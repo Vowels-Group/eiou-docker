@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## 2026-02-06 -- 2026-02-12
 
 ### Added
+- Cascade cancel/expire for dead-end P2P routes (#598): Nodes immediately notify upstream when they have no viable route, triggering early best-fee selection or cascade cancellation instead of waiting for expiration timers
 - Multi-part contact names with spaces supported in CLI (use quotes: `"John Doe"`)
 - Contact disambiguation when multiple contacts share the same name — CLI prompts for selection, JSON mode returns `multiple_matches` error with contact list
 - Searchable contact dropdown in GUI send form — type to filter contacts by name or address instead of scrolling through a static list

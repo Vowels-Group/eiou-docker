@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\Rp2pServiceInterface;
 use Eiou\Contracts\P2pTransactionSenderInterface;
+use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
@@ -112,6 +113,11 @@ class Rp2pService implements Rp2pServiceInterface {
     private ?P2pTransactionSenderInterface $p2pTransactionSender = null;
 
     /**
+     * @var P2pServiceInterface|null P2P service for cascade cancel notification propagation
+     */
+    private ?P2pServiceInterface $p2pService = null;
+
+    /**
      * Set the P2P transaction sender (setter injection to break circular dependency)
      *
      * This method accepts P2pTransactionSenderInterface, which breaks the circular
@@ -135,6 +141,16 @@ class Rp2pService implements Rp2pServiceInterface {
             throw new RuntimeException('P2pTransactionSender not injected. Call setP2pTransactionSender() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->p2pTransactionSender;
+    }
+
+    /**
+     * Set the P2pService for cascade cancel notification propagation
+     *
+     * @param P2pServiceInterface $service
+     * @return void
+     */
+    public function setP2pService(P2pServiceInterface $service): void {
+        $this->p2pService = $service;
     }
 
     /**
@@ -379,6 +395,18 @@ class Rp2pService implements Rp2pServiceInterface {
     public function checkRp2pPossible($request, $echo = true){
         // Check if RP2P already exists for hash in database
         try{
+            // Handle cancel notification from downstream dead-end contact
+            if (isset($request['cancelled']) && $request['cancelled'] === true) {
+                $p2p = $this->p2pRepository->getByHash($request['hash']);
+                if ($p2p && !((int)($p2p['fast'] ?? 1))) {
+                    $this->handleCancelNotification($request, $p2p);
+                    if ($echo) {
+                        echo json_encode(['status' => 'received', 'message' => 'cancel notification processed']);
+                    }
+                }
+                return false;
+            }
+
             if($this->rp2pRepository->rp2pExists($request['hash'])){
               //If RP2P already exists
                 if($echo){
@@ -542,6 +570,73 @@ class Rp2pService implements Rp2pServiceInterface {
     }
 
     /**
+     * Handle a cancel notification from a downstream contact
+     *
+     * When a downstream contact cancels a P2P (dead-end or expired with no route),
+     * it sends a cancel notification. This method counts it as a response and
+     * triggers selection or cascade cancellation when all contacts have responded.
+     *
+     * @param array $request The cancel notification payload
+     * @param array $p2p The corresponding P2P record
+     * @return void
+     */
+    public function handleCancelNotification(array $request, array $p2p): void
+    {
+        // Don't process if already selected/forwarded
+        if ($this->rp2pRepository->rp2pExists($request['hash'])) {
+            return;
+        }
+
+        // Classify the cancel source to increment the correct counter
+        $fromAddress = $request['senderAddress'] ?? null;
+        $isFromRelayed = false;
+        if ($fromAddress && $this->p2pRelayedContactRepository !== null) {
+            $isFromRelayed = $this->p2pRelayedContactRepository->isRelayedContact($request['hash'], $fromAddress);
+        }
+
+        if ($isFromRelayed) {
+            $this->p2pRepository->incrementContactsRelayedRespondedCount($request['hash']);
+        } else {
+            $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
+        }
+
+        Logger::getInstance()->info("Received cancel notification from downstream contact", [
+            'hash' => $request['hash'],
+            'from' => $fromAddress,
+            'is_relayed' => $isFromRelayed,
+        ]);
+
+        // Re-check selection trigger with updated counts (same logic as handleRp2pCandidate)
+        $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
+        if (!$tracking) {
+            return;
+        }
+
+        $sentCount = (int) $tracking['contacts_sent_count'];
+        $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
+        $insertedRespondedCount = (int) $tracking['contacts_responded_count'];
+        $relayedRespondedCount = (int) ($tracking['contacts_relayed_responded_count'] ?? 0);
+        $phase1Sent = (bool) ($tracking['phase1_sent'] ?? 0);
+
+        // Phase 2: all contacts responded
+        if ($relayedCount > 0 && ($insertedRespondedCount + $relayedRespondedCount) >= ($sentCount + $relayedCount)) {
+            $this->selectAndForwardBestRp2p($request['hash']);
+            return;
+        }
+
+        // Phase 1: all inserted contacts responded
+        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && !$phase1Sent) {
+            $this->sendBestCandidateToRelayedContacts($request['hash']);
+            return;
+        }
+
+        // No relayed contacts: all inserted responded
+        if ($relayedCount === 0 && $insertedRespondedCount >= $sentCount) {
+            $this->selectAndForwardBestRp2p($request['hash']);
+        }
+    }
+
+    /**
      * Phase 1: Send the best candidate to all already_relayed contacts
      *
      * Called when all inserted contacts have responded but relayed contacts
@@ -677,7 +772,12 @@ class Rp2pService implements Rp2pServiceInterface {
 
         $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
         if (!$bestCandidate) {
-            Logger::getInstance()->warning("No rp2p candidates found for best-fee selection", ['hash' => $hash]);
+            // All contacts responded but zero viable candidates — cancel and propagate upstream
+            Logger::getInstance()->warning("No rp2p candidates found for best-fee selection, cancelling P2P", ['hash' => $hash]);
+            $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
+            if ($this->p2pService !== null) {
+                $this->p2pService->sendCancelNotificationForHash($hash);
+            }
             return;
         }
 

@@ -585,5 +585,64 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# ==================== Test 11: Dead-End Cascade Cancel ====================
+echo -e "\n[Test 11: Dead-end cascade cancel (non-existent recipient)]"
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\t-> Sending 5 USD from ${testSender} to non-existent address with --best (expect fast cancel)"
+
+cancelStartTime=$(date +%s)
+cancelSendResult=$(docker exec ${testSender} eiou send http://nonexistent.eiou.internal 5 USD --best 2>&1)
+
+# With cascade cancel, dead-end nodes cancel immediately and propagate upstream.
+# The originator should see cancellation well before full expiration.
+cancelTimeout=$((testExpiration / 2))
+echo -e "\t   Waiting for cascade cancel (timeout: ${cancelTimeout}s, expiration: ${testExpiration}s)..."
+
+elapsed=0
+cancelDetected=0
+while [ $elapsed -lt $cancelTimeout ]; do
+    # Process queues to trigger P2P forwarding and cleanup
+    process_routing_queues "$all_containers"
+    for container in "${containers[@]}"; do
+        docker exec ${container} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \Eiou\Core\Application::getInstance()->services->getCleanupService()->processCleanupMessages();
+        " 2>/dev/null || true
+    done
+
+    # Check if the P2P was cancelled on the originator
+    p2pStatus=$(docker exec ${testSender} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->query('SELECT status FROM p2p WHERE fast = 0 ORDER BY id DESC LIMIT 1');
+        \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+        echo \$row ? \$row['status'] : 'UNKNOWN';
+    " 2>/dev/null || echo "UNKNOWN")
+
+    if [ "$p2pStatus" = "cancelled" ] || [ "$p2pStatus" = "expired" ]; then
+        cancelDetected=1
+        break
+    fi
+
+    elapsed=$(( $(date +%s) - cancelStartTime ))
+done
+
+cancelEndTime=$(date +%s)
+cancelElapsed=$((cancelEndTime - cancelStartTime))
+
+if [ "$cancelDetected" -eq 1 ]; then
+    if [ "$cancelElapsed" -lt "$testExpiration" ]; then
+        printf "\t   Dead-end cascade cancel ${GREEN}PASSED${NC} (Status: %s, Time: %ds < %ds expiration)\n" "$p2pStatus" "$cancelElapsed" "$testExpiration"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Dead-end cascade cancel ${YELLOW}PASSED (slow)${NC} (Status: %s, Time: %ds)\n" "$p2pStatus" "$cancelElapsed"
+        passed=$(( passed + 1 ))
+    fi
+else
+    printf "\t   Dead-end cascade cancel ${RED}FAILED${NC} (Status: %s, Timeout after %ds)\n" "$p2pStatus" "$cancelElapsed"
+    failure=$(( failure + 1 ))
+fi
+
 echo ""
 succesrate "${totaltests}" "${passed}" "${failure}" "'best-fee routing'"

@@ -66,4 +66,16 @@ interface P2pServiceInterface
      * @return array Statistics including counts, totals, and averages
      */
     public function getStatistics(): array;
+
+    /**
+     * Send cancel notification upstream for a P2P hash
+     *
+     * Called when a node has no viable route (dead-end) or when a relay P2P
+     * expires with no candidates. Notifies all upstream senders so they can
+     * count this as a responded contact and trigger selection/cancellation.
+     *
+     * @param string $hash The P2P hash to cancel
+     * @return void
+     */
+    public function sendCancelNotificationForHash(string $hash): void;
 }

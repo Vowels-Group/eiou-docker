@@ -895,6 +895,123 @@ class P2pPayloadTest extends TestCase
     }
 
     // ============================================================
+    // Tests for buildCancelled() method
+    // ============================================================
+
+    /**
+     * Test buildCancelled returns array with correct type
+     */
+    public function testBuildCancelledReturnsArrayWithCorrectType(): void
+    {
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertIsArray($result);
+        $this->assertEquals('rp2p', $result['type']);
+    }
+
+    /**
+     * Test buildCancelled includes cancelled flag set to true
+     */
+    public function testBuildCancelledIncludesCancelledFlag(): void
+    {
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('cancelled', $result);
+        $this->assertTrue($result['cancelled']);
+    }
+
+    /**
+     * Test buildCancelled sets amount to zero
+     */
+    public function testBuildCancelledSetsAmountToZero(): void
+    {
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('amount', $result);
+        $this->assertEquals(0, $result['amount']);
+    }
+
+    /**
+     * Test buildCancelled includes hash
+     */
+    public function testBuildCancelledIncludesHash(): void
+    {
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('hash', $result);
+        $this->assertEquals(self::TEST_HASH, $result['hash']);
+    }
+
+    /**
+     * Test buildCancelled includes senderAddress resolved via transport utility
+     */
+    public function testBuildCancelledResolvesSenderAddress(): void
+    {
+        $this->mockTransportUtility->expects($this->once())
+            ->method('resolveUserAddressForTransport')
+            ->with(self::TEST_HTTP_ADDRESS)
+            ->willReturn(self::TEST_RESOLVED_ADDRESS);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('senderAddress', $result);
+        $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
+    }
+
+    /**
+     * Test buildCancelled includes senderPublicKey from user context
+     */
+    public function testBuildCancelledIncludesSenderPublicKey(): void
+    {
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('senderPublicKey', $result);
+        $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
+    }
+
+    /**
+     * Test buildCancelled includes time from time utility
+     */
+    public function testBuildCancelledIncludesTime(): void
+    {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('time', $result);
+        $this->assertEquals(1700000000000000, $result['time']);
+    }
+
+    /**
+     * Test buildCancelled includes currency from Constants default
+     */
+    public function testBuildCancelledIncludesCurrency(): void
+    {
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $this->assertArrayHasKey('currency', $result);
+        $this->assertEquals(Constants::TRANSACTION_DEFAULT_CURRENCY, $result['currency']);
+    }
+
+    /**
+     * Test buildCancelled contains all required keys
+     */
+    public function testBuildCancelledContainsAllRequiredKeys(): void
+    {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
+
+        $expectedKeys = ['type', 'hash', 'cancelled', 'amount', 'time', 'currency', 'senderAddress', 'senderPublicKey'];
+        foreach ($expectedKeys as $key) {
+            $this->assertArrayHasKey($key, $result, "buildCancelled missing key: $key");
+        }
+        $this->assertCount(count($expectedKeys), $result, "buildCancelled should have exactly " . count($expectedKeys) . " keys");
+    }
+
+    // ============================================================
     // Helper methods for creating test data
     // ============================================================
 

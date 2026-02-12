@@ -386,6 +386,7 @@ serviceInterfaceTest
 serviceExceptionTest
 nodeIdentityTest
 bestFeeRoutingTest
+cascadeCancelTest
 performanceBaseline
 "
 
@@ -470,6 +471,7 @@ performanceBaseline
 TESTS_BESTFEE="
 addContactsTest
 bestFeeRoutingTest
+cascadeCancelTest
 "
 
 # Select test order based on subset
