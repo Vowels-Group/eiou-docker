@@ -94,51 +94,18 @@
         <!-- P2P Routing Mode -->
         <div class="form-group" id="best-fee-group">
             <label><i class="fas fa-route"></i> Best Fee Route:</label>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px;">
-                    <input type="checkbox" id="best-fee" name="best_fee" value="1" style="opacity: 0; width: 0; height: 0;">
-                    <span class="toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #6c757d; transition: 0.3s; border-radius: 26px;"></span>
+            <div class="toggle-row">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="best-fee" name="best_fee" value="1">
+                    <span class="toggle-slider"></span>
                 </label>
-                <span id="bestFeeStatus" style="color: #6c757d; font-weight: 500;">Disabled</span>
+                <span id="bestFeeStatus" class="toggle-status">Disabled</span>
             </div>
             <small style="color: #856404; background: #fff3cd; border: 1px solid #ffc107; border-radius: 3px; padding: 0.35rem 0.5rem; margin-top: 0.25rem; display: block;">
                 <i class="fas fa-flask"></i> <strong>Experimental:</strong>
                 Finds the cheapest fee route but may be slower or less reliable than the default. When disabled, the first available route is used.
             </small>
         </div>
-
-        <style>
-            .toggle-switch input:checked + .toggle-slider {
-                background-color: #28a745 !important;
-            }
-            .toggle-slider:before {
-                position: absolute;
-                content: "";
-                height: 20px;
-                width: 20px;
-                left: 3px;
-                bottom: 3px;
-                background-color: white;
-                transition: 0.3s;
-                border-radius: 50%;
-            }
-            .toggle-switch input:checked + .toggle-slider:before {
-                transform: translateX(24px);
-            }
-        </style>
-
-        <script>
-            document.getElementById('best-fee').addEventListener('change', function() {
-                var statusEl = document.getElementById('bestFeeStatus');
-                if (this.checked) {
-                    statusEl.textContent = 'Enabled';
-                    statusEl.style.color = '#28a745';
-                } else {
-                    statusEl.textContent = 'Disabled';
-                    statusEl.style.color = '#6c757d';
-                }
-            });
-        </script>
 
         <!-- Transaction Type Indicator -->
         <div id="transaction-type-indicator" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; display: none;">

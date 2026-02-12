@@ -2987,3 +2987,36 @@ function showDlqToasts() {
 document.addEventListener('DOMContentLoaded', function() {
     showDlqToasts();
 });
+
+/**
+ * Initialize a toggle switch with status text.
+ *
+ * Binds a change listener to the checkbox input that updates the adjacent
+ * status label text and CSS class. Uses null checks for elements that only
+ * exist on specific pages (Tor Browser compatible — no optional chaining).
+ *
+ * @param {string} inputId - The checkbox input element ID
+ * @param {string} statusId - The status text span element ID
+ */
+function initToggleSwitch(inputId, statusId) {
+    var input = document.getElementById(inputId);
+    var status = document.getElementById(statusId);
+    if (input && status) {
+        input.addEventListener('change', function() {
+            if (this.checked) {
+                status.textContent = 'Enabled';
+                status.className = 'toggle-status enabled';
+            } else {
+                status.textContent = 'Disabled';
+                status.className = 'toggle-status';
+            }
+        });
+    }
+}
+
+// Initialize all toggle switches (elements only exist on their respective pages)
+document.addEventListener('DOMContentLoaded', function() {
+    initToggleSwitch('best-fee', 'bestFeeStatus');
+    initToggleSwitch('autoRefreshEnabled', 'autoRefreshStatus');
+    initToggleSwitch('autoBackupEnabled', 'autoBackupStatus');
+});
