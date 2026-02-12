@@ -582,6 +582,14 @@ class Rp2pService implements Rp2pServiceInterface {
      */
     public function handleCancelNotification(array $request, array $p2p): void
     {
+        // Don't process if P2P is already cancelled/expired — prevents feedback loop
+        // where repeated cancel notifications keep incrementing counters and re-triggering
+        // selection, which sends more cancel notifications upstream.
+        $status = $p2p['status'] ?? null;
+        if ($status === Constants::STATUS_CANCELLED || $status === 'expired') {
+            return;
+        }
+
         // Don't process if already selected/forwarded
         if ($this->rp2pRepository->rp2pExists($request['hash'])) {
             return;
@@ -772,11 +780,17 @@ class Rp2pService implements Rp2pServiceInterface {
 
         $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
         if (!$bestCandidate) {
-            // All contacts responded but zero viable candidates — cancel and propagate upstream
-            Logger::getInstance()->warning("No rp2p candidates found for best-fee selection, cancelling P2P", ['hash' => $hash]);
-            $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
-            if ($this->p2pService !== null) {
-                $this->p2pService->sendCancelNotificationForHash($hash);
+            // All contacts responded but zero viable candidates — cancel and propagate upstream.
+            // Guard: only send cancel notification if P2P is not already cancelled
+            // to prevent feedback loop from redundant cancel messages.
+            $currentP2p = $this->p2pRepository->getByHash($hash);
+            $currentStatus = $currentP2p ? ($currentP2p['status'] ?? null) : null;
+            if ($currentStatus !== Constants::STATUS_CANCELLED && $currentStatus !== 'expired') {
+                Logger::getInstance()->warning("No rp2p candidates found for best-fee selection, cancelling P2P", ['hash' => $hash]);
+                $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
+                if ($this->p2pService !== null) {
+                    $this->p2pService->sendCancelNotificationForHash($hash);
+                }
             }
             return;
         }

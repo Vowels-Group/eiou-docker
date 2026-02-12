@@ -343,6 +343,64 @@ class Rp2pServiceCascadeCancelTest extends TestCase
     // =========================================================================
 
     /**
+     * Test handleCancelNotification skips processing when P2P is already cancelled
+     *
+     * Prevents feedback loop: repeated cancel notifications should not increment
+     * counters or re-trigger selection on an already-cancelled P2P.
+     */
+    public function testHandleCancelNotificationSkipsWhenAlreadyCancelled(): void
+    {
+        $request = [
+            'hash' => self::TEST_HASH,
+            'senderAddress' => self::TEST_ADDRESS,
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'status' => Constants::STATUS_CANCELLED,
+        ];
+
+        // Should NOT even check rp2pExists (returns before that)
+        $this->rp2pRepository->expects($this->never())
+            ->method('rp2pExists');
+
+        // Should NOT increment counter
+        $this->p2pRepository->expects($this->never())
+            ->method('incrementContactsRespondedCount');
+
+        // Should NOT trigger selection
+        $this->p2pRepository->expects($this->never())
+            ->method('getTrackingCounts');
+
+        $this->service->handleCancelNotification($request, $p2p);
+    }
+
+    /**
+     * Test handleCancelNotification skips processing when P2P is expired
+     */
+    public function testHandleCancelNotificationSkipsWhenExpired(): void
+    {
+        $request = [
+            'hash' => self::TEST_HASH,
+            'senderAddress' => self::TEST_ADDRESS,
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'status' => 'expired',
+        ];
+
+        $this->p2pRepository->expects($this->never())
+            ->method('incrementContactsRespondedCount');
+
+        $this->service->handleCancelNotification($request, $p2p);
+    }
+
+    /**
      * Test handleCancelNotification increments contacts_responded_count for inserted contact
      */
     public function testHandleCancelNotificationIncrementsRespondedCount(): void
@@ -356,6 +414,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             'hash' => self::TEST_HASH,
             'amount' => self::TEST_AMOUNT,
             'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'status' => 'sent',
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -391,6 +450,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         $p2p = [
             'hash' => self::TEST_HASH,
             'amount' => self::TEST_AMOUNT,
+            'status' => 'sent',
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -778,6 +838,40 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             ->with(self::TEST_HASH, Constants::STATUS_CANCELLED);
 
         // p2pService is null so sendCancelNotificationForHash should NOT be called
+        $this->p2pService->expects($this->never())
+            ->method('sendCancelNotificationForHash');
+
+        $service->selectAndForwardBestRp2p(self::TEST_HASH);
+    }
+
+    /**
+     * Test selectAndForwardBestRp2p skips cancel notification when P2P already cancelled
+     *
+     * Prevents feedback loop: if P2P is already cancelled (from a previous
+     * cancel notification), don't send redundant cancel notifications upstream.
+     */
+    public function testSelectAndForwardBestRp2pSkipsCancelWhenAlreadyCancelled(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = $this->createServiceWithCandidateRepoAndP2pService($rp2pCandidateRepo);
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // No best candidate found
+        $rp2pCandidateRepo->method('getBestCandidate')
+            ->willReturn(null);
+
+        // P2P is already cancelled
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+            ]);
+
+        // Should NOT update status again or send cancel notification
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
         $this->p2pService->expects($this->never())
             ->method('sendCancelNotificationForHash');
 
