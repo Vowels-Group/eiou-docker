@@ -104,7 +104,7 @@ declare -A expectedContacts=(
     [A11]=1  # Connected to A8
 )
 
-# 9-node cluster (collision) topology with randomized fees:
+# 11-node cluster (collision) topology with randomized fees and dead ends:
 ##
 ##              A3        A9
 ##            /    \    /
