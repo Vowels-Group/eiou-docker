@@ -258,7 +258,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             return;
         }
 
-        $contactInfo = $this->getContactService()->lookupContactInfo($request[2]);
+        $contactInfo = $this->getContactService()->lookupContactInfoWithDisambiguation($request[2], $output);
         if (!$contactInfo) { $this->handleP2pRoute($request, $output); return; }
 
         if ($contactInfo['status'] === Constants::CONTACT_STATUS_ACCEPTED) {

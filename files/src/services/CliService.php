@@ -512,7 +512,7 @@ class CliService implements CliServiceInterface {
                 'usage' => 'add [address] [name] [fee] [credit] [currency]',
                 'arguments' => [
                     'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor)'],
-                    'name' => ['type' => 'required', 'description' => 'Contact name'],
+                    'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit'],
                     'currency' => ['type' => 'required', 'description' => 'Currency code']
@@ -564,9 +564,9 @@ class CliService implements CliServiceInterface {
             ],
             'send' => [
                 'description' => 'Send an eIOU',
-                'usage' => 'send [address/name] [amount] [currency] (--best)',
+                'usage' => 'send [address/"name"] [amount] [currency] (--best)',
                 'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Recipient address or name'],
+                    'address/name' => ['type' => 'required', 'description' => 'Recipient address or name (use quotes for multi-word names: "John Doe")'],
                     'amount' => ['type' => 'required', 'description' => 'Amount to send'],
                     'currency' => ['type' => 'required', 'description' => 'Currency code'],
                     '--best' => ['type' => 'optional', 'description' => '[EXPERIMENTAL] Find the best fee route. This feature is experimental and may be slower or less reliable than the default first-available routing']
