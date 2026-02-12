@@ -182,10 +182,13 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying services running after restart"
 
-# Wait a bit for services to fully start
+# Wait for both core services to start
 wait_for_condition \
     "docker exec ${testContainer} sh -c \"service apache2 status 2>&1 | grep -q 'running'\"" \
     30 3 "Apache to start"
+wait_for_condition \
+    "docker exec ${testContainer} sh -c \"service mariadb status 2>&1 | grep -q 'running\|Uptime'\"" \
+    30 3 "MariaDB to start"
 
 postServicesRunning=0
 if docker exec ${testContainer} sh -c "service apache2 status 2>&1 | grep -q 'running'" 2>/dev/null; then

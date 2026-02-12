@@ -160,6 +160,11 @@ graceful_shutdown() {
                 fi
             done
         fi
+
+        # Reap background jobs to suppress shell "Killed" messages
+        for pid in $pids_to_wait; do
+            wait "$pid" 2>/dev/null || true
+        done
     else
         echo "[Shutdown] No PHP processors were running"
     fi
