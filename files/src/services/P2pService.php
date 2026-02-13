@@ -758,13 +758,18 @@ class P2pService implements P2pServiceInterface {
 
                 // Track sent count for best-fee mode: the matched contact will send
                 // an RP2P response, so we expect exactly 1 response.
-                // Both 'inserted' (new P2P) and 'already_relayed' (P2P exists via
-                // another path) contacts track this sender and will forward RP2P back.
-                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed')) {
+                // 'found' means the destination matched itself and will send RP2P back.
+                // 'inserted' and 'already_relayed' mean the contact will forward and respond.
+                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed' || $response['status'] === 'found')) {
                     $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
                 }
 
                 output(outputP2pSendResult($response),'SILENT');
+
+                // Re-check best-fee selection: RP2P may have arrived during the
+                // blocking send (destination sends RP2P inline). Now that sentCount
+                // is set, check if enough responses arrived to trigger selection.
+                $this->rp2pService?->checkBestFeeSelection($p2pHash);
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;

@@ -523,6 +523,13 @@ class Rp2pService implements Rp2pServiceInterface {
             $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
         }
 
+        // Don't trigger selection if the P2P hasn't been forwarded yet (still queued).
+        // Store the candidate and count the response, but defer selection to the daemon's
+        // checkBestFeeSelection call after it processes and forwards the queued P2P.
+        if ($p2p['status'] === Constants::STATUS_QUEUED) {
+            return;
+        }
+
         // If the P2P already expired (hop-wait elapsed) at a relay node, select
         // immediately since cleanup already ran and won't re-process this P2P.
         // Relay nodes (no destination_address) may have dead paths that never respond,
@@ -613,6 +620,15 @@ class Rp2pService implements Rp2pServiceInterface {
             'from' => $fromAddress,
             'is_relayed' => $isFromRelayed,
         ]);
+
+        // Don't trigger selection if the P2P hasn't been forwarded yet (still queued).
+        // The P2P daemon will process and forward this P2P, setting the correct
+        // contacts_sent_count. Cancel notifications arriving before forwarding would
+        // see sentCount=0 and prematurely trigger cancellation. The daemon's
+        // checkBestFeeSelection call after processing handles deferred responses.
+        if ($status === Constants::STATUS_QUEUED) {
+            return;
+        }
 
         // Re-check selection trigger with updated counts (same logic as handleRp2pCandidate)
         $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);

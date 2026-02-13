@@ -698,33 +698,6 @@ check_contact_status_with_retry() {
     echo "$status"
 }
 
-# ==================== Routing Retry Helpers ====================
-
-# Process message queues on specified containers for routing
-# Usage: process_routing_queues "httpA httpB httpC httpD"
-# Processes outgoing queues on all containers in parallel, then incoming
-process_routing_queues() {
-    local containers_str="$1"
-    local containers_arr=($containers_str)
-    local settle_time="${2:-1}"
-
-    # Process outgoing queues in parallel
-    for container in "${containers_arr[@]}"; do
-        docker exec -e EIOU_TEST_MODE=true ${container} eiou out 2>&1 > /dev/null &
-    done
-    wait
-    # Brief settle time for message delivery
-    sleep $settle_time
-
-    # Process incoming queues in parallel
-    for container in "${containers_arr[@]}"; do
-        docker exec -e EIOU_TEST_MODE=true ${container} eiou in 2>&1 > /dev/null &
-    done
-    wait
-    # Brief settle time for processing completion
-    sleep $settle_time
-}
-
 # ==================== Sync Functions ====================
 
 # Trigger sync for a container
