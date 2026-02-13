@@ -386,56 +386,63 @@ declare -A expectedContacts=(
 # dead ends, collision paths, cross-arm links, mesh hubs, skip connections,
 # and linear branches:
 ##
-##                                   N8
-##                                    |
-##                              N5b--N7
-##                                    |\
-##                                  N6-N6b
-##                                    |
-##                                   N5
-##                                    |
-##                     LN3--LN2--LN1--N4
-##                                    |
-##                           MH------N3--N3b
-##                                    |
-##                                   N2
-##                                    |
-##                                   N1
-##                                    |
+##                                      N8
+##                                      |
+##                                N5b--N7------+
+##                                      |\     |
+##                                    N6-N6b   | N5<->N7
+##                                      |      |
+##                                     N5------+
+##                                      |
+##                       LN3--LN2--LN1--N4------+
+##                                      |       | N2<->N4
+##                             MH------N3--N3b  |
+##                                    / |       |
+##                          N1<->N3 /  N2------+
+##                                /     |
+##                              N1      |
+##                                \     |
+##                                 \    |
+##       W1<->W3                    \   |                    E1<->E3
+##          \    W2<->W4             \  |             E2<->E4    /
+##           \      \                 \ |                /      /
 ## W8--W7--W6--W5--W4--W3--W2--W1----C0----E1--E2--E3--E4--E5--E6--E7--E8
-##      |    |              |                            |    |    |    |
-##     W7b  W5b            W3b                         E4b  MH2  E6b  E7b
-##                                    |
-##                                   S1
-##                                    |
-##                                   S2
-##                                    |
-##                                   S3
-##                                    |
-##                              S4b--S4
-##                                    |
-##                                   S5
-##                                    |
-##                          S6b--S6--LS1--LS2
-##                                    |
-##                               S8--S7
-##                                    |
-##                                   S7b
+##      |    |   /      / |                            |    |   \      \
+##     W7b  W5b /      /  W3b                        E4b  MH2   \      \
+##            W3<->W5 /                                     E3<->E5  E6b E7b
+##                   /
+##                  S1
+##                /   \
+##     S1<->S3  /      \
+##            S2      S2<->S4
+##              \      \
+##              S3      \
+##                \      \
+##           S4b--S4------+
+##                  \      | S3<->S5
+##                  S5----+
+##                    |
+##           S6b--S6--LS1--LS2
+##                    |
+##               S8--S7
+##                    |
+##                   S7b
 ##
 ## C0 at center. N=up, S=down, E=right, W=left.
-## Lines show spine + branch edges. Additional connections listed below.
+## Spine edges: solid lines. Skip connections: labeled X<->Y arcs.
 ##
 ## Mesh hubs: MH(N3,E3,S3,W3) at depth 3, MH2(E5,S5) at depth 5
 ## Collision bypasses: N6-N6b-N7, E6-E6b-E7, S4-S4b-S5, W5-W5b-W6
 ## Cross-arm links: N6b<->E6b (depth 6), S7b<->W7b (depth 7), S4<->W4 (depth 4)
-## Skip connections (overlapping = triangular cycles):
-##   North: N1<->N3, N2<->N4, N5<->N7
-##   East:  E1<->E3, E2<->E4, E3<->E5
-##   South: S1<->S3, S2<->S4, S3<->S5
-##   West:  W1<->W3, W2<->W4, W3<->W5
 ## Linear branches: N4->LN1->LN2->LN3, S6->LS1->LS2
 ## ISO is isolated (no connections) -- cascade cancel target.
 ## Fees are randomized (0.1-0.9) per run; best-fee route varies each time.
+##
+## Triangular cycles (16):
+##   N1-N2-N3, N2-N3-N4, N5-N6-N7, N6-N6b-N7
+##   E1-E2-E3, E2-E3-E4, E3-E4-E5, E6-E6b-E7
+##   S1-S2-S3, S2-S3-S4, S3-S4-S5, S4-S4b-S5
+##   W1-W2-W3, W2-W3-W4, W3-W4-W5, W5-W5b-W6
 ##
 ## Minimum hop distances from C0:
 ##   1 hop:  N1, E1, S1, W1
