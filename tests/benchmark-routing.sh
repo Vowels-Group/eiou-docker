@@ -32,7 +32,7 @@ set -e
 RUNS="${1:-10}"
 IFS=',' read -ra _INPUT_PROTOCOLS <<< "${2:-http,https,tor}"
 TOPOLOGY_MODE="${3:-shared}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Sort protocols so tor always runs last — Tor needs extra startup time and
 # running it first risks skewed results from incomplete Tor connectivity.
@@ -46,8 +46,8 @@ done
 unset _INPUT_PROTOCOLS _p
 
 # Source base configuration (colors, helpers, BOOTSTRAP_PATH)
-cd "$SCRIPT_DIR"
-. "${SCRIPT_DIR}/baseconfig/config.sh"
+cd "$BENCH_DIR"
+. "${BENCH_DIR}/baseconfig/config.sh"
 
 # Additional color codes
 CYAN='\033[0;36m'
@@ -520,9 +520,9 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
     export MODE="$first_protocol"
     export EIOU_CONTACT_STATUS_ENABLED=false
 
-    cd "$SCRIPT_DIR"
+    cd "$BENCH_DIR"
     set -e
-    . "${SCRIPT_DIR}/buildfiles/collisionscluster.sh"
+    . "${BENCH_DIR}/buildfiles/collisionscluster.sh"
     set +e
 
     if ! wait_for_containers "$first_protocol"; then
@@ -644,9 +644,9 @@ else
         export MODE="$protocol"
         export EIOU_CONTACT_STATUS_ENABLED=false
 
-        cd "$SCRIPT_DIR"
+        cd "$BENCH_DIR"
         set -e
-        . "${SCRIPT_DIR}/buildfiles/collisionscluster.sh"
+        . "${BENCH_DIR}/buildfiles/collisionscluster.sh"
         set +e
 
         if ! wait_for_containers "$protocol"; then
