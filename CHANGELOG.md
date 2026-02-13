@@ -54,7 +54,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Changed
-- Removed manual `eiou in`/`eiou out` queue processing from all integration tests — background daemon processors handle message routing naturally; fixed race condition where Phase 1 cancel notifications from relayed contacts could cancel a P2P before the daemon forwarded it to the destination
+- Removed manual `eiou in`/`eiou out` queue processing from integration tests (best-fee, cascade cancel, routing, send, negative-financial) — background daemon processors handle message routing naturally, reducing best-fee test time from ~73s to ~72s with no manual overhead; `syncTestSuite.sh` retains its own `process_all_queues` for precise chain synchronization sequencing
 - Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
 - GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
 - Startup user info section no longer creates a separate authcode temp file on first wallet creation — the seedphrase file already contains the authcode, so creating a second file was redundant and confusing; on restart or restore, the authcode-only file is still created as before
