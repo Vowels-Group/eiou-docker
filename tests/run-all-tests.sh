@@ -7,7 +7,7 @@
 # Usage: ./run-all-tests.sh <build_name> [mode] [subset]
 #
 # Arguments:
-#   build_name  - The topology to test (http4, http10, http13, collisions)
+#   build_name  - The topology to test (http4, http10, http13, collisions, collisionscluster)
 #   mode        - Transport mode: http, https, or tor (default: http)
 #   subset      - Test subset to run (default: all)
 #
@@ -49,7 +49,7 @@ set -e  # Exit on error
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <build_name> [mode] [subset]"
     echo ""
-    echo "Available builds: http4, http10, http13, collisions"
+    echo "Available builds: http4, http10, http13, collisions, collisionscluster"
     echo "Available modes:  http, https, tor (default: http)"
     echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, multisig, bestfee"
     exit 1
