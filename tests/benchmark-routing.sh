@@ -222,6 +222,34 @@ establish_contacts() {
     printf "  Sample contact %s->%s status: %s\n" "${first_pair[0]}" "${first_pair[1]}" "$status"
 }
 
+# Register a new transport address with already-established contacts (one-sided).
+# After the initial double-sided HTTP add establishes mutual contacts, a one-sided
+# add of a new transport address (https/tor) triggers automatic address exchange —
+# the remote side learns the sender's new address without needing its own add call.
+add_transport_addresses() {
+    local protocol="$1"
+    printf "\nRegistering ${protocol} addresses with existing contacts...\n"
+    local link_keys=($(for x in "${!containersLinks[@]}"; do echo "$x"; done | sort))
+    local count=0
+    declare -A _seen_pairs
+
+    for key in "${link_keys[@]}"; do
+        local values=(${containersLinks[$key]})
+        local pair=(${key//,/ })
+        # Only one direction per pair — automatic exchange handles the reverse
+        local reverse="${pair[1]},${pair[0]}"
+        if [ -n "${_seen_pairs[$reverse]}" ]; then
+            continue
+        fi
+        _seen_pairs[$key]=1
+        count=$((count + 1))
+        printf "\r  ${protocol} %d: %s -> %s    " "$count" "${pair[0]}" "${pair[1]}"
+        docker exec ${pair[0]} eiou add ${containerAddresses[${pair[1]}]} ${pair[1]} ${values[0]} ${values[1]} ${values[2]} 2>&1 >/dev/null || true
+    done
+    printf "\n  Waiting for address exchange...\n"
+    sleep 10
+}
+
 # Execute a single send and record results
 do_send() {
     local protocol="$1"
@@ -514,7 +542,9 @@ set +e  # Allow errors during main loop (we handle them ourselves)
 # ---- Shared topology: build once, reuse for all protocols ----
 if [ "$TOPOLOGY_MODE" = "shared" ]; then
 
-    # Build topology once using first protocol for initial setup
+    # Build topology once — fees are randomized at build time and stay fixed.
+    # MODE only affects which docker-compose config is used; all transports
+    # (http, https, tor) are available regardless of the build MODE.
     first_protocol="${PROTOCOLS[0]}"
     printf "\nBuilding shared topology (fees fixed across all protocols)...\n"
     export MODE="$first_protocol"
@@ -525,7 +555,16 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
     . "${BENCH_DIR}/buildfiles/collisionscluster.sh"
     set +e
 
-    if ! wait_for_containers "$first_protocol"; then
+    # Wait for the most demanding transport — tor readiness implies http/https
+    # are also ready since Tor services start last.
+    wait_protocol="$first_protocol"
+    for _p in "${PROTOCOLS[@]}"; do
+        if [ "$_p" = "tor" ]; then wait_protocol="tor"; break; fi
+        if [ "$_p" = "https" ]; then wait_protocol="https"; fi
+    done
+    unset _p
+
+    if ! wait_for_containers "$wait_protocol"; then
         printf "${RED}Container initialization failed, aborting${NC}\n"
         for container in "${containers[@]}"; do
             remove_container_if_exists $container 2>/dev/null || true
@@ -533,10 +572,32 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         exit 1
     fi
 
-    # Enumerate optimal paths once — fees are the same for all protocols
-    # (Populate addresses temporarily to verify containers, then re-populate per protocol)
-    populate_addresses "$first_protocol"
+    # Populate addresses and establish contacts for ALL requested protocols.
+    # Each node needs to know its contacts' addresses for every transport type
+    # so that routing works over http, https, AND tor.
+    #
+    # Flow: full double-sided add for the first protocol (establishes mutual contacts),
+    # then one-sided adds for subsequent protocols (automatic address exchange).
+    declare -A PROTO_ADDRESSES  # keyed by "${protocol}_${container}"
 
+    # First protocol: full double-sided establish (both A→B and B→A)
+    populate_addresses "$first_protocol"
+    for container in "${containers[@]}"; do
+        PROTO_ADDRESSES["${first_protocol}_${container}"]="${containerAddresses[$container]}"
+    done
+    establish_contacts
+
+    # Subsequent protocols: one-sided adds (exchange handles the reverse)
+    for protocol in "${PROTOCOLS[@]}"; do
+        [ "$protocol" = "$first_protocol" ] && continue
+        populate_addresses "$protocol"
+        for container in "${containers[@]}"; do
+            PROTO_ADDRESSES["${protocol}_${container}"]="${containerAddresses[$container]}"
+        done
+        add_transport_addresses "$protocol"
+    done
+
+    # Verify we got a sender address (use last populated protocol)
     if [ -z "${containerAddresses[$SENDER]}" ]; then
         printf "${RED}Failed to get address for ${SENDER}, aborting${NC}\n"
         for container in "${containers[@]}"; do
@@ -545,12 +606,12 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         exit 1
     fi
 
+    # Enumerate optimal paths once — fees are the same for all protocols
     printf "\nEnumerating optimal paths (shared fee structure)...\n"
     for distance in "${DISTANCES[@]}"; do
         target="${TARGETS[$distance]}"
         all_paths=$(enumerate_paths "$SENDER" "$target")
         best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
-        # Store under a shared key — all protocols share the same optimal fees
         _SHARED_OPTIMAL_FEE[$distance]="$best_fee"
         path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
         printf "  ${SENDER} -> %-4s (%s): %d paths, optimal fee=%sx\n" \
@@ -564,25 +625,6 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         \$app = \Eiou\Core\Application::getInstance();
         \$app->services->getCurrentUser()->set('p2pExpiration', ${testExpiration});
     " 2>/dev/null || true
-
-    # Establish contacts once using the first protocol's addresses
-    establish_contacts
-
-    # For each subsequent protocol we need the right addresses for `eiou send`.
-    # Pre-populate all protocol addresses now so we can switch cheaply.
-    declare -A PROTO_ADDRESSES  # keyed by "${protocol}_${container}"
-    for container in "${containers[@]}"; do
-        PROTO_ADDRESSES["${first_protocol}_${container}"]="${containerAddresses[$container]}"
-    done
-    for protocol in "${PROTOCOLS[@]}"; do
-        [ "$protocol" = "$first_protocol" ] && continue
-        populate_addresses "$protocol"
-        for container in "${containers[@]}"; do
-            PROTO_ADDRESSES["${protocol}_${container}"]="${containerAddresses[$container]}"
-        done
-        # Also add contacts for this transport so routing works over it
-        establish_contacts
-    done
 
     # Run sends for each protocol
     for protocol in "${PROTOCOLS[@]}"; do
