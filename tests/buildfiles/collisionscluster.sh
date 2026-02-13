@@ -93,9 +93,18 @@ fee_W5b_W6=$(random_fee)
 fee_W7_W7b=$(random_fee)
 
 # --- Skip connection fees (within-arm shortcuts) ---
+# Overlapping skips create triangular cycles: e.g. E1-E2-E3-E1, E2-E3-E4-E2
+fee_N1_N3=$(random_fee)
 fee_N2_N4=$(random_fee)
+fee_N5_N7=$(random_fee)
+fee_E1_E3=$(random_fee)
+fee_E2_E4=$(random_fee)
 fee_E3_E5=$(random_fee)
+fee_S1_S3=$(random_fee)
+fee_S2_S4=$(random_fee)
 fee_S3_S5=$(random_fee)
+fee_W1_W3=$(random_fee)
+fee_W2_W4=$(random_fee)
 fee_W3_W5=$(random_fee)
 
 # --- Mesh hub fees ---
@@ -248,13 +257,33 @@ declare -A containersLinks=(
     [S4,W4]="$fee_S4_W4 $defaultCredit USD"
     [W4,S4]="$fee_S4_W4 $defaultCredit USD"
 
-    # --- Skip connections (within-arm shortcuts) ---
+    # --- Skip connections (within-arm shortcuts, overlapping = triangular cycles) ---
+    # North: N1-N2-N3-N1, N2-N3-N4-N2, N5-N6-N7-N5
+    [N1,N3]="$fee_N1_N3 $defaultCredit USD"
+    [N3,N1]="$fee_N1_N3 $defaultCredit USD"
     [N2,N4]="$fee_N2_N4 $defaultCredit USD"
     [N4,N2]="$fee_N2_N4 $defaultCredit USD"
+    [N5,N7]="$fee_N5_N7 $defaultCredit USD"
+    [N7,N5]="$fee_N5_N7 $defaultCredit USD"
+    # East: E1-E2-E3-E1, E2-E3-E4-E2, E3-E4-E5-E3
+    [E1,E3]="$fee_E1_E3 $defaultCredit USD"
+    [E3,E1]="$fee_E1_E3 $defaultCredit USD"
+    [E2,E4]="$fee_E2_E4 $defaultCredit USD"
+    [E4,E2]="$fee_E2_E4 $defaultCredit USD"
     [E3,E5]="$fee_E3_E5 $defaultCredit USD"
     [E5,E3]="$fee_E3_E5 $defaultCredit USD"
+    # South: S1-S2-S3-S1, S2-S3-S4-S2, S3-S4-S5-S3
+    [S1,S3]="$fee_S1_S3 $defaultCredit USD"
+    [S3,S1]="$fee_S1_S3 $defaultCredit USD"
+    [S2,S4]="$fee_S2_S4 $defaultCredit USD"
+    [S4,S2]="$fee_S2_S4 $defaultCredit USD"
     [S3,S5]="$fee_S3_S5 $defaultCredit USD"
     [S5,S3]="$fee_S3_S5 $defaultCredit USD"
+    # West: W1-W2-W3-W1, W2-W3-W4-W2, W3-W4-W5-W3
+    [W1,W3]="$fee_W1_W3 $defaultCredit USD"
+    [W3,W1]="$fee_W1_W3 $defaultCredit USD"
+    [W2,W4]="$fee_W2_W4 $defaultCredit USD"
+    [W4,W2]="$fee_W2_W4 $defaultCredit USD"
     [W3,W5]="$fee_W3_W5 $defaultCredit USD"
     [W5,W3]="$fee_W3_W5 $defaultCredit USD"
 
@@ -292,22 +321,22 @@ declare -A containersLinks=(
 declare -A expectedContacts=(
     [C0]=4    # Connected to N1, E1, S1, W1
     # --- North arm ---
-    [N1]=2    # Connected to C0, N2
+    [N1]=3    # Connected to C0, N2, N3 (skip)
     [N2]=3    # Connected to N1, N3, N4 (skip)
-    [N3]=4    # Connected to N2, N4, N3b, MH
+    [N3]=5    # Connected to N2, N4, N3b, MH, N1 (skip)
     [N4]=4    # Connected to N3, N5, N2 (skip), LN1
-    [N5]=3    # Connected to N4, N6, N5b
+    [N5]=4    # Connected to N4, N6, N5b, N7 (skip)
     [N6]=3    # Connected to N5, N7, N6b
-    [N7]=3    # Connected to N6, N8, N6b
+    [N7]=4    # Connected to N6, N8, N6b, N5 (skip)
     [N3b]=1   # Dead end: N3
     [N5b]=1   # Dead end: N5
     [N6b]=3   # Connected to N6, N7, E6b (cross-arm)
     [N8]=1    # Dead end: N7
     # --- East arm ---
-    [E1]=2    # Connected to C0, E2
-    [E2]=2    # Connected to E1, E3
-    [E3]=4    # Connected to E2, E4, MH, E5 (skip)
-    [E4]=3    # Connected to E3, E5, E4b
+    [E1]=3    # Connected to C0, E2, E3 (skip)
+    [E2]=3    # Connected to E1, E3, E4 (skip)
+    [E3]=5    # Connected to E2, E4, MH, E5 (skip), E1 (skip)
+    [E4]=4    # Connected to E3, E5, E4b, E2 (skip)
     [E5]=4    # Connected to E4, E6, E3 (skip), MH2
     [E6]=3    # Connected to E5, E7, E6b
     [E7]=4    # Connected to E6, E8, E6b, E7b
@@ -316,10 +345,10 @@ declare -A expectedContacts=(
     [E6b]=3   # Connected to E6, E7, N6b (cross-arm)
     [E7b]=1   # Dead end: E7
     # --- South arm ---
-    [S1]=2    # Connected to C0, S2
-    [S2]=2    # Connected to S1, S3
-    [S3]=4    # Connected to S2, S4, MH, S5 (skip)
-    [S4]=4    # Connected to S3, S5, S4b, W4 (cross-arm)
+    [S1]=3    # Connected to C0, S2, S3 (skip)
+    [S2]=3    # Connected to S1, S3, S4 (skip)
+    [S3]=5    # Connected to S2, S4, MH, S5 (skip), S1 (skip)
+    [S4]=5    # Connected to S3, S5, S4b, W4 (cross-arm), S2 (skip)
     [S5]=5    # Connected to S4, S6, S4b, S3 (skip), MH2
     [S6]=4    # Connected to S5, S7, S6b, LS1
     [S7]=3    # Connected to S6, S8, S7b
@@ -328,10 +357,10 @@ declare -A expectedContacts=(
     [S6b]=1   # Dead end: S6
     [S7b]=2   # Cross-arm node: S7, W7b
     # --- West arm ---
-    [W1]=2    # Connected to C0, W2
-    [W2]=2    # Connected to W1, W3
-    [W3]=5    # Connected to W2, W4, W3b, MH, W5 (skip)
-    [W4]=3    # Connected to W3, W5, S4 (cross-arm)
+    [W1]=3    # Connected to C0, W2, W3 (skip)
+    [W2]=3    # Connected to W1, W3, W4 (skip)
+    [W3]=6    # Connected to W2, W4, W3b, MH, W5 (skip), W1 (skip)
+    [W4]=4    # Connected to W3, W5, S4 (cross-arm), W2 (skip)
     [W5]=4    # Connected to W4, W6, W5b, W3 (skip)
     [W6]=3    # Connected to W5, W7, W5b
     [W7]=3    # Connected to W6, W8, W7b
@@ -399,16 +428,23 @@ declare -A expectedContacts=(
 ## Mesh hubs: MH(N3,E3,S3,W3) at depth 3, MH2(E5,S5) at depth 5
 ## Collision bypasses: N6-N6b-N7, E6-E6b-E7, S4-S4b-S5, W5-W5b-W6
 ## Cross-arm links: N6b<->E6b (depth 6), S7b<->W7b (depth 7), S4<->W4 (depth 4)
-## Skip connections: N2<->N4, E3<->E5, S3<->S5, W3<->W5
+## Skip connections (overlapping = triangular cycles):
+##   North: N1<->N3, N2<->N4, N5<->N7
+##   East:  E1<->E3, E2<->E4, E3<->E5
+##   South: S1<->S3, S2<->S4, S3<->S5
+##   West:  W1<->W3, W2<->W4, W3<->W5
 ## Linear branches: N4->LN1->LN2->LN3, S6->LS1->LS2
 ## ISO is isolated (no connections) -- cascade cancel target.
 ## Fees are randomized (0.1-0.9) per run; best-fee route varies each time.
 ##
 ## Minimum hop distances from C0:
 ##   1 hop:  N1, E1, S1, W1
-##   3 hops: N3, N4, E3, S3, W3
-##   6 hops: N6b, N7, E6b, E7, LN3, LS1, S6b, S7, W7
-## 53 nodes, 66 edges, max depth 8 hops from center.
+##   2 hops: N2, N3, E2, E3, S2, S3, W2, W3
+##   3 hops: N3b, N4, E4, E5, MH, S4, S5, W3b, W4, W5
+##   4 hops: N5, E4b, E6, LN1, MH2, S4b, S6, W5b, W6
+##   5 hops: N5b, N6, N7, E6b, E7, LN2, LS1, S6b, S7, W7
+##   6 hops: N6b, N8, E7b, E8, LN3, LS2, S7b, S8, W7b, W8
+## 53 nodes, 74 edges, 16 triangular cycles, max depth 7 hops from center.
 declare -A routingTests=(
     [C0,N8]="N1,N2,N3,N4,N5,N6,N7"
     [C0,E8]="E1,E2,E3,E4,E5,E6,E7"
