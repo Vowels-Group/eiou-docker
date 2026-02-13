@@ -3,6 +3,7 @@
 namespace Eiou\Contracts;
 
 use Eiou\Services\MessageDeliveryService;
+use Eiou\Contracts\P2pServiceInterface;
 
 /**
  * RP2P Service Interface
@@ -77,4 +78,24 @@ interface Rp2pServiceInterface
      * @return float Fee percent of request
      */
     public function feeInformation(array $p2p, array $request): float;
+
+    /**
+     * Handle a cancel notification from a downstream contact
+     *
+     * Increments the responded count and triggers selection/cascade cancel
+     * when all contacts have responded.
+     *
+     * @param array $request The cancel notification payload
+     * @param array $p2p The corresponding P2P record
+     * @return void
+     */
+    public function handleCancelNotification(array $request, array $p2p): void;
+
+    /**
+     * Set the P2pService for cascade cancel notification propagation
+     *
+     * @param P2pServiceInterface $service
+     * @return void
+     */
+    public function setP2pService(P2pServiceInterface $service): void;
 }

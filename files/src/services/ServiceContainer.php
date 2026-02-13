@@ -1427,9 +1427,11 @@ class ServiceContainer implements ContainerInterface {
             $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
         }
 
-        // Wire CleanupService -> Rp2pCandidateRepository, Rp2pService, P2pSenderRepository, P2pRelayedContactRepository
-        // Reason: CleanupService needs to select best-fee route before expiring P2P with candidates
-        //         and clean up old P2P sender and relayed contact records
+        // Wire CleanupService -> Rp2pCandidateRepository, Rp2pService, P2pSenderRepository,
+        //                        P2pRelayedContactRepository, P2pService
+        // Reason: CleanupService needs to select best-fee route before expiring P2P with candidates,
+        //         clean up old P2P sender and relayed contact records,
+        //         and send cascade cancel notification on P2P expiration
         if (isset($this->services['CleanupService'])) {
             $this->services['CleanupService']->setRp2pCandidateRepository($this->getRp2pCandidateRepository());
             $this->services['CleanupService']->setP2pSenderRepository($this->getP2pSenderRepository());
@@ -1437,12 +1439,19 @@ class ServiceContainer implements ContainerInterface {
             if (isset($this->services['Rp2pService'])) {
                 $this->services['CleanupService']->setRp2pService($this->services['Rp2pService']);
             }
+            if (isset($this->services['P2pService'])) {
+                $this->services['CleanupService']->setP2pService($this->services['P2pService']);
+            }
         }
 
-        // Wire Rp2pService -> P2pRelayedContactRepository
-        // Reason: Rp2pService needs relayed contacts for two-phase best-fee selection
+        // Wire Rp2pService -> P2pRelayedContactRepository, P2pService
+        // Reason: Rp2pService needs relayed contacts for two-phase best-fee selection,
+        //         and P2pService for cascade cancel notification propagation
         if (isset($this->services['Rp2pService'])) {
             $this->services['Rp2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            if (isset($this->services['P2pService'])) {
+                $this->services['Rp2pService']->setP2pService($this->services['P2pService']);
+            }
         }
 
         // Wire P2pService -> P2pRelayedContactRepository + Rp2pRepository + Rp2pService

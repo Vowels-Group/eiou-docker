@@ -219,6 +219,32 @@ class P2pPayload extends BasePayload
         ]);
     }
 
+    /**
+     * Build a P2P cancelled notification payload
+     *
+     * Sent upstream when a node cancels a P2P (dead-end, no viable contacts).
+     * Uses type 'rp2p' so it routes through the RP2P handler on the receiving node,
+     * where the cancelled flag is detected and handled as a response.
+     *
+     * @param string $hash The P2P hash being cancelled
+     * @param string $recipientAddress The address of the recipient (used to resolve
+     *        this node's address for the matching transport type)
+     * @return array The cancel notification payload
+     */
+    public function buildCancelled(string $hash, string $recipientAddress): array
+    {
+        return [
+            'type' => 'rp2p',
+            'hash' => $hash,
+            'cancelled' => true,
+            'amount' => 0,
+            'time' => $this->timeUtility->getCurrentMicrotime(),
+            'currency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
+            'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($recipientAddress),
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
     // /**
     //  * Build P2P inquiry payload
     //  *

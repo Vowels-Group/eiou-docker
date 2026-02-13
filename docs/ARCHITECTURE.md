@@ -1229,6 +1229,9 @@ The two-phase relay mechanism breaks this deadlock:
    contacts haven't, the node sends its current best downstream candidate to all
    `already_relayed` contacts via `sendBestCandidateToRelayedContacts()`. The
    `phase1_sent` flag is set atomically before sending to prevent re-triggering.
+   If no candidates exist (all inserted contacts cancelled), `sendCancelToRelayedContacts()`
+   sends cancel notifications instead, so relayed contacts can count the response
+   and break mutual deadlocks without waiting for hop-wait expiration.
 
 2. **Relay Phase 2** — When all propagated contacts (inserted + relayed combined)
    have responded, `selectAndForwardBestRp2p()` picks the overall best candidate
@@ -1242,12 +1245,18 @@ The two-phase relay mechanism breaks this deadlock:
    |                          |
   A5 (downstream)            A6 (downstream)
 
-Timeline:
+Timeline (candidates exist):
 1. A5 responds to A2, A6 responds to A4  (inserted contacts done)
 2. A2 sends best(A5) to A4              (relay Phase 1)
    A4 sends best(A6) to A2              (relay Phase 1)
 3. A2 re-selects from {A5, A4's candidate}, sends upstream to A1  (relay Phase 2)
    A4 re-selects from {A6, A2's candidate}, sends upstream to A3  (relay Phase 2)
+
+Timeline (all inserted cancelled — no candidates):
+1. A5 cancels to A2, A6 cancels to A4   (inserted contacts done, zero candidates)
+2. A2 sends cancel to A4                (relay Phase 1 cancel)
+   A4 sends cancel to A2                (relay Phase 1 cancel)
+3. A2 + A4 trigger Phase 2 → selectAndForwardBestRp2p → cancel + propagate upstream
 ```
 
 **Race condition guard:** If a relayed contact's RP2P arrives before all inserted
@@ -1257,6 +1266,27 @@ forwarding upstream. If Phase 1 was skipped, it calls
 `sendBestCandidateToRelayedContacts()` first, ensuring the relayed contact
 receives the node's best downstream candidate before the final selection goes
 upstream.
+
+**Queued status guard:** When a relay node receives a P2P, it is inserted with
+status `'queued'`. The P2P daemon picks it up and forwards it to downstream
+contacts, updating the status and `contacts_sent_count`. However, cancel
+notifications or RP2P candidates from *other* paths can arrive at the node before
+the daemon processes the queued P2P. If `handleCancelNotification()` runs while
+`contacts_sent_count` is still 0, it sees `respondedCount >= sentCount` and
+triggers selection prematurely — cancelling the P2P before it reaches the
+destination.
+
+Both `handleCancelNotification()` and `handleRp2pCandidate()` check the P2P
+status and defer selection when it is `'queued'`. The response is still counted
+(incrementing `contacts_responded_count`), but the selection trigger is skipped.
+After the daemon forwards the queued P2P and sets `contacts_sent_count`, the
+subsequent `checkBestFeeSelection()` call picks up the deferred responses and
+triggers selection with the correct counts.
+
+For matched-contact sends (destination node is a direct contact of the relay),
+`processQueuedP2pMessages()` also tracks `contacts_sent_count` for `'found'`
+responses and calls `checkBestFeeSelection()` after forwarding — ensuring RP2P
+responses that arrived during the blocking send are processed.
 
 **Sender list merge:** `handleRp2pRequest()` merges `p2p_relayed_contacts` into
 the `p2p_senders` list before sending RP2P responses. This ensures that contacts

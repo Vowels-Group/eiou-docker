@@ -97,14 +97,10 @@ for routingPair in "${!routingTests[@]}"; do
             fi
         done
 
-        # Retry if no relay fees detected - process queues with adaptive polling
+        # Retry if no relay fees detected - wait for daemon processing
         if [[ $relayFeesDetected -eq 0 ]]; then
-            echo -e "\t   No relay fees detected, retrying with queue processing..."
-            all_containers="${containers[*]}"
-            # Process queues multiple times to ensure routing messages propagate
-            for attempt in 1 2 3; do
-                process_routing_queues "$all_containers"
-            done
+            echo -e "\t   No relay fees detected, waiting for daemon processing..."
+            sleep 10
 
             # Re-check relay fees after retry
             for relay in "${intermediates[@]}"; do
@@ -209,14 +205,10 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
 
-        # Retry if delivery not detected - process queues with adaptive polling
+        # Retry if delivery not detected - wait for daemon processing
         if [[ "$stateIncreased" -eq 0 ]]; then
-            echo -e "\t   Delivery not detected, retrying with queue processing..."
-            all_containers="${containers[*]}"
-            # Process queues multiple times to ensure routing messages propagate
-            for attempt in 1 2 3 4; do
-                process_routing_queues "$all_containers"
-            done
+            echo -e "\t   Delivery not detected, waiting for daemon processing..."
+            sleep 10
 
             # Re-check delivery after retry
             finalState=$(docker exec ${lastContainer} php -r "

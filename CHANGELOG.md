@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## 2026-02-06 -- 2026-02-12
 
 ### Added
+- Cascade cancel/expire for dead-end P2P routes (#598): Nodes immediately notify upstream when they have no viable route, triggering early best-fee selection or cascade cancellation instead of waiting for expiration timers
 - Multi-part contact names with spaces supported in CLI (use quotes: `"John Doe"`)
 - Contact disambiguation when multiple contacts share the same name — CLI prompts for selection, JSON mode returns `multiple_matches` error with contact list
 - Searchable contact dropdown in GUI send form — type to filter contacts by name or address instead of scrolling through a static list
@@ -53,6 +54,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Changed
+- Removed manual `eiou in`/`eiou out` queue processing from integration tests (best-fee, cascade cancel, routing, send, negative-financial) — background daemon processors handle message routing naturally, reducing best-fee test time from ~73s to ~72s with no manual overhead; `syncTestSuite.sh` retains its own `process_all_queues` for precise chain synchronization sequencing
 - Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
 - GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
 - Startup user info section no longer creates a separate authcode temp file on first wallet creation — the seedphrase file already contains the authcode, so creating a second file was redundant and confusing; on restart or restore, the authcode-only file is still created as before
@@ -76,6 +78,10 @@ The project is currently in **ALPHA** status.
 - GUI chain drop propose/accept/reject actions reload page and reopen contact modal after completion
 
 ### Fixed
+- Race condition in best-fee P2P routing: cancel notifications from Phase 1 relayed contacts could arrive before the P2P daemon forwarded the queued message to the destination — `handleCancelNotification` and `handleRp2pCandidate` now defer selection when P2P status is 'queued'; matched-contact sends now track `contacts_sent_count` for 'found' responses and call `checkBestFeeSelection` after forwarding
+- Phase 1 cancel deadlock between hub nodes: when all inserted contacts cancelled with no RP2P candidates, `sendBestCandidateToRelayedContacts` silently returned without notifying relayed contacts — hub nodes with mutual relayed references (e.g. A4↔A8) deadlocked until hop-wait expiration instead of cascading cancel immediately
+- Collisions topology bugs: duplicate fee variable, missing `fee_A6_A9` (A6↔A9 link used wrong fee), duplicate `[A8,A10]` key instead of reverse `[A10,A8]`, wrong `expectedContacts` counts for A4 (4→5), A6 (3→4), wrong comment for A5; routing test intermediary lists now cover all shortest-path variations
+- Cascade cancel tests sent to nonexistent hostname which fails address validation before P2P is broadcast — added isolated A12 node (no connections) as cascade cancel target so the P2P propagates through the mesh and dead-end nodes actually exercise cascade cancel
 - Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
 - Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"
 - Graceful shutdown output truncated after Apache stop — `service apache2 stop` blocked indefinitely with no timeout, consuming the Docker grace period before MariaDB/Tor/Cron stops and completion message could execute; all service stops now wrapped in `timeout` commands

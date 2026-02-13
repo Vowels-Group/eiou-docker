@@ -684,6 +684,82 @@ class Rp2pPayloadTest extends TestCase
     }
 
     // ========================================
+    // buildCancelled() Tests
+    // ========================================
+
+    /**
+     * Test buildCancelled creates proper payload structure
+     */
+    public function testBuildCancelledCreatesProperPayloadStructure(): void
+    {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1704067200);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_SENDER_ADDRESS);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('type', $result);
+        $this->assertArrayHasKey('hash', $result);
+        $this->assertArrayHasKey('cancelled', $result);
+        $this->assertArrayHasKey('amount', $result);
+        $this->assertArrayHasKey('time', $result);
+        $this->assertArrayHasKey('currency', $result);
+        $this->assertArrayHasKey('senderAddress', $result);
+        $this->assertArrayHasKey('senderPublicKey', $result);
+    }
+
+    /**
+     * Test buildCancelled sets correct values
+     */
+    public function testBuildCancelledSetsCorrectValues(): void
+    {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1704067200);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_SENDER_ADDRESS);
+
+        $this->assertEquals('rp2p', $result['type']);
+        $this->assertEquals(self::TEST_HASH, $result['hash']);
+        $this->assertTrue($result['cancelled']);
+        $this->assertEquals(0, $result['amount']);
+        $this->assertEquals(1704067200, $result['time']);
+        $this->assertEquals(Constants::TRANSACTION_DEFAULT_CURRENCY, $result['currency']);
+        $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
+        $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
+    }
+
+    /**
+     * Test buildCancelled resolves sender address via transport utility
+     */
+    public function testBuildCancelledResolvesSenderAddressViaTransportUtility(): void
+    {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1704067200);
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('resolveUserAddressForTransport')
+            ->with(self::TEST_SENDER_ADDRESS)
+            ->willReturn(self::TEST_RESOLVED_ADDRESS);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_SENDER_ADDRESS);
+
+        $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
+    }
+
+    /**
+     * Test buildCancelled has exactly 8 keys
+     */
+    public function testBuildCancelledHasExactlyEightKeys(): void
+    {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1704067200);
+
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_SENDER_ADDRESS);
+
+        $this->assertCount(8, $result);
+    }
+
+    // ========================================
     // Cross-method Tests
     // ========================================
 
@@ -692,7 +768,10 @@ class Rp2pPayloadTest extends TestCase
      */
     public function testAllMethodsUseResolveUserAddressForTransportCorrectly(): void
     {
-        $this->mockTransportUtility->expects($this->exactly(6))
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1704067200);
+
+        $this->mockTransportUtility->expects($this->exactly(7))
             ->method('resolveUserAddressForTransport')
             ->willReturn(self::TEST_RESOLVED_ADDRESS);
 
@@ -706,6 +785,7 @@ class Rp2pPayloadTest extends TestCase
         $this->payload->buildRejection($requestData);
         $this->payload->buildForwarded($requestData);
         $this->payload->buildInserted($requestData);
+        $this->payload->buildCancelled(self::TEST_HASH, self::TEST_SENDER_ADDRESS);
     }
 
     /**
@@ -713,6 +793,9 @@ class Rp2pPayloadTest extends TestCase
      */
     public function testAllMethodsIncludeSenderPublicKeyFromUserContext(): void
     {
+        $this->mockTimeUtility->method('getCurrentMicrotime')
+            ->willReturn(1704067200);
+
         $requestData = $this->createStandardRequestData();
         $databaseData = $this->createDatabaseFormatData();
 
@@ -739,6 +822,10 @@ class Rp2pPayloadTest extends TestCase
         // buildInserted()
         $decoded = json_decode($this->payload->buildInserted($requestData), true);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $decoded['senderPublicKey']);
+
+        // buildCancelled()
+        $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_SENDER_ADDRESS);
+        $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
     }
 
     /**

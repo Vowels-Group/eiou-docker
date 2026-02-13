@@ -8,6 +8,7 @@ use Eiou\Contracts\CleanupServiceInterface;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\Rp2pServiceInterface;
+use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
@@ -106,6 +107,11 @@ class CleanupService implements CleanupServiceInterface {
     private ?P2pRelayedContactRepository $p2pRelayedContactRepository = null;
 
     /**
+     * @var P2pServiceInterface|null P2P service for cascade cancel notification on expiration
+     */
+    private ?P2pServiceInterface $p2pService = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -191,6 +197,17 @@ class CleanupService implements CleanupServiceInterface {
     public function setP2pRelayedContactRepository(P2pRelayedContactRepository $p2pRelayedContactRepository): void
     {
         $this->p2pRelayedContactRepository = $p2pRelayedContactRepository;
+    }
+
+    /**
+     * Set the P2pService for cascade cancel notification on P2P expiration
+     *
+     * @param P2pServiceInterface $p2pService
+     * @return void
+     */
+    public function setP2pService(P2pServiceInterface $p2pService): void
+    {
+        $this->p2pService = $p2pService;
     }
 
     /**
@@ -374,6 +391,13 @@ class CleanupService implements CleanupServiceInterface {
         $this->p2pRepository->updateStatus($hash, Constants::STATUS_EXPIRED);
         if (function_exists('output') && function_exists('outputP2pExpired')) {
             output(outputP2pExpired($message), 'SILENT');
+        }
+
+        // Send cancel notification upstream so upstream nodes can trigger
+        // selection immediately instead of waiting for their own expiration.
+        // Only for relay nodes (no destination_address) — originators have no upstream.
+        if (!isset($message['destination_address']) && $this->p2pService !== null) {
+            $this->p2pService->sendCancelNotificationForHash($hash);
         }
 
         // Cancel associated transactions if they exist

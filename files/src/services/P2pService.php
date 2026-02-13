@@ -758,13 +758,18 @@ class P2pService implements P2pServiceInterface {
 
                 // Track sent count for best-fee mode: the matched contact will send
                 // an RP2P response, so we expect exactly 1 response.
-                // Both 'inserted' (new P2P) and 'already_relayed' (P2P exists via
-                // another path) contacts track this sender and will forward RP2P back.
-                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed')) {
+                // 'found' means the destination matched itself and will send RP2P back.
+                // 'inserted' and 'already_relayed' mean the contact will forward and respond.
+                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed' || $response['status'] === 'found')) {
                     $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
                 }
 
                 output(outputP2pSendResult($response),'SILENT');
+
+                // Re-check best-fee selection: RP2P may have arrived during the
+                // blocking send (destination sends RP2P inline). Now that sentCount
+                // is set, check if enough responses arrived to trigger selection.
+                $this->rp2pService?->checkBestFeeSelection($p2pHash);
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;
@@ -846,9 +851,16 @@ class P2pService implements P2pServiceInterface {
                 }
 
                 // Cancel the message due to no viable contacts to send to (user is dead-end)
+                // Send cancel notification upstream so senders can count this as a
+                // responded contact and trigger selection/cancellation immediately
+                // instead of waiting for their own expiration timer.
                 if($sentMessages === 0){
                     output(outputNoViableRouteP2p($p2pHash,'SILENT'));
                     $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
+                    $p2p = $this->p2pRepository->getByHash($p2pHash);
+                    if ($p2p) {
+                        $this->sendCancelNotification($p2pHash, $p2p);
+                    }
                     continue;
                 }
 
@@ -931,6 +943,75 @@ class P2pService implements P2pServiceInterface {
         output(outputInsertingP2pRequest($message['receiver_address']), 'SILENT');
         $this->p2pRepository->insertP2pRequest($p2pPayload, $message['receiver_address']);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
+    }
+
+    /**
+     * Send cancel notification upstream for a P2P hash
+     *
+     * Looks up the P2P record and all senders, then sends a cancel notification
+     * to each upstream sender. Used when this node cannot route the P2P further
+     * (dead-end or expiration with no candidates).
+     *
+     * @param string $hash The P2P hash to cancel
+     * @return void
+     */
+    public function sendCancelNotificationForHash(string $hash): void
+    {
+        $p2p = $this->p2pRepository->getByHash($hash);
+        if (!$p2p) {
+            return;
+        }
+        $this->sendCancelNotification($hash, $p2p);
+    }
+
+    /**
+     * Send cancel notification to all upstream senders of a P2P
+     *
+     * Builds a cancel payload and sends it to every node in p2p_senders
+     * for this hash. The cancel notification uses type 'rp2p' so it routes
+     * through the receiving node's RP2P handler for response counting.
+     *
+     * @param string $hash The P2P hash
+     * @param array $p2p The P2P record from database
+     * @return void
+     */
+    private function sendCancelNotification(string $hash, array $p2p): void
+    {
+        // Don't send cancel upstream for originator nodes — they have no upstream
+        if (isset($p2p['destination_address'])) {
+            return;
+        }
+
+        // Get all senders from p2p_senders table
+        $senders = $this->p2pSenderRepository
+            ? $this->p2pSenderRepository->getSendersByHash($hash)
+            : [];
+
+        // Always include the original sender from the p2p record
+        $originalSender = $p2p['sender_address'];
+        if (empty($senders)) {
+            $senders = [['sender_address' => $originalSender]];
+        } else {
+            $senderAddresses = array_column($senders, 'sender_address');
+            if (!in_array($originalSender, $senderAddresses)) {
+                $senders[] = ['sender_address' => $originalSender];
+            }
+        }
+
+        // Build per-sender cancel payload: senderAddress is resolved for the
+        // recipient's transport type (HTTP, Tor, etc.) so the cancel notification
+        // uses the correct transport address for this node.
+        foreach ($senders as $sender) {
+            $cancelPayload = $this->p2pPayload->buildCancelled($hash, $sender['sender_address']);
+            $contactHash = substr(hash('sha256', $sender['sender_address']), 0, 8);
+            $messageId = 'cancel-' . $hash . '-' . $contactHash;
+            $this->sendP2pMessage('rp2p', $sender['sender_address'], $cancelPayload, $messageId);
+        }
+
+        Logger::getInstance()->info("Sent cancel notification upstream", [
+            'hash' => $hash,
+            'sender_count' => count($senders),
+        ]);
     }
 
     /**
