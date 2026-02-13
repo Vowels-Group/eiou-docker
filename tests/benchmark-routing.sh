@@ -708,19 +708,16 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
             OPTIMAL_FEES["${protocol}_${distance}"]="${_SHARED_OPTIMAL_FEE[$distance]}"
         done
 
-        # Fast mode sends
-        printf "\n--- Fast mode sends (timeout: ${send_timeout}s) ---\n"
-        for ((run=1; run<=RUNS; run++)); do
-            for distance in "${DISTANCES[@]}"; do
-                do_send "$protocol" "$distance" "fast" "$run" "$send_timeout"
-            done
-        done
-
-        # Best mode sends
-        printf "\n--- Best mode sends (timeout: ${send_timeout}s) ---\n"
-        for ((run=1; run<=RUNS; run++)); do
-            for distance in "${DISTANCES[@]}"; do
-                do_send "$protocol" "$distance" "best" "$run" "$send_timeout"
+        # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
+        # then 3-hop fast, 3-hop best, etc. This keeps topology state consistent
+        # for each hop distance before moving on.
+        for distance in "${DISTANCES[@]}"; do
+            target="${TARGETS[$distance]}"
+            printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
+            for mode in "fast" "best"; do
+                for ((run=1; run<=RUNS; run++)); do
+                    do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
+                done
             done
         done
     done
@@ -797,19 +794,15 @@ else
                 "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_fee"
         done
 
-        # Fast mode sends
-        printf "\n--- Fast mode sends (timeout: ${send_timeout}s) ---\n"
-        for ((run=1; run<=RUNS; run++)); do
-            for distance in "${DISTANCES[@]}"; do
-                do_send "$protocol" "$distance" "fast" "$run" "$send_timeout"
-            done
-        done
-
-        # Best mode sends
-        printf "\n--- Best mode sends (timeout: ${send_timeout}s) ---\n"
-        for ((run=1; run<=RUNS; run++)); do
-            for distance in "${DISTANCES[@]}"; do
-                do_send "$protocol" "$distance" "best" "$run" "$send_timeout"
+        # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
+        # then 3-hop fast, 3-hop best, etc.
+        for distance in "${DISTANCES[@]}"; do
+            target="${TARGETS[$distance]}"
+            printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
+            for mode in "fast" "best"; do
+                for ((run=1; run<=RUNS; run++)); do
+                    do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
+                done
             done
         done
 

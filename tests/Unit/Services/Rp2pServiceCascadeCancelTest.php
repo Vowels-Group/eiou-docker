@@ -187,9 +187,8 @@ class Rp2pServiceCascadeCancelTest extends TestCase
     }
 
     /**
-     * Test checkRp2pPossible does NOT process cancel in fast mode (fast=1)
-     *
-     * When P2P is fast mode (fast=1), cancel notification should be ignored.
+     * Test checkRp2pPossible does NOT process cancel logic in fast mode (fast=1)
+     * but still echoes a response to prevent "No response received" delivery failures.
      */
     public function testCheckRp2pPossibleDoesNotProcessCancelInFastMode(): void
     {
@@ -223,8 +222,11 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         $output = ob_get_clean();
 
         $this->assertFalse($result);
-        // No output because fast=1 bypasses the cancel handler
-        $this->assertEmpty($output);
+        // Response is still echoed to prevent delivery failures, even though
+        // cancel cascade logic is skipped for fast mode
+        $decoded = json_decode($output, true);
+        $this->assertIsArray($decoded);
+        $this->assertEquals('received', $decoded['status']);
     }
 
     /**
