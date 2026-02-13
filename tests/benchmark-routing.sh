@@ -667,11 +667,13 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
     # Build adjacency list for fast DFS neighbor lookup
     build_adjacency_list
 
-    # Enumerate optimal paths once — fees are the same for all protocols
+    # Enumerate optimal paths once — fees are the same for all protocols.
+    # Depth limit = distance + 2 so we explore near-optimal alternatives
+    # without wasting time on long detours (e.g., 183 paths for a 1-hop target).
     printf "\nEnumerating optimal paths (shared fee structure)...\n"
     for distance in "${DISTANCES[@]}"; do
         target="${TARGETS[$distance]}"
-        all_paths=$(enumerate_paths_limited "$SENDER" "$target")
+        all_paths=$(enumerate_paths_limited "$SENDER" "$target" $((distance + 2)))
         best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
         _SHARED_OPTIMAL_FEE[$distance]="$best_fee"
         path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
@@ -787,7 +789,7 @@ else
         printf "\nEnumerating optimal paths...\n"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
-            all_paths=$(enumerate_paths_limited "$SENDER" "$target")
+            all_paths=$(enumerate_paths_limited "$SENDER" "$target" $((distance + 2)))
             best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
             OPTIMAL_FEES["${protocol}_${distance}"]="$best_fee"
             path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
