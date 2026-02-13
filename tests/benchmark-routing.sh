@@ -77,6 +77,56 @@ declare -A _SHARED_OPTIMAL_FEE
 
 # ======================== Helper Functions ========================
 
+# Build adjacency list from containersLinks for fast neighbor lookup.
+# Without this, DFS scans all 148 links at every node. With it, each node
+# only iterates its 3-4 actual neighbors.
+# Populates: ADJ_NEIGHBORS[node]="N1 N2 N3" and ADJ_FEE[from,to]="0.5"
+declare -A ADJ_NEIGHBORS ADJ_FEE
+build_adjacency_list() {
+    ADJ_NEIGHBORS=()
+    ADJ_FEE=()
+    for key in "${!containersLinks[@]}"; do
+        local from="${key%%,*}"
+        local to="${key##*,}"
+        local fee=$(echo "${containersLinks[$key]}" | awk '{print $1}')
+        ADJ_NEIGHBORS[$from]="${ADJ_NEIGHBORS[$from]:+${ADJ_NEIGHBORS[$from]} }${to}"
+        ADJ_FEE[$key]="$fee"
+    done
+}
+
+# Depth-limited path enumeration using pre-built adjacency list.
+# Usage: enumerate_paths_limited <source> <dest> [max_depth]
+# max_depth defaults to 10 (covers our 6-hop target with margin).
+enumerate_paths_limited() {
+    local source="$1"
+    local dest="$2"
+    local max_depth="${3:-10}"
+    _dfs_limited "$source" "$dest" "$source" ",${source}," "1.000000" 0 "$max_depth" | sort -t= -k2 -n
+}
+
+# Internal DFS with depth limit — uses ADJ_NEIGHBORS/ADJ_FEE for O(degree) per node
+_dfs_limited() {
+    local current="$1" dest="$2" path="$3"
+    local visited="$4" multiplier="$5" depth="$6" max_depth="$7"
+
+    if [ "$current" = "$dest" ]; then
+        printf "%s fee=%s\n" "$path" "$multiplier"
+        return
+    fi
+    [ "$depth" -ge "$max_depth" ] && return
+
+    for to in ${ADJ_NEIGHBORS[$current]}; do
+        [[ "$visited" == *",$to,"* ]] && continue
+        local fee="${ADJ_FEE[$current,$to]}"
+        if [ "$to" = "$dest" ]; then
+            _dfs_limited "$to" "$dest" "${path}->${to}" "${visited}${to}," "$multiplier" $((depth+1)) "$max_depth"
+        else
+            local new_m=$(awk "BEGIN {printf \"%.6f\", $multiplier * (1 + ${fee:-0}/100)}")
+            _dfs_limited "$to" "$dest" "${path}->${to}" "${visited}${to}," "$new_m" $((depth+1)) "$max_depth"
+        fi
+    done
+}
+
 # Compute compound fee multiplier for a traced path
 # Fee = product of (1 + feePercent/100) at each relay hop; destination excluded
 # Usage: compute_path_fee "C0->E1->E3->MH" "MH"
@@ -320,11 +370,16 @@ do_send() {
 
         if [ "$hash" != "UNKNOWN" ]; then
             path=$(trace_actual_path "$hash" "$SENDER" "$target")
-            fee=$(compute_path_fee "$path" "$target")
-            local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
-            if [ -n "$optimal" ] && [ "$optimal" != "" ]; then
-                is_optimal=$(awk "BEGIN {printf \"%s\", ($fee <= $optimal * 1.000001) ? \"OPTIMAL\" : \"SUB-OPT\"}")
-            fi
+        fi
+        # Direct sends (1 hop) have no relay chain — trace returns empty.
+        # Fall back to the obvious direct path.
+        if [ -z "$path" ]; then
+            path="${SENDER}->${target}"
+        fi
+        fee=$(compute_path_fee "$path" "$target")
+        local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
+        if [ -n "$optimal" ] && [ "$optimal" != "" ]; then
+            is_optimal=$(awk "BEGIN {printf \"%s\", ($fee <= $optimal * 1.000001) ? \"OPTIMAL\" : \"SUB-OPT\"}")
         fi
     fi
 
@@ -354,24 +409,27 @@ _accumulate_keys() {
     local p_filter="$1" d_filter="$2" m_filter="$3"
     _ts=0; _tc=0; _pc=0; _oc=0; _fc=0; _fs="0"; _tmin=999999; _tmax=0
 
-    for protocol in "${PROTOCOLS[@]}"; do
-        [ -n "$p_filter" ] && [ "$protocol" != "$p_filter" ] && continue
-        for distance in "${DISTANCES[@]}"; do
-            [ -n "$d_filter" ] && [ "$distance" != "$d_filter" ] && continue
-            for mode in "fast" "best"; do
-                [ -n "$m_filter" ] && [ "$mode" != "$m_filter" ] && continue
-                for ((run=1; run<=RUNS; run++)); do
-                    key="${protocol}_${distance}_${mode}_${run}"
-                    if [ -n "${R_TIME[$key]}" ]; then
-                        _ts=$((_ts + R_TIME[$key]))
+    # Use _ak_ prefixed vars to avoid clobbering outer loop variables
+    # (bash has no block scoping — inner loops overwrite outer variables)
+    local _ak_p _ak_d _ak_m _ak_r _ak_key
+    for _ak_p in "${PROTOCOLS[@]}"; do
+        [ -n "$p_filter" ] && [ "$_ak_p" != "$p_filter" ] && continue
+        for _ak_d in "${DISTANCES[@]}"; do
+            [ -n "$d_filter" ] && [ "$_ak_d" != "$d_filter" ] && continue
+            for _ak_m in "fast" "best"; do
+                [ -n "$m_filter" ] && [ "$_ak_m" != "$m_filter" ] && continue
+                for ((_ak_r=1; _ak_r<=RUNS; _ak_r++)); do
+                    _ak_key="${_ak_p}_${_ak_d}_${_ak_m}_${_ak_r}"
+                    if [ -n "${R_TIME[$_ak_key]}" ]; then
+                        _ts=$((_ts + R_TIME[$_ak_key]))
                         _tc=$((_tc + 1))
-                        [ "${R_TIME[$key]}" -lt "$_tmin" ] && _tmin=${R_TIME[$key]}
-                        [ "${R_TIME[$key]}" -gt "$_tmax" ] && _tmax=${R_TIME[$key]}
+                        [ "${R_TIME[$_ak_key]}" -lt "$_tmin" ] && _tmin=${R_TIME[$_ak_key]}
+                        [ "${R_TIME[$_ak_key]}" -gt "$_tmax" ] && _tmax=${R_TIME[$_ak_key]}
                     fi
-                    [ "${R_PASS[$key]}" = "1" ] && _pc=$((_pc + 1))
-                    [ "${R_OPTIMAL[$key]}" = "OPTIMAL" ] && _oc=$((_oc + 1))
-                    if [ "${R_PASS[$key]}" = "1" ] && [ "${R_FEE[$key]}" != "0" ] && [ -n "${R_FEE[$key]}" ]; then
-                        _fs=$(awk "BEGIN {printf \"%.6f\", $_fs + ${R_FEE[$key]}}")
+                    [ "${R_PASS[$_ak_key]}" = "1" ] && _pc=$((_pc + 1))
+                    [ "${R_OPTIMAL[$_ak_key]}" = "OPTIMAL" ] && _oc=$((_oc + 1))
+                    if [ "${R_PASS[$_ak_key]}" = "1" ] && [ "${R_FEE[$_ak_key]}" != "0" ] && [ -n "${R_FEE[$_ak_key]}" ]; then
+                        _fs=$(awk "BEGIN {printf \"%.6f\", $_fs + ${R_FEE[$_ak_key]}}")
                         _fc=$((_fc + 1))
                     fi
                 done
@@ -606,11 +664,14 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         exit 1
     fi
 
+    # Build adjacency list for fast DFS neighbor lookup
+    build_adjacency_list
+
     # Enumerate optimal paths once — fees are the same for all protocols
     printf "\nEnumerating optimal paths (shared fee structure)...\n"
     for distance in "${DISTANCES[@]}"; do
         target="${TARGETS[$distance]}"
-        all_paths=$(enumerate_paths "$SENDER" "$target")
+        all_paths=$(enumerate_paths_limited "$SENDER" "$target")
         best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
         _SHARED_OPTIMAL_FEE[$distance]="$best_fee"
         path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
@@ -719,11 +780,14 @@ else
             \$app->services->getCurrentUser()->set('p2pExpiration', ${testExpiration});
         " 2>/dev/null || true
 
+        # Build adjacency list for fast DFS neighbor lookup
+        build_adjacency_list
+
         # Enumerate paths (fresh fees each build)
         printf "\nEnumerating optimal paths...\n"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
-            all_paths=$(enumerate_paths "$SENDER" "$target")
+            all_paths=$(enumerate_paths_limited "$SENDER" "$target")
             best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
             OPTIMAL_FEES["${protocol}_${distance}"]="$best_fee"
             path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
