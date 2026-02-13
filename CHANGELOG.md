@@ -24,6 +24,7 @@ The project is currently in **ALPHA** status.
 - Contact modal exceeded viewport height causing settings buttons (Block/Delete/Save) to be invisible — modal now constrained to 90vh with internal scrolling
 - Contact modal settings buttons were stacked vertically with uneven sizing — now displayed in a compact inline row with consistent height
 - Contact modal transactions tab refresh button overlapped info text on narrow screens — text now wraps while button stays intact
+- P2P max level boundary nodes now immediately send cancel notification upstream instead of going through the full broadcast-rejection cycle — when `requestLevel >= maxRequestLevel` after re-adjustment, the node stores as cancelled and notifies upstream instantly, significantly improving cancel cascade propagation speed in larger topologies
 
 ---
 
