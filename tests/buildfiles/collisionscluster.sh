@@ -23,6 +23,9 @@ declare -a containers=(
     "S4b" "S6b" "S7b"
     "W1" "W2" "W3" "W4" "W5" "W6" "W7" "W8"
     "W3b" "W5b" "W7b"
+    "MH" "MH2"
+    "LN1" "LN2" "LN3"
+    "LS1" "LS2"
     "ISO"
 )
 
@@ -89,9 +92,31 @@ fee_W5_W5b=$(random_fee)
 fee_W5b_W6=$(random_fee)
 fee_W7_W7b=$(random_fee)
 
+# --- Skip connection fees (within-arm shortcuts) ---
+fee_N2_N4=$(random_fee)
+fee_E3_E5=$(random_fee)
+fee_S3_S5=$(random_fee)
+fee_W3_W5=$(random_fee)
+
+# --- Mesh hub fees ---
+fee_N3_MH=$(random_fee)
+fee_E3_MH=$(random_fee)
+fee_S3_MH=$(random_fee)
+fee_W3_MH=$(random_fee)
+fee_E5_MH2=$(random_fee)
+fee_S5_MH2=$(random_fee)
+
+# --- Linear branch fees ---
+fee_N4_LN1=$(random_fee)
+fee_LN1_LN2=$(random_fee)
+fee_LN2_LN3=$(random_fee)
+fee_S6_LS1=$(random_fee)
+fee_LS1_LS2=$(random_fee)
+
 # --- Cross-arm link fees ---
 fee_N6b_E6b=$(random_fee)
 fee_S7b_W7b=$(random_fee)
+fee_S4_W4=$(random_fee)
 
 # Define contacts, direction ->
 # example: [A0,A1] defines A0 as a contact of A1
@@ -219,15 +244,58 @@ declare -A containersLinks=(
     # South-West at depth 7
     [S7b,W7b]="$fee_S7b_W7b $defaultCredit USD"
     [W7b,S7b]="$fee_S7b_W7b $defaultCredit USD"
+    # South-West at depth 4
+    [S4,W4]="$fee_S4_W4 $defaultCredit USD"
+    [W4,S4]="$fee_S4_W4 $defaultCredit USD"
+
+    # --- Skip connections (within-arm shortcuts) ---
+    [N2,N4]="$fee_N2_N4 $defaultCredit USD"
+    [N4,N2]="$fee_N2_N4 $defaultCredit USD"
+    [E3,E5]="$fee_E3_E5 $defaultCredit USD"
+    [E5,E3]="$fee_E3_E5 $defaultCredit USD"
+    [S3,S5]="$fee_S3_S5 $defaultCredit USD"
+    [S5,S3]="$fee_S3_S5 $defaultCredit USD"
+    [W3,W5]="$fee_W3_W5 $defaultCredit USD"
+    [W5,W3]="$fee_W3_W5 $defaultCredit USD"
+
+    # --- Mesh hub at depth 3 (MH connects all 4 arms) ---
+    [N3,MH]="$fee_N3_MH $defaultCredit USD"
+    [MH,N3]="$fee_N3_MH $defaultCredit USD"
+    [E3,MH]="$fee_E3_MH $defaultCredit USD"
+    [MH,E3]="$fee_E3_MH $defaultCredit USD"
+    [S3,MH]="$fee_S3_MH $defaultCredit USD"
+    [MH,S3]="$fee_S3_MH $defaultCredit USD"
+    [W3,MH]="$fee_W3_MH $defaultCredit USD"
+    [MH,W3]="$fee_W3_MH $defaultCredit USD"
+
+    # --- Mesh hub at depth 5 (MH2 bridges East-South) ---
+    [E5,MH2]="$fee_E5_MH2 $defaultCredit USD"
+    [MH2,E5]="$fee_E5_MH2 $defaultCredit USD"
+    [S5,MH2]="$fee_S5_MH2 $defaultCredit USD"
+    [MH2,S5]="$fee_S5_MH2 $defaultCredit USD"
+
+    # --- Linear branch off N4 ---
+    [N4,LN1]="$fee_N4_LN1 $defaultCredit USD"
+    [LN1,N4]="$fee_N4_LN1 $defaultCredit USD"
+    [LN1,LN2]="$fee_LN1_LN2 $defaultCredit USD"
+    [LN2,LN1]="$fee_LN1_LN2 $defaultCredit USD"
+    [LN2,LN3]="$fee_LN2_LN3 $defaultCredit USD"
+    [LN3,LN2]="$fee_LN2_LN3 $defaultCredit USD"
+
+    # --- Linear branch off S6 ---
+    [S6,LS1]="$fee_S6_LS1 $defaultCredit USD"
+    [LS1,S6]="$fee_S6_LS1 $defaultCredit USD"
+    [LS1,LS2]="$fee_LS1_LS2 $defaultCredit USD"
+    [LS2,LS1]="$fee_LS1_LS2 $defaultCredit USD"
 )
 
 declare -A expectedContacts=(
     [C0]=4    # Connected to N1, E1, S1, W1
     # --- North arm ---
     [N1]=2    # Connected to C0, N2
-    [N2]=2    # Connected to N1, N3
-    [N3]=3    # Connected to N2, N4, N3b
-    [N4]=2    # Connected to N3, N5
+    [N2]=3    # Connected to N1, N3, N4 (skip)
+    [N3]=4    # Connected to N2, N4, N3b, MH
+    [N4]=4    # Connected to N3, N5, N2 (skip), LN1
     [N5]=3    # Connected to N4, N6, N5b
     [N6]=3    # Connected to N5, N7, N6b
     [N7]=3    # Connected to N6, N8, N6b
@@ -238,9 +306,9 @@ declare -A expectedContacts=(
     # --- East arm ---
     [E1]=2    # Connected to C0, E2
     [E2]=2    # Connected to E1, E3
-    [E3]=2    # Connected to E2, E4
+    [E3]=4    # Connected to E2, E4, MH, E5 (skip)
     [E4]=3    # Connected to E3, E5, E4b
-    [E5]=2    # Connected to E4, E6
+    [E5]=4    # Connected to E4, E6, E3 (skip), MH2
     [E6]=3    # Connected to E5, E7, E6b
     [E7]=4    # Connected to E6, E8, E6b, E7b
     [E8]=1    # Dead end: E7
@@ -250,10 +318,10 @@ declare -A expectedContacts=(
     # --- South arm ---
     [S1]=2    # Connected to C0, S2
     [S2]=2    # Connected to S1, S3
-    [S3]=2    # Connected to S2, S4
-    [S4]=3    # Connected to S3, S5, S4b
-    [S5]=3    # Connected to S4, S6, S4b
-    [S6]=3    # Connected to S5, S7, S6b
+    [S3]=4    # Connected to S2, S4, MH, S5 (skip)
+    [S4]=4    # Connected to S3, S5, S4b, W4 (cross-arm)
+    [S5]=5    # Connected to S4, S6, S4b, S3 (skip), MH2
+    [S6]=4    # Connected to S5, S7, S6b, LS1
     [S7]=3    # Connected to S6, S8, S7b
     [S8]=1    # Dead end: S7
     [S4b]=2   # Collision node: S4, S5
@@ -262,53 +330,92 @@ declare -A expectedContacts=(
     # --- West arm ---
     [W1]=2    # Connected to C0, W2
     [W2]=2    # Connected to W1, W3
-    [W3]=3    # Connected to W2, W4, W3b
-    [W4]=2    # Connected to W3, W5
-    [W5]=3    # Connected to W4, W6, W5b
+    [W3]=5    # Connected to W2, W4, W3b, MH, W5 (skip)
+    [W4]=3    # Connected to W3, W5, S4 (cross-arm)
+    [W5]=4    # Connected to W4, W6, W5b, W3 (skip)
     [W6]=3    # Connected to W5, W7, W5b
     [W7]=3    # Connected to W6, W8, W7b
     [W8]=1    # Dead end: W7
     [W3b]=1   # Dead end: W3
     [W5b]=2   # Collision node: W5, W6
     [W7b]=2   # Cross-arm node: W7, S7b
+    # --- Mesh hubs ---
+    [MH]=4    # Connected to N3, E3, S3, W3
+    [MH2]=2   # Connected to E5, S5
+    # --- Linear branch off N4 ---
+    [LN1]=2   # Connected to N4, LN2
+    [LN2]=2   # Connected to LN1, LN3
+    [LN3]=1   # Dead end: LN2
+    # --- Linear branch off S6 ---
+    [LS1]=2   # Connected to S6, LS2
+    [LS2]=1   # Dead end: LS1
     # --- Isolated ---
     [ISO]=0   # Isolated node (cascade cancel target)
 )
 
-# 46-node cluster (collisionscluster) topology with randomized fees,
-# dead ends, collision paths, and cross-arm links:
+# 53-node cluster (collisionscluster) topology with randomized fees,
+# dead ends, collision paths, cross-arm links, mesh hubs, skip connections,
+# and linear branches:
 ##
-##                      N3b   N5b       N8
-##                       |     |         |
-##   C0──N1──N2──N3──N4──N5──N6──N7─────┘
-##                            |  |
-##                           N6b─┘
-##                            |
-##                   ┌──────E6b─┘
-##                   |      |
-##   C0──E1──E2──E3──E4──E5──E6──E7──E8
-##                   |            |   |
-##                  E4b          E6b─┘ E7b
+##                                   N8
+##                                    |
+##                              N5b--N7
+##                                    |\
+##                                  N6-N6b
+##                                    |
+##                                   N5
+##                                    |
+##                     LN3--LN2--LN1--N4
+##                                    |
+##                           MH------N3--N3b
+##                                    |
+##                                   N2
+##                                    |
+##                                   N1
+##                                    |
+## W8--W7--W6--W5--W4--W3--W2--W1----C0----E1--E2--E3--E4--E5--E6--E7--E8
+##      |    |              |                            |    |    |    |
+##     W7b  W5b            W3b                         E4b  MH2  E6b  E7b
+##                                    |
+##                                   S1
+##                                    |
+##                                   S2
+##                                    |
+##                                   S3
+##                                    |
+##                              S4b--S4
+##                                    |
+##                                   S5
+##                                    |
+##                          S6b--S6--LS1--LS2
+##                                    |
+##                               S8--S7
+##                                    |
+##                                   S7b
 ##
-##   C0──S1──S2──S3──S4──S5──S6──S7──S8
-##                   |  |    |    |
-##                  S4b─┘   S6b  S7b
-##                                |
-##                       W7b─────┘
-##                        |
-##   C0──W1──W2──W3──W4──W5──W6──W7──W8
-##               |        |  |    |
-##              W3b      W5b─┘   W7b
+## C0 at center. N=up, S=down, E=right, W=left.
+## Lines show spine + branch edges. Additional connections listed below.
 ##
-## Cross-arm links: N6b<->E6b (depth 6), S7b<->W7b (depth 7)
-## ISO is isolated (no connections) — used as cascade cancel target.
+## Mesh hubs: MH(N3,E3,S3,W3) at depth 3, MH2(E5,S5) at depth 5
+## Collision bypasses: N6-N6b-N7, E6-E6b-E7, S4-S4b-S5, W5-W5b-W6
+## Cross-arm links: N6b<->E6b (depth 6), S7b<->W7b (depth 7), S4<->W4 (depth 4)
+## Skip connections: N2<->N4, E3<->E5, S3<->S5, W3<->W5
+## Linear branches: N4->LN1->LN2->LN3, S6->LS1->LS2
+## ISO is isolated (no connections) -- cascade cancel target.
 ## Fees are randomized (0.1-0.9) per run; best-fee route varies each time.
-## 46 nodes, 50 edges, max depth 8 hops from center.
+##
+## Minimum hop distances from C0:
+##   1 hop:  N1, E1, S1, W1
+##   3 hops: N3, N4, E3, S3, W3
+##   6 hops: N6b, N7, E6b, E7, LN3, LS1, S6b, S7, W7
+## 53 nodes, 66 edges, max depth 8 hops from center.
 declare -A routingTests=(
     [C0,N8]="N1,N2,N3,N4,N5,N6,N7"
     [C0,E8]="E1,E2,E3,E4,E5,E6,E7"
     [N8,E8]="N7,N6,N6b,E6b,E7"
     [S8,W8]="S7,S7b,W7b,W7"
+    [N3b,W3b]="N3,MH,W3"
+    [LN3,LS2]="LN2,LN1,N4,N3,MH,S3,S4,S5,S6,LS1"
 )
 
 echo "Removing existing containers and associated volumes (if any)..."
