@@ -10,6 +10,11 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## 2026-02-13
+
+### Fixed
+- P2P max level boundary nodes now immediately send cancel notification upstream instead of going through the full broadcast-rejection cycle — when `requestLevel >= maxRequestLevel` after re-adjustment, the node stores as cancelled and notifies upstream instantly, significantly improving cancel cascade propagation speed in larger topologies
+
 ## 2026-02-06 -- 2026-02-12
 
 ### Added

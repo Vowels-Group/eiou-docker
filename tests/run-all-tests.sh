@@ -34,6 +34,7 @@
 #   connections  - SSL certificates and Tor connectivity tests
 #   system       - System tests: shutdown, lockfiles, seedphrase
 #   performance  - Performance baseline benchmarks
+#   multisig     - Multisig setup, join, CLI, and repository tests
 #   bestfee      - Best-fee P2P route selection tests (best with collisions build)
 #
 # Environment Variables (for WSL2/slow environments):
@@ -50,7 +51,7 @@ if [ $# -eq 0 ]; then
     echo ""
     echo "Available builds: http4, http10, http13, collisions"
     echo "Available modes:  http, https, tor (default: http)"
-    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, bestfee"
+    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, multisig, bestfee"
     exit 1
 fi
 
@@ -88,6 +89,7 @@ show_available_subsets() {
     printf "  ${GREEN}connections${NC}  - SSL certificates and Tor connectivity tests\n"
     printf "  ${GREEN}system${NC}       - System tests: shutdown, lockfiles, seedphrase\n"
     printf "  ${GREEN}performance${NC}  - Performance baseline benchmarks\n"
+    printf "  ${GREEN}multisig${NC}     - Multisig setup, join, CLI, and repository tests\n"
     printf "  ${GREEN}bestfee${NC}      - Best-fee P2P route selection tests (best with collisions build)\n"
     echo ""
     printf "${YELLOW}Note:${NC} Some subsets require 'addContactsTest' to run first.\n"
@@ -96,7 +98,7 @@ show_available_subsets() {
 }
 
 # Validate SUBSET is one of the allowed values
-VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance bestfee"
+VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance multisig bestfee"
 if ! echo "$VALID_SUBSETS" | grep -qw "$SUBSET"; then
     printf "${RED}Error: Invalid test subset '${SUBSET}'${NC}\n"
     show_available_subsets
@@ -385,8 +387,10 @@ pingTestSuite
 serviceInterfaceTest
 serviceExceptionTest
 nodeIdentityTest
+multisigTestSuite
 bestFeeRoutingTest
 cascadeCancelTest
+maxLevelCancelTest
 performanceBaseline
 "
 
@@ -467,11 +471,18 @@ addContactsTest
 performanceBaseline
 "
 
+# Multisig tests (requires contacts for join/announce flow)
+TESTS_MULTISIG="
+addContactsTest
+multisigTestSuite
+"
+
 # Best-fee routing tests (best with collisions topology for multiple route paths)
 TESTS_BESTFEE="
 addContactsTest
 bestFeeRoutingTest
 cascadeCancelTest
+maxLevelCancelTest
 "
 
 # Select test order based on subset
@@ -505,6 +516,9 @@ case "$SUBSET" in
         ;;
     performance)
         TEST_ORDER="$TESTS_PERFORMANCE"
+        ;;
+    multisig)
+        TEST_ORDER="$TESTS_MULTISIG"
         ;;
     bestfee)
         TEST_ORDER="$TESTS_BESTFEE"

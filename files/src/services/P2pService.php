@@ -504,6 +504,28 @@ class P2pService implements P2pServiceInterface {
                 $request['feeAmount'] = $requestedAmount - $request['amount'];
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
+                // Max level boundary: requestLevel >= maxRequestLevel means the next hop
+                // (requestLevel+1) will exceed maxRequestLevel and ALL downstream contacts
+                // will reject. Treat as immediate dead-end: store as cancelled and send
+                // cancel notification upstream without going through the broadcast cycle.
+                // This is critical for cancel cascade speed in larger topologies — without
+                // this, the node would queue, poll, broadcast to all contacts (each timing
+                // out or rejecting), and only then detect the dead-end.
+                if ((int)$request['requestLevel'] >= (int)$request['maxRequestLevel']) {
+                    $request['status'] = Constants::STATUS_CANCELLED;
+                    $this->p2pRepository->insertP2pRequest($request, NULL);
+                    $this->p2pSenderRepository?->insertSender(
+                        $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                    );
+                    $this->sendCancelNotificationForHash($request['hash']);
+                    Logger::getInstance()->info("P2P max level boundary reached, immediate cancel", [
+                        'hash' => $request['hash'],
+                        'requestLevel' => $request['requestLevel'],
+                        'maxRequestLevel' => $request['maxRequestLevel'],
+                    ]);
+                    return;
+                }
+
                 // In best-fee mode, scale relay expiration proportionally to remaining hops.
                 // Deeper nodes (high requestLevel, few remaining hops) expire sooner,
                 // guaranteeing downstream nodes always expire before upstream ones.
