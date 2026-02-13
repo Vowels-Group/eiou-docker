@@ -517,11 +517,18 @@ class P2pService implements P2pServiceInterface {
                     $this->p2pSenderRepository?->insertSender(
                         $request['hash'], $request['senderAddress'], $request['senderPublicKey']
                     );
-                    $this->sendCancelNotificationForHash($request['hash']);
+                    // Only send cancel notification for best-fee mode (fast=0).
+                    // Fast mode doesn't use response counting — upstream nodes
+                    // simply wait for expiration. Sending cancel for fast mode
+                    // wastes bandwidth and the recipient ignores it anyway.
+                    if (!($request['fast'] ?? true)) {
+                        $this->sendCancelNotificationForHash($request['hash']);
+                    }
                     Logger::getInstance()->info("P2P max level boundary reached, immediate cancel", [
                         'hash' => $request['hash'],
                         'requestLevel' => $request['requestLevel'],
                         'maxRequestLevel' => $request['maxRequestLevel'],
+                        'cancel_sent' => !($request['fast'] ?? true),
                     ]);
                     return;
                 }
