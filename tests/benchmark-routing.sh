@@ -47,7 +47,7 @@ unset _INPUT_PROTOCOLS _p
 
 # Source base configuration (colors, helpers, BOOTSTRAP_PATH)
 cd "$SCRIPT_DIR"
-. './baseconfig/config.sh'
+. "${SCRIPT_DIR}/baseconfig/config.sh"
 
 # Additional color codes
 CYAN='\033[0;36m'
@@ -522,7 +522,7 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
 
     cd "$SCRIPT_DIR"
     set -e
-    . "./buildfiles/collisionscluster.sh"
+    . "${SCRIPT_DIR}/buildfiles/collisionscluster.sh"
     set +e
 
     if ! wait_for_containers "$first_protocol"; then
@@ -646,7 +646,7 @@ else
 
         cd "$SCRIPT_DIR"
         set -e
-        . "./buildfiles/collisionscluster.sh"
+        . "${SCRIPT_DIR}/buildfiles/collisionscluster.sh"
         set +e
 
         if ! wait_for_containers "$protocol"; then
