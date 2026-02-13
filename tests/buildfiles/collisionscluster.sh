@@ -388,52 +388,59 @@ declare -A expectedContacts=(
 ##
 ##                                      N8
 ##                                      |
-##                                N5b--N7------+
+##                                N5b--N7------+ N5<->N7
 ##                                      |\     |
-##                                    N6-N6b   | N5<->N7
-##                                      |      |
-##                                     N5------+
-##                                      |
-##                       LN3--LN2--LN1--N4------+
-##                                      |       | N2<->N4
-##                             MH------N3--N3b  |
-##                                    / |       |
-##                          N1<->N3 /  N2------+
-##                                /     |
-##                              N1      |
-##                                \     |
-##                                 \    |
-##       W1<->W3                    \   |                    E1<->E3
-##          \    W2<->W4             \  |             E2<->E4    /
-##           \      \                 \ |                /      /
-## W8--W7--W6--W5--W4--W3--W2--W1----C0----E1--E2--E3--E4--E5--E6--E7--E8
-##      |    |   /      / |                            |    |   \      \
-##     W7b  W5b /      /  W3b                        E4b  MH2   \      \
-##            W3<->W5 /                                     E3<->E5  E6b E7b
-##                   /
-##                  S1
-##                /   \
-##     S1<->S3  /      \
-##            S2      S2<->S4
-##              \      \
-##              S3      \
-##                \      \
-##           S4b--S4------+
-##                  \      | S3<->S5
-##                  S5----+
-##                    |
-##           S6b--S6--LS1--LS2
-##                    |
-##               S8--S7
-##                    |
-##                   S7b
+##                                    N6-N6b   |
+##                                      |  :   |
+##                                     N5  :   |
+##                                      |  : N6b<->E6b
+##                       LN3--LN2--LN1-N4  :  N2<->N4
+##                                      |  :   |
+##                                     N3--:--N3b
+##                                   /  |  :   | N1<->N3
+##                         N1<->N3  /  N2--:---+
+##                                 /    |  :
+##                                N1    :  :
+##                                 \    :  :
+##       W1<->W3                    \   :  :                 E1<->E3
+##          \    W2<->W4             \  :  :          E2<->E4    /
+##           \      \                 \ :  :             /      /
+## W8--W7--W6--W5--W4--W3--W2--W1----C0:---:--E1--E2--E3--E4--E5--E6--E7--E8
+##      |    |   /      /  |         : : MH:                  |    |   \      \
+##     W7b  W5b /      /  W3b       :W3:N3 :               E4b   MH2   \      \
+##      :     W3<->W5 /             :  :S3 :E3              :  E3<->E5  E6b E7b
+##      :            /              :  :   :                :
+##      :           S1              :  :   :                :
+##      :         /   \             :  :   :                :
+##      :  S1<->S3     \            :  :   :                :
+##      :       S2    S2<->S4       :  :   :                :
+##      :        \      \          S4<->W4 :                :
+##      :         S3     \                 :                :
+##      :          \      \                :                :
+##      :     S4b--S4------+ S3<->S5       :                :
+##      :            \      |              :                :
+##      :             S5---+        S5<->MH2                :
+##      :              |                                    :
+##      :     S6b--S6--LS1--LS2                             :
+##      :              |                                    :
+##      :         S8--S7                                    :
+##      :              |                                    :
+##      :............S7b                         N6b........:
+##        S7b<->W7b                                N6b<->E6b
 ##
 ## C0 at center. N=up, S=down, E=right, W=left.
-## Spine edges: solid lines. Skip connections: labeled X<->Y arcs.
+## Spine edges: solid lines (|, --, /, \).
+## Skip connections: labeled X<->Y (within-arm shortcuts).
+## Dotted lines (:, .): cross-arm and mesh hub links (drawn below/beside arms).
 ##
-## Mesh hubs: MH(N3,E3,S3,W3) at depth 3, MH2(E5,S5) at depth 5
+## Mesh hubs:
+##   MH  <-> N3, E3, S3, W3  (4-way hub linking all arms at depth 3)
+##   MH2 <-> E5, S5           (2-way hub linking East-South at depth 5)
 ## Collision bypasses: N6-N6b-N7, E6-E6b-E7, S4-S4b-S5, W5-W5b-W6
-## Cross-arm links: N6b<->E6b (depth 6), S7b<->W7b (depth 7), S4<->W4 (depth 4)
+## Cross-arm links:
+##   S4  <-> W4   (South-West at depth 4)
+##   N6b <-> E6b  (North-East at depth 6)
+##   S7b <-> W7b  (South-West at depth 7)
 ## Linear branches: N4->LN1->LN2->LN3, S6->LS1->LS2
 ## ISO is isolated (no connections) -- cascade cancel target.
 ## Fees are randomized (0.1-0.9) per run; best-fee route varies each time.
