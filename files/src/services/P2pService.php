@@ -517,18 +517,15 @@ class P2pService implements P2pServiceInterface {
                     $this->p2pSenderRepository?->insertSender(
                         $request['hash'], $request['senderAddress'], $request['senderPublicKey']
                     );
-                    // Only send cancel notification for best-fee mode (fast=0).
-                    // Fast mode doesn't use response counting — upstream nodes
-                    // simply wait for expiration. Sending cancel for fast mode
-                    // wastes bandwidth and the recipient ignores it anyway.
-                    if (!($request['fast'] ?? true)) {
-                        $this->sendCancelNotificationForHash($request['hash']);
-                    }
+                    // Send cancel notification upstream for all modes.
+                    // Both fast and best-fee need cancel cascade so upstream relay
+                    // nodes know this contact is a dead end and can propagate
+                    // cancellation when ALL their contacts have cancelled.
+                    $this->sendCancelNotificationForHash($request['hash']);
                     Logger::getInstance()->info("P2P max level boundary reached, immediate cancel", [
                         'hash' => $request['hash'],
                         'requestLevel' => $request['requestLevel'],
                         'maxRequestLevel' => $request['maxRequestLevel'],
-                        'cancel_sent' => !($request['fast'] ?? true),
                     ]);
                     return;
                 }
@@ -906,7 +903,14 @@ class P2pService implements P2pServiceInterface {
                 $this->rp2pService?->checkBestFeeSelection($p2pHash);
             }
 
-            $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+            // Only update to 'sent' if not already cancelled by cancel cascade.
+            // Cancel notifications from boundary nodes may arrive during broadcast
+            // and trigger checkBestFeeSelection above, which cancels the P2P when
+            // all contacts are dead ends. Don't overwrite that cancellation.
+            $currentP2p = $this->p2pRepository->getByHash($p2pHash);
+            if ($currentP2p && ($currentP2p['status'] ?? '') !== Constants::STATUS_CANCELLED) {
+                $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+            }
         }
         return isset($queuedMessages) ? count($queuedMessages) : 0;
     }

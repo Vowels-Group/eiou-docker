@@ -187,10 +187,12 @@ class Rp2pServiceCascadeCancelTest extends TestCase
     }
 
     /**
-     * Test checkRp2pPossible does NOT process cancel logic in fast mode (fast=1)
-     * but still echoes a response to prevent "No response received" delivery failures.
+     * Test checkRp2pPossible processes cancel notification in fast mode (fast=1)
+     *
+     * Both fast and best-fee modes need cancel cascade so relay nodes can detect
+     * when ALL contacts are dead ends and propagate cancel upstream.
      */
-    public function testCheckRp2pPossibleDoesNotProcessCancelInFastMode(): void
+    public function testCheckRp2pPossibleProcessesCancelInFastMode(): void
     {
         $request = [
             'hash' => self::TEST_HASH,
@@ -203,27 +205,37 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             'amount' => self::TEST_AMOUNT,
             'fast' => 1, // fast mode
             'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'status' => 'sent',
         ];
 
         $this->p2pRepository->method('getByHash')
             ->with(self::TEST_HASH)
             ->willReturn($p2p);
 
-        // handleCancelNotification should NOT be called (rp2pExists is part of it)
-        $this->rp2pRepository->expects($this->never())
-            ->method('rp2pExists');
+        // handleCancelNotification checks rp2pExists first
+        $this->rp2pRepository->method('rp2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(false);
 
-        // incrementContactsRespondedCount should NOT be called
-        $this->p2pRepository->expects($this->never())
-            ->method('incrementContactsRespondedCount');
+        // handleCancelNotification increments responded count
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount')
+            ->with(self::TEST_HASH);
+
+        // After increment, getTrackingCounts is called
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 3,
+                'contacts_responded_count' => 1, // not all yet
+                'contacts_relayed_count' => 0,
+                'fast' => 1,
+            ]);
 
         ob_start();
         $result = $this->service->checkRp2pPossible($request);
         $output = ob_get_clean();
 
         $this->assertFalse($result);
-        // Response is still echoed to prevent delivery failures, even though
-        // cancel cascade logic is skipped for fast mode
         $decoded = json_decode($output, true);
         $this->assertIsArray($decoded);
         $this->assertEquals('received', $decoded['status']);

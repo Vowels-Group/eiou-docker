@@ -828,7 +828,7 @@ class P2pServiceCascadeCancelTest extends TestCase
      * response counting, so cancel notifications are wasteful and would get
      * ignored by the recipient anyway).
      */
-    public function testHandleP2pRequestMaxLevelBoundaryFastModeDoesNotSendCancel(): void
+    public function testHandleP2pRequestMaxLevelBoundaryFastModeSendsCancel(): void
     {
         $senderAddress = 'http://upstream-sender.test';
 
@@ -879,9 +879,45 @@ class P2pServiceCascadeCancelTest extends TestCase
             ->method('insertSender')
             ->with(self::TEST_HASH, $senderAddress, self::TEST_PUBLIC_KEY);
 
-        // Cancel notification should NOT be sent for fast mode
-        $this->messageDeliveryService->expects($this->never())
-            ->method('sendMessage');
+        // Cancel notification SHOULD be sent for fast mode (needed for cancel cascade)
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+                'destination_address' => null,
+                'sender_address' => $senderAddress,
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        $this->p2pSenderRepository->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['sender_address' => $senderAddress, 'sender_pubkey' => self::TEST_PUBLIC_KEY],
+            ]);
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                $senderAddress,
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['cancelled'] === true
+                        && $payload['hash'] === self::TEST_HASH;
+                }),
+                $this->stringContains('cancel-'),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'cancel-' . self::TEST_HASH . '-test',
+            ]);
 
         // P2P should NOT be queued
         $this->p2pRepository->expects($this->never())
@@ -993,11 +1029,11 @@ class P2pServiceCascadeCancelTest extends TestCase
     }
 
     /**
-     * Test that reAdjustP2pLevel lowering maxRequestLevel triggers cancel without notification in fast mode
+     * Test that reAdjustP2pLevel lowering maxRequestLevel triggers cancel with notification
      *
      * When a relay node has maxP2pLevel=0 (or very low), reAdjustP2pLevel may
      * lower maxRequestLevel to exactly requestLevel, creating a boundary condition.
-     * Fast mode should NOT send cancel notification.
+     * Cancel notification is sent upstream for all modes (fast and best-fee).
      */
     public function testHandleP2pRequestReAdjustedLevelBoundaryCancelsImmediately(): void
     {
@@ -1065,9 +1101,45 @@ class P2pServiceCascadeCancelTest extends TestCase
                 null
             );
 
-        // Cancel notification should NOT be sent for fast mode
-        $this->messageDeliveryService->expects($this->never())
-            ->method('sendMessage');
+        // Cancel notification SHOULD be sent (needed for cancel cascade in all modes)
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+                'destination_address' => null,
+                'sender_address' => $senderAddress,
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        $this->p2pSenderRepository->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['sender_address' => $senderAddress, 'sender_pubkey' => self::TEST_PUBLIC_KEY],
+            ]);
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                $senderAddress,
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['cancelled'] === true
+                        && $payload['hash'] === self::TEST_HASH;
+                }),
+                $this->stringContains('cancel-'),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'cancel-' . self::TEST_HASH . '-test',
+            ]);
 
         // Should NOT be queued
         $this->p2pRepository->expects($this->never())
