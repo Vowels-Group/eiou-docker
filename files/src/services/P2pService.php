@@ -903,12 +903,13 @@ class P2pService implements P2pServiceInterface {
                 $this->rp2pService?->checkBestFeeSelection($p2pHash);
             }
 
-            // Only update to 'sent' if not already cancelled by cancel cascade.
-            // Cancel notifications from boundary nodes may arrive during broadcast
-            // and trigger checkBestFeeSelection above, which cancels the P2P when
-            // all contacts are dead ends. Don't overwrite that cancellation.
+            // Only transition queued → sent. During broadcast, concurrent events
+            // (RP2P arrival triggering selection → 'found', or cancel cascade → 'cancelled')
+            // may have already advanced the status. Overwriting those terminal states
+            // causes cleanup to re-expire the P2P and send spurious cancel notifications
+            // upstream, conflicting with the RP2P that was already forwarded.
             $currentP2p = $this->p2pRepository->getByHash($p2pHash);
-            if ($currentP2p && ($currentP2p['status'] ?? '') !== Constants::STATUS_CANCELLED) {
+            if ($currentP2p && ($currentP2p['status'] ?? '') === Constants::STATUS_QUEUED) {
                 $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
             }
         }

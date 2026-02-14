@@ -1489,6 +1489,11 @@ class P2pServiceTest extends TestCase
                 ];
             });
 
+        // getByHash is called to check current status before updating to 'sent'
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn(['status' => Constants::STATUS_QUEUED]);
+
         // Status should be updated to 'sent' even with partial success
         $this->p2pRepository->expects($this->once())
             ->method('updateStatus')
