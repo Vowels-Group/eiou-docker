@@ -398,9 +398,10 @@ class Rp2pService implements Rp2pServiceInterface {
             // Handle cancel notification from downstream dead-end contact
             if (isset($request['cancelled']) && $request['cancelled'] === true) {
                 $p2p = $this->p2pRepository->getByHash($request['hash']);
-                // Only run cancel cascade logic for best-fee mode (fast=0).
-                // Fast mode doesn't use response counting/phase selection.
-                if ($p2p && !((int)($p2p['fast'] ?? 1))) {
+                // Run cancel cascade for all modes (fast and best-fee).
+                // Both modes need response counting so relay nodes can detect
+                // when ALL contacts are dead ends and propagate cancel upstream.
+                if ($p2p) {
                     $this->handleCancelNotification($request, $p2p);
                 }
                 // Always echo a response so the sender doesn't get "No response
