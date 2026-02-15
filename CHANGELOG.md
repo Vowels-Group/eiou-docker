@@ -10,6 +10,13 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- GUI header logout button overflows outside the card on narrow screens — wallet owner name now wraps to a new line on mobile, keeping the logout button anchored in the top right
+
+---
+
 ## 2026-02-06 -- 2026-02-12
 
 ### Added

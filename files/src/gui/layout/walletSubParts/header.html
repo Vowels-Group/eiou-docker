@@ -4,7 +4,7 @@
 <div class="header fade-in-up">
     <h1><i class="fas fa-wallet"></i> ₳ Wallet<?php
         $headerName = $user->getName();
-        echo $headerName ? ' of ' . htmlspecialchars($headerName) : '';
+        echo $headerName ? ' of <span class="wallet-owner">' . htmlspecialchars($headerName) . '</span>' : '';
     ?></h1>
     <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" class="logout-btn">
         <i class="fas fa-sign-out-alt"></i> Logout

@@ -57,6 +57,8 @@ body {
 .header h1 {
     color: #212529;
     font-size: 2rem;
+    min-width: 0;
+    word-break: break-word;
 }
 
 .logout-btn {
@@ -70,6 +72,8 @@ body {
     transition: background 0.3s ease;
     text-decoration: none;
     display: inline-block;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .logout-btn:hover {
@@ -1017,6 +1021,19 @@ body {
 
     .form-actions {
         flex-direction: column;
+    }
+
+    .header {
+        align-items: flex-start;
+    }
+
+    .header h1 {
+        font-size: 1.25rem;
+    }
+
+    .wallet-owner {
+        display: block;
+        padding-left: 0.25rem;
     }
 }
 
