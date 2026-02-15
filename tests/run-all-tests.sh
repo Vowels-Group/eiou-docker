@@ -391,6 +391,7 @@ multisigTestSuite
 bestFeeRoutingTest
 cascadeCancelTest
 maxLevelCancelTest
+parallelBroadcastTest
 performanceBaseline
 "
 
@@ -483,6 +484,7 @@ addContactsTest
 bestFeeRoutingTest
 cascadeCancelTest
 maxLevelCancelTest
+parallelBroadcastTest
 "
 
 # Select test order based on subset

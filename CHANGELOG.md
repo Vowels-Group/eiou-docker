@@ -10,6 +10,15 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## 2026-02-15
+
+### Added
+- Parallel P2P broadcast via `curl_multi` — broadcast to all contacts simultaneously instead of sequentially, reducing broadcast time from O(N × latency) to O(max latency)
+- `createCurlHandle()` and `sendBatch()` methods on `TransportUtilityService` for reusable parallel transport
+- `sendBatchAsync()` method on `MessageDeliveryService` for tracked batch delivery with per-recipient response processing
+- Tor expiration scaling — P2P messages sent to Tor contacts use 2x expiration multiplier (`P2P_TOR_EXPIRATION_MULTIPLIER`) to account for higher Tor latency
+- Integration test suite `parallelBroadcastTest.sh` (14 tests) for curl_multi batch send functionality
+
 ## 2026-02-13
 
 ### Fixed
