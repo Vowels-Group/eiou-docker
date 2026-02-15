@@ -15,11 +15,15 @@ The project is currently in **ALPHA** status.
 ### Changed
 - Send eIOU P2P info box collapsed by default — shows "Peer-to-Peer Routing Available" as a one-liner, click to expand details
 - Best Fee Route experimental warning hidden by default — flask icon shown inline next to the label, yellow warning only appears when the toggle is enabled
+- Floating refresh and back-to-top buttons reduced from 60px to 40px and moved from right: 30px to right: 8px for a less intrusive presence
+- All new inline styles moved to CSS classes; all new JS uses TOR-compatible patterns (var, className, vendor-prefixed flex)
 
 ### Fixed
 - GUI header logout button overflows outside the card on narrow screens — wallet owner name now wraps to a new line on mobile, keeping the logout button anchored in the top right
 - Contacts scroll buttons repositioned outside the card area so contact cards are fully visible — left button auto-hides when at the first contact, right button hides at the end
-- Floating refresh and back-to-top buttons scaled smaller and moved closer to the edge on mobile screens
+- Contact modal exceeded viewport height causing settings buttons (Block/Delete/Save) to be invisible — modal now constrained to 90vh with internal scrolling
+- Contact modal settings buttons were stacked vertically with uneven sizing — now displayed in a compact inline row with consistent height
+- Contact modal transactions tab refresh button overlapped info text on narrow screens — text now wraps while button stays intact
 
 ---
 
