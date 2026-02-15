@@ -1136,19 +1136,19 @@ body {
     }
 
     .back-to-top-btn {
-        width: 40px;
-        height: 40px;
-        right: 12px;
-        bottom: 16px;
-        font-size: 1rem;
+        width: 34px;
+        height: 34px;
+        right: 4px;
+        bottom: 12px;
+        font-size: 0.85rem;
     }
 
     .manual-refresh {
-        width: 40px;
-        height: 40px;
-        right: 12px;
-        bottom: 64px;
-        font-size: 1rem;
+        width: 34px;
+        height: 34px;
+        right: 4px;
+        bottom: 54px;
+        font-size: 0.85rem;
     }
 
     .contacts-section {
