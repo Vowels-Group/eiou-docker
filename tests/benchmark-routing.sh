@@ -85,10 +85,11 @@ declare -A DISTANCE_LABELS=( [1]="1 hop" [3]="3 hops" [6]="6 hops" )
 # Results storage: keyed by "${protocol}_${distance}_${mode}_${run}"
 declare -A R_TIME R_PASS R_PATH R_FEE R_OPTIMAL R_P2P_TIME R_SEARCH_TIME R_SETTLE_TIME
 
-# Optimal fee per target per protocol build: "${protocol}_${distance}"
+# Optimal RP2P amount in cents per target per protocol build: "${protocol}_${distance}"
+# Uses integer arithmetic matching production calculateFee to avoid float/int mismatch.
 declare -A OPTIMAL_FEES
 
-# Shared optimal fees (used in shared topology mode): "${distance}"
+# Shared optimal amounts (used in shared topology mode): "${distance}"
 declare -A _SHARED_OPTIMAL_FEE
 
 # ======================== Helper Functions ========================
@@ -143,7 +144,7 @@ _dfs_limited() {
     done
 }
 
-# Compute compound fee multiplier for a traced path
+# Compute compound fee multiplier for a traced path (floating-point, for display)
 # Fee = product of (1 + feePercent/100) at each relay hop; destination excluded
 # Usage: compute_path_fee "C0->E1->E3->MH" "MH"
 compute_path_fee() {
@@ -160,6 +161,29 @@ compute_path_fee() {
         fi
     done
     echo "$multiplier"
+}
+
+# Compute total RP2P amount in cents using integer arithmetic matching production.
+# Simulates CurrencyUtilityService::calculateFee per relay hop:
+#   hop_fee = (int) round((amount / 100) * (feePercent_stored / 100))
+# where feePercent_stored = link_fee * 100 (link_fee is 0.2 for 0.2%).
+# This simplifies to: hop_fee = round(amount * link_fee / 100)
+# Usage: compute_path_integer_amount "C0->S1->S3->MH" "MH" 500
+compute_path_integer_amount() {
+    local path_str="$1"
+    local receiver="$2"
+    local amount="$3"  # cents
+    IFS=' ' read -ra hops <<< "${path_str//->/ }"
+    for ((i=0; i<${#hops[@]}-1; i++)); do
+        local from="${hops[$i]}"
+        local to="${hops[$((i+1))]}"
+        if [ "$to" != "$receiver" ]; then
+            local link_fee=$(echo "${containersLinks[$from,$to]}" | awk '{print $1}')
+            local hop_fee=$(awk "BEGIN {printf \"%.0f\", $amount * ${link_fee:-0} / 100}")
+            amount=$((amount + hop_fee))
+        fi
+    done
+    echo "$amount"
 }
 
 # Wait for all containers to initialize (simplified from run-all-tests.sh)
@@ -345,12 +369,12 @@ do_send() {
         echo \$pdo->query('SELECT COALESCE(MAX(id),0) FROM p2p')->fetchColumn();
     " 2>/dev/null || echo "0")
 
-    # Send
+    # Send (EIOU_TEST_MODE disables CLI rate limiter — benchmarks exceed 30 sends/min)
     local start_time=$(date +%s)
     if [ "$mode" = "fast" ]; then
-        docker exec $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null || true
     else
-        docker exec $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY --best 2>&1 >/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY --best 2>&1 >/dev/null || true
     fi
 
     # Wait for balance change — uniform polling for both modes.
@@ -446,9 +470,13 @@ do_send() {
             path="${SENDER}->${target}"
         fi
         fee=$(compute_path_fee "$path" "$target")
+
+        # Compare using integer amounts (matching production calculateFee rounding)
+        # to avoid false SUB-OPT from float/int mismatch on paths with equal integer cost.
+        local actual_amount=$(compute_path_integer_amount "$path" "$target" $((SEND_AMOUNT * 100)))
         local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
         if [ -n "$optimal" ] && [ "$optimal" != "" ]; then
-            is_optimal=$(awk "BEGIN {printf \"%s\", ($fee <= $optimal * 1.000001) ? \"OPTIMAL\" : \"SUB-OPT\"}")
+            is_optimal=$([ "$actual_amount" -le "$optimal" ] && echo "OPTIMAL" || echo "SUB-OPT")
         fi
     fi
 
@@ -778,15 +806,30 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
     # Enumerate optimal paths once — fees are the same for all protocols.
     # Depth limit = distance + 2 so we explore near-optimal alternatives
     # without wasting time on long detours (e.g., 183 paths for a 1-hop target).
+    # Integer amounts are computed per path to match production calculateFee rounding.
+    local amount_cents=$((SEND_AMOUNT * 100))
     printf "\nEnumerating optimal paths (shared fee structure)...\n"
     for distance in "${DISTANCES[@]}"; do
         target="${TARGETS[$distance]}"
         all_paths=$(enumerate_paths_limited "$SENDER" "$target" $((distance + 2)))
-        best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
-        _SHARED_OPTIMAL_FEE[$distance]="$best_fee"
         path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
-        printf "  ${SENDER} -> %-4s (%s): %d paths, optimal fee=%sx\n" \
-            "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_fee"
+
+        # Find optimal integer amount across all enumerated paths
+        local best_int_amount=999999
+        local best_float_fee="1.000000"
+        while IFS= read -r path_line; do
+            [ -z "$path_line" ] && continue
+            local p_path=$(echo "$path_line" | awk '{print $1}')
+            local int_amount=$(compute_path_integer_amount "$p_path" "$target" "$amount_cents")
+            if [ "$int_amount" -lt "$best_int_amount" ]; then
+                best_int_amount="$int_amount"
+                best_float_fee=$(echo "$path_line" | grep -oP 'fee=\K[0-9.]+')
+            fi
+        done <<< "$all_paths"
+
+        _SHARED_OPTIMAL_FEE[$distance]="$best_int_amount"
+        printf "  ${SENDER} -> %-4s (%s): %d paths, optimal=%d¢ (%.4fx)\n" \
+            "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_int_amount" "$best_float_fee"
     done
 
     # Set P2P expiration once
@@ -892,15 +935,30 @@ else
         build_adjacency_list
 
         # Enumerate paths (fresh fees each build)
+        # Integer amounts computed per path to match production calculateFee rounding.
+        local amount_cents=$((SEND_AMOUNT * 100))
         printf "\nEnumerating optimal paths...\n"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
             all_paths=$(enumerate_paths_limited "$SENDER" "$target" $((distance + 2)))
-            best_fee=$(echo "$all_paths" | head -1 | grep -oP 'fee=\K[0-9.]+')
-            OPTIMAL_FEES["${protocol}_${distance}"]="$best_fee"
             path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
-            printf "  ${SENDER} -> %-4s (%s): %d paths, optimal fee=%sx\n" \
-                "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_fee"
+
+            # Find optimal integer amount across all enumerated paths
+            local best_int_amount=999999
+            local best_float_fee="1.000000"
+            while IFS= read -r path_line; do
+                [ -z "$path_line" ] && continue
+                local p_path=$(echo "$path_line" | awk '{print $1}')
+                local int_amount=$(compute_path_integer_amount "$p_path" "$target" "$amount_cents")
+                if [ "$int_amount" -lt "$best_int_amount" ]; then
+                    best_int_amount="$int_amount"
+                    best_float_fee=$(echo "$path_line" | grep -oP 'fee=\K[0-9.]+')
+                fi
+            done <<< "$all_paths"
+
+            OPTIMAL_FEES["${protocol}_${distance}"]="$best_int_amount"
+            printf "  ${SENDER} -> %-4s (%s): %d paths, optimal=%d¢ (%.4fx)\n" \
+                "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_int_amount" "$best_float_fee"
         done
 
         # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
