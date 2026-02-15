@@ -92,6 +92,9 @@ declare -A OPTIMAL_FEES
 # Shared optimal amounts (used in shared topology mode): "${distance}"
 declare -A _SHARED_OPTIMAL_FEE
 
+# Enumerated paths per target: "${protocol}_${distance}" → raw enumerate_paths_limited output
+declare -A ENUM_PATHS _SHARED_ENUM_PATHS
+
 # ======================== Helper Functions ========================
 
 # Build adjacency list from containersLinks for fast neighbor lookup.
@@ -713,6 +716,55 @@ print_comparison_table() {
     done
 }
 
+# Print all enumerated paths for multi-hop targets (3 and 6 hops) with integer amounts.
+# Shows which paths the system could take and whether each is optimal by integer cost.
+print_path_analysis() {
+    printf "\n${BOLD}--- Enumerated Path Analysis (3+ hops) ---${NC}\n"
+
+    # In shared mode, paths are identical across protocols — use first protocol only
+    local shown_protocols=("${PROTOCOLS[@]}")
+    if [ "$TOPOLOGY_MODE" = "shared" ]; then
+        shown_protocols=("${PROTOCOLS[0]}")
+        printf "${DIM}(shared topology — paths identical across protocols)${NC}\n"
+    fi
+
+    local amount_cents=$((SEND_AMOUNT * 100))
+
+    for protocol in "${shown_protocols[@]}"; do
+        for distance in 3 6; do
+            local target="${TARGETS[$distance]}"
+            local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
+            local paths="${ENUM_PATHS[${protocol}_${distance}]}"
+            [ -z "$paths" ] && continue
+
+            local path_count=$(echo "$paths" | wc -l | tr -d ' ')
+            if [ "$TOPOLOGY_MODE" != "shared" ]; then
+                printf "\n  [%s] %s → %s  (optimal: %d¢, %d paths)\n" \
+                    "$protocol" "${DISTANCE_LABELS[$distance]}" "$target" "$optimal" "$path_count"
+            else
+                printf "\n  %s → %s  (optimal: %d¢, %d paths)\n" \
+                    "${DISTANCE_LABELS[$distance]}" "$target" "$optimal" "$path_count"
+            fi
+            printf "  %-50s %10s %10s  %s\n" "Path" "Float Fee" "Int Amt" "Status"
+            printf "  %-50s %10s %10s  %s\n" "----" "---------" "-------" "------"
+
+            while IFS= read -r path_line; do
+                [ -z "$path_line" ] && continue
+                local p=$(echo "$path_line" | awk '{print $1}')
+                local ff=$(echo "$path_line" | grep -oP 'fee=\K[0-9.]+')
+                local ia=$(compute_path_integer_amount "$p" "$target" "$amount_cents")
+                local status="SUB-OPT"
+                local color="${YELLOW}"
+                if [ "$ia" -le "$optimal" ]; then
+                    status="OPTIMAL"
+                    color="${GREEN}"
+                fi
+                printf "  %-50s %9sx %9d¢  ${color}%s${NC}\n" "$p" "$ff" "$ia" "$status"
+            done <<< "$paths"
+        done
+    done
+}
+
 # ======================== Main Execution ========================
 
 echo ""
@@ -828,6 +880,7 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         done <<< "$all_paths"
 
         _SHARED_OPTIMAL_FEE[$distance]="$best_int_amount"
+        _SHARED_ENUM_PATHS[$distance]="$all_paths"
         printf "  ${SENDER} -> %-4s (%s): %d paths, optimal=%d¢ (%.4fx)\n" \
             "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_int_amount" "$best_float_fee"
     done
@@ -854,9 +907,10 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
             containerAddresses[$container]="${PROTO_ADDRESSES[${protocol}_${container}]}"
         done
 
-        # Copy shared optimal fees into per-protocol keys
+        # Copy shared optimal fees and paths into per-protocol keys
         for distance in "${DISTANCES[@]}"; do
             OPTIMAL_FEES["${protocol}_${distance}"]="${_SHARED_OPTIMAL_FEE[$distance]}"
+            ENUM_PATHS["${protocol}_${distance}"]="${_SHARED_ENUM_PATHS[$distance]}"
         done
 
         # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
@@ -957,6 +1011,7 @@ else
             done <<< "$all_paths"
 
             OPTIMAL_FEES["${protocol}_${distance}"]="$best_int_amount"
+            ENUM_PATHS["${protocol}_${distance}"]="$all_paths"
             printf "  ${SENDER} -> %-4s (%s): %d paths, optimal=%d¢ (%.4fx)\n" \
                 "$target" "${DISTANCE_LABELS[$distance]}" "$path_count" "$best_int_amount" "$best_float_fee"
         done
@@ -996,6 +1051,7 @@ echo "================================================================"
 
 print_summary_table
 print_comparison_table
+print_path_analysis
 print_mode_averages
 print_distance_averages
 print_protocol_averages
