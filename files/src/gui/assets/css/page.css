@@ -289,20 +289,29 @@ body {
 .contacts-scroll-btn {
     position: absolute;
     top: 50%;
+    -webkit-transform: translateY(-50%);
+    -ms-transform: translateY(-50%);
     transform: translateY(-50%);
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 50%;
     width: 28px;
     height: 28px;
+    display: -webkit-box;
+    display: -ms-flexbox;
     display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
     align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
     justify-content: center;
     cursor: pointer;
     color: #495057;
     font-size: 0.75rem;
     z-index: 2;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    -webkit-transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
     transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
@@ -682,6 +691,74 @@ body {
     gap: 1rem;
     justify-content: flex-end;
     margin-top: 2rem;
+}
+
+/* P2P Info Alert (collapsible) */
+.p2p-info-alert {
+    background: #e7f3ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    padding: 0.6rem 1rem;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+}
+
+.p2p-info-header {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.p2p-info-header > * + * {
+    margin-left: 0.5rem;
+}
+
+@supports (gap: 0.5rem) {
+    .p2p-info-header > * + * {
+        margin-left: 0;
+    }
+}
+
+.p2p-info-header i,
+.p2p-info-header strong {
+    color: #0066cc;
+}
+
+.p2p-info-header strong {
+    -webkit-box-flex: 1;
+    -ms-flex: 1;
+    flex: 1;
+}
+
+.p2p-info-chevron {
+    font-size: 0.8rem;
+}
+
+.p2p-info-detail {
+    display: none;
+    margin: 0.5rem 0 0 1.5rem;
+    color: #333;
+    font-size: 0.9rem;
+}
+
+/* Best Fee Route — experimental warning */
+.best-fee-flask {
+    color: #856404;
+}
+
+.best-fee-experimental {
+    color: #856404;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 3px;
+    padding: 0.35rem 0.5rem;
+    margin-top: 0.25rem;
+    display: none;
 }
 
 /* Settings Grid Layout */

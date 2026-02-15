@@ -2698,6 +2698,25 @@ function toggleConfigSection(contentId, arrowId) {
 }
 
 /**
+ * Toggles the P2P routing info alert between collapsed and expanded states.
+ * Collapsed shows only the header; expanded reveals the description paragraph.
+ *
+ * @returns {void}
+ */
+function toggleP2pInfo() {
+    var detail = document.getElementById('p2p-info-detail');
+    var chevron = document.getElementById('p2p-info-chevron');
+    if (!detail) return;
+    if (detail.style.display === 'block') {
+        detail.style.display = 'none';
+        if (chevron) chevron.className = 'fas fa-chevron-down p2p-info-chevron';
+    } else {
+        detail.style.display = 'block';
+        if (chevron) chevron.className = 'fas fa-chevron-up p2p-info-chevron';
+    }
+}
+
+/**
  * Filters debug log entries based on search input.
  *
  * Performs case-insensitive substring matching on debug entries or pre-formatted
