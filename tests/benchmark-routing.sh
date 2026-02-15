@@ -470,25 +470,25 @@ do_send() {
 
             if [ -n "$sender_created" ] && [ -n "$sender_completed" ]; then
                 p2p_time=$(docker exec $SENDER php -r "
-                    \$c = strtotime('$sender_created');
-                    \$d = strtotime('$sender_completed');
-                    if (\$c && \$d) printf('%.1f', \$d - \$c);
+                    \$c = new \DateTime('$sender_created');
+                    \$d = new \DateTime('$sender_completed');
+                    printf('%.3f', (float)\$d->format('U.u') - (float)\$c->format('U.u'));
                 " 2>/dev/null || echo "")
             fi
 
             if [ -n "$sender_created" ] && [ -n "$target_ts" ]; then
                 search_time=$(docker exec $SENDER php -r "
-                    \$c = strtotime('$sender_created');
-                    \$t = strtotime('$target_ts');
-                    if (\$c && \$t) printf('%.1f', \$t - \$c);
+                    \$c = new \DateTime('$sender_created');
+                    \$t = new \DateTime('$target_ts');
+                    printf('%.3f', (float)\$t->format('U.u') - (float)\$c->format('U.u'));
                 " 2>/dev/null || echo "")
             fi
 
             if [ -n "$target_ts" ] && [ -n "$sender_completed" ]; then
                 settle_time=$(docker exec $SENDER php -r "
-                    \$t = strtotime('$target_ts');
-                    \$d = strtotime('$sender_completed');
-                    if (\$t && \$d) printf('%.1f', \$d - \$t);
+                    \$t = new \DateTime('$target_ts');
+                    \$d = new \DateTime('$sender_completed');
+                    printf('%.3f', (float)\$d->format('U.u') - (float)\$t->format('U.u'));
                 " 2>/dev/null || echo "")
             fi
         fi
@@ -530,7 +530,7 @@ do_send() {
             [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
             timing_detail="${timing_detail})"
         fi
-        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-38s | %-35s | %sx | ${opt_color}%s${NC}\n" \
             "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
     else
         printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
@@ -666,7 +666,7 @@ do_burst() {
             R_SEARCH_TIME[$key]=""
             R_SETTLE_TIME[$key]=""
 
-            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-38s | %-35s | %sx | ${opt_color}%s${NC}\n" \
                 "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "" "${SENDER}->${target}" "$fee" "$is_optimal"
         done
     else
@@ -742,9 +742,9 @@ do_burst() {
 
             if [ -n "$sender_created" ] && [ -n "$sender_completed" ]; then
                 p2p_time=$(docker exec $SENDER php -r "
-                    \$c = strtotime('$sender_created');
-                    \$d = strtotime('$sender_completed');
-                    if (\$c && \$d) printf('%.1f', \$d - \$c);
+                    \$c = new \DateTime('$sender_created');
+                    \$d = new \DateTime('$sender_completed');
+                    printf('%.3f', (float)\$d->format('U.u') - (float)\$c->format('U.u'));
                 " 2>/dev/null || echo "")
             fi
 
@@ -760,17 +760,17 @@ do_burst() {
 
             if [ -n "$sender_created" ] && [ -n "$target_ts" ]; then
                 search_time=$(docker exec $SENDER php -r "
-                    \$c = strtotime('$sender_created');
-                    \$t = strtotime('$target_ts');
-                    if (\$c && \$t) printf('%.1f', \$t - \$c);
+                    \$c = new \DateTime('$sender_created');
+                    \$t = new \DateTime('$target_ts');
+                    printf('%.3f', (float)\$t->format('U.u') - (float)\$c->format('U.u'));
                 " 2>/dev/null || echo "")
             fi
 
             if [ -n "$target_ts" ] && [ -n "$sender_completed" ]; then
                 settle_time=$(docker exec $SENDER php -r "
-                    \$t = strtotime('$target_ts');
-                    \$d = strtotime('$sender_completed');
-                    if (\$t && \$d) printf('%.1f', \$d - \$t);
+                    \$t = new \DateTime('$target_ts');
+                    \$d = new \DateTime('$sender_completed');
+                    printf('%.3f', (float)\$d->format('U.u') - (float)\$t->format('U.u'));
                 " 2>/dev/null || echo "")
             fi
 
@@ -794,7 +794,7 @@ do_burst() {
                 [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
                 timing_detail="${timing_detail})"
             fi
-            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-38s | %-35s | %sx | ${opt_color}%s${NC}\n" \
                 "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
         done
     fi
@@ -834,15 +834,15 @@ _accumulate_keys() {
                     fi
                     # Timing breakdowns (float sums via awk)
                     if [ -n "${R_P2P_TIME[$_ak_key]}" ]; then
-                        _p2p_sum=$(awk "BEGIN {printf \"%.1f\", $_p2p_sum + ${R_P2P_TIME[$_ak_key]}}")
+                        _p2p_sum=$(awk "BEGIN {printf \"%.3f\", $_p2p_sum + ${R_P2P_TIME[$_ak_key]}}")
                         _p2p_cnt=$((_p2p_cnt + 1))
                     fi
                     if [ -n "${R_SEARCH_TIME[$_ak_key]}" ]; then
-                        _srch_sum=$(awk "BEGIN {printf \"%.1f\", $_srch_sum + ${R_SEARCH_TIME[$_ak_key]}}")
+                        _srch_sum=$(awk "BEGIN {printf \"%.3f\", $_srch_sum + ${R_SEARCH_TIME[$_ak_key]}}")
                         _srch_cnt=$((_srch_cnt + 1))
                     fi
                     if [ -n "${R_SETTLE_TIME[$_ak_key]}" ]; then
-                        _sttl_sum=$(awk "BEGIN {printf \"%.1f\", $_sttl_sum + ${R_SETTLE_TIME[$_ak_key]}}")
+                        _sttl_sum=$(awk "BEGIN {printf \"%.3f\", $_sttl_sum + ${R_SETTLE_TIME[$_ak_key]}}")
                         _sttl_cnt=$((_sttl_cnt + 1))
                     fi
                 done
@@ -868,25 +868,25 @@ _fmt_stats() {
     avg_fee="N/A"
     [ "$_fc" -gt 0 ] && avg_fee=$(awk "BEGIN {printf \"%.4f\", $_fs / $_fc}")
     avg_p2p="N/A"; avg_search="N/A"; avg_settle="N/A"
-    [ "$_p2p_cnt" -gt 0 ] && avg_p2p=$(awk "BEGIN {printf \"%.1f\", $_p2p_sum / $_p2p_cnt}")
-    [ "$_srch_cnt" -gt 0 ] && avg_search=$(awk "BEGIN {printf \"%.1f\", $_srch_sum / $_srch_cnt}")
-    [ "$_sttl_cnt" -gt 0 ] && avg_settle=$(awk "BEGIN {printf \"%.1f\", $_sttl_sum / $_sttl_cnt}")
+    [ "$_p2p_cnt" -gt 0 ] && avg_p2p=$(awk "BEGIN {printf \"%.3f\", $_p2p_sum / $_p2p_cnt}")
+    [ "$_srch_cnt" -gt 0 ] && avg_search=$(awk "BEGIN {printf \"%.3f\", $_srch_sum / $_srch_cnt}")
+    [ "$_sttl_cnt" -gt 0 ] && avg_settle=$(awk "BEGIN {printf \"%.3f\", $_sttl_sum / $_sttl_cnt}")
 }
 
 # Print the main per-condition summary table
 print_summary_table() {
     printf "\n${BOLD}--- Per-Condition Results ---${NC}\n"
-    printf "%-10s %-10s %-6s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+    printf "%-10s %-10s %-6s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
         "Protocol" "Distance" "Mode" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %-10s %-6s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
-        "--------" "--------" "----" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
+    printf "%-10s %-10s %-6s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
+        "--------" "--------" "----" "--------" "---" "---" "---------" "---------" "---------" "--------" "------" "--------"
 
     for protocol in "${PROTOCOLS[@]}"; do
         for distance in "${DISTANCES[@]}"; do
             for mode in "fast" "best"; do
                 _accumulate_keys "$protocol" "$distance" "$mode"
                 _fmt_stats "" "$RUNS"
-                printf "%-10s %-10s %-6s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+                printf "%-10s %-10s %-6s %8ss %5ss %5ss %9ss %9ss %9ss %8s%% %6s%% %8sx\n" \
                     "$protocol" "${DISTANCE_LABELS[$distance]}" "$mode" \
                     "$avg_time" "$min_time" "$max_time" \
                     "$avg_p2p" "$avg_search" "$avg_settle" \
@@ -901,15 +901,15 @@ print_mode_averages() {
     local total_per_mode=$((${#PROTOCOLS[@]} * ${#DISTANCES[@]} * RUNS))
 
     printf "\n${BOLD}--- Average by Mode ---${NC}\n"
-    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+    printf "%-10s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
         "Mode" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
-        "--------" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
+    printf "%-10s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
+        "--------" "--------" "---" "---" "---------" "---------" "---------" "--------" "------" "--------"
 
     for mode in "fast" "best"; do
         _accumulate_keys "" "" "$mode"
         _fmt_stats "" "$total_per_mode"
-        printf "%-10s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+        printf "%-10s %8ss %5ss %5ss %9ss %9ss %9ss %8s%% %6s%% %8sx\n" \
             "$mode" "$avg_time" "$min_time" "$max_time" \
             "$avg_p2p" "$avg_search" "$avg_settle" \
             "$optimal_pct" "$pass_pct" "$avg_fee"
@@ -921,15 +921,15 @@ print_distance_averages() {
     local total_per_dist=$((${#PROTOCOLS[@]} * 2 * RUNS))
 
     printf "\n${BOLD}--- Average by Distance ---${NC}\n"
-    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+    printf "%-10s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
         "Distance" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
-        "--------" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
+    printf "%-10s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
+        "--------" "--------" "---" "---" "---------" "---------" "---------" "--------" "------" "--------"
 
     for distance in "${DISTANCES[@]}"; do
         _accumulate_keys "" "$distance" ""
         _fmt_stats "" "$total_per_dist"
-        printf "%-10s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+        printf "%-10s %8ss %5ss %5ss %9ss %9ss %9ss %8s%% %6s%% %8sx\n" \
             "${DISTANCE_LABELS[$distance]}" "$avg_time" "$min_time" "$max_time" \
             "$avg_p2p" "$avg_search" "$avg_settle" \
             "$optimal_pct" "$pass_pct" "$avg_fee"
@@ -941,15 +941,15 @@ print_protocol_averages() {
     local total_per_proto=$((${#DISTANCES[@]} * 2 * RUNS))
 
     printf "\n${BOLD}--- Average by Protocol ---${NC}\n"
-    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+    printf "%-10s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
         "Protocol" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
-        "--------" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
+    printf "%-10s %9s %6s %6s %10s %10s %10s %9s %7s %9s\n" \
+        "--------" "--------" "---" "---" "---------" "---------" "---------" "--------" "------" "--------"
 
     for protocol in "${PROTOCOLS[@]}"; do
         _accumulate_keys "$protocol" "" ""
         _fmt_stats "" "$total_per_proto"
-        printf "%-10s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+        printf "%-10s %8ss %5ss %5ss %9ss %9ss %9ss %8s%% %6s%% %8sx\n" \
             "$protocol" "$avg_time" "$min_time" "$max_time" \
             "$avg_p2p" "$avg_search" "$avg_settle" \
             "$optimal_pct" "$pass_pct" "$avg_fee"

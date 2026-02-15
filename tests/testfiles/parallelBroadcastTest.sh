@@ -284,7 +284,7 @@ if [ $containerCount -ge 2 ]; then
 
         \$startTime = microtime(true);
         \$results = \$transport->sendBatch(\$recipients, \$payload);
-        \$elapsed = round((microtime(true) - \$startTime) * 1000);
+        \$elapsed = number_format((microtime(true) - \$startTime) * 1000, 3);
 
         // Should have a result per recipient
         if (count(\$results) !== count(\$recipients)) {
