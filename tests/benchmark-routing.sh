@@ -27,18 +27,24 @@
 #   search_time  = p2p.created_at on SENDER → p2p.created_at on TARGET (network propagation)
 #   settle_time  = p2p.created_at on TARGET → p2p.completed_at on SENDER (tx chain back)
 #
-# Usage: ./benchmark-routing.sh [runs] [protocols] [topology]
+# Usage: ./benchmark-routing.sh [runs] [protocols] [topology] [send_mode]
 #   runs      - Number of runs per condition (default: 10)
 #   protocols - Comma-separated protocols (default: http,https,tor)
 #   topology  - "shared" (default) or "rebuild"
 #               shared:  build once, reuse across all protocols (same fees, faster)
 #               rebuild: fresh topology per protocol (different random fees each time)
+#   send_mode - "serial" (default) or "burst"
+#               serial: send one at a time, poll for completion, collect results, repeat
+#               burst:  fire all runs at once, wait for all to complete, collect from DB
+#                       keeps processors warm (100ms polling), measures true throughput
 #
 # Examples:
-#   ./benchmark-routing.sh 10                        # Full benchmark, shared topology
-#   ./benchmark-routing.sh 3 http                    # Quick test, HTTP only
-#   ./benchmark-routing.sh 5 http,https              # HTTP and HTTPS only
-#   ./benchmark-routing.sh 10 http,https,tor rebuild # Fresh build per protocol
+#   ./benchmark-routing.sh 10                              # Full benchmark, serial
+#   ./benchmark-routing.sh 3 http                          # Quick test, HTTP only
+#   ./benchmark-routing.sh 5 http,https                    # HTTP and HTTPS only
+#   ./benchmark-routing.sh 10 http,https,tor rebuild       # Fresh build per protocol
+#   ./benchmark-routing.sh 3 http shared burst             # Burst mode, HTTP only
+#   ./benchmark-routing.sh 10 http,https shared burst      # Burst mode, multi-protocol
 #
 # Total sends: protocols × 3 distances × 2 modes × runs
 # With shared topology at $5/send, 180 sends = $900 total — well under $1000 credit limit.
@@ -48,6 +54,7 @@ set -e
 RUNS="${1:-10}"
 IFS=',' read -ra _INPUT_PROTOCOLS <<< "${2:-http,https,tor}"
 TOPOLOGY_MODE="${3:-shared}"
+SEND_MODE="${4:-serial}"
 BENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Sort protocols so tor always runs last — Tor needs extra startup time and
@@ -414,6 +421,25 @@ do_send() {
         " 2>/dev/null || echo "UNKNOWN")
 
         if [ "$hash" != "UNKNOWN" ]; then
+            # Wait for P2P completion to propagate back to sender.
+            # Balance changes on TARGET before completed_at is set on SENDER —
+            # the confirmation chain must travel back through all relay hops.
+            # This gap is especially noticeable over Tor multi-hop routes.
+            local _cw=0
+            while [ $_cw -lt 30 ]; do
+                local _done=$(docker exec $SENDER php -r "
+                    require_once('${BOOTSTRAP_PATH}');
+                    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+                    \$stmt = \$pdo->prepare('SELECT completed_at FROM p2p WHERE hash = ?');
+                    \$stmt->execute(['$hash']);
+                    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+                    echo (\$row && \$row['completed_at']) ? '1' : '0';
+                " 2>/dev/null || echo "0")
+                [ "$_done" = "1" ] && break
+                sleep 1
+                _cw=$((_cw + 1))
+            done
+
             path=$(trace_actual_path "$hash" "$SENDER" "$target")
 
             # Query P2P timestamps from sender: created_at and completed_at
@@ -510,6 +536,208 @@ do_send() {
         printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
             "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
     fi
+}
+
+# Execute all runs for one distance+mode combination in burst mode.
+# Three phases: fire all sends, wait for completion, collect per-run results from DB.
+do_burst() {
+    local protocol="$1"
+    local distance="$2"
+    local mode="$3"    # "fast" or "best"
+    local timeout="$4"
+
+    local target="${TARGETS[$distance]}"
+    local receiver_addr="${containerAddresses[$target]}"
+    local fast_flag=$( [ "$mode" = "fast" ] && echo 1 || echo 0 )
+    local dist_label="${DISTANCE_LABELS[$distance]}"
+
+    # Balance command template
+    local balance_cmd="php -r \"
+        require_once('${BOOTSTRAP_PATH}');
+        \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+        echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+    \""
+
+    # ---- Phase 1: Fire all sends ----
+    # Record max P2P ID before any sends (to identify our records later)
+    local max_id=$(docker exec $SENDER php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        echo \$pdo->query('SELECT COALESCE(MAX(id),0) FROM p2p')->fetchColumn();
+    " 2>/dev/null || echo "0")
+
+    # Record initial balance on target
+    local initial_balance=$(docker exec $target sh -c "$balance_cmd" 2>/dev/null || echo "0")
+
+    declare -a _burst_fire_time
+    for ((run=1; run<=RUNS; run++)); do
+        _burst_fire_time[$run]=$(date +%s)
+        if [ "$mode" = "fast" ]; then
+            docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null || true
+        else
+            docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY --best 2>&1 >/dev/null || true
+        fi
+        printf "[%-5s] Fired %2d/%d | %-4s | %-6s -> %-4s\n" \
+            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target"
+    done
+
+    # ---- Phase 2: Wait for all to complete ----
+    local wait_start=$(date +%s)
+    local completed=0
+    local failed=0
+    while [ $((completed + failed)) -lt $RUNS ]; do
+        sleep 2
+        local elapsed_wait=$(( $(date +%s) - wait_start ))
+        if [ $elapsed_wait -ge $timeout ]; then
+            break
+        fi
+
+        # Count completed P2P records
+        completed=$(docker exec $SENDER php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+            echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND completed_at IS NOT NULL')->fetchColumn();
+        " 2>/dev/null || echo "0")
+
+        # Count terminal failures (cancelled/expired)
+        failed=$(docker exec $SENDER php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+            echo \$pdo->query(\"SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND status IN ('cancelled','expired')\")->fetchColumn();
+        " 2>/dev/null || echo "0")
+
+        printf "\r  Waiting: %d/%d completed (%ds)...  " "$completed" "$RUNS" "$elapsed_wait"
+    done
+    printf "\r  Waiting: %d/%d completed, %d failed (%ds)     \n" "$completed" "$RUNS" "$failed" "$(( $(date +%s) - wait_start ))"
+
+    # ---- Phase 3: Collect per-run results ----
+    # Query all P2P hashes for this burst, ordered by creation
+    local hash_data=$(docker exec $SENDER php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->query('SELECT hash, created_at, completed_at FROM p2p WHERE id > $max_id AND fast = $fast_flag ORDER BY id ASC');
+        while (\$row = \$stmt->fetch(PDO::FETCH_ASSOC)) {
+            echo \$row['hash'] . '|' . (\$row['created_at'] ?? '') . '|' . (\$row['completed_at'] ?? '') . \"\n\";
+        }
+    " 2>/dev/null || echo "")
+
+    # Parse hash_data into arrays
+    local -a _burst_hashes _burst_sender_created _burst_sender_completed
+    local hash_count=0
+    while IFS='|' read -r h_hash h_created h_completed; do
+        [ -z "$h_hash" ] && continue
+        hash_count=$((hash_count + 1))
+        _burst_hashes[$hash_count]="$h_hash"
+        _burst_sender_created[$hash_count]="$h_created"
+        _burst_sender_completed[$hash_count]="$h_completed"
+    done <<< "$hash_data"
+
+    # Process each run
+    for ((run=1; run<=RUNS; run++)); do
+        local key="${protocol}_${distance}_${mode}_${run}"
+        local hash="${_burst_hashes[$run]:-}"
+        local sender_created="${_burst_sender_created[$run]:-}"
+        local sender_completed="${_burst_sender_completed[$run]:-}"
+        local fire_time="${_burst_fire_time[$run]}"
+
+        if [ -z "$hash" ] || [ -z "$sender_completed" ]; then
+            # No hash found or not completed — mark as failed
+            local elapsed=$(( $(date +%s) - fire_time ))
+            R_TIME[$key]="$elapsed"
+            R_PASS[$key]="0"
+            R_PATH[$key]=""
+            R_FEE[$key]="0"
+            R_OPTIMAL[$key]="N/A"
+            R_P2P_TIME[$key]=""
+            R_SEARCH_TIME[$key]=""
+            R_SETTLE_TIME[$key]=""
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
+                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
+            continue
+        fi
+
+        # Wall time: fire_time to completed_at epoch
+        local completed_epoch=$(docker exec $SENDER php -r "
+            echo strtotime('$sender_completed');
+        " 2>/dev/null || echo "0")
+        local elapsed=$((completed_epoch - fire_time))
+        [ "$elapsed" -lt 0 ] && elapsed=0
+
+        # Trace path
+        local path=$(trace_actual_path "$hash" "$SENDER" "$target")
+        if [ -z "$path" ]; then
+            path="${SENDER}->${target}"
+        fi
+        local fee=$(compute_path_fee "$path" "$target")
+
+        # Optimality check
+        local is_optimal="N/A"
+        local actual_amount=$(compute_path_integer_amount "$path" "$target" $((SEND_AMOUNT * 100)))
+        local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
+        if [ -n "$optimal" ] && [ "$optimal" != "" ]; then
+            is_optimal=$([ "$actual_amount" -le "$optimal" ] && echo "OPTIMAL" || echo "SUB-OPT")
+        fi
+
+        # Timing breakdowns from DB timestamps
+        local p2p_time="" search_time="" settle_time=""
+
+        if [ -n "$sender_created" ] && [ -n "$sender_completed" ]; then
+            p2p_time=$(docker exec $SENDER php -r "
+                \$c = strtotime('$sender_created');
+                \$d = strtotime('$sender_completed');
+                if (\$c && \$d) printf('%.1f', \$d - \$c);
+            " 2>/dev/null || echo "")
+        fi
+
+        # Query target timestamps for search_time
+        local target_ts=$(docker exec $target php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+            \$stmt = \$pdo->prepare('SELECT created_at FROM p2p WHERE hash = ?');
+            \$stmt->execute(['$hash']);
+            \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+            if (\$row) echo \$row['created_at'] ?? '';
+        " 2>/dev/null || echo "")
+
+        if [ -n "$sender_created" ] && [ -n "$target_ts" ]; then
+            search_time=$(docker exec $SENDER php -r "
+                \$c = strtotime('$sender_created');
+                \$t = strtotime('$target_ts');
+                if (\$c && \$t) printf('%.1f', \$t - \$c);
+            " 2>/dev/null || echo "")
+        fi
+
+        if [ -n "$target_ts" ] && [ -n "$sender_completed" ]; then
+            settle_time=$(docker exec $SENDER php -r "
+                \$t = strtotime('$target_ts');
+                \$d = strtotime('$sender_completed');
+                if (\$t && \$d) printf('%.1f', \$d - \$t);
+            " 2>/dev/null || echo "")
+        fi
+
+        # Store results (same keys as serial mode)
+        R_TIME[$key]="$elapsed"
+        R_PASS[$key]="1"
+        R_PATH[$key]="$path"
+        R_FEE[$key]="$fee"
+        R_OPTIMAL[$key]="$is_optimal"
+        R_P2P_TIME[$key]="${p2p_time:-}"
+        R_SEARCH_TIME[$key]="${search_time:-}"
+        R_SETTLE_TIME[$key]="${settle_time:-}"
+
+        # Print per-run result line (same format as serial do_send)
+        local opt_color="${YELLOW}"
+        [ "$is_optimal" = "OPTIMAL" ] && opt_color="${GREEN}"
+        local timing_detail=""
+        if [ -n "$p2p_time" ]; then
+            timing_detail=" (p2p:${p2p_time}s"
+            [ -n "$search_time" ] && timing_detail="${timing_detail} srch:${search_time}s"
+            [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
+            timing_detail="${timing_detail})"
+        fi
+        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
+    done
 }
 
 # Accumulate stats for a set of keys into caller's variables:
@@ -774,14 +1002,22 @@ echo "================================================================"
 echo "Runs per condition: ${RUNS}"
 echo "Protocols:          ${PROTOCOLS[*]}"
 echo "Topology:           ${TOPOLOGY_MODE}"
+echo "Send mode:          ${SEND_MODE}"
 echo "Targets:            $(for d in "${DISTANCES[@]}"; do printf "%s(%s) " "${TARGETS[$d]}" "${DISTANCE_LABELS[$d]}"; done)"
 echo "Total sends:        $((${#PROTOCOLS[@]} * ${#DISTANCES[@]} * 2 * RUNS))"
 echo "Time:               $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
-# P2P expiration (production default: 300s) — also used as send timeout
-testExpiration=300
-send_timeout=$testExpiration
+# P2P expiration — must outlast the slowest transport's round trip.
+# Tor hidden services add ~2-5s latency per hop; a 6-hop chain (12 hops round trip)
+# needs well over 300s. Use 600s when Tor is in the protocol list.
+_has_tor=0
+for _p in "${PROTOCOLS[@]}"; do [ "$_p" = "tor" ] && _has_tor=1; done
+testExpiration=$(( _has_tor ? 600 : 300 ))
+
+# Per-protocol send timeouts (polling deadline in do_send/do_burst).
+# HTTP/HTTPS complete quickly; Tor needs the full extended window.
+declare -A _PROTO_TIMEOUT=( [http]=300 [https]=300 [tor]=600 )
 
 set +e  # Allow errors during main loop (we handle them ourselves)
 
@@ -916,14 +1152,19 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
         # then 3-hop fast, 3-hop best, etc. This keeps topology state consistent
         # for each hop distance before moving on.
+        local send_timeout="${_PROTO_TIMEOUT[$protocol]}"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
             printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
             for mode in "fast" "best"; do
                 [ "$mode" = "best" ] && printf "\n"
-                for ((run=1; run<=RUNS; run++)); do
-                    do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
-                done
+                if [ "$SEND_MODE" = "burst" ]; then
+                    do_burst "$protocol" "$distance" "$mode" "$send_timeout"
+                else
+                    for ((run=1; run<=RUNS; run++)); do
+                        do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
+                    done
+                fi
             done
         done
     done
@@ -1018,14 +1259,19 @@ else
 
         # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
         # then 3-hop fast, 3-hop best, etc.
+        local send_timeout="${_PROTO_TIMEOUT[$protocol]}"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
             printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
             for mode in "fast" "best"; do
                 [ "$mode" = "best" ] && printf "\n"
-                for ((run=1; run<=RUNS; run++)); do
-                    do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
-                done
+                if [ "$SEND_MODE" = "burst" ]; then
+                    do_burst "$protocol" "$distance" "$mode" "$send_timeout"
+                else
+                    for ((run=1; run<=RUNS; run++)); do
+                        do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
+                    done
+                fi
             done
         done
 
@@ -1056,6 +1302,28 @@ print_mode_averages
 print_distance_averages
 print_protocol_averages
 print_grand_total
+
+# ======================== CSV Export ========================
+
+CSV_FILE="${BENCH_DIR}/benchmark-results-$(date '+%Y%m%d-%H%M%S').csv"
+
+{
+    echo "protocol,distance,target,mode,run,wall_time_s,pass,path,fee_multiplier,optimal,p2p_time_s,search_time_s,settle_time_s"
+    for protocol in "${PROTOCOLS[@]}"; do
+        for distance in "${DISTANCES[@]}"; do
+            target="${TARGETS[$distance]}"
+            for mode in "fast" "best"; do
+                for ((run=1; run<=RUNS; run++)); do
+                    key="${protocol}_${distance}_${mode}_${run}"
+                    # Quote path field (contains -> arrows)
+                    echo "${protocol},${distance},${target},${mode},${run},${R_TIME[$key]:-},${R_PASS[$key]:-0},\"${R_PATH[$key]:-}\",${R_FEE[$key]:-},${R_OPTIMAL[$key]:-},${R_P2P_TIME[$key]:-},${R_SEARCH_TIME[$key]:-},${R_SETTLE_TIME[$key]:-}"
+                done
+            done
+        done
+    done
+} > "$CSV_FILE"
+
+printf "\nResults saved to: ${CSV_FILE}\n"
 
 echo ""
 echo "Benchmark completed: $(date '+%Y-%m-%d %H:%M:%S')"
