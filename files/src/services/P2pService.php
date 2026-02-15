@@ -756,6 +756,17 @@ class P2pService implements P2pServiceInterface {
     public function processQueuedP2pMessages(): int {
         // Select queued messages from the p2p table (with status queued)
         $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
+
+        // Coalesce delay: if we got some messages but fewer than the batch size,
+        // wait briefly to let more P2Ps accumulate before firing the mega-batch.
+        // This prevents the processor from grabbing one P2P at a time due to fast polling.
+        $batchSize = Constants::P2P_QUEUE_BATCH_SIZE;
+        $coalesceMs = Constants::P2P_QUEUE_COALESCE_MS;
+        if (!empty($queuedMessages) && count($queuedMessages) < $batchSize && $coalesceMs > 0) {
+            usleep($coalesceMs * 1000);
+            $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
+        }
+
         if($queuedMessages !== []){
             $contacts = $this->contactService->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
             $contactsCount = count($contacts); // Count amount of contacts to send p2p request
@@ -844,7 +855,11 @@ class P2pService implements P2pServiceInterface {
         // Fire ALL broadcasts from ALL P2Ps in one curl_multi call.
         $megaResults = [];
         if (!empty($megaBatchSends)) {
+            $p2pCount = count($p2pBroadcastMeta);
+            $sendCount = count($megaBatchSends);
+            output("Mega-batch: {$p2pCount} P2Ps, {$sendCount} total sends via curl_multi", 'SILENT');
             $megaResults = $this->transportUtility->sendMultiBatch($megaBatchSends);
+            output("Mega-batch complete: " . count($megaResults) . " results", 'SILENT');
         }
 
         // ── Phase 3: Process ──────────────────────────────────────────────
