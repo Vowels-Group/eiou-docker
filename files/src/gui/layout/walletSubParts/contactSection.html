@@ -440,8 +440,8 @@
                     </div>
                 </form>
 
-                <div class="form-actions" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; justify-content: center;">
-                    <form method="POST" id="blockForm" style="display: inline;">
+                <div class="contact-settings-actions">
+                    <form method="POST" id="blockForm">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="blockContact">
                         <input type="hidden" name="contact_address" id="block_contact_address">
@@ -457,7 +457,7 @@
                             <i class="fas fa-check"></i> Unblock
                         </button>
                     </form>
-                    <form method="POST" id="deleteForm" style="display: inline;">
+                    <form method="POST" id="deleteForm">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="deleteContact">
                         <input type="hidden" name="contact_address" id="delete_contact_address">
@@ -466,7 +466,7 @@
                         </button>
                     </form>
                     <button type="submit" form="editContactForm" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Changes
+                        <i class="fas fa-save"></i> Save
                     </button>
                 </div>
         </div>

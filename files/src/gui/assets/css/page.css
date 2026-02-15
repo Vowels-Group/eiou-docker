@@ -2167,6 +2167,41 @@ html {
     border-radius: 0 0 8px 8px;
 }
 
+/* Contact modal settings action buttons — compact 2x2 grid */
+.contact-settings-actions {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    gap: 0.5rem;
+    -webkit-flex-wrap: wrap;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.contact-settings-actions > * + * {
+    margin-left: 0.5rem;
+}
+
+@supports (gap: 0.5rem) {
+    .contact-settings-actions > * + * {
+        margin-left: 0;
+    }
+}
+
+.contact-settings-actions form {
+    display: inline;
+}
+
+.contact-settings-actions .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
 /* Contact Info Section */
 .contact-info-section {
     margin-bottom: 1.5rem;
