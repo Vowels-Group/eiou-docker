@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Core\Constants;
+
 /**
  * Message Delivery Service Interface
  *
@@ -105,7 +107,7 @@ interface MessageDeliveryServiceInterface
      *               - 'no_payload' (int): Skipped due to missing payload
      *               - 'details' (array): Per-message details
      */
-    public function processRetryQueue(int $limit = 10): array;
+    public function processRetryQueue(int $limit = Constants::DELIVERY_RETRY_BATCH_SIZE): array;
 
     /**
      * Check if a message has exhausted all retries
@@ -183,7 +185,7 @@ interface MessageDeliveryServiceInterface
      *               - 'threshold' (int): Alert threshold
      *               - 'statistics' (array): DLQ statistics
      */
-    public function getDlqAlertStatus(int $alertThreshold = 10): array;
+    public function getDlqAlertStatus(int $alertThreshold = Constants::DLQ_ALERT_THRESHOLD): array;
 
     /**
      * Retry a message from the DLQ
@@ -245,7 +247,7 @@ interface MessageDeliveryServiceInterface
      *               - 'delivery_deleted' (int): Number of delivery records deleted
      *               - 'dlq_deleted' (int): Number of DLQ records deleted
      */
-    public function cleanup(int $deliveryDays = 30, int $dlqDays = 90): array;
+    public function cleanup(int $deliveryDays = Constants::CLEANUP_DELIVERY_RETENTION_DAYS, int $dlqDays = Constants::CLEANUP_DLQ_RETENTION_DAYS): array;
 
     /**
      * Update delivery stage to 'forwarded' after successfully forwarding a message

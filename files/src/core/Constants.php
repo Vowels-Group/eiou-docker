@@ -253,6 +253,54 @@ class Constants {
     const BACKUP_CRON_HOUR = 0;              // Hour to run backup (0 = midnight)
     const BACKUP_CRON_MINUTE = 0;            // Minute to run backup
 
+    // Queue/Processor batch sizes
+    // Controls how many items are fetched and processed per daemon poll cycle
+    const P2P_EXPIRING_BATCH_SIZE = 5;             // Max expiring P2P messages per cleanup cycle (default: 5)
+    const RECOVERY_PENDING_BATCH_SIZE = 5;         // Max pending recovery transactions per cycle (default: 5)
+    const RECOVERY_IN_PROGRESS_BATCH_SIZE = 10;    // Max in-progress recovery transactions per cycle (default: 10)
+    const DELIVERY_RETRY_BATCH_SIZE = 10;          // Max failed deliveries retried per cycle (default: 10)
+    const DELIVERY_EXHAUSTED_BATCH_SIZE = 10;      // Max exhausted-retry deliveries moved to DLQ per cycle (default: 10)
+    const DLQ_BATCH_SIZE = 50;                     // Max dead letter queue items fetched per query (default: 50)
+    const HELD_TX_BATCH_SIZE = 10;                 // Max held transactions processed per cycle (default: 10)
+    const HELD_TX_EXHAUSTED_BATCH_SIZE = 10;       // Max exhausted held transactions fetched per cycle (default: 10)
+
+    // Display/Query limits
+    const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 5;   // Max recent transactions shown in lists (default: 5)
+    const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
+    const CONTACT_TRANSACTIONS_LIMIT = 5;          // Max transactions per contact in combined queries (default: 5)
+    const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
+    const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
+
+    // Debug logging limits
+    const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)
+    const DEBUG_ALL_ENTRIES_MAX = 10000;            // Max total debug entries returned (default: 10000)
+    const DEBUG_PRUNE_KEEP_COUNT = 100;            // Number of debug entries to keep when pruning (default: 100)
+
+    // Message delivery configuration
+    const DELIVERY_MAX_RETRIES = 5;                // Max delivery retry attempts before moving to DLQ (default: 5)
+    const DELIVERY_BASE_DELAY_SECONDS = 2;         // Base delay between retries in seconds (default: 2)
+    const DELIVERY_JITTER_FACTOR = 0.2;            // Random jitter factor for retry delay (default: 0.2)
+    const DLQ_ALERT_THRESHOLD = 10;                // DLQ item count that triggers alerts (default: 10)
+
+    // Data retention / cleanup (days unless noted)
+    const CLEANUP_DELIVERY_RETENTION_DAYS = 30;    // Days to keep delivery records (default: 30)
+    const CLEANUP_DLQ_RETENTION_DAYS = 90;         // Days to keep dead letter queue records (default: 90)
+    const CLEANUP_HELD_TX_RETENTION_DAYS = 7;      // Days to keep resolved held transactions (default: 7)
+    const CLEANUP_RP2P_RETENTION_DAYS = 30;        // Days to keep RP2P response records (default: 30)
+    const CLEANUP_RP2P_CANDIDATE_RETENTION_DAYS = 1; // Days to keep RP2P candidate records (default: 1)
+    const CLEANUP_P2P_SENDER_RETENTION_DAYS = 1;   // Days to keep P2P sender records (default: 1)
+    const CLEANUP_P2P_RELAYED_RETENTION_DAYS = 1;  // Days to keep P2P relayed contact records (default: 1)
+    const CLEANUP_METRICS_RETENTION_DAYS = 90;     // Days to keep delivery metrics (default: 90)
+    const CLEANUP_RATE_LIMIT_SECONDS = 3600;       // Seconds before expired rate limit entries are cleaned (default: 3600)
+
+    // Database locking
+    const DB_LOCK_TIMEOUT_SECONDS = 30;            // Max seconds to wait for a database lock (default: 30)
+
+    // Rate limiting defaults
+    const RATE_LIMIT_MAX_ATTEMPTS = 10;            // Max attempts before rate-limiting kicks in (default: 10)
+    const RATE_LIMIT_WINDOW_SECONDS = 60;          // Time window in seconds for counting attempts (default: 60)
+    const RATE_LIMIT_BLOCK_SECONDS = 300;          // Seconds to block after limit exceeded (default: 300)
+
     /**
      * Check if automatic backups are enabled
      * Supports runtime override via EIOU_BACKUP_AUTO_ENABLED env variable

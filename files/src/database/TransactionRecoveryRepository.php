@@ -55,7 +55,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
      * @param int $limit Maximum number of messages to retrieve
      * @return array Array of pending transactions
      */
-    public function getPendingTransactions(int $limit = 5): array {
+    public function getPendingTransactions(int $limit = Constants::RECOVERY_PENDING_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE status = 'pending'
                   ORDER BY timestamp ASC
@@ -289,7 +289,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
      * @param int $limit Maximum number of transactions to retrieve
      * @return array Array of in-progress transactions
      */
-    public function getInProgressTransactions(int $limit = 10): array {
+    public function getInProgressTransactions(int $limit = Constants::RECOVERY_IN_PROGRESS_BATCH_SIZE): array {
         $userAddresses = $this->getUserAddressesOrNull();
         if ($userAddresses === null) {
             return [];

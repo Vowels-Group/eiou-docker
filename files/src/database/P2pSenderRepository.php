@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
@@ -126,7 +127,7 @@ class P2pSenderRepository extends AbstractRepository {
      * @param int $days Number of days to keep
      * @return int Number of deleted records
      */
-    public function deleteOldRecords(int $days = 1): int {
+    public function deleteOldRecords(int $days = Constants::CLEANUP_P2P_SENDER_RETENTION_DAYS): int {
         $query = "DELETE FROM {$this->tableName}
                   WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)";
 

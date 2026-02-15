@@ -229,7 +229,7 @@ class TransactionRepository extends AbstractRepository {
      * @param int $limit
      * @return array
      */
-    public function getRecentTransactions(int $limit = 5): array
+    public function getRecentTransactions(int $limit = Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT): array
     {
         return $this->getTransactionHistory($limit);
     }
@@ -883,7 +883,7 @@ class TransactionRepository extends AbstractRepository {
      *
      * @return array Timestamp column
      */
-    public function getTimestampsTransactions(int $limit = 5): array {
+    public function getTimestampsTransactions(int $limit = Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT): array {
         $query = "SELECT timestamp FROM {$this->tableName}
                   ORDER BY timestamp DESC LIMIT ?";
         $stmt = $this->pdo->prepare($query);

@@ -9,6 +9,7 @@ use Eiou\Database\DeliveryMetricsRepository;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Exception;
@@ -130,9 +131,9 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
         TransportUtilityService $transportUtility,
         TimeUtilityService $timeUtility,
         UserContext $currentUser,
-        int $maxRetries = 5,
-        int $baseDelay = 2,
-        float $jitterFactor = 0.2,
+        int $maxRetries = Constants::DELIVERY_MAX_RETRIES,
+        int $baseDelay = Constants::DELIVERY_BASE_DELAY_SECONDS,
+        float $jitterFactor = Constants::DELIVERY_JITTER_FACTOR,
     ) {
         $this->deliveryRepository = $deliveryRepository;
         $this->dlqRepository = $dlqRepository;
@@ -1112,7 +1113,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * @param int $limit Maximum messages to process
      * @return array Results with processed count and details
      */
-    public function processRetryQueue(int $limit = 10): array {
+    public function processRetryQueue(int $limit = Constants::DELIVERY_RETRY_BATCH_SIZE): array {
         $messages = $this->deliveryRepository->getMessagesForRetry($limit);
         $results = [
             'processed' => 0,
@@ -1348,7 +1349,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * @param int $alertThreshold Number of pending items to trigger alert
      * @return array Alert information
      */
-    public function getDlqAlertStatus(int $alertThreshold = 10): array {
+    public function getDlqAlertStatus(int $alertThreshold = Constants::DLQ_ALERT_THRESHOLD): array {
         $pendingCount = $this->dlqRepository->getPendingCount();
         $stats = $this->dlqRepository->getStatistics();
 
@@ -1494,7 +1495,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * @param int $dlqDays Days to keep resolved DLQ records
      * @return array Cleanup results
      */
-    public function cleanup(int $deliveryDays = 30, int $dlqDays = 90): array {
+    public function cleanup(int $deliveryDays = Constants::CLEANUP_DELIVERY_RETENTION_DAYS, int $dlqDays = Constants::CLEANUP_DLQ_RETENTION_DAYS): array {
         return [
             'delivery_deleted' => $this->deliveryRepository->deleteOldRecords($deliveryDays),
             'dlq_deleted' => $this->dlqRepository->deleteOldRecords($dlqDays)

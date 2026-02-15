@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Utils\Logger;
 use PDO;
@@ -215,7 +216,7 @@ class HeldTransactionRepository extends AbstractRepository {
      * @param int $limit Maximum number of transactions to return
      * @return array Array of held transaction records
      */
-    public function getTransactionsToResume(int $limit = 10): array {
+    public function getTransactionsToResume(int $limit = Constants::HELD_TX_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE sync_status = 'completed'
                   ORDER BY held_at ASC
@@ -422,7 +423,7 @@ class HeldTransactionRepository extends AbstractRepository {
      * @param int $limit Maximum number of transactions to return
      * @return array Array of held transaction records
      */
-    public function getExhaustedRetries(int $limit = 10): array {
+    public function getExhaustedRetries(int $limit = Constants::HELD_TX_EXHAUSTED_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE retry_count >= max_retries
                   ORDER BY held_at ASC
@@ -449,7 +450,7 @@ class HeldTransactionRepository extends AbstractRepository {
      * @param int $days Number of days to keep records (default: 7)
      * @return int Number of records deleted, -1 on error
      */
-    public function cleanupOldRecords(int $days = 7): int {
+    public function cleanupOldRecords(int $days = Constants::CLEANUP_HELD_TX_RETENTION_DAYS): int {
         $cutoffDate = date('Y-m-d H:i:s', strtotime("-{$days} days"));
 
         $query = "DELETE FROM {$this->tableName}

@@ -140,7 +140,7 @@ class P2pRepository extends AbstractRepository {
      * @param int $limit Maximum number of messages
      * @return array Array of P2P messages
      */
-    public function getExpiringP2pMessages(int $limit = 5): array {
+    public function getExpiringP2pMessages(int $limit = Constants::P2P_EXPIRING_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE status NOT IN ('completed', 'expired', 'cancelled')
                   ORDER BY created_at ASC

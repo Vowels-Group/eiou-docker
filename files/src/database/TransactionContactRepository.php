@@ -176,7 +176,7 @@ class TransactionContactRepository extends AbstractRepository {
      * @param int $limit Maximum number of transactions to return
      * @return array Formatted transactions with contact
      */
-    public function getTransactionsWithContact(array $contactAddresses, int $limit = 5): array {
+    public function getTransactionsWithContact(array $contactAddresses, int $limit = Constants::CONTACT_TRANSACTIONS_LIMIT): array {
         $userAddresses = $this->getUserAddressesOrNull();
         if ($userAddresses === null || empty($contactAddresses)) {
             return [];

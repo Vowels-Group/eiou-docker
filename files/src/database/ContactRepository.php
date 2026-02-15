@@ -1075,7 +1075,7 @@ class ContactRepository extends AbstractRepository {
      * @param int $limit
      * @return array
      */
-    public function getRecentContacts(int $limit = 5): array
+    public function getRecentContacts(int $limit = Constants::DISPLAY_RECENT_CONTACTS_LIMIT): array
     {
          $query = "SELECT * 
                     FROM {$this->tableName} c 

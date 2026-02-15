@@ -105,7 +105,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     }
 
     /** Acquire a lock for sending to a specific contact */
-    public function acquireContactSendLock(string $contactPubkeyHash, int $timeout = 30): bool
+    public function acquireContactSendLock(string $contactPubkeyHash, int $timeout = Constants::DB_LOCK_TIMEOUT_SECONDS): bool
     {
         if ($this->lockingService !== null) {
             return $this->lockingService->acquireLock('contact_send_' . $contactPubkeyHash, $timeout);
