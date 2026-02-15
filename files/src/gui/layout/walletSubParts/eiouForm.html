@@ -4,17 +4,16 @@
 <div id="send-form" class="form-container fade-in-up">
     <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
     
-    <!-- P2P Information Alert -->
-    <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; padding: 1rem; margin-bottom: 1.5rem;">
-        <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
-            <i class="fas fa-info-circle" style="color: #0066cc; margin-top: 0.2rem;"></i>
-            <div>
-                <strong style="color: #0066cc;">Peer-to-Peer Routing Available</strong>
-                <p style="margin: 0.5rem 0 0 0; color: #333; font-size: 0.9rem;">
-                    You can send eIOUs to anyone, even if they're not in your contacts! The system will automatically route the transaction through your network of contacts to reach the recipient.
-                </p>
-            </div>
+    <!-- P2P Information Alert (collapsible) -->
+    <div class="p2p-info-alert" onclick="toggleP2pInfo()">
+        <div class="p2p-info-header">
+            <i class="fas fa-info-circle"></i>
+            <strong>Peer-to-Peer Routing Available</strong>
+            <i id="p2p-info-chevron" class="fas fa-chevron-down p2p-info-chevron"></i>
         </div>
+        <p id="p2p-info-detail" class="p2p-info-detail">
+            You can send eIOUs to anyone, even if they're not in your contacts! The system will automatically route the transaction through your network of contacts to reach the recipient.
+        </p>
     </div>
     
     <form method="POST">
@@ -94,7 +93,7 @@
 
         <!-- P2P Routing Mode -->
         <div class="form-group" id="best-fee-group">
-            <label><i class="fas fa-route"></i> Best Fee Route:</label>
+            <label><i class="fas fa-route"></i> Best Fee Route: <i class="fas fa-flask best-fee-flask" title="Experimental feature"></i></label>
             <div class="toggle-row">
                 <label class="toggle-switch">
                     <input type="checkbox" id="best-fee" name="best_fee" value="1">
@@ -102,7 +101,7 @@
                 </label>
                 <span id="bestFeeStatus" class="toggle-status">Disabled</span>
             </div>
-            <small style="color: #856404; background: #fff3cd; border: 1px solid #ffc107; border-radius: 3px; padding: 0.35rem 0.5rem; margin-top: 0.25rem; display: block;">
+            <small id="best-fee-experimental" class="best-fee-experimental">
                 <i class="fas fa-flask"></i> <strong>Experimental:</strong>
                 Finds the cheapest fee route but may be slower or less reliable than the default. When disabled, the first available route is used.
             </small>

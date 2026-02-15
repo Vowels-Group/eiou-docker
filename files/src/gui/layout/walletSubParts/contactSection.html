@@ -18,7 +18,7 @@
     </div>
     <?php endif; ?>
     <div class="contacts-slider">
-        <button type="button" class="contacts-scroll-btn contacts-scroll-left" onclick="scrollContacts(-1)" title="Scroll left">
+        <button type="button" id="contacts-scroll-left" class="contacts-scroll-btn contacts-scroll-left hidden" onclick="scrollContacts(-1)" title="Scroll left">
             <i class="fas fa-chevron-left"></i>
         </button>
         <div class="contacts-grid" id="contacts-grid">
@@ -180,7 +180,7 @@
 
         <?php endif; ?>
     </div>
-        <button type="button" class="contacts-scroll-btn contacts-scroll-right" onclick="scrollContacts(1)" title="Scroll right">
+        <button type="button" id="contacts-scroll-right" class="contacts-scroll-btn contacts-scroll-right" onclick="scrollContacts(1)" title="Scroll right">
             <i class="fas fa-chevron-right"></i>
         </button>
     </div>
@@ -386,8 +386,8 @@
             <div class="modal-tab-scroll">
                 <!-- Transaction List View -->
                 <div id="tx-list-view">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
+                    <div class="tx-tab-header">
+                        <p>
                             <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
                         </p>
                         <button type="button" class="btn btn-sm btn-secondary" onclick="refreshContactModalTransactions();">
@@ -440,8 +440,8 @@
                     </div>
                 </form>
 
-                <div class="form-actions" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; justify-content: center;">
-                    <form method="POST" id="blockForm" style="display: inline;">
+                <div class="contact-settings-actions">
+                    <form method="POST" id="blockForm">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="blockContact">
                         <input type="hidden" name="contact_address" id="block_contact_address">
@@ -457,7 +457,7 @@
                             <i class="fas fa-check"></i> Unblock
                         </button>
                     </form>
-                    <form method="POST" id="deleteForm" style="display: inline;">
+                    <form method="POST" id="deleteForm">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="deleteContact">
                         <input type="hidden" name="contact_address" id="delete_contact_address">
@@ -466,7 +466,7 @@
                         </button>
                     </form>
                     <button type="submit" form="editContactForm" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Changes
+                        <i class="fas fa-save"></i> Save
                     </button>
                 </div>
         </div>
