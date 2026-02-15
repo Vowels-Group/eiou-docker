@@ -2184,6 +2184,47 @@ html {
 }
 
 /* Contact modal settings action buttons — compact 2x2 grid */
+/* Contact modal transactions header — info text + refresh button */
+.tx-tab-header {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-pack: justify;
+    -ms-flex-pack: justify;
+    justify-content: space-between;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.tx-tab-header > * + * {
+    margin-left: 0.5rem;
+}
+
+@supports (gap: 0.5rem) {
+    .tx-tab-header > * + * {
+        margin-left: 0;
+    }
+}
+
+.tx-tab-header p {
+    color: #6c757d;
+    margin: 0;
+    font-size: 0.85rem;
+    min-width: 0;
+}
+
+.tx-tab-header .btn {
+    -webkit-flex-shrink: 0;
+    -ms-flex-negative: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Contact modal settings action buttons — compact row */
 .contact-settings-actions {
     display: -webkit-box;
     display: -ms-flexbox;
