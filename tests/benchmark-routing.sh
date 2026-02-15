@@ -1152,7 +1152,7 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
         # then 3-hop fast, 3-hop best, etc. This keeps topology state consistent
         # for each hop distance before moving on.
-        local send_timeout="${_PROTO_TIMEOUT[$protocol]}"
+        send_timeout="${_PROTO_TIMEOUT[$protocol]:-300}"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
             printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
@@ -1259,7 +1259,7 @@ else
 
         # Sends grouped by distance then mode: all runs for 1-hop fast, 1-hop best,
         # then 3-hop fast, 3-hop best, etc.
-        local send_timeout="${_PROTO_TIMEOUT[$protocol]}"
+        send_timeout="${_PROTO_TIMEOUT[$protocol]:-300}"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
             printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
