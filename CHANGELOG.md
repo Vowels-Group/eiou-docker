@@ -14,6 +14,8 @@ The project is currently in **ALPHA** status.
 
 ### Fixed
 - GUI header logout button overflows outside the card on narrow screens — wallet owner name now wraps to a new line on mobile, keeping the logout button anchored in the top right
+- Contacts scroll buttons repositioned outside the card area so contact cards are fully visible — left button auto-hides when at the first contact, right button hides at the end
+- Floating refresh and back-to-top buttons scaled smaller and moved closer to the edge on mobile screens
 
 ---
 

@@ -283,23 +283,27 @@ body {
 }
 
 .contacts-slider {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    position: relative;
 }
 
 .contacts-scroll-btn {
-    background: #f8f9fa;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: white;
     border: 1px solid #dee2e6;
     border-radius: 50%;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     color: #495057;
-    flex-shrink: 0;
+    font-size: 0.75rem;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 .contacts-scroll-btn:hover {
@@ -307,13 +311,31 @@ body {
     color: #0d6efd;
 }
 
+.contacts-scroll-btn.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.contacts-scroll-left {
+    left: -14px;
+}
+
+.contacts-scroll-right {
+    right: -14px;
+}
+
 .contacts-grid {
     display: flex;
     gap: 1rem;
     overflow-x: auto;
     padding-bottom: 0.5rem;
-    flex: 1;
     min-width: 0;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE */
+}
+
+.contacts-grid::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
 }
 
 .contact-card {
@@ -1034,6 +1056,26 @@ body {
     .wallet-owner {
         display: block;
         padding-left: 0.25rem;
+    }
+
+    .back-to-top-btn {
+        width: 40px;
+        height: 40px;
+        right: 12px;
+        bottom: 16px;
+        font-size: 1rem;
+    }
+
+    .manual-refresh {
+        width: 40px;
+        height: 40px;
+        right: 12px;
+        bottom: 64px;
+        font-size: 1rem;
+    }
+
+    .contacts-section {
+        padding: 1rem;
     }
 }
 

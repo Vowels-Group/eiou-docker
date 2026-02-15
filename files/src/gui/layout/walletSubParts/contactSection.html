@@ -18,7 +18,7 @@
     </div>
     <?php endif; ?>
     <div class="contacts-slider">
-        <button type="button" class="contacts-scroll-btn contacts-scroll-left" onclick="scrollContacts(-1)" title="Scroll left">
+        <button type="button" id="contacts-scroll-left" class="contacts-scroll-btn contacts-scroll-left hidden" onclick="scrollContacts(-1)" title="Scroll left">
             <i class="fas fa-chevron-left"></i>
         </button>
         <div class="contacts-grid" id="contacts-grid">
@@ -180,7 +180,7 @@
 
         <?php endif; ?>
     </div>
-        <button type="button" class="contacts-scroll-btn contacts-scroll-right" onclick="scrollContacts(1)" title="Scroll right">
+        <button type="button" id="contacts-scroll-right" class="contacts-scroll-btn contacts-scroll-right" onclick="scrollContacts(1)" title="Scroll right">
             <i class="fas fa-chevron-right"></i>
         </button>
     </div>

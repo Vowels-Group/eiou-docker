@@ -1279,6 +1279,35 @@ function showManualCopyModal(text, successMessage) {
 // ============================================================================
 
 /**
+ * Updates the visibility of the left/right contacts scroll buttons
+ * based on the current scroll position of the contacts grid.
+ * Hides the left button when scrolled to the start and the right
+ * button when scrolled to the end.
+ */
+function updateContactsScrollButtons() {
+    var grid = document.getElementById('contacts-grid');
+    if (!grid) return;
+    var leftBtn = document.getElementById('contacts-scroll-left');
+    var rightBtn = document.getElementById('contacts-scroll-right');
+    if (leftBtn) {
+        if (grid.scrollLeft <= 0) {
+            leftBtn.className = leftBtn.className.replace(' hidden', '') + ' hidden';
+        } else {
+            leftBtn.className = leftBtn.className.replace(' hidden', '');
+        }
+    }
+    if (rightBtn) {
+        // 1px tolerance for rounding
+        var atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 1;
+        if (atEnd) {
+            rightBtn.className = rightBtn.className.replace(' hidden', '') + ' hidden';
+        } else {
+            rightBtn.className = rightBtn.className.replace(' hidden', '');
+        }
+    }
+}
+
+/**
  * Scrolls the contacts grid left or right by one card width.
  * @param {number} direction - -1 for left, 1 for right
  */
@@ -1288,7 +1317,24 @@ function scrollContacts(direction) {
     // Card width (250px) + gap (16px)
     var scrollAmount = 266 * direction;
     grid.scrollLeft = grid.scrollLeft + scrollAmount;
+    // Delay update to let scroll settle
+    setTimeout(updateContactsScrollButtons, 50);
 }
+
+// Update scroll buttons on page load and when the grid is scrolled
+(function() {
+    var initScrollButtons = function() {
+        var grid = document.getElementById('contacts-grid');
+        if (!grid) return;
+        grid.addEventListener('scroll', updateContactsScrollButtons);
+        updateContactsScrollButtons();
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initScrollButtons);
+    } else {
+        initScrollButtons();
+    }
+})();
 
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
@@ -1368,6 +1414,9 @@ function filterContacts() {
     if (showMoreBtn) {
         showMoreBtn.style.display = searchTerm !== '' ? 'none' : '';
     }
+
+    // Update scroll button visibility after filtering
+    setTimeout(updateContactsScrollButtons, 50);
 }
 
 /**
@@ -1411,6 +1460,9 @@ function toggleShowAllContacts() {
             showMoreBtn.innerHTML = '<i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
         }
     }
+
+    // Update scroll button visibility after toggling
+    setTimeout(updateContactsScrollButtons, 50);
 }
 
 /**
