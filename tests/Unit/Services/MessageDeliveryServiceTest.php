@@ -1529,4 +1529,169 @@ class MessageDeliveryServiceTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertEquals('completed', $result['stage']);
     }
+
+    // =========================================================================
+    // sendBatchAsync() Tests
+    // =========================================================================
+
+    /**
+     * Test sendBatchAsync returns empty array for empty sends
+     */
+    public function testSendBatchAsyncReturnsEmptyForEmptySends(): void
+    {
+        $result = $this->service->sendBatchAsync('p2p', []);
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    /**
+     * Test sendBatchAsync creates delivery records and processes successful responses
+     */
+    public function testSendBatchAsyncProcessesSuccessfulDeliveries(): void
+    {
+        $sends = [
+            [
+                'messageId' => 'batch-msg-1',
+                'recipient' => 'http://contact1.test',
+                'payload' => ['type' => 'p2p', 'hash' => 'abc123']
+            ],
+            [
+                'messageId' => 'batch-msg-2',
+                'recipient' => 'http://contact2.test',
+                'payload' => ['type' => 'p2p', 'hash' => 'abc123']
+            ]
+        ];
+
+        // Delivery records should be created for each send
+        $this->deliveryRepository->method('deliveryExists')
+            ->willReturn(false);
+
+        $this->deliveryRepository->expects($this->exactly(2))
+            ->method('createDelivery');
+
+        $this->deliveryRepository->expects($this->exactly(2))
+            ->method('updateStage');
+
+        // Transport batch returns success for both
+        $this->transportUtility->expects($this->once())
+            ->method('sendBatch')
+            ->with(
+                ['http://contact1.test', 'http://contact2.test'],
+                $this->anything()
+            )
+            ->willReturn([
+                'http://contact1.test' => [
+                    'response' => json_encode(['status' => 'inserted']),
+                    'signature' => 'sig1',
+                    'nonce' => 100
+                ],
+                'http://contact2.test' => [
+                    'response' => json_encode(['status' => 'inserted']),
+                    'signature' => 'sig2',
+                    'nonce' => 101
+                ]
+            ]);
+
+        $this->deliveryRepository->method('getByMessage')
+            ->willReturn(['delivery_stage' => 'sent']);
+
+        $result = $this->service->sendBatchAsync('p2p', $sends);
+
+        $this->assertCount(2, $result);
+        $this->assertTrue($result['http://contact1.test']['success']);
+        $this->assertTrue($result['http://contact2.test']['success']);
+    }
+
+    /**
+     * Test sendBatchAsync handles mixed success and rejection responses
+     */
+    public function testSendBatchAsyncHandlesMixedResponses(): void
+    {
+        $sends = [
+            [
+                'messageId' => 'batch-msg-1',
+                'recipient' => 'http://contact1.test',
+                'payload' => ['type' => 'p2p', 'hash' => 'abc123']
+            ],
+            [
+                'messageId' => 'batch-msg-2',
+                'recipient' => 'http://contact2.test',
+                'payload' => ['type' => 'p2p', 'hash' => 'abc123']
+            ]
+        ];
+
+        $this->deliveryRepository->method('deliveryExists')
+            ->willReturn(false);
+
+        // Transport batch returns success for first, rejection for second
+        $this->transportUtility->expects($this->once())
+            ->method('sendBatch')
+            ->willReturn([
+                'http://contact1.test' => [
+                    'response' => json_encode(['status' => 'inserted']),
+                    'signature' => 'sig1',
+                    'nonce' => 100
+                ],
+                'http://contact2.test' => [
+                    'response' => json_encode(['status' => 'rejected', 'message' => 'insufficient_funds']),
+                    'signature' => 'sig2',
+                    'nonce' => 101
+                ]
+            ]);
+
+        $this->deliveryRepository->method('getByMessage')
+            ->willReturn(['delivery_stage' => 'sent']);
+
+        // Rejection should mark as failed
+        $this->deliveryRepository->expects($this->once())
+            ->method('markFailed')
+            ->with('p2p', 'batch-msg-2', $this->anything());
+
+        $result = $this->service->sendBatchAsync('p2p', $sends);
+
+        $this->assertCount(2, $result);
+        $this->assertTrue($result['http://contact1.test']['success']);
+        $this->assertFalse($result['http://contact2.test']['success']);
+        $this->assertEquals('rejected', $result['http://contact2.test']['response']['status']);
+    }
+
+    /**
+     * Test sendBatchAsync handles transport errors by queuing for retry
+     */
+    public function testSendBatchAsyncQueuesTransportErrorsForRetry(): void
+    {
+        $sends = [
+            [
+                'messageId' => 'batch-msg-1',
+                'recipient' => 'http://contact1.test',
+                'payload' => ['type' => 'p2p', 'hash' => 'abc123']
+            ]
+        ];
+
+        $this->deliveryRepository->method('deliveryExists')
+            ->willReturn(false);
+
+        // Transport error
+        $this->transportUtility->expects($this->once())
+            ->method('sendBatch')
+            ->willReturn([
+                'http://contact1.test' => [
+                    'response' => json_encode(['status' => 'error', 'message' => 'Connection refused']),
+                    'signature' => 'sig1',
+                    'nonce' => 100
+                ]
+            ]);
+
+        // Should increment retry for background processing
+        $this->deliveryRepository->expects($this->once())
+            ->method('incrementRetry')
+            ->with('p2p', 'batch-msg-1', 0, $this->anything());
+
+        $result = $this->service->sendBatchAsync('p2p', $sends);
+
+        $this->assertCount(1, $result);
+        $this->assertFalse($result['http://contact1.test']['success']);
+        $this->assertTrue($result['http://contact1.test']['queued_for_retry']);
+    }
 }

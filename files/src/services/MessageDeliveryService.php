@@ -467,6 +467,164 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
     }
 
     /**
+     * Send multiple messages in parallel with delivery tracking.
+     *
+     * Three phases:
+     * 1. Prepare: Create delivery records and update stage to 'sent'
+     * 2. Transport: Call transportUtility->sendBatch() for parallel curl_multi
+     * 3. Process: Handle each response using existing delivery processing logic
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param array $sends Array of sends, each with 'messageId', 'recipient', 'payload' keys
+     * @return array<string, array> Results keyed by recipient address, same structure as sendMessage()
+     */
+    public function sendBatchAsync(string $messageType, array $sends): array {
+        if (empty($sends)) {
+            return [];
+        }
+
+        $this->deliveryStartTime = $this->timeUtility->getCurrentMicrotime();
+
+        // Phase 1: Prepare - create delivery records
+        $recipientMap = []; // recipient => send data
+        foreach ($sends as $send) {
+            $messageId = $send['messageId'];
+            $recipient = $send['recipient'];
+            $payload = $send['payload'];
+            $recipientMap[$recipient] = $send;
+
+            if (!$this->deliveryRepository->deliveryExists($messageType, $messageId)) {
+                $this->deliveryRepository->createDelivery(
+                    $messageType,
+                    $messageId,
+                    $recipient,
+                    'pending',
+                    $this->maxRetries,
+                    $payload
+                );
+                $this->emitDebugEvent('outputMessageDeliveryCreated', [$messageType, $messageId, $recipient]);
+            } else {
+                $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
+            }
+
+            $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
+        }
+
+        // Phase 2: Transport - parallel send via curl_multi
+        // All sends share the same payload structure (P2P broadcast), signed per-recipient
+        $recipients = array_keys($recipientMap);
+        $firstPayload = $sends[0]['payload'];
+        $transportResults = $this->transportUtility->sendBatch($recipients, $firstPayload);
+
+        // Phase 3: Process - handle each response
+        $results = [];
+        foreach ($transportResults as $recipient => $transportResult) {
+            $send = $recipientMap[$recipient];
+            $messageId = $send['messageId'];
+            $response = $transportResult['response'];
+            $signingData = [
+                'signature' => $transportResult['signature'],
+                'nonce' => $transportResult['nonce']
+            ];
+
+            $decodedResponse = json_decode($response, true);
+
+            try {
+                if ($decodedResponse !== null && !empty($response)) {
+                    $status = $decodedResponse['status'] ?? null;
+
+                    if ($this->isSuccessStatus($status)) {
+                        $result = $this->processSuccessfulDelivery(
+                            $messageType,
+                            $messageId,
+                            $status,
+                            $decodedResponse,
+                            $response,
+                            0
+                        );
+                        $result['attempts'] = 1;
+                        $result['async'] = true;
+                        $result['signing_data'] = $signingData;
+
+                        $results[$recipient] = [
+                            'success' => true,
+                            'response' => $decodedResponse,
+                            'raw' => $response,
+                            'tracking' => $result,
+                            'messageId' => $messageId,
+                            'queued_for_retry' => false,
+                            'signing_data' => $signingData
+                        ];
+                        continue;
+                    }
+
+                    if ($status === 'rejected') {
+                        $this->deliveryRepository->markFailed(
+                            $messageType,
+                            $messageId,
+                            'Rejected: ' . ($decodedResponse['message'] ?? 'No reason')
+                        );
+                        $results[$recipient] = [
+                            'success' => false,
+                            'response' => $decodedResponse,
+                            'raw' => $response,
+                            'tracking' => [
+                                'success' => false,
+                                'stage' => 'rejected',
+                                'message' => $decodedResponse['message'] ?? 'Message rejected by recipient',
+                                'response' => $decodedResponse,
+                                'retry' => false,
+                                'attempts' => 1,
+                                'async' => true
+                            ],
+                            'messageId' => $messageId,
+                            'queued_for_retry' => false,
+                            'signing_data' => null
+                        ];
+                        continue;
+                    }
+
+                    $lastError = ($status === 'error')
+                        ? ($decodedResponse['message'] ?? 'Transport error')
+                        : 'Unknown response status: ' . ($status ?? 'null');
+                } else {
+                    $lastError = 'No response received from recipient';
+                }
+            } catch (\Exception $e) {
+                $lastError = 'Transport exception: ' . $e->getMessage();
+                $this->logException($e, [
+                    'context' => 'batch_delivery_processing',
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+            }
+
+            // Failed - queue for background retry
+            $this->deliveryRepository->incrementRetry($messageType, $messageId, 0, $lastError);
+
+            $results[$recipient] = [
+                'success' => false,
+                'response' => $decodedResponse ?? null,
+                'raw' => $response,
+                'tracking' => [
+                    'success' => false,
+                    'stage' => 'queued_for_retry',
+                    'message' => 'First delivery attempt failed, queued for background retry',
+                    'error' => $lastError,
+                    'retry' => true,
+                    'attempts' => 1,
+                    'async' => true
+                ],
+                'messageId' => $messageId,
+                'queued_for_retry' => true,
+                'signing_data' => null
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
      * Send a message with delivery tracking and synchronous retry
      *
      * Attempts to deliver a message with automatic retries using exponential backoff.

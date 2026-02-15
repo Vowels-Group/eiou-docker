@@ -810,7 +810,8 @@ class P2pService implements P2pServiceInterface {
                 // The ceiling is updated to the actual count after the loop completes.
                 $this->p2pRepository->updateContactsSentCount($p2pHash, $contactsCount);
 
-                // Send p2p request to all accepted contacts
+                // Phase 1 — Prepare: collect eligible contacts for batch send (no I/O)
+                $batchSends = [];
                 foreach ($contacts as $contact) {
                     $contactAddress = $contact[$transportIndex]; // Get similar contact address to message
                     // Do not send message if contact has not similar transport mode (HTTP goes over HTTP, TOR over TOR etc.)
@@ -829,17 +830,49 @@ class P2pService implements P2pServiceInterface {
                         continue;
                     }
 
-                    // Send with delivery tracking - use unique ID per contact to track each send
                     // Message ID format: broadcast-{p2pHash}-{contactHash} (message_type 'p2p' provides context)
                     $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
                     $messageId = 'broadcast-' . $p2pHash . '-' . $contactHash;
-                    $sendResult = $this->sendP2pMessage('p2p', $contactAddress, $p2pPayload, $messageId);
+                    $batchSends[$contactAddress] = [
+                        'messageId' => $messageId,
+                        'recipient' => $contactAddress,
+                        'payload' => $p2pPayload
+                    ];
+                }
+
+                // Phase 2 — Send: parallel I/O via curl_multi (or sequential fallback)
+                $batchResults = [];
+                if (!empty($batchSends)) {
+                    if ($this->messageDeliveryService !== null) {
+                        $batchResults = $this->messageDeliveryService->sendBatchAsync('p2p', array_values($batchSends));
+                    } else {
+                        // Fallback: direct transport batch without delivery tracking
+                        $transportResults = $this->transportUtility->sendBatch(
+                            array_keys($batchSends),
+                            $p2pPayload
+                        );
+                        foreach ($transportResults as $addr => $result) {
+                            $decoded = json_decode($result['response'], true);
+                            $batchResults[$addr] = [
+                                'success' => $decoded !== null && isset($decoded['status']),
+                                'response' => $decoded,
+                                'raw' => $result['response'],
+                                'messageId' => $batchSends[$addr]['messageId']
+                            ];
+                        }
+                    }
+                }
+
+                // Phase 3 — Process: handle responses (same logic as before, minus the send)
+                foreach ($batchResults as $contactAddress => $sendResult) {
                     $response = $sendResult['response'];
 
-                    // If rejection from sole possible contact then cancel p2p immediately
-                    if($response['status'] === Constants::STATUS_REJECTED && $contactsToSend === 1){
-                        $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
-                        $contactsToSend -= 1;
+                    // Track non-rejected responses as sent messages
+                    if (!isset($response['status']) || $response['status'] === Constants::STATUS_REJECTED) {
+                        // Rejected or no status — not counted as sent
+                        if (isset($response['status']) && $response['status'] === Constants::STATUS_REJECTED) {
+                            output(outputP2pResponse($response),'SILENT');
+                        }
                         continue;
                     }
 
@@ -856,7 +889,10 @@ class P2pService implements P2pServiceInterface {
                         $this->p2pRelayedContactRepository?->insertRelayedContact($p2pHash, $contactAddress);
                     }
                     if ($sendResult['success']) {
-                        $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
+                        $successfulSends[] = [
+                            'messageId' => $batchSends[$contactAddress]['messageId'],
+                            'nextHop' => $contactAddress
+                        ];
                     }
                     output(outputP2pResponse($response),'SILENT');
                 }

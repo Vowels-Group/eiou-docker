@@ -379,6 +379,142 @@ class TransportUtilityService implements TransportServiceInterface
     }
 
     /**
+     * Create a configured but un-executed curl handle for a recipient.
+     *
+     * Extracts curl setup logic from sendByHttp() and sendByTor() into a shared helper.
+     * Auto-detects Tor vs HTTP based on address.
+     *
+     * @param string $recipient The recipient address
+     * @param string $signedPayload The JSON-encoded signed payload
+     * @return \CurlHandle The configured curl handle
+     */
+    public function createCurlHandle(string $recipient, string $signedPayload): \CurlHandle {
+        $ch = curl_init();
+
+        if ($this->isTorAddress($recipient)) {
+            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
+            curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
+            curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
+        } else {
+            $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
+            $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+
+            // SSL options for HTTPS connections
+            if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
+                $verifySsl = getenv('P2P_SSL_VERIFY') === 'true';
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
+
+                $caCertPath = getenv('P2P_CA_CERT');
+                if ($caCertPath && file_exists($caCertPath)) {
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                    curl_setopt($ch, CURLOPT_CAINFO, $caCertPath);
+                }
+            }
+        }
+
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+        curl_setopt($ch, CURLOPT_POST, true);
+
+        return $ch;
+    }
+
+    /**
+     * Send a payload to multiple recipients in parallel using curl_multi.
+     *
+     * Signs the payload separately for each recipient (unique nonce/signature per send),
+     * creates curl handles via createCurlHandle(), and executes all in parallel.
+     *
+     * @param array $recipients Array of recipient addresses
+     * @param array $payload The data payload to send (will be signed per-recipient)
+     * @return array<string, array{response: string, signature: string, nonce: string}> Results keyed by recipient address
+     */
+    public function sendBatch(array $recipients, array $payload): array {
+        if (empty($recipients)) {
+            return [];
+        }
+
+        $mh = curl_multi_init();
+        $handles = [];     // recipient => CurlHandle
+        $signingData = []; // recipient => ['signature' => ..., 'nonce' => ...]
+
+        // Sign and create handles for each recipient
+        foreach ($recipients as $recipient) {
+            $signingResult = $this->signWithCapture($payload);
+            if ($signingResult === false) {
+                Logger::getInstance()->warning("Failed to sign payload for batch recipient", [
+                    'recipient' => $recipient
+                ]);
+                continue;
+            }
+
+            $signedPayload = json_encode($signingResult['envelope']);
+            $signingData[$recipient] = [
+                'signature' => $signingResult['signature'],
+                'nonce' => $signingResult['nonce']
+            ];
+
+            $ch = $this->createCurlHandle($recipient, $signedPayload);
+            $handles[$recipient] = $ch;
+            curl_multi_add_handle($mh, $ch);
+        }
+
+        // Execute all handles in parallel
+        $active = null;
+        do {
+            $status = curl_multi_exec($mh, $active);
+            if ($active) {
+                curl_multi_select($mh);
+            }
+        } while ($active && $status === CURLM_OK);
+
+        // Collect results
+        $results = [];
+        foreach ($handles as $recipient => $ch) {
+            $response = curl_multi_getcontent($ch);
+
+            if ($response === false || $response === null) {
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
+
+                $transportType = $this->isTorAddress($recipient) ? 'TOR' : 'HTTP';
+                Logger::getInstance()->warning("$transportType batch request failed", [
+                    'recipient' => $recipient,
+                    'curl_error' => $curlError,
+                    'curl_errno' => $curlErrno
+                ]);
+
+                $response = json_encode([
+                    'status' => 'error',
+                    'message' => "$transportType request failed: " . $curlError,
+                    'error_code' => $curlErrno
+                ]);
+            }
+
+            $results[$recipient] = [
+                'response' => $response,
+                'signature' => $signingData[$recipient]['signature'] ?? '',
+                'nonce' => $signingData[$recipient]['nonce'] ?? ''
+            ];
+
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+
+        curl_multi_close($mh);
+
+        return $results;
+    }
+
+    /**
      * Sign a payload and capture the signing data
      *
      * Creates a clean payload structure and returns both the envelope

@@ -81,6 +81,18 @@ interface MessageDeliveryServiceInterface
     ): array;
 
     /**
+     * Send multiple messages in parallel with delivery tracking.
+     *
+     * Three phases: prepare (create delivery records), transport (parallel curl_multi),
+     * process (handle responses per-recipient).
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param array $sends Array of sends, each with 'messageId', 'recipient', 'payload' keys
+     * @return array<string, array> Results keyed by recipient address, same structure as sendMessage()
+     */
+    public function sendBatchAsync(string $messageType, array $sends): array;
+
+    /**
      * Process messages ready for retry (asynchronous/background processing)
      *
      * Used for background processing of messages left in pending/sent state.
