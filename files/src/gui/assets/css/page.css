@@ -2211,11 +2211,14 @@ html {
 
 .contact-settings-actions form {
     display: inline;
+    padding: 0;
+    margin: 0;
 }
 
 .contact-settings-actions .btn {
     padding: 0.5rem 1rem;
     font-size: 0.85rem;
+    vertical-align: middle;
 }
 
 /* Contact Info Section */
