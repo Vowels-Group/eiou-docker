@@ -6,10 +6,26 @@
 #
 # Tests fast mode (first route wins) vs best-fee mode (collect all routes, pick cheapest)
 # at 1-hop, 3-hop, and 6-hop distances from C0, measuring:
-#   - Delivery time
+#   - Delivery time (wall clock + DB-derived breakdowns)
 #   - Path taken
 #   - Fee multiplier
 #   - Optimality (vs enumerated best path)
+#
+# Timing breakdown (per send):
+#
+#   |-- CLI overhead --|------- P2P search -------|---- settlement ----|-- poll jitter --|
+#   |                  |                          |                    |                 |
+#   eiou send     P2P created_at            P2P created_at       P2P completed_at   balance
+#   (wall clock)  on SENDER                 on TARGET            on SENDER           detected
+#                  |                          |                    |
+#                  |<-------- p2p_time -------------------------------->|
+#                  |<-- search_time --------->|<-- settle_time --->|
+#   |<----------------------- wall_time ------------------------------------------>|
+#
+#   wall_time    = date before eiou send → balance change detected (includes poll jitter)
+#   p2p_time     = p2p.created_at → p2p.completed_at on SENDER (full P2P round-trip)
+#   search_time  = p2p.created_at on SENDER → p2p.created_at on TARGET (network propagation)
+#   settle_time  = p2p.created_at on TARGET → p2p.completed_at on SENDER (tx chain back)
 #
 # Usage: ./benchmark-routing.sh [runs] [protocols] [topology]
 #   runs      - Number of runs per condition (default: 10)
@@ -67,7 +83,7 @@ declare -A TARGETS=( [1]="E1" [3]="MH" [6]="LN3" )
 declare -A DISTANCE_LABELS=( [1]="1 hop" [3]="3 hops" [6]="6 hops" )
 
 # Results storage: keyed by "${protocol}_${distance}_${mode}_${run}"
-declare -A R_TIME R_PASS R_PATH R_FEE R_OPTIMAL
+declare -A R_TIME R_PASS R_PATH R_FEE R_OPTIMAL R_P2P_TIME R_SEARCH_TIME R_SETTLE_TIME
 
 # Optimal fee per target per protocol build: "${protocol}_${distance}"
 declare -A OPTIMAL_FEES
@@ -340,11 +356,12 @@ do_send() {
     # Wait for balance change — uniform polling for both modes.
     # Use the full timeout (P2P expiration) so we capture outliers and slow deliveries
     # rather than prematurely marking them as failures.
+    # Poll every 2s for better wall-clock granularity (DB timestamps are jitter-free).
     local new_balance
     local balance_changed=0
     local elapsed_wait=0
     while [ $elapsed_wait -lt $timeout ]; do
-        sleep 5
+        sleep 2
         new_balance=$(docker exec $target sh -c "$balance_cmd" 2>/dev/null || echo "$initial")
         balance_changed=$(awk "BEGIN {print ($new_balance != $initial) ? 1 : 0}")
         if [ "$balance_changed" -eq 1 ]; then
@@ -356,8 +373,9 @@ do_send() {
     local end_time=$(date +%s)
     local elapsed=$((end_time - start_time))
 
-    # Trace path and compute fee if send succeeded
+    # Trace path, compute fee, and extract DB timestamps if send succeeded
     local path="" fee="0" is_optimal="N/A"
+    local p2p_time="" search_time="" settle_time=""
     if [ "$balance_changed" -eq 1 ]; then
         local fast_flag=$( [ "$mode" = "fast" ] && echo 1 || echo 0 )
         local hash=$(docker exec $SENDER php -r "
@@ -370,7 +388,58 @@ do_send() {
 
         if [ "$hash" != "UNKNOWN" ]; then
             path=$(trace_actual_path "$hash" "$SENDER" "$target")
+
+            # Query P2P timestamps from sender: created_at and completed_at
+            local sender_ts=$(docker exec $SENDER php -r "
+                require_once('${BOOTSTRAP_PATH}');
+                \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+                \$stmt = \$pdo->prepare('SELECT created_at, completed_at FROM p2p WHERE hash = ?');
+                \$stmt->execute(['$hash']);
+                \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+                if (\$row) {
+                    echo (\$row['created_at'] ?? '') . '|' . (\$row['completed_at'] ?? '');
+                }
+            " 2>/dev/null || echo "")
+
+            # Query P2P timestamps from target: created_at
+            local target_ts=$(docker exec $target php -r "
+                require_once('${BOOTSTRAP_PATH}');
+                \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+                \$stmt = \$pdo->prepare('SELECT created_at FROM p2p WHERE hash = ?');
+                \$stmt->execute(['$hash']);
+                \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+                if (\$row) echo \$row['created_at'] ?? '';
+            " 2>/dev/null || echo "")
+
+            # Parse timestamps and compute timing breakdowns (seconds with 1 decimal)
+            local sender_created="${sender_ts%%|*}"
+            local sender_completed="${sender_ts##*|}"
+
+            if [ -n "$sender_created" ] && [ -n "$sender_completed" ]; then
+                p2p_time=$(docker exec $SENDER php -r "
+                    \$c = strtotime('$sender_created');
+                    \$d = strtotime('$sender_completed');
+                    if (\$c && \$d) printf('%.1f', \$d - \$c);
+                " 2>/dev/null || echo "")
+            fi
+
+            if [ -n "$sender_created" ] && [ -n "$target_ts" ]; then
+                search_time=$(docker exec $SENDER php -r "
+                    \$c = strtotime('$sender_created');
+                    \$t = strtotime('$target_ts');
+                    if (\$c && \$t) printf('%.1f', \$t - \$c);
+                " 2>/dev/null || echo "")
+            fi
+
+            if [ -n "$target_ts" ] && [ -n "$sender_completed" ]; then
+                settle_time=$(docker exec $SENDER php -r "
+                    \$t = strtotime('$target_ts');
+                    \$d = strtotime('$sender_completed');
+                    if (\$t && \$d) printf('%.1f', \$d - \$t);
+                " 2>/dev/null || echo "")
+            fi
         fi
+
         # Direct sends (1 hop) have no relay chain — trace returns empty.
         # Fall back to the obvious direct path.
         if [ -z "$path" ]; then
@@ -388,14 +457,24 @@ do_send() {
     R_PATH[$key]="$path"
     R_FEE[$key]="$fee"
     R_OPTIMAL[$key]="$is_optimal"
+    R_P2P_TIME[$key]="${p2p_time:-}"
+    R_SEARCH_TIME[$key]="${search_time:-}"
+    R_SETTLE_TIME[$key]="${settle_time:-}"
 
     # Print per-send line with full context
     local dist_label="${DISTANCE_LABELS[$distance]}"
     if [ "$balance_changed" -eq 1 ]; then
         local opt_color="${YELLOW}"
         [ "$is_optimal" = "OPTIMAL" ] && opt_color="${GREEN}"
-        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | %-35s | %sx | ${opt_color}%s${NC}\n" \
-            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$path" "$fee" "$is_optimal"
+        local timing_detail=""
+        if [ -n "$p2p_time" ]; then
+            timing_detail=" (p2p:${p2p_time}s"
+            [ -n "$search_time" ] && timing_detail="${timing_detail} srch:${search_time}s"
+            [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
+            timing_detail="${timing_detail})"
+        fi
+        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
     else
         printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
             "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
@@ -403,11 +482,13 @@ do_send() {
 }
 
 # Accumulate stats for a set of keys into caller's variables:
-#   _ts _tc _pc _oc _fc _fs _tmin _tmax
+#   _ts _tc _pc _oc _fc _fs _tmin _tmax (wall-clock time stats)
+#   _p2p_sum _p2p_cnt _srch_sum _srch_cnt _sttl_sum _sttl_cnt (timing breakdown stats)
 # Usage: accumulate_stats "http" "1" "fast" (or use "" to wildcard a dimension)
 _accumulate_keys() {
     local p_filter="$1" d_filter="$2" m_filter="$3"
     _ts=0; _tc=0; _pc=0; _oc=0; _fc=0; _fs="0"; _tmin=999999; _tmax=0
+    _p2p_sum="0"; _p2p_cnt=0; _srch_sum="0"; _srch_cnt=0; _sttl_sum="0"; _sttl_cnt=0
 
     # Use _ak_ prefixed vars to avoid clobbering outer loop variables
     # (bash has no block scoping — inner loops overwrite outer variables)
@@ -432,6 +513,19 @@ _accumulate_keys() {
                         _fs=$(awk "BEGIN {printf \"%.6f\", $_fs + ${R_FEE[$_ak_key]}}")
                         _fc=$((_fc + 1))
                     fi
+                    # Timing breakdowns (float sums via awk)
+                    if [ -n "${R_P2P_TIME[$_ak_key]}" ]; then
+                        _p2p_sum=$(awk "BEGIN {printf \"%.1f\", $_p2p_sum + ${R_P2P_TIME[$_ak_key]}}")
+                        _p2p_cnt=$((_p2p_cnt + 1))
+                    fi
+                    if [ -n "${R_SEARCH_TIME[$_ak_key]}" ]; then
+                        _srch_sum=$(awk "BEGIN {printf \"%.1f\", $_srch_sum + ${R_SEARCH_TIME[$_ak_key]}}")
+                        _srch_cnt=$((_srch_cnt + 1))
+                    fi
+                    if [ -n "${R_SETTLE_TIME[$_ak_key]}" ]; then
+                        _sttl_sum=$(awk "BEGIN {printf \"%.1f\", $_sttl_sum + ${R_SETTLE_TIME[$_ak_key]}}")
+                        _sttl_cnt=$((_sttl_cnt + 1))
+                    fi
                 done
             done
         done
@@ -454,24 +548,30 @@ _fmt_stats() {
     [ "$total_runs" -gt 0 ] && pass_pct=$(awk "BEGIN {printf \"%.0f\", ($_pc * 100.0 / $total_runs)}")
     avg_fee="N/A"
     [ "$_fc" -gt 0 ] && avg_fee=$(awk "BEGIN {printf \"%.4f\", $_fs / $_fc}")
+    avg_p2p="N/A"; avg_search="N/A"; avg_settle="N/A"
+    [ "$_p2p_cnt" -gt 0 ] && avg_p2p=$(awk "BEGIN {printf \"%.1f\", $_p2p_sum / $_p2p_cnt}")
+    [ "$_srch_cnt" -gt 0 ] && avg_search=$(awk "BEGIN {printf \"%.1f\", $_srch_sum / $_srch_cnt}")
+    [ "$_sttl_cnt" -gt 0 ] && avg_settle=$(awk "BEGIN {printf \"%.1f\", $_sttl_sum / $_sttl_cnt}")
 }
 
 # Print the main per-condition summary table
 print_summary_table() {
     printf "\n${BOLD}--- Per-Condition Results ---${NC}\n"
-    printf "%-10s %-10s %-6s %9s %6s %6s %9s %7s %9s\n" \
-        "Protocol" "Distance" "Mode" "Avg Time" "Min" "Max" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %-10s %-6s %9s %6s %6s %9s %7s %9s\n" \
-        "--------" "--------" "----" "--------" "---" "---" "--------" "------" "--------"
+    printf "%-10s %-10s %-6s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "Protocol" "Distance" "Mode" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
+    printf "%-10s %-10s %-6s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "--------" "--------" "----" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
 
     for protocol in "${PROTOCOLS[@]}"; do
         for distance in "${DISTANCES[@]}"; do
             for mode in "fast" "best"; do
                 _accumulate_keys "$protocol" "$distance" "$mode"
                 _fmt_stats "" "$RUNS"
-                printf "%-10s %-10s %-6s %8ss %5ss %5ss %8s%% %6s%% %8sx\n" \
+                printf "%-10s %-10s %-6s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
                     "$protocol" "${DISTANCE_LABELS[$distance]}" "$mode" \
-                    "$avg_time" "$min_time" "$max_time" "$optimal_pct" "$pass_pct" "$avg_fee"
+                    "$avg_time" "$min_time" "$max_time" \
+                    "$avg_p2p" "$avg_search" "$avg_settle" \
+                    "$optimal_pct" "$pass_pct" "$avg_fee"
             done
         done
     done
@@ -482,16 +582,18 @@ print_mode_averages() {
     local total_per_mode=$((${#PROTOCOLS[@]} * ${#DISTANCES[@]} * RUNS))
 
     printf "\n${BOLD}--- Average by Mode ---${NC}\n"
-    printf "%-10s %9s %6s %6s %9s %7s %9s\n" \
-        "Mode" "Avg Time" "Min" "Max" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %9s %6s %6s %9s %7s %9s\n" \
-        "--------" "--------" "---" "---" "--------" "------" "--------"
+    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "Mode" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
+    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "--------" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
 
     for mode in "fast" "best"; do
         _accumulate_keys "" "" "$mode"
         _fmt_stats "" "$total_per_mode"
-        printf "%-10s %8ss %5ss %5ss %8s%% %6s%% %8sx\n" \
-            "$mode" "$avg_time" "$min_time" "$max_time" "$optimal_pct" "$pass_pct" "$avg_fee"
+        printf "%-10s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+            "$mode" "$avg_time" "$min_time" "$max_time" \
+            "$avg_p2p" "$avg_search" "$avg_settle" \
+            "$optimal_pct" "$pass_pct" "$avg_fee"
     done
 }
 
@@ -500,16 +602,18 @@ print_distance_averages() {
     local total_per_dist=$((${#PROTOCOLS[@]} * 2 * RUNS))
 
     printf "\n${BOLD}--- Average by Distance ---${NC}\n"
-    printf "%-10s %9s %6s %6s %9s %7s %9s\n" \
-        "Distance" "Avg Time" "Min" "Max" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %9s %6s %6s %9s %7s %9s\n" \
-        "--------" "--------" "---" "---" "--------" "------" "--------"
+    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "Distance" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
+    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "--------" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
 
     for distance in "${DISTANCES[@]}"; do
         _accumulate_keys "" "$distance" ""
         _fmt_stats "" "$total_per_dist"
-        printf "%-10s %8ss %5ss %5ss %8s%% %6s%% %8sx\n" \
-            "${DISTANCE_LABELS[$distance]}" "$avg_time" "$min_time" "$max_time" "$optimal_pct" "$pass_pct" "$avg_fee"
+        printf "%-10s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+            "${DISTANCE_LABELS[$distance]}" "$avg_time" "$min_time" "$max_time" \
+            "$avg_p2p" "$avg_search" "$avg_settle" \
+            "$optimal_pct" "$pass_pct" "$avg_fee"
     done
 }
 
@@ -518,16 +622,18 @@ print_protocol_averages() {
     local total_per_proto=$((${#DISTANCES[@]} * 2 * RUNS))
 
     printf "\n${BOLD}--- Average by Protocol ---${NC}\n"
-    printf "%-10s %9s %6s %6s %9s %7s %9s\n" \
-        "Protocol" "Avg Time" "Min" "Max" "Optimal%" "Pass%" "Avg Fee"
-    printf "%-10s %9s %6s %6s %9s %7s %9s\n" \
-        "--------" "--------" "---" "---" "--------" "------" "--------"
+    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "Protocol" "Avg Wall" "Min" "Max" "Avg P2P" "Avg Srch" "Avg Sttl" "Optimal%" "Pass%" "Avg Fee"
+    printf "%-10s %9s %6s %6s %8s %8s %8s %9s %7s %9s\n" \
+        "--------" "--------" "---" "---" "-------" "--------" "--------" "--------" "------" "--------"
 
     for protocol in "${PROTOCOLS[@]}"; do
         _accumulate_keys "$protocol" "" ""
         _fmt_stats "" "$total_per_proto"
-        printf "%-10s %8ss %5ss %5ss %8s%% %6s%% %8sx\n" \
-            "$protocol" "$avg_time" "$min_time" "$max_time" "$optimal_pct" "$pass_pct" "$avg_fee"
+        printf "%-10s %8ss %5ss %5ss %7ss %7ss %7ss %8s%% %6s%% %8sx\n" \
+            "$protocol" "$avg_time" "$min_time" "$max_time" \
+            "$avg_p2p" "$avg_search" "$avg_settle" \
+            "$optimal_pct" "$pass_pct" "$avg_fee"
     done
 }
 
@@ -538,8 +644,10 @@ print_grand_total() {
     printf "\n${BOLD}--- Grand Total ---${NC}\n"
     _accumulate_keys "" "" ""
     _fmt_stats "" "$total"
-    printf "  Sends: %d  |  Avg Time: %ss  |  Min: %ss  |  Max: %ss  |  Optimal: %s%%  |  Pass: %s%%  |  Avg Fee: %sx\n" \
+    printf "  Sends: %d  |  Avg Wall: %ss  |  Min: %ss  |  Max: %ss  |  Optimal: %s%%  |  Pass: %s%%  |  Avg Fee: %sx\n" \
         "$total" "$avg_time" "$min_time" "$max_time" "$optimal_pct" "$pass_pct" "$avg_fee"
+    printf "  Avg P2P: %ss  |  Avg Search: %ss  |  Avg Settle: %ss\n" \
+        "$avg_p2p" "$avg_search" "$avg_settle"
 }
 
 # Print Fast vs Best comparison table
@@ -715,6 +823,7 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
             target="${TARGETS[$distance]}"
             printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
             for mode in "fast" "best"; do
+                [ "$mode" = "best" ] && printf "\n"
                 for ((run=1; run<=RUNS; run++)); do
                     do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
                 done
@@ -800,6 +909,7 @@ else
             target="${TARGETS[$distance]}"
             printf "\n--- ${DISTANCE_LABELS[$distance]} → ${target} (timeout: ${send_timeout}s) ---\n"
             for mode in "fast" "best"; do
+                [ "$mode" = "best" ] && printf "\n"
                 for ((run=1; run<=RUNS; run++)); do
                     do_send "$protocol" "$distance" "$mode" "$run" "$send_timeout"
                 done
