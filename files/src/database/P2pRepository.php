@@ -165,7 +165,7 @@ class P2pRepository extends AbstractRepository {
      * @param int $limit Maximum number of messages
      * @return array Array of P2P messages
      */
-    public function getQueuedP2pMessages(string $status = 'queued', int $limit = 5): array {
+    public function getQueuedP2pMessages(string $status = 'queued', int $limit = Constants::P2P_QUEUE_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE status = :status
                   ORDER BY created_at ASC
