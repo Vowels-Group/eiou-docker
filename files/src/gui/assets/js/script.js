@@ -3128,7 +3128,7 @@ document.addEventListener('DOMContentLoaded', function() {
  * @param {string} inputId - The checkbox input element ID
  * @param {string} statusId - The status text span element ID
  */
-function initToggleSwitch(inputId, statusId) {
+function initToggleSwitch(inputId, statusId, onChange) {
     var input = document.getElementById(inputId);
     var status = document.getElementById(statusId);
     if (input && status) {
@@ -3140,13 +3140,21 @@ function initToggleSwitch(inputId, statusId) {
                 status.textContent = 'Disabled';
                 status.className = 'toggle-status';
             }
+            if (typeof onChange === 'function') {
+                onChange(this.checked);
+            }
         });
     }
 }
 
 // Initialize all toggle switches (elements only exist on their respective pages)
 document.addEventListener('DOMContentLoaded', function() {
-    initToggleSwitch('best-fee', 'bestFeeStatus');
+    initToggleSwitch('best-fee', 'bestFeeStatus', function(checked) {
+        var experimentalNote = document.getElementById('best-fee-experimental');
+        if (experimentalNote) {
+            experimentalNote.style.display = checked ? 'block' : 'none';
+        }
+    });
     initToggleSwitch('autoRefreshEnabled', 'autoRefreshStatus');
     initToggleSwitch('autoBackupEnabled', 'autoBackupStatus');
 });

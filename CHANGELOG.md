@@ -12,6 +12,10 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- Send eIOU P2P info box collapsed by default — shows "Peer-to-Peer Routing Available" as a one-liner, click to expand details
+- Best Fee Route experimental warning hidden by default — flask icon shown inline next to the label, yellow warning only appears when the toggle is enabled
+
 ### Fixed
 - GUI header logout button overflows outside the card on narrow screens — wallet owner name now wraps to a new line on mobile, keeping the logout button anchored in the top right
 - Contacts scroll buttons repositioned outside the card area so contact cards are fully visible — left button auto-hides when at the first contact, right button hides at the end
