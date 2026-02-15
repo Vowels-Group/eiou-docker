@@ -1467,26 +1467,24 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
 
-        // Simulate partial success via batch: first two succeed, third fails
-        $this->messageDeliveryService->expects($this->once())
-            ->method('sendBatchAsync')
-            ->willReturnCallback(function ($type, $sends) {
+        // Simulate partial success via mega-batch: first two succeed, third fails
+        $this->transportUtility->expects($this->once())
+            ->method('sendMultiBatch')
+            ->willReturnCallback(function ($sends) {
                 $results = [];
                 foreach ($sends as $send) {
-                    $addr = $send['recipient'];
-                    if (strpos($addr, 'contact3') !== false) {
-                        $results[$addr] = [
-                            'success' => false,
-                            'response' => ['status' => 'failed', 'error' => 'timeout'],
-                            'raw' => '{"status":"failed","error":"timeout"}',
-                            'messageId' => $send['messageId']
+                    $key = $send['key'];
+                    if (strpos($send['recipient'], 'contact3') !== false) {
+                        $results[$key] = [
+                            'response' => '{"status":"failed","error":"timeout"}',
+                            'signature' => 'sig',
+                            'nonce' => 'nonce'
                         ];
                     } else {
-                        $results[$addr] = [
-                            'success' => true,
-                            'response' => ['status' => 'inserted'],
-                            'raw' => '{"status":"inserted"}',
-                            'messageId' => $send['messageId']
+                        $results[$key] = [
+                            'response' => '{"status":"inserted"}',
+                            'signature' => 'sig',
+                            'nonce' => 'nonce'
                         ];
                     }
                 }
@@ -1689,27 +1687,23 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        // Batch send returns results for all 3 contacts in parallel
-        $this->messageDeliveryService->expects($this->once())
-            ->method('sendBatchAsync')
-            ->with('p2p', $this->callback(function ($sends) {
+        // Mega-batch returns results for all 3 contacts in parallel
+        $this->transportUtility->expects($this->once())
+            ->method('sendMultiBatch')
+            ->with($this->callback(function ($sends) {
                 return count($sends) === 3;
             }))
-            ->willReturnCallback(function ($type, $sends) use ($p2pHash) {
+            ->willReturnCallback(function ($sends) {
                 $results = [];
                 foreach ($sends as $send) {
-                    $results[$send['recipient']] = [
-                        'success' => true,
-                        'response' => ['status' => 'inserted'],
-                        'raw' => '{"status":"inserted"}',
-                        'messageId' => $send['messageId']
+                    $results[$send['key']] = [
+                        'response' => '{"status":"inserted"}',
+                        'signature' => 'sig',
+                        'nonce' => 'nonce'
                     ];
                 }
                 return $results;
             });
-
-        $this->messageDeliveryService->expects($this->exactly(3))
-            ->method('updateStageToForwarded');
 
         $this->p2pRepository->method('getByHash')
             ->willReturn(['status' => Constants::STATUS_QUEUED]);
@@ -1861,34 +1855,28 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        // Batch returns: first contact rejects, second accepts
-        $this->messageDeliveryService->expects($this->once())
-            ->method('sendBatchAsync')
-            ->willReturnCallback(function ($type, $sends) use ($p2pHash) {
+        // Mega-batch returns: first contact rejects, second accepts
+        $this->transportUtility->expects($this->once())
+            ->method('sendMultiBatch')
+            ->willReturnCallback(function ($sends) {
                 $results = [];
                 foreach ($sends as $send) {
                     if (strpos($send['recipient'], 'contact1') !== false) {
-                        $results[$send['recipient']] = [
-                            'success' => false,
-                            'response' => ['status' => Constants::STATUS_REJECTED, 'reason' => 'insufficient_funds'],
-                            'raw' => '{"status":"rejected","reason":"insufficient_funds"}',
-                            'messageId' => $send['messageId']
+                        $results[$send['key']] = [
+                            'response' => '{"status":"rejected","reason":"insufficient_funds"}',
+                            'signature' => 'sig',
+                            'nonce' => 'nonce'
                         ];
                     } else {
-                        $results[$send['recipient']] = [
-                            'success' => true,
-                            'response' => ['status' => 'inserted'],
-                            'raw' => '{"status":"inserted"}',
-                            'messageId' => $send['messageId']
+                        $results[$send['key']] = [
+                            'response' => '{"status":"inserted"}',
+                            'signature' => 'sig',
+                            'nonce' => 'nonce'
                         ];
                     }
                 }
                 return $results;
             });
-
-        // Only successful send gets stage update
-        $this->messageDeliveryService->expects($this->once())
-            ->method('updateStageToForwarded');
 
         $this->p2pRepository->method('getByHash')
             ->willReturn(['status' => Constants::STATUS_QUEUED]);
@@ -2024,25 +2012,23 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        // Batch returns: first inserted, second already_relayed
-        $this->messageDeliveryService->expects($this->once())
-            ->method('sendBatchAsync')
-            ->willReturnCallback(function ($type, $sends) use ($p2pHash) {
+        // Mega-batch returns: first inserted, second already_relayed
+        $this->transportUtility->expects($this->once())
+            ->method('sendMultiBatch')
+            ->willReturnCallback(function ($sends) {
                 $results = [];
                 foreach ($sends as $send) {
                     if (strpos($send['recipient'], 'contact1') !== false) {
-                        $results[$send['recipient']] = [
-                            'success' => true,
-                            'response' => ['status' => 'inserted'],
-                            'raw' => '{"status":"inserted"}',
-                            'messageId' => $send['messageId']
+                        $results[$send['key']] = [
+                            'response' => '{"status":"inserted"}',
+                            'signature' => 'sig',
+                            'nonce' => 'nonce'
                         ];
                     } else {
-                        $results[$send['recipient']] = [
-                            'success' => true,
-                            'response' => ['status' => 'already_relayed'],
-                            'raw' => '{"status":"already_relayed"}',
-                            'messageId' => $send['messageId']
+                        $results[$send['key']] = [
+                            'response' => '{"status":"already_relayed"}',
+                            'signature' => 'sig',
+                            'nonce' => 'nonce'
                         ];
                     }
                 }
@@ -2121,8 +2107,8 @@ class P2pServiceTest extends TestCase
             ->willReturn(['http', 'https', 'tor']);
 
         // No batch should be sent since only contact is the sender (all filtered out)
-        $this->messageDeliveryService->expects($this->never())
-            ->method('sendBatchAsync');
+        $this->transportUtility->expects($this->never())
+            ->method('sendMultiBatch');
 
         // Status should be cancelled due to no viable route
         $this->p2pRepository->expects($this->once())
@@ -2137,11 +2123,11 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test parallel broadcast uses sendBatchAsync with correct send structure
+     * Test parallel broadcast uses transportUtility->sendMultiBatch with correct sends
      *
      * Verifies that the refactored broadcast loop collects eligible contacts
-     * into a batch and calls sendBatchAsync once with the correct structure,
-     * rather than calling sendMessage N times sequentially.
+     * into a mega-batch and calls sendMultiBatch once with the correct sends,
+     * filtering out the sender address.
      */
     public function testProcessQueuedP2pMessagesBatchSendStructure(): void
     {
@@ -2182,26 +2168,25 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        // Verify sendBatchAsync is called with exactly 2 sends (sender filtered out)
-        $this->messageDeliveryService->expects($this->once())
-            ->method('sendBatchAsync')
-            ->with('p2p', $this->callback(function ($sends) {
+        // Verify sendMultiBatch is called with exactly 2 sends (sender filtered out)
+        $this->transportUtility->expects($this->once())
+            ->method('sendMultiBatch')
+            ->with($this->callback(function ($sends) {
                 if (count($sends) !== 2) return false;
-                // Each send must have messageId, recipient, payload
+                // Sender address should be filtered out
                 foreach ($sends as $send) {
-                    if (!isset($send['messageId'], $send['recipient'], $send['payload'])) return false;
-                    if (strpos($send['messageId'], 'broadcast-') !== 0) return false;
+                    if ($send['recipient'] === self::TEST_ADDRESS) return false;
+                    if (!isset($send['key'], $send['recipient'], $send['payload'])) return false;
                 }
                 return true;
             }))
-            ->willReturnCallback(function ($type, $sends) {
+            ->willReturnCallback(function ($sends) {
                 $results = [];
                 foreach ($sends as $send) {
-                    $results[$send['recipient']] = [
-                        'success' => true,
-                        'response' => ['status' => 'inserted'],
-                        'raw' => '{"status":"inserted"}',
-                        'messageId' => $send['messageId']
+                    $results[$send['key']] = [
+                        'response' => '{"status":"inserted"}',
+                        'signature' => 'sig',
+                        'nonce' => 'nonce'
                     ];
                 }
                 return $results;
@@ -2218,25 +2203,13 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test broadcast fallback to direct transport batch when messageDeliveryService is null
+     * Test broadcast uses transportUtility->sendBatch() directly without delivery tracking
      *
-     * When messageDeliveryService is not available, the broadcast should fall back
-     * to using transportUtility->sendBatch() directly.
+     * P2P broadcasts bypass MessageDeliveryService for minimal overhead.
+     * The transport batch is called directly on transportUtility.
      */
     public function testProcessQueuedP2pMessagesFallbackToDirectTransportBatch(): void
     {
-        // Create service without message delivery service
-        $service = new P2pService(
-            $this->contactService,
-            $this->balanceRepository,
-            $this->p2pRepository,
-            $this->transactionRepository,
-            $this->utilityContainer,
-            $this->userContext,
-            null, // No message delivery service
-            $this->p2pSenderRepository
-        );
-
         $p2pHash = self::TEST_HASH;
         $queuedMessage = [
             'hash' => $p2pHash,
@@ -2272,22 +2245,26 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        // Fallback should use transportUtility->sendBatch() directly
+        // Transport mega-batch is called directly
         $this->transportUtility->expects($this->once())
-            ->method('sendBatch')
-            ->willReturn([
-                'http://contact1.test' => [
-                    'response' => json_encode(['status' => 'inserted']),
-                    'signature' => 'sig1',
-                    'nonce' => 100
-                ]
-            ]);
+            ->method('sendMultiBatch')
+            ->willReturnCallback(function ($sends) {
+                $results = [];
+                foreach ($sends as $send) {
+                    $results[$send['key']] = [
+                        'response' => json_encode(['status' => 'inserted']),
+                        'signature' => 'sig1',
+                        'nonce' => 'nonce1'
+                    ];
+                }
+                return $results;
+            });
 
         $this->p2pRepository->method('getByHash')
             ->willReturn(['status' => Constants::STATUS_QUEUED]);
 
         ob_start();
-        $result = $service->processQueuedP2pMessages();
+        $result = $this->service->processQueuedP2pMessages();
         ob_get_clean();
 
         $this->assertEquals(1, $result);

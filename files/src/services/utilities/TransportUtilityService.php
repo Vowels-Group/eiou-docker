@@ -515,6 +515,96 @@ class TransportUtilityService implements TransportServiceInterface
     }
 
     /**
+     * Send different payloads to multiple recipients in parallel using curl_multi.
+     *
+     * Unlike sendBatch() which sends the same payload to all recipients, this method
+     * accepts per-send payloads — used when broadcasting multiple P2P messages in one
+     * curl_multi call (each P2P has a different hash/amount/etc).
+     *
+     * @param array $sends Array of ['key' => string, 'recipient' => string, 'payload' => array]
+     * @return array<string, array{response: string, signature: string, nonce: string}> Results keyed by send key
+     */
+    public function sendMultiBatch(array $sends): array {
+        if (empty($sends)) {
+            return [];
+        }
+
+        $mh = curl_multi_init();
+        $handles = [];     // key => CurlHandle
+        $signingData = []; // key => ['signature' => ..., 'nonce' => ...]
+
+        foreach ($sends as $send) {
+            $key = $send['key'];
+            $recipient = $send['recipient'];
+            $payload = $send['payload'];
+
+            $signingResult = $this->signWithCapture($payload);
+            if ($signingResult === false) {
+                Logger::getInstance()->warning("Failed to sign payload for multi-batch send", [
+                    'key' => $key,
+                    'recipient' => $recipient
+                ]);
+                continue;
+            }
+
+            $signedPayload = json_encode($signingResult['envelope']);
+            $signingData[$key] = [
+                'signature' => $signingResult['signature'],
+                'nonce' => $signingResult['nonce']
+            ];
+
+            $ch = $this->createCurlHandle($recipient, $signedPayload);
+            $handles[$key] = $ch;
+            curl_multi_add_handle($mh, $ch);
+        }
+
+        // Execute all handles in parallel
+        $active = null;
+        do {
+            $status = curl_multi_exec($mh, $active);
+            if ($active) {
+                curl_multi_select($mh);
+            }
+        } while ($active && $status === CURLM_OK);
+
+        // Collect results
+        $results = [];
+        foreach ($handles as $key => $ch) {
+            $response = curl_multi_getcontent($ch);
+
+            if ($response === false || $response === null) {
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
+
+                Logger::getInstance()->warning("Multi-batch request failed", [
+                    'key' => $key,
+                    'curl_error' => $curlError,
+                    'curl_errno' => $curlErrno
+                ]);
+
+                $response = json_encode([
+                    'status' => 'error',
+                    'message' => "Request failed: " . $curlError,
+                    'error_code' => $curlErrno
+                ]);
+            }
+
+            $results[$key] = [
+                'response' => $response,
+                'signature' => $signingData[$key]['signature'] ?? '',
+                'nonce' => $signingData[$key]['nonce'] ?? ''
+            ];
+
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+
+        curl_multi_close($mh);
+
+        return $results;
+    }
+
+    /**
      * Sign a payload and capture the signing data
      *
      * Creates a clean payload structure and returns both the envelope
