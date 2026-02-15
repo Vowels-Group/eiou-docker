@@ -807,7 +807,7 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
     # Depth limit = distance + 2 so we explore near-optimal alternatives
     # without wasting time on long detours (e.g., 183 paths for a 1-hop target).
     # Integer amounts are computed per path to match production calculateFee rounding.
-    local amount_cents=$((SEND_AMOUNT * 100))
+    amount_cents=$((SEND_AMOUNT * 100))
     printf "\nEnumerating optimal paths (shared fee structure)...\n"
     for distance in "${DISTANCES[@]}"; do
         target="${TARGETS[$distance]}"
@@ -815,12 +815,12 @@ if [ "$TOPOLOGY_MODE" = "shared" ]; then
         path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
 
         # Find optimal integer amount across all enumerated paths
-        local best_int_amount=999999
-        local best_float_fee="1.000000"
+        best_int_amount=999999
+        best_float_fee="1.000000"
         while IFS= read -r path_line; do
             [ -z "$path_line" ] && continue
-            local p_path=$(echo "$path_line" | awk '{print $1}')
-            local int_amount=$(compute_path_integer_amount "$p_path" "$target" "$amount_cents")
+            p_path=$(echo "$path_line" | awk '{print $1}')
+            int_amount=$(compute_path_integer_amount "$p_path" "$target" "$amount_cents")
             if [ "$int_amount" -lt "$best_int_amount" ]; then
                 best_int_amount="$int_amount"
                 best_float_fee=$(echo "$path_line" | grep -oP 'fee=\K[0-9.]+')
@@ -936,7 +936,7 @@ else
 
         # Enumerate paths (fresh fees each build)
         # Integer amounts computed per path to match production calculateFee rounding.
-        local amount_cents=$((SEND_AMOUNT * 100))
+        amount_cents=$((SEND_AMOUNT * 100))
         printf "\nEnumerating optimal paths...\n"
         for distance in "${DISTANCES[@]}"; do
             target="${TARGETS[$distance]}"
@@ -944,12 +944,12 @@ else
             path_count=$(echo "$all_paths" | wc -l | tr -d ' ')
 
             # Find optimal integer amount across all enumerated paths
-            local best_int_amount=999999
-            local best_float_fee="1.000000"
+            best_int_amount=999999
+            best_float_fee="1.000000"
             while IFS= read -r path_line; do
                 [ -z "$path_line" ] && continue
-                local p_path=$(echo "$path_line" | awk '{print $1}')
-                local int_amount=$(compute_path_integer_amount "$p_path" "$target" "$amount_cents")
+                p_path=$(echo "$path_line" | awk '{print $1}')
+                int_amount=$(compute_path_integer_amount "$p_path" "$target" "$amount_cents")
                 if [ "$int_amount" -lt "$best_int_amount" ]; then
                     best_int_amount="$int_amount"
                     best_float_fee=$(echo "$path_line" | grep -oP 'fee=\K[0-9.]+')
