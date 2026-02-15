@@ -42,6 +42,7 @@ class P2pPayloadTest extends TestCase
     private const TEST_HTTP_ADDRESS = 'http://192.168.1.100:8080';
     private const TEST_RESOLVED_ADDRESS = 'http://192.168.1.50:8080';
     private const TEST_SENDER_ADDRESS = 'http://192.168.1.200:8080';
+    private const TEST_TOR_ADDRESS = 'http://abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.onion:8080';
     private const TEST_TIME = 1700000000;
     private const TEST_CURRENCY = 'USD';
     private const TEST_AMOUNT = 100.50;
@@ -79,8 +80,15 @@ class P2pPayloadTest extends TestCase
                 return self::TEST_RESOLVED_ADDRESS;
             });
 
+        $this->mockTransportUtility->method('isTorAddress')
+            ->willReturnCallback(function ($address) {
+                return str_contains($address, '.onion');
+            });
+
         $this->mockTimeUtility->method('convertMicrotimeToInt')
-            ->willReturn(self::TEST_EXPIRATION_TIME);
+            ->willReturnCallback(function ($value): int {
+                return (int) $value;
+            });
 
         $this->payload = new P2pPayload(
             $this->mockUserContext,
@@ -1009,6 +1017,78 @@ class P2pPayloadTest extends TestCase
             $this->assertArrayHasKey($key, $result, "buildCancelled missing key: $key");
         }
         $this->assertCount(count($expectedKeys), $result, "buildCancelled should have exactly " . count($expectedKeys) . " keys");
+    }
+
+    // ============================================================
+    // Tests for Tor expiration scaling
+    // ============================================================
+
+    /**
+     * Test build scales expiration for Tor receiver addresses
+     */
+    public function testBuildScalesExpirationForTorAddress(): void
+    {
+        $data = $this->getValidBuildData();
+        $data['receiverAddress'] = self::TEST_TOR_ADDRESS;
+
+        $result = $this->payload->build($data);
+
+        $scaledExpiration = self::TEST_EXPIRATION_TIME * Constants::P2P_TOR_EXPIRATION_MULTIPLIER;
+        $expectedExpiration = self::TEST_TIME + $scaledExpiration;
+        $this->assertEquals($expectedExpiration, $result['expiration']);
+    }
+
+    /**
+     * Test build does not scale expiration for HTTP receiver addresses
+     */
+    public function testBuildDoesNotScaleExpirationForHttpAddress(): void
+    {
+        $data = $this->getValidBuildData();
+        $result = $this->payload->build($data);
+
+        $expectedExpiration = self::TEST_TIME + self::TEST_EXPIRATION_TIME;
+        $this->assertEquals($expectedExpiration, $result['expiration']);
+    }
+
+    /**
+     * Test build produces larger hopWait for Tor addresses
+     */
+    public function testBuildProducesLargerHopWaitForTorAddress(): void
+    {
+        $httpData = $this->getValidBuildData();
+        $httpResult = $this->payload->build($httpData);
+
+        // Need fresh payload instance to avoid mock call count issues
+        $torPayload = new P2pPayload(
+            $this->mockUserContext,
+            $this->mockUtilityContainer
+        );
+        $torData = $this->getValidBuildData();
+        $torData['receiverAddress'] = self::TEST_TOR_ADDRESS;
+        $torResult = $torPayload->build($torData);
+
+        $this->assertGreaterThan($httpResult['hopWait'], $torResult['hopWait']);
+    }
+
+    /**
+     * Test Tor expiration multiplier uses Constants value
+     */
+    public function testBuildTorExpirationUsesConstantsMultiplier(): void
+    {
+        $data = $this->getValidBuildData();
+        $data['receiverAddress'] = self::TEST_TOR_ADDRESS;
+
+        $scaledExpiration = self::TEST_EXPIRATION_TIME * Constants::P2P_TOR_EXPIRATION_MULTIPLIER;
+
+        // hopWait = floor(scaledExpiration / HOP_WAIT_DIVISOR) - PROCESSING_BUFFER
+        $expectedHopWait = max(
+            (int) floor($scaledExpiration / Constants::P2P_HOP_WAIT_DIVISOR) - Constants::P2P_HOP_PROCESSING_BUFFER_SECONDS,
+            Constants::P2P_MIN_HOP_WAIT_SECONDS
+        );
+
+        $result = $this->payload->build($data);
+
+        $this->assertEquals($expectedHopWait, $result['hopWait']);
     }
 
     // ============================================================

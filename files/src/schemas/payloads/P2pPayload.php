@@ -33,6 +33,13 @@ class P2pPayload extends BasePayload
         // Uses HOP_WAIT_DIVISOR (fixed, not actual max level) so all P2Ps produce the same
         // hopWait regardless of the user's maxP2pLevel setting (prevents topology inference).
         $expirationSeconds = $this->currentUser->getP2pExpirationTime();
+
+        // Tor hidden services add significant per-hop latency (each EIOU hop = 6 Tor relay hops).
+        // Scale expiration so multi-hop Tor chains don't expire prematurely.
+        if ($this->transportUtility->isTorAddress($data['receiverAddress'])) {
+            $expirationSeconds *= Constants::P2P_TOR_EXPIRATION_MULTIPLIER;
+        }
+
         $hopWait = max(
             (int) floor($expirationSeconds / Constants::P2P_HOP_WAIT_DIVISOR) - Constants::P2P_HOP_PROCESSING_BUFFER_SECONDS,
             Constants::P2P_MIN_HOP_WAIT_SECONDS

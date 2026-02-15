@@ -145,6 +145,7 @@ class Constants {
     const P2P_MAX_ROUTING_LEVEL = 10; // Maximum allowed P2P routing hops (user setting cap)
     const P2P_HOP_WAIT_DIVISOR = 12; // Fixed divisor for hopWait formula (hides actual max level for privacy)
     const P2P_HOP_PROCESSING_BUFFER_SECONDS = 2; // Per-hop buffer for network latency and processing time
+    const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per EIOU hop)
 
     // Transport timeouts (single HTTP/TOR request to a node)
     const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
