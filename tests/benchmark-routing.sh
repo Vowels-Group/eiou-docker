@@ -582,162 +582,222 @@ do_burst() {
     done
 
     # ---- Phase 2: Wait for all to complete ----
+    # 1-hop direct sends bypass the P2P table (standard transactions only).
+    # Detect which mode applies, then poll accordingly.
     local wait_start=$(date +%s)
     local completed=0
     local failed=0
-    while [ $((completed + failed)) -lt $RUNS ]; do
-        sleep 2
-        local elapsed_wait=$(( $(date +%s) - wait_start ))
-        if [ $elapsed_wait -ge $timeout ]; then
-            break
-        fi
+    local _use_p2p=1
 
-        # Count completed P2P records
-        completed=$(docker exec $SENDER php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND completed_at IS NOT NULL')->fetchColumn();
-        " 2>/dev/null || echo "0")
+    # Brief pause for P2P records to appear (if they will)
+    sleep 2
+    local p2p_total=$(docker exec $SENDER php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag')->fetchColumn();
+    " 2>/dev/null || echo "0")
 
-        # Count terminal failures (cancelled/expired)
-        failed=$(docker exec $SENDER php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            echo \$pdo->query(\"SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND status IN ('cancelled','expired')\")->fetchColumn();
-        " 2>/dev/null || echo "0")
+    if [ "$p2p_total" -eq 0 ]; then
+        _use_p2p=0
+        # Direct sends — poll target balance (same approach as serial do_send)
+        while true; do
+            local elapsed_wait=$(( $(date +%s) - wait_start ))
+            if [ $elapsed_wait -ge $timeout ]; then break; fi
+            local current_balance=$(docker exec $target sh -c "$balance_cmd" 2>/dev/null || echo "$initial_balance")
+            local bal_diff=$(awk "BEGIN {print ($current_balance != $initial_balance) ? 1 : 0}")
+            if [ "$bal_diff" -eq 1 ]; then
+                completed=$RUNS
+                break
+            fi
+            printf "\r  Waiting: balance check (%ds)...  " "$elapsed_wait"
+            sleep 2
+        done
+    else
+        # P2P records exist — poll for completion/failure
+        while [ $((completed + failed)) -lt $RUNS ]; do
+            local elapsed_wait=$(( $(date +%s) - wait_start ))
+            if [ $elapsed_wait -ge $timeout ]; then break; fi
 
-        printf "\r  Waiting: %d/%d completed (%ds)...  " "$completed" "$RUNS" "$elapsed_wait"
-    done
+            completed=$(docker exec $SENDER php -r "
+                require_once('${BOOTSTRAP_PATH}');
+                \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+                echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND completed_at IS NOT NULL')->fetchColumn();
+            " 2>/dev/null || echo "0")
+
+            failed=$(docker exec $SENDER php -r "
+                require_once('${BOOTSTRAP_PATH}');
+                \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+                echo \$pdo->query(\"SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND status IN ('cancelled','expired')\")->fetchColumn();
+            " 2>/dev/null || echo "0")
+
+            printf "\r  Waiting: %d/%d completed (%ds)...  " "$completed" "$RUNS" "$elapsed_wait"
+            sleep 2
+        done
+    fi
     printf "\r  Waiting: %d/%d completed, %d failed (%ds)     \n" "$completed" "$RUNS" "$failed" "$(( $(date +%s) - wait_start ))"
 
     # ---- Phase 3: Collect per-run results ----
-    # Query all P2P hashes for this burst, ordered by creation
-    local hash_data=$(docker exec $SENDER php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        \$stmt = \$pdo->query('SELECT hash, created_at, completed_at FROM p2p WHERE id > $max_id AND fast = $fast_flag ORDER BY id ASC');
-        while (\$row = \$stmt->fetch(PDO::FETCH_ASSOC)) {
-            echo \$row['hash'] . '|' . (\$row['created_at'] ?? '') . '|' . (\$row['completed_at'] ?? '') . \"\n\";
-        }
-    " 2>/dev/null || echo "")
-
-    # Parse hash_data into arrays
-    local -a _burst_hashes _burst_sender_created _burst_sender_completed
-    local hash_count=0
-    while IFS='|' read -r h_hash h_created h_completed; do
-        [ -z "$h_hash" ] && continue
-        hash_count=$((hash_count + 1))
-        _burst_hashes[$hash_count]="$h_hash"
-        _burst_sender_created[$hash_count]="$h_created"
-        _burst_sender_completed[$hash_count]="$h_completed"
-    done <<< "$hash_data"
-
-    # Process each run
-    for ((run=1; run<=RUNS; run++)); do
-        local key="${protocol}_${distance}_${mode}_${run}"
-        local hash="${_burst_hashes[$run]:-}"
-        local sender_created="${_burst_sender_created[$run]:-}"
-        local sender_completed="${_burst_sender_completed[$run]:-}"
-        local fire_time="${_burst_fire_time[$run]}"
-
-        if [ -z "$hash" ] || [ -z "$sender_completed" ]; then
-            # No hash found or not completed — mark as failed
-            local elapsed=$(( $(date +%s) - fire_time ))
-            R_TIME[$key]="$elapsed"
-            R_PASS[$key]="0"
-            R_PATH[$key]=""
-            R_FEE[$key]="0"
-            R_OPTIMAL[$key]="N/A"
-            R_P2P_TIME[$key]=""
-            R_SEARCH_TIME[$key]=""
-            R_SETTLE_TIME[$key]=""
-            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
-                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
-            continue
-        fi
-
-        # Wall time: fire_time to completed_at epoch
-        local completed_epoch=$(docker exec $SENDER php -r "
-            echo strtotime('$sender_completed');
-        " 2>/dev/null || echo "0")
-        local elapsed=$((completed_epoch - fire_time))
-        [ "$elapsed" -lt 0 ] && elapsed=0
-
-        # Trace path
-        local path=$(trace_actual_path "$hash" "$SENDER" "$target")
-        if [ -z "$path" ]; then
-            path="${SENDER}->${target}"
-        fi
-        local fee=$(compute_path_fee "$path" "$target")
-
-        # Optimality check
-        local is_optimal="N/A"
-        local actual_amount=$(compute_path_integer_amount "$path" "$target" $((SEND_AMOUNT * 100)))
+    if [ "$_use_p2p" -eq 0 ]; then
+        # Direct sends (no P2P records) — results from transactions.
+        # These complete synchronously during fire; no timing breakdown available.
+        local fee=$(compute_path_fee "${SENDER}->${target}" "$target")
+        local actual_amount=$(compute_path_integer_amount "${SENDER}->${target}" "$target" $((SEND_AMOUNT * 100)))
         local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
+        local is_optimal="N/A"
         if [ -n "$optimal" ] && [ "$optimal" != "" ]; then
             is_optimal=$([ "$actual_amount" -le "$optimal" ] && echo "OPTIMAL" || echo "SUB-OPT")
         fi
-
-        # Timing breakdowns from DB timestamps
-        local p2p_time="" search_time="" settle_time=""
-
-        if [ -n "$sender_created" ] && [ -n "$sender_completed" ]; then
-            p2p_time=$(docker exec $SENDER php -r "
-                \$c = strtotime('$sender_created');
-                \$d = strtotime('$sender_completed');
-                if (\$c && \$d) printf('%.1f', \$d - \$c);
-            " 2>/dev/null || echo "")
-        fi
-
-        # Query target timestamps for search_time
-        local target_ts=$(docker exec $target php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            \$stmt = \$pdo->prepare('SELECT created_at FROM p2p WHERE hash = ?');
-            \$stmt->execute(['$hash']);
-            \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
-            if (\$row) echo \$row['created_at'] ?? '';
-        " 2>/dev/null || echo "")
-
-        if [ -n "$sender_created" ] && [ -n "$target_ts" ]; then
-            search_time=$(docker exec $SENDER php -r "
-                \$c = strtotime('$sender_created');
-                \$t = strtotime('$target_ts');
-                if (\$c && \$t) printf('%.1f', \$t - \$c);
-            " 2>/dev/null || echo "")
-        fi
-
-        if [ -n "$target_ts" ] && [ -n "$sender_completed" ]; then
-            settle_time=$(docker exec $SENDER php -r "
-                \$t = strtotime('$target_ts');
-                \$d = strtotime('$sender_completed');
-                if (\$t && \$d) printf('%.1f', \$d - \$t);
-            " 2>/dev/null || echo "")
-        fi
-
-        # Store results (same keys as serial mode)
-        R_TIME[$key]="$elapsed"
-        R_PASS[$key]="1"
-        R_PATH[$key]="$path"
-        R_FEE[$key]="$fee"
-        R_OPTIMAL[$key]="$is_optimal"
-        R_P2P_TIME[$key]="${p2p_time:-}"
-        R_SEARCH_TIME[$key]="${search_time:-}"
-        R_SETTLE_TIME[$key]="${settle_time:-}"
-
-        # Print per-run result line (same format as serial do_send)
         local opt_color="${YELLOW}"
         [ "$is_optimal" = "OPTIMAL" ] && opt_color="${GREEN}"
-        local timing_detail=""
-        if [ -n "$p2p_time" ]; then
-            timing_detail=" (p2p:${p2p_time}s"
-            [ -n "$search_time" ] && timing_detail="${timing_detail} srch:${search_time}s"
-            [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
-            timing_detail="${timing_detail})"
-        fi
-        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
-            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
-    done
+
+        for ((run=1; run<=RUNS; run++)); do
+            local key="${protocol}_${distance}_${mode}_${run}"
+            local fire_time="${_burst_fire_time[$run]}"
+            # Wall time: fire to next fire (last run: ~0s since send is synchronous)
+            local next_fire="${_burst_fire_time[$((run+1))]:-${_burst_fire_time[$run]}}"
+            local elapsed=$((next_fire - fire_time))
+
+            R_TIME[$key]="$elapsed"
+            R_PASS[$key]="1"
+            R_PATH[$key]="${SENDER}->${target}"
+            R_FEE[$key]="$fee"
+            R_OPTIMAL[$key]="$is_optimal"
+            R_P2P_TIME[$key]=""
+            R_SEARCH_TIME[$key]=""
+            R_SETTLE_TIME[$key]=""
+
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "" "${SENDER}->${target}" "$fee" "$is_optimal"
+        done
+    else
+        # P2P sends — collect from P2P table
+        local hash_data=$(docker exec $SENDER php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+            \$stmt = \$pdo->query('SELECT hash, created_at, completed_at FROM p2p WHERE id > $max_id AND fast = $fast_flag ORDER BY id ASC');
+            while (\$row = \$stmt->fetch(PDO::FETCH_ASSOC)) {
+                echo \$row['hash'] . '|' . (\$row['created_at'] ?? '') . '|' . (\$row['completed_at'] ?? '') . \"\n\";
+            }
+        " 2>/dev/null || echo "")
+
+        # Parse hash_data into arrays
+        local -a _burst_hashes _burst_sender_created _burst_sender_completed
+        local hash_count=0
+        while IFS='|' read -r h_hash h_created h_completed; do
+            [ -z "$h_hash" ] && continue
+            hash_count=$((hash_count + 1))
+            _burst_hashes[$hash_count]="$h_hash"
+            _burst_sender_created[$hash_count]="$h_created"
+            _burst_sender_completed[$hash_count]="$h_completed"
+        done <<< "$hash_data"
+
+        # Process each run
+        for ((run=1; run<=RUNS; run++)); do
+            local key="${protocol}_${distance}_${mode}_${run}"
+            local hash="${_burst_hashes[$run]:-}"
+            local sender_created="${_burst_sender_created[$run]:-}"
+            local sender_completed="${_burst_sender_completed[$run]:-}"
+            local fire_time="${_burst_fire_time[$run]}"
+
+            if [ -z "$hash" ] || [ -z "$sender_completed" ]; then
+                # No hash found or not completed — mark as failed
+                local elapsed=$(( $(date +%s) - fire_time ))
+                R_TIME[$key]="$elapsed"
+                R_PASS[$key]="0"
+                R_PATH[$key]=""
+                R_FEE[$key]="0"
+                R_OPTIMAL[$key]="N/A"
+                R_P2P_TIME[$key]=""
+                R_SEARCH_TIME[$key]=""
+                R_SETTLE_TIME[$key]=""
+                printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
+                    "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
+                continue
+            fi
+
+            # Wall time: fire_time to completed_at epoch
+            local completed_epoch=$(docker exec $SENDER php -r "
+                echo strtotime('$sender_completed');
+            " 2>/dev/null || echo "0")
+            local elapsed=$((completed_epoch - fire_time))
+            [ "$elapsed" -lt 0 ] && elapsed=0
+
+            # Trace path
+            local path=$(trace_actual_path "$hash" "$SENDER" "$target")
+            if [ -z "$path" ]; then
+                path="${SENDER}->${target}"
+            fi
+            local fee=$(compute_path_fee "$path" "$target")
+
+            # Optimality check
+            local is_optimal="N/A"
+            local actual_amount=$(compute_path_integer_amount "$path" "$target" $((SEND_AMOUNT * 100)))
+            local optimal="${OPTIMAL_FEES[${protocol}_${distance}]}"
+            if [ -n "$optimal" ] && [ "$optimal" != "" ]; then
+                is_optimal=$([ "$actual_amount" -le "$optimal" ] && echo "OPTIMAL" || echo "SUB-OPT")
+            fi
+
+            # Timing breakdowns from DB timestamps
+            local p2p_time="" search_time="" settle_time=""
+
+            if [ -n "$sender_created" ] && [ -n "$sender_completed" ]; then
+                p2p_time=$(docker exec $SENDER php -r "
+                    \$c = strtotime('$sender_created');
+                    \$d = strtotime('$sender_completed');
+                    if (\$c && \$d) printf('%.1f', \$d - \$c);
+                " 2>/dev/null || echo "")
+            fi
+
+            # Query target timestamps for search_time
+            local target_ts=$(docker exec $target php -r "
+                require_once('${BOOTSTRAP_PATH}');
+                \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+                \$stmt = \$pdo->prepare('SELECT created_at FROM p2p WHERE hash = ?');
+                \$stmt->execute(['$hash']);
+                \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+                if (\$row) echo \$row['created_at'] ?? '';
+            " 2>/dev/null || echo "")
+
+            if [ -n "$sender_created" ] && [ -n "$target_ts" ]; then
+                search_time=$(docker exec $SENDER php -r "
+                    \$c = strtotime('$sender_created');
+                    \$t = strtotime('$target_ts');
+                    if (\$c && \$t) printf('%.1f', \$t - \$c);
+                " 2>/dev/null || echo "")
+            fi
+
+            if [ -n "$target_ts" ] && [ -n "$sender_completed" ]; then
+                settle_time=$(docker exec $SENDER php -r "
+                    \$t = strtotime('$target_ts');
+                    \$d = strtotime('$sender_completed');
+                    if (\$t && \$d) printf('%.1f', \$d - \$t);
+                " 2>/dev/null || echo "")
+            fi
+
+            # Store results (same keys as serial mode)
+            R_TIME[$key]="$elapsed"
+            R_PASS[$key]="1"
+            R_PATH[$key]="$path"
+            R_FEE[$key]="$fee"
+            R_OPTIMAL[$key]="$is_optimal"
+            R_P2P_TIME[$key]="${p2p_time:-}"
+            R_SEARCH_TIME[$key]="${search_time:-}"
+            R_SETTLE_TIME[$key]="${settle_time:-}"
+
+            # Print per-run result line (same format as serial do_send)
+            local opt_color="${YELLOW}"
+            [ "$is_optimal" = "OPTIMAL" ] && opt_color="${GREEN}"
+            local timing_detail=""
+            if [ -n "$p2p_time" ]; then
+                timing_detail=" (p2p:${p2p_time}s"
+                [ -n "$search_time" ] && timing_detail="${timing_detail} srch:${search_time}s"
+                [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
+                timing_detail="${timing_detail})"
+            fi
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-28s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
+        done
+    fi
 }
 
 # Accumulate stats for a set of keys into caller's variables:
