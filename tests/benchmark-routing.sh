@@ -573,16 +573,18 @@ do_burst() {
     local initial_balance=$(docker exec $target sh -c "$balance_cmd" 2>/dev/null || echo "0")
 
     declare -a _burst_fire_time
+    local burst_start=$(date +%s%3N)
     for ((run=1; run<=RUNS; run++)); do
-        _burst_fire_time[$run]=$(date +%s%3N)
+        _burst_fire_time[$run]=$burst_start
         if [ "$mode" = "fast" ]; then
-            docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null || true
+            docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null &
         else
-            docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY --best 2>&1 >/dev/null || true
+            docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY --best 2>&1 >/dev/null &
         fi
         printf "[%-5s] Fired %2d/%d | %-4s | %-6s -> %-4s\n" \
             "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target"
     done
+    wait  # Wait for all background sends to complete before polling
 
     # ---- Phase 2: Wait for all to complete ----
     # 1-hop direct sends bypass the P2P table (standard transactions only).
