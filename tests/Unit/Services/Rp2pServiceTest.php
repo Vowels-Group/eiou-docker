@@ -2619,4 +2619,167 @@ class Rp2pServiceTest extends TestCase
 
         $service->selectAndForwardBestRp2p(self::TEST_HASH);
     }
+
+    /**
+     * Test checkRp2pPossible increments response count on rejection and cancels when all responded
+     *
+     * When a fast-mode RP2P is rejected (fee too high / relay can't afford),
+     * the relay should count it as a responded contact. When all contacts
+     * have responded with rejections/cancels, the relay cancels the P2P
+     * and propagates cancel upstream instead of waiting for expiration.
+     */
+    public function testCheckRp2pPossibleCountsRejectionAndCancelsWhenAllResponded(): void
+    {
+        $mockP2pService = $this->createMock(\Eiou\Contracts\P2pServiceInterface::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null, // no candidate repo (fast mode)
+            $this->p2pSenderRepository
+        );
+        $service->setP2pService($mockP2pService);
+        $service->setP2pTransactionSender($this->p2pTransactionSender);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => 'http://downstream-contact.test',
+            'senderPublicKey' => 'downstream-key',
+            'signature' => 'test-sig',
+        ];
+
+        // Fast-mode relay P2P (no destination_address, fast=1)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+                'sender_address' => 'http://upstream.test',
+                'fast' => 1,
+                'status' => 'sent',
+            ]);
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // Relay can't afford — triggers rejection
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(0);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(0.0);
+
+        // Should increment response count for the rejected RP2P
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount')
+            ->with(self::TEST_HASH);
+
+        // After increment: 3 out of 3 contacts have responded
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 3,
+                'contacts_responded_count' => 3,
+                'contacts_relayed_count' => 0,
+                'contacts_relayed_responded_count' => 0,
+                'phase1_sent' => 0,
+            ]);
+
+        // All paths dead — P2P should be cancelled
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_CANCELLED);
+
+        // Cancel notification should be sent upstream
+        $mockP2pService->expects($this->once())
+            ->method('sendCancelNotificationForHash')
+            ->with(self::TEST_HASH);
+
+        ob_start();
+        $result = $service->checkRp2pPossible($request);
+        $output = ob_get_clean();
+
+        $this->assertFalse($result);
+
+        // Should have echoed rejection response
+        $decoded = json_decode($output, true);
+        $this->assertEquals('rejected', $decoded['status']);
+    }
+
+    /**
+     * Test checkRp2pPossible increments count but does not cancel when contacts remain
+     */
+    public function testCheckRp2pPossibleCountsRejectionWithoutCancelWhenContactsRemain(): void
+    {
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null,
+            $this->p2pSenderRepository
+        );
+        $service->setP2pTransactionSender($this->p2pTransactionSender);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => 'http://downstream-contact.test',
+            'senderPublicKey' => 'downstream-key',
+            'signature' => 'test-sig',
+        ];
+
+        // Fast-mode relay P2P
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+                'sender_address' => 'http://upstream.test',
+                'fast' => 1,
+                'status' => 'sent',
+            ]);
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // Relay can't afford
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(0);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(0.0);
+
+        // Should increment count
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount')
+            ->with(self::TEST_HASH);
+
+        // Only 1 of 3 contacts responded — should NOT cancel yet
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 3,
+                'contacts_responded_count' => 1,
+                'contacts_relayed_count' => 0,
+                'contacts_relayed_responded_count' => 0,
+                'phase1_sent' => 0,
+            ]);
+
+        // P2P should NOT be cancelled (other contacts haven't responded)
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+
+        ob_start();
+        $result = $service->checkRp2pPossible($request);
+        ob_get_clean();
+
+        $this->assertFalse($result);
+    }
 }

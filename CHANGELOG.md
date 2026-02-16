@@ -24,6 +24,7 @@ The project is currently in **ALPHA** status.
 - `handleRp2pRequest()` return type changed from `void` to `bool` — returns `false` when fee/affordability validation fails, enabling caller-driven fallback
 - Originator fee check moved before RP2P insert — rejected candidates no longer pollute the database, and `updateStatus('found')` is deferred until validation passes
 - `checkRp2pPossible()` fast-mode path now sends rejection response (not "inserted") when `handleRp2pRequest()` returns false — sender correctly records failed delivery instead of false positive acceptance
+- Rejected RP2Ps in fast mode now increment `contacts_responded_count` — when all contacts have responded (all rejected or cancelled), the relay cancels immediately and propagates cancel upstream instead of waiting for expiration timeout
 - P2P best-fee mode forced to fast for Tor recipients (`.onion` addresses) — Tor latency (~5s/hop) makes best-fee relay overhead prohibitive
 
 ### Fixed

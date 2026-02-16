@@ -458,13 +458,54 @@ class Rp2pService implements Rp2pServiceInterface {
             // (follows same pattern as TransactionService.checkTransactionPossible)
             try {
                 $accepted = $this->handleRp2pRequest($request);
+                if (!$accepted) {
+                    // RP2P rejected (fee too high or relay can't afford) — count
+                    // this as a responded contact so the node can detect when ALL
+                    // downstream paths are dead and cancel immediately instead
+                    // of waiting for expiration timeout.
+                    $fromAddress = $request['senderAddress'] ?? null;
+                    $isFromRelayed = false;
+                    if ($fromAddress && $this->p2pRelayedContactRepository !== null) {
+                        $isFromRelayed = $this->p2pRelayedContactRepository->isRelayedContact($request['hash'], $fromAddress);
+                    }
+                    if ($isFromRelayed) {
+                        $this->p2pRepository->incrementContactsRelayedRespondedCount($request['hash']);
+                    } else {
+                        $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
+                    }
+
+                    // Check if all contacts have responded — cancel and propagate upstream
+                    $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
+                    if ($tracking) {
+                        $sentCount = (int) $tracking['contacts_sent_count'];
+                        $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
+                        $respondedCount = (int) $tracking['contacts_responded_count'];
+                        $relayedRespondedCount = (int) ($tracking['contacts_relayed_responded_count'] ?? 0);
+
+                        $currentStatus = $p2p['status'] ?? null;
+                        if (($respondedCount + $relayedRespondedCount) >= ($sentCount + $relayedCount)
+                            && $sentCount > 0
+                            && $currentStatus !== Constants::STATUS_CANCELLED
+                            && $currentStatus !== 'expired'
+                        ) {
+                            Logger::getInstance()->info("All downstream RP2P paths rejected, cancelling P2P", [
+                                'hash' => $request['hash'],
+                                'responded' => $respondedCount + $relayedRespondedCount,
+                                'total' => $sentCount + $relayedCount,
+                            ]);
+                            $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_CANCELLED);
+                            if ($this->p2pService !== null) {
+                                $this->p2pService->sendCancelNotificationForHash($request['hash']);
+                            }
+                        }
+                    }
+                }
                 if($echo){
                     if ($accepted) {
                         // Return 'inserted' status AFTER the RP2P has been stored in the database
                         echo  $this->rp2pPayload->buildInserted($request);
                     } else {
-                        // Fee too high or relay can't afford — reject so sender
-                        // knows not to count this as a successful RP2P delivery
+                        // Fee too high or relay can't afford — reject downstream
                         echo  $this->rp2pPayload->buildRejection($request, 'rejected');
                     }
                 }
