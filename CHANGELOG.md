@@ -52,6 +52,8 @@ The project is currently in **ALPHA** status.
 ### Fixed
 - CA-signed SSL certificate generation in `startup.sh` — openssl errors were silently discarded (`2>/dev/null`), so if `/ssl-ca/` mount had permission issues or corrupt keys, Apache got an invalid cert and the container crashed with no explanation; now logs errors and falls back to self-signed
 - CA-signed SSL serial file written to `/tmp/ca.srl` instead of `/ssl-ca/ca.srl` — `-CAcreateserial` tried to write into the read-only `/ssl-ca/` mount, causing signing to fail on every `:ro` mount
+- SSL certificate CN and SANs included port number when QUICKSTART/EIOU_HOST contained a port (e.g. `88.99.69.172:1152`) — ports are not valid in certificate fields; now stripped before certificate generation
+- SSL certificate used `DNS:` SAN prefix for IP addresses — IP addresses require the `IP:` prefix per RFC 5280; now auto-detected and prefixed correctly
 - `viewsettings` CLI command and `GET /api/v1/system/settings` now include `hostname` and `hostname_secure` fields — previously these were settable via `changesettings` option 10 but not visible in the settings display
 - API `GET /api/v1/system/settings` now includes `auto_backup_enabled` field
 - Idempotency guards on P2P and transaction balance updates — `MessageService::handleTransactionMessageRequest` and `CleanupService::syncAndCompleteP2p` now check whether a P2P/transaction is already completed before calling `updateBalanceGivenTransactions`, preventing double balance increments when both the normal completion flow and cleanup recovery fire for the same hash
