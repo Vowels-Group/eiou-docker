@@ -148,10 +148,16 @@ class Constants {
     const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per EIOU hop)
     const P2P_QUEUE_BATCH_SIZE = 10; // Max queued P2Ps processed per daemon poll cycle (all sent in one curl_multi)
     const P2P_QUEUE_COALESCE_MS = 2000; // Milliseconds to wait for more P2Ps before firing mega-batch (default: 2000ms)
-    // Max concurrent worker processes for parallel P2P processing (override via EIOU_P2P_MAX_WORKERS env var)
+    // Max concurrent worker processes for parallel P2P processing, keyed by transport protocol.
     // Each worker uses ~15-20MB RAM, 1 MySQL connection, and up to CURL_MULTI_MAX_CONCURRENT curl handles.
-    // Recommended: 10 for Tor nodes (Tor circuits are the bottleneck), 20 for HTTP-only nodes.
-    const P2P_MAX_WORKERS = 10;
+    // Tor is limited because each hidden service connection creates 6 Tor hops; too many circuits saturates the daemon.
+    // HTTP/HTTPS are lightweight — higher limit lets burst P2Ps process without queueing.
+    // Override all via EIOU_P2P_MAX_WORKERS env var.
+    const P2P_MAX_WORKERS = [
+        'http'  => 50,
+        'https' => 50,
+        'tor'   => 5,
+    ];
     const P2P_SENDING_TIMEOUT_SECONDS = 300; // Seconds before a P2P stuck in 'sending' is recovered (worker assumed dead)
     // Max simultaneous connections per curl_multi batch, keyed by protocol.
     // Lower Tor limit prevents circuit overload; HTTP/HTTPS can handle more.
@@ -330,19 +336,22 @@ class Constants {
     }
 
     /**
-     * Get max P2P worker processes
-     * Supports runtime override via EIOU_P2P_MAX_WORKERS env variable
-     * Production (single node per server): default 10 is appropriate
-     * Testing (multiple nodes per server): set lower to conserve RAM/Tor circuits
+     * Get max P2P worker processes for a given transport protocol.
+     * Supports runtime override via EIOU_P2P_MAX_WORKERS env variable (overrides all protocols).
      *
-     * @return int Maximum concurrent worker processes
+     * @param string $transport Transport protocol ('http', 'https', 'tor')
+     * @return int Maximum concurrent worker processes for that transport
      */
-    public static function getMaxP2pWorkers(): int {
+    public static function getMaxP2pWorkers(string $transport = 'tor'): int {
         $envValue = getenv('EIOU_P2P_MAX_WORKERS');
         if ($envValue !== false && ctype_digit($envValue) && (int)$envValue > 0) {
             return (int)$envValue;
         }
-        return self::P2P_MAX_WORKERS;
+        if (isset(self::P2P_MAX_WORKERS[$transport])) {
+            return self::P2P_MAX_WORKERS[$transport];
+        }
+        // Unknown protocol: use the lowest configured limit
+        return min(self::P2P_MAX_WORKERS);
     }
 
     /**

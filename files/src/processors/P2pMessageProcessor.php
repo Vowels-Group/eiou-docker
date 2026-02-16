@@ -6,6 +6,7 @@ namespace Eiou\Processors;
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
 use Eiou\Database\P2pRepository;
+use Eiou\Utils\AddressValidator;
 use Eiou\Utils\Logger;
 
 /**
@@ -15,8 +16,13 @@ use Eiou\Utils\Logger;
  * processes (P2pWorker.php) for each one. Workers are fully isolated with their
  * own Application singleton, PDO connection, and curl_multi handle.
  *
+ * Worker limits are per-transport: HTTP/HTTPS get a higher ceiling than Tor,
+ * because Tor circuits are the bottleneck (each hidden service connection
+ * creates 6 Tor hops). The coordinator tracks active workers by transport
+ * and enforces limits independently.
+ *
  * Responsibilities:
- * - Dispatch: fetch queued P2Ps, spawn workers up to P2P_MAX_WORKERS
+ * - Dispatch: fetch queued P2Ps, spawn workers up to per-transport limits
  * - Reap: check proc_get_status() on active workers, remove finished ones
  * - Recover: find stuck 'sending' P2Ps with dead worker PIDs, reset to 'queued'
  * - Shutdown: SIGTERM to all workers, wait up to 10s, force-kill
@@ -30,14 +36,9 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
     private P2pRepository $p2pRepository;
 
     /**
-     * @var array Active workers: pid => ['hash' => string, 'process' => resource, 'started_at' => float, 'pipes' => array]
+     * @var array Active workers: pid => ['hash' => string, 'process' => resource, 'started_at' => float, 'pipes' => array, 'transport' => string]
      */
     private array $activeWorkers = [];
-
-    /**
-     * @var int Maximum concurrent worker processes
-     */
-    private int $maxWorkers;
 
     /**
      * @var string Path to the P2pWorker.php entry point
@@ -53,6 +54,11 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
      * @var int Seconds between stuck-sending recovery checks
      */
     private int $recoveryInterval = 60;
+
+    /**
+     * @var array|null Override max workers per transport (for testing)
+     */
+    private ?array $maxWorkersOverride = null;
 
     /**
      * Constructor
@@ -81,7 +87,6 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
         $app = Application::getInstance();
         $this->p2pService = $app->services->getP2pService();
         $this->p2pRepository = new P2pRepository();
-        $this->maxWorkers = Constants::getMaxP2pWorkers();
         $this->workerScript = '/etc/eiou/processors/P2pWorker.php';
         $this->lastRecoveryTime = microtime(true);
     }
@@ -105,21 +110,62 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
     }
 
     /**
-     * Set max workers (for testing)
+     * Set max workers per transport (for testing)
      *
-     * @param int $max
+     * @param array $limits ['http' => int, 'https' => int, 'tor' => int]
      */
-    public function setMaxWorkers(int $max): void {
-        $this->maxWorkers = $max;
+    public function setMaxWorkers(array $limits): void {
+        $this->maxWorkersOverride = $limits;
     }
 
     /**
      * Get active workers count (for testing/monitoring)
      *
-     * @return int
+     * @return int Total active workers across all transports
      */
     public function getActiveWorkerCount(): int {
         return count($this->activeWorkers);
+    }
+
+    /**
+     * Get active worker count for a specific transport (for testing/monitoring)
+     *
+     * @param string $transport Transport protocol ('http', 'https', 'tor')
+     * @return int Active workers for that transport
+     */
+    public function getActiveWorkerCountByTransport(string $transport): int {
+        $count = 0;
+        foreach ($this->activeWorkers as $worker) {
+            if ($worker['transport'] === $transport) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * Get the max workers limit for a transport
+     *
+     * @param string $transport Transport protocol
+     * @return int Max workers allowed
+     */
+    protected function getMaxWorkersForTransport(string $transport): int {
+        if ($this->maxWorkersOverride !== null && isset($this->maxWorkersOverride[$transport])) {
+            return $this->maxWorkersOverride[$transport];
+        }
+        return Constants::getMaxP2pWorkers($transport);
+    }
+
+    /**
+     * Determine the transport type for a P2P message
+     *
+     * @param array $message P2P message row
+     * @return string Transport type ('http', 'https', 'tor')
+     */
+    protected function getMessageTransport(array $message): string {
+        $address = $message['sender_address'] ?? '';
+        $transport = AddressValidator::getTransportType($address);
+        return $transport ?? Constants::DEFAULT_TRANSPORT_MODE;
     }
 
     /**
@@ -167,6 +213,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
                     Logger::getInstance()->warning("P2P worker exited with error", [
                         'pid' => $pid,
                         'hash' => $worker['hash'],
+                        'transport' => $worker['transport'],
                         'exit_code' => $exitCode,
                         'duration_s' => $duration,
                     ]);
@@ -192,25 +239,29 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
     }
 
     /**
-     * Fetch queued P2Ps and spawn workers for each (up to available slots)
+     * Fetch queued P2Ps and spawn workers for each (respecting per-transport limits)
      *
      * @return int Number of workers spawned
      */
     protected function dispatchWorkers(): int {
-        $availableSlots = $this->maxWorkers - count($this->activeWorkers);
-        if ($availableSlots <= 0) {
-            return 0;
-        }
-
+        // Fetch a generous batch — we'll filter by transport capacity
         $queuedMessages = $this->p2pRepository->getQueuedP2pMessages(
             Constants::STATUS_QUEUED,
-            $availableSlots
+            Constants::P2P_QUEUE_BATCH_SIZE
         );
 
         $spawned = 0;
         foreach ($queuedMessages as $message) {
+            $transport = $this->getMessageTransport($message);
+            $maxForTransport = $this->getMaxWorkersForTransport($transport);
+            $activeForTransport = $this->getActiveWorkerCountByTransport($transport);
+
+            if ($activeForTransport >= $maxForTransport) {
+                continue; // This transport is at capacity, skip to next message
+            }
+
             $hash = $message['hash'];
-            if ($this->spawnWorker($hash)) {
+            if ($this->spawnWorker($hash, $transport)) {
                 $spawned++;
             }
         }
@@ -222,9 +273,10 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
      * Spawn a worker process for a single P2P hash
      *
      * @param string $hash P2P hash to process
+     * @param string $transport Transport type for this P2P
      * @return bool True if worker spawned successfully
      */
-    protected function spawnWorker(string $hash): bool {
+    protected function spawnWorker(string $hash, string $transport): bool {
         $cmd = 'php ' . escapeshellarg($this->workerScript) . ' ' . escapeshellarg($hash);
 
         $descriptorSpec = [
@@ -251,6 +303,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
             'process' => $process,
             'started_at' => microtime(true),
             'pipes' => $pipes,
+            'transport' => $transport,
         ];
 
         return true;

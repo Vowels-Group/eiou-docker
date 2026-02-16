@@ -7,8 +7,8 @@
  * - Processor name identification
  * - Fast polling configuration for time-critical P2P routing
  * - Coordinator cycle: reap, recover, dispatch
- * - Worker dispatch with max worker limits
- * - Active worker count tracking
+ * - Per-transport worker limits (HTTP: 50, Tor: 5)
+ * - Active worker count tracking (total and per-transport)
  * - Graceful shutdown with no active workers
  */
 
@@ -46,7 +46,7 @@ class P2pMessageProcessorTest extends TestCase
 
     private const TEST_LOCKFILE = '/tmp/test_p2p_lock.pid';
     private const TEST_WORKER_SCRIPT = '/tmp/test_worker.php';
-    private const TEST_MAX_WORKERS = 5;
+    private const TEST_MAX_WORKERS = ['http' => 5, 'https' => 5, 'tor' => 3];
 
     protected function setUp(): void
     {
@@ -174,10 +174,6 @@ class P2pMessageProcessorTest extends TestCase
 
     /**
      * Test processMessages calls reapWorkers as first step of coordinator cycle
-     *
-     * Since processMessages calls reapWorkers(), recoverStuckP2ps(), and
-     * dispatchWorkers() internally, we verify the full cycle runs by checking
-     * that dispatchWorkers returns its result (which depends on p2pRepository).
      */
     public function testProcessMessagesReapsFinishedWorkers(): void
     {
@@ -191,9 +187,6 @@ class P2pMessageProcessorTest extends TestCase
             self::TEST_LOCKFILE
         );
 
-        // Add a fake "finished" worker to activeWorkers via reflection
-        // Since we cannot create real proc_open resources in unit tests,
-        // we verify the method completes without error when activeWorkers is empty
         $result = $this->invokeProtectedMethod($processor, 'processMessages');
 
         // processMessages returns count from dispatchWorkers (0 when no queued messages)
@@ -202,22 +195,18 @@ class P2pMessageProcessorTest extends TestCase
 
     /**
      * Test processMessages dispatches new workers and returns spawned count
-     *
-     * When p2pRepository returns queued messages, dispatchWorkers attempts to
-     * spawn workers. Since spawnWorker uses proc_open (untestable in unit tests),
-     * we verify that the repository is queried with the correct limit.
      */
     public function testProcessMessagesDispatchesNewWorkers(): void
     {
         $queuedMessages = [
-            ['hash' => 'abc123'],
-            ['hash' => 'def456'],
+            ['hash' => 'abc123', 'sender_address' => 'http://node1.example.com'],
+            ['hash' => 'def456', 'sender_address' => 'http://node2.example.com'],
         ];
 
         // dispatchWorkers queries p2pRepository for queued messages
         $this->p2pRepository->expects($this->once())
             ->method('getQueuedP2pMessages')
-            ->with(Constants::STATUS_QUEUED, self::TEST_MAX_WORKERS)
+            ->with(Constants::STATUS_QUEUED, Constants::P2P_QUEUE_BATCH_SIZE)
             ->willReturn($queuedMessages);
 
         $processor = $this->createProcessorWithMockedDependencies(
@@ -245,9 +234,6 @@ class P2pMessageProcessorTest extends TestCase
 
     /**
      * Test processMessages runs recovery after the recovery interval has elapsed
-     *
-     * When lastRecoveryTime is far enough in the past, recoverStuckP2ps()
-     * should be called during the processMessages cycle.
      */
     public function testProcessMessagesRunsRecoveryAfterInterval(): void
     {
@@ -305,72 +291,127 @@ class P2pMessageProcessorTest extends TestCase
             self::TEST_LOCKFILE
         );
 
-        // lastRecoveryTime is set to microtime(true) by createProcessorWithMockedDependencies
-        // which means the interval hasn't elapsed yet
-
         $result = $this->invokeProtectedMethod($processor, 'processMessages');
 
         $this->assertEquals(0, $result);
     }
 
     // =========================================================================
-    // dispatchWorkers Tests
+    // dispatchWorkers Tests (Per-Transport Limits)
     // =========================================================================
 
     /**
-     * Test dispatchWorkers respects max worker limit
+     * Test dispatchWorkers respects per-transport worker limits
      *
-     * When activeWorkers count equals or exceeds maxWorkers, dispatchWorkers
-     * should return 0 immediately without querying the repository.
+     * When a transport has reached its max, queued P2Ps for that transport
+     * should be skipped while other transports can still spawn.
      */
-    public function testDispatchWorkersRespectsMaxWorkerLimit(): void
+    public function testDispatchWorkersRespectsPerTransportLimits(): void
     {
-        $this->p2pRepository->expects($this->never())
-            ->method('getQueuedP2pMessages');
+        // Tor limit is 3 in our test config
+        $queuedMessages = [
+            ['hash' => 'tor1', 'sender_address' => 'abcdef1234567890.onion'],
+            ['hash' => 'tor2', 'sender_address' => 'abcdef1234567891.onion'],
+        ];
+
+        $this->p2pRepository->expects($this->once())
+            ->method('getQueuedP2pMessages')
+            ->willReturn($queuedMessages);
 
         $processor = $this->createProcessorWithMockedDependencies(
             self::TEST_POLLER_CONFIG,
             self::TEST_LOCKFILE
         );
 
-        // Fill activeWorkers to maxWorkers via reflection
+        // Fill 3 Tor workers (at limit)
         $actualClassReflection = new ReflectionClass(P2pMessageProcessor::class);
         $activeWorkersProp = $actualClassReflection->getProperty('activeWorkers');
         $activeWorkersProp->setAccessible(true);
+        $activeWorkersProp->setValue($processor, [
+            1 => ['hash' => 'h1', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            2 => ['hash' => 'h2', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            3 => ['hash' => 'h3', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+        ]);
 
-        $fakeWorkers = [];
-        for ($i = 1; $i <= self::TEST_MAX_WORKERS; $i++) {
-            $fakeWorkers[$i] = [
-                'hash' => "hash_{$i}",
-                'process' => null,
-                'started_at' => microtime(true),
-                'pipes' => [],
-            ];
-        }
-        $activeWorkersProp->setValue($processor, $fakeWorkers);
+        // spawnWorker should NOT be called since Tor is at capacity
+        $processorMock = $this->getMockBuilder(P2pMessageProcessor::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['spawnWorker'])
+            ->getMock();
 
-        $result = $this->invokeProtectedMethod($processor, 'dispatchWorkers');
+        $this->copyProcessorProperties($processor, $processorMock);
+
+        $processorMock->expects($this->never())
+            ->method('spawnWorker');
+
+        $result = $this->invokeProtectedMethod($processorMock, 'dispatchWorkers');
 
         $this->assertEquals(0, $result);
     }
 
     /**
-     * Test dispatchWorkers spawns workers for queued P2Ps
+     * Test dispatchWorkers allows HTTP when Tor is full
      *
-     * When there are available worker slots and queued messages, dispatchWorkers
-     * should call spawnWorker for each queued message.
+     * HTTP P2Ps should still spawn even when Tor limit is reached.
      */
-    public function testDispatchWorkersSpawnsForQueuedP2ps(): void
+    public function testDispatchWorkersAllowsHttpWhenTorIsFull(): void
     {
         $queuedMessages = [
-            ['hash' => 'hash_a'],
-            ['hash' => 'hash_b'],
-            ['hash' => 'hash_c'],
+            ['hash' => 'tor_skip', 'sender_address' => 'abcdef1234567890.onion'],
+            ['hash' => 'http_ok', 'sender_address' => 'http://node1.example.com'],
         ];
 
         $this->p2pRepository->expects($this->once())
             ->method('getQueuedP2pMessages')
-            ->with(Constants::STATUS_QUEUED, self::TEST_MAX_WORKERS)
+            ->willReturn($queuedMessages);
+
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        // Fill Tor to capacity (3)
+        $actualClassReflection = new ReflectionClass(P2pMessageProcessor::class);
+        $activeWorkersProp = $actualClassReflection->getProperty('activeWorkers');
+        $activeWorkersProp->setAccessible(true);
+        $activeWorkersProp->setValue($processor, [
+            1 => ['hash' => 'h1', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            2 => ['hash' => 'h2', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            3 => ['hash' => 'h3', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+        ]);
+
+        $processorMock = $this->getMockBuilder(P2pMessageProcessor::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['spawnWorker'])
+            ->getMock();
+
+        $this->copyProcessorProperties($processor, $processorMock);
+
+        // Only the HTTP P2P should spawn (Tor skipped)
+        $processorMock->expects($this->once())
+            ->method('spawnWorker')
+            ->with('http_ok', 'http')
+            ->willReturn(true);
+
+        $result = $this->invokeProtectedMethod($processorMock, 'dispatchWorkers');
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test dispatchWorkers spawns workers for queued P2Ps
+     */
+    public function testDispatchWorkersSpawnsForQueuedP2ps(): void
+    {
+        $queuedMessages = [
+            ['hash' => 'hash_a', 'sender_address' => 'http://node1.example.com'],
+            ['hash' => 'hash_b', 'sender_address' => 'http://node2.example.com'],
+            ['hash' => 'hash_c', 'sender_address' => 'http://node3.example.com'],
+        ];
+
+        $this->p2pRepository->expects($this->once())
+            ->method('getQueuedP2pMessages')
+            ->with(Constants::STATUS_QUEUED, Constants::P2P_QUEUE_BATCH_SIZE)
             ->willReturn($queuedMessages);
 
         $processor = $this->createProcessorWithMockedDependencies(
@@ -396,17 +437,14 @@ class P2pMessageProcessorTest extends TestCase
     }
 
     /**
-     * Test dispatchWorkers returns correct spawned count
-     *
-     * When some spawnWorker calls succeed and some fail, the returned count
-     * should only reflect successful spawns.
+     * Test dispatchWorkers returns correct spawned count when some fail
      */
     public function testDispatchWorkersReturnsSpawnedCount(): void
     {
         $queuedMessages = [
-            ['hash' => 'hash_ok1'],
-            ['hash' => 'hash_fail'],
-            ['hash' => 'hash_ok2'],
+            ['hash' => 'hash_ok1', 'sender_address' => 'http://node1.example.com'],
+            ['hash' => 'hash_fail', 'sender_address' => 'http://node2.example.com'],
+            ['hash' => 'hash_ok2', 'sender_address' => 'http://node3.example.com'],
         ];
 
         $this->p2pRepository->expects($this->once())
@@ -436,39 +474,6 @@ class P2pMessageProcessorTest extends TestCase
     }
 
     /**
-     * Test dispatchWorkers queries with correct available slots
-     *
-     * When some workers are already active, the limit passed to
-     * getQueuedP2pMessages should be (maxWorkers - activeWorkers count).
-     */
-    public function testDispatchWorkersQueriesWithCorrectAvailableSlots(): void
-    {
-        // 2 workers already active, maxWorkers=5, so 3 slots available
-        $this->p2pRepository->expects($this->once())
-            ->method('getQueuedP2pMessages')
-            ->with(Constants::STATUS_QUEUED, 3)
-            ->willReturn([]);
-
-        $processor = $this->createProcessorWithMockedDependencies(
-            self::TEST_POLLER_CONFIG,
-            self::TEST_LOCKFILE
-        );
-
-        // Set 2 active workers via reflection
-        $actualClassReflection = new ReflectionClass(P2pMessageProcessor::class);
-        $activeWorkersProp = $actualClassReflection->getProperty('activeWorkers');
-        $activeWorkersProp->setAccessible(true);
-        $activeWorkersProp->setValue($processor, [
-            100 => ['hash' => 'h1', 'process' => null, 'started_at' => microtime(true), 'pipes' => []],
-            200 => ['hash' => 'h2', 'process' => null, 'started_at' => microtime(true), 'pipes' => []],
-        ]);
-
-        $result = $this->invokeProtectedMethod($processor, 'dispatchWorkers');
-
-        $this->assertEquals(0, $result);
-    }
-
-    /**
      * Test dispatchWorkers returns zero when no queued messages
      */
     public function testDispatchWorkersReturnsZeroWhenNoQueuedMessages(): void
@@ -485,6 +490,47 @@ class P2pMessageProcessorTest extends TestCase
         $result = $this->invokeProtectedMethod($processor, 'dispatchWorkers');
 
         $this->assertEquals(0, $result);
+    }
+
+    /**
+     * Test dispatchWorkers handles mixed transport messages correctly
+     *
+     * When batch contains both HTTP and Tor P2Ps, each transport's limit
+     * is enforced independently.
+     */
+    public function testDispatchWorkersHandlesMixedTransports(): void
+    {
+        $queuedMessages = [
+            ['hash' => 'http1', 'sender_address' => 'http://node1.example.com'],
+            ['hash' => 'tor1', 'sender_address' => 'abcdef1234567890.onion'],
+            ['hash' => 'http2', 'sender_address' => 'http://node2.example.com'],
+            ['hash' => 'tor2', 'sender_address' => 'abcdef1234567891.onion'],
+        ];
+
+        $this->p2pRepository->expects($this->once())
+            ->method('getQueuedP2pMessages')
+            ->willReturn($queuedMessages);
+
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        $processorMock = $this->getMockBuilder(P2pMessageProcessor::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['spawnWorker'])
+            ->getMock();
+
+        $this->copyProcessorProperties($processor, $processorMock);
+
+        // All 4 should spawn (both transports have capacity)
+        $processorMock->expects($this->exactly(4))
+            ->method('spawnWorker')
+            ->willReturn(true);
+
+        $result = $this->invokeProtectedMethod($processorMock, 'dispatchWorkers');
+
+        $this->assertEquals(4, $result);
     }
 
     // =========================================================================
@@ -519,12 +565,111 @@ class P2pMessageProcessorTest extends TestCase
         $activeWorkersProp = $actualClassReflection->getProperty('activeWorkers');
         $activeWorkersProp->setAccessible(true);
         $activeWorkersProp->setValue($processor, [
-            101 => ['hash' => 'h1', 'process' => null, 'started_at' => microtime(true), 'pipes' => []],
-            102 => ['hash' => 'h2', 'process' => null, 'started_at' => microtime(true), 'pipes' => []],
-            103 => ['hash' => 'h3', 'process' => null, 'started_at' => microtime(true), 'pipes' => []],
+            101 => ['hash' => 'h1', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'http'],
+            102 => ['hash' => 'h2', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            103 => ['hash' => 'h3', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'http'],
         ]);
 
         $this->assertEquals(3, $processor->getActiveWorkerCount());
+    }
+
+    /**
+     * Test getActiveWorkerCountByTransport returns correct per-transport counts
+     */
+    public function testGetActiveWorkerCountByTransportReturnsCounts(): void
+    {
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        $actualClassReflection = new ReflectionClass(P2pMessageProcessor::class);
+        $activeWorkersProp = $actualClassReflection->getProperty('activeWorkers');
+        $activeWorkersProp->setAccessible(true);
+        $activeWorkersProp->setValue($processor, [
+            101 => ['hash' => 'h1', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'http'],
+            102 => ['hash' => 'h2', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            103 => ['hash' => 'h3', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'http'],
+            104 => ['hash' => 'h4', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'tor'],
+            105 => ['hash' => 'h5', 'process' => null, 'started_at' => microtime(true), 'pipes' => [], 'transport' => 'https'],
+        ]);
+
+        $this->assertEquals(2, $processor->getActiveWorkerCountByTransport('http'));
+        $this->assertEquals(2, $processor->getActiveWorkerCountByTransport('tor'));
+        $this->assertEquals(1, $processor->getActiveWorkerCountByTransport('https'));
+        $this->assertEquals(0, $processor->getActiveWorkerCountByTransport('unknown'));
+    }
+
+    // =========================================================================
+    // getMessageTransport Tests
+    // =========================================================================
+
+    /**
+     * Test getMessageTransport identifies HTTP addresses
+     */
+    public function testGetMessageTransportIdentifiesHttp(): void
+    {
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        $result = $this->invokeProtectedMethod($processor, 'getMessageTransport', [
+            ['sender_address' => 'http://node1.example.com']
+        ]);
+
+        $this->assertEquals('http', $result);
+    }
+
+    /**
+     * Test getMessageTransport identifies HTTPS addresses
+     */
+    public function testGetMessageTransportIdentifiesHttps(): void
+    {
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        $result = $this->invokeProtectedMethod($processor, 'getMessageTransport', [
+            ['sender_address' => 'https://node1.example.com']
+        ]);
+
+        $this->assertEquals('https', $result);
+    }
+
+    /**
+     * Test getMessageTransport identifies Tor addresses
+     */
+    public function testGetMessageTransportIdentifiesTor(): void
+    {
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        $result = $this->invokeProtectedMethod($processor, 'getMessageTransport', [
+            ['sender_address' => 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef12.onion']
+        ]);
+
+        $this->assertEquals('tor', $result);
+    }
+
+    /**
+     * Test getMessageTransport falls back to default for missing address
+     */
+    public function testGetMessageTransportFallsBackToDefault(): void
+    {
+        $processor = $this->createProcessorWithMockedDependencies(
+            self::TEST_POLLER_CONFIG,
+            self::TEST_LOCKFILE
+        );
+
+        $result = $this->invokeProtectedMethod($processor, 'getMessageTransport', [
+            ['sender_address' => '']
+        ]);
+
+        $this->assertEquals(Constants::DEFAULT_TRANSPORT_MODE, $result);
     }
 
     // =========================================================================
@@ -541,14 +686,10 @@ class P2pMessageProcessorTest extends TestCase
             self::TEST_LOCKFILE
         );
 
-        // Verify activeWorkers is empty
         $this->assertEquals(0, $processor->getActiveWorkerCount());
 
-        // onShutdown should return without error when no active workers
-        // (it checks empty($this->activeWorkers) and returns early)
         $this->invokeProtectedMethod($processor, 'onShutdown');
 
-        // If we get here without exception, the test passes
         $this->assertEquals(0, $processor->getActiveWorkerCount());
     }
 
@@ -587,7 +728,6 @@ class P2pMessageProcessorTest extends TestCase
         $pollerConfigProp->setAccessible(true);
         $config = $pollerConfigProp->getValue($processor);
 
-        // Default P2P min interval should be <= 100ms for fast polling
         $this->assertLessThanOrEqual(100, $config['min_interval_ms']);
     }
 
@@ -603,7 +743,6 @@ class P2pMessageProcessorTest extends TestCase
         $pollerConfigProp->setAccessible(true);
         $config = $pollerConfigProp->getValue($processor);
 
-        // Default P2P max interval should be <= 5000ms
         $this->assertLessThanOrEqual(5000, $config['max_interval_ms']);
     }
 
@@ -619,7 +758,6 @@ class P2pMessageProcessorTest extends TestCase
         $pollerConfigProp->setAccessible(true);
         $config = $pollerConfigProp->getValue($processor);
 
-        // Default P2P idle interval should be <= 2000ms
         $this->assertLessThanOrEqual(2000, $config['idle_interval_ms']);
     }
 
@@ -635,7 +773,6 @@ class P2pMessageProcessorTest extends TestCase
         $pollerConfigProp->setAccessible(true);
         $config = $pollerConfigProp->getValue($processor);
 
-        // P2P min interval (100ms) should be less than cleanup min interval (1000ms)
         $this->assertLessThan(1000, $config['min_interval_ms']);
     }
 
@@ -654,7 +791,6 @@ class P2pMessageProcessorTest extends TestCase
         $pollerConfigProp = $reflection->getProperty('pollerConfig');
         $pollerConfigProp->setAccessible(true);
 
-        // Should still have an array, even if empty
         $this->assertIsArray($pollerConfigProp->getValue($processor));
     }
 
@@ -730,22 +866,23 @@ class P2pMessageProcessorTest extends TestCase
     }
 
     /**
-     * Test setMaxWorkers updates the limit
+     * Test setMaxWorkers updates the per-transport limits
      */
-    public function testSetMaxWorkersUpdatesLimit(): void
+    public function testSetMaxWorkersUpdatesLimits(): void
     {
         $processor = $this->createProcessorWithMockedDependencies(
             self::TEST_POLLER_CONFIG,
             self::TEST_LOCKFILE
         );
 
-        $processor->setMaxWorkers(10);
+        $limits = ['http' => 20, 'https' => 20, 'tor' => 3];
+        $processor->setMaxWorkers($limits);
 
         $actualClassReflection = new ReflectionClass(P2pMessageProcessor::class);
-        $maxProp = $actualClassReflection->getProperty('maxWorkers');
-        $maxProp->setAccessible(true);
+        $overrideProp = $actualClassReflection->getProperty('maxWorkersOverride');
+        $overrideProp->setAccessible(true);
 
-        $this->assertEquals(10, $maxProp->getValue($processor));
+        $this->assertEquals($limits, $overrideProp->getValue($processor));
     }
 
     // =========================================================================
@@ -822,15 +959,56 @@ class P2pMessageProcessorTest extends TestCase
     }
 
     // =========================================================================
+    // Constants Integration Tests
+    // =========================================================================
+
+    /**
+     * Test P2P_MAX_WORKERS is keyed by transport protocol
+     */
+    public function testMaxWorkersConstantIsKeyedByTransport(): void
+    {
+        $this->assertIsArray(Constants::P2P_MAX_WORKERS);
+        $this->assertArrayHasKey('http', Constants::P2P_MAX_WORKERS);
+        $this->assertArrayHasKey('https', Constants::P2P_MAX_WORKERS);
+        $this->assertArrayHasKey('tor', Constants::P2P_MAX_WORKERS);
+    }
+
+    /**
+     * Test Tor worker limit is lower than HTTP
+     */
+    public function testTorWorkerLimitIsLowerThanHttp(): void
+    {
+        $this->assertLessThan(
+            Constants::P2P_MAX_WORKERS['http'],
+            Constants::P2P_MAX_WORKERS['tor']
+        );
+    }
+
+    /**
+     * Test getMaxP2pWorkers returns correct per-transport values
+     */
+    public function testGetMaxP2pWorkersReturnsPerTransportValues(): void
+    {
+        $this->assertEquals(Constants::P2P_MAX_WORKERS['http'], Constants::getMaxP2pWorkers('http'));
+        $this->assertEquals(Constants::P2P_MAX_WORKERS['tor'], Constants::getMaxP2pWorkers('tor'));
+        $this->assertEquals(Constants::P2P_MAX_WORKERS['https'], Constants::getMaxP2pWorkers('https'));
+    }
+
+    /**
+     * Test getMaxP2pWorkers falls back to minimum for unknown transport
+     */
+    public function testGetMaxP2pWorkersFallsBackForUnknownTransport(): void
+    {
+        $result = Constants::getMaxP2pWorkers('unknown_protocol');
+        $this->assertEquals(min(Constants::P2P_MAX_WORKERS), $result);
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
 
     /**
      * Create a P2pMessageProcessor with mocked dependencies
-     *
-     * Sets up all properties via reflection, including the new coordinator
-     * properties (p2pRepository, activeWorkers, maxWorkers, workerScript,
-     * lastRecoveryTime, recoveryInterval).
      */
     private function createProcessorWithMockedDependencies(
         ?array $pollerConfig,
@@ -897,10 +1075,10 @@ class P2pMessageProcessorTest extends TestCase
         $activeWorkersProp->setAccessible(true);
         $activeWorkersProp->setValue($processor, []);
 
-        // Set maxWorkers
-        $maxWorkersProp = $actualClassReflection->getProperty('maxWorkers');
-        $maxWorkersProp->setAccessible(true);
-        $maxWorkersProp->setValue($processor, self::TEST_MAX_WORKERS);
+        // Set maxWorkersOverride (per-transport limits for testing)
+        $overrideProp = $actualClassReflection->getProperty('maxWorkersOverride');
+        $overrideProp->setAccessible(true);
+        $overrideProp->setValue($processor, self::TEST_MAX_WORKERS);
 
         // Set workerScript
         $workerScriptProp = $actualClassReflection->getProperty('workerScript');
@@ -922,9 +1100,6 @@ class P2pMessageProcessorTest extends TestCase
 
     /**
      * Copy all relevant properties from a configured processor to a partial mock
-     *
-     * Used when we need a partial mock with spawnWorker stubbed but all other
-     * properties correctly set up.
      */
     private function copyProcessorProperties(
         P2pMessageProcessor $source,
@@ -942,7 +1117,7 @@ class P2pMessageProcessorTest extends TestCase
         }
 
         // P2pMessageProcessor properties
-        $ownProps = ['p2pService', 'p2pRepository', 'activeWorkers', 'maxWorkers',
+        $ownProps = ['p2pService', 'p2pRepository', 'activeWorkers', 'maxWorkersOverride',
                      'workerScript', 'lastRecoveryTime', 'recoveryInterval'];
         foreach ($ownProps as $propName) {
             $prop = $actualClassReflection->getProperty($propName);
