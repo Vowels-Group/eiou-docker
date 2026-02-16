@@ -442,7 +442,6 @@ class TransportUtilityService implements TransportServiceInterface
             return [];
         }
 
-        $mh = curl_multi_init();
         $handles = [];     // recipient => CurlHandle
         $signingData = []; // recipient => ['signature' => ..., 'nonce' => ...]
 
@@ -462,24 +461,16 @@ class TransportUtilityService implements TransportServiceInterface
                 'nonce' => $signingResult['nonce']
             ];
 
-            $ch = $this->createCurlHandle($recipient, $signedPayload);
-            $handles[$recipient] = $ch;
-            curl_multi_add_handle($mh, $ch);
+            $handles[$recipient] = $this->createCurlHandle($recipient, $signedPayload);
         }
 
-        // Execute all handles in parallel
-        $active = null;
-        do {
-            $status = curl_multi_exec($mh, $active);
-            if ($active) {
-                curl_multi_select($mh);
-            }
-        } while ($active && $status === CURLM_OK);
+        // Execute with concurrency limit
+        $responses = $this->executeWithConcurrencyLimit($handles);
 
-        // Collect results
+        // Build results with signing data
         $results = [];
         foreach ($handles as $recipient => $ch) {
-            $response = curl_multi_getcontent($ch);
+            $response = $responses[$recipient] ?? null;
 
             if ($response === false || $response === null) {
                 $curlError = curl_error($ch);
@@ -505,11 +496,8 @@ class TransportUtilityService implements TransportServiceInterface
                 'nonce' => $signingData[$recipient]['nonce'] ?? ''
             ];
 
-            curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
         }
-
-        curl_multi_close($mh);
 
         return $results;
     }
@@ -529,7 +517,6 @@ class TransportUtilityService implements TransportServiceInterface
             return [];
         }
 
-        $mh = curl_multi_init();
         $handles = [];     // key => CurlHandle
         $signingData = []; // key => ['signature' => ..., 'nonce' => ...]
 
@@ -553,24 +540,16 @@ class TransportUtilityService implements TransportServiceInterface
                 'nonce' => $signingResult['nonce']
             ];
 
-            $ch = $this->createCurlHandle($recipient, $signedPayload);
-            $handles[$key] = $ch;
-            curl_multi_add_handle($mh, $ch);
+            $handles[$key] = $this->createCurlHandle($recipient, $signedPayload);
         }
 
-        // Execute all handles in parallel
-        $active = null;
-        do {
-            $status = curl_multi_exec($mh, $active);
-            if ($active) {
-                curl_multi_select($mh);
-            }
-        } while ($active && $status === CURLM_OK);
+        // Execute with concurrency limit
+        $responses = $this->executeWithConcurrencyLimit($handles);
 
-        // Collect results
+        // Build results with signing data
         $results = [];
         foreach ($handles as $key => $ch) {
-            $response = curl_multi_getcontent($ch);
+            $response = $responses[$key] ?? null;
 
             if ($response === false || $response === null) {
                 $curlError = curl_error($ch);
@@ -595,13 +574,80 @@ class TransportUtilityService implements TransportServiceInterface
                 'nonce' => $signingData[$key]['nonce'] ?? ''
             ];
 
-            curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
         }
 
+        return $results;
+    }
+
+    /**
+     * Execute curl handles with a sliding-window concurrency limit.
+     *
+     * Instead of firing all handles simultaneously (which overwhelms Tor circuits
+     * when broadcasting to many contacts), this processes handles in a sliding window:
+     * up to $maxConcurrent run at once, and as each completes, the next is added.
+     *
+     * @param array<string, \CurlHandle> $handles All curl handles keyed by identifier
+     * @param int $maxConcurrent Max simultaneous connections (0 = unlimited)
+     * @return array<string, string|null> Responses keyed by the same identifiers
+     */
+    private function executeWithConcurrencyLimit(array $handles, int $maxConcurrent = 0): array {
+        if (empty($handles)) {
+            return [];
+        }
+
+        if ($maxConcurrent <= 0) {
+            $maxConcurrent = Constants::CURL_MULTI_MAX_CONCURRENT;
+        }
+
+        $mh = curl_multi_init();
+        $responses = [];
+        $pendingKeys = array_keys($handles);
+        $activeMap = []; // spl_object_id => key (for fast lookup of completed handles)
+
+        // Seed the initial window
+        while (!empty($pendingKeys) && count($activeMap) < $maxConcurrent) {
+            $key = array_shift($pendingKeys);
+            curl_multi_add_handle($mh, $handles[$key]);
+            $activeMap[spl_object_id($handles[$key])] = $key;
+        }
+
+        // Process with sliding window
+        do {
+            curl_multi_exec($mh, $running);
+
+            // Check for completed handles and swap in pending ones
+            while ($info = curl_multi_info_read($mh)) {
+                if ($info['msg'] !== CURLMSG_DONE) {
+                    continue;
+                }
+
+                $doneCh = $info['handle'];
+                $objectId = spl_object_id($doneCh);
+                $doneKey = $activeMap[$objectId] ?? null;
+
+                if ($doneKey !== null) {
+                    $responses[$doneKey] = curl_multi_getcontent($doneCh);
+                    curl_multi_remove_handle($mh, $doneCh);
+                    unset($activeMap[$objectId]);
+
+                    // Add next pending handle
+                    if (!empty($pendingKeys)) {
+                        $nextKey = array_shift($pendingKeys);
+                        curl_multi_add_handle($mh, $handles[$nextKey]);
+                        $activeMap[spl_object_id($handles[$nextKey])] = $nextKey;
+                    }
+                }
+            }
+
+            if ($running > 0) {
+                curl_multi_select($mh);
+            }
+        } while ($running > 0 || !empty($activeMap));
+
         curl_multi_close($mh);
 
-        return $results;
+        return $responses;
     }
 
     /**
