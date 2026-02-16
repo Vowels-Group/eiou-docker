@@ -1223,7 +1223,10 @@ class ApiController {
                 'p2p_expiration_seconds' => $currentUser->getP2pExpirationTime(),
                 'max_output_lines' => $currentUser->getMaxOutput(),
                 'default_transport_mode' => $currentUser->getDefaultTransportMode(),
-                'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled()
+                'hostname' => $currentUser->getHttpAddress(),
+                'hostname_secure' => $currentUser->getHttpsAddress(),
+                'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled(),
+                'auto_backup_enabled' => $currentUser->getAutoBackupEnabled()
             ]
         ]);
     }

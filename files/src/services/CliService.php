@@ -492,6 +492,8 @@ class CliService implements CliServiceInterface {
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
             'default_transport_mode' => $this->currentUser->getDefaultTransportMode(),
+            'hostname' => $this->currentUser->getHttpAddress(),
+            'hostname_secure' => $this->currentUser->getHttpsAddress(),
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled()
         ];
@@ -509,6 +511,8 @@ class CliService implements CliServiceInterface {
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
             echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
+            if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
+            if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
         }
