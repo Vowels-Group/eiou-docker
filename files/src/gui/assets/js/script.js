@@ -522,7 +522,7 @@ function openTransactionModal(index) {
 
     // Header with amount
     html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + (tx.type === 'sent' ? '#ff6b6b' : '#20c997') + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
-    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
     html += '<div style="color: white; margin-top: 0.5rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
@@ -591,7 +591,7 @@ function openTransactionModal(index) {
         if (tx.p2p_amount) {
             html += '<div class="tx-detail-row">';
             html += '<div class="tx-detail-label">Amount to Recipient</div>';
-            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -599,7 +599,7 @@ function openTransactionModal(index) {
         if (tx.p2p_fee) {
             html += '<div class="tx-detail-row">';
             html += '<div class="tx-detail-label">Transaction Fee</div>';
-            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_fee).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_fee).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -763,7 +763,7 @@ function initializeTransactionToast() {
 
             showToast(
                 'Sending ' + txType + ' Transaction',
-                'Sending $' + amountValue + ' ' + currencyValue + ' to ' + recipient + '...',
+                'Sending ' + amountValue + ' ' + currencyValue + ' to ' + recipient + '...',
                 'info'
             );
         });
@@ -2217,7 +2217,7 @@ function showContactTxDetail(index) {
 
     // Header with amount
     html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + gradientEnd + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
-    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
     html += '<div style="color: white; margin-top: 0.5rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 

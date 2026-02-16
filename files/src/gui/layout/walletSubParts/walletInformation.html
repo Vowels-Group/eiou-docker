@@ -14,15 +14,33 @@
         </div>
         
         <div class="wallet-stats-row">
+            <?php if (!empty($totalBalanceByCurrency)): ?>
+            <?php foreach ($totalBalanceByCurrency as $bal): ?>
             <div class="balance-display">
-                <div class="balance-amount"><?php echo $totalBalance; ?> <span class="balance-amount-currency">USD</span></div>
+                <div class="balance-amount"><?php echo htmlspecialchars($bal['total']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($bal['currency']); ?></span></div>
                 <div class="balance-currency">Total Balance</div>
             </div>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <div class="balance-display">
+                <div class="balance-amount">0.00 <span class="balance-amount-currency">USD</span></div>
+                <div class="balance-currency">Total Balance</div>
+            </div>
+            <?php endif; ?>
 
+            <?php if (!empty($totalEarningsByCurrency)): ?>
+            <?php foreach ($totalEarningsByCurrency as $earn): ?>
             <div class="balance-display balance-earnings">
-                <div class="balance-amount"><?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?> <span class="balance-amount-currency">USD</span></div>
+                <div class="balance-amount"><?php echo htmlspecialchars($earn['total']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($earn['currency']); ?></span></div>
                 <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
             </div>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <div class="balance-display balance-earnings">
+                <div class="balance-amount">0.00 <span class="balance-amount-currency">USD</span></div>
+                <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
+            </div>
+            <?php endif; ?>
 
             <?php if (!empty($totalAvailableCreditByCurrency)): ?>
             <?php foreach ($totalAvailableCreditByCurrency as $credit): ?>
@@ -33,7 +51,7 @@
             <?php endforeach; ?>
             <?php else: ?>
             <div class="balance-display balance-credit">
-                <div class="balance-amount">0.00</div>
+                <div class="balance-amount">0.00 <span class="balance-amount-currency">USD</span></div>
                 <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
             </div>
             <?php endif; ?>

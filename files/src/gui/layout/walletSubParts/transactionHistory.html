@@ -62,7 +62,7 @@
                     <div class="tx-in-progress-details" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
                         <?php if (!empty($ipTx['fee_amount'])): ?>
-                        <div><i class="fas fa-coins"></i> Fee: $<?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
+                        <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -73,7 +73,7 @@
                     <?php endif; ?>
                 </div>
                 <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
-                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?>$<?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
+                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -131,7 +131,7 @@
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
+                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
                         <i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i>
                     </div>
                 </div>

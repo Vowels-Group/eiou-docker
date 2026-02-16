@@ -108,6 +108,30 @@ if (isset($_SESSION['message'])) {
 $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
 $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTotalEarnings());
+
+// Per-currency balance data for future-proof dashboard display
+$totalBalanceByCurrency = [];
+$balancesRaw = $serviceContainer->getBalanceRepository()->getUserBalance();
+if (!empty($balancesRaw)) {
+    foreach ($balancesRaw as $bal) {
+        $totalBalanceByCurrency[] = [
+            'currency' => $bal['currency'],
+            'total' => $currencyUtility->convertCentsToDollars((int)($bal['total_balance'] ?? 0))
+        ];
+    }
+}
+
+// Per-currency earnings data for future-proof dashboard display
+$totalEarningsByCurrency = [];
+$earningsRaw = $p2pService->getUserTotalEarningsByCurrency();
+if (!empty($earningsRaw)) {
+    foreach ($earningsRaw as $earn) {
+        $totalEarningsByCurrency[] = [
+            'currency' => $earn['currency'],
+            'total' => $currencyUtility->convertCentsToDollars((int)($earn['total_amount'] ?? 0))
+        ];
+    }
+}
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
