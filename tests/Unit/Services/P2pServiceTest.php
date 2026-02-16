@@ -2123,6 +2123,98 @@ class P2pServiceTest extends TestCase
     }
 
     /**
+     * Test originator P2P (with destination_address) uses sendMultiBatch
+     *
+     * When the original sender queues a P2P, the message has destination_address set.
+     * This should skip Path A (direct match) and enter Path B (broadcast), collecting
+     * contacts into megaBatchSends and firing sendMultiBatch. The destination contact
+     * itself should be filtered out from the batch.
+     */
+    public function testProcessQueuedP2pMessagesOriginatorUsesSendMultiBatch(): void
+    {
+        $p2pHash = self::TEST_HASH;
+        $originatorAddress = 'http://originator.test';
+        $destinationAddress = 'http://destination.test';
+
+        $queuedMessage = [
+            'hash' => $p2pHash,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'sender_address' => $originatorAddress,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 0,
+            'max_request_level' => 5,
+            'fee_amount' => 0,
+            'expiration' => '1234567890000000',
+            'status' => Constants::STATUS_QUEUED,
+            'destination_address' => $destinationAddress  // Originator has destination set
+        ];
+
+        $contacts = [
+            ['http' => 'http://contact1.test', 'pubkey' => 'pubkey1'],
+            ['http' => $destinationAddress, 'pubkey' => 'dest-pubkey'],   // Should be filtered (destination)
+            ['http' => $originatorAddress, 'pubkey' => 'orig-pubkey'],    // Should be filtered (sender)
+            ['http' => 'http://contact4.test', 'pubkey' => 'pubkey4']
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn($contacts);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // Verify sendMultiBatch is called with exactly 2 sends:
+        // contact1 and contact4 (destination and sender filtered out)
+        $this->transportUtility->expects($this->once())
+            ->method('sendMultiBatch')
+            ->with($this->callback(function ($sends) use ($destinationAddress, $originatorAddress) {
+                if (count($sends) !== 2) return false;
+                foreach ($sends as $send) {
+                    // Destination and sender addresses must be excluded
+                    if ($send['recipient'] === $destinationAddress) return false;
+                    if ($send['recipient'] === $originatorAddress) return false;
+                    if (!isset($send['key'], $send['recipient'], $send['payload'])) return false;
+                }
+                return true;
+            }))
+            ->willReturnCallback(function ($sends) {
+                $results = [];
+                foreach ($sends as $send) {
+                    $results[$send['key']] = [
+                        'response' => '{"status":"inserted"}',
+                        'signature' => 'sig',
+                        'nonce' => 'nonce'
+                    ];
+                }
+                return $results;
+            });
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn(['status' => Constants::STATUS_QUEUED]);
+
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($p2pHash, Constants::STATUS_SENT);
+
+        ob_start();
+        $result = $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
      * Test parallel broadcast uses transportUtility->sendMultiBatch with correct sends
      *
      * Verifies that the refactored broadcast loop collects eligible contacts
