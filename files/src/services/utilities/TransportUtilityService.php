@@ -173,6 +173,29 @@ class TransportUtilityService implements TransportServiceInterface
     }
 
     /**
+     * Get the curl_multi concurrency limit for a set of recipient addresses.
+     *
+     * Looks up CURL_MULTI_MAX_CONCURRENT by protocol. When the batch contains
+     * mixed protocols, returns the most restrictive (lowest) limit.
+     * Unknown protocols fall back to the lowest configured value.
+     *
+     * @param string[] $addresses Recipient addresses in this batch
+     * @return int Max concurrent connections to use
+     */
+    public function getConcurrencyLimit(array $addresses): int {
+        $limits = Constants::CURL_MULTI_MAX_CONCURRENT;
+        $fallback = min($limits);
+        $min = PHP_INT_MAX;
+
+        foreach ($addresses as $address) {
+            $protocol = $this->determineTransportType($address) ?? '';
+            $min = min($min, $limits[$protocol] ?? $fallback);
+        }
+
+        return $min === PHP_INT_MAX ? $fallback : $min;
+    }
+
+    /**
      *  Add random number to value (either 0 or 1)
      *
      * @param int A number
@@ -376,6 +399,282 @@ class TransportUtilityService implements TransportServiceInterface
         curl_close($ch);
         // Return the response from the recipient
         return $response;
+    }
+
+    /**
+     * Create a configured but un-executed curl handle for a recipient.
+     *
+     * Extracts curl setup logic from sendByHttp() and sendByTor() into a shared helper.
+     * Auto-detects Tor vs HTTP based on address.
+     *
+     * @param string $recipient The recipient address
+     * @param string $signedPayload The JSON-encoded signed payload
+     * @return \CurlHandle The configured curl handle
+     */
+    public function createCurlHandle(string $recipient, string $signedPayload): \CurlHandle {
+        $ch = curl_init();
+
+        if ($this->isTorAddress($recipient)) {
+            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
+            curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
+            curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
+        } else {
+            $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
+            $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+
+            // SSL options for HTTPS connections
+            if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
+                $verifySsl = getenv('P2P_SSL_VERIFY') === 'true';
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
+
+                $caCertPath = getenv('P2P_CA_CERT');
+                if ($caCertPath && file_exists($caCertPath)) {
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                    curl_setopt($ch, CURLOPT_CAINFO, $caCertPath);
+                }
+            }
+        }
+
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+        curl_setopt($ch, CURLOPT_POST, true);
+
+        return $ch;
+    }
+
+    /**
+     * Send a payload to multiple recipients in parallel using curl_multi.
+     *
+     * Signs the payload separately for each recipient (unique nonce/signature per send),
+     * creates curl handles via createCurlHandle(), and executes all in parallel.
+     *
+     * @param array $recipients Array of recipient addresses
+     * @param array $payload The data payload to send (will be signed per-recipient)
+     * @return array<string, array{response: string, signature: string, nonce: string}> Results keyed by recipient address
+     */
+    public function sendBatch(array $recipients, array $payload): array {
+        if (empty($recipients)) {
+            return [];
+        }
+
+        $handles = [];     // recipient => CurlHandle
+        $signingData = []; // recipient => ['signature' => ..., 'nonce' => ...]
+
+        // Sign and create handles for each recipient
+        foreach ($recipients as $recipient) {
+            $signingResult = $this->signWithCapture($payload);
+            if ($signingResult === false) {
+                Logger::getInstance()->warning("Failed to sign payload for batch recipient", [
+                    'recipient' => $recipient
+                ]);
+                continue;
+            }
+
+            $signedPayload = json_encode($signingResult['envelope']);
+            $signingData[$recipient] = [
+                'signature' => $signingResult['signature'],
+                'nonce' => $signingResult['nonce']
+            ];
+
+            $handles[$recipient] = $this->createCurlHandle($recipient, $signedPayload);
+        }
+
+        $responses = $this->executeWithConcurrencyLimit(
+            $handles,
+            $this->getConcurrencyLimit($recipients)
+        );
+
+        // Build results with signing data
+        $results = [];
+        foreach ($handles as $recipient => $ch) {
+            $response = $responses[$recipient] ?? null;
+
+            if ($response === false || $response === null) {
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
+
+                $transportType = $this->isTorAddress($recipient) ? 'TOR' : 'HTTP';
+                Logger::getInstance()->warning("$transportType batch request failed", [
+                    'recipient' => $recipient,
+                    'curl_error' => $curlError,
+                    'curl_errno' => $curlErrno
+                ]);
+
+                $response = json_encode([
+                    'status' => 'error',
+                    'message' => "$transportType request failed: " . $curlError,
+                    'error_code' => $curlErrno
+                ]);
+            }
+
+            $results[$recipient] = [
+                'response' => $response,
+                'signature' => $signingData[$recipient]['signature'] ?? '',
+                'nonce' => $signingData[$recipient]['nonce'] ?? ''
+            ];
+
+            curl_close($ch);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Send different payloads to multiple recipients in parallel using curl_multi.
+     *
+     * Unlike sendBatch() which sends the same payload to all recipients, this method
+     * accepts per-send payloads — used when broadcasting multiple P2P messages in one
+     * curl_multi call (each P2P has a different hash/amount/etc).
+     *
+     * @param array $sends Array of ['key' => string, 'recipient' => string, 'payload' => array]
+     * @return array<string, array{response: string, signature: string, nonce: string}> Results keyed by send key
+     */
+    public function sendMultiBatch(array $sends): array {
+        if (empty($sends)) {
+            return [];
+        }
+
+        $handles = [];     // key => CurlHandle
+        $signingData = []; // key => ['signature' => ..., 'nonce' => ...]
+
+        foreach ($sends as $send) {
+            $key = $send['key'];
+            $recipient = $send['recipient'];
+            $payload = $send['payload'];
+
+            $signingResult = $this->signWithCapture($payload);
+            if ($signingResult === false) {
+                Logger::getInstance()->warning("Failed to sign payload for multi-batch send", [
+                    'key' => $key,
+                    'recipient' => $recipient
+                ]);
+                continue;
+            }
+
+            $signedPayload = json_encode($signingResult['envelope']);
+            $signingData[$key] = [
+                'signature' => $signingResult['signature'],
+                'nonce' => $signingResult['nonce']
+            ];
+
+            $handles[$key] = $this->createCurlHandle($recipient, $signedPayload);
+        }
+
+        $responses = $this->executeWithConcurrencyLimit(
+            $handles,
+            $this->getConcurrencyLimit(array_column($sends, 'recipient'))
+        );
+
+        // Build results with signing data
+        $results = [];
+        foreach ($handles as $key => $ch) {
+            $response = $responses[$key] ?? null;
+
+            if ($response === false || $response === null) {
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
+
+                Logger::getInstance()->warning("Multi-batch request failed", [
+                    'key' => $key,
+                    'curl_error' => $curlError,
+                    'curl_errno' => $curlErrno
+                ]);
+
+                $response = json_encode([
+                    'status' => 'error',
+                    'message' => "Request failed: " . $curlError,
+                    'error_code' => $curlErrno
+                ]);
+            }
+
+            $results[$key] = [
+                'response' => $response,
+                'signature' => $signingData[$key]['signature'] ?? '',
+                'nonce' => $signingData[$key]['nonce'] ?? ''
+            ];
+
+            curl_close($ch);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Execute curl handles with a sliding-window concurrency limit.
+     *
+     * Instead of firing all handles simultaneously (which overwhelms Tor circuits
+     * when broadcasting to many contacts), this processes handles in a sliding window:
+     * up to $maxConcurrent run at once, and as each completes, the next is added.
+     *
+     * @param array<string, \CurlHandle> $handles All curl handles keyed by identifier
+     * @param int $maxConcurrent Max simultaneous connections (defaults to HTTP limit)
+     * @return array<string, string|null> Responses keyed by the same identifiers
+     */
+    private function executeWithConcurrencyLimit(array $handles, int $maxConcurrent = 0): array {
+        if (empty($handles)) {
+            return [];
+        }
+
+        if ($maxConcurrent <= 0) {
+            $maxConcurrent = min(Constants::CURL_MULTI_MAX_CONCURRENT);
+        }
+
+        $mh = curl_multi_init();
+        $responses = [];
+        $pendingKeys = array_keys($handles);
+        $activeMap = []; // spl_object_id => key (for fast lookup of completed handles)
+
+        // Seed the initial window
+        while (!empty($pendingKeys) && count($activeMap) < $maxConcurrent) {
+            $key = array_shift($pendingKeys);
+            curl_multi_add_handle($mh, $handles[$key]);
+            $activeMap[spl_object_id($handles[$key])] = $key;
+        }
+
+        // Process with sliding window
+        do {
+            curl_multi_exec($mh, $running);
+
+            // Check for completed handles and swap in pending ones
+            while ($info = curl_multi_info_read($mh)) {
+                if ($info['msg'] !== CURLMSG_DONE) {
+                    continue;
+                }
+
+                $doneCh = $info['handle'];
+                $objectId = spl_object_id($doneCh);
+                $doneKey = $activeMap[$objectId] ?? null;
+
+                if ($doneKey !== null) {
+                    $responses[$doneKey] = curl_multi_getcontent($doneCh);
+                    curl_multi_remove_handle($mh, $doneCh);
+                    unset($activeMap[$objectId]);
+
+                    // Add next pending handle
+                    if (!empty($pendingKeys)) {
+                        $nextKey = array_shift($pendingKeys);
+                        curl_multi_add_handle($mh, $handles[$nextKey]);
+                        $activeMap[spl_object_id($handles[$nextKey])] = $nextKey;
+                    }
+                }
+            }
+
+            if ($running > 0) {
+                curl_multi_select($mh);
+            }
+        } while ($running > 0 || !empty($activeMap));
+
+        curl_multi_close($mh);
+
+        return $responses;
     }
 
     /**

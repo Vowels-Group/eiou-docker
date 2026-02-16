@@ -817,6 +817,475 @@ class P2pServiceCascadeCancelTest extends TestCase
     }
 
     // =========================================================================
+    // handleP2pRequest() - Max Level Boundary Immediate Cancel Tests
+    // =========================================================================
+
+    /**
+     * Test that max level boundary in fast mode cancels without sending notification
+     *
+     * When requestLevel == maxRequestLevel and fast=1, the node should store as
+     * cancelled but NOT send cancel notification upstream (fast mode doesn't use
+     * response counting, so cancel notifications are wasteful and would get
+     * ignored by the recipient anyway).
+     */
+    public function testHandleP2pRequestMaxLevelBoundaryFastModeSendsCancel(): void
+    {
+        $senderAddress = 'http://upstream-sender.test';
+
+        $request = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'expiration' => '1234567890000000',
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'requestLevel' => 5,
+            'maxRequestLevel' => 5, // Equal to requestLevel = boundary
+            'fast' => 1,
+            'hopWait' => 25,
+            'signature' => 'test-signature',
+        ];
+
+        // matchYourselfP2P must return false (not the destination)
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://this-node.test');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://this-node.test']);
+
+        // calculateRequestedAmount dependencies
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(null);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        // P2P should be stored with status 'cancelled' (not 'queued')
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($data) {
+                    return $data['status'] === Constants::STATUS_CANCELLED
+                        && $data['requestLevel'] === 5
+                        && $data['maxRequestLevel'] === 5;
+                }),
+                null // relay node, no destination
+            );
+
+        // Sender should still be recorded
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('insertSender')
+            ->with(self::TEST_HASH, $senderAddress, self::TEST_PUBLIC_KEY);
+
+        // Cancel notification SHOULD be sent for fast mode (needed for cancel cascade)
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+                'destination_address' => null,
+                'sender_address' => $senderAddress,
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        $this->p2pSenderRepository->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['sender_address' => $senderAddress, 'sender_pubkey' => self::TEST_PUBLIC_KEY],
+            ]);
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                $senderAddress,
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['cancelled'] === true
+                        && $payload['hash'] === self::TEST_HASH;
+                }),
+                $this->stringContains('cancel-'),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'cancel-' . self::TEST_HASH . '-test',
+            ]);
+
+        // P2P should NOT be queued
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleP2pRequest($request);
+    }
+
+    /**
+     * Test that max level boundary in best-fee mode sends cancel notification
+     *
+     * When requestLevel == maxRequestLevel and fast=0, the node should store as
+     * cancelled AND send cancel notification upstream for response counting.
+     */
+    public function testHandleP2pRequestMaxLevelBoundaryBestFeeSendsCancel(): void
+    {
+        $senderAddress = 'http://upstream-sender.test';
+
+        $request = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'expiration' => '1234567890000000',
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'requestLevel' => 5,
+            'maxRequestLevel' => 5, // Equal to requestLevel = boundary
+            'fast' => false,
+            'hopWait' => 25,
+            'signature' => 'test-signature',
+        ];
+
+        // matchYourselfP2P must return false (not the destination)
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://this-node.test');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://this-node.test']);
+
+        // calculateRequestedAmount dependencies
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(null);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        // P2P should be stored with status 'cancelled'
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($data) {
+                    return $data['status'] === Constants::STATUS_CANCELLED
+                        && $data['requestLevel'] === 5
+                        && $data['maxRequestLevel'] === 5;
+                }),
+                null
+            );
+
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('insertSender')
+            ->with(self::TEST_HASH, $senderAddress, self::TEST_PUBLIC_KEY);
+
+        // Cancel notification SHOULD be sent for best-fee mode
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+                'destination_address' => null,
+                'sender_address' => $senderAddress,
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        $this->p2pSenderRepository->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['sender_address' => $senderAddress, 'sender_pubkey' => self::TEST_PUBLIC_KEY],
+            ]);
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                $senderAddress,
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['cancelled'] === true
+                        && $payload['hash'] === self::TEST_HASH;
+                }),
+                $this->stringContains('cancel-'),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'cancel-' . self::TEST_HASH . '-test',
+            ]);
+
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleP2pRequest($request);
+    }
+
+    /**
+     * Test that reAdjustP2pLevel lowering maxRequestLevel triggers cancel with notification
+     *
+     * When a relay node has maxP2pLevel=0 (or very low), reAdjustP2pLevel may
+     * lower maxRequestLevel to exactly requestLevel, creating a boundary condition.
+     * Cancel notification is sent upstream for all modes (fast and best-fee).
+     */
+    public function testHandleP2pRequestReAdjustedLevelBoundaryCancelsImmediately(): void
+    {
+        $senderAddress = 'http://upstream.test';
+
+        // maxRequestLevel starts at 10, but reAdjustP2pLevel will lower it
+        $request = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'expiration' => '1234567890000000',
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'requestLevel' => 5,
+            'maxRequestLevel' => 10, // Will be lowered by reAdjustP2pLevel
+            'fast' => 1,
+            'hopWait' => 25,
+            'signature' => 'test-signature',
+        ];
+
+        // Create service with maxP2pLevel=0 to trigger re-adjustment boundary
+        $userContextZeroLevel = $this->createMock(UserContext::class);
+        $userContextZeroLevel->method('getDefaultFee')->willReturn(1.0);
+        $userContextZeroLevel->method('getMinimumFee')->willReturn(10.0);
+        $userContextZeroLevel->method('getMaxP2pLevel')->willReturn(0); // Zero relay hops
+        $userContextZeroLevel->method('getMaxFee')->willReturn(5.0);
+        $userContextZeroLevel->method('getPublicKey')->willReturn(self::TEST_PUBLIC_KEY);
+        $userContextZeroLevel->method('getP2pExpirationTime')->willReturn(300);
+        $userContextZeroLevel->method('getUserLocaters')
+            ->willReturn(['http' => 'http://this-node.test']);
+
+        $serviceZeroLevel = new P2pService(
+            $this->contactService,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->transactionRepository,
+            $this->utilityContainer,
+            $userContextZeroLevel,
+            $this->messageDeliveryService,
+            $this->p2pSenderRepository
+        );
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://this-node.test');
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(null);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        // reAdjustP2pLevel: maxP2pLevel=0, requestLevel(5)+0=5 < maxRequestLevel(10),
+        // so returns requestLevel+0 = 5. Now requestLevel(5) >= maxRequestLevel(5).
+
+        // P2P stored as cancelled
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($data) {
+                    return $data['status'] === Constants::STATUS_CANCELLED
+                        && $data['maxRequestLevel'] === 5; // Re-adjusted from 10 to 5
+                }),
+                null
+            );
+
+        // Cancel notification SHOULD be sent (needed for cancel cascade in all modes)
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+                'destination_address' => null,
+                'sender_address' => $senderAddress,
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        $this->p2pSenderRepository->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['sender_address' => $senderAddress, 'sender_pubkey' => self::TEST_PUBLIC_KEY],
+            ]);
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                $senderAddress,
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['cancelled'] === true
+                        && $payload['hash'] === self::TEST_HASH;
+                }),
+                $this->stringContains('cancel-'),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'cancel-' . self::TEST_HASH . '-test',
+            ]);
+
+        // Should NOT be queued
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $serviceZeroLevel->handleP2pRequest($request);
+    }
+
+    /**
+     * Test that normal relay (requestLevel < maxRequestLevel) still queues for broadcast
+     *
+     * When requestLevel < maxRequestLevel after re-adjustment, the node has room
+     * for more hops. It should store and queue normally, NOT trigger immediate cancel.
+     */
+    public function testHandleP2pRequestNormalRelayQueuesForBroadcast(): void
+    {
+        $senderAddress = 'http://upstream.test';
+
+        $request = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'expiration' => '1234567890000000',
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'requestLevel' => 3,
+            'maxRequestLevel' => 8, // Room for more hops
+            'fast' => 1,
+            'hopWait' => 25,
+            'signature' => 'test-signature',
+        ];
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://this-node.test');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://this-node.test']);
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(null);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        // P2P should be stored (not with cancelled status)
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($data) {
+                    return !isset($data['status']) || $data['status'] !== Constants::STATUS_CANCELLED;
+                }),
+                null
+            );
+
+        // Should be queued for broadcast
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_QUEUED);
+
+        // No cancel notification should be sent
+        $this->messageDeliveryService->expects($this->never())
+            ->method('sendMessage');
+
+        $this->service->handleP2pRequest($request);
+    }
+
+    /**
+     * Test that destination match at max level boundary still processes normally
+     *
+     * When requestLevel == maxRequestLevel but this node IS the destination,
+     * it should handle normally (store as found, send RP2P back), NOT cancel.
+     * The destination match check happens before the boundary check.
+     */
+    public function testHandleP2pRequestDestinationMatchAtBoundaryDoesNotCancel(): void
+    {
+        $senderAddress = 'http://upstream.test';
+        $myAddress = 'http://destination-node.test';
+
+        // Create a hash that matches this node's address
+        $salt = 'test-salt';
+        $time = '1234567890';
+        $matchingHash = hash(Constants::HASH_ALGORITHM, $myAddress . $salt . $time);
+
+        $request = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => $matchingHash,
+            'salt' => $salt,
+            'time' => $time,
+            'expiration' => '1234567890000000',
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'requestLevel' => 5,
+            'maxRequestLevel' => 5, // At boundary, but we ARE the destination
+            'fast' => 1,
+            'hopWait' => 25,
+            'signature' => 'test-signature',
+        ];
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn($myAddress);
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => $myAddress]);
+
+        // P2P should be stored as 'found' (destination match), NOT cancelled
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($data) {
+                    return $data['status'] === 'found';
+                }),
+                $this->anything()
+            );
+
+        // RP2P response should be sent back (not a cancel)
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1700000000000000);
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                $senderAddress,
+                $this->callback(function ($payload) {
+                    // RP2P response, not a cancel
+                    return $payload['type'] === 'rp2p'
+                        && !isset($payload['cancelled']);
+                }),
+                $this->anything(),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'response-test',
+            ]);
+
+        // updateStatus should NOT be called with 'cancelled'
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleP2pRequest($request);
+    }
+
+    // =========================================================================
     // Cancel Payload Verification Tests
     // =========================================================================
 

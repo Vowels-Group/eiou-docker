@@ -4,6 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Contracts\BalanceServiceInterface;
+use Eiou\Core\Constants;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionContactRepository;
 use Eiou\Database\AddressRepository;
@@ -72,7 +73,7 @@ class BalanceService implements BalanceServiceInterface
      * @param int $transactionLimit Maximum number of transactions to fetch per contact
      * @return array Converted contact information with balances
      */
-    public function contactBalanceConversion(array $contacts, int $transactionLimit = 5): array
+    public function contactBalanceConversion(array $contacts, int $transactionLimit = Constants::BALANCE_TRANSACTION_LIMIT): array
     {
         if (empty($contacts)) {
             return [];

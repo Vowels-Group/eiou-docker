@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Core\Constants;
+
 /**
  * Held Transaction Service Interface
  *
@@ -118,7 +120,7 @@ interface HeldTransactionServiceInterface
      * @param int $limit Maximum number of transactions to process
      * @return array Result with keys: processed_count, resumed_count, failed_count
      */
-    public function processHeldTransactions(int $limit = 10): array;
+    public function processHeldTransactions(int $limit = Constants::HELD_TX_BATCH_SIZE): array;
 
     /**
      * Get statistics about held transactions

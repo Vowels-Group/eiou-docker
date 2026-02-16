@@ -650,4 +650,59 @@ class TransportUtilityServiceTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    // =========================================================================
+    // createCurlHandle Tests
+    // =========================================================================
+
+    /**
+     * Test createCurlHandle returns a CurlHandle for HTTP recipient
+     */
+    public function testCreateCurlHandleReturnsHandleForHttp(): void
+    {
+        $this->userContext->method('getPrivateKey')
+            ->willReturn(null);
+
+        $handle = $this->service->createCurlHandle('http://example.com', '{"test":"data"}');
+
+        $this->assertInstanceOf(\CurlHandle::class, $handle);
+        curl_close($handle);
+    }
+
+    /**
+     * Test createCurlHandle returns a CurlHandle for Tor recipient
+     */
+    public function testCreateCurlHandleReturnsHandleForTor(): void
+    {
+        $handle = $this->service->createCurlHandle('abcdef1234567890.onion', '{"test":"data"}');
+
+        $this->assertInstanceOf(\CurlHandle::class, $handle);
+        curl_close($handle);
+    }
+
+    /**
+     * Test createCurlHandle returns a CurlHandle for HTTPS recipient
+     */
+    public function testCreateCurlHandleReturnsHandleForHttps(): void
+    {
+        $handle = $this->service->createCurlHandle('https://secure.example.com', '{"test":"data"}');
+
+        $this->assertInstanceOf(\CurlHandle::class, $handle);
+        curl_close($handle);
+    }
+
+    // =========================================================================
+    // sendBatch Tests
+    // =========================================================================
+
+    /**
+     * Test sendBatch returns empty array for empty recipients
+     */
+    public function testSendBatchReturnsEmptyForEmptyRecipients(): void
+    {
+        $result = $this->service->sendBatch([], ['type' => 'p2p']);
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
 }

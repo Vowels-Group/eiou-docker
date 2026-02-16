@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Core\Constants;
+
 /**
  * Locking Service Interface
  *
@@ -23,7 +25,7 @@ interface LockingServiceInterface
      * @param int $timeout Maximum seconds to wait for lock (0 = no wait)
      * @return bool True if lock acquired, false if timeout or error
      */
-    public function acquireLock(string $lockName, int $timeout = 30): bool;
+    public function acquireLock(string $lockName, int $timeout = Constants::DB_LOCK_TIMEOUT_SECONDS): bool;
 
     /**
      * Release a named lock

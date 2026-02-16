@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
@@ -89,7 +90,7 @@ class DebugRepository extends AbstractRepository {
      * @param int $limit Number of entries to retrieve
      * @return array
      */
-    public function getRecentDebugEntries(int $limit = 100): array {
+    public function getRecentDebugEntries(int $limit = Constants::DEBUG_RECENT_ENTRIES_LIMIT): array {
         if (!$this->getPdo()) {
             return [];
         }
@@ -134,7 +135,7 @@ class DebugRepository extends AbstractRepository {
      * @param int $maxEntries Maximum entries to prevent memory issues (default 10000)
      * @return array
      */
-    public function getAllDebugEntries(int $maxEntries = 10000): array {
+    public function getAllDebugEntries(int $maxEntries = Constants::DEBUG_ALL_ENTRIES_MAX): array {
         if (!$this->getPdo()) {
             return [];
         }
@@ -177,7 +178,7 @@ class DebugRepository extends AbstractRepository {
      * @param int $keepCount Number of entries to keep
      * @return bool
      */
-    public function pruneOldEntries(int $keepCount = 100): bool {
+    public function pruneOldEntries(int $keepCount = Constants::DEBUG_PRUNE_KEEP_COUNT): bool {
         if (!$this->getPdo()) {
             return false;
         }

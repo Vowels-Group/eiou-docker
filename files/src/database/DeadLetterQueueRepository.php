@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Utils\Logger;
 use DateTime;
@@ -104,7 +105,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
      * @param int $limit Maximum number of items
      * @return array Array of DLQ records
      */
-    public function getPendingItems(int $limit = 50): array {
+    public function getPendingItems(int $limit = Constants::DLQ_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE status = 'pending'
                   ORDER BY created_at ASC
@@ -147,7 +148,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
      * @param int $limit Maximum number of items
      * @return array Array of DLQ records
      */
-    public function getByMessageType(string $messageType, ?string $status = null, int $limit = 50): array {
+    public function getByMessageType(string $messageType, ?string $status = null, int $limit = Constants::DLQ_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE message_type = :type";
 
@@ -316,7 +317,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
      * @param int $days Number of days to keep
      * @return int Number of deleted records
      */
-    public function deleteOldRecords(int $days = 90): int {
+    public function deleteOldRecords(int $days = Constants::CLEANUP_DLQ_RETENTION_DAYS): int {
         $query = "DELETE FROM {$this->tableName}
                   WHERE status IN ('resolved', 'abandoned')
                     AND resolved_at < DATE_SUB(NOW(), INTERVAL :days DAY)";

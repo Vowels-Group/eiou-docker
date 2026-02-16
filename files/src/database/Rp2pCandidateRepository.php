@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
@@ -151,7 +152,7 @@ class Rp2pCandidateRepository extends AbstractRepository {
      * @param int $days Number of days to keep
      * @return int Number of deleted records
      */
-    public function deleteOldRecords(int $days = 1): int {
+    public function deleteOldRecords(int $days = Constants::CLEANUP_RP2P_CANDIDATE_RETENTION_DAYS): int {
         $query = "DELETE FROM {$this->tableName}
                   WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)";
 

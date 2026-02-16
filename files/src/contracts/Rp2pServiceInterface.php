@@ -43,9 +43,9 @@ interface Rp2pServiceInterface
      * validating funds, storing the request, and routing it appropriately.
      *
      * @param array $request The RP2P request data
-     * @return void
+     * @return bool True if the rp2p was successfully processed, false if rejected
      */
-    public function handleRp2pRequest(array $request): void;
+    public function handleRp2pRequest(array $request): bool;
 
     /**
      * Check if RP2P is possible for the given request

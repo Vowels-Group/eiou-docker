@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Eiou\Core\Constants;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\LockingServiceInterface;
 use PDO;
@@ -75,7 +76,7 @@ class DatabaseLockingService implements LockingServiceInterface
      * @param int $timeout Maximum seconds to wait for lock (0 = no wait)
      * @return bool True if lock acquired, false if timeout or error
      */
-    public function acquireLock(string $lockName, int $timeout = 30): bool
+    public function acquireLock(string $lockName, int $timeout = Constants::DB_LOCK_TIMEOUT_SECONDS): bool
     {
         $sanitizedName = $this->sanitizeLockName($lockName);
 

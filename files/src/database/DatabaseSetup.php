@@ -194,6 +194,8 @@ function runColumnMigrations(PDO $pdo): array {
             'contacts_relayed_count' => 'INT DEFAULT 0 AFTER hop_wait',
             'contacts_relayed_responded_count' => 'INT DEFAULT 0 AFTER contacts_relayed_count',
             'phase1_sent' => 'TINYINT(1) DEFAULT 0 AFTER contacts_relayed_responded_count',
+            'sending_started_at' => 'TIMESTAMP(6) NULL AFTER status',
+            'sending_worker_pid' => 'INT NULL AFTER sending_started_at',
         ],
     ];
 
@@ -250,7 +252,11 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Update ENUM columns to add new values
-    $enumUpdates = [];
+    $enumUpdates = [
+        'p2p' => [
+            'status' => "ENUM('initial','queued','sending','sent','found','paid','completed','cancelled','expired') DEFAULT 'initial'",
+        ],
+    ];
 
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
@@ -281,7 +287,11 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Add missing indexes
-    $indexesToAdd = [];
+    $indexesToAdd = [
+        'p2p' => [
+            'idx_p2p_sending_recovery' => 'status, sending_started_at',
+        ],
+    ];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
         foreach ($indexes as $indexName => $columnSpec) {

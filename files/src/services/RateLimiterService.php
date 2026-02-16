@@ -36,7 +36,7 @@ class RateLimiterService implements RateLimiterServiceInterface {
      * @param int $blockSeconds How long to block after exceeding limit
      * @return array ['allowed' => bool, 'remaining' => int, 'reset_at' => timestamp]
      */
-    public function checkLimit(string $identifier, string $action, int $maxAttempts = 10, int $windowSeconds = 60, int $blockSeconds = 300): array {
+    public function checkLimit(string $identifier, string $action, int $maxAttempts = Constants::RATE_LIMIT_MAX_ATTEMPTS, int $windowSeconds = Constants::RATE_LIMIT_WINDOW_SECONDS, int $blockSeconds = Constants::RATE_LIMIT_BLOCK_SECONDS): array {
         // If rate limiting is disabled or in test mode, always allow
         $testMode = getenv('EIOU_TEST_MODE') === 'true';
         if (!Constants::RATE_LIMIT_ENABLED || $testMode) {

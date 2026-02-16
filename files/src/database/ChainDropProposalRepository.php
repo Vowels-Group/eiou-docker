@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Utils\Logger;
 use PDO;
@@ -290,7 +291,7 @@ class ChainDropProposalRepository extends AbstractRepository {
      * @param int $limit Maximum results
      * @return array List of proposals
      */
-    public function getAllForContact(string $contactPubkeyHash, int $limit = 20): array {
+    public function getAllForContact(string $contactPubkeyHash, int $limit = Constants::CHAIN_DROP_PROPOSALS_LIMIT): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE contact_pubkey_hash = :contact_hash
                   ORDER BY created_at DESC

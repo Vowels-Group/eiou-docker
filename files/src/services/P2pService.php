@@ -477,6 +477,16 @@ class P2pService implements P2pServiceInterface {
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
+            // Force fast mode for Tor recipients on receiving side —
+            // prevents remote nodes from forcing best-fee mode over Tor
+            // where relay latency makes candidate collection impractical
+            if (!($request['fast'] ?? true)
+                && isset($request['receiverAddress'])
+                && $this->transportUtility->isTorAddress($request['receiverAddress'])
+            ) {
+                $request['fast'] = 1;
+            }
+
             // Handler for p2p requests
             $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
@@ -503,6 +513,32 @@ class P2pService implements P2pServiceInterface {
                 $requestedAmount = $this->calculateRequestedAmount($request);
                 $request['feeAmount'] = $requestedAmount - $request['amount'];
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
+
+                // Max level boundary: requestLevel >= maxRequestLevel means the next hop
+                // (requestLevel+1) will exceed maxRequestLevel and ALL downstream contacts
+                // will reject. Treat as immediate dead-end: store as cancelled and send
+                // cancel notification upstream without going through the broadcast cycle.
+                // This is critical for cancel cascade speed in larger topologies — without
+                // this, the node would queue, poll, broadcast to all contacts (each timing
+                // out or rejecting), and only then detect the dead-end.
+                if ((int)$request['requestLevel'] >= (int)$request['maxRequestLevel']) {
+                    $request['status'] = Constants::STATUS_CANCELLED;
+                    $this->p2pRepository->insertP2pRequest($request, NULL);
+                    $this->p2pSenderRepository?->insertSender(
+                        $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                    );
+                    // Send cancel notification upstream for all modes.
+                    // Both fast and best-fee need cancel cascade so upstream relay
+                    // nodes know this contact is a dead end and can propagate
+                    // cancellation when ALL their contacts have cancelled.
+                    $this->sendCancelNotificationForHash($request['hash']);
+                    Logger::getInstance()->info("P2P max level boundary reached, immediate cancel", [
+                        'hash' => $request['hash'],
+                        'requestLevel' => $request['requestLevel'],
+                        'maxRequestLevel' => $request['maxRequestLevel'],
+                    ]);
+                    return;
+                }
 
                 // In best-fee mode, scale relay expiration proportionally to remaining hops.
                 // Deeper nodes (high requestLevel, few remaining hops) expire sooner,
@@ -677,6 +713,12 @@ class P2pService implements P2pServiceInterface {
         // Thread fast flag from user request (default: true for backward compatibility)
         $data['fast'] = (int)($request['fast'] ?? true);
 
+        // Force fast mode for Tor recipients — best-fee mode generates excessive
+        // relay traffic and Tor latency (~5s/hop) amplifies the wait overhead
+        if (!$data['fast'] && $this->transportUtility->isTorAddress($data['receiverAddress'])) {
+            $data['fast'] = 1;
+        }
+
         return $data;
     }
 
@@ -730,161 +772,359 @@ class P2pService implements P2pServiceInterface {
     public function processQueuedP2pMessages(): int {
         // Select queued messages from the p2p table (with status queued)
         $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
+
+        // Coalesce delay: if we got some messages but fewer than the batch size,
+        // wait briefly to let more P2Ps accumulate before firing the mega-batch.
+        // This prevents the processor from grabbing one P2P at a time due to fast polling.
+        $batchSize = Constants::P2P_QUEUE_BATCH_SIZE;
+        $coalesceMs = Constants::P2P_QUEUE_COALESCE_MS;
+        if (!empty($queuedMessages) && count($queuedMessages) < $batchSize && $coalesceMs > 0) {
+            usleep($coalesceMs * 1000);
+            $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
+        }
+
         if($queuedMessages !== []){
             $contacts = $this->contactService->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
             $contactsCount = count($contacts); // Count amount of contacts to send p2p request
         }
-        // Process each queued message
+
+        // ── Phase 1: Prepare ──────────────────────────────────────────────
+        // Collect ALL sends from ALL queued P2Ps into one mega-batch (no I/O).
+        // Direct-match sends are handled separately (single-recipient, inline).
+        $megaBatchSends = [];    // flat array of ['key' => ..., 'recipient' => ..., 'payload' => ...]
+        $p2pBroadcastMeta = [];  // p2pHash => ['message' => ..., 'batchKeys' => [...], 'contactsToSend' => int]
+
         foreach ($queuedMessages as $message) {
-            // Get transport type for forwarding/sending
             $transportIndex = $this->transportUtility->determineTransportType($message['sender_address']);
-            $p2pPayload = $this->p2pPayload->buildFromDatabase($message); // Build p2p request payload
+            $p2pPayload = $this->p2pPayload->buildFromDatabase($message);
             $p2pHash = $message['hash'];
 
-            // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
-            // If this is the case then send p2p directly
-            // Message ID format: direct-{hash}-{contactHash} (message_type 'p2p' provides context)
+            // Path A: Direct contact match — single send, handled inline (not batched)
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
-                // Send directly to matched contact with delivery tracking
                 $contactHash = substr(hash('sha256', $matchedContact[$transportIndex]), 0, 8);
                 $messageId = 'direct-' . $p2pHash . '-' . $contactHash;
                 $sendResult = $this->sendP2pMessage('p2p', $matchedContact[$transportIndex], $p2pPayload, $messageId);
                 $response = $sendResult['response'];
 
                 if ($sendResult['success'] && $this->messageDeliveryService !== null) {
-                    // Mark as forwarded stage since we're routing to the destination
                     $this->messageDeliveryService->updateStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
                 }
 
-                // Track sent count for best-fee mode: the matched contact will send
-                // an RP2P response, so we expect exactly 1 response.
-                // 'found' means the destination matched itself and will send RP2P back.
-                // 'inserted' and 'already_relayed' mean the contact will forward and respond.
                 if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed' || $response['status'] === 'found')) {
                     $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
                 }
 
                 output(outputP2pSendResult($response),'SILENT');
-
-                // Re-check best-fee selection: RP2P may have arrived during the
-                // blocking send (destination sends RP2P inline). Now that sentCount
-                // is set, check if enough responses arrived to trigger selection.
                 $this->rp2pService?->checkBestFeeSelection($p2pHash);
-            } else{
-                $contactsToSend = $contactsCount; // Reset sendable contact count
-                $sentMessages = 0;
-                $acceptedContacts = 0; // Contacts that accepted P2P as new ('inserted')
-                $relayedContacts = 0; // Contacts that returned 'already_relayed' (two-phase selection)
-                $successfulSends = [];
 
-                // Set contacts_sent_count ceiling BEFORE broadcasting to prevent race condition.
-                // RP2P responses can arrive via HTTP handler while we're still sending to contacts.
-                // Without this, contacts_sent_count defaults to 0 and the first RP2P triggers
-                // immediate best-fee selection (responded >= 0), ignoring later/better paths.
-                // The ceiling is updated to the actual count after the loop completes.
-                $this->p2pRepository->updateContactsSentCount($p2pHash, $contactsCount);
+                // Status transition (queued → sent)
+                $currentP2p = $this->p2pRepository->getByHash($p2pHash);
+                if ($currentP2p && ($currentP2p['status'] ?? '') === Constants::STATUS_QUEUED) {
+                    $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+                }
+                continue;
+            }
 
-                // Send p2p request to all accepted contacts
-                foreach ($contacts as $contact) {
-                    $contactAddress = $contact[$transportIndex]; // Get similar contact address to message
-                    // Do not send message if contact has not similar transport mode (HTTP goes over HTTP, TOR over TOR etc.)
-                    if(!$contactAddress){
-                        $contactsToSend -= 1;
-                        continue;
-                    }
-                    // Do not send message to original sender
-                    if($message['sender_address'] === $contactAddress){
-                        $contactsToSend -= 1;
-                        continue;
-                    }
-                    // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
-                    if(isset($message['destination_address']) && $message['destination_address'] === $contactAddress){
-                        $contactsToSend -= 1;
-                        continue;
-                    }
+            // Path B: Broadcast — collect eligible contacts into mega-batch
+            $contactsToSend = $contactsCount;
+            $batchKeys = [];
 
-                    // Send with delivery tracking - use unique ID per contact to track each send
-                    // Message ID format: broadcast-{p2pHash}-{contactHash} (message_type 'p2p' provides context)
-                    $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
-                    $messageId = 'broadcast-' . $p2pHash . '-' . $contactHash;
-                    $sendResult = $this->sendP2pMessage('p2p', $contactAddress, $p2pPayload, $messageId);
-                    $response = $sendResult['response'];
+            // Set contacts_sent_count ceiling BEFORE broadcasting to prevent race condition.
+            $this->p2pRepository->updateContactsSentCount($p2pHash, $contactsCount);
 
-                    // If rejection from sole possible contact then cancel p2p immediately
-                    if($response['status'] === Constants::STATUS_REJECTED && $contactsToSend === 1){
-                        $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
-                        $contactsToSend -= 1;
-                        continue;
-                    }
-
-                    $sentMessages += 1;
-                    // Track contacts for best-fee response counting.
-                    // 'inserted': contact accepted P2P as new — will forward RP2P back after its cascade.
-                    // 'already_relayed': contact received P2P from another path and runs its own cascade
-                    //   on an independent timer. Two-phase selection: phase 1 selects from inserted contacts,
-                    //   sends result to relayed contacts; phase 2 re-selects after relayed contacts respond.
-                    if ($response['status'] === 'inserted') {
-                        $acceptedContacts += 1;
-                    } elseif ($response['status'] === 'already_relayed') {
-                        $relayedContacts += 1;
-                        $this->p2pRelayedContactRepository?->insertRelayedContact($p2pHash, $contactAddress);
-                    }
-                    if ($sendResult['success']) {
-                        $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
-                    }
-                    output(outputP2pResponse($response),'SILENT');
+            foreach ($contacts as $contact) {
+                $contactAddress = $contact[$transportIndex];
+                if(!$contactAddress){
+                    $contactsToSend -= 1;
+                    continue;
+                }
+                if($message['sender_address'] === $contactAddress){
+                    $contactsToSend -= 1;
+                    continue;
+                }
+                if(isset($message['destination_address']) && $message['destination_address'] === $contactAddress){
+                    $contactsToSend -= 1;
+                    continue;
                 }
 
-                // Update delivery stages to 'forwarded' for successful sends (using MessageDeliveryService directly)
-                if ($this->messageDeliveryService !== null) {
-                    foreach ($successfulSends as $sendInfo) {
-                        $this->messageDeliveryService->updateStageToForwarded('p2p', $sendInfo['messageId'], $sendInfo['nextHop']);
-                    }
+                $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
+                $messageId = 'broadcast-' . $p2pHash . '-' . $contactHash;
+                // Use compound key so results can be mapped back to the right P2P + contact
+                $sendKey = $p2pHash . '|' . $contactAddress;
+                $batchKeys[$sendKey] = ['messageId' => $messageId, 'contactAddress' => $contactAddress];
+
+                $megaBatchSends[] = [
+                    'key' => $sendKey,
+                    'recipient' => $contactAddress,
+                    'payload' => $p2pPayload
+                ];
+            }
+
+            $p2pBroadcastMeta[$p2pHash] = [
+                'message' => $message,
+                'batchKeys' => $batchKeys,
+                'contactsToSend' => $contactsToSend
+            ];
+        }
+
+        // ── Phase 2: Send ─────────────────────────────────────────────────
+        // Fire ALL broadcasts from ALL P2Ps in one curl_multi call.
+        $megaResults = [];
+        if (!empty($megaBatchSends)) {
+            $p2pCount = count($p2pBroadcastMeta);
+            $sendCount = count($megaBatchSends);
+            output("Mega-batch: {$p2pCount} P2Ps, {$sendCount} total sends via curl_multi", 'SILENT');
+            $megaResults = $this->transportUtility->sendMultiBatch($megaBatchSends);
+            output("Mega-batch complete: " . count($megaResults) . " results", 'SILENT');
+        }
+
+        // ── Phase 3: Process ──────────────────────────────────────────────
+        // Map results back to each P2P and apply the same response logic.
+        foreach ($p2pBroadcastMeta as $p2pHash => $meta) {
+            $message = $meta['message'];
+            $batchKeys = $meta['batchKeys'];
+            $contactsToSend = $meta['contactsToSend'];
+            $sentMessages = 0;
+            $acceptedContacts = 0;
+            $relayedContacts = 0;
+            $successfulSends = [];
+
+            foreach ($batchKeys as $sendKey => $keyInfo) {
+                $contactAddress = $keyInfo['contactAddress'];
+                $messageId = $keyInfo['messageId'];
+
+                if (!isset($megaResults[$sendKey])) {
+                    continue; // Signing failed for this send
                 }
 
-                if(isset($message['destination_address']) && $contactsToSend > 0){
-                    output(outputSendP2PToAmountContacts($sentMessages), 'SILENT');
-                    //Inform user (in debug) about expected response time
-                    $httpExpectedResponseTime = $this->currentUser->getMaxP2pLevel(); // Use maxP2pLevel seconds for http
-                    $torExpectedResponseTime = 5 * 2 * $this->currentUser->getMaxP2pLevel(); //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
-                    output(outputResponseTransactionTimes($httpExpectedResponseTime, $torExpectedResponseTime), 'SILENT');
-                }
+                $transportResult = $megaResults[$sendKey];
+                $decoded = json_decode($transportResult['response'], true);
+                $success = $decoded !== null && isset($decoded['status']);
 
-                // Cancel the message due to no viable contacts to send to (user is dead-end)
-                // Send cancel notification upstream so senders can count this as a
-                // responded contact and trigger selection/cancellation immediately
-                // instead of waiting for their own expiration timer.
-                if($sentMessages === 0){
-                    output(outputNoViableRouteP2p($p2pHash,'SILENT'));
-                    $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
-                    $p2p = $this->p2pRepository->getByHash($p2pHash);
-                    if ($p2p) {
-                        $this->sendCancelNotification($p2pHash, $p2p);
+                if (!isset($decoded['status']) || $decoded['status'] === Constants::STATUS_REJECTED) {
+                    if (isset($decoded['status']) && $decoded['status'] === Constants::STATUS_REJECTED) {
+                        output(outputP2pResponse($decoded),'SILENT');
                     }
                     continue;
                 }
 
+                $sentMessages += 1;
+                if ($decoded['status'] === 'inserted') {
+                    $acceptedContacts += 1;
+                } elseif ($decoded['status'] === 'already_relayed') {
+                    $relayedContacts += 1;
+                    $this->p2pRelayedContactRepository?->insertRelayedContact($p2pHash, $contactAddress);
+                }
+                if ($success) {
+                    $successfulSends[] = [
+                        'messageId' => $messageId,
+                        'nextHop' => $contactAddress
+                    ];
+                }
+                output(outputP2pResponse($decoded),'SILENT');
+            }
+
+            if(isset($message['destination_address']) && $contactsToSend > 0){
+                output(outputSendP2PToAmountContacts($sentMessages), 'SILENT');
+                $httpExpectedResponseTime = $this->currentUser->getMaxP2pLevel();
+                $torExpectedResponseTime = 5 * 2 * $this->currentUser->getMaxP2pLevel();
+                output(outputResponseTransactionTimes($httpExpectedResponseTime, $torExpectedResponseTime), 'SILENT');
+            }
+
+            // Cancel the message due to no viable contacts to send to (user is dead-end)
+            if($sentMessages === 0){
+                output(outputNoViableRouteP2p($p2pHash,'SILENT'));
+                $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
+                $p2p = $this->p2pRepository->getByHash($p2pHash);
+                if ($p2p) {
+                    $this->sendCancelNotification($p2pHash, $p2p);
+                }
+            } else {
                 // Update contacts_sent_count from ceiling to actual accepted count
                 $this->p2pRepository->updateContactsSentCount($p2pHash, $acceptedContacts);
                 if ($relayedContacts > 0) {
                     $this->p2pRepository->updateContactsRelayedCount($p2pHash, $relayedContacts);
                 }
-
-                // Re-check best-fee selection: RP2Ps may have arrived during broadcast
-                // and been stored as candidates without triggering selection (ceiling was
-                // higher than actual count). Now that the real count is set, check if
-                // enough responses have arrived to trigger selection.
                 $this->rp2pService?->checkBestFeeSelection($p2pHash);
             }
 
-            $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+            // Only transition queued → sent
+            $currentP2p = $this->p2pRepository->getByHash($p2pHash);
+            if ($currentP2p && ($currentP2p['status'] ?? '') === Constants::STATUS_QUEUED) {
+                $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+            }
         }
+
         return isset($queuedMessages) ? count($queuedMessages) : 0;
     }
 
 
     /**
-     * Adjust remaining p2p chain length based on intermediary contact's config of maxP2pLevel 
+     * Process a single P2P message in a worker process
+     *
+     * Called by P2pWorker.php. Atomically claims the P2P, processes it
+     * (direct match or broadcast), and transitions to sent/cancelled.
+     * Each worker has its own Application, PDO, and curl_multi handle.
+     *
+     * @param string $hash P2P hash to process
+     * @param int $workerPid PID of this worker process
+     * @return bool True if processed successfully, false if claim failed or error
+     */
+    public function processSingleP2p(string $hash, int $workerPid): bool {
+        // Atomic claim — if another worker already claimed this hash, bail out
+        if (!$this->p2pRepository->claimQueuedP2p($hash, $workerPid)) {
+            return false;
+        }
+
+        try {
+            $message = $this->p2pRepository->getByHash($hash);
+            if (!$message) {
+                return false;
+            }
+
+            $transportIndex = $this->transportUtility->determineTransportType($message['sender_address']);
+            $p2pPayload = $this->p2pPayload->buildFromDatabase($message);
+            $p2pHash = $message['hash'];
+
+            // Path A: Direct contact match — single send
+            if (!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)) {
+                $contactHash = substr(hash('sha256', $matchedContact[$transportIndex]), 0, 8);
+                $messageId = 'direct-' . $p2pHash . '-' . $contactHash;
+                $sendResult = $this->sendP2pMessage('p2p', $matchedContact[$transportIndex], $p2pPayload, $messageId);
+                $response = $sendResult['response'];
+
+                if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
+                }
+
+                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed' || $response['status'] === 'found')) {
+                    $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
+                }
+
+                output(outputP2pSendResult($response), 'SILENT');
+                $this->rp2pService?->checkBestFeeSelection($p2pHash);
+
+                // Transition sending → sent
+                $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+                $this->p2pRepository->clearSendingMetadata($p2pHash);
+                return true;
+            }
+
+            // Path B: Broadcast to all contacts via curl_multi
+            $contacts = $this->contactService->getAllAcceptedAddresses();
+            $contactsCount = count($contacts);
+            $sends = [];
+            $batchKeys = [];
+            $contactsToSend = $contactsCount;
+
+            // Set contacts_sent_count ceiling BEFORE broadcasting
+            $this->p2pRepository->updateContactsSentCount($p2pHash, $contactsCount);
+
+            foreach ($contacts as $contact) {
+                $contactAddress = $contact[$transportIndex] ?? null;
+                if (!$contactAddress) {
+                    $contactsToSend -= 1;
+                    continue;
+                }
+                if ($message['sender_address'] === $contactAddress) {
+                    $contactsToSend -= 1;
+                    continue;
+                }
+                if (isset($message['destination_address']) && $message['destination_address'] === $contactAddress) {
+                    $contactsToSend -= 1;
+                    continue;
+                }
+
+                $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
+                $messageId = 'broadcast-' . $p2pHash . '-' . $contactHash;
+                $sendKey = $p2pHash . '|' . $contactAddress;
+                $batchKeys[$sendKey] = ['messageId' => $messageId, 'contactAddress' => $contactAddress];
+
+                $sends[] = [
+                    'key' => $sendKey,
+                    'recipient' => $contactAddress,
+                    'payload' => $p2pPayload
+                ];
+            }
+
+            // Fire curl_multi for this single P2P
+            $results = [];
+            if (!empty($sends)) {
+                $results = $this->transportUtility->sendMultiBatch($sends);
+            }
+
+            // Process results
+            $sentMessages = 0;
+            $acceptedContacts = 0;
+            $relayedContacts = 0;
+
+            foreach ($batchKeys as $sendKey => $keyInfo) {
+                $contactAddress = $keyInfo['contactAddress'];
+                if (!isset($results[$sendKey])) {
+                    continue;
+                }
+
+                $transportResult = $results[$sendKey];
+                $decoded = json_decode($transportResult['response'], true);
+
+                if (!isset($decoded['status']) || $decoded['status'] === Constants::STATUS_REJECTED) {
+                    if (isset($decoded['status']) && $decoded['status'] === Constants::STATUS_REJECTED) {
+                        output(outputP2pResponse($decoded), 'SILENT');
+                    }
+                    continue;
+                }
+
+                $sentMessages += 1;
+                if ($decoded['status'] === 'inserted') {
+                    $acceptedContacts += 1;
+                } elseif ($decoded['status'] === 'already_relayed') {
+                    $relayedContacts += 1;
+                    $this->p2pRelayedContactRepository?->insertRelayedContact($p2pHash, $contactAddress);
+                }
+                output(outputP2pResponse($decoded), 'SILENT');
+            }
+
+            if (isset($message['destination_address']) && $contactsToSend > 0) {
+                output(outputSendP2PToAmountContacts($sentMessages), 'SILENT');
+            }
+
+            // Dead-end: no contacts accepted
+            if ($sentMessages === 0) {
+                output(outputNoViableRouteP2p($p2pHash, 'SILENT'));
+                $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
+                $p2p = $this->p2pRepository->getByHash($p2pHash);
+                if ($p2p) {
+                    $this->sendCancelNotification($p2pHash, $p2p);
+                }
+            } else {
+                $this->p2pRepository->updateContactsSentCount($p2pHash, $acceptedContacts);
+                if ($relayedContacts > 0) {
+                    $this->p2pRepository->updateContactsRelayedCount($p2pHash, $relayedContacts);
+                }
+                $this->rp2pService?->checkBestFeeSelection($p2pHash);
+            }
+
+            // Transition sending → sent
+            $currentP2p = $this->p2pRepository->getByHash($p2pHash);
+            if ($currentP2p && $currentP2p['status'] === Constants::STATUS_SENDING) {
+                $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
+            }
+            $this->p2pRepository->clearSendingMetadata($p2pHash);
+            return true;
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e, [
+                'method' => 'processSingleP2p',
+                'hash' => $hash,
+                'worker_pid' => $workerPid,
+            ]);
+            // On error, clear sending metadata so recovery can reset to queued
+            $this->p2pRepository->clearSendingMetadata($hash);
+            return false;
+        }
+    }
+
+    /**
+     * Adjust remaining p2p chain length based on intermediary contact's config of maxP2pLevel
      *
      * @param array $data Request data
      * @return int (adjusted) Level of Request

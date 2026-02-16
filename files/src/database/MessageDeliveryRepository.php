@@ -206,7 +206,7 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @param int $limit Maximum number of messages to return
      * @return array Array of delivery records ready for retry
      */
-    public function getMessagesForRetry(int $limit = 10): array {
+    public function getMessagesForRetry(int $limit = Constants::DELIVERY_RETRY_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE delivery_stage IN ('pending', 'sent')
                     AND retry_count < max_retries
@@ -232,7 +232,7 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @param int $limit Maximum number of messages
      * @return array Array of failed delivery records
      */
-    public function getExhaustedRetries(int $limit = 10): array {
+    public function getExhaustedRetries(int $limit = Constants::DELIVERY_EXHAUSTED_BATCH_SIZE): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE delivery_stage NOT IN ('completed', 'failed')
                     AND retry_count >= max_retries
@@ -395,7 +395,7 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @param int $days Number of days to keep
      * @return int Number of deleted records
      */
-    public function deleteOldRecords(int $days = 30): int {
+    public function deleteOldRecords(int $days = Constants::CLEANUP_DELIVERY_RETENTION_DAYS): int {
         $query = "DELETE FROM {$this->tableName}
                   WHERE delivery_stage IN ('completed', 'failed')
                     AND updated_at < DATE_SUB(NOW(), INTERVAL :days DAY)";

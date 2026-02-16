@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\Constants;
 use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
@@ -134,7 +135,7 @@ class RateLimiterRepository {
      * @param int $olderThanSeconds Remove records older than this
      * @return bool Success status
      */
-    public function cleanup(int $olderThanSeconds = 3600): bool {
+    public function cleanup(int $olderThanSeconds = Constants::CLEANUP_RATE_LIMIT_SECONDS): bool {
         try {
             $stmt = $this->pdo->prepare("
                 DELETE FROM rate_limits

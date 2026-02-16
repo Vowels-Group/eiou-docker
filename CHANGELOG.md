@@ -10,6 +10,47 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## 2026-02-16
+
+### Added
+- Sliding-window concurrency control for `curl_multi` batch sends — `executeWithConcurrencyLimit()` caps simultaneous connections per protocol (HTTP: 10, Tor: 5) to prevent Tor circuit overload
+- `getConcurrencyLimit()` method on `TransportUtilityService` — centralized protocol-to-limit lookup using `Constants::CURL_MULTI_MAX_CONCURRENT` associative array
+- Mega-batch P2P processing — `processQueuedP2pMessages()` uses a 3-phase approach: collect all sends across queued P2Ps, fire via `sendMultiBatch()`, map results back
+- Coalesce delay (`P2P_QUEUE_COALESCE_MS`, 2000ms) — groups concurrent P2Ps arriving within a short window into a single mega-batch
+- P2P parallel worker model — coordinator (`P2pMessageProcessor`) spawns independent worker processes (`P2pWorker.php`) for each queued P2P via `proc_open`, enabling truly parallel routing through the network
+- `processSingleP2p()` method on `P2pService` — processes one P2P with atomic claim (`queued → sending`), broadcast via own `curl_multi`, and status transition (`sending → sent`)
+- Atomic P2P claiming in `P2pRepository` — `claimQueuedP2p()`, `getStuckSendingP2ps()`, `recoverStuckP2p()`, `clearSendingMetadata()` methods for worker coordination and crash recovery
+- `sending` status added to P2P ENUM with `sending_started_at` and `sending_worker_pid` columns — enables worker ownership tracking and stuck-sending recovery
+- `P2P_MAX_WORKERS` keyed by transport protocol (HTTP: 50, HTTPS: 50, Tor: 5) and `P2P_SENDING_TIMEOUT_SECONDS` (300) constants for worker pool sizing and crash recovery threshold
+- `Constants::getMaxP2pWorkers($transport)` static method — returns per-transport worker limit with `EIOU_P2P_MAX_WORKERS` env var override for per-deployment tuning
+
+### Changed
+- `P2pMessageProcessor` rewritten from single-threaded delegator to coordinator+worker model — polls for queued P2Ps, spawns workers up to per-transport limits (HTTP: 50, Tor: 5), tracks workers by transport type independently, reaps finished workers, and recovers stuck `sending` P2Ps with dead worker PIDs every 60s
+- `CURL_MULTI_MAX_CONCURRENT` is now an associative array mapping protocol to limit (http: 10, https: 10, tor: 5) instead of a single value — unknown protocols fall back to the lowest configured limit
+- Best-fee route selection now tries candidates from cheapest to most expensive with fallback — if the cheapest candidate's fee exceeds the originator's `maxFee` setting or a relay node can't afford the amount, the next candidate is tried instead of silently failing
+- `handleRp2pRequest()` return type changed from `void` to `bool` — returns `false` when fee/affordability validation fails, enabling caller-driven fallback
+- Originator fee check moved before RP2P insert — rejected candidates no longer pollute the database, and `updateStatus('found')` is deferred until validation passes
+- `checkRp2pPossible()` fast-mode path now sends rejection response (not "inserted") when `handleRp2pRequest()` returns false — sender correctly records failed delivery instead of false positive acceptance
+- Rejected RP2Ps in fast mode now increment `contacts_responded_count` — when all contacts have responded (all rejected or cancelled), the relay cancels immediately and propagates cancel upstream instead of waiting for expiration timeout
+- P2P best-fee mode forced to fast for Tor recipients (`.onion` addresses) on both sender and receiver side — Tor latency (~5s/hop) makes best-fee relay overhead prohibitive; receiver-side override prevents remote nodes from forcing best-fee mode over Tor
+
+### Fixed
+- Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
+
+## 2026-02-15
+
+### Added
+- Parallel P2P broadcast via `curl_multi` — broadcast to all contacts simultaneously instead of sequentially, reducing broadcast time from O(N × latency) to O(max latency)
+- `createCurlHandle()` and `sendBatch()` methods on `TransportUtilityService` for reusable parallel transport
+- `sendBatchAsync()` method on `MessageDeliveryService` for tracked batch delivery with per-recipient response processing
+- Tor expiration scaling — P2P messages sent to Tor contacts use 2x expiration multiplier (`P2P_TOR_EXPIRATION_MULTIPLIER`) to account for higher Tor latency
+- Integration test suite `parallelBroadcastTest.sh` (14 tests) for curl_multi batch send functionality
+
+## 2026-02-13
+
+### Fixed
+- P2P max level boundary nodes now immediately send cancel notification upstream instead of going through the full broadcast-rejection cycle — when `requestLevel >= maxRequestLevel` after re-adjustment, the node stores as cancelled and notifies upstream instantly, significantly improving cancel cascade propagation speed in larger topologies
+
 ## [Unreleased]
 
 ### Changed
@@ -24,6 +65,7 @@ The project is currently in **ALPHA** status.
 - Contact modal exceeded viewport height causing settings buttons (Block/Delete/Save) to be invisible — modal now constrained to 90vh with internal scrolling
 - Contact modal settings buttons were stacked vertically with uneven sizing — now displayed in a compact inline row with consistent height
 - Contact modal transactions tab refresh button overlapped info text on narrow screens — text now wraps while button stays intact
+- P2P max level boundary nodes now immediately send cancel notification upstream instead of going through the full broadcast-rejection cycle — when `requestLevel >= maxRequestLevel` after re-adjustment, the node stores as cancelled and notifies upstream instantly, significantly improving cancel cascade propagation speed in larger topologies
 
 ---
 

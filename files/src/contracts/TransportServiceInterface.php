@@ -78,6 +78,30 @@ interface TransportServiceInterface
     public function sendByTor(string $recipient, string $signedPayload): string;
 
     /**
+     * Send a payload to multiple recipients in parallel using curl_multi.
+     *
+     * Signs the payload separately for each recipient (unique nonce/signature per send),
+     * creates curl handles, and executes all in parallel.
+     *
+     * @param array $recipients Array of recipient addresses
+     * @param array $payload The data payload to send (will be signed per-recipient)
+     * @return array<string, array{response: string, signature: string, nonce: string}> Results keyed by recipient address
+     */
+    public function sendBatch(array $recipients, array $payload): array;
+
+    /**
+     * Send different payloads to multiple recipients in parallel using curl_multi.
+     *
+     * Unlike sendBatch() which sends the same payload to all recipients, this method
+     * accepts per-send payloads — used when broadcasting multiple P2P messages in one
+     * curl_multi call (each P2P has a different hash/amount/etc).
+     *
+     * @param array $sends Array of ['key' => string, 'recipient' => string, 'payload' => array]
+     * @return array<string, array{response: string, signature: string, nonce: string}> Results keyed by send key
+     */
+    public function sendMultiBatch(array $sends): array;
+
+    /**
      * Sign a payload for transport.
      *
      * @param array $payload The payload to sign
