@@ -304,27 +304,22 @@ try {
 }
 
 // Merge available credit into contact arrays and calculate their available credit with me
-$balanceRepo = $serviceContainer->getBalanceRepository();
 $contactArraysForCredit = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
 foreach ($contactArraysForCredit as &$contacts) {
     foreach ($contacts as &$contact) {
         $hash = $contact['pubkey_hash'] ?? '';
         // My available credit with them (from pong, stored in contact_credit)
         $contact['my_available_credit'] = $availableCreditByContact[$hash] ?? null;
-        // Their available credit with me (calculated: sent - received + credit_limit)
+        // Their available credit with me: credit_limit - balance
+        // Uses the same balance data as the displayed contact balance (from transactions table)
+        // Formula: credit_limit - balance, where balance = received - sent
+        // When balance is negative (I owe them), their credit increases
+        // When balance is positive (they owe me), their credit decreases
         $contact['their_available_credit'] = null;
-        if ($hash) {
-            try {
-                $currency = $contact['currency'] ?? 'USD';
-                $balData = $balanceRepo->getContactBalanceByPubkeyHash($hash, $currency);
-                if ($balData && count($balData) > 0) {
-                    $b = $balData[0];
-                    $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)(($contact['credit_limit'] ?? 0) * \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR));
-                    $contact['their_available_credit'] = $theirCents / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR;
-                }
-            } catch (Exception $e) {
-                // Non-critical
-            }
+        $balanceValue = floatval($contact['balance'] ?? 0);
+        $creditLimitValue = floatval($contact['credit_limit'] ?? 0);
+        if ($creditLimitValue > 0 || $balanceValue != 0) {
+            $contact['their_available_credit'] = round($creditLimitValue - $balanceValue, 2);
         }
     }
     unset($contact);
