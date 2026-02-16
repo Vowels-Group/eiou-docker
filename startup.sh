@@ -389,7 +389,7 @@ SSLEOF
         if [ "$CA_SIGN_OK" = true ] && ! openssl x509 -req -in /tmp/server.csr \
             -CA /ssl-ca/ca.crt \
             -CAkey /ssl-ca/ca.key \
-            -CAcreateserial \
+            -CAserial /tmp/ca.srl -CAcreateserial \
             -out /etc/apache2/ssl/server.crt \
             -days 365 \
             -sha256 \
@@ -400,7 +400,7 @@ SSLEOF
             CA_SIGN_OK=false
         fi
 
-        rm -f /tmp/server.csr
+        rm -f /tmp/server.csr /tmp/ca.srl
 
         if [ "$CA_SIGN_OK" = true ]; then
             # Copy CA cert for client verification
