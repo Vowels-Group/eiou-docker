@@ -311,7 +311,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
 | `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders | ContactRepo, P2pRepo, P2pSenderRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection in best-fee mode | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -1191,7 +1191,14 @@ No candidate storage or selection logic is involved.
 - Status flow: initial → queued → sent → found → completed
 - **Forced for Tor recipients:** When the destination address is `.onion`, fast mode
   is automatically enforced regardless of the `--best` flag, because best-fee mode
-  generates excessive relay traffic and Tor's ~5s/hop latency amplifies the wait overhead
+  generates excessive relay traffic and Tor's ~5s/hop latency amplifies the wait overhead.
+  Enforced on both sender side (`prepareP2pRequestData`) and receiver side
+  (`handleP2pRequest`) to prevent remote nodes from forcing best-fee over Tor.
+- **Rejection counting:** When `handleRp2pRequest()` returns false (fee too high or
+  relay can't afford), `checkRp2pPossible()` increments `contacts_responded_count` for
+  the sender. When all contacts have responded (all rejected or cancelled), the node
+  cancels the P2P immediately and propagates cancel upstream via
+  `sendCancelNotificationForHash()`, avoiding a wasted wait until expiration.
 
 #### Best-Fee Mode (Experimental)
 
@@ -1229,7 +1236,7 @@ The best candidate is the one with the lowest `amount` (since accumulated fees
 increase the final amount):
 
 ```sql
-SELECT * FROM rp2p_candidates WHERE hash = ? ORDER BY amount ASC LIMIT 1
+SELECT * FROM rp2p_candidates WHERE hash = ? ORDER BY amount ASC
 ```
 
 After selection, `selectAndForwardBestRp2p()` iterates through candidates from
