@@ -173,6 +173,29 @@ class TransportUtilityService implements TransportServiceInterface
     }
 
     /**
+     * Get the curl_multi concurrency limit for a set of recipient addresses.
+     *
+     * Looks up CURL_MULTI_MAX_CONCURRENT by protocol. When the batch contains
+     * mixed protocols, returns the most restrictive (lowest) limit.
+     * Unknown protocols fall back to the lowest configured value.
+     *
+     * @param string[] $addresses Recipient addresses in this batch
+     * @return int Max concurrent connections to use
+     */
+    public function getConcurrencyLimit(array $addresses): int {
+        $limits = Constants::CURL_MULTI_MAX_CONCURRENT;
+        $fallback = min($limits);
+        $min = PHP_INT_MAX;
+
+        foreach ($addresses as $address) {
+            $protocol = $this->determineTransportType($address) ?? '';
+            $min = min($min, $limits[$protocol] ?? $fallback);
+        }
+
+        return $min === PHP_INT_MAX ? $fallback : $min;
+    }
+
+    /**
      *  Add random number to value (either 0 or 1)
      *
      * @param int A number
@@ -464,19 +487,10 @@ class TransportUtilityService implements TransportServiceInterface
             $handles[$recipient] = $this->createCurlHandle($recipient, $signedPayload);
         }
 
-        // Use Tor concurrency limit if any recipient is a Tor address
-        $hasTor = false;
-        foreach ($recipients as $recipient) {
-            if ($this->isTorAddress($recipient)) {
-                $hasTor = true;
-                break;
-            }
-        }
-        $maxConcurrent = $hasTor
-            ? Constants::CURL_MULTI_MAX_CONCURRENT_TOR
-            : Constants::CURL_MULTI_MAX_CONCURRENT_HTTP;
-
-        $responses = $this->executeWithConcurrencyLimit($handles, $maxConcurrent);
+        $responses = $this->executeWithConcurrencyLimit(
+            $handles,
+            $this->getConcurrencyLimit($recipients)
+        );
 
         // Build results with signing data
         $results = [];
@@ -554,19 +568,10 @@ class TransportUtilityService implements TransportServiceInterface
             $handles[$key] = $this->createCurlHandle($recipient, $signedPayload);
         }
 
-        // Use Tor concurrency limit if any recipient is a Tor address
-        $hasTor = false;
-        foreach ($sends as $send) {
-            if ($this->isTorAddress($send['recipient'])) {
-                $hasTor = true;
-                break;
-            }
-        }
-        $maxConcurrent = $hasTor
-            ? Constants::CURL_MULTI_MAX_CONCURRENT_TOR
-            : Constants::CURL_MULTI_MAX_CONCURRENT_HTTP;
-
-        $responses = $this->executeWithConcurrencyLimit($handles, $maxConcurrent);
+        $responses = $this->executeWithConcurrencyLimit(
+            $handles,
+            $this->getConcurrencyLimit(array_column($sends, 'recipient'))
+        );
 
         // Build results with signing data
         $results = [];
@@ -619,7 +624,7 @@ class TransportUtilityService implements TransportServiceInterface
         }
 
         if ($maxConcurrent <= 0) {
-            $maxConcurrent = Constants::CURL_MULTI_MAX_CONCURRENT_HTTP;
+            $maxConcurrent = min(Constants::CURL_MULTI_MAX_CONCURRENT);
         }
 
         $mh = curl_multi_init();

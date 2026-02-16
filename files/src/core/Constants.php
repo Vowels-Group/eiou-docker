@@ -148,8 +148,14 @@ class Constants {
     const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per EIOU hop)
     const P2P_QUEUE_BATCH_SIZE = 10; // Max queued P2Ps processed per daemon poll cycle (all sent in one curl_multi)
     const P2P_QUEUE_COALESCE_MS = 2000; // Milliseconds to wait for more P2Ps before firing mega-batch (default: 2000ms)
-    const CURL_MULTI_MAX_CONCURRENT_HTTP = 10; // Max simultaneous HTTP/HTTPS connections per curl_multi batch
-    const CURL_MULTI_MAX_CONCURRENT_TOR = 5;  // Max simultaneous Tor connections per curl_multi batch (Tor circuits overload easily)
+    // Max simultaneous connections per curl_multi batch, keyed by protocol.
+    // Lower Tor limit prevents circuit overload; HTTP/HTTPS can handle more.
+    // Unlisted protocols fall back to the lowest value.
+    const CURL_MULTI_MAX_CONCURRENT = [
+        'http'  => 10,
+        'https' => 10,
+        'tor'   => 5,
+    ];
 
     // Transport timeouts (single HTTP/TOR request to a node)
     const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
