@@ -22,10 +22,12 @@
             </div>
             <?php endforeach; ?>
             <?php else: ?>
+            <?php foreach ((!empty($knownCurrencies) ? $knownCurrencies : ['']) as $cur): ?>
             <div class="balance-display">
-                <div class="balance-amount">0.00</div>
+                <div class="balance-amount">0.00<?php if ($cur): ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span><?php endif; ?></div>
                 <div class="balance-currency">Total Balance</div>
             </div>
+            <?php endforeach; ?>
             <?php endif; ?>
 
             <?php if (!empty($totalEarningsByCurrency)): ?>
@@ -36,10 +38,12 @@
             </div>
             <?php endforeach; ?>
             <?php else: ?>
+            <?php foreach ((!empty($knownCurrencies) ? $knownCurrencies : ['']) as $cur): ?>
             <div class="balance-display balance-earnings">
-                <div class="balance-amount">0.00</div>
+                <div class="balance-amount">0.00<?php if ($cur): ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span><?php endif; ?></div>
                 <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
             </div>
+            <?php endforeach; ?>
             <?php endif; ?>
 
             <?php if (!empty($totalAvailableCreditByCurrency)): ?>
@@ -50,10 +54,12 @@
             </div>
             <?php endforeach; ?>
             <?php else: ?>
+            <?php foreach ((!empty($knownCurrencies) ? $knownCurrencies : ['']) as $cur): ?>
             <div class="balance-display balance-credit">
-                <div class="balance-amount">0.00</div>
+                <div class="balance-amount">0.00<?php if ($cur): ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span><?php endif; ?></div>
                 <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
             </div>
+            <?php endforeach; ?>
             <?php endif; ?>
         </div>
 

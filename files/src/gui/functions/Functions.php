@@ -132,6 +132,25 @@ if (!empty($earningsRaw)) {
         ];
     }
 }
+// Collect known currencies from all data sources for consistent fallback display
+$knownCurrencies = [];
+foreach ($totalBalanceByCurrency as $item) {
+    $knownCurrencies[$item['currency']] = true;
+}
+foreach ($totalEarningsByCurrency as $item) {
+    $knownCurrencies[$item['currency']] = true;
+}
+// totalAvailableCreditByCurrency is populated later, so also check contact_credit directly
+try {
+    $creditCurrencies = $serviceContainer->getContactCreditRepository()->getTotalAvailableCreditByCurrency();
+    foreach ($creditCurrencies as $row) {
+        $knownCurrencies[$row['currency']] = true;
+    }
+} catch (Exception $e) {
+    // Non-critical
+}
+$knownCurrencies = array_keys($knownCurrencies);
+
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
