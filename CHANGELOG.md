@@ -49,6 +49,7 @@ The project is currently in **ALPHA** status.
 - P2P best-fee mode forced to fast for Tor recipients (`.onion` addresses) on both sender and receiver side — Tor latency (~5s/hop) makes best-fee relay overhead prohibitive; receiver-side override prevents remote nodes from forcing best-fee mode over Tor
 
 ### Fixed
+- Idempotency guards on P2P and transaction balance updates — `MessageService::handleTransactionMessageRequest` and `CleanupService::syncAndCompleteP2p` now check whether a P2P/transaction is already completed before calling `updateBalanceGivenTransactions`, preventing double balance increments when both the normal completion flow and cleanup recovery fire for the same hash
 - Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
 
 ### Fixed

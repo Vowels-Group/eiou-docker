@@ -743,4 +743,102 @@ class MessageServiceTest extends TestCase
 
         $this->assertFalse($result);
     }
+
+    // =========================================================================
+    // Idempotency Guard Tests
+    // =========================================================================
+
+    /**
+     * Test P2P relay completion skips balance update when P2P already completed
+     */
+    public function testP2pRelayCompletionSkipsBalanceUpdateWhenAlreadyCompleted(): void
+    {
+        $request = [
+            'typeMessage' => 'transaction',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'status' => Constants::STATUS_COMPLETED,
+            'hashType' => 'memo',
+            'hash' => self::TEST_HASH,
+        ];
+
+        // Contact exists
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(true);
+
+        // P2P is already completed (idempotency scenario)
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => Constants::STATUS_COMPLETED,
+                'sender_address' => 'http://sender.example.com',
+            ]);
+
+        $this->transactionRepository->method('getByMemo')
+            ->with(self::TEST_HASH)
+            ->willReturn([['txid' => 'tx1', 'status' => Constants::STATUS_COMPLETED]]);
+
+        // sendMessage returns array with success key
+        $this->messageDeliveryService->method('sendMessage')
+            ->willReturn(['success' => true, 'tracking' => []]);
+
+        // Status updates are idempotent - still allowed
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_COMPLETED, true);
+        $this->transactionRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_COMPLETED);
+
+        // Balance update should NOT happen (already completed)
+        $this->balanceRepository->expects($this->never())
+            ->method('updateBalanceGivenTransactions');
+
+        // Expect acknowledgment output
+        $this->expectOutputRegex('/acknowledged/');
+
+        $this->service->handleMessageRequest($request);
+    }
+
+    /**
+     * Test direct transaction completion skips balance update when already completed
+     */
+    public function testDirectTxCompletionSkipsBalanceUpdateWhenAlreadyCompleted(): void
+    {
+        $txid = 'direct-tx-id-123';
+        $request = [
+            'typeMessage' => 'transaction',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'status' => Constants::STATUS_COMPLETED,
+            'hashType' => 'txid',
+            'hash' => $txid,
+            'amount' => 1000,
+            'currency' => 'USD',
+        ];
+
+        // Contact exists
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(true);
+
+        // Transaction already completed
+        $this->transactionRepository->method('getByTxid')
+            ->with($txid)
+            ->willReturn([['txid' => $txid, 'status' => Constants::STATUS_COMPLETED]]);
+
+        // Status update is idempotent - still allowed
+        $this->transactionRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($txid, Constants::STATUS_COMPLETED, true);
+
+        // Balance update should NOT happen (already completed)
+        $this->balanceRepository->expects($this->never())
+            ->method('updateBalanceGivenTransactions');
+
+        // Expect acknowledgment output
+        $this->expectOutputRegex('/acknowledged/');
+
+        $this->service->handleMessageRequest($request);
+    }
 }
