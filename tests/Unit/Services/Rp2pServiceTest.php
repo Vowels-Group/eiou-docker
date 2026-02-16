@@ -1446,9 +1446,9 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null); // No candidate found, just verifying selection was triggered
+            ->willReturn([]); // No candidate found, just verifying selection was triggered
 
         // getTrackingCounts should NOT be called because we return early
         $this->p2pRepository->expects($this->never())
@@ -1587,9 +1587,9 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
 
         $service->handleRp2pCandidate($request, $p2p);
     }
@@ -1656,9 +1656,9 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
 
         $service->handleRp2pCandidate($request, $p2p);
     }
@@ -1735,9 +1735,9 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
 
         $service->handleRp2pCandidate($request, $p2p);
     }
@@ -1917,9 +1917,9 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
 
         // Should NOT send to relayed contacts (that's phase 1)
         $p2pRelayedContactRepo->expects($this->never())
@@ -2043,8 +2043,8 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         // Best candidate exists
-        $rp2pCandidateRepo->method('getBestCandidate')
-            ->willReturn([
+        $rp2pCandidateRepo->method('getCandidatesByHash')
+            ->willReturn([[
                 'hash' => self::TEST_HASH,
                 'time' => 1234567890,
                 'amount' => 10050,
@@ -2053,10 +2053,7 @@ class Rp2pServiceTest extends TestCase
                 'sender_address' => self::TEST_ADDRESS,
                 'sender_signature' => 'test-sig',
                 'fee_amount' => 50,
-            ]);
-
-        $rp2pCandidateRepo->method('getCandidateCount')
-            ->willReturn(1);
+            ]]);
 
         // P2P record (intermediate node — no destination_address)
         $this->p2pRepository->method('getByHash')
@@ -2138,8 +2135,8 @@ class Rp2pServiceTest extends TestCase
         $this->rp2pRepository->method('rp2pExists')
             ->willReturn(false);
 
-        $rp2pCandidateRepo->method('getBestCandidate')
-            ->willReturn([
+        $rp2pCandidateRepo->method('getCandidatesByHash')
+            ->willReturn([[
                 'hash' => self::TEST_HASH,
                 'time' => 1234567890,
                 'amount' => 10050,
@@ -2148,10 +2145,7 @@ class Rp2pServiceTest extends TestCase
                 'sender_address' => self::TEST_ADDRESS,
                 'sender_signature' => 'test-sig',
                 'fee_amount' => 50,
-            ]);
-
-        $rp2pCandidateRepo->method('getCandidateCount')
-            ->willReturn(1);
+            ]]);
 
         $this->p2pRepository->method('getByHash')
             ->willReturn([
@@ -2340,10 +2334,289 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(false);
 
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
 
         $service->handleRp2pCandidate($request, $p2p);
+    }
+
+    // =========================================================================
+    // Best-fee candidate fallback tests
+    // =========================================================================
+
+    /**
+     * Test handleRp2pRequest returns false when originator fee exceeds max
+     */
+    public function testHandleRp2pRequestReturnsFalseForFeeRejection(): void
+    {
+        $sender = $this->createMock(P2pTransactionSenderInterface::class);
+        $this->service->setP2pTransactionSender($sender);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Originator P2P (has destination_address)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'destination_address' => 'http://destination.test',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+            ]);
+
+        // maxFee is 5.0 (set in setUp), fee will be way above that
+        // feeInformation calculates fee_percent = ((amount - original) / original) * 100
+        // amount after adding my_fee = 10050, request amount is 10000
+        // So fee = ((10050 - 10000) / 10000) * 100 = 0.5% — that's below 5%
+        // We need a higher fee. Set request amount high enough to exceed 5%
+        $request['amount'] = 15000; // fee would be ((15050 - 10000)/10000)*100 = 50.5%
+
+        // rp2p should NOT be inserted (fee check happens before insert now)
+        $this->rp2pRepository->expects($this->never())
+            ->method('insertRp2pRequest');
+
+        // Transaction should NOT be sent
+        $sender->expects($this->never())
+            ->method('sendP2pEiou');
+
+        $result = $this->service->handleRp2pRequest($request);
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test handleRp2pRequest returns false when relay can't afford
+     */
+    public function testHandleRp2pRequestReturnsFalseForRelayAffordability(): void
+    {
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Relay P2P (no destination_address)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+                'sender_address' => 'http://upstream.test',
+            ]);
+
+        // Can't afford: credit + funds < amount
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(0);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(0.0);
+
+        // rp2p should NOT be inserted
+        $this->rp2pRepository->expects($this->never())
+            ->method('insertRp2pRequest');
+
+        $result = $this->service->handleRp2pRequest($request);
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test selectAndForwardBestRp2p falls back to second candidate when first is rejected
+     */
+    public function testSelectAndForwardBestRp2pFallsBackToSecondCandidate(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+
+        $sender = $this->createMock(P2pTransactionSenderInterface::class);
+        $service->setP2pTransactionSender($sender);
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // Two candidates: first has high fee, second has acceptable fee
+        $rp2pCandidateRepo->method('getCandidatesByHash')
+            ->willReturn([
+                [
+                    'hash' => self::TEST_HASH,
+                    'time' => 1234567890,
+                    'amount' => 20000, // Very high fee (100% of original amount)
+                    'currency' => 'EIOU',
+                    'sender_public_key' => 'key-expensive',
+                    'sender_address' => 'http://expensive-route.test',
+                    'sender_signature' => 'sig-expensive',
+                    'fee_amount' => 10000,
+                ],
+                [
+                    'hash' => self::TEST_HASH,
+                    'time' => 1234567890,
+                    'amount' => 10050, // Low fee (0.5%)
+                    'currency' => 'EIOU',
+                    'sender_public_key' => 'key-cheap',
+                    'sender_address' => 'http://cheap-route.test',
+                    'sender_signature' => 'sig-cheap',
+                    'fee_amount' => 50,
+                ],
+            ]);
+
+        // Originator P2P
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'destination_address' => 'http://destination.test',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+            ]);
+
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 2,
+                'contacts_responded_count' => 2,
+                'contacts_relayed_count' => 0,
+                'phase1_sent' => 0,
+                'fast' => 0,
+            ]);
+
+        // The second candidate should succeed — rp2p gets inserted
+        $this->rp2pRepository->expects($this->once())
+            ->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+
+        // Status should be updated to 'found'
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, 'found');
+
+        // Transaction should be sent (second candidate accepted)
+        $sender->expects($this->once())
+            ->method('sendP2pEiou');
+
+        // Candidates should be cleaned up
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('deleteCandidatesByHash')
+            ->with(self::TEST_HASH);
+
+        $service->selectAndForwardBestRp2p(self::TEST_HASH);
+    }
+
+    /**
+     * Test selectAndForwardBestRp2p cancels P2P when all candidates fail
+     */
+    public function testSelectAndForwardBestRp2pCancelsWhenAllCandidatesFail(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $mockP2pService = $this->createMock(\Eiou\Contracts\P2pServiceInterface::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+        $service->setP2pService($mockP2pService);
+
+        $sender = $this->createMock(P2pTransactionSenderInterface::class);
+        $service->setP2pTransactionSender($sender);
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // Two candidates, both with fees too high
+        $rp2pCandidateRepo->method('getCandidatesByHash')
+            ->willReturn([
+                [
+                    'hash' => self::TEST_HASH,
+                    'time' => 1234567890,
+                    'amount' => 20000,
+                    'currency' => 'EIOU',
+                    'sender_public_key' => 'key-1',
+                    'sender_address' => 'http://route1.test',
+                    'sender_signature' => 'sig-1',
+                    'fee_amount' => 10000,
+                ],
+                [
+                    'hash' => self::TEST_HASH,
+                    'time' => 1234567890,
+                    'amount' => 25000,
+                    'currency' => 'EIOU',
+                    'sender_public_key' => 'key-2',
+                    'sender_address' => 'http://route2.test',
+                    'sender_signature' => 'sig-2',
+                    'fee_amount' => 15000,
+                ],
+            ]);
+
+        // Originator P2P
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'destination_address' => 'http://destination.test',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+                'status' => 'sent',
+            ]);
+
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 2,
+                'contacts_responded_count' => 2,
+                'contacts_relayed_count' => 0,
+                'phase1_sent' => 0,
+                'fast' => 0,
+            ]);
+
+        // No rp2p should be inserted (all candidates rejected)
+        $this->rp2pRepository->expects($this->never())
+            ->method('insertRp2pRequest');
+
+        // Transaction should NOT be sent
+        $sender->expects($this->never())
+            ->method('sendP2pEiou');
+
+        // P2P should be cancelled
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_CANCELLED);
+
+        // Cancel notification should be sent upstream
+        $mockP2pService->expects($this->once())
+            ->method('sendCancelNotificationForHash')
+            ->with(self::TEST_HASH);
+
+        // Candidates should still be cleaned up
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('deleteCandidatesByHash')
+            ->with(self::TEST_HASH);
+
+        $service->selectAndForwardBestRp2p(self::TEST_HASH);
     }
 }

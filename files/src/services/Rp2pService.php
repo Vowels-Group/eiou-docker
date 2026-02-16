@@ -257,47 +257,51 @@ class Rp2pService implements Rp2pServiceInterface {
      * Handle incoming RP2P request
      *
      * @param array $request The RP2P request data
-     * @return void
+     * @return bool True if the rp2p was successfully processed, false if rejected
      */
-    public function handleRp2pRequest(array $request): void {
-        // Check if corresponding p2p exists 
+    public function handleRp2pRequest(array $request): bool {
+        // Check if corresponding p2p exists
         $p2p = $this->p2pRepository->getByHash($request['hash']);
         if(!$p2p){
             throw new Exception('P2P request was not found for the given hash.');
-        }else{
-            if(isset($p2p['destination_address'])) {
-                $this->p2pRepository->updateStatus($request['hash'], 'found');
-            }
-            // Add users fee to request
-            $request['amount'] += $p2p['my_fee_amount'];
+        }
 
-            //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
-            if(!isset($p2p['destination_address'])) {
-                $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
-                $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
-                if(($creditLimit + $availableFunds) < $request['amount']){
-                    output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
-                    return;
-                }
-            }
+        // Add users fee to request
+        $request['amount'] += $p2p['my_fee_amount'];
 
-            // Save rp2p response 
-            $insertResult = $this->rp2pRepository->insertRp2pRequest($request);
-            if (!$insertResult) {
-                output(outputRp2pInsertionFailure($request), 'SILENT');
+        //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
+        if(!isset($p2p['destination_address'])) {
+            $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
+            if(($creditLimit + $availableFunds) < $request['amount']){
+                output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
+                return false;
             }
-            // Check if original p2p was sent by user
-            if(isset($p2p['destination_address'])) {
-                $feePercent = $this->feeInformation($p2p,$request); // Get fee percent and output fee information in  log
-                
-                // Check if the fee percent is below the set maximum fee percent the user would pay
-                if ($feePercent <= $this->currentUser->getMaxFee()) {
-                    // Send transaction through rp2p chain using P2pTransactionSenderInterface
-                    $this->getP2pTransactionSender()->sendP2pEiou($request);
-                } else {
-                    output(outputFeeRejection(), 'SILENT');
-                }
-            } else{
+        }
+
+        // Originator fee check — validate BEFORE inserting rp2p so rejected
+        // candidates don't pollute the database and fallback can try the next one
+        if(isset($p2p['destination_address'])) {
+            $feePercent = $this->feeInformation($p2p,$request);
+            if ($feePercent > $this->currentUser->getMaxFee()) {
+                output(outputFeeRejection(), 'SILENT');
+                return false;
+            }
+        }
+
+        // Save rp2p response (only after all validation passes)
+        $insertResult = $this->rp2pRepository->insertRp2pRequest($request);
+        if (!$insertResult) {
+            output(outputRp2pInsertionFailure($request), 'SILENT');
+            return false;
+        }
+
+        // Check if original p2p was sent by user
+        if(isset($p2p['destination_address'])) {
+            $this->p2pRepository->updateStatus($request['hash'], 'found');
+            // Send transaction through rp2p chain using P2pTransactionSenderInterface
+            $this->getP2pTransactionSender()->sendP2pEiou($request);
+        } else{
                 // Send rp2p back to ALL upstream senders (multi-path support)
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
 
@@ -382,8 +386,9 @@ class Rp2pService implements Rp2pServiceInterface {
                         output(outputRp2pResponse($response ?? ['status' => 'failed', 'error' => $lastError]), 'SILENT');
                     }
                 }
-            }
         }
+
+        return true;
     }
 
     /**
@@ -835,8 +840,8 @@ class Rp2pService implements Rp2pServiceInterface {
             return;
         }
 
-        $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
-        if (!$bestCandidate) {
+        $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
+        if (empty($candidates)) {
             // All contacts responded but zero viable candidates — cancel and propagate upstream.
             // Guard: only send cancel notification if P2P is not already cancelled
             // to prevent feedback loop from redundant cancel messages.
@@ -852,33 +857,13 @@ class Rp2pService implements Rp2pServiceInterface {
             return;
         }
 
-        Logger::getInstance()->info("Best-fee route selected", [
+        $totalCandidates = count($candidates);
+        Logger::getInstance()->info("Best-fee route selection starting", [
             'hash' => $hash,
-            'amount' => $bestCandidate['amount'],
-            'fee_amount' => $bestCandidate['fee_amount'],
-            'sender_address' => $bestCandidate['sender_address'],
-            'total_candidates' => $this->rp2pCandidateRepository->getCandidateCount($hash),
+            'total_candidates' => $totalCandidates,
         ]);
 
-        // Convert candidate back to rp2p request format for handleRp2pRequest
-        $request = [
-            'hash' => $bestCandidate['hash'],
-            'time' => $bestCandidate['time'],
-            'amount' => (int) $bestCandidate['amount'],
-            'currency' => $bestCandidate['currency'],
-            'senderPublicKey' => $bestCandidate['sender_public_key'],
-            'senderAddress' => $bestCandidate['sender_address'],
-            'signature' => $bestCandidate['sender_signature'],
-        ];
-
-        // Process the best candidate via normal rp2p handling
-        // Note: handleRp2pRequest adds the fee again, but the candidate amount
-        // already includes our fee from handleRp2pCandidate, so we need to
-        // subtract it before passing to handleRp2pRequest
         $p2p = $this->p2pRepository->getByHash($hash);
-        if ($p2p) {
-            $request['amount'] -= ($p2p['my_fee_amount'] ?? 0);
-        }
 
         // Before forwarding upstream: ensure Phase 1 sent to relayed contacts.
         // Race condition: if a relayed contact's RP2P arrived before all inserted
@@ -895,7 +880,60 @@ class Rp2pService implements Rp2pServiceInterface {
             }
         }
 
-        $this->handleRp2pRequest($request);
+        // Try candidates from cheapest to most expensive (fallback on fee/affordability rejection)
+        $success = false;
+        foreach ($candidates as $index => $candidate) {
+            // Convert candidate back to rp2p request format for handleRp2pRequest
+            $request = [
+                'hash' => $candidate['hash'],
+                'time' => $candidate['time'],
+                'amount' => (int) $candidate['amount'],
+                'currency' => $candidate['currency'],
+                'senderPublicKey' => $candidate['sender_public_key'],
+                'senderAddress' => $candidate['sender_address'],
+                'signature' => $candidate['sender_signature'],
+            ];
+
+            // handleRp2pRequest adds the fee again, but the candidate amount
+            // already includes our fee from handleRp2pCandidate, so subtract it
+            if ($p2p) {
+                $request['amount'] -= ($p2p['my_fee_amount'] ?? 0);
+            }
+
+            if ($this->handleRp2pRequest($request)) {
+                Logger::getInstance()->info("Best-fee route selected", [
+                    'hash' => $hash,
+                    'candidate' => ($index + 1) . '/' . $totalCandidates,
+                    'amount' => $candidate['amount'],
+                    'fee_amount' => $candidate['fee_amount'],
+                    'sender_address' => $candidate['sender_address'],
+                ]);
+                $success = true;
+                break;
+            }
+
+            Logger::getInstance()->info("Candidate rejected, trying next", [
+                'hash' => $hash,
+                'candidate' => ($index + 1) . '/' . $totalCandidates,
+                'sender_address' => $candidate['sender_address'],
+            ]);
+        }
+
+        if (!$success) {
+            // All candidates failed fee/affordability checks — cancel and propagate upstream
+            $currentP2p = $this->p2pRepository->getByHash($hash);
+            $currentStatus = $currentP2p ? ($currentP2p['status'] ?? null) : null;
+            if ($currentStatus !== Constants::STATUS_CANCELLED && $currentStatus !== 'expired') {
+                Logger::getInstance()->warning("All rp2p candidates failed validation, cancelling P2P", [
+                    'hash' => $hash,
+                    'candidates_tried' => $totalCandidates,
+                ]);
+                $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
+                if ($this->p2pService !== null) {
+                    $this->p2pService->sendCancelNotificationForHash($hash);
+                }
+            }
+        }
 
         // Clean up all candidates for this hash
         $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);

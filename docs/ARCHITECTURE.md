@@ -1232,9 +1232,12 @@ increase the final amount):
 SELECT * FROM rp2p_candidates WHERE hash = ? ORDER BY amount ASC LIMIT 1
 ```
 
-After selection, `selectAndForwardBestRp2p()` processes the winning candidate
-through the normal `handleRp2pRequest()` flow and deletes all candidates for
-that hash.
+After selection, `selectAndForwardBestRp2p()` iterates through candidates from
+cheapest to most expensive and calls `handleRp2pRequest()` for each one.
+If a candidate fails validation (fee exceeds originator's `maxFee`, or relay
+node can't afford the amount), the next candidate is tried. If all candidates
+fail, the P2P is cancelled and a cancel notification is sent upstream.
+All candidates are deleted after the loop completes regardless of outcome.
 
 **Phase 3a — Two-Phase Relay Selection (Mesh Deadlock Prevention):**
 
