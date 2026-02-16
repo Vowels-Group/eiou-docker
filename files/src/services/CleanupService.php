@@ -461,6 +461,13 @@ class CleanupService implements CleanupServiceInterface {
     private function syncAndCompleteP2p(array $message): void {
         $hash = $message['hash'];
 
+        // Idempotency guard: skip if P2P already completed (balance already updated)
+        $p2p = $this->p2pRepository->getByHash($hash);
+        if ($p2p && $p2p['status'] === Constants::STATUS_COMPLETED) {
+            Logger::getInstance()->info("syncAndCompleteP2p skipped: P2P already completed", ['hash' => $hash]);
+            return;
+        }
+
         // Update P2P status to completed
         $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
 

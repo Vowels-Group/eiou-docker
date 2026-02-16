@@ -589,6 +589,8 @@ class MessageService implements MessageServiceInterface {
                 $p2p = $this->p2pRepository->getByHash($hash);
                 // P2P has two transactions, one to you and one you send forwards (unless you are the end recipient, then only one transaction towards you)
                 $transactions = $this->transactionRepository->getByMemo($hash);
+                // Idempotency guard: track if P2P was already completed to prevent double balance update
+                $p2pAlreadyCompleted = ($p2p && $p2p['status'] === Constants::STATUS_COMPLETED);
                 if($p2p && $transactions){
                     // Check if user was original sender of transaction
                     if(isset($p2p['destination_address'])){
@@ -616,7 +618,9 @@ class MessageService implements MessageServiceInterface {
                                 // Transaction confirmed completed at end-recipient
                                 $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
                                 $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
-                                $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+                                if (!$p2pAlreadyCompleted) {
+                                    $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+                                }
                                 output(outputTransactionP2pSentSuccesfully($p2p), 'SILENT');
 
                                 // Store description from completion message if provided
@@ -645,7 +649,9 @@ class MessageService implements MessageServiceInterface {
                     } else{
                         $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
                         $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
-                        $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+                        if (!$p2pAlreadyCompleted) {
+                            $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+                        }
 
                         // Mark all P2P delivery records for this hash as completed
                         $this->markP2pDeliveriesCompleted($hash);
@@ -670,8 +676,18 @@ class MessageService implements MessageServiceInterface {
                 // Singular direct transaction
                 $transaction = $this->transactionRepository->getByTxid($hash);
                 if($transaction){
+                    // Idempotency guard: check if transaction already completed to prevent double balance update
+                    $txAlreadyCompleted = false;
+                    foreach ($transaction as $tx) {
+                        if (($tx['status'] ?? '') === Constants::STATUS_COMPLETED) {
+                            $txAlreadyCompleted = true;
+                            break;
+                        }
+                    }
                     $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
-                    $this->balanceRepository->updateBalanceGivenTransactions($transaction);
+                    if (!$txAlreadyCompleted) {
+                        $this->balanceRepository->updateBalanceGivenTransactions($transaction);
+                    }
                     output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
 
                     // Store description from completion message if provided

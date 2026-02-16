@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Services\RateLimiterService;
 
@@ -29,6 +31,22 @@ interface ContactStatusServiceInterface
      * @return void
      */
     public function setRateLimiterService(RateLimiterService $service): void;
+
+    /**
+     * Set the balance repository for calculating available credit in pong responses
+     *
+     * @param BalanceRepository $repo Balance repository
+     * @return void
+     */
+    public function setBalanceRepository(BalanceRepository $repo): void;
+
+    /**
+     * Set the contact credit repository for storing available credit from pong responses
+     *
+     * @param ContactCreditRepository $repo Contact credit repository
+     * @return void
+     */
+    public function setContactCreditRepository(ContactCreditRepository $repo): void;
 
     /**
      * Handle incoming ping request

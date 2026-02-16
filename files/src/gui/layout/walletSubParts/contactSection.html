@@ -230,12 +230,20 @@
             <div class="contact-info-section">
                 <div class="info-grid">
                     <div class="info-item">
-                        <label><i class="fas fa-credit-card"></i> Credit Limit</label>
+                        <label><i class="fas fa-credit-card"></i> Their Credit Limit</label>
                         <div class="info-value"><span id="modal_credit_limit">0.00</span> <span id="modal_credit_currency">USD</span></div>
                     </div>
                     <div class="info-item">
                         <label><i class="fas fa-percent"></i> Fee</label>
                         <div class="info-value"><span id="modal_fee">0.00</span>%</div>
+                    </div>
+                    <div class="info-item">
+                        <label title="How much credit you can use through this contact (received via ping)"><i class="fas fa-coins"></i> Your Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Refreshed on ~5 min intervals, may not be fully up to date"></i></label>
+                        <div class="info-value"><span id="modal_my_available_credit">—</span> <span id="modal_my_credit_currency">USD</span></div>
+                    </div>
+                    <div class="info-item">
+                        <label title="How much credit this contact can use through you"><i class="fas fa-hand-holding-usd"></i> Their Available Credit</label>
+                        <div class="info-value"><span id="modal_their_available_credit">—</span> <span id="modal_their_credit_currency">USD</span></div>
                     </div>
                 </div>
             </div>

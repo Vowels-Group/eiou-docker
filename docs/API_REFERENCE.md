@@ -349,6 +349,12 @@ Get dashboard summary with balances and recent transactions.
                 "total_balance": 500.00
             }
         ],
+        "total_available_credit": [
+            {
+                "currency": "USD",
+                "total": "250.00"
+            }
+        ],
         "recent_transactions": [
             {
                 "txid": "tx_abc123",
@@ -366,6 +372,9 @@ Get dashboard summary with balances and recent transactions.
     }
 }
 ```
+
+**Fields:**
+- `total_available_credit`: Sum of available credit across all contacts, grouped by currency. Received via ping/pong from contacts; refreshed on ~5 minute intervals.
 
 ---
 
@@ -499,6 +508,8 @@ List all contacts.
                 "currency": "USD",
                 "fee_percent": 1.0,
                 "credit_limit": 100.00,
+                "my_available_credit": 95.00,
+                "their_available_credit": 100.00,
                 "addresses": {
                     "http": "http://bob.local:8080",
                     "https": null,
@@ -511,6 +522,10 @@ List all contacts.
     }
 }
 ```
+
+**Fields:**
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
+- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
 
 ---
 
@@ -631,13 +646,25 @@ Search contacts by name.
                 "status": "accepted",
                 "addresses": {
                     "http": "http://bob.local:8080"
-                }
+                },
+                "fee_percent": 1.0,
+                "credit_limit": 100.00,
+                "my_available_credit": 85.50,
+                "their_available_credit": 114.50,
+                "currency": "USD"
             }
         ],
         "count": 1
     }
 }
 ```
+
+**Contact fields:**
+- `fee_percent`: Fee percentage for transactions through this contact
+- `credit_limit`: Credit limit set for this contact
+- `my_available_credit`: How much credit this contact extends to you (from pong, refreshed on ~5 min intervals). `null` if not yet received.
+- `their_available_credit`: How much credit you extend to this contact (calculated from balance + credit limit). `null` if no balance data.
+- `currency`: Currency code for this contact relationship
 
 ---
 
@@ -667,6 +694,8 @@ Ping a contact to check online status.
 }
 ```
 
+**Note:** Ping also exchanges available credit information with the contact in the background. The `my_available_credit` field on subsequent contact queries will reflect the latest value received from this ping.
+
 ---
 
 ### GET /api/v1/contacts/:address
@@ -688,6 +717,8 @@ Get contact details by address or name.
             "currency": "USD",
             "fee_percent": 1.0,
             "credit_limit": 100.00,
+            "my_available_credit": 95.00,
+            "their_available_credit": 100.00,
             "addresses": {
                 "http": "http://bob.local:8080",
                 "https": null,
@@ -703,6 +734,10 @@ Get contact details by address or name.
     }
 }
 ```
+
+**Fields:**
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
+- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
 
 **Error Response (404):**
 
@@ -976,7 +1011,10 @@ Get system settings.
             "p2p_expiration_seconds": 3600,
             "max_output_lines": 100,
             "default_transport_mode": "http",
-            "auto_refresh_enabled": true
+            "hostname": "http://alice",
+            "hostname_secure": "https://alice",
+            "auto_refresh_enabled": true,
+            "auto_backup_enabled": true
         }
     }
 }
@@ -992,7 +1030,10 @@ Get system settings.
 - `p2p_expiration_seconds`: Time in seconds before P2P requests expire
 - `max_output_lines`: Maximum output lines for CLI commands
 - `default_transport_mode`: Default transport protocol ("http", "https", or "tor")
+- `hostname`: HTTP hostname of the node (e.g., "http://alice")
+- `hostname_secure`: HTTPS hostname of the node (e.g., "https://alice")
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
+- `auto_backup_enabled`: Whether daily automatic database backup is enabled
 
 ---
 

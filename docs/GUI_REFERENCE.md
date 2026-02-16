@@ -278,11 +278,14 @@ Quick navigation cards linking to main sections:
 | Element | Purpose |
 |---------|---------|
 | Last updated timestamp | Shows data freshness |
-| Total Balance | Aggregated wallet balance |
-| Total Earnings | P2P routing earnings |
+| Total Balance | Aggregated wallet balance per currency |
+| Total Fee Earnings | P2P relay fee earnings per currency |
+| Total Available Credit | Sum of available credit per currency (from ping/pong, ~5 min refresh) |
 | User Addresses | HTTP/HTTPS/Tor with copy buttons |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
+
+All three dashboard cards display per-currency rows. When a card has no data for a given category, it shows "0.00" with the currency derived from other data sources for consistency.
 
 ---
 
@@ -336,7 +339,7 @@ Quick navigation cards linking to main sections:
 
 | Tab | Contents |
 |-----|----------|
-| Info | Balance, credit limit, fee, online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
+| Info | Balance, credit limit, fee, your/their available credit, online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
 | Transactions | Recent transactions with this contact |
 | Settings | Edit form, block/unblock/delete buttons |
 
@@ -558,6 +561,8 @@ Builds standardized contact data structures for the GUI.
 |--------|-------------|
 | `buildContactData($contact, $status)` | Create normalized contact array |
 | `buildEncodedContactData($contact, $status)` | JSON-encoded, HTML-safe for onclick |
+
+**Contact Data Fields:** name, address, fee, credit_limit, currency, status, pubkey, pubkey_hash, balance, contact_id, transactions, online_status, valid_chain, my_available_credit, their_available_credit, chain_drop_proposal, plus all dynamic address types.
 
 **Address Priority:** Tor > HTTPS > HTTP (security preference)
 

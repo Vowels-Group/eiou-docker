@@ -13,6 +13,21 @@ The project is currently in **ALPHA** status.
 ## 2026-02-16
 
 ### Added
+- Available credit exchange during ping/pong — pong responses now include `availableCredit` and `currency` fields, allowing contacts to report how much credit is available to transact through them
+- `contact_credit` database table — stores per-contact available credit (pubkey_hash, available_credit, currency) updated on each successful ping, linked to contacts via pubkey_hash
+- `ContactCreditRepository` — new repository for managing contact credit entries with upsert, lookup, and initial creation methods
+- Initial contact credit entry created on contact acceptance — both `ContactManagementService` and `ContactSyncService` create a zero-credit row when accepting contacts
+- `ContactStatusProcessor` saves available credit from background ping pong responses
+- Bidirectional available credit display — CLI `view`, `search`, API contact endpoints (`/contacts`, `/contacts/:address`, `/contacts/search`), and GUI contact modal show both "your available credit" (from pong) and "their available credit" (calculated from balance + credit limit)
+- Total available credit per currency in CLI `info` command — sums available credit across all contacts, displayed in both text and JSON modes
+- Total fee earnings per currency in CLI `info` command — sums P2P relay fee earnings across all completed P2Ps, displayed in both text and JSON modes
+- Available credit in API contact endpoints — `GET /api/v1/contacts` and `GET /api/v1/contacts/:address` include `my_available_credit` and `their_available_credit` fields
+- Total available credit in API wallet overview — `GET /api/v1/wallet/overview` includes `total_available_credit` array grouped by currency
+- `getTotalAvailableCreditByCurrency()` method on `ContactCreditRepository` — aggregates available credit across all contacts by currency
+- GUI total available credit dashboard card — shows summed available credit per currency in the wallet information section
+- GUI contact modal bidirectional credit display — "Your Credit" (from pong, with refresh interval tooltip) and "Their Credit" (calculated locally) shown side by side
+- GUI wallet dashboard stats (Total Balance, Total Earnings, Total Available Credit) displayed in a horizontal row on wide screens with consistent card styling; each currency gets its own row for future multi-currency support
+- Contact modal labels renamed to "Your Available Credit" and "Their Available Credit"; reordered to: Credit Limit, Your Available Credit, Fee, Their Available Credit
 - Sliding-window concurrency control for `curl_multi` batch sends — `executeWithConcurrencyLimit()` caps simultaneous connections per protocol (HTTP: 10, Tor: 5) to prevent Tor circuit overload
 - `getConcurrencyLimit()` method on `TransportUtilityService` — centralized protocol-to-limit lookup using `Constants::CURL_MULTI_MAX_CONCURRENT` associative array
 - Mega-batch P2P processing — `processQueuedP2pMessages()` uses a 3-phase approach: collect all sends across queued P2Ps, fire via `sendMultiBatch()`, map results back
@@ -35,7 +50,30 @@ The project is currently in **ALPHA** status.
 - P2P best-fee mode forced to fast for Tor recipients (`.onion` addresses) on both sender and receiver side — Tor latency (~5s/hop) makes best-fee relay overhead prohibitive; receiver-side override prevents remote nodes from forcing best-fee mode over Tor
 
 ### Fixed
+- `viewsettings` CLI command and `GET /api/v1/system/settings` now include `hostname` and `hostname_secure` fields — previously these were settable via `changesettings` option 10 but not visible in the settings display
+- API `GET /api/v1/system/settings` now includes `auto_backup_enabled` field
+- Idempotency guards on P2P and transaction balance updates — `MessageService::handleTransactionMessageRequest` and `CleanupService::syncAndCompleteP2p` now check whether a P2P/transaction is already completed before calling `updateBalanceGivenTransactions`, preventing double balance increments when both the normal completion flow and cleanup recovery fire for the same hash
 - Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
+
+### Fixed
+- Ping/pong fatal error — `ContactStatusService::handlePingRequest()` called `protected` method `findByColumn()` on `AbstractRepository`; replaced with public `getContactByPubkey()`
+
+### Changed
+- Wallet dashboard balance and earnings cards now display per-currency rows — future-proofed for multi-currency support, matching the existing Total Available Credit pattern
+- Dollar sign (`$`) prefix removed from all transaction amount displays — amounts now show as `83.32 USD` instead of `$83.32 USD` across recent transactions, transaction detail modals, contact modal transactions, in-progress transactions, P2P details, and toast notifications
+- `getUserTotalEarningsByCurrency()` method added to `P2pRepository` and `P2pService` — returns fee earnings grouped by currency
+
+### Docs
+- Updated API Reference with `total_available_credit` in wallet overview response and `my_available_credit`/`their_available_credit` in contact endpoints
+- Updated API Reference: `/contacts/search` now documents `fee_percent`, `credit_limit`, `my_available_credit`, `their_available_credit`, and `currency` fields
+- Updated API Reference: `/system/settings` now documents `hostname`, `hostname_secure`, and `auto_backup_enabled` fields
+- Updated CLI Reference: `search` command now documents available credit fields in output
+- Updated CLI Reference: `info` command now documents total fee earnings per currency
+- Updated CLI Reference: `viewsettings` command now documents hostname and auto-backup fields
+- Updated GUI Reference: wallet dashboard cards documented as per-currency with fallback behavior
+- Updated CLI Demo Guide with available credit details for `viewcontact` and `ping` sections
+- Updated GUI Reference with total available credit dashboard card and contact modal credit fields
+- Updated API and GUI Quick References with available credit field descriptions
 
 ## 2026-02-15
 

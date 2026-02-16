@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof showToast === 'function') {
         showToast(
             'Transaction Complete',
-            'Your $<?php echo number_format($tx['amount'] ?? 0, 2); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> transfer has completed successfully.',
+            'Your <?php echo number_format($tx['amount'] ?? 0, 2); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> transfer has completed successfully.',
             'success'
         );
     }
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof showToast === 'function') {
         showToast(
             'Payment Received',
-            'You received $<?php echo number_format($tx['amount'] ?? 0, 2); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> from <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'a contact'); ?>.',
+            'You received <?php echo number_format($tx['amount'] ?? 0, 2); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> from <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'a contact'); ?>.',
             'success'
         );
     }

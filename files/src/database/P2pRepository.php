@@ -231,18 +231,35 @@ class P2pRepository extends AbstractRepository {
     /**
      * Get users earnings through fees
      *
-     * @return string Fee Balance 
+     * @return string Fee Balance
      */
     function getUserTotalEarnings() {
         $query = "SELECT SUM(my_fee_amount) as total_amount FROM {$this->tableName} WHERE status = 'completed'";
         $stmt = $this->execute($query);
-        
+
         if (!$stmt) {
             return 0.00;
         }
-        
+
         $balance = $stmt->fetchColumn();
         return $balance ?? 0.00;
+    }
+
+    /**
+     * Get users earnings through fees grouped by currency
+     *
+     * @return array Array of ['currency' => string, 'total_amount' => int] rows
+     */
+    public function getUserTotalEarningsByCurrency(): array {
+        $query = "SELECT currency, SUM(my_fee_amount) as total_amount FROM {$this->tableName} WHERE status = 'completed' GROUP BY currency";
+        $stmt = $this->execute($query);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $result ?: [];
     }
 
     /**

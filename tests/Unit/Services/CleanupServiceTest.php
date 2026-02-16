@@ -1040,4 +1040,51 @@ class CleanupServiceTest extends TestCase
 
         $this->assertEquals(0, $result);
     }
+
+    /**
+     * Test syncAndCompleteP2p skips balance update when P2P already completed (idempotency guard)
+     */
+    public function testExpireMessageSkipsBalanceUpdateWhenP2pAlreadyCompleted(): void
+    {
+        $message = [
+            'hash' => self::TEST_HASH,
+            'sender_address' => self::TEST_SENDER_ADDRESS
+        ];
+
+        $pendingTransaction = [
+            'txid' => self::TEST_TXID,
+            'status' => Constants::STATUS_PENDING
+        ];
+
+        // First call: check local (no completed)
+        $this->transactionRepository->expects($this->once())
+            ->method('getByMemo')
+            ->with(self::TEST_HASH)
+            ->willReturn([$pendingTransaction]);
+
+        // Sender inquiry returns completed
+        $this->transportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn(json_encode(['status' => Constants::STATUS_COMPLETED]));
+
+        // syncAndCompleteP2p calls getByHash - return already completed P2P
+        $this->p2pRepository->expects($this->once())
+            ->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn(['hash' => self::TEST_HASH, 'status' => Constants::STATUS_COMPLETED]);
+
+        // Should NOT update P2P status (guard returns early)
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+
+        // Should NOT update transaction status
+        $this->transactionRepository->expects($this->never())
+            ->method('updateStatus');
+
+        // Should NOT update balance (idempotency guard prevents double update)
+        $this->balanceRepository->expects($this->never())
+            ->method('updateBalanceGivenTransactions');
+
+        $this->service->expireMessage($message);
+    }
 }

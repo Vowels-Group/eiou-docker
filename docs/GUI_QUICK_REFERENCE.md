@@ -86,10 +86,10 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 | Header | `layout/walletSubParts/header.html` | Page header |
 | Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages, pending contact banners, chain drop proposal banners |
 | Quick actions | `layout/walletSubParts/quickActions.html` | Action buttons |
-| Wallet info | `layout/walletSubParts/walletInformation.html` | Balance, earnings display |
+| Wallet info | `layout/walletSubParts/walletInformation.html` | Balance, earnings, available credit display |
 | Send form | `layout/walletSubParts/eiouForm.html` | Send transaction form |
 | Contact form | `layout/walletSubParts/contactForm.html` | Add contact form |
-| Contact section | `layout/walletSubParts/contactSection.html` | Contact lists (pending, accepted, blocked) |
+| Contact section | `layout/walletSubParts/contactSection.html` | Contact lists, modal with your/their credit |
 | Transaction history | `layout/walletSubParts/transactionHistory.html` | Transaction list |
 | Settings | `layout/walletSubParts/settingsSection.html` | Settings panel & debug tools |
 | Floating buttons | `layout/walletSubParts/floatingButtons.html` | Back-to-top, etc. |

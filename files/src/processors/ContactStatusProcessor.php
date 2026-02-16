@@ -6,6 +6,7 @@ namespace Eiou\Processors;
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
@@ -63,6 +64,11 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
     private ?object $syncService = null;
 
     /**
+     * @var ContactCreditRepository|null Contact credit repository for storing available credit
+     */
+    private ?ContactCreditRepository $contactCreditRepository = null;
+
+    /**
      * @var int Index of current contact being pinged in the cycle
      */
     private int $currentContactIndex = 0;
@@ -89,6 +95,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         // Get repositories from ServiceContainer directly
         $this->contactRepository = $app->services->getContactRepository();
         $this->transactionRepository = $app->services->getTransactionRepository();
+        $this->contactCreditRepository = $app->services->getContactCreditRepository();
 
         // Initialize payload builder
         $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);
@@ -193,6 +200,9 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                     // Contact is online
                     $this->updateContactOnlineStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
 
+                    // Save available credit from pong response
+                    $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
+
                     // Check chain validity
                     $chainValid = $response['chainValid'] ?? true;
                     $remotePrevTxid = $response['prevTxid'] ?? null;
@@ -229,6 +239,31 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                 'error' => $e->getMessage()
             ]);
             return true;
+        }
+    }
+
+    /**
+     * Save available credit received from a pong response
+     *
+     * @param string $contactPubkey Contact's public key
+     * @param array $response The pong response data
+     */
+    private function saveAvailableCreditFromPong(string $contactPubkey, array $response): void {
+        if (!isset($response['availableCredit']) || $this->contactCreditRepository === null) {
+            return;
+        }
+
+        try {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+            $this->contactCreditRepository->upsertAvailableCredit(
+                $pubkeyHash,
+                (int) $response['availableCredit'],
+                $response['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY
+            );
+        } catch (Exception $e) {
+            Logger::getInstance()->warning("Failed to save available credit from pong", [
+                'error' => $e->getMessage()
+            ]);
         }
     }
 

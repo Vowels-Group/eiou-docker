@@ -12,6 +12,8 @@ use Eiou\Contracts\CliServiceInterface;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\P2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -79,6 +81,16 @@ class CliService implements CliServiceInterface {
     private UserContext $currentUser;
 
     /**
+     * @var ContactCreditRepository|null Contact credit repository (optional, setter-injected)
+     */
+    private ?ContactCreditRepository $contactCreditRepository = null;
+
+    /**
+     * @var P2pRepository|null P2P repository (optional, setter-injected)
+     */
+    private ?P2pRepository $p2pRepository = null;
+
+    /**
      * Constructor
      * 
      * @param ContactRepository $contactRepository Contact Repository
@@ -101,6 +113,20 @@ class CliService implements CliServiceInterface {
         $this->currencyUtility = $utilityContainer->getCurrencyUtility();
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->generalUtility = $utilityContainer->getGeneralUtility();
+    }
+
+    /**
+     * Set the contact credit repository (optional dependency)
+     */
+    public function setContactCreditRepository(ContactCreditRepository $contactCreditRepository): void {
+        $this->contactCreditRepository = $contactCreditRepository;
+    }
+
+    /**
+     * Set the P2P repository (optional dependency)
+     */
+    public function setP2pRepository(P2pRepository $p2pRepository): void {
+        $this->p2pRepository = $p2pRepository;
     }
 
     // =========================================================================
@@ -466,6 +492,8 @@ class CliService implements CliServiceInterface {
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
             'default_transport_mode' => $this->currentUser->getDefaultTransportMode(),
+            'hostname' => $this->currentUser->getHttpAddress(),
+            'hostname_secure' => $this->currentUser->getHttpsAddress(),
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled()
         ];
@@ -483,6 +511,8 @@ class CliService implements CliServiceInterface {
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
             echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
+            if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
+            if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
         }
@@ -1059,11 +1089,45 @@ HELP;
             }
         }
 
+        // Get total fee earnings per currency
+        $totalEarnings = [];
+        if ($this->p2pRepository !== null) {
+            try {
+                $earningsRows = $this->p2pRepository->getUserTotalEarningsByCurrency();
+                foreach ($earningsRows as $row) {
+                    $totalEarnings[] = [
+                        'currency' => $row['currency'],
+                        'total_earnings' => number_format(((int)($row['total_amount'] ?? 0)) / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Non-critical — skip earnings display
+            }
+        }
+
+        // Get total available credit per currency
+        $totalAvailableCredit = [];
+        if ($this->contactCreditRepository !== null) {
+            try {
+                $creditRows = $this->contactCreditRepository->getTotalAvailableCreditByCurrency();
+                foreach ($creditRows as $row) {
+                    $totalAvailableCredit[] = [
+                        'currency' => $row['currency'],
+                        'total_available_credit' => number_format($row['total_available_credit'] / Constants::CREDIT_CONVERSION_FACTOR, 2)
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Non-critical — skip available credit display
+            }
+        }
+
         // Build user info data structure
         $userInfo = [
             'locators' => $locators,
             'authentication_code' => $authcodeInfo,
-            'public_key' => $this->currentUser->getPublicKey()
+            'public_key' => $this->currentUser->getPublicKey(),
+            'total_earnings' => $totalEarnings,
+            'total_available_credit' => $totalAvailableCredit
         ];
 
         $showDetails = isset($argv[2]) && strtolower($argv[2]) === 'detail';
@@ -1149,6 +1213,34 @@ HELP;
             // Public key is from the config file
             $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
             echo "\tPublic Key:" . $readablePubKey . "\n";
+
+            // Total fee earnings per currency (always show, fallback to balance currencies)
+            echo "\tTotal Fee Earnings:\n";
+            if (!empty($totalEarnings)) {
+                foreach ($totalEarnings as $earning) {
+                    printf("\t\t%s: %s\n", $earning['currency'], $earning['total_earnings']);
+                }
+            } else {
+                // Show 0.00 for each known currency from balances
+                $balanceCurrencies = $this->balanceRepository->getUserBalance();
+                if (!empty($balanceCurrencies)) {
+                    foreach ($balanceCurrencies as $b) {
+                        printf("\t\t%s: 0.00\n", $b['currency']);
+                    }
+                } else {
+                    echo "\t\t0.00\n";
+                }
+            }
+
+            // Total available credit across all contacts, per currency (always show)
+            echo "\tTotal Available Credit:\n";
+            if (!empty($totalAvailableCredit)) {
+                foreach ($totalAvailableCredit as $credit) {
+                    printf("\t\t%s: %s\n", $credit['currency'], $credit['total_available_credit']);
+                }
+            } else {
+                echo "\t\t0.00\n";
+            }
 
             if ($showDetails){
                 // Get total sent and received by currency

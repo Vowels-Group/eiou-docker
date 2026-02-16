@@ -1316,7 +1316,15 @@ class P2pService implements P2pServiceInterface {
     public function getUserTotalEarnings(): string {
         return $this->p2pRepository->getUserTotalEarnings();
     }
-    
+
+    /**
+     * Get users total earnings grouped by currency
+     *
+     * @return array Array of ['currency' => string, 'total_amount' => int] rows
+     */
+    public function getUserTotalEarningsByCurrency(): array {
+        return $this->p2pRepository->getUserTotalEarningsByCurrency();
+    }
 
     /**
      * Get P2P statistics

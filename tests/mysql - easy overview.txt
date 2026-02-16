@@ -55,3 +55,6 @@ SELECT id, identifier, action, attempts, first_attempt, last_attempt, blocked_un
 
 # Held Transactions - transactions pending resync
 SELECT id, contact_pubkey_hash, txid, original_previous_txid, expected_previous_txid, transaction_type, hold_reason, sync_status, retry_count, held_at, resolved_at FROM held_transactions;
+
+# Contact Credit - available credit per contact (updated during ping)
+SELECT id, pubkey_hash, available_credit, currency, updated_at FROM contact_credit;

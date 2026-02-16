@@ -13,14 +13,54 @@
             <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" style="color: #0d6efd;">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" style="color: #dc3545;">Logout</a></small>
         </div>
         
-        <div class="balance-display">
-            <div class="balance-amount">$<?php echo $totalBalance; ?></div>
-            <div class="balance-currency">Total Balance</div>
-        </div>
+        <div class="wallet-stats-row">
+            <?php if (!empty($totalBalanceByCurrency)): ?>
+            <?php foreach ($totalBalanceByCurrency as $bal): ?>
+            <div class="balance-display">
+                <div class="balance-amount"><?php echo htmlspecialchars($bal['total']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($bal['currency']); ?></span></div>
+                <div class="balance-currency">Total Balance</div>
+            </div>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <?php foreach ((!empty($knownCurrencies) ? $knownCurrencies : ['']) as $cur): ?>
+            <div class="balance-display">
+                <div class="balance-amount">0.00<?php if ($cur): ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span><?php endif; ?></div>
+                <div class="balance-currency">Total Balance</div>
+            </div>
+            <?php endforeach; ?>
+            <?php endif; ?>
 
-        <div class="balance-display" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); margin-top: 1rem;">
-            <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?></div>
-            <div class="balance-currency">Total Earnings</div>
+            <?php if (!empty($totalEarningsByCurrency)): ?>
+            <?php foreach ($totalEarningsByCurrency as $earn): ?>
+            <div class="balance-display balance-earnings">
+                <div class="balance-amount"><?php echo htmlspecialchars($earn['total']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($earn['currency']); ?></span></div>
+                <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
+            </div>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <?php foreach ((!empty($knownCurrencies) ? $knownCurrencies : ['']) as $cur): ?>
+            <div class="balance-display balance-earnings">
+                <div class="balance-amount">0.00<?php if ($cur): ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span><?php endif; ?></div>
+                <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
+            </div>
+            <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if (!empty($totalAvailableCreditByCurrency)): ?>
+            <?php foreach ($totalAvailableCreditByCurrency as $credit): ?>
+            <div class="balance-display balance-credit">
+                <div class="balance-amount"><?php echo htmlspecialchars($credit['total']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($credit['currency']); ?></span></div>
+                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
+            </div>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <?php foreach ((!empty($knownCurrencies) ? $knownCurrencies : ['']) as $cur): ?>
+            <div class="balance-display balance-credit">
+                <div class="balance-amount">0.00<?php if ($cur): ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span><?php endif; ?></div>
+                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
+            </div>
+            <?php endforeach; ?>
+            <?php endif; ?>
         </div>
 
         <?php

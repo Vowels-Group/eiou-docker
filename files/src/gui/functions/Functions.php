@@ -108,6 +108,49 @@ if (isset($_SESSION['message'])) {
 $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
 $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTotalEarnings());
+
+// Per-currency balance data for future-proof dashboard display
+$totalBalanceByCurrency = [];
+$balancesRaw = $serviceContainer->getBalanceRepository()->getUserBalance();
+if (!empty($balancesRaw)) {
+    foreach ($balancesRaw as $bal) {
+        $totalBalanceByCurrency[] = [
+            'currency' => $bal['currency'],
+            'total' => number_format($currencyUtility->convertCentsToDollars((int)($bal['total_balance'] ?? 0)), 2)
+        ];
+    }
+}
+
+// Per-currency earnings data for future-proof dashboard display
+$totalEarningsByCurrency = [];
+$earningsRaw = $p2pService->getUserTotalEarningsByCurrency();
+if (!empty($earningsRaw)) {
+    foreach ($earningsRaw as $earn) {
+        $totalEarningsByCurrency[] = [
+            'currency' => $earn['currency'],
+            'total' => number_format($currencyUtility->convertCentsToDollars((int)($earn['total_amount'] ?? 0)), 2)
+        ];
+    }
+}
+// Collect known currencies from all data sources for consistent fallback display
+$knownCurrencies = [];
+foreach ($totalBalanceByCurrency as $item) {
+    $knownCurrencies[$item['currency']] = true;
+}
+foreach ($totalEarningsByCurrency as $item) {
+    $knownCurrencies[$item['currency']] = true;
+}
+// totalAvailableCreditByCurrency is populated later, so also check contact_credit directly
+try {
+    $creditCurrencies = $serviceContainer->getContactCreditRepository()->getTotalAvailableCreditByCurrency();
+    foreach ($creditCurrencies as $row) {
+        $knownCurrencies[$row['currency']] = true;
+    }
+} catch (Exception $e) {
+    // Non-critical
+}
+$knownCurrencies = array_keys($knownCurrencies);
+
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
@@ -250,6 +293,57 @@ try {
     // Silently fail - DLQ notification is non-critical
     $newlyAddedToDlq = [];
 }
+
+// Fetch available credit per contact and merge into contact arrays
+$availableCreditByContact = [];
+$totalAvailableCreditByCurrency = [];
+try {
+    $contactCreditRepo = $serviceContainer->getContactCreditRepository();
+    // Get per-contact credits for merging into contact cards
+    foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
+        $hash = $c['pubkey_hash'] ?? '';
+        if ($hash && !isset($availableCreditByContact[$hash])) {
+            $creditData = $contactCreditRepo->getAvailableCredit($hash);
+            if ($creditData !== null) {
+                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR;
+            }
+        }
+    }
+    // Get totals per currency for dashboard display
+    $creditTotals = $contactCreditRepo->getTotalAvailableCreditByCurrency();
+    foreach ($creditTotals as $row) {
+        $totalAvailableCreditByCurrency[] = [
+            'currency' => $row['currency'],
+            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR, 2)
+        ];
+    }
+} catch (Exception $e) {
+    $availableCreditByContact = [];
+    $totalAvailableCreditByCurrency = [];
+}
+
+// Merge available credit into contact arrays and calculate their available credit with me
+$contactArraysForCredit = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
+foreach ($contactArraysForCredit as &$contacts) {
+    foreach ($contacts as &$contact) {
+        $hash = $contact['pubkey_hash'] ?? '';
+        // My available credit with them (from pong, stored in contact_credit)
+        $contact['my_available_credit'] = $availableCreditByContact[$hash] ?? null;
+        // Their available credit with me: credit_limit - balance
+        // Uses the same balance data as the displayed contact balance (from transactions table)
+        // Formula: credit_limit - balance, where balance = received - sent
+        // When balance is negative (I owe them), their credit increases
+        // When balance is positive (they owe me), their credit decreases
+        $contact['their_available_credit'] = null;
+        $balanceValue = floatval($contact['balance'] ?? 0);
+        $creditLimitValue = floatval($contact['credit_limit'] ?? 0);
+        if ($creditLimitValue > 0 || $balanceValue != 0) {
+            $contact['their_available_credit'] = round($creditLimitValue - $balanceValue, 2);
+        }
+    }
+    unset($contact);
+}
+unset($contacts);
 
 // Initialize ContactDataBuilder helper
 $contactDataBuilder = new ContactDataBuilder($addressTypes);

@@ -170,6 +170,8 @@ eiou info --show-auth --json
 - HTTP, HTTPS, and Tor addresses (locators)
 - Authentication code status (redacted by default)
 - Public key
+- Total fee earnings per currency (P2P relay fee earnings)
+- Total available credit per currency (sum of credit available through all contacts, received via ping/pong)
 - (With `detail`) Total balances by currency with sent/received breakdown
 
 **Security: Authentication Code Handling**
@@ -303,6 +305,13 @@ eiou viewcontact http://bob:8080
 eiou viewcontact --json Bob
 ```
 
+**Output includes:**
+- Contact name, status, addresses, public key
+- Balance (received, sent, net)
+- Fee percentage and credit limit
+- Your available credit with them (received via ping/pong, ~5 min refresh)
+- Their available credit with you (calculated: sent - received + credit_limit)
+
 **On Failure (JSON):**
 ```json
 {
@@ -368,6 +377,12 @@ eiou search [name]
 |----------|------|-------------|
 | `name` | optional | Search term (partial name match) |
 
+**Output per contact:**
+- Name, address(es), status
+- Fee percentage, credit limit, currency
+- Your Available Credit (from pong, how much credit they extend to you)
+- Their Available Credit (calculated: how much credit you extend to them)
+
 **Examples:**
 ```bash
 # Search for contacts containing "bob"
@@ -410,6 +425,7 @@ eiou ping --json Alice
 - Online status (online/offline)
 - Chain validity status (includes internal gap detection)
 - Response message
+- Available credit exchange (your credit with them is updated in the background)
 
 **Wallet restore behavior:**
 When a ping is received by a node that was restored from a seed phrase, the ContactStatusService detects the incoming ping from a previously unknown address, auto-creates a pending contact, and triggers a sync to restore the shared transaction chain. The prior contact then appears as a pending request that the restored wallet owner can review via `eiou pending` and re-accept via `eiou add`. This allows prior contacts to re-establish their relationship with a restored wallet simply by pinging it.
@@ -699,7 +715,9 @@ eiou viewsettings --json
 - P2P expiration time
 - Max output lines
 - Default transport mode
+- Hostname (HTTP and HTTPS)
 - Auto-refresh status
+- Auto-backup status
 
 ---
 
