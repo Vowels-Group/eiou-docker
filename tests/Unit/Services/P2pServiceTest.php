@@ -2472,4 +2472,63 @@ class P2pServiceTest extends TestCase
             $this->assertNotEquals(Constants::STATUS_CANCELLED, $p2p['status']);
         }
     }
+
+    /**
+     * Test handleP2pRequest forces fast mode for Tor receiver addresses
+     *
+     * When a P2P arrives with fast=0 (best-fee) but the receiver is a .onion
+     * address, the node should override to fast=1 before storing. This prevents
+     * remote nodes from forcing best-fee mode over Tor.
+     */
+    public function testHandleP2pRequestForcesFastModeForTorReceiver(): void
+    {
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'amount' => self::TEST_AMOUNT,
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5,
+            'fast' => 0, // best-fee mode requested
+            'receiverAddress' => 'abcdef1234567890.onion', // Tor address
+        ];
+
+        // User is NOT the end recipient
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://mynode.test');
+
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://mynode.test']);
+
+        // Tor address detection
+        $this->transportUtility->method('isTorAddress')
+            ->with('abcdef1234567890.onion')
+            ->willReturn(true);
+
+        // Fee calculation
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 2.0]);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(200);
+
+        // Verify fast flag is overridden to 1 when stored
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($req) {
+                    return $req['fast'] === 1;
+                }),
+                null
+            );
+
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_QUEUED);
+
+        $this->service->handleP2pRequest($request);
+    }
 }

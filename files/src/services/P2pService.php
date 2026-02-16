@@ -477,6 +477,16 @@ class P2pService implements P2pServiceInterface {
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
+            // Force fast mode for Tor recipients on receiving side —
+            // prevents remote nodes from forcing best-fee mode over Tor
+            // where relay latency makes candidate collection impractical
+            if (!($request['fast'] ?? true)
+                && isset($request['receiverAddress'])
+                && $this->transportUtility->isTorAddress($request['receiverAddress'])
+            ) {
+                $request['fast'] = 1;
+            }
+
             // Handler for p2p requests
             $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
