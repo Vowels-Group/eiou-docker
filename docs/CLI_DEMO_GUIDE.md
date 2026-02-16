@@ -756,6 +756,10 @@ docker exec alice eiou viewcontact Bob
 docker exec bob eiou viewcontact http://alice
 ```
 
+Shows contact details including balance, fee, credit limit, and bidirectional available credit:
+- **Your Available Credit**: How much credit you can use through this contact (received via ping, refreshed ~5 min)
+- **Their Available Credit**: How much credit this contact can use through you (calculated from balances + credit limit)
+
 ---
 
 ### 5.5 update - Modifying Contacts
@@ -790,6 +794,8 @@ Status:        ONLINE
 Response Time: 45ms
 Chain Valid:   Yes
 ```
+
+Ping also exchanges available credit information with the contact in the background. After a ping, `viewcontact` will show the latest available credit values.
 
 ---
 

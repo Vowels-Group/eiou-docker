@@ -27,7 +27,7 @@ All requests require HMAC-SHA256 authentication:
 | `GET` | `/api/v1/wallet/balance` | `wallet:read` | Get balances by contact |
 | `GET` | `/api/v1/wallet/balances` | `wallet:read` | Alias for balance |
 | `GET` | `/api/v1/wallet/info` | `wallet:read` | Get wallet public key and addresses |
-| `GET` | `/api/v1/wallet/overview` | `wallet:read` | Dashboard summary (balances + recent tx) |
+| `GET` | `/api/v1/wallet/overview` | `wallet:read` | Dashboard summary (balances, credit, recent tx) |
 | `GET` | `/api/v1/wallet/transactions` | `wallet:read` | Paginated transaction history |
 | `POST` | `/api/v1/wallet/send` | `wallet:send` | Send a transaction |
 
@@ -39,7 +39,7 @@ All requests require HMAC-SHA256 authentication:
 | `POST` | `/api/v1/contacts` | `contacts:write` | Add new contact |
 | `GET` | `/api/v1/contacts/pending` | `contacts:read` | Get pending requests |
 | `GET` | `/api/v1/contacts/search` | `contacts:read` | Search contacts by name |
-| `POST` | `/api/v1/contacts/ping/:address` | `contacts:read` | Ping contact status |
+| `POST` | `/api/v1/contacts/ping/:address` | `contacts:read` | Ping contact status + exchange credit |
 | `GET` | `/api/v1/contacts/:address` | `contacts:read` | Get contact details |
 | `PUT` | `/api/v1/contacts/:address` | `contacts:write` | Update contact |
 | `DELETE` | `/api/v1/contacts/:address` | `contacts:write` | Delete contact |

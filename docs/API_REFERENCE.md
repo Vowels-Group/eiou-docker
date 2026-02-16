@@ -349,6 +349,12 @@ Get dashboard summary with balances and recent transactions.
                 "total_balance": 500.00
             }
         ],
+        "total_available_credit": [
+            {
+                "currency": "USD",
+                "total": "250.00"
+            }
+        ],
         "recent_transactions": [
             {
                 "txid": "tx_abc123",
@@ -366,6 +372,9 @@ Get dashboard summary with balances and recent transactions.
     }
 }
 ```
+
+**Fields:**
+- `total_available_credit`: Sum of available credit across all contacts, grouped by currency. Received via ping/pong from contacts; refreshed on ~5 minute intervals.
 
 ---
 
@@ -499,6 +508,8 @@ List all contacts.
                 "currency": "USD",
                 "fee_percent": 1.0,
                 "credit_limit": 100.00,
+                "my_available_credit": 95.00,
+                "their_available_credit": 100.00,
                 "addresses": {
                     "http": "http://bob.local:8080",
                     "https": null,
@@ -511,6 +522,10 @@ List all contacts.
     }
 }
 ```
+
+**Fields:**
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
+- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
 
 ---
 
@@ -667,6 +682,8 @@ Ping a contact to check online status.
 }
 ```
 
+**Note:** Ping also exchanges available credit information with the contact in the background. The `my_available_credit` field on subsequent contact queries will reflect the latest value received from this ping.
+
 ---
 
 ### GET /api/v1/contacts/:address
@@ -688,6 +705,8 @@ Get contact details by address or name.
             "currency": "USD",
             "fee_percent": 1.0,
             "credit_limit": 100.00,
+            "my_available_credit": 95.00,
+            "their_available_credit": 100.00,
             "addresses": {
                 "http": "http://bob.local:8080",
                 "https": null,
@@ -703,6 +722,10 @@ Get contact details by address or name.
     }
 }
 ```
+
+**Fields:**
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
+- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
 
 **Error Response (404):**
 

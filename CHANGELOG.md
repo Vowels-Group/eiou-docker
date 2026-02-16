@@ -49,6 +49,13 @@ The project is currently in **ALPHA** status.
 ### Fixed
 - Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
 
+### Docs
+- Updated API Reference with `total_available_credit` in wallet overview response and `my_available_credit`/`their_available_credit` in contact endpoints
+- Updated CLI Reference with available credit in `info` output, bidirectional credit in `viewcontact`, and credit exchange in `ping`
+- Updated CLI Demo Guide with available credit details for `viewcontact` and `ping` sections
+- Updated GUI Reference with total available credit dashboard card and contact modal credit fields
+- Updated API and GUI Quick References with available credit field descriptions
+
 ## 2026-02-15
 
 ### Added
