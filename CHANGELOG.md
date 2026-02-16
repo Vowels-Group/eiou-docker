@@ -65,7 +65,12 @@ The project is currently in **ALPHA** status.
 
 ### Docs
 - Updated API Reference with `total_available_credit` in wallet overview response and `my_available_credit`/`their_available_credit` in contact endpoints
-- Updated CLI Reference with available credit in `info` output, bidirectional credit in `viewcontact`, and credit exchange in `ping`
+- Updated API Reference: `/contacts/search` now documents `fee_percent`, `credit_limit`, `my_available_credit`, `their_available_credit`, and `currency` fields
+- Updated API Reference: `/system/settings` now documents `hostname`, `hostname_secure`, and `auto_backup_enabled` fields
+- Updated CLI Reference: `search` command now documents available credit fields in output
+- Updated CLI Reference: `info` command now documents total fee earnings per currency
+- Updated CLI Reference: `viewsettings` command now documents hostname and auto-backup fields
+- Updated GUI Reference: wallet dashboard cards documented as per-currency with fallback behavior
 - Updated CLI Demo Guide with available credit details for `viewcontact` and `ping` sections
 - Updated GUI Reference with total available credit dashboard card and contact modal credit fields
 - Updated API and GUI Quick References with available credit field descriptions

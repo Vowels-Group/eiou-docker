@@ -278,12 +278,14 @@ Quick navigation cards linking to main sections:
 | Element | Purpose |
 |---------|---------|
 | Last updated timestamp | Shows data freshness |
-| Total Balance | Aggregated wallet balance |
-| Total Earnings | P2P routing earnings |
+| Total Balance | Aggregated wallet balance per currency |
+| Total Fee Earnings | P2P relay fee earnings per currency |
 | Total Available Credit | Sum of available credit per currency (from ping/pong, ~5 min refresh) |
 | User Addresses | HTTP/HTTPS/Tor with copy buttons |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
+
+All three dashboard cards display per-currency rows. When a card has no data for a given category, it shows "0.00" with the currency derived from other data sources for consistency.
 
 ---
 

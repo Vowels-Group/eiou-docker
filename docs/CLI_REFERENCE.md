@@ -170,6 +170,7 @@ eiou info --show-auth --json
 - HTTP, HTTPS, and Tor addresses (locators)
 - Authentication code status (redacted by default)
 - Public key
+- Total fee earnings per currency (P2P relay fee earnings)
 - Total available credit per currency (sum of credit available through all contacts, received via ping/pong)
 - (With `detail`) Total balances by currency with sent/received breakdown
 
@@ -375,6 +376,12 @@ eiou search [name]
 | Argument | Type | Description |
 |----------|------|-------------|
 | `name` | optional | Search term (partial name match) |
+
+**Output per contact:**
+- Name, address(es), status
+- Fee percentage, credit limit, currency
+- Your Available Credit (from pong, how much credit they extend to you)
+- Their Available Credit (calculated: how much credit you extend to them)
 
 **Examples:**
 ```bash
@@ -708,7 +715,9 @@ eiou viewsettings --json
 - P2P expiration time
 - Max output lines
 - Default transport mode
+- Hostname (HTTP and HTTPS)
 - Auto-refresh status
+- Auto-backup status
 
 ---
 
