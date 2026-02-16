@@ -310,7 +310,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing; broadcasts P2P requests, handles fast/best-fee mode, tracks multi-path senders | ContactRepo, P2pRepo, P2pSenderRepo, TransportUtility, MessageDeliveryService |
+| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders | ContactRepo, P2pRepo, P2pSenderRepo, TransportUtility, MessageDeliveryService |
 | `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection in best-fee mode | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
@@ -341,7 +341,7 @@ The `UtilityServiceContainer` provides helper services for common operations:
 | `TimeUtilityService` | Timestamp formatting, timezone handling |
 | `CurrencyUtilityService` | Amount conversion, formatting |
 | `ValidationUtilityService` | Input validation, sanitization |
-| `TransportUtilityService` | HTTP/HTTPS/Tor message transport |
+| `TransportUtilityService` | HTTP/HTTPS/Tor message transport; parallel batch sends via `curl_multi` with per-protocol concurrency limits |
 
 ### Circular Dependency Resolution
 
@@ -823,6 +823,21 @@ protected function processMessages(): int {
 }
 ```
 
+**Mega-Batch Processing:**
+
+`processQueuedP2pMessages()` uses a 3-phase mega-batch approach to send all queued
+P2P messages in a single `curl_multi` call rather than one-at-a-time:
+
+1. **Phase 1 — Collect:** Iterates all queued P2Ps (up to `P2P_QUEUE_BATCH_SIZE`),
+   builds per-contact payloads, and accumulates them into a flat `$megaBatchSends` array.
+   A coalesce delay (`P2P_QUEUE_COALESCE_MS`, default 2000ms) groups P2Ps that arrive
+   within a short window into a single batch.
+2. **Phase 2 — Fire:** Calls `TransportUtilityService::sendMultiBatch($megaBatchSends)`
+   which executes all sends in parallel via `curl_multi` with a sliding-window concurrency
+   limit (see [Transport Concurrency Control](#transport-concurrency-control)).
+3. **Phase 3 — Map Results:** Maps each `curl_multi` result back to its originating P2P
+   by key, processes responses, and updates P2P status accordingly.
+
 ### CleanupMessageProcessor
 
 Removes expired P2P and transaction messages with slower polling (less time-critical).
@@ -1089,7 +1104,7 @@ no direct connection exists. The system supports two routing modes:
 | Mode | Flag | Internal | Behavior |
 |------|------|----------|----------|
 | **Fast** (default) | None | `fast=1` | First RP2P response wins; lowest latency |
-| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee |
+| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee (HTTP/HTTPS only — forced to fast for Tor) |
 
 ```
       ALICE                   BOB                    CAROL                   EVE
@@ -1144,11 +1159,13 @@ request patterns.
 **Outbound (P2pService):**
 
 1. User initiates transaction to unknown recipient
-2. P2pService creates P2P record with randomized level
-3. P2pMessageProcessor picks up pending messages
-4. Message sent to all accepted contacts (broadcast)
-5. Each contact forwards to their contacts (level++)
-6. Process continues until recipient found or level exceeds maxRequestLevel
+2. P2pService creates P2P record with randomized level and status `queued`
+3. P2pMessageProcessor daemon picks up queued messages (polls every 100ms–5s)
+4. Coalesce delay groups concurrent P2Ps into a single mega-batch (2000ms window)
+5. Mega-batch broadcasts to all accepted contacts via `sendMultiBatch()` (`curl_multi`)
+6. Concurrency-limited sliding window caps simultaneous connections per protocol
+7. Each relay node queues, coalesces, and broadcasts to its own contacts (level++)
+8. Process continues until recipient found or level exceeds maxRequestLevel
 
 **Inbound Response (Rp2pService):**
 
@@ -1172,6 +1189,9 @@ No candidate storage or selection logic is involved.
 - May not select the cheapest fee route
 - Single transaction path, no waiting
 - Status flow: initial → queued → sent → found → completed
+- **Forced for Tor recipients:** When the destination address is `.onion`, fast mode
+  is automatically enforced regardless of the `--best` flag, because best-fee mode
+  generates excessive relay traffic and Tor's ~5s/hop latency amplifies the wait overhead
 
 #### Best-Fee Mode (Experimental)
 
@@ -1419,6 +1439,28 @@ correct upstream node.
 | Tor | `http://xxx.onion` | Anonymous communication |
 
 **Priority:** Tor > HTTPS > HTTP (security preference)
+
+### Transport Concurrency Control
+
+Batch sends (`sendBatch()`, `sendMultiBatch()`) use `curl_multi` with a sliding-window
+concurrency limit to prevent overwhelming network circuits, particularly Tor. Instead of
+firing all connections at once, the `executeWithConcurrencyLimit()` method runs up to N
+handles simultaneously and adds the next as each completes.
+
+Limits are configured per protocol in `Constants::CURL_MULTI_MAX_CONCURRENT`:
+
+| Protocol | Max Concurrent | Rationale |
+|----------|---------------|-----------|
+| HTTP | 10 | Fast connections, high throughput |
+| HTTPS | 10 | Same as HTTP with TLS overhead |
+| Tor | 5 | SOCKS5 circuits overload easily; lower limit prevents thundering herd |
+
+When a batch contains mixed protocols, the most restrictive (lowest) limit is used.
+Unknown protocols fall back to the lowest configured value.
+
+The lookup is centralized in `TransportUtilityService::getConcurrencyLimit(array $addresses)`
+which resolves addresses to protocols via `determineTransportType()` and returns `min()` of
+the applicable limits. To tune: edit the `CURL_MULTI_MAX_CONCURRENT` array in `Constants.php`.
 
 ---
 

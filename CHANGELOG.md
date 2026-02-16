@@ -10,6 +10,18 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## 2026-02-16
+
+### Added
+- Sliding-window concurrency control for `curl_multi` batch sends — `executeWithConcurrencyLimit()` caps simultaneous connections per protocol (HTTP: 10, Tor: 5) to prevent Tor circuit overload
+- `getConcurrencyLimit()` method on `TransportUtilityService` — centralized protocol-to-limit lookup using `Constants::CURL_MULTI_MAX_CONCURRENT` associative array
+- Mega-batch P2P processing — `processQueuedP2pMessages()` uses a 3-phase approach: collect all sends across queued P2Ps, fire via `sendMultiBatch()`, map results back
+- Coalesce delay (`P2P_QUEUE_COALESCE_MS`, 2000ms) — groups concurrent P2Ps arriving within a short window into a single mega-batch
+
+### Changed
+- `CURL_MULTI_MAX_CONCURRENT` is now an associative array mapping protocol to limit (http: 10, https: 10, tor: 5) instead of a single value — unknown protocols fall back to the lowest configured limit
+- Tor P2P recipients automatically forced to fast mode — `--best` flag is ignored when destination address is `.onion` to avoid excessive relay traffic amplified by Tor's ~5s/hop latency
+
 ## 2026-02-15
 
 ### Added
