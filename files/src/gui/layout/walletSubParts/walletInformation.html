@@ -19,22 +19,22 @@
                 <div class="balance-currency">Total Balance</div>
             </div>
 
-            <div class="balance-display" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+            <div class="balance-display balance-earnings">
                 <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?></div>
-                <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Fee earnings from relaying P2P transactions through your node."></i></div>
+                <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
             </div>
 
             <?php if (!empty($totalAvailableCreditByCurrency)): ?>
             <?php foreach ($totalAvailableCreditByCurrency as $credit): ?>
-            <div class="balance-display" style="background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);">
-                <div class="balance-amount">$<?php echo htmlspecialchars($credit['total']); ?> <span style="font-size: 0.6em; opacity: 0.8;"><?php echo htmlspecialchars($credit['currency']); ?></span></div>
-                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
+            <div class="balance-display balance-credit">
+                <div class="balance-amount">$<?php echo htmlspecialchars($credit['total']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($credit['currency']); ?></span></div>
+                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
             </div>
             <?php endforeach; ?>
             <?php else: ?>
-            <div class="balance-display" style="background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);">
+            <div class="balance-display balance-credit">
                 <div class="balance-amount">$0.00</div>
-                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
+                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
             </div>
             <?php endif; ?>
         </div>
