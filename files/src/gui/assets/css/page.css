@@ -195,6 +195,18 @@ body {
     color: #495057;
 }
 
+.wallet-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.wallet-stats-row .balance-display {
+    flex: 1 1 200px;
+    margin-bottom: 0;
+}
+
 .balance-display {
     background: #0d6efd;
     color: white;

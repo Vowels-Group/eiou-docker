@@ -328,7 +328,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         $contactCurrency = null;
         if ($this->balanceRepository !== null) {
             try {
-                $contactData = $this->contactRepository->findByColumn('pubkey', $senderPubkey);
+                $contactData = $this->contactRepository->getContactByPubkey($senderPubkey);
                 $contactCurrency = $contactData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $contactCurrency);
                 $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $contactCurrency);

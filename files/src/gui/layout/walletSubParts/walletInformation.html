@@ -13,29 +13,31 @@
             <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" style="color: #0d6efd;">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" style="color: #dc3545;">Logout</a></small>
         </div>
         
-        <div class="balance-display">
-            <div class="balance-amount">$<?php echo $totalBalance; ?></div>
-            <div class="balance-currency">Total Balance</div>
-        </div>
-
-        <div class="balance-display" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); margin-top: 1rem;">
-            <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?></div>
-            <div class="balance-currency">Total Earnings</div>
-        </div>
-
-        <?php if (!empty($totalAvailableCreditByCurrency)): ?>
-        <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%); border-radius: 8px; color: white;">
-            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 0.25rem;">
-                <i class="fas fa-coins"></i> Total Available Credit
-                <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i>
+        <div class="wallet-stats-row">
+            <div class="balance-display">
+                <div class="balance-amount">$<?php echo $totalBalance; ?></div>
+                <div class="balance-currency">Total Balance</div>
             </div>
+
+            <div class="balance-display" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?></div>
+                <div class="balance-currency">Total Earnings</div>
+            </div>
+
+            <?php if (!empty($totalAvailableCreditByCurrency)): ?>
             <?php foreach ($totalAvailableCreditByCurrency as $credit): ?>
-            <div style="font-size: 1.5rem; font-weight: 700;">
-                $<?php echo htmlspecialchars($credit['total']); ?> <span style="font-size: 0.9rem; opacity: 0.8;"><?php echo htmlspecialchars($credit['currency']); ?></span>
+            <div class="balance-display" style="background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);">
+                <div class="balance-amount">$<?php echo htmlspecialchars($credit['total']); ?> <span style="font-size: 0.6em; opacity: 0.8;"><?php echo htmlspecialchars($credit['currency']); ?></span></div>
+                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
             </div>
             <?php endforeach; ?>
+            <?php else: ?>
+            <div class="balance-display" style="background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);">
+                <div class="balance-amount">$0.00</div>
+                <div class="balance-currency">Total Available Credit <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i></div>
+            </div>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
 
         <?php
         // Use getUserLocaters() for dynamic address handling

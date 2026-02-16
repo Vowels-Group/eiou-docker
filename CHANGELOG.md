@@ -25,6 +25,8 @@ The project is currently in **ALPHA** status.
 - `getTotalAvailableCreditByCurrency()` method on `ContactCreditRepository` — aggregates available credit across all contacts by currency
 - GUI total available credit dashboard card — shows summed available credit per currency in the wallet information section
 - GUI contact modal bidirectional credit display — "Your Credit" (from pong, with refresh interval tooltip) and "Their Credit" (calculated locally) shown side by side
+- GUI wallet dashboard stats (Total Balance, Total Earnings, Total Available Credit) displayed in a horizontal row on wide screens with consistent card styling; each currency gets its own row for future multi-currency support
+- Contact modal labels renamed to "Your Available Credit" and "Their Available Credit"; reordered to: Credit Limit, Your Available Credit, Fee, Their Available Credit
 - Sliding-window concurrency control for `curl_multi` batch sends — `executeWithConcurrencyLimit()` caps simultaneous connections per protocol (HTTP: 10, Tor: 5) to prevent Tor circuit overload
 - `getConcurrencyLimit()` method on `TransportUtilityService` — centralized protocol-to-limit lookup using `Constants::CURL_MULTI_MAX_CONCURRENT` associative array
 - Mega-batch P2P processing — `processQueuedP2pMessages()` uses a 3-phase approach: collect all sends across queued P2Ps, fire via `sendMultiBatch()`, map results back
@@ -48,6 +50,9 @@ The project is currently in **ALPHA** status.
 
 ### Fixed
 - Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
+
+### Fixed
+- Ping/pong fatal error — `ContactStatusService::handlePingRequest()` called `protected` method `findByColumn()` on `AbstractRepository`; replaced with public `getContactByPubkey()`
 
 ### Docs
 - Updated API Reference with `total_available_credit` in wallet overview response and `my_available_credit`/`their_available_credit` in contact endpoints
