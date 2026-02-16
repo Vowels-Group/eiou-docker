@@ -68,6 +68,17 @@ interface P2pServiceInterface
     public function getStatistics(): array;
 
     /**
+     * Process a single P2P message in a worker process
+     *
+     * Atomically claims the P2P, processes it, and transitions to sent/cancelled.
+     *
+     * @param string $hash P2P hash to process
+     * @param int $workerPid PID of this worker process
+     * @return bool True if processed successfully
+     */
+    public function processSingleP2p(string $hash, int $workerPid): bool;
+
+    /**
      * Send cancel notification upstream for a P2P hash
      *
      * Called when a node has no viable route (dead-end) or when a relay P2P

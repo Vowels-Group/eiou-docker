@@ -17,8 +17,14 @@ The project is currently in **ALPHA** status.
 - `getConcurrencyLimit()` method on `TransportUtilityService` — centralized protocol-to-limit lookup using `Constants::CURL_MULTI_MAX_CONCURRENT` associative array
 - Mega-batch P2P processing — `processQueuedP2pMessages()` uses a 3-phase approach: collect all sends across queued P2Ps, fire via `sendMultiBatch()`, map results back
 - Coalesce delay (`P2P_QUEUE_COALESCE_MS`, 2000ms) — groups concurrent P2Ps arriving within a short window into a single mega-batch
+- P2P parallel worker model — coordinator (`P2pMessageProcessor`) spawns independent worker processes (`P2pWorker.php`) for each queued P2P via `proc_open`, enabling truly parallel routing through the network
+- `processSingleP2p()` method on `P2pService` — processes one P2P with atomic claim (`queued → sending`), broadcast via own `curl_multi`, and status transition (`sending → sent`)
+- Atomic P2P claiming in `P2pRepository` — `claimQueuedP2p()`, `getStuckSendingP2ps()`, `recoverStuckP2p()`, `clearSendingMetadata()` methods for worker coordination and crash recovery
+- `sending` status added to P2P ENUM with `sending_started_at` and `sending_worker_pid` columns — enables worker ownership tracking and stuck-sending recovery
+- `P2P_MAX_WORKERS` (5) and `P2P_SENDING_TIMEOUT_SECONDS` (300) constants for worker pool sizing and crash recovery threshold
 
 ### Changed
+- `P2pMessageProcessor` rewritten from single-threaded delegator to coordinator+worker model — polls for queued P2Ps, spawns up to `P2P_MAX_WORKERS` independent PHP processes, reaps finished workers, and recovers stuck `sending` P2Ps with dead worker PIDs every 60s
 - `CURL_MULTI_MAX_CONCURRENT` is now an associative array mapping protocol to limit (http: 10, https: 10, tor: 5) instead of a single value — unknown protocols fall back to the lowest configured limit
 - Best-fee route selection now tries candidates from cheapest to most expensive with fallback — if the cheapest candidate's fee exceeds the originator's `maxFee` setting or a relay node can't afford the amount, the next candidate is tried instead of silently failing
 - `handleRp2pRequest()` return type changed from `void` to `bool` — returns `false` when fee/affordability validation fails, enabling caller-driven fallback

@@ -26,8 +26,8 @@ class P2pRepository extends AbstractRepository {
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
         'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
-        'phase1_sent', 'status', 'created_at', 'incoming_txid',
-        'outgoing_txid', 'completed_at'
+        'phase1_sent', 'status', 'sending_started_at', 'sending_worker_pid',
+        'created_at', 'incoming_txid', 'outgoing_txid', 'completed_at'
     ];
 
     /**
@@ -596,6 +596,121 @@ class P2pRepository extends AbstractRepository {
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ?: null;
+    }
+
+    /**
+     * Atomically claim a queued P2P for processing by a worker
+     *
+     * Uses WHERE status='queued' to prevent race conditions between workers.
+     * Only one worker can successfully claim a given P2P hash.
+     *
+     * @param string $hash P2P hash to claim
+     * @param int $pid Worker process ID
+     * @return bool True if claim succeeded (this worker owns it), false if already claimed
+     */
+    public function claimQueuedP2p(string $hash, int $pid): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET status = :newStatus,
+                      sending_started_at = CURRENT_TIMESTAMP(6),
+                      sending_worker_pid = :pid
+                  WHERE hash = :hash AND status = :currentStatus";
+
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':newStatus', Constants::STATUS_SENDING, PDO::PARAM_STR);
+            $stmt->bindValue(':pid', $pid, PDO::PARAM_INT);
+            $stmt->bindValue(':hash', $hash, PDO::PARAM_STR);
+            $stmt->bindValue(':currentStatus', Constants::STATUS_QUEUED, PDO::PARAM_STR);
+            $stmt->execute();
+
+            return $stmt->rowCount() === 1;
+        } catch (PDOException $e) {
+            $this->logError("Failed to claim queued P2P", $e);
+            return false;
+        }
+    }
+
+    /**
+     * Find P2Ps stuck in 'sending' status beyond the timeout threshold
+     *
+     * @param int $timeoutSeconds Seconds after which a sending P2P is considered stuck
+     * @return array Array of stuck P2P records
+     */
+    public function getStuckSendingP2ps(int $timeoutSeconds = Constants::P2P_SENDING_TIMEOUT_SECONDS): array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE status = :status
+                    AND sending_started_at < DATE_SUB(NOW(6), INTERVAL :timeout SECOND)
+                  ORDER BY sending_started_at ASC";
+
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':status', Constants::STATUS_SENDING, PDO::PARAM_STR);
+            $stmt->bindValue(':timeout', $timeoutSeconds, PDO::PARAM_INT);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve stuck sending P2Ps", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Recover a stuck P2P by resetting it to queued status
+     *
+     * Checks if the worker PID is still alive before recovering.
+     * If the worker is dead, resets to queued for reprocessing.
+     *
+     * @param string $hash P2P hash to recover
+     * @return bool True if recovered (reset to queued), false otherwise
+     */
+    public function recoverStuckP2p(string $hash): bool {
+        $p2p = $this->getByHash($hash);
+        if (!$p2p || $p2p['status'] !== Constants::STATUS_SENDING) {
+            return false;
+        }
+
+        $workerPid = (int) ($p2p['sending_worker_pid'] ?? 0);
+
+        // If worker PID is set and still alive, don't recover — it's still working
+        if ($workerPid > 0 && @posix_kill($workerPid, 0)) {
+            return false;
+        }
+
+        // Worker is dead — reset to queued for reprocessing
+        $query = "UPDATE {$this->tableName}
+                  SET status = :newStatus,
+                      sending_started_at = NULL,
+                      sending_worker_pid = NULL
+                  WHERE hash = :hash AND status = :currentStatus";
+
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':newStatus', Constants::STATUS_QUEUED, PDO::PARAM_STR);
+            $stmt->bindValue(':hash', $hash, PDO::PARAM_STR);
+            $stmt->bindValue(':currentStatus', Constants::STATUS_SENDING, PDO::PARAM_STR);
+            $stmt->execute();
+
+            return $stmt->rowCount() === 1;
+        } catch (PDOException $e) {
+            $this->logError("Failed to recover stuck P2P", $e);
+            return false;
+        }
+    }
+
+    /**
+     * Clear sending metadata after a worker completes processing
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function clearSendingMetadata(string $hash): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET sending_started_at = NULL,
+                      sending_worker_pid = NULL
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+        return $stmt !== false;
     }
 
     /**

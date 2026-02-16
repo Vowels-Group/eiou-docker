@@ -109,6 +109,7 @@ function getP2pTableSchema() {
         status ENUM(
             'initial',      /* First received p2p request */
             'queued',       /* Waiting to be processed */
+            'sending',      /* Claimed by a worker process, prevents duplicate processing */
             'sent',         /* Request has been sent to contacts */
             'found',        /* Contact has been found and being reported back */
             'paid',         /* Payment has been sent to the next peer */
@@ -116,6 +117,8 @@ function getP2pTableSchema() {
             'cancelled',    /* Transaction cancelled or failed */
             'expired'       /* Request timed out */
         ) DEFAULT 'initial',
+        sending_started_at TIMESTAMP(6) NULL, /* When worker claimed this P2P for processing */
+        sending_worker_pid INT NULL, /* PID of the worker process handling this P2P */
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         incoming_txid VARCHAR(255),
         outgoing_txid VARCHAR(255),
@@ -129,7 +132,8 @@ function getP2pTableSchema() {
         INDEX idx_p2p_destination (destination_address),
         INDEX idx_p2p_incoming_txid (incoming_txid),
         INDEX idx_p2p_outgoing_txid (outgoing_txid),
-        INDEX idx_p2p_status_expiration (status, expiration)
+        INDEX idx_p2p_status_expiration (status, expiration),
+        INDEX idx_p2p_sending_recovery (status, sending_started_at)
     )";
 }
 
