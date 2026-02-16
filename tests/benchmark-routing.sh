@@ -411,11 +411,13 @@ do_send() {
     local path="" fee="0" is_optimal="N/A"
     local p2p_time="" search_time="" settle_time=""
     if [ "$balance_changed" -eq 1 ]; then
-        local fast_flag=$( [ "$mode" = "fast" ] && echo 1 || echo 0 )
+        # Don't filter by fast flag — Tor recipients override best→fast at send
+        # time, so the stored flag may differ from the requested mode.
+        # Scoping by id > $max_id is sufficient since the benchmark is sequential.
         local hash=$(docker exec $SENDER php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            \$stmt = \$pdo->query('SELECT hash FROM p2p WHERE id > $max_id AND fast = $fast_flag ORDER BY id ASC LIMIT 1');
+            \$stmt = \$pdo->query('SELECT hash FROM p2p WHERE id > $max_id ORDER BY id ASC LIMIT 1');
             \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
             echo \$row ? \$row['hash'] : 'UNKNOWN';
         " 2>/dev/null || echo "UNKNOWN")

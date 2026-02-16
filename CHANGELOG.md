@@ -20,10 +20,14 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - `CURL_MULTI_MAX_CONCURRENT` is now an associative array mapping protocol to limit (http: 10, https: 10, tor: 5) instead of a single value — unknown protocols fall back to the lowest configured limit
-- Tor P2P recipients automatically forced to fast mode — `--best` flag is ignored when destination address is `.onion` to avoid excessive relay traffic amplified by Tor's ~5s/hop latency
 - Best-fee route selection now tries candidates from cheapest to most expensive with fallback — if the cheapest candidate's fee exceeds the originator's `maxFee` setting or a relay node can't afford the amount, the next candidate is tried instead of silently failing
 - `handleRp2pRequest()` return type changed from `void` to `bool` — returns `false` when fee/affordability validation fails, enabling caller-driven fallback
 - Originator fee check moved before RP2P insert — rejected candidates no longer pollute the database, and `updateStatus('found')` is deferred until validation passes
+- `checkRp2pPossible()` fast-mode path now sends rejection response (not "inserted") when `handleRp2pRequest()` returns false — sender correctly records failed delivery instead of false positive acceptance
+- P2P best-fee mode forced to fast for Tor recipients (`.onion` addresses) — Tor latency (~5s/hop) makes best-fee relay overhead prohibitive
+
+### Fixed
+- Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
 
 ## 2026-02-15
 

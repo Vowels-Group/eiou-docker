@@ -457,10 +457,16 @@ class Rp2pService implements Rp2pServiceInterface {
             // to prevent false positives from acceptance-before-storage bug
             // (follows same pattern as TransactionService.checkTransactionPossible)
             try {
-                $this->handleRp2pRequest($request);
+                $accepted = $this->handleRp2pRequest($request);
                 if($echo){
-                    // Return 'inserted' status AFTER the RP2P has been stored in the database
-                    echo  $this->rp2pPayload->buildInserted($request);
+                    if ($accepted) {
+                        // Return 'inserted' status AFTER the RP2P has been stored in the database
+                        echo  $this->rp2pPayload->buildInserted($request);
+                    } else {
+                        // Fee too high or relay can't afford — reject so sender
+                        // knows not to count this as a successful RP2P delivery
+                        echo  $this->rp2pPayload->buildRejection($request, 'rejected');
+                    }
                 }
                 // Return false to prevent caller from calling handleRp2pRequest again
                 return false;
