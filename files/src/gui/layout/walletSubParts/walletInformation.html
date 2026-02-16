@@ -15,12 +15,12 @@
         
         <div class="wallet-stats-row">
             <div class="balance-display">
-                <div class="balance-amount">$<?php echo $totalBalance; ?></div>
+                <div class="balance-amount">$<?php echo $totalBalance; ?> <span class="balance-amount-currency">USD</span></div>
                 <div class="balance-currency">Total Balance</div>
             </div>
 
             <div class="balance-display balance-earnings">
-                <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?></div>
+                <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?> <span class="balance-amount-currency">USD</span></div>
                 <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle info-tooltip-icon" title="Fee earnings from relaying P2P transactions through your node."></i></div>
             </div>
 
