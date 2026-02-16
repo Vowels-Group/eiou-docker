@@ -21,7 +21,7 @@
 
             <div class="balance-display" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
                 <div class="balance-amount">$<?php echo isset($totalEarnings) ? $totalEarnings : '0.00'; ?></div>
-                <div class="balance-currency">Total Earnings</div>
+                <div class="balance-currency">Total Fee Earnings <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Fee earnings from relaying P2P transactions through your node."></i></div>
             </div>
 
             <?php if (!empty($totalAvailableCreditByCurrency)): ?>
