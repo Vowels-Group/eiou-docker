@@ -116,7 +116,7 @@ if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
             'currency' => $bal['currency'],
-            'total' => $currencyUtility->convertCentsToDollars((int)($bal['total_balance'] ?? 0))
+            'total' => number_format($currencyUtility->convertCentsToDollars((int)($bal['total_balance'] ?? 0)), 2)
         ];
     }
 }
@@ -128,7 +128,7 @@ if (!empty($earningsRaw)) {
     foreach ($earningsRaw as $earn) {
         $totalEarningsByCurrency[] = [
             'currency' => $earn['currency'],
-            'total' => $currencyUtility->convertCentsToDollars((int)($earn['total_amount'] ?? 0))
+            'total' => number_format($currencyUtility->convertCentsToDollars((int)($earn['total_amount'] ?? 0)), 2)
         ];
     }
 }
