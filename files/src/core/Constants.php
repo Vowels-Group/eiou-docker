@@ -148,7 +148,10 @@ class Constants {
     const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per EIOU hop)
     const P2P_QUEUE_BATCH_SIZE = 10; // Max queued P2Ps processed per daemon poll cycle (all sent in one curl_multi)
     const P2P_QUEUE_COALESCE_MS = 2000; // Milliseconds to wait for more P2Ps before firing mega-batch (default: 2000ms)
-    const P2P_MAX_WORKERS = 10; // Max concurrent worker processes for parallel P2P processing (override via EIOU_P2P_MAX_WORKERS env var)
+    // Max concurrent worker processes for parallel P2P processing (override via EIOU_P2P_MAX_WORKERS env var)
+    // Each worker uses ~15-20MB RAM, 1 MySQL connection, and up to CURL_MULTI_MAX_CONCURRENT curl handles.
+    // Recommended: 10 for Tor nodes (Tor circuits are the bottleneck), 20 for HTTP-only nodes.
+    const P2P_MAX_WORKERS = 10;
     const P2P_SENDING_TIMEOUT_SECONDS = 300; // Seconds before a P2P stuck in 'sending' is recovered (worker assumed dead)
     // Max simultaneous connections per curl_multi batch, keyed by protocol.
     // Lower Tor limit prevents circuit overload; HTTP/HTTPS can handle more.
