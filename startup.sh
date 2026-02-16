@@ -311,8 +311,18 @@ elif [ ! -f /etc/apache2/ssl/server.crt ]; then
         SSL_DOMAIN="localhost"
     fi
 
+    # Strip port from SSL_DOMAIN (e.g. "88.99.69.172:1152" → "88.99.69.172")
+    # Ports are not valid in certificate CN or SAN fields
+    SSL_DOMAIN=$(echo "$SSL_DOMAIN" | sed 's/:[0-9]*$//')
+
     # Build Subject Alternative Names list
-    SAN_LIST="DNS:localhost,DNS:$SSL_DOMAIN"
+    # Use IP: prefix for IP addresses, DNS: for hostnames
+    SAN_LIST="DNS:localhost"
+    if echo "$SSL_DOMAIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        SAN_LIST="$SAN_LIST,IP:$SSL_DOMAIN"
+    elif [ "$SSL_DOMAIN" != "localhost" ]; then
+        SAN_LIST="$SAN_LIST,DNS:$SSL_DOMAIN"
+    fi
 
     # Add container hostname if different from SSL_DOMAIN
     CONTAINER_HOSTNAME=$(hostname 2>/dev/null || echo "")
