@@ -35,19 +35,43 @@ SELECT id, received, sent, currency FROM balances;
 # TRANSACTIONS TABLE
 # ============================================================
 # Full transactions (excludes pubkey, pubkey_hash, signatures, nonce)
-SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, timestamp, time, txid, previous_txid, memo, description FROM transactions;
+SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, timestamp, time, txid, previous_txid, memo, description, sending_started_at, recovery_count, needs_manual_review FROM transactions;
 
 # ============================================================
 # P2P TABLE
 # ============================================================
 # Peer-to-peer requests (excludes pubkey, signatures, salt)
-SELECT id, hash, time, expiration, currency, amount, my_fee_amount, destination_address, request_level, max_request_level, sender_address, description, status, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
+SELECT id, hash, time, expiration, currency, amount, my_fee_amount, destination_address, request_level, max_request_level, sender_address, description, fast, contacts_sent_count, contacts_responded_count, hop_wait, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, status, sending_started_at, sending_worker_pid, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
 
 # ============================================================
 # RP2P TABLE
 # ============================================================
 # Responses to p2p requests (excludes pubkey, signatures)
 SELECT id, hash, time, amount, currency, sender_address, created_at FROM rp2p;
+
+# ============================================================
+# RP2P_CANDIDATES TABLE
+# ============================================================
+# Best-fee route selection candidates (excludes pubkey, signatures)
+SELECT id, hash, time, amount, currency, sender_address, fee_amount, created_at FROM rp2p_candidates;
+
+# ============================================================
+# P2P_SENDERS TABLE
+# ============================================================
+# Multi-path upstream senders per P2P hash (excludes pubkey)
+SELECT id, hash, sender_address, created_at FROM p2p_senders;
+
+# ============================================================
+# P2P_RELAYED_CONTACTS TABLE
+# ============================================================
+# Contacts that returned already_relayed during broadcast (two-phase selection)
+SELECT id, hash, contact_address, created_at FROM p2p_relayed_contacts;
+
+# ============================================================
+# CHAIN_DROP_PROPOSALS TABLE
+# ============================================================
+# Mutual agreements to drop missing transactions
+SELECT id, proposal_id, contact_pubkey_hash, missing_txid, broken_txid, previous_txid_before_gap, direction, status, gap_context, created_at, updated_at, expires_at, resolved_at FROM chain_drop_proposals;
 
 # ============================================================
 # API_KEYS TABLE
@@ -88,5 +112,5 @@ SELECT id, identifier, action, attempts, first_attempt, last_attempt, blocked_un
 # ============================================================
 # HELD_TRANSACTIONS TABLE
 # ============================================================
-# Transactions pending resync completion (excludes pubkey_hash fields)
+# Transactions pending resync completion
 SELECT id, contact_pubkey_hash, txid, original_previous_txid, expected_previous_txid, transaction_type, hold_reason, sync_status, retry_count, max_retries, held_at, last_sync_attempt, next_retry_at, resolved_at FROM held_transactions;

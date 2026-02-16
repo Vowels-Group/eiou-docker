@@ -15,13 +15,25 @@ SELECT id, http, https, tor FROM addresses;
 SELECT id, received, sent, currency FROM balances;
 
 # P2P Requests - peer-to-peer routing (excludes keys, signatures, salt)
-SELECT id, hash, time, amount, currency, my_fee_amount, request_level, max_request_level, sender_address, destination_address, description, incoming_txid, outgoing_txid, status, created_at, completed_at FROM p2p;
+SELECT id, hash, time, amount, currency, my_fee_amount, request_level, max_request_level, sender_address, destination_address, description, fast, contacts_sent_count, contacts_responded_count, hop_wait, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, status, sending_started_at, sending_worker_pid, incoming_txid, outgoing_txid, created_at, completed_at FROM p2p;
 
 # RP2P Responses - responses to p2p requests (excludes keys, signatures)
 SELECT id, hash, time, amount, currency, sender_address FROM rp2p;
 
+# RP2P Candidates - best-fee route selection (excludes keys, signatures)
+SELECT id, hash, time, amount, currency, sender_address, fee_amount, created_at FROM rp2p_candidates;
+
+# P2P Senders - multi-path upstream senders per P2P hash (excludes pubkey)
+SELECT id, hash, sender_address, created_at FROM p2p_senders;
+
+# P2P Relayed Contacts - contacts that returned already_relayed (two-phase selection)
+SELECT id, hash, contact_address, created_at FROM p2p_relayed_contacts;
+
+# Chain Drop Proposals - mutual agreements to drop missing transactions
+SELECT id, proposal_id, contact_pubkey_hash, missing_txid, broken_txid, direction, status, created_at, expires_at, resolved_at FROM chain_drop_proposals;
+
 # Transactions - transaction records (excludes keys, signatures, nonce)
-SELECT id, status, tx_type, type, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, description, timestamp, txid, previous_txid, memo FROM transactions;
+SELECT id, status, tx_type, type, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, description, timestamp, txid, previous_txid, memo, sending_started_at, recovery_count, needs_manual_review FROM transactions;
 
 # Message Delivery - delivery tracking (excludes payload)
 SELECT id, message_type, message_id, recipient_address, delivery_stage, retry_count, last_error, created_at, updated_at FROM message_delivery;
