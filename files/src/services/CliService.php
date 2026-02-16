@@ -1214,20 +1214,32 @@ HELP;
             $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
             echo "\tPublic Key:" . $readablePubKey . "\n";
 
-            // Total fee earnings per currency
+            // Total fee earnings per currency (always show, fallback to balance currencies)
+            echo "\tTotal Fee Earnings:\n";
             if (!empty($totalEarnings)) {
-                echo "\tTotal Fee Earnings:\n";
                 foreach ($totalEarnings as $earning) {
                     printf("\t\t%s: %s\n", $earning['currency'], $earning['total_earnings']);
                 }
+            } else {
+                // Show 0.00 for each known currency from balances
+                $balanceCurrencies = $this->balanceRepository->getUserBalance();
+                if (!empty($balanceCurrencies)) {
+                    foreach ($balanceCurrencies as $b) {
+                        printf("\t\t%s: 0.00\n", $b['currency']);
+                    }
+                } else {
+                    echo "\t\t0.00\n";
+                }
             }
 
-            // Total available credit across all contacts, per currency
+            // Total available credit across all contacts, per currency (always show)
+            echo "\tTotal Available Credit:\n";
             if (!empty($totalAvailableCredit)) {
-                echo "\tTotal Available Credit:\n";
                 foreach ($totalAvailableCredit as $credit) {
                     printf("\t\t%s: %s\n", $credit['currency'], $credit['total_available_credit']);
                 }
+            } else {
+                echo "\t\t0.00\n";
             }
 
             if ($showDetails){
