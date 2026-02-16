@@ -277,7 +277,8 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
      * @return bool True if worker spawned successfully
      */
     protected function spawnWorker(string $hash, string $transport): bool {
-        $cmd = 'php ' . escapeshellarg($this->workerScript) . ' ' . escapeshellarg($hash);
+        // exec replaces the shell with PHP directly (1 PID per worker instead of 2)
+        $cmd = 'exec php ' . escapeshellarg($this->workerScript) . ' ' . escapeshellarg($hash);
 
         $descriptorSpec = [
             0 => ['pipe', 'r'],  // stdin
