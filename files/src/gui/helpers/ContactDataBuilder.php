@@ -73,7 +73,8 @@ class ContactDataBuilder
             'online_status' => $contact['online_status'] ?? 'unknown',
             'valid_chain' => $contact['valid_chain'] ?? null,
             'pubkey_hash' => $contact['pubkey_hash'] ?? '',
-            'available_credit' => $contact['available_credit'] ?? null,
+            'my_available_credit' => $contact['my_available_credit'] ?? null,
+            'their_available_credit' => $contact['their_available_credit'] ?? null,
             'chain_drop_proposal' => $contact['chain_drop_proposal'] ?? null
         ], $addresses);
     }

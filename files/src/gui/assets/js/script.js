@@ -1576,22 +1576,30 @@ function openContactModal(contact, openTab) {
     balanceEl.className = 'balance-amount';
     document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
 
-    // Set credit limit, available credit, and fee
+    // Set credit limit, available credits (both directions), and fee
     var creditLimit = parseFloat(contact.credit_limit) || 0;
     document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
     document.getElementById('modal_credit_currency').textContent = contact.currency || 'USD';
-    var availableCreditEl = document.getElementById('modal_available_credit');
-    var availableCreditCurrencyEl = document.getElementById('modal_available_credit_currency');
-    if (availableCreditEl) {
-        if (contact.available_credit !== null && contact.available_credit !== undefined) {
-            availableCreditEl.textContent = parseFloat(contact.available_credit).toFixed(2);
-        } else {
-            availableCreditEl.textContent = '—';
-        }
+    var currency = contact.currency || 'USD';
+
+    // My available credit with them (from pong)
+    var myAvailableCreditEl = document.getElementById('modal_my_available_credit');
+    if (myAvailableCreditEl) {
+        myAvailableCreditEl.textContent = (contact.my_available_credit !== null && contact.my_available_credit !== undefined)
+            ? parseFloat(contact.my_available_credit).toFixed(2) : '—';
     }
-    if (availableCreditCurrencyEl) {
-        availableCreditCurrencyEl.textContent = contact.currency || 'USD';
+    var myCreditCurrencyEl = document.getElementById('modal_my_credit_currency');
+    if (myCreditCurrencyEl) myCreditCurrencyEl.textContent = currency;
+
+    // Their available credit with me (calculated)
+    var theirAvailableCreditEl = document.getElementById('modal_their_available_credit');
+    if (theirAvailableCreditEl) {
+        theirAvailableCreditEl.textContent = (contact.their_available_credit !== null && contact.their_available_credit !== undefined)
+            ? parseFloat(contact.their_available_credit).toFixed(2) : '—';
     }
+    var theirCreditCurrencyEl = document.getElementById('modal_their_credit_currency');
+    if (theirCreditCurrencyEl) theirCreditCurrencyEl.textContent = currency;
+
     var fee = parseFloat(contact.fee) || 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
 

@@ -537,6 +537,7 @@ class ApiController {
 
         $contacts = $contactRepo->getContactsByStatus($status);
         $creditRepo = $this->services->getContactCreditRepository();
+        $balanceRepo = $this->services->getBalanceRepository();
         $result = [];
 
         foreach ($contacts as $contact) {
@@ -548,11 +549,21 @@ class ApiController {
                 $addresses[$type] = $contactAddresses[$type] ?? null;
             }
 
-            // Look up available credit for this contact
-            $availableCredit = null;
+            // My available credit with them (from contact_credit table, received via pong)
+            $myAvailableCredit = null;
             $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
             if ($creditData !== null) {
-                $availableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+                $myAvailableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+            }
+
+            // Their available credit with me (calculated: sent - received + credit_limit)
+            $theirAvailableCredit = null;
+            $currency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $balanceData = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash'], $currency);
+            if ($balanceData && count($balanceData) > 0) {
+                $b = $balanceData[0];
+                $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contact['credit_limit'] ?? 0));
+                $theirAvailableCredit = $theirCents / Constants::CREDIT_CONVERSION_FACTOR;
             }
 
             $result[] = [
@@ -562,7 +573,8 @@ class ApiController {
                 'currency' => $contact['currency'],
                 'fee_percent' => $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'],
-                'available_credit' => $availableCredit,
+                'my_available_credit' => $myAvailableCredit,
+                'their_available_credit' => $theirAvailableCredit,
                 'addresses' => $addresses,
                 'created_at' => $contact['created_at']
             ];
@@ -831,12 +843,19 @@ class ApiController {
         $balanceResult = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash']);
         $balance = $balanceResult && count($balanceResult) > 0 ? $balanceResult[0] : null;
 
-        // Look up available credit for this contact
+        // My available credit with them (from contact_credit table, received via pong)
         $creditRepo = $this->services->getContactCreditRepository();
-        $availableCredit = null;
+        $myAvailableCredit = null;
         $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
         if ($creditData !== null) {
-            $availableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+            $myAvailableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+        }
+
+        // Their available credit with me (calculated: sent - received + credit_limit)
+        $theirAvailableCredit = null;
+        if ($balance) {
+            $theirCents = ((int)($balance['sent'] ?? 0)) - ((int)($balance['received'] ?? 0)) + ((int)($contact['credit_limit'] ?? 0));
+            $theirAvailableCredit = $theirCents / Constants::CREDIT_CONVERSION_FACTOR;
         }
 
         return $this->successResponse([
@@ -847,7 +866,8 @@ class ApiController {
                 'currency' => $contact['currency'],
                 'fee_percent' => $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'],
-                'available_credit' => $availableCredit,
+                'my_available_credit' => $myAvailableCredit,
+                'their_available_credit' => $theirAvailableCredit,
                 'addresses' => $addresses,
                 'balance' => $balance ? [
                     'received' => $balance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,

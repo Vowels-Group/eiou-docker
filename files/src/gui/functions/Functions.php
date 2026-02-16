@@ -279,12 +279,29 @@ try {
     $totalAvailableCreditByCurrency = [];
 }
 
-// Merge available credit into contact arrays
+// Merge available credit into contact arrays and calculate their available credit with me
+$balanceRepo = $serviceContainer->getBalanceRepository();
 $contactArraysForCredit = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
 foreach ($contactArraysForCredit as &$contacts) {
     foreach ($contacts as &$contact) {
         $hash = $contact['pubkey_hash'] ?? '';
-        $contact['available_credit'] = $availableCreditByContact[$hash] ?? null;
+        // My available credit with them (from pong, stored in contact_credit)
+        $contact['my_available_credit'] = $availableCreditByContact[$hash] ?? null;
+        // Their available credit with me (calculated: sent - received + credit_limit)
+        $contact['their_available_credit'] = null;
+        if ($hash) {
+            try {
+                $currency = $contact['currency'] ?? 'USD';
+                $balData = $balanceRepo->getContactBalanceByPubkeyHash($hash, $currency);
+                if ($balData && count($balData) > 0) {
+                    $b = $balData[0];
+                    $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)(($contact['credit_limit'] ?? 0) * \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR));
+                    $contact['their_available_credit'] = $theirCents / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR;
+                }
+            } catch (Exception $e) {
+                // Non-critical
+            }
+        }
     }
     unset($contact);
 }

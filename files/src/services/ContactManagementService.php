@@ -611,16 +611,32 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
 
         if ($contactResult) {
-            // Look up available credit for this contact
-            $availableCredit = null;
+            // My available credit with them (from contact_credit table, received via pong)
+            $myAvailableCredit = null;
             if ($this->contactCreditRepository !== null && !empty($contactResult['pubkey_hash'])) {
                 try {
                     $creditData = $this->contactCreditRepository->getAvailableCredit($contactResult['pubkey_hash']);
                     if ($creditData !== null) {
-                        $availableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+                        $myAvailableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
                     }
                 } catch (\Exception $e) {
                     // Non-critical — skip available credit display
+                }
+            }
+
+            // Their available credit with me (calculated: sent - received + credit_limit)
+            $theirAvailableCredit = null;
+            if (!empty($contactResult['pubkey_hash'])) {
+                try {
+                    $currency = $contactResult['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                    $balanceData = $this->balanceRepository->getContactBalanceByPubkeyHash($contactResult['pubkey_hash'], $currency);
+                    if ($balanceData && count($balanceData) > 0) {
+                        $b = $balanceData[0];
+                        $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contactResult['credit_limit'] ?? 0));
+                        $theirAvailableCredit = $theirCents / Constants::CREDIT_CONVERSION_FACTOR;
+                    }
+                } catch (\Exception $e) {
+                    // Non-critical
                 }
             }
 
@@ -633,7 +649,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                 $contact['status'] = $contactResult['status'] ?? null;
                 $contact['fee_percent'] = isset($contactResult['fee_percent']) ? $contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null;
                 $contact['credit_limit'] = isset($contactResult['credit_limit']) ? $contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null;
-                $contact['available_credit'] = $availableCredit;
+                $contact['my_available_credit'] = $myAvailableCredit;
+                $contact['their_available_credit'] = $theirAvailableCredit;
                 $contact['currency'] = $contactResult['currency'] ?? null;
                 $output->success("Contact found", ['contact' => $contact]);
             } else {
@@ -645,7 +662,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                 echo "\tStatus: " . ($contactResult['status'] ?? 'N/A') . "\n";
                 if (isset($contactResult['fee_percent'])) echo "\tFee: " . ($contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
                 if (isset($contactResult['credit_limit'])) echo "\tCredit Limit: " . ($contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
-                if ($availableCredit !== null) echo "\tAvailable Credit: " . number_format($availableCredit, 2) . "\n";
+                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, 2) . "\n";
+                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, 2) . "\n";
                 if (isset($contactResult['currency'])) echo "\tCurrency: " . $contactResult['currency'] . "\n";
             }
         } else {
