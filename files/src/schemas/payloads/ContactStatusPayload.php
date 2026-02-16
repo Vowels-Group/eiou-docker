@@ -44,9 +44,11 @@ class ContactStatusPayload extends BasePayload
      * @param array $request The ping request data
      * @param string|null $localPrevTxid Our local prev_txid for comparison
      * @param bool $chainValid Whether the chains match
+     * @param int|null $availableCredit Available credit for the pinging contact (in cents)
+     * @param string|null $currency Currency code for the available credit
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true): string
+    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
@@ -58,6 +60,8 @@ class ContactStatusPayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
             'prevTxid' => $localPrevTxid,
             'chainValid' => $chainValid,
+            'availableCredit' => $availableCredit,
+            'currency' => $currency,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ]);
     }

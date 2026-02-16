@@ -251,5 +251,44 @@ try {
     $newlyAddedToDlq = [];
 }
 
+// Fetch available credit per contact and merge into contact arrays
+$availableCreditByContact = [];
+$totalAvailableCreditByCurrency = [];
+try {
+    $contactCreditRepo = $serviceContainer->getContactCreditRepository();
+    // Get per-contact credits for merging into contact cards
+    foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
+        $hash = $c['pubkey_hash'] ?? '';
+        if ($hash && !isset($availableCreditByContact[$hash])) {
+            $creditData = $contactCreditRepo->getAvailableCredit($hash);
+            if ($creditData !== null) {
+                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR;
+            }
+        }
+    }
+    // Get totals per currency for dashboard display
+    $creditTotals = $contactCreditRepo->getTotalAvailableCreditByCurrency();
+    foreach ($creditTotals as $row) {
+        $totalAvailableCreditByCurrency[] = [
+            'currency' => $row['currency'],
+            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR, 2)
+        ];
+    }
+} catch (Exception $e) {
+    $availableCreditByContact = [];
+    $totalAvailableCreditByCurrency = [];
+}
+
+// Merge available credit into contact arrays
+$contactArraysForCredit = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
+foreach ($contactArraysForCredit as &$contacts) {
+    foreach ($contacts as &$contact) {
+        $hash = $contact['pubkey_hash'] ?? '';
+        $contact['available_credit'] = $availableCreditByContact[$hash] ?? null;
+    }
+    unset($contact);
+}
+unset($contacts);
+
 // Initialize ContactDataBuilder helper
 $contactDataBuilder = new ContactDataBuilder($addressTypes);

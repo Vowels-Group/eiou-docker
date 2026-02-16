@@ -9,6 +9,7 @@ use Eiou\Core\Constants;
 use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
@@ -109,6 +110,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     private ?SyncTriggerInterface $syncTrigger = null;
 
+    /**
+     * @var ContactCreditRepository|null Contact credit repository for initial credit creation
+     */
+    private ?ContactCreditRepository $contactCreditRepository = null;
+
     // =========================================================================
     // CONSTRUCTOR
     // =========================================================================
@@ -158,6 +164,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     public function setSyncTrigger(SyncTriggerInterface $sync): void {
         $this->syncTrigger = $sync;
+    }
+
+    /**
+     * Set the contact credit repository for creating initial credit entries
+     *
+     * @param ContactCreditRepository $repo Contact credit repository
+     */
+    public function setContactCreditRepository(ContactCreditRepository $repo): void {
+        $this->contactCreditRepository = $repo;
     }
 
     /**
@@ -1021,6 +1036,17 @@ class ContactSyncService implements ContactSyncServiceInterface {
         if($success){
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+
+            // Create initial contact credit entry (available_credit = 0 until first ping)
+            if ($this->contactCreditRepository !== null) {
+                try {
+                    $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to create initial contact credit entry", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
 
             // Recalculate balances from existing transactions (wallet restore scenario:
             // transactions were synced during ping but balances are still zero)

@@ -1576,10 +1576,22 @@ function openContactModal(contact, openTab) {
     balanceEl.className = 'balance-amount';
     document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
 
-    // Set credit limit and fee
+    // Set credit limit, available credit, and fee
     var creditLimit = parseFloat(contact.credit_limit) || 0;
     document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
     document.getElementById('modal_credit_currency').textContent = contact.currency || 'USD';
+    var availableCreditEl = document.getElementById('modal_available_credit');
+    var availableCreditCurrencyEl = document.getElementById('modal_available_credit_currency');
+    if (availableCreditEl) {
+        if (contact.available_credit !== null && contact.available_credit !== undefined) {
+            availableCreditEl.textContent = parseFloat(contact.available_credit).toFixed(2);
+        } else {
+            availableCreditEl.textContent = '—';
+        }
+    }
+    if (availableCreditCurrencyEl) {
+        availableCreditCurrencyEl.textContent = contact.currency || 'USD';
+    }
     var fee = parseFloat(contact.fee) || 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
 

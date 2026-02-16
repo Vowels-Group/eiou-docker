@@ -12,6 +12,7 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Exceptions\FatalServiceException;
 use Eiou\Exceptions\ValidationServiceException;
@@ -91,6 +92,11 @@ class ContactManagementService implements ContactManagementServiceInterface
      */
     private ?SyncTriggerInterface $syncTrigger = null;
 
+    /**
+     * @var ContactCreditRepository|null Contact credit repository for initial credit creation
+     */
+    private ?ContactCreditRepository $contactCreditRepository = null;
+
     // =========================================================================
     // CONSTRUCTOR & DEPENDENCY INJECTION
     // =========================================================================
@@ -143,6 +149,17 @@ class ContactManagementService implements ContactManagementServiceInterface
     public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void
     {
         $this->syncTrigger = $syncTrigger;
+    }
+
+    /**
+     * Set the contact credit repository for creating initial credit entries
+     *
+     * @param ContactCreditRepository $repo Contact credit repository
+     * @return void
+     */
+    public function setContactCreditRepository(ContactCreditRepository $repo): void
+    {
+        $this->contactCreditRepository = $repo;
     }
 
     /**
@@ -279,6 +296,17 @@ class ContactManagementService implements ContactManagementServiceInterface
         if ($success) {
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+
+            // Create initial contact credit entry (available_credit = 0 until first ping)
+            if ($this->contactCreditRepository !== null) {
+                try {
+                    $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
+                } catch (\Exception $e) {
+                    $this->secureLogger->warning("Failed to create initial contact credit entry", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
 
             // Recalculate balances from existing transactions (wallet restore scenario:
             // transactions were synced during ping but balances are still zero)
@@ -583,6 +611,19 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
 
         if ($contactResult) {
+            // Look up available credit for this contact
+            $availableCredit = null;
+            if ($this->contactCreditRepository !== null && !empty($contactResult['pubkey_hash'])) {
+                try {
+                    $creditData = $this->contactCreditRepository->getAvailableCredit($contactResult['pubkey_hash']);
+                    if ($creditData !== null) {
+                        $availableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+                    }
+                } catch (\Exception $e) {
+                    // Non-critical — skip available credit display
+                }
+            }
+
             if ($output->isJsonMode()) {
                 $contact = ['name' => $contactResult['name'] ?? null];
                 foreach ($this->getAllAddressTypes() as $type) {
@@ -592,6 +633,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 $contact['status'] = $contactResult['status'] ?? null;
                 $contact['fee_percent'] = isset($contactResult['fee_percent']) ? $contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null;
                 $contact['credit_limit'] = isset($contactResult['credit_limit']) ? $contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null;
+                $contact['available_credit'] = $availableCredit;
                 $contact['currency'] = $contactResult['currency'] ?? null;
                 $output->success("Contact found", ['contact' => $contact]);
             } else {
@@ -603,6 +645,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 echo "\tStatus: " . ($contactResult['status'] ?? 'N/A') . "\n";
                 if (isset($contactResult['fee_percent'])) echo "\tFee: " . ($contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
                 if (isset($contactResult['credit_limit'])) echo "\tCredit Limit: " . ($contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
+                if ($availableCredit !== null) echo "\tAvailable Credit: " . number_format($availableCredit, 2) . "\n";
                 if (isset($contactResult['currency'])) echo "\tCurrency: " . $contactResult['currency'] . "\n";
             }
         } else {

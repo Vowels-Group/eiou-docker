@@ -13,6 +13,18 @@ The project is currently in **ALPHA** status.
 ## 2026-02-16
 
 ### Added
+- Available credit exchange during ping/pong — pong responses now include `availableCredit` and `currency` fields, allowing contacts to report how much credit is available to transact through them
+- `contact_credit` database table — stores per-contact available credit (pubkey_hash, available_credit, currency) updated on each successful ping, linked to contacts via pubkey_hash
+- `ContactCreditRepository` — new repository for managing contact credit entries with upsert, lookup, and initial creation methods
+- Initial contact credit entry created on contact acceptance — both `ContactManagementService` and `ContactSyncService` create a zero-credit row when accepting contacts
+- `ContactStatusProcessor` saves available credit from background ping pong responses
+- Available credit display in CLI `view` command — shows available credit alongside credit limit for each contact
+- Total available credit per currency in CLI `info` command — sums available credit across all contacts, displayed in both text and JSON modes
+- Available credit in API contact endpoints — `GET /api/v1/contacts` and `GET /api/v1/contacts/:address` include `available_credit` field per contact
+- Total available credit in API wallet overview — `GET /api/v1/wallet/overview` includes `total_available_credit` array grouped by currency
+- `getTotalAvailableCreditByCurrency()` method on `ContactCreditRepository` — aggregates available credit across all contacts by currency
+- GUI total available credit dashboard card — shows summed available credit per currency in the wallet information section
+- GUI contact modal available credit display — shows per-contact available credit with hover tooltip noting ~5 min refresh interval
 - Sliding-window concurrency control for `curl_multi` batch sends — `executeWithConcurrencyLimit()` caps simultaneous connections per protocol (HTTP: 10, Tor: 5) to prevent Tor circuit overload
 - `getConcurrencyLimit()` method on `TransportUtilityService` — centralized protocol-to-limit lookup using `Constants::CURL_MULTI_MAX_CONCURRENT` associative array
 - Mega-batch P2P processing — `processQueuedP2pMessages()` uses a 3-phase approach: collect all sends across queued P2Ps, fire via `sendMultiBatch()`, map results back

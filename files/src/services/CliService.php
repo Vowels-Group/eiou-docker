@@ -12,6 +12,7 @@ use Eiou\Contracts\CliServiceInterface;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -79,6 +80,11 @@ class CliService implements CliServiceInterface {
     private UserContext $currentUser;
 
     /**
+     * @var ContactCreditRepository|null Contact credit repository (optional, setter-injected)
+     */
+    private ?ContactCreditRepository $contactCreditRepository = null;
+
+    /**
      * Constructor
      * 
      * @param ContactRepository $contactRepository Contact Repository
@@ -101,6 +107,13 @@ class CliService implements CliServiceInterface {
         $this->currencyUtility = $utilityContainer->getCurrencyUtility();
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->generalUtility = $utilityContainer->getGeneralUtility();
+    }
+
+    /**
+     * Set the contact credit repository (optional dependency)
+     */
+    public function setContactCreditRepository(ContactCreditRepository $contactCreditRepository): void {
+        $this->contactCreditRepository = $contactCreditRepository;
     }
 
     // =========================================================================
@@ -1059,11 +1072,28 @@ HELP;
             }
         }
 
+        // Get total available credit per currency
+        $totalAvailableCredit = [];
+        if ($this->contactCreditRepository !== null) {
+            try {
+                $creditRows = $this->contactCreditRepository->getTotalAvailableCreditByCurrency();
+                foreach ($creditRows as $row) {
+                    $totalAvailableCredit[] = [
+                        'currency' => $row['currency'],
+                        'total_available_credit' => number_format($row['total_available_credit'] / Constants::CREDIT_CONVERSION_FACTOR, 2)
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Non-critical — skip available credit display
+            }
+        }
+
         // Build user info data structure
         $userInfo = [
             'locators' => $locators,
             'authentication_code' => $authcodeInfo,
-            'public_key' => $this->currentUser->getPublicKey()
+            'public_key' => $this->currentUser->getPublicKey(),
+            'total_available_credit' => $totalAvailableCredit
         ];
 
         $showDetails = isset($argv[2]) && strtolower($argv[2]) === 'detail';
@@ -1149,6 +1179,14 @@ HELP;
             // Public key is from the config file
             $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
             echo "\tPublic Key:" . $readablePubKey . "\n";
+
+            // Total available credit across all contacts, per currency
+            if (!empty($totalAvailableCredit)) {
+                echo "\tTotal Available Credit:\n";
+                foreach ($totalAvailableCredit as $credit) {
+                    printf("\t\t%s: %s\n", $credit['currency'], $credit['total_available_credit']);
+                }
+            }
 
             if ($showDetails){
                 // Get total sent and received by currency

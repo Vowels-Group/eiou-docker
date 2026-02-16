@@ -8,6 +8,8 @@ use Eiou\Contracts\ContactStatusServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\AddressRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -82,6 +84,16 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?AddressRepository $addressRepository = null;
 
     /**
+     * @var BalanceRepository|null Balance repository for calculating available credit
+     */
+    private ?BalanceRepository $balanceRepository = null;
+
+    /**
+     * @var ContactCreditRepository|null Contact credit repository for storing available credit from pong
+     */
+    private ?ContactCreditRepository $contactCreditRepository = null;
+
+    /**
      * Set the sync trigger (accepts interface for loose coupling)
      *
      * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
@@ -137,6 +149,24 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setAddressRepository(AddressRepository $repo): void {
         $this->addressRepository = $repo;
+    }
+
+    /**
+     * Set the balance repository for calculating available credit in pong responses
+     *
+     * @param BalanceRepository $repo Balance repository
+     */
+    public function setBalanceRepository(BalanceRepository $repo): void {
+        $this->balanceRepository = $repo;
+    }
+
+    /**
+     * Set the contact credit repository for storing available credit from pong responses
+     *
+     * @param ContactCreditRepository $repo Contact credit repository
+     */
+    public function setContactCreditRepository(ContactCreditRepository $repo): void {
+        $this->contactCreditRepository = $repo;
     }
 
     /**
@@ -293,11 +323,30 @@ class ContactStatusService implements ContactStatusServiceInterface {
             $this->triggerSync($request['senderAddress'] ?? '', $senderPubkey);
         }
 
+        // Calculate available credit for the pinging contact
+        $availableCredit = null;
+        $contactCurrency = null;
+        if ($this->balanceRepository !== null) {
+            try {
+                $contactData = $this->contactRepository->findByColumn('pubkey', $senderPubkey);
+                $contactCurrency = $contactData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $contactCurrency);
+                $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $contactCurrency);
+                $balance = $sentBalance - $receivedBalance;
+                $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
+                $availableCredit = $balance + $creditLimit;
+            } catch (\Exception $e) {
+                Logger::getInstance()->warning("Failed to calculate available credit for ping response", [
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
         // Update the sender's online status since they pinged us
         $this->updateContactOnlineStatus($senderPubkey);
 
-        // Send pong response
-        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid);
+        // Send pong response with available credit
+        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency);
     }
 
     /**
@@ -444,6 +493,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     // Contact is online
                     $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
 
+                    // Save available credit from pong response
+                    $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
+
                     // Check chain validity from remote response
                     $chainValid = $response['chainValid'] ?? true;
                     $remotePrevTxid = $response['prevTxid'] ?? null;
@@ -549,6 +601,31 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 'chain_valid' => null,
                 'message' => 'Contact is offline (connection failed)'
             ];
+        }
+    }
+
+    /**
+     * Save available credit received from a pong response
+     *
+     * @param string $contactPubkey Contact's public key
+     * @param array $response The pong response data
+     */
+    private function saveAvailableCreditFromPong(string $contactPubkey, array $response): void {
+        if (!isset($response['availableCredit']) || $this->contactCreditRepository === null) {
+            return;
+        }
+
+        try {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+            $this->contactCreditRepository->upsertAvailableCredit(
+                $pubkeyHash,
+                (int) $response['availableCredit'],
+                $response['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY
+            );
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning("Failed to save available credit from pong", [
+                'error' => $e->getMessage()
+            ]);
         }
     }
 

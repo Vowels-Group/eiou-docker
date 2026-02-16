@@ -88,6 +88,7 @@ function freshInstall(){
                 $dbConn->exec(getRp2pCandidatesTableSchema());
                 $dbConn->exec(getP2pSendersTableSchema());
                 $dbConn->exec(getP2pRelayedContactsTableSchema());
+                $dbConn->exec(getContactCreditTableSchema());
             } catch (PDOException $tableError) {
                 Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()
@@ -144,6 +145,7 @@ function runMigrations(PDO $pdo): array {
         'rp2p_candidates' => 'getRp2pCandidatesTableSchema',
         'p2p_senders' => 'getP2pSendersTableSchema',
         'p2p_relayed_contacts' => 'getP2pRelayedContactsTableSchema',
+        'contact_credit' => 'getContactCreditTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

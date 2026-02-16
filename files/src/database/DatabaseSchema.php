@@ -455,3 +455,15 @@ function getChainDropProposalsTableSchema() {
         INDEX idx_cdp_expires (expires_at, status)
     )";
 }
+
+// Contact Credit table - stores available credit information from contacts, updated during ping
+function getContactCreditTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS contact_credit (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey_hash VARCHAR(64) NOT NULL UNIQUE,
+        available_credit INT DEFAULT 0,
+        currency VARCHAR(10),
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_contact_credit_pubkey_hash (pubkey_hash)
+    )";
+}

@@ -62,6 +62,7 @@ use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Database\ChainDropProposalRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Database\TransactionStatisticsRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -427,6 +428,20 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->repositories['ChainDropProposalRepository'];
+    }
+
+    /**
+     * Get ContactCreditRepository instance
+     *
+     * @return ContactCreditRepository
+     */
+    public function getContactCreditRepository(): ContactCreditRepository {
+        if (!isset($this->repositories['ContactCreditRepository'])) {
+            $this->repositories['ContactCreditRepository'] = new ContactCreditRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['ContactCreditRepository'];
     }
 
     /**
@@ -1245,20 +1260,24 @@ class ServiceContainer implements ContainerInterface {
         // These now use SyncTriggerInterface via proxy for loose coupling
         // =========================================================================
 
-        // Wire ContactManagementService with ContactSyncService and SyncTriggerInterface
-        // Reason: ContactManagementService needs to trigger sync operations after contact changes
-        //         and recalculate balances after accepting contacts (wallet restore scenario)
+        // Wire ContactManagementService with ContactSyncService, SyncTriggerInterface, and ContactCreditRepository
+        // Reason: ContactManagementService needs to trigger sync operations after contact changes,
+        //         recalculate balances after accepting contacts (wallet restore scenario),
+        //         and create initial contact credit entries on acceptance
         if (isset($this->services['ContactManagementService'])) {
             if (isset($this->services['ContactSyncService'])) {
                 $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
             }
             $this->services['ContactManagementService']->setSyncTrigger($this->getSyncServiceProxy());
+            $this->services['ContactManagementService']->setContactCreditRepository($this->getContactCreditRepository());
         }
 
-        // Wire ContactSyncService -> SyncTriggerInterface (via proxy)
+        // Wire ContactSyncService -> SyncTriggerInterface (via proxy), ContactCreditRepository
         // Reason: ContactSyncService needs to trigger sync operations for contacts
+        //         and create initial contact credit entries on acceptance
         if (isset($this->services['ContactSyncService'])) {
             $this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
+            $this->services['ContactSyncService']->setContactCreditRepository($this->getContactCreditRepository());
         }
 
         // Wire ContactSyncService -> MessageDeliveryService
@@ -1274,14 +1293,17 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository, ChainDropService, AddressRepository
+        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository, ChainDropService, AddressRepository,
+        //                              BalanceRepository, ContactCreditRepository
         // Reason: ContactStatusService validates chains, needs rate limiting, detects internal gaps, auto-proposes chain drops,
-        //         and auto-creates pending contacts from pings (wallet restore scenario)
+        //         auto-creates pending contacts from pings (wallet restore scenario), and calculates/stores available credit during ping
         // Note: Uses SyncTriggerInterface for loose coupling
         if (isset($this->services['ContactStatusService'])) {
             $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
             $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
             $this->services['ContactStatusService']->setAddressRepository($this->getAddressRepository());
+            $this->services['ContactStatusService']->setBalanceRepository($this->getBalanceRepository());
+            $this->services['ContactStatusService']->setContactCreditRepository($this->getContactCreditRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
@@ -1304,6 +1326,12 @@ class ServiceContainer implements ContainerInterface {
         // Reason: ChainDropService needs to recalculate balances after dropping transactions
         if (isset($this->services['ChainDropService'])) {
             $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
+        }
+
+        // Wire CliService -> ContactCreditRepository
+        // Reason: CliService displays total available credit in user info
+        if (isset($this->services['CliService'])) {
+            $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
         }
 
         // =========================================================================

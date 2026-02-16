@@ -23,6 +23,20 @@
             <div class="balance-currency">Total Earnings</div>
         </div>
 
+        <?php if (!empty($totalAvailableCreditByCurrency)): ?>
+        <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%); border-radius: 8px; color: white;">
+            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 0.25rem;">
+                <i class="fas fa-coins"></i> Total Available Credit
+                <i class="fas fa-info-circle" style="font-size: 0.7rem; opacity: 0.7; cursor: help;" title="Sum of available credit across all contacts. Refreshed during periodic pings (~5 min intervals)."></i>
+            </div>
+            <?php foreach ($totalAvailableCreditByCurrency as $credit): ?>
+            <div style="font-size: 1.5rem; font-weight: 700;">
+                $<?php echo htmlspecialchars($credit['total']); ?> <span style="font-size: 0.9rem; opacity: 0.8;"><?php echo htmlspecialchars($credit['currency']); ?></span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <?php
         // Use getUserLocaters() for dynamic address handling
         $userAddresses = $user->getUserLocaters();

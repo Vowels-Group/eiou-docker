@@ -499,8 +499,20 @@ class ApiController {
             ];
         }
 
+        // Get total available credit per currency
+        $creditRepo = $this->services->getContactCreditRepository();
+        $totalAvailableCredit = [];
+        $creditRows = $creditRepo->getTotalAvailableCreditByCurrency();
+        foreach ($creditRows as $row) {
+            $totalAvailableCredit[] = [
+                'currency' => $row['currency'],
+                'total_available_credit' => $row['total_available_credit'] / Constants::CREDIT_CONVERSION_FACTOR
+            ];
+        }
+
         return $this->successResponse([
             'balances' => $balanceResult,
+            'total_available_credit' => $totalAvailableCredit,
             'recent_transactions' => $transactionResult,
             'transaction_count' => count($transactionResult)
         ]);
@@ -524,6 +536,7 @@ class ApiController {
         $addressTypes = $addressRepo->getAllAddressTypes();
 
         $contacts = $contactRepo->getContactsByStatus($status);
+        $creditRepo = $this->services->getContactCreditRepository();
         $result = [];
 
         foreach ($contacts as $contact) {
@@ -535,6 +548,13 @@ class ApiController {
                 $addresses[$type] = $contactAddresses[$type] ?? null;
             }
 
+            // Look up available credit for this contact
+            $availableCredit = null;
+            $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
+            if ($creditData !== null) {
+                $availableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+            }
+
             $result[] = [
                 'name' => $contact['name'],
                 'pubkey_hash' => $contact['pubkey_hash'],
@@ -542,6 +562,7 @@ class ApiController {
                 'currency' => $contact['currency'],
                 'fee_percent' => $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'],
+                'available_credit' => $availableCredit,
                 'addresses' => $addresses,
                 'created_at' => $contact['created_at']
             ];
@@ -810,6 +831,14 @@ class ApiController {
         $balanceResult = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash']);
         $balance = $balanceResult && count($balanceResult) > 0 ? $balanceResult[0] : null;
 
+        // Look up available credit for this contact
+        $creditRepo = $this->services->getContactCreditRepository();
+        $availableCredit = null;
+        $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
+        if ($creditData !== null) {
+            $availableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+        }
+
         return $this->successResponse([
             'contact' => [
                 'name' => $contact['name'],
@@ -818,6 +847,7 @@ class ApiController {
                 'currency' => $contact['currency'],
                 'fee_percent' => $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'],
+                'available_credit' => $availableCredit,
                 'addresses' => $addresses,
                 'balance' => $balance ? [
                     'received' => $balance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
