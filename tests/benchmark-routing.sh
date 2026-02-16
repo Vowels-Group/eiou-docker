@@ -380,7 +380,7 @@ do_send() {
     " 2>/dev/null || echo "0")
 
     # Send (EIOU_TEST_MODE disables CLI rate limiter — benchmarks exceed 30 sends/min)
-    local start_time=$(date +%s)
+    local start_time=$(date +%s%3N)
     if [ "$mode" = "fast" ]; then
         docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null || true
     else
@@ -401,10 +401,10 @@ do_send() {
         if [ "$balance_changed" -eq 1 ]; then
             break
         fi
-        elapsed_wait=$(( $(date +%s) - start_time ))
+        elapsed_wait=$(( ($(date +%s%3N) - start_time) / 1000 ))
     done
 
-    local end_time=$(date +%s)
+    local end_time=$(date +%s%3N)
     local elapsed=$((end_time - start_time))
 
     # Trace path, compute fee, and extract DB timestamps if send succeeded
@@ -532,11 +532,13 @@ do_send() {
             [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
             timing_detail="${timing_detail})"
         fi
-        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-38s | %-35s | %sx | ${opt_color}%s${NC}\n" \
-            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
+        local elapsed_fmt=$(awk "BEGIN {printf \"%.3f\", $elapsed / 1000}")
+        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %7ss%-35s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed_fmt" "$timing_detail" "$path" "$fee" "$is_optimal"
     else
-        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
-            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
+        local elapsed_fmt=$(awk "BEGIN {printf \"%.3f\", $elapsed / 1000}")
+        printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %7ss | ${RED}FAILED${NC}\n" \
+            "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed_fmt"
     fi
 }
 
@@ -572,7 +574,7 @@ do_burst() {
 
     declare -a _burst_fire_time
     for ((run=1; run<=RUNS; run++)); do
-        _burst_fire_time[$run]=$(date +%s)
+        _burst_fire_time[$run]=$(date +%s%3N)
         if [ "$mode" = "fast" ]; then
             docker exec -e EIOU_TEST_MODE=true $SENDER eiou send $receiver_addr $SEND_AMOUNT $SEND_CURRENCY 2>&1 >/dev/null || true
         else
@@ -667,8 +669,9 @@ do_burst() {
             R_SEARCH_TIME[$key]=""
             R_SETTLE_TIME[$key]=""
 
-            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-38s | %-35s | %sx | ${opt_color}%s${NC}\n" \
-                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "" "${SENDER}->${target}" "$fee" "$is_optimal"
+            local elapsed_fmt=$(awk "BEGIN {printf \"%.3f\", $elapsed / 1000}")
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %7ss%-35s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed_fmt" "" "${SENDER}->${target}" "$fee" "$is_optimal"
         done
     else
         # P2P sends — collect from P2P table
@@ -702,7 +705,7 @@ do_burst() {
 
             if [ -z "$hash" ] || [ -z "$sender_completed" ]; then
                 # No hash found or not completed — mark as failed
-                local elapsed=$(( $(date +%s) - fire_time ))
+                local elapsed=$(( $(date +%s%3N) - fire_time ))
                 R_TIME[$key]="$elapsed"
                 R_PASS[$key]="0"
                 R_PATH[$key]=""
@@ -711,16 +714,18 @@ do_burst() {
                 R_P2P_TIME[$key]=""
                 R_SEARCH_TIME[$key]=""
                 R_SETTLE_TIME[$key]=""
-                printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds | ${RED}FAILED${NC}\n" \
-                    "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed"
+                local elapsed_fmt=$(awk "BEGIN {printf \"%.3f\", $elapsed / 1000}")
+                printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %7ss | ${RED}FAILED${NC}\n" \
+                    "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed_fmt"
                 continue
             fi
 
             # Wall time: fire_time to completed_at epoch
-            local completed_epoch=$(docker exec $SENDER php -r "
-                echo strtotime('$sender_completed');
+            local completed_epoch_ms=$(docker exec $SENDER php -r "
+                \$d = new \DateTime('$sender_completed');
+                echo (int)(((float)\$d->format('U.u')) * 1000);
             " 2>/dev/null || echo "0")
-            local elapsed=$((completed_epoch - fire_time))
+            local elapsed=$((completed_epoch_ms - fire_time))
             [ "$elapsed" -lt 0 ] && elapsed=0
 
             # Trace path
@@ -795,8 +800,9 @@ do_burst() {
                 [ -n "$settle_time" ] && timing_detail="${timing_detail} sttl:${settle_time}s"
                 timing_detail="${timing_detail})"
             fi
-            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %3ds%-38s | %-35s | %sx | ${opt_color}%s${NC}\n" \
-                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed" "$timing_detail" "$path" "$fee" "$is_optimal"
+            local elapsed_fmt=$(awk "BEGIN {printf \"%.3f\", $elapsed / 1000}")
+            printf "[%-5s] Run %2d/%d | %-4s | %-6s -> %-4s | %7ss%-35s | %-35s | %sx | ${opt_color}%s${NC}\n" \
+                "$protocol" "$run" "$RUNS" "$mode" "$dist_label" "$target" "$elapsed_fmt" "$timing_detail" "$path" "$fee" "$is_optimal"
         done
     fi
 }
@@ -858,9 +864,9 @@ _fmt_stats() {
     local label="$1" total_runs="$2"
     avg_time="N/A"; min_time="-"; max_time="-"
     if [ "$_tc" -gt 0 ]; then
-        avg_time=$(awk "BEGIN {printf \"%.1f\", $_ts / $_tc}")
-        min_time="${_tmin}"
-        max_time="${_tmax}"
+        avg_time=$(awk "BEGIN {printf \"%.1f\", $_ts / $_tc / 1000}")
+        min_time=$(awk "BEGIN {printf \"%.1f\", $_tmin / 1000}")
+        max_time=$(awk "BEGIN {printf \"%.1f\", $_tmax / 1000}")
     fi
     optimal_pct="N/A"
     [ "$_pc" -gt 0 ] && optimal_pct=$(awk "BEGIN {printf \"%.0f\", ($_oc * 100.0 / $_pc)}")
