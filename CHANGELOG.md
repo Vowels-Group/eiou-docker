@@ -21,7 +21,8 @@ The project is currently in **ALPHA** status.
 - `processSingleP2p()` method on `P2pService` — processes one P2P with atomic claim (`queued → sending`), broadcast via own `curl_multi`, and status transition (`sending → sent`)
 - Atomic P2P claiming in `P2pRepository` — `claimQueuedP2p()`, `getStuckSendingP2ps()`, `recoverStuckP2p()`, `clearSendingMetadata()` methods for worker coordination and crash recovery
 - `sending` status added to P2P ENUM with `sending_started_at` and `sending_worker_pid` columns — enables worker ownership tracking and stuck-sending recovery
-- `P2P_MAX_WORKERS` (5) and `P2P_SENDING_TIMEOUT_SECONDS` (300) constants for worker pool sizing and crash recovery threshold
+- `P2P_MAX_WORKERS` (10) and `P2P_SENDING_TIMEOUT_SECONDS` (300) constants for worker pool sizing and crash recovery threshold
+- `Constants::getMaxP2pWorkers()` static method — reads `EIOU_P2P_MAX_WORKERS` env var at runtime, allowing per-deployment tuning (production servers with one node can safely use higher values than multi-node test environments)
 
 ### Changed
 - `P2pMessageProcessor` rewritten from single-threaded delegator to coordinator+worker model — polls for queued P2Ps, spawns up to `P2P_MAX_WORKERS` independent PHP processes, reaps finished workers, and recovers stuck `sending` P2Ps with dead worker PIDs every 60s

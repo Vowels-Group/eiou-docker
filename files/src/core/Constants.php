@@ -148,7 +148,7 @@ class Constants {
     const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per EIOU hop)
     const P2P_QUEUE_BATCH_SIZE = 10; // Max queued P2Ps processed per daemon poll cycle (all sent in one curl_multi)
     const P2P_QUEUE_COALESCE_MS = 2000; // Milliseconds to wait for more P2Ps before firing mega-batch (default: 2000ms)
-    const P2P_MAX_WORKERS = 5; // Max concurrent worker processes for parallel P2P processing
+    const P2P_MAX_WORKERS = 10; // Max concurrent worker processes for parallel P2P processing (override via EIOU_P2P_MAX_WORKERS env var)
     const P2P_SENDING_TIMEOUT_SECONDS = 300; // Seconds before a P2P stuck in 'sending' is recovered (worker assumed dead)
     // Max simultaneous connections per curl_multi batch, keyed by protocol.
     // Lower Tor limit prevents circuit overload; HTTP/HTTPS can handle more.
@@ -324,6 +324,22 @@ class Constants {
             return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
         }
         return self::BACKUP_AUTO_ENABLED;
+    }
+
+    /**
+     * Get max P2P worker processes
+     * Supports runtime override via EIOU_P2P_MAX_WORKERS env variable
+     * Production (single node per server): default 10 is appropriate
+     * Testing (multiple nodes per server): set lower to conserve RAM/Tor circuits
+     *
+     * @return int Maximum concurrent worker processes
+     */
+    public static function getMaxP2pWorkers(): int {
+        $envValue = getenv('EIOU_P2P_MAX_WORKERS');
+        if ($envValue !== false && ctype_digit($envValue) && (int)$envValue > 0) {
+            return (int)$envValue;
+        }
+        return self::P2P_MAX_WORKERS;
     }
 
     /**
