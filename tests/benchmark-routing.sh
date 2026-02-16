@@ -550,7 +550,6 @@ do_burst() {
 
     local target="${TARGETS[$distance]}"
     local receiver_addr="${containerAddresses[$target]}"
-    local fast_flag=$( [ "$mode" = "fast" ] && echo 1 || echo 0 )
     local dist_label="${DISTANCE_LABELS[$distance]}"
 
     # Balance command template
@@ -596,7 +595,7 @@ do_burst() {
     local p2p_total=$(docker exec $SENDER php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag')->fetchColumn();
+        echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id')->fetchColumn();
     " 2>/dev/null || echo "0")
 
     if [ "$p2p_total" -eq 0 ]; then
@@ -623,13 +622,13 @@ do_burst() {
             completed=$(docker exec $SENDER php -r "
                 require_once('${BOOTSTRAP_PATH}');
                 \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-                echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND completed_at IS NOT NULL')->fetchColumn();
+                echo \$pdo->query('SELECT COUNT(*) FROM p2p WHERE id > $max_id AND completed_at IS NOT NULL')->fetchColumn();
             " 2>/dev/null || echo "0")
 
             failed=$(docker exec $SENDER php -r "
                 require_once('${BOOTSTRAP_PATH}');
                 \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-                echo \$pdo->query(\"SELECT COUNT(*) FROM p2p WHERE id > $max_id AND fast = $fast_flag AND status IN ('cancelled','expired')\")->fetchColumn();
+                echo \$pdo->query(\"SELECT COUNT(*) FROM p2p WHERE id > $max_id AND status IN ('cancelled','expired')\")->fetchColumn();
             " 2>/dev/null || echo "0")
 
             printf "\r  Waiting: %d/%d completed (%ds)...  " "$completed" "$RUNS" "$elapsed_wait"
@@ -676,7 +675,7 @@ do_burst() {
         local hash_data=$(docker exec $SENDER php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            \$stmt = \$pdo->query('SELECT hash, created_at, completed_at FROM p2p WHERE id > $max_id AND fast = $fast_flag ORDER BY id ASC');
+            \$stmt = \$pdo->query('SELECT hash, created_at, completed_at FROM p2p WHERE id > $max_id ORDER BY id ASC');
             while (\$row = \$stmt->fetch(PDO::FETCH_ASSOC)) {
                 echo \$row['hash'] . '|' . (\$row['created_at'] ?? '') . '|' . (\$row['completed_at'] ?? '') . \"\n\";
             }
