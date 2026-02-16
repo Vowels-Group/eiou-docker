@@ -373,15 +373,20 @@ SSLEOF
     if [ -f /ssl-ca/ca.crt ] && [ -f /ssl-ca/ca.key ]; then
         echo "  Generating CA-signed certificate..."
 
+        CA_SIGN_OK=true
+
         # Generate private key and CSR
-        openssl req -new -nodes -newkey rsa:2048 \
+        if ! openssl req -new -nodes -newkey rsa:2048 \
             -keyout /etc/apache2/ssl/server.key \
             -out /tmp/server.csr \
             -config /tmp/openssl-san.cnf \
-            2>/dev/null
+            2>&1; then
+            echo "  WARNING: Failed to generate CSR from CA. Check /ssl-ca/ file permissions."
+            CA_SIGN_OK=false
+        fi
 
         # Sign with CA (browsers will trust this if CA is in their trust store)
-        openssl x509 -req -in /tmp/server.csr \
+        if [ "$CA_SIGN_OK" = true ] && ! openssl x509 -req -in /tmp/server.csr \
             -CA /ssl-ca/ca.crt \
             -CAkey /ssl-ca/ca.key \
             -CAcreateserial \
@@ -390,14 +395,30 @@ SSLEOF
             -sha256 \
             -extfile /tmp/openssl-san.cnf \
             -extensions v3_ext \
-            2>/dev/null
-
-        # Copy CA cert for client verification
-        cp /ssl-ca/ca.crt /etc/apache2/ssl/ca.crt
-        chmod 644 /etc/apache2/ssl/ca.crt
+            2>&1; then
+            echo "  WARNING: Failed to sign certificate with CA. Check that ca.key is valid."
+            CA_SIGN_OK=false
+        fi
 
         rm -f /tmp/server.csr
-        echo "  CA-signed certificate generated successfully."
+
+        if [ "$CA_SIGN_OK" = true ]; then
+            # Copy CA cert for client verification
+            cp /ssl-ca/ca.crt /etc/apache2/ssl/ca.crt
+            chmod 644 /etc/apache2/ssl/ca.crt
+            echo "  CA-signed certificate generated successfully."
+        else
+            echo "  WARNING: CA-signed certificate generation failed. Falling back to self-signed."
+            rm -f /etc/apache2/ssl/server.key /etc/apache2/ssl/server.crt
+
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout /etc/apache2/ssl/server.key \
+                -out /etc/apache2/ssl/server.crt \
+                -config /tmp/openssl-san.cnf \
+                2>&1
+
+            echo "  Self-signed certificate generated as fallback."
+        fi
     else
         # Generate self-signed certificate
         echo "  Generating self-signed certificate..."
