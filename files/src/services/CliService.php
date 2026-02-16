@@ -13,6 +13,7 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\P2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -85,6 +86,11 @@ class CliService implements CliServiceInterface {
     private ?ContactCreditRepository $contactCreditRepository = null;
 
     /**
+     * @var P2pRepository|null P2P repository (optional, setter-injected)
+     */
+    private ?P2pRepository $p2pRepository = null;
+
+    /**
      * Constructor
      * 
      * @param ContactRepository $contactRepository Contact Repository
@@ -114,6 +120,13 @@ class CliService implements CliServiceInterface {
      */
     public function setContactCreditRepository(ContactCreditRepository $contactCreditRepository): void {
         $this->contactCreditRepository = $contactCreditRepository;
+    }
+
+    /**
+     * Set the P2P repository (optional dependency)
+     */
+    public function setP2pRepository(P2pRepository $p2pRepository): void {
+        $this->p2pRepository = $p2pRepository;
     }
 
     // =========================================================================
@@ -1072,6 +1085,22 @@ HELP;
             }
         }
 
+        // Get total fee earnings per currency
+        $totalEarnings = [];
+        if ($this->p2pRepository !== null) {
+            try {
+                $earningsRows = $this->p2pRepository->getUserTotalEarningsByCurrency();
+                foreach ($earningsRows as $row) {
+                    $totalEarnings[] = [
+                        'currency' => $row['currency'],
+                        'total_earnings' => number_format(((int)($row['total_amount'] ?? 0)) / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Non-critical — skip earnings display
+            }
+        }
+
         // Get total available credit per currency
         $totalAvailableCredit = [];
         if ($this->contactCreditRepository !== null) {
@@ -1093,6 +1122,7 @@ HELP;
             'locators' => $locators,
             'authentication_code' => $authcodeInfo,
             'public_key' => $this->currentUser->getPublicKey(),
+            'total_earnings' => $totalEarnings,
             'total_available_credit' => $totalAvailableCredit
         ];
 
@@ -1179,6 +1209,14 @@ HELP;
             // Public key is from the config file
             $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
             echo "\tPublic Key:" . $readablePubKey . "\n";
+
+            // Total fee earnings per currency
+            if (!empty($totalEarnings)) {
+                echo "\tTotal Fee Earnings:\n";
+                foreach ($totalEarnings as $earning) {
+                    printf("\t\t%s: %s\n", $earning['currency'], $earning['total_earnings']);
+                }
+            }
 
             // Total available credit across all contacts, per currency
             if (!empty($totalAvailableCredit)) {

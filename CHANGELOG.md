@@ -18,8 +18,9 @@ The project is currently in **ALPHA** status.
 - `ContactCreditRepository` — new repository for managing contact credit entries with upsert, lookup, and initial creation methods
 - Initial contact credit entry created on contact acceptance — both `ContactManagementService` and `ContactSyncService` create a zero-credit row when accepting contacts
 - `ContactStatusProcessor` saves available credit from background ping pong responses
-- Bidirectional available credit display — CLI `view`, API contact endpoints, and GUI contact modal show both "your available credit" (from pong) and "their available credit" (calculated from balance + credit limit)
+- Bidirectional available credit display — CLI `view`, `search`, API contact endpoints (`/contacts`, `/contacts/:address`, `/contacts/search`), and GUI contact modal show both "your available credit" (from pong) and "their available credit" (calculated from balance + credit limit)
 - Total available credit per currency in CLI `info` command — sums available credit across all contacts, displayed in both text and JSON modes
+- Total fee earnings per currency in CLI `info` command — sums P2P relay fee earnings across all completed P2Ps, displayed in both text and JSON modes
 - Available credit in API contact endpoints — `GET /api/v1/contacts` and `GET /api/v1/contacts/:address` include `my_available_credit` and `their_available_credit` fields
 - Total available credit in API wallet overview — `GET /api/v1/wallet/overview` includes `total_available_credit` array grouped by currency
 - `getTotalAvailableCreditByCurrency()` method on `ContactCreditRepository` — aggregates available credit across all contacts by currency

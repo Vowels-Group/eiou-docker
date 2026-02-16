@@ -669,6 +669,8 @@ class ApiController {
         $searchTerm = $params['q'] ?? $params['query'] ?? null;
         $contactRepo = $this->services->getContactRepository();
         $addressRepo = $this->services->getAddressRepository();
+        $balanceRepo = $this->services->getBalanceRepository();
+        $creditRepo = $this->services->getContactCreditRepository();
 
         // Get all address types dynamically
         $addressTypes = $addressRepo->getAllAddressTypes();
@@ -684,11 +686,38 @@ class ApiController {
                     $addresses[$type] = $contact[$type] ?? null;
                 }
 
+                // My available credit (from contact_credit table, received via pong)
+                $myAvailableCredit = null;
+                $hash = $contact['pubkey_hash'] ?? '';
+                if ($hash) {
+                    $creditData = $creditRepo->getAvailableCredit($hash);
+                    if ($creditData !== null) {
+                        $myAvailableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+                    }
+                }
+
+                // Their available credit (calculated: sent - received + credit_limit)
+                $theirAvailableCredit = null;
+                if ($hash) {
+                    $currency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                    $balance = $balanceRepo->getContactBalanceByPubkeyHash($hash, $currency);
+                    if ($balance && count($balance) > 0) {
+                        $b = $balance[0];
+                        $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contact['credit_limit'] ?? 0));
+                        $theirAvailableCredit = $theirCents / Constants::CREDIT_CONVERSION_FACTOR;
+                    }
+                }
+
                 $result[] = [
                     'name' => $contact['name'] ?? null,
-                    'pubkey_hash' => $contact['pubkey_hash'] ?? null,
+                    'pubkey_hash' => $hash,
                     'status' => $contact['status'] ?? null,
-                    'addresses' => $addresses
+                    'addresses' => $addresses,
+                    'fee_percent' => isset($contact['fee_percent']) ? $contact['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null,
+                    'credit_limit' => isset($contact['credit_limit']) ? $contact['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null,
+                    'my_available_credit' => $myAvailableCredit,
+                    'their_available_credit' => $theirAvailableCredit,
+                    'currency' => $contact['currency'] ?? null
                 ];
             }
         }

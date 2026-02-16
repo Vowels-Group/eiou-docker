@@ -1332,6 +1332,7 @@ class ServiceContainer implements ContainerInterface {
         // Reason: CliService displays total available credit in user info
         if (isset($this->services['CliService'])) {
             $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['CliService']->setP2pRepository($this->getP2pRepository());
         }
 
         // =========================================================================
