@@ -464,8 +464,19 @@ class TransportUtilityService implements TransportServiceInterface
             $handles[$recipient] = $this->createCurlHandle($recipient, $signedPayload);
         }
 
-        // Execute with concurrency limit
-        $responses = $this->executeWithConcurrencyLimit($handles);
+        // Use Tor concurrency limit if any recipient is a Tor address
+        $hasTor = false;
+        foreach ($recipients as $recipient) {
+            if ($this->isTorAddress($recipient)) {
+                $hasTor = true;
+                break;
+            }
+        }
+        $maxConcurrent = $hasTor
+            ? Constants::CURL_MULTI_MAX_CONCURRENT_TOR
+            : Constants::CURL_MULTI_MAX_CONCURRENT_HTTP;
+
+        $responses = $this->executeWithConcurrencyLimit($handles, $maxConcurrent);
 
         // Build results with signing data
         $results = [];
@@ -543,8 +554,19 @@ class TransportUtilityService implements TransportServiceInterface
             $handles[$key] = $this->createCurlHandle($recipient, $signedPayload);
         }
 
-        // Execute with concurrency limit
-        $responses = $this->executeWithConcurrencyLimit($handles);
+        // Use Tor concurrency limit if any recipient is a Tor address
+        $hasTor = false;
+        foreach ($sends as $send) {
+            if ($this->isTorAddress($send['recipient'])) {
+                $hasTor = true;
+                break;
+            }
+        }
+        $maxConcurrent = $hasTor
+            ? Constants::CURL_MULTI_MAX_CONCURRENT_TOR
+            : Constants::CURL_MULTI_MAX_CONCURRENT_HTTP;
+
+        $responses = $this->executeWithConcurrencyLimit($handles, $maxConcurrent);
 
         // Build results with signing data
         $results = [];
@@ -588,7 +610,7 @@ class TransportUtilityService implements TransportServiceInterface
      * up to $maxConcurrent run at once, and as each completes, the next is added.
      *
      * @param array<string, \CurlHandle> $handles All curl handles keyed by identifier
-     * @param int $maxConcurrent Max simultaneous connections (0 = unlimited)
+     * @param int $maxConcurrent Max simultaneous connections (defaults to HTTP limit)
      * @return array<string, string|null> Responses keyed by the same identifiers
      */
     private function executeWithConcurrencyLimit(array $handles, int $maxConcurrent = 0): array {
@@ -597,7 +619,7 @@ class TransportUtilityService implements TransportServiceInterface
         }
 
         if ($maxConcurrent <= 0) {
-            $maxConcurrent = Constants::CURL_MULTI_MAX_CONCURRENT;
+            $maxConcurrent = Constants::CURL_MULTI_MAX_CONCURRENT_HTTP;
         }
 
         $mh = curl_multi_init();

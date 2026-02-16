@@ -703,6 +703,12 @@ class P2pService implements P2pServiceInterface {
         // Thread fast flag from user request (default: true for backward compatibility)
         $data['fast'] = (int)($request['fast'] ?? true);
 
+        // Force fast mode for Tor recipients — best-fee mode generates excessive
+        // relay traffic and Tor latency (~5s/hop) amplifies the wait overhead
+        if (!$data['fast'] && $this->transportUtility->isTorAddress($data['receiverAddress'])) {
+            $data['fast'] = 1;
+        }
+
         return $data;
     }
 
