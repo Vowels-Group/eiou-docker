@@ -355,18 +355,26 @@ class ContactStatusService implements ContactStatusServiceInterface {
     }
 
     /**
-     * Update contact's online status to online and record last ping time
+     * Update contact's online status when they ping us and record last ping time
+     *
+     * We know the sender's Apache is up (they sent us a ping), but we don't know
+     * their processor health — that info only comes in pong responses. So we check
+     * our own processor health as a proxy: if the ping arrived through a non-processor
+     * path, we can only confirm the node is reachable, not fully operational.
      *
      * @param string $pubkey Contact public key
      */
     private function updateContactOnlineStatus(string $pubkey): void {
         try {
+            // We know the contact's Apache is up, but not their processor health.
+            // Check our own processors to determine if we'd report partial to them —
+            // but for the sender's status, just record that they're reachable.
+            // The next ping/pong cycle will set the accurate online/partial status.
             $this->contactRepository->updateContactFields($pubkey, [
-                'online_status' => Constants::CONTACT_ONLINE_STATUS_ONLINE,
                 'last_ping_at' => date('Y-m-d H:i:s.u')
             ]);
         } catch (\Exception $e) {
-            Logger::getInstance()->error("Failed to update contact online status on ping receive", [
+            Logger::getInstance()->error("Failed to update contact last ping time on ping receive", [
                 'error' => $e->getMessage()
             ]);
         }

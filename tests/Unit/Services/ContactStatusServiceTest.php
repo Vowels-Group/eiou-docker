@@ -204,11 +204,12 @@ class ContactStatusServiceTest extends TestCase
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
             ->willReturn(self::TEST_PREV_TXID);
 
+        // On incoming ping, only last_ping_at is updated (not online_status —
+        // that requires a pong with processorsRunning from the next ping/pong cycle)
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
             ->with(self::TEST_CONTACT_PUBKEY, $this->callback(function ($fields) {
-                return $fields['online_status'] === Constants::CONTACT_ONLINE_STATUS_ONLINE
-                    && isset($fields['last_ping_at']);
+                return isset($fields['last_ping_at']) && !isset($fields['online_status']);
             }))
             ->willReturn(true);
 
