@@ -187,7 +187,11 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [];
+    $columnsToAdd = [
+        'p2p' => [
+            'hop_wait' => 'INT DEFAULT 0 AFTER `fast`',
+        ],
+    ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [];
