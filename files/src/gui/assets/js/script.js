@@ -1336,6 +1336,62 @@ function scrollContacts(direction) {
     }
 })();
 
+/**
+ * Updates the visibility of the quick actions scroll buttons
+ * based on the current scroll position.
+ */
+function updateQuickActionsScrollButtons() {
+    var grid = document.getElementById('quick-actions-grid');
+    if (!grid) return;
+    var leftBtn = document.getElementById('quick-actions-scroll-left');
+    var rightBtn = document.getElementById('quick-actions-scroll-right');
+    // Only show buttons when content overflows
+    var hasOverflow = grid.scrollWidth > grid.clientWidth + 1;
+    if (leftBtn) {
+        if (!hasOverflow || grid.scrollLeft <= 0) {
+            leftBtn.className = leftBtn.className.replace(' hidden', '') + ' hidden';
+        } else {
+            leftBtn.className = leftBtn.className.replace(' hidden', '');
+        }
+    }
+    if (rightBtn) {
+        var atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 1;
+        if (!hasOverflow || atEnd) {
+            rightBtn.className = rightBtn.className.replace(' hidden', '') + ' hidden';
+        } else {
+            rightBtn.className = rightBtn.className.replace(' hidden', '');
+        }
+    }
+}
+
+/**
+ * Scrolls the quick actions grid left or right by one card width.
+ * @param {number} direction - -1 for left, 1 for right
+ */
+function scrollQuickActions(direction) {
+    var grid = document.getElementById('quick-actions-grid');
+    if (!grid) return;
+    var scrollAmount = 130 * direction;
+    grid.scrollLeft = grid.scrollLeft + scrollAmount;
+    setTimeout(updateQuickActionsScrollButtons, 50);
+}
+
+// Update quick actions scroll buttons on load, scroll, and resize
+(function() {
+    var initQuickActionsScroll = function() {
+        var grid = document.getElementById('quick-actions-grid');
+        if (!grid) return;
+        grid.addEventListener('scroll', updateQuickActionsScrollButtons);
+        updateQuickActionsScrollButtons();
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initQuickActionsScroll);
+    } else {
+        initQuickActionsScroll();
+    }
+    window.addEventListener('resize', updateQuickActionsScrollButtons);
+})();
+
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
 var currentContactPubkeyHash = null;

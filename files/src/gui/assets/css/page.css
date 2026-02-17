@@ -61,6 +61,7 @@ body {
     font-size: 2rem;
     min-width: 0;
     word-break: break-word;
+    flex: 1 1 0;
 }
 
 .logout-btn {
@@ -244,10 +245,52 @@ body {
 }
 
 /* Quick Actions */
+.quick-actions-slider {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
 .quick-actions {
     display: flex;
     gap: 1rem;
-    margin-bottom: 2rem;
+}
+
+.quick-actions-scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #495057;
+    font-size: 0.75rem;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+
+.quick-actions-scroll-btn:hover {
+    background: #e9ecef;
+    color: #0d6efd;
+}
+
+.quick-actions-scroll-btn.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.quick-actions-scroll-left {
+    left: -14px;
+}
+
+.quick-actions-scroll-right {
+    right: -14px;
 }
 
 /* Hide descriptions at medium widths to keep cards compact on one line */
@@ -1144,10 +1187,19 @@ body {
         padding-bottom: 0.5rem;
         scrollbar-width: none; /* Firefox */
         -ms-overflow-style: none; /* IE */
+        max-width: 100%;
     }
 
     .quick-actions::-webkit-scrollbar {
         display: none; /* Chrome/Safari */
+    }
+
+    .quick-actions-scroll-left {
+        left: -4px;
+    }
+
+    .quick-actions-scroll-right {
+        right: -4px;
     }
 
     .action-card {
