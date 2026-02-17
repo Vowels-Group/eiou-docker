@@ -507,7 +507,11 @@ abstract class AbstractMessageProcessor {
         $pid = (int)$pid;
 
         if (!@posix_kill($pid, 0)) {
-            return false;
+            // EPERM (errno 1) means "process exists but caller lacks permission to signal it"
+            // This happens when Apache (www-data) checks a root-owned processor
+            if (posix_get_last_error() !== 1) {
+                return false;
+            }
         }
 
         $cmdline = @file_get_contents("/proc/$pid/cmdline");
