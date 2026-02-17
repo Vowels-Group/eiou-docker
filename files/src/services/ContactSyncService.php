@@ -422,9 +422,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param array $payload Message payload
      * @param string|null $messageId Optional unique message ID for tracking
      * @param bool $async Whether to send asynchronously
+     * @param bool $allowTransportFallback If true, TOR failures attempt HTTP/HTTPS fallback (contact requests only)
      * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
      */
-    private function sendContactMessageInternal(string $address, array $payload, ?string $messageId = null, bool $async = true): array {
+    private function sendContactMessageInternal(string $address, array $payload, ?string $messageId = null, bool $async = true, bool $allowTransportFallback = false): array {
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
             // async=true: Non-blocking, queues for retry if first attempt fails
@@ -444,7 +445,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $messageId = hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
         }
 
-        $rawResponse = $this->transportUtility->send($address, $payload);
+        $rawResponse = $this->transportUtility->send($address, $payload, false, $allowTransportFallback);
         $response = json_decode($rawResponse, true);
 
         return [
@@ -626,7 +627,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
 
         // Send contact creation request with delivery tracking
-        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId);
+        // Allow transport fallback for contact requests — if TOR fails, try HTTP/HTTPS
+        // so the initial handshake can succeed even when the hidden service is unreachable
+        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
         $responseData = $sendResult['response'];
 
         if (isset($responseData['status'])){

@@ -261,9 +261,10 @@ class TransportUtilityService implements TransportServiceInterface
      * @param string $recipient The address of the recipient
      * @param array $payload The payload to send
      * @param bool $returnSigningData If true, returns array with response and signing data
+     * @param bool $allowTransportFallback If true, TOR failures will attempt HTTP/HTTPS fallback (use only for contact requests to preserve privacy)
      * @return string|array The response from the recipient, or array with response and signing data if $returnSigningData is true
      */
-    public function send(string $recipient, array $payload, bool $returnSigningData = false): string|array {
+    public function send(string $recipient, array $payload, bool $returnSigningData = false, bool $allowTransportFallback = false): string|array {
         $signingResult = $this->signWithCapture($payload);
         $signedPayload = json_encode($signingResult['envelope']);
 
@@ -271,8 +272,10 @@ class TransportUtilityService implements TransportServiceInterface
         if ($this->isTorAddress($recipient)) {
             $response = $this->sendByTor($recipient, $signedPayload);
 
-            // If TOR delivery failed, attempt HTTP/HTTPS fallback
-            if ($this->isTorFailure($response)) {
+            // If TOR delivery failed and fallback is allowed, attempt HTTP/HTTPS
+            // Fallback is restricted to contact requests only — transactions must
+            // respect the user's chosen transport to preserve privacy.
+            if ($allowTransportFallback && $this->isTorFailure($response)) {
                 $fallbackResponse = $this->attemptFallbackDelivery($recipient, $signedPayload);
                 if ($fallbackResponse !== null) {
                     $response = $fallbackResponse;
