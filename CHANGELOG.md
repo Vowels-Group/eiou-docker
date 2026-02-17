@@ -10,35 +10,40 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## [Unreleased]
+## 2026-02-17
 
 ### Added
-- `partial` online status for contacts
-- `senderAddresses` field in contact creation payload — initial contact requests now include all known addresses (HTTP, HTTPS, TOR), enabling transport fallback when the primary address is unreachable
-- TOR-to-HTTP/HTTPS transport fallback for contact requests only — when TOR delivery fails (SOCKS5 connection error) during initial contact creation, `TransportUtilityService::send()` attempts delivery via the recipient's known HTTP/HTTPS address; transactions and other messages respect the user's chosen transport to preserve privacy
-- Tor hidden service self-health check in watchdog — every 5 minutes the watchdog curls the node's own `.onion` address through the SOCKS5 proxy; if unreachable, fixes hidden service directory permissions and restarts Tor to republish the descriptor (up to 5 attempts with 5-minute cooldown, resets on recovery)
-
-### Fixed
-- Contact acceptance messages fail when recipient's TOR hidden service is unreachable — the system now falls back to HTTP/HTTPS transport using stored alternative addresses
-- Incoming contact requests only stored the sender's primary address — `handleContactCreation()` now extracts and stores `senderAddresses` from the request payload, and includes responder's addresses in the `buildReceived()` response — indicates node is reachable but has degraded message processors (some of P2P, Transaction, or Cleanup processors are not running)
+- `partial` online status for contacts — indicates node is reachable but has degraded message processors (some of P2P, Transaction, or Cleanup processors are not running)
 - Pong response now includes processor health (`processorsRunning`, `processorsTotal`) for remote nodes to determine partial vs online status
 - `contact_status` processor status in `GET /api/v1/system/status` response
 - `isProcessorRunning()` static utility on `AbstractMessageProcessor` for PID file validation with process existence and cmdline verification
 - CSS styling for partial status: orange indicator dot and warning badge in GUI
-
-### Fixed
-- `GET /api/v1/system/status` used wrong PID file names (`p2p_processor.pid` instead of `p2pmessages_lock.pid`), always reported processors as not running
-- `GET /api/v1/system/status` now validates PID files properly (checks process existence and PHP cmdline) instead of only checking file existence
-
-### Fixed
-- Remove dead Curve25519 `sodium_crypto_scalarmult_base()` call from Tor key derivation that computed an unused value before the correct Ed25519 derivation
-- Tor hidden service directory permission errors in startup.sh are now logged instead of silently swallowed — failed `chown`/`chmod` could cause Tor to reject seed-derived keys and generate random ones
-- Log warning when OpenSSL falls back from secp256k1 to prime256v1 EC curve, which would cause wallet keys to differ from nodes using secp256k1
-- Add missing `hop_wait` column to `p2p` table schema and migration — INSERT queries from `P2pRepository::insertP2pRequest()` were failing with "Unknown column 'hop_wait'"
+- `senderAddresses` field in contact creation payload — initial contact requests now include all known addresses (HTTP, HTTPS, TOR), enabling transport fallback when the primary address is unreachable
+- TOR-to-HTTP/HTTPS transport fallback for contact requests only — when TOR delivery fails (SOCKS5 connection error) during initial contact creation, `TransportUtilityService::send()` attempts delivery via the recipient's known HTTP/HTTPS address; transactions and other messages respect the user's chosen transport to preserve privacy
+- Tor hidden service self-health check in watchdog — every 5 minutes the watchdog curls the node's own `.onion` address through the SOCKS5 proxy; if unreachable, fixes hidden service directory permissions and restarts Tor to republish the descriptor (up to 5 attempts with 5-minute cooldown, resets on recovery)
+- Send eIOU P2P info box collapsed by default — shows "Peer-to-Peer Routing Available" as a one-liner, click to expand details
+- Best Fee Route experimental warning hidden by default — flask icon shown inline next to the label, yellow warning only appears when the toggle is enabled
 
 ### Changed
 - GUI header (wallet title + logout) now wraps to two lines when viewport is too narrow instead of overlapping
 - GUI quick action menu buttons scale to fit on one line at desktop widths; become a horizontal slider at tablet/phone sizes instead of wrapping to multiple rows
+- Floating refresh and back-to-top buttons reduced from 60px to 40px and moved from right: 30px to right: 8px for a less intrusive presence
+- All new inline styles moved to CSS classes; all new JS uses TOR-compatible patterns (var, className, vendor-prefixed flex)
+
+### Fixed
+- Contact acceptance messages fail when recipient's TOR hidden service is unreachable — the system now falls back to HTTP/HTTPS transport using stored alternative addresses
+- Incoming contact requests only stored the sender's primary address — `handleContactCreation()` now extracts and stores `senderAddresses` from the request payload, and includes responder's addresses in the `buildReceived()` response
+- `GET /api/v1/system/status` used wrong PID file names (`p2p_processor.pid` instead of `p2pmessages_lock.pid`), always reported processors as not running
+- `GET /api/v1/system/status` now validates PID files properly (checks process existence and PHP cmdline) instead of only checking file existence
+- Remove dead Curve25519 `sodium_crypto_scalarmult_base()` call from Tor key derivation that computed an unused value before the correct Ed25519 derivation
+- Tor hidden service directory permission errors in startup.sh are now logged instead of silently swallowed — failed `chown`/`chmod` could cause Tor to reject seed-derived keys and generate random ones
+- Log warning when OpenSSL falls back from secp256k1 to prime256v1 EC curve, which would cause wallet keys to differ from nodes using secp256k1
+- Add missing `hop_wait` column to `p2p` table schema and migration — INSERT queries from `P2pRepository::insertP2pRequest()` were failing with "Unknown column 'hop_wait'"
+- GUI header logout button overflows outside the card on narrow screens — wallet owner name now wraps to a new line on mobile, keeping the logout button anchored in the top right
+- Contacts scroll buttons repositioned outside the card area so contact cards are fully visible — left button auto-hides when at the first contact, right button hides at the end
+- Contact modal exceeded viewport height causing settings buttons (Block/Delete/Save) to be invisible — modal now constrained to 90vh with internal scrolling
+- Contact modal settings buttons were stacked vertically with uneven sizing — now displayed in a compact inline row with consistent height
+- Contact modal transactions tab refresh button overlapped info text on narrow screens — text now wraps while button stays intact
 
 ---
 
@@ -123,22 +128,6 @@ The project is currently in **ALPHA** status.
 ## 2026-02-13
 
 ### Fixed
-- P2P max level boundary nodes now immediately send cancel notification upstream instead of going through the full broadcast-rejection cycle — when `requestLevel >= maxRequestLevel` after re-adjustment, the node stores as cancelled and notifies upstream instantly, significantly improving cancel cascade propagation speed in larger topologies
-
-## [Unreleased]
-
-### Changed
-- Send eIOU P2P info box collapsed by default — shows "Peer-to-Peer Routing Available" as a one-liner, click to expand details
-- Best Fee Route experimental warning hidden by default — flask icon shown inline next to the label, yellow warning only appears when the toggle is enabled
-- Floating refresh and back-to-top buttons reduced from 60px to 40px and moved from right: 30px to right: 8px for a less intrusive presence
-- All new inline styles moved to CSS classes; all new JS uses TOR-compatible patterns (var, className, vendor-prefixed flex)
-
-### Fixed
-- GUI header logout button overflows outside the card on narrow screens — wallet owner name now wraps to a new line on mobile, keeping the logout button anchored in the top right
-- Contacts scroll buttons repositioned outside the card area so contact cards are fully visible — left button auto-hides when at the first contact, right button hides at the end
-- Contact modal exceeded viewport height causing settings buttons (Block/Delete/Save) to be invisible — modal now constrained to 90vh with internal scrolling
-- Contact modal settings buttons were stacked vertically with uneven sizing — now displayed in a compact inline row with consistent height
-- Contact modal transactions tab refresh button overlapped info text on narrow screens — text now wraps while button stays intact
 - P2P max level boundary nodes now immediately send cancel notification upstream instead of going through the full broadcast-rejection cycle — when `requestLevel >= maxRequestLevel` after re-adjustment, the node stores as cancelled and notifies upstream instantly, significantly improving cancel cascade propagation speed in larger topologies
 
 ---
