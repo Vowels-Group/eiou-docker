@@ -705,4 +705,96 @@ class TransportUtilityServiceTest extends TestCase
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
+
+    // =========================================================================
+    // TOR Fallback Tests (isTorFailure via send behavior)
+    // =========================================================================
+
+    /**
+     * Test isTorFailure detects TOR SOCKS5 error responses
+     */
+    public function testIsTorFailureDetectsTorErrors(): void
+    {
+        // Use reflection to test the private method
+        $reflection = new \ReflectionMethod($this->service, 'isTorFailure');
+        $reflection->setAccessible(true);
+
+        // TOR SOCKS5 connection failure
+        $torError = json_encode([
+            'status' => 'error',
+            'message' => "TOR request failed: Can't complete SOCKS5 connection to xyz.onion. (4)",
+            'error_code' => 7
+        ]);
+        $this->assertTrue($reflection->invoke($this->service, $torError));
+
+        // TOR timeout failure
+        $torTimeout = json_encode([
+            'status' => 'error',
+            'message' => 'TOR request failed: Connection timed out',
+            'error_code' => 28
+        ]);
+        $this->assertTrue($reflection->invoke($this->service, $torTimeout));
+    }
+
+    /**
+     * Test isTorFailure returns false for successful responses
+     */
+    public function testIsTorFailureReturnsFalseForSuccess(): void
+    {
+        $reflection = new \ReflectionMethod($this->service, 'isTorFailure');
+        $reflection->setAccessible(true);
+
+        // Successful response
+        $success = json_encode(['status' => 'received', 'message' => 'ok']);
+        $this->assertFalse($reflection->invoke($this->service, $success));
+
+        // HTTP error (not TOR-specific)
+        $httpError = json_encode([
+            'status' => 'error',
+            'message' => 'HTTP request failed: Connection refused',
+            'error_code' => 7
+        ]);
+        $this->assertFalse($reflection->invoke($this->service, $httpError));
+
+        // Non-JSON response
+        $this->assertFalse($reflection->invoke($this->service, 'not json'));
+    }
+
+    /**
+     * Test attemptFallbackDelivery returns null when no pubkey hash found
+     */
+    public function testAttemptFallbackDeliveryReturnsNullWhenNoPubkeyHash(): void
+    {
+        $reflection = new \ReflectionMethod($this->service, 'attemptFallbackDelivery');
+        $reflection->setAccessible(true);
+
+        $this->addressRepository->expects($this->once())
+            ->method('getContactPubkeyHash')
+            ->with('tor', 'unknown.onion')
+            ->willReturn(null);
+
+        $result = $reflection->invoke($this->service, 'unknown.onion', '{"test":"data"}');
+        $this->assertNull($result);
+    }
+
+    /**
+     * Test attemptFallbackDelivery returns null when no non-TOR addresses exist
+     */
+    public function testAttemptFallbackDeliveryReturnsNullWhenNoFallbackAddress(): void
+    {
+        $reflection = new \ReflectionMethod($this->service, 'attemptFallbackDelivery');
+        $reflection->setAccessible(true);
+
+        $this->addressRepository->method('getContactPubkeyHash')
+            ->willReturn('hash123');
+
+        $this->addressRepository->method('lookupByPubkeyHash')
+            ->willReturn(['tor' => 'contact.onion']); // Only TOR, no HTTP/HTTPS
+
+        $this->addressRepository->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        $result = $reflection->invoke($this->service, 'contact.onion', '{"test":"data"}');
+        $this->assertNull($result);
+    }
 }

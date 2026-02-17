@@ -422,9 +422,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param array $payload Message payload
      * @param string|null $messageId Optional unique message ID for tracking
      * @param bool $async Whether to send asynchronously
+     * @param bool $allowTransportFallback If true, TOR failures attempt HTTP/HTTPS fallback (contact requests only)
      * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
      */
-    private function sendContactMessageInternal(string $address, array $payload, ?string $messageId = null, bool $async = true): array {
+    private function sendContactMessageInternal(string $address, array $payload, ?string $messageId = null, bool $async = true, bool $allowTransportFallback = false): array {
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
             // async=true: Non-blocking, queues for retry if first attempt fails
@@ -444,7 +445,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $messageId = hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
         }
 
-        $rawResponse = $this->transportUtility->send($address, $payload);
+        $rawResponse = $this->transportUtility->send($address, $payload, false, $allowTransportFallback);
         $response = json_decode($rawResponse, true);
 
         return [
@@ -626,7 +627,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
 
         // Send contact creation request with delivery tracking
-        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId);
+        // Allow transport fallback for contact requests — if TOR fails, try HTTP/HTTPS
+        // so the initial handshake can succeed even when the hidden service is unreachable
+        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
         $responseData = $sendResult['response'];
 
         if (isset($responseData['status'])){
@@ -903,6 +906,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         $signature = $request['signature'] ?? null;
         $nonce = isset($request['nonce']) ? (int)$request['nonce'] : null;
 
+        // Extract sender's additional addresses for storage (allows fallback transport)
+        $senderAddresses = $request['senderAddresses'] ?? [];
+
         // Get our own (the responder's) addresses to include in response
         // This allows the requester to store all our known addresses
         $myAddresses = $this->currentUser->getUserLocaters();
@@ -925,10 +931,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     );
 
                     if (!$hasContactTx) {
+                        // Store any additional addresses from senderAddresses if present
+                        if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                        }
                         // Create the contact transaction on our side (they already have one on their end)
                         $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
                         // Return 'received' with txid so sender can sync
-                        return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                        return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
 
                     // Contact exists as pending with contact transaction - treat as re-confirmation
@@ -946,6 +956,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Contact is pending - update their address
                     if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
+                        // Store any additional addresses from senderAddresses if present
+                        if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                        }
                         // Check if we have the contact transaction
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                             $senderPublicKeyHash
@@ -954,7 +968,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         if (!$hasContactTx) {
                             // Create the contact transaction on our side
                             $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
-                            return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                            return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                         }
 
                         // Return 'received' so sender handles it like a new contact request
@@ -973,11 +987,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
         } else{
             // Contact request is brand new, no prior users exist in any form
             if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
+                // Store any additional addresses from senderAddresses if present
+                if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                }
+
                 // Insert received contact transaction with status 'accepted' (pending user acceptance)
                 // This creates the contact transaction on the receiver's side
                 // Receiver generates txid and includes it in response for sender to use
                 $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
-                return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
             } else{
                 // Unable to insert contact
                 return $this->contactPayload->buildRejection($senderAddress);

@@ -247,7 +247,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **BasePayloadTest.php** | 53 | ensureRequiredFields validation, sanitizeString, sanitizeNumber type handling, validate empty check, edge cases |
-| **ContactPayloadTest.php** | 26 | Contact creation/received/updated/rejection/pending/mutually-accepted payloads, filterAddresses, JSON encoding |
+| **ContactPayloadTest.php** | 26 | Contact creation/received/updated/rejection/pending/mutually-accepted payloads, filterAddresses, senderAddresses in creation payload, JSON encoding |
 | **ContactStatusPayloadTest.php** | 53 | Ping/pong payloads, status responses |
 | **MessagePayloadTest.php** | 20 | Contact inquiry/accepted/unknown payloads, transaction status/sync responses, P2P status inquiry/response |
 | **P2pPayloadTest.php** | 50+ | P2P request payloads, validation |

@@ -1092,9 +1092,18 @@ watchdog() {
     local CLEANUP_LAST_RESTART=0
     local CONTACT_STATUS_LAST_RESTART=0
 
+    # Tor hidden service self-health check
+    local TOR_CHECK_INTERVAL=300     # Check Tor reachability every 5 minutes
+    local TOR_LAST_CHECK=0
+    local TOR_RESTART_COUNT=0
+    local TOR_MAX_RESTARTS=5         # Max Tor restart attempts before giving up
+    local TOR_RESTART_COOLDOWN=300   # Minimum 5 minutes between Tor restarts
+    local TOR_LAST_RESTART=0
+    local TOR_HS_DIR="/var/lib/tor/hidden_service"
+
     local WAS_SHUTDOWN=false  # Track shutdown-to-normal transitions
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs and Tor health"
 
     while true; do
         sleep $WATCHDOG_INTERVAL
@@ -1120,6 +1129,9 @@ watchdog() {
             TRANSACTION_LAST_RESTART=0
             CLEANUP_LAST_RESTART=0
             CONTACT_STATUS_LAST_RESTART=0
+            TOR_RESTART_COUNT=0
+            TOR_LAST_RESTART=0
+            TOR_LAST_CHECK=0
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Shutdown flag cleared, resuming processor monitoring with reset counters"
         fi
 
@@ -1181,6 +1193,76 @@ watchdog() {
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
                 elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                fi
+            fi
+        fi
+
+        # =====================================================================
+        # Tor hidden service self-health check
+        # =====================================================================
+        # Periodically verify that our own .onion address is reachable through
+        # the SOCKS5 proxy. If unreachable, Tor may have crashed, the hidden
+        # service descriptor may have expired, or permissions may have changed.
+        # This catches silent failures that leave the node running internally
+        # but unreachable over Tor to all contacts.
+        # =====================================================================
+        local TOR_TIME_SINCE_CHECK=$((CURRENT_TIME - TOR_LAST_CHECK))
+        if [ -n "$tor" ] && [ $TOR_TIME_SINCE_CHECK -ge $TOR_CHECK_INTERVAL ]; then
+            TOR_LAST_CHECK=$CURRENT_TIME
+
+            # Self-check: curl our own .onion through the SOCKS5 proxy
+            if ! curl --socks5-hostname 127.0.0.1:9050 \
+                    --connect-timeout 5 \
+                    --max-time 10 \
+                    --silent \
+                    --fail \
+                    --output /dev/null \
+                    "$tor" 2>/dev/null; then
+
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor self-check FAILED — own .onion address unreachable"
+
+                # Check if Tor process is running at all
+                if ! pgrep -x "tor" > /dev/null 2>&1; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor process is not running"
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor process is running but hidden service unreachable — descriptor may be stale"
+                fi
+
+                # Attempt restart if within limits and cooldown
+                local TOR_TIME_SINCE_RESTART=$((CURRENT_TIME - TOR_LAST_RESTART))
+                if [ $TOR_RESTART_COUNT -lt $TOR_MAX_RESTARTS ] && [ $TOR_TIME_SINCE_RESTART -ge $TOR_RESTART_COOLDOWN ]; then
+                    TOR_RESTART_COUNT=$((TOR_RESTART_COUNT + 1))
+                    TOR_LAST_RESTART=$CURRENT_TIME
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Restarting Tor to republish hidden service descriptor (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS)..."
+
+                    # Fix permissions before restart (most common cause of descriptor issues)
+                    if [ -d "$TOR_HS_DIR" ]; then
+                        chown -R debian-tor:debian-tor "$TOR_HS_DIR" 2>/dev/null || true
+                        chmod 700 "$TOR_HS_DIR" 2>/dev/null || true
+                        find "$TOR_HS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+                    fi
+
+                    # Restart Tor
+                    pkill -x tor 2>/dev/null || true
+                    sleep 2
+                    if service tor start 2>/dev/null; then
+                        sleep 5
+                        if pgrep -x "tor" > /dev/null 2>&1; then
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — hidden service will republish within ~30s"
+                        else
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
+                        fi
+                    else
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart command failed"
+                    fi
+                elif [ $TOR_RESTART_COUNT -ge $TOR_MAX_RESTARTS ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor exceeded max restarts ($TOR_MAX_RESTARTS) — hidden service may remain unreachable until container restart"
+                fi
+            else
+                # Self-check passed — reset restart counter on sustained success
+                if [ $TOR_RESTART_COUNT -gt 0 ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor self-check passed — hidden service reachable again, resetting restart counter"
+                    TOR_RESTART_COUNT=0
                 fi
             fi
         fi

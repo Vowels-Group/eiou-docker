@@ -261,15 +261,26 @@ class TransportUtilityService implements TransportServiceInterface
      * @param string $recipient The address of the recipient
      * @param array $payload The payload to send
      * @param bool $returnSigningData If true, returns array with response and signing data
+     * @param bool $allowTransportFallback If true, TOR failures will attempt HTTP/HTTPS fallback (use only for contact requests to preserve privacy)
      * @return string|array The response from the recipient, or array with response and signing data if $returnSigningData is true
      */
-    public function send(string $recipient, array $payload, bool $returnSigningData = false): string|array {
+    public function send(string $recipient, array $payload, bool $returnSigningData = false, bool $allowTransportFallback = false): string|array {
         $signingResult = $this->signWithCapture($payload);
         $signedPayload = json_encode($signingResult['envelope']);
 
         // Determine if tor address, else send by http
         if ($this->isTorAddress($recipient)) {
             $response = $this->sendByTor($recipient, $signedPayload);
+
+            // If TOR delivery failed and fallback is allowed, attempt HTTP/HTTPS
+            // Fallback is restricted to contact requests only — transactions must
+            // respect the user's chosen transport to preserve privacy.
+            if ($allowTransportFallback && $this->isTorFailure($response)) {
+                $fallbackResponse = $this->attemptFallbackDelivery($recipient, $signedPayload);
+                if ($fallbackResponse !== null) {
+                    $response = $fallbackResponse;
+                }
+            }
         } else {
             $response = $this->sendByHttp($recipient, $signedPayload);
         }
@@ -283,6 +294,59 @@ class TransportUtilityService implements TransportServiceInterface
         }
 
         return $response;
+    }
+
+    /**
+     * Check if a response indicates a TOR delivery failure
+     *
+     * @param string $response The JSON response from sendByTor
+     * @return bool True if the response indicates a TOR failure
+     */
+    private function isTorFailure(string $response): bool {
+        $decoded = json_decode($response, true);
+        return isset($decoded['status']) && $decoded['status'] === 'error'
+            && isset($decoded['message']) && str_contains($decoded['message'], 'TOR request failed');
+    }
+
+    /**
+     * Attempt to deliver a payload via HTTP/HTTPS fallback when TOR fails
+     *
+     * Looks up the recipient's known addresses and tries the first available
+     * non-TOR address as a fallback transport.
+     *
+     * @param string $torAddress The TOR address that failed
+     * @param string $signedPayload The already-signed payload to deliver
+     * @return string|null The HTTP response on success, or null if no fallback available
+     */
+    private function attemptFallbackDelivery(string $torAddress, string $signedPayload): ?string {
+        $addressRepo = $this->container->getAddressRepository();
+
+        // Look up the recipient's pubkey hash from their TOR address
+        $pubkeyHash = $addressRepo->getContactPubkeyHash('tor', $torAddress);
+        if ($pubkeyHash === null) {
+            return null;
+        }
+
+        // Get all known addresses for this contact
+        $contactAddresses = $addressRepo->lookupByPubkeyHash($pubkeyHash);
+        if (empty($contactAddresses)) {
+            return null;
+        }
+
+        // Remove TOR from candidates so we only try HTTP/HTTPS
+        unset($contactAddresses['tor']);
+
+        $fallbackAddress = $this->fallbackTransportAddress($contactAddresses);
+        if ($fallbackAddress === null) {
+            return null;
+        }
+
+        Logger::getInstance()->info("TOR delivery failed, attempting HTTP/HTTPS fallback", [
+            'tor_address' => $torAddress,
+            'fallback_address' => $fallbackAddress
+        ]);
+
+        return $this->sendByHttp($fallbackAddress, $signedPayload);
     }
 
     /**

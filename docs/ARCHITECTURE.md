@@ -914,7 +914,12 @@ The watchdog runs every 30 seconds and monitors processor health:
         |       |-- No: Restart (if < 10 restarts, > 60s cooldown)
         |
         +-- Check ContactStatus PID alive? (if enabled)
-                |-- No: Restart (if < 10 restarts, > 60s cooldown)
+        |       |-- No: Restart (if < 10 restarts, > 60s cooldown)
+        |
+        +-- Tor self-health check (every 5 minutes)
+                |-- Curl own .onion via SOCKS5 proxy
+                |-- Failure: Fix HS dir permissions, restart Tor
+                |-- (max 5 restarts, 300s cooldown, resets on recovery)
 ```
 
 **Shutdown Flag Lifecycle:**
@@ -937,6 +942,9 @@ The shutdown flag (`/tmp/eiou_shutdown.flag`) coordinates between the PHP CLI co
 | Check Interval | 30 seconds |
 | Restart Cooldown | 60 seconds |
 | Max Restarts | 10 per processor |
+| Tor Check Interval | 300 seconds (5 minutes) |
+| Tor Restart Cooldown | 300 seconds |
+| Tor Max Restarts | 5 |
 
 ---
 
@@ -1450,6 +1458,13 @@ correct upstream node.
 
 **Priority:** Tor > HTTPS > HTTP (security preference)
 
+**Transport Fallback:** When TOR delivery fails during contact requests (SOCKS5 connection
+error), `TransportUtilityService::send()` attempts HTTP/HTTPS delivery using stored alternative
+addresses. This fallback is only enabled for contact creation/acceptance messages
+(`allowTransportFallback` parameter) — transactions and other messages respect the user's
+chosen transport to preserve privacy. The fallback looks up alternative addresses via
+`AddressRepository::getContactPubkeyHash()` and `lookupByPubkeyHash()`.
+
 ### Transport Concurrency Control
 
 Batch sends (`sendBatch()`, `sendMultiBatch()`) use `curl_multi` with a sliding-window
@@ -1793,7 +1808,8 @@ don't match.
     |                                             |
     +-- eiou add <address>                        |
     |     +-- Send contact request -------------->|
-    |         (tx_type='contact', amount=0)       +-- Contact appears as 'pending'
+    |         (tx_type='contact', amount=0,       +-- Contact appears as 'pending'
+    |          senderAddresses=[all addresses])   |
     |                                             |
     |                                             +-- eiou accept <name>
     |                                             |     +-- Update contact to 'accepted'

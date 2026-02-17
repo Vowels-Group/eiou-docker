@@ -64,6 +64,9 @@ class ContactPayloadTest extends TestCase
         $this->mockUserContext->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
 
+        $this->mockUserContext->method('getUserLocaters')
+            ->willReturn(['http' => self::TEST_HTTP_ADDRESS]);
+
         $this->mockTransportUtility->method('resolveUserAddressForTransport')
             ->willReturnCallback(function ($address) {
                 // Return a resolved address based on input
@@ -89,10 +92,13 @@ class ContactPayloadTest extends TestCase
         $this->assertIsArray($result);
         $this->assertArrayHasKey('type', $result);
         $this->assertArrayHasKey('senderAddress', $result);
+        $this->assertArrayHasKey('senderAddresses', $result);
         $this->assertArrayHasKey('senderPublicKey', $result);
         $this->assertEquals('create', $result['type']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
+        $this->assertIsArray($result['senderAddresses']);
+        $this->assertArrayHasKey('http', $result['senderAddresses']);
     }
 
     /**
@@ -109,6 +115,7 @@ class ContactPayloadTest extends TestCase
         $this->assertIsArray($result);
         $this->assertEquals('create', $result['type']);
         $this->assertArrayHasKey('senderAddress', $result);
+        $this->assertArrayHasKey('senderAddresses', $result);
         $this->assertArrayHasKey('senderPublicKey', $result);
     }
 
@@ -127,6 +134,7 @@ class ContactPayloadTest extends TestCase
         $this->assertIsArray($result);
         $this->assertEquals('create', $result['type']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
+        $this->assertArrayHasKey('senderAddresses', $result);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
     }
 
@@ -542,10 +550,11 @@ class ContactPayloadTest extends TestCase
     {
         $result = $this->payload->build(['address' => self::TEST_HTTP_ADDRESS]);
 
-        // Should have exactly 3 keys
-        $this->assertCount(3, $result);
+        // Should have exactly 4 keys (type, senderAddress, senderAddresses, senderPublicKey)
+        $this->assertCount(4, $result);
         $this->assertEquals('create', $result['type']);
         $this->assertIsString($result['senderAddress']);
+        $this->assertIsArray($result['senderAddresses']);
         $this->assertIsString($result['senderPublicKey']);
     }
 
