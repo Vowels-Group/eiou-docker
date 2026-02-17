@@ -101,6 +101,7 @@ function getP2pTableSchema() {
         sender_signature TEXT,
         description TEXT,
         fast TINYINT(1) DEFAULT 1, /* 1=fast mode (first rp2p wins), 0=best-fee mode (collect all, pick cheapest) */
+        hop_wait INT DEFAULT 0, /* seconds to wait at each hop before forwarding (best-fee mode delay) */
         contacts_sent_count INT DEFAULT 0, /* number of contacts the p2p was sent to */
         contacts_responded_count INT DEFAULT 0, /* number of contacts that responded with rp2p */
         contacts_relayed_count INT DEFAULT 0, /* number of contacts that returned already_relayed (two-phase selection) */

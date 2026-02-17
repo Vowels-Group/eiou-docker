@@ -361,6 +361,8 @@ class DatabaseSchemaTest extends TestCase
             'sender_address VARCHAR(255) NOT NULL',
             'sender_signature TEXT',
             'description TEXT',
+            'fast TINYINT(1)',
+            'hop_wait INT',
             'status ENUM',
             'created_at TIMESTAMP(6)',
             'incoming_txid VARCHAR(255)',

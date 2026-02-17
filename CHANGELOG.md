@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Add missing `hop_wait` column to `p2p` table schema and migration — INSERT queries from `P2pRepository::insertP2pRequest()` were failing with "Unknown column 'hop_wait'"
+
 ### Changed
 - GUI header (wallet title + logout) now wraps to two lines when viewport is too narrow instead of overlapping
 - GUI quick action menu buttons scale to fit on one line at desktop widths; become a horizontal slider at tablet/phone sizes instead of wrapping to multiple rows
