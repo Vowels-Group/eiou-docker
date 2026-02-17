@@ -16,6 +16,7 @@ The project is currently in **ALPHA** status.
 - `partial` online status for contacts
 - `senderAddresses` field in contact creation payload — initial contact requests now include all known addresses (HTTP, HTTPS, TOR), enabling transport fallback when the primary address is unreachable
 - TOR-to-HTTP/HTTPS transport fallback for contact requests only — when TOR delivery fails (SOCKS5 connection error) during initial contact creation, `TransportUtilityService::send()` attempts delivery via the recipient's known HTTP/HTTPS address; transactions and other messages respect the user's chosen transport to preserve privacy
+- Tor hidden service self-health check in watchdog — every 5 minutes the watchdog curls the node's own `.onion` address through the SOCKS5 proxy; if unreachable, fixes hidden service directory permissions and restarts Tor to republish the descriptor (up to 5 attempts with 5-minute cooldown, resets on recovery)
 
 ### Fixed
 - Contact acceptance messages fail when recipient's TOR hidden service is unreachable — the system now falls back to HTTP/HTTPS transport using stored alternative addresses
