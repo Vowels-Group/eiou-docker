@@ -13,7 +13,13 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
-- `partial` online status for contacts — indicates node is reachable but has degraded message processors (some of P2P, Transaction, or Cleanup processors are not running)
+- `partial` online status for contacts
+- `senderAddresses` field in contact creation payload — initial contact requests now include all known addresses (HTTP, HTTPS, TOR), enabling transport fallback when the primary address is unreachable
+- TOR-to-HTTP/HTTPS transport fallback for contact requests only — when TOR delivery fails (SOCKS5 connection error) during initial contact creation, `TransportUtilityService::send()` attempts delivery via the recipient's known HTTP/HTTPS address; transactions and other messages respect the user's chosen transport to preserve privacy
+
+### Fixed
+- Contact acceptance messages fail when recipient's TOR hidden service is unreachable — the system now falls back to HTTP/HTTPS transport using stored alternative addresses
+- Incoming contact requests only stored the sender's primary address — `handleContactCreation()` now extracts and stores `senderAddresses` from the request payload, and includes responder's addresses in the `buildReceived()` response — indicates node is reachable but has degraded message processors (some of P2P, Transaction, or Cleanup processors are not running)
 - Pong response now includes processor health (`processorsRunning`, `processorsTotal`) for remote nodes to determine partial vs online status
 - `contact_status` processor status in `GET /api/v1/system/status` response
 - `isProcessorRunning()` static utility on `AbstractMessageProcessor` for PID file validation with process existence and cmdline verification
