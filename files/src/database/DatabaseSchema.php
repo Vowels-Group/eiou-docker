@@ -17,7 +17,8 @@ function getContactsTableSchema() {
             'blocked'   /* Contact request Blocked */
         ) DEFAULT 'pending',
         online_status ENUM(
-            'online',   /* Contact responded to ping */
+            'online',   /* Contact responded to ping, all processors running */
+            'partial',  /* Contact responded to ping, some processors degraded */
             'offline',  /* Contact did not respond to ping */
             'unknown'   /* Ping not performed (default or feature disabled) */
         ) DEFAULT 'unknown',

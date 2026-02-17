@@ -12,6 +12,17 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- `partial` online status for contacts — indicates node is reachable but has degraded message processors (some of P2P, Transaction, or Cleanup processors are not running)
+- Pong response now includes processor health (`processorsRunning`, `processorsTotal`) for remote nodes to determine partial vs online status
+- `contact_status` processor status in `GET /api/v1/system/status` response
+- `isProcessorRunning()` static utility on `AbstractMessageProcessor` for PID file validation with process existence and cmdline verification
+- CSS styling for partial status: orange indicator dot and warning badge in GUI
+
+### Fixed
+- `GET /api/v1/system/status` used wrong PID file names (`p2p_processor.pid` instead of `p2pmessages_lock.pid`), always reported processors as not running
+- `GET /api/v1/system/status` now validates PID files properly (checks process existence and PHP cmdline) instead of only checking file existence
+
 ### Fixed
 - Remove dead Curve25519 `sodium_crypto_scalarmult_base()` call from Tor key derivation that computed an unused value before the correct Ed25519 derivation
 - Tor hidden service directory permission errors in startup.sh are now logged instead of silently swallowed — failed `chown`/`chmod` could cause Tor to reject seed-derived keys and generate random ones

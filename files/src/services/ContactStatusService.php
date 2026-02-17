@@ -18,6 +18,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Schemas\Payloads\ContactStatusPayload;
+use Eiou\Processors\AbstractMessageProcessor;
 use RuntimeException;
 use Exception;
 
@@ -275,7 +276,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                         // Respond with pong so remote knows we're alive
                         // Chain is marked invalid since we just restored from scratch
-                        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, false);
+                        [$prRunning, $prTotal] = $this->checkProcessorHealth();
+                        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, false, null, null, $prRunning, $prTotal);
                         return;
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to auto-create pending contact from ping", [
@@ -342,11 +344,14 @@ class ContactStatusService implements ContactStatusServiceInterface {
             }
         }
 
+        // Check processor health for pong response
+        [$processorsRunning, $processorsTotal] = $this->checkProcessorHealth();
+
         // Update the sender's online status since they pinged us
         $this->updateContactOnlineStatus($senderPubkey);
 
-        // Send pong response with available credit
-        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency);
+        // Send pong response with available credit and processor health
+        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal);
     }
 
     /**
@@ -490,8 +495,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 ]);
 
                 if ($response['status'] === 'pong') {
-                    // Contact is online
-                    $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
+                    // Determine online status based on processor health
+                    $onlineStatus = $this->determineOnlineStatusFromPong($response);
+                    $this->updateContactStatus($contact['pubkey'], $onlineStatus);
 
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
@@ -511,6 +517,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             $chainValid = false;
                         }
                     }
+
+                    $statusLabel = $onlineStatus === Constants::CONTACT_ONLINE_STATUS_PARTIAL ? 'partial' : 'online';
 
                     // If chains don't match, update status and optionally trigger sync
                     if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {
@@ -544,18 +552,18 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         return [
                             'success' => true,
                             'contact_name' => $contact['name'],
-                            'online_status' => 'online',
+                            'online_status' => $statusLabel,
                             'chain_valid' => false,
-                            'message' => 'Contact is online but chain needs sync'
+                            'message' => "Contact is {$statusLabel} but chain needs sync"
                         ];
                     } else {
                         $this->updateChainStatus($contact['pubkey'], true);
                         return [
                             'success' => true,
                             'contact_name' => $contact['name'],
-                            'online_status' => 'online',
+                            'online_status' => $statusLabel,
                             'chain_valid' => true,
-                            'message' => 'Contact is online and chain is valid'
+                            'message' => "Contact is {$statusLabel} and chain is valid"
                         ];
                     }
                 } elseif ($response['status'] === 'rejected') {
@@ -664,5 +672,50 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Check health of the 3 core message processors
+     *
+     * @return array [int running, int total] — counts of running vs expected processors
+     */
+    private function checkProcessorHealth(): array
+    {
+        $pidFiles = [
+            '/tmp/p2pmessages_lock.pid',
+            '/tmp/transactionmessages_lock.pid',
+            '/tmp/cleanupmessages_lock.pid',
+        ];
+
+        $running = 0;
+        foreach ($pidFiles as $pidFile) {
+            if (AbstractMessageProcessor::isProcessorRunning($pidFile)) {
+                $running++;
+            }
+        }
+
+        return [$running, count($pidFiles)];
+    }
+
+    /**
+     * Determine online status based on processor health from pong response
+     *
+     * @param array $response The pong response data
+     * @return string Online status constant (online or partial)
+     */
+    private function determineOnlineStatusFromPong(array $response): string
+    {
+        if (!isset($response['processorsRunning']) || !isset($response['processorsTotal'])) {
+            return Constants::CONTACT_ONLINE_STATUS_ONLINE;
+        }
+
+        $running = (int)$response['processorsRunning'];
+        $total = (int)$response['processorsTotal'];
+
+        if ($total > 0 && $running < $total) {
+            return Constants::CONTACT_ONLINE_STATUS_PARTIAL;
+        }
+
+        return Constants::CONTACT_ONLINE_STATUS_ONLINE;
     }
 }

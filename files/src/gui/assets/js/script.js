@@ -1969,7 +1969,7 @@ function pingContact() {
                         var onlineStatus = response.online_status || 'unknown';
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Status updated, reloading...';
-                            resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : '#dc3545';
+                            resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : (onlineStatus === 'partial' ? '#fd7e14' : '#dc3545');
                         }
                         // Reload and reopen modal on info tab so updated values persist
                         if (currentContactId) {

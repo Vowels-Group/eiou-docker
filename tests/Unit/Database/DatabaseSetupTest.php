@@ -109,12 +109,22 @@ class DatabaseSetupTest extends TestCase
     }
 
     /**
-     * Test runColumnMigrations handles empty migrations gracefully
+     * Test runColumnMigrations handles migrations gracefully
      */
-    public function testRunColumnMigrationsHandlesEmptyMigrationsGracefully(): void
+    public function testRunColumnMigrationsHandlesMigrationsGracefully(): void
     {
-        // The function has empty arrays for columnsToAdd, columnsToDrop, etc.
-        // so it should just return an empty or minimal result array
+        $this->mockPdo->expects($this->any())
+            ->method('query')
+            ->willReturn($this->mockStatement);
+
+        $this->mockStatement->expects($this->any())
+            ->method('rowCount')
+            ->willReturn(1);
+
+        $this->mockStatement->expects($this->any())
+            ->method('fetch')
+            ->willReturn(['Type' => "enum('online','partial','offline','unknown')"]);
+
         $result = runColumnMigrations($this->mockPdo);
 
         $this->assertIsArray($result);
@@ -189,6 +199,60 @@ class DatabaseSetupTest extends TestCase
         $this->assertContains('created', $validStatuses);
         $this->assertContains('exists', $validStatuses);
         $this->assertContains('added', $validStatuses);
+    }
+
+    /**
+     * Test ENUM migration adds 'partial' to contacts.online_status
+     */
+    public function testEnumMigrationAddsPartialToOnlineStatus(): void
+    {
+        // Simulate column exists but lacks 'partial'
+        $this->mockPdo->expects($this->any())
+            ->method('query')
+            ->willReturn($this->mockStatement);
+
+        $this->mockStatement->expects($this->any())
+            ->method('rowCount')
+            ->willReturn(1);
+
+        // Return an ENUM type that does NOT contain 'partial'
+        $this->mockStatement->expects($this->any())
+            ->method('fetch')
+            ->willReturn(['Type' => "enum('online','offline','unknown')"]);
+
+        $this->mockPdo->expects($this->atLeastOnce())
+            ->method('exec');
+
+        $result = runColumnMigrations($this->mockPdo);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('contacts.online_status_enum', $result);
+        $this->assertEquals('updated', $result['contacts.online_status_enum']);
+    }
+
+    /**
+     * Test ENUM migration skips when 'partial' already exists
+     */
+    public function testEnumMigrationSkipsWhenPartialAlreadyExists(): void
+    {
+        $this->mockPdo->expects($this->any())
+            ->method('query')
+            ->willReturn($this->mockStatement);
+
+        $this->mockStatement->expects($this->any())
+            ->method('rowCount')
+            ->willReturn(1);
+
+        // Return an ENUM type that already contains 'partial'
+        $this->mockStatement->expects($this->any())
+            ->method('fetch')
+            ->willReturn(['Type' => "enum('online','partial','offline','unknown')"]);
+
+        $result = runColumnMigrations($this->mockPdo);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('contacts.online_status_enum', $result);
+        $this->assertEquals('already_updated', $result['contacts.online_status_enum']);
     }
 
     /**

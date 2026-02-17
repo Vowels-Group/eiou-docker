@@ -197,8 +197,9 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             // Update contact based on response
             if ($response && isset($response['status'])) {
                 if ($response['status'] === 'pong') {
-                    // Contact is online
-                    $this->updateContactOnlineStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
+                    // Determine online status based on processor health
+                    $onlineStatus = $this->determineOnlineStatusFromPong($response);
+                    $this->updateContactOnlineStatus($contact['pubkey'], $onlineStatus);
 
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
@@ -240,6 +241,28 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             ]);
             return true;
         }
+    }
+
+    /**
+     * Determine online status based on processor health from pong response
+     *
+     * @param array $response The pong response data
+     * @return string Online status constant (online or partial)
+     */
+    private function determineOnlineStatusFromPong(array $response): string
+    {
+        if (!isset($response['processorsRunning']) || !isset($response['processorsTotal'])) {
+            return Constants::CONTACT_ONLINE_STATUS_ONLINE;
+        }
+
+        $running = (int)$response['processorsRunning'];
+        $total = (int)$response['processorsTotal'];
+
+        if ($total > 0 && $running < $total) {
+            return Constants::CONTACT_ONLINE_STATUS_PARTIAL;
+        }
+
+        return Constants::CONTACT_ONLINE_STATUS_ONLINE;
     }
 
     /**

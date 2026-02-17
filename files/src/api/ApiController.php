@@ -11,6 +11,7 @@ use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Utils\Logger;
 use Eiou\Exceptions\ServiceException;
+use Eiou\Processors\AbstractMessageProcessor;
 
 /**
  * API Controller
@@ -1144,11 +1145,12 @@ class ApiController {
             $dbStatus = 'unhealthy';
         }
 
-        // Check if processors are running
+        // Check if processors are running (validate PID files, not just existence)
         $processors = [
-            'p2p' => file_exists('/tmp/p2p_processor.pid'),
-            'transaction' => file_exists('/tmp/transaction_processor.pid'),
-            'cleanup' => file_exists('/tmp/cleanup_processor.pid')
+            'p2p' => AbstractMessageProcessor::isProcessorRunning('/tmp/p2pmessages_lock.pid'),
+            'transaction' => AbstractMessageProcessor::isProcessorRunning('/tmp/transactionmessages_lock.pid'),
+            'cleanup' => AbstractMessageProcessor::isProcessorRunning('/tmp/cleanupmessages_lock.pid'),
+            'contact_status' => AbstractMessageProcessor::isProcessorRunning('/tmp/contact_status.pid'),
         ];
 
         return $this->successResponse([
