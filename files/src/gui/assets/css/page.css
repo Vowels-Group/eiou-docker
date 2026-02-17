@@ -1187,24 +1187,14 @@ body {
         padding-bottom: 0.5rem;
         scrollbar-width: none; /* Firefox */
         -ms-overflow-style: none; /* IE */
-        max-width: 100%;
     }
 
     .quick-actions::-webkit-scrollbar {
         display: none; /* Chrome/Safari */
     }
 
-    .quick-actions-scroll-left {
-        left: -4px;
-    }
-
-    .quick-actions-scroll-right {
-        right: -4px;
-    }
-
     .action-card {
-        flex: 0 0 auto;
-        min-width: 100px;
+        flex: 0 0 100px;
         padding: 0.75rem 0.5rem;
     }
 
@@ -1230,11 +1220,6 @@ body {
         font-size: 1.25rem;
     }
 
-    .wallet-owner {
-        display: block;
-        padding-left: 0.25rem;
-    }
-
     .contacts-section {
         padding: 1rem;
     }
@@ -1243,7 +1228,7 @@ body {
 /* Smaller cards on very small screens (phones) */
 @media (max-width: 480px) {
     .action-card {
-        min-width: 80px;
+        flex: 0 0 80px;
         padding: 0.6rem 0.4rem;
     }
 
