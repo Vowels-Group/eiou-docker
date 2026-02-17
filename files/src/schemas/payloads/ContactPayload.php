@@ -22,9 +22,11 @@ class ContactPayload extends BasePayload
     public function build(array $data = []): array
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($data['address']);
+        $myAddresses = $this->filterAddresses($this->currentUser->getUserLocaters());
         return [
             'type' => 'create',
             'senderAddress' => $myAddress,
+            'senderAddresses' => $myAddresses,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
