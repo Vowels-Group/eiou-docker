@@ -10,6 +10,14 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## [Unreleased]
+
+### Changed
+- GUI header (wallet title + logout) now wraps to two lines when viewport is too narrow instead of overlapping
+- GUI quick action menu buttons scale to fit on one line at desktop widths; become a horizontal slider at tablet/phone sizes instead of wrapping to multiple rows
+
+---
+
 ## 2026-02-16
 
 ### Added

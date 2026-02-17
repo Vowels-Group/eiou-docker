@@ -1,30 +1,38 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
  <!-- Quick Actions -->
-<div class="quick-actions">
-    <a href="#send-form" class="action-card">
-        <i class="fas fa-paper-plane"></i>
-        <h3>Send eIOU</h3>
-        <p>Transfer value to contacts or anyone via P2P</p>
-    </a>
-    <a href="#add-contact" class="action-card">
-        <i class="fas fa-user-plus"></i>
-        <h3>Add Contact</h3>
-        <p>Add new contact</p>
-    </a>
-    <a href="#contacts" class="action-card">
-        <i class="fas fa-address-book"></i>
-        <h3>View Contacts</h3>
-        <p>Manage your contacts</p>
-    </a>
-    <a href="#transactions" class="action-card">
-        <i class="fas fa-history"></i>
-        <h3>Transaction History</h3>
-        <p>View past transactions</p>
-    </a>
-    <a href="#settings" class="action-card">
-        <i class="fas fa-cog"></i>
-        <h3>Settings</h3>
-        <p>Configure wallet settings</p>
-    </a>
+<div class="quick-actions-slider">
+    <button type="button" id="quick-actions-scroll-left" class="quick-actions-scroll-btn quick-actions-scroll-left hidden" onclick="scrollQuickActions(-1)" title="Scroll left">
+        <i class="fas fa-chevron-left"></i>
+    </button>
+    <div class="quick-actions" id="quick-actions-grid">
+        <a href="#send-form" class="action-card">
+            <i class="fas fa-paper-plane"></i>
+            <h3>Send eIOU</h3>
+            <p>Transfer value to contacts or anyone via P2P</p>
+        </a>
+        <a href="#add-contact" class="action-card">
+            <i class="fas fa-user-plus"></i>
+            <h3>Add Contact</h3>
+            <p>Add new contact</p>
+        </a>
+        <a href="#contacts" class="action-card">
+            <i class="fas fa-address-book"></i>
+            <h3>View Contacts</h3>
+            <p>Manage your contacts</p>
+        </a>
+        <a href="#transactions" class="action-card">
+            <i class="fas fa-history"></i>
+            <h3>Transaction History</h3>
+            <p>View past transactions</p>
+        </a>
+        <a href="#settings" class="action-card">
+            <i class="fas fa-cog"></i>
+            <h3>Settings</h3>
+            <p>Configure wallet settings</p>
+        </a>
+    </div>
+    <button type="button" id="quick-actions-scroll-right" class="quick-actions-scroll-btn quick-actions-scroll-right" onclick="scrollQuickActions(1)" title="Scroll right">
+        <i class="fas fa-chevron-right"></i>
+    </button>
 </div>
