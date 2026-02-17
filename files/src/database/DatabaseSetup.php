@@ -187,19 +187,7 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [
-        'p2p' => [
-            'fast' => 'TINYINT(1) DEFAULT 1 AFTER description',
-            'contacts_sent_count' => 'INT DEFAULT 0 AFTER fast',
-            'contacts_responded_count' => 'INT DEFAULT 0 AFTER contacts_sent_count',
-            'hop_wait' => 'INT DEFAULT 0 AFTER contacts_responded_count',
-            'contacts_relayed_count' => 'INT DEFAULT 0 AFTER hop_wait',
-            'contacts_relayed_responded_count' => 'INT DEFAULT 0 AFTER contacts_relayed_count',
-            'phase1_sent' => 'TINYINT(1) DEFAULT 0 AFTER contacts_relayed_responded_count',
-            'sending_started_at' => 'TIMESTAMP(6) NULL AFTER status',
-            'sending_worker_pid' => 'INT NULL AFTER sending_started_at',
-        ],
-    ];
+    $columnsToAdd = [];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [];
@@ -254,11 +242,7 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Update ENUM columns to add new values
-    $enumUpdates = [
-        'p2p' => [
-            'status' => "ENUM('initial','queued','sending','sent','found','paid','completed','cancelled','expired') DEFAULT 'initial'",
-        ],
-    ];
+    $enumUpdates = [];
 
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
@@ -289,11 +273,7 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Add missing indexes
-    $indexesToAdd = [
-        'p2p' => [
-            'idx_p2p_sending_recovery' => 'status, sending_started_at',
-        ],
-    ];
+    $indexesToAdd = [];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
         foreach ($indexes as $indexName => $columnSpec) {
