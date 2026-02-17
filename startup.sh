@@ -796,10 +796,18 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
     # Ensure correct permissions on hidden service directory before restart
     # This fixes potential permission issues from PHP-based key generation
+    # If these fail, Tor will reject the key files and generate its own random keys,
+    # causing the .onion address to NOT match the seed phrase
     if [ -d "$HS_DIR" ]; then
-        chown -R debian-tor:debian-tor "$HS_DIR" 2>/dev/null || true
-        chmod 700 "$HS_DIR" 2>/dev/null || true
-        find "$HS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+        if ! chown -R debian-tor:debian-tor "$HS_DIR" 2>&1; then
+            echo "ERROR: Failed to set ownership on $HS_DIR — Tor may generate wrong keys!"
+        fi
+        if ! chmod 700 "$HS_DIR" 2>&1; then
+            echo "ERROR: Failed to set directory permissions on $HS_DIR"
+        fi
+        if ! find "$HS_DIR" -type f -exec chmod 600 {} \; 2>&1; then
+            echo "ERROR: Failed to set file permissions in $HS_DIR"
+        fi
     fi
 
     # Attempt restart with retry logic

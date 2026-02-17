@@ -12,6 +12,11 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Remove dead Curve25519 `sodium_crypto_scalarmult_base()` call from Tor key derivation that computed an unused value before the correct Ed25519 derivation
+- Tor hidden service directory permission errors in startup.sh are now logged instead of silently swallowed — failed `chown`/`chmod` could cause Tor to reject seed-derived keys and generate random ones
+- Log warning when OpenSSL falls back from secp256k1 to prime256v1 EC curve, which would cause wallet keys to differ from nodes using secp256k1
+
 ### Changed
 - GUI header (wallet title + logout) now wraps to two lines when viewport is too narrow instead of overlapping
 - GUI quick action menu buttons scale to fit on one line at desktop widths; become a horizontal slider at tablet/phone sizes instead of wrapping to multiple rows

@@ -83,14 +83,9 @@ class TorKeyDerivation
         // The expanded secret key for Tor is: clamped_scalar || hash_prefix
         $expandedSecretKey = $clampedScalar . $hashPrefix;
 
-        // Derive public key from the clamped scalar using sodium
-        // We need to compute the public key: scalar * basepoint
-        // Use sodium's scalarmult to compute this
-        $publicKey = sodium_crypto_scalarmult_base($clampedScalar);
-
-        // Note: sodium_crypto_scalarmult_base returns Curve25519 point, not Ed25519
-        // For Ed25519, we need to derive the public key differently
-        // Let's use the original seed to get the correct public key from sodium
+        // Derive the Ed25519 public key from the Tor seed using libsodium
+        // sodium_crypto_sign_seed_keypair internally does SHA-512 + clamping identical
+        // to our manual expansion above, so the public key matches the expanded secret key
         $keypair = sodium_crypto_sign_seed_keypair($torSeed);
         $publicKey = sodium_crypto_sign_publickey($keypair);
 

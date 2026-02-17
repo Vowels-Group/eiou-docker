@@ -266,6 +266,8 @@ class BIP39 {
         }
 
         if (in_array('prime256v1', $curves)) {
+            error_log('WARNING: secp256k1 curve not available in OpenSSL, falling back to prime256v1. '
+                . 'Wallet keys derived from seed phrases will differ from nodes using secp256k1.');
             return 'prime256v1';
         }
 
