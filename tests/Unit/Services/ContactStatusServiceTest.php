@@ -204,11 +204,12 @@ class ContactStatusServiceTest extends TestCase
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
             ->willReturn(self::TEST_PREV_TXID);
 
+        // On incoming ping, only last_ping_at is updated (not online_status —
+        // that requires a pong with processorsRunning from the next ping/pong cycle)
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
             ->with(self::TEST_CONTACT_PUBKEY, $this->callback(function ($fields) {
-                return $fields['online_status'] === Constants::CONTACT_ONLINE_STATUS_ONLINE
-                    && isset($fields['last_ping_at']);
+                return isset($fields['last_ping_at']) && !isset($fields['online_status']);
             }))
             ->willReturn(true);
 
@@ -1264,5 +1265,199 @@ class ContactStatusServiceTest extends TestCase
 
         $service->setTransactionChainRepository($this->mockChainRepo);
         $this->assertInstanceOf(ContactStatusService::class, $service);
+    }
+
+    // =========================================================================
+    // Partial Online Status Tests
+    // =========================================================================
+
+    /**
+     * Test handlePingRequest pong includes processorsRunning and processorsTotal
+     */
+    public function testHandlePingRequestPongIncludesProcessorHealth(): void
+    {
+        $request = [
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS,
+            'prevTxid' => self::TEST_PREV_TXID
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('isAcceptedContactPubkey')
+            ->willReturn(true);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        ob_start();
+        $this->service->handlePingRequest($request);
+        $output = ob_get_clean();
+
+        $response = json_decode($output, true);
+        $this->assertEquals('pong', $response['status']);
+        // processorsRunning and processorsTotal should be present
+        $this->assertArrayHasKey('processorsRunning', $response);
+        $this->assertArrayHasKey('processorsTotal', $response);
+        $this->assertIsInt($response['processorsRunning']);
+        $this->assertIsInt($response['processorsTotal']);
+        $this->assertEquals(3, $response['processorsTotal']);
+    }
+
+    /**
+     * Test pingContact returns partial status when remote has degraded processors
+     */
+    public function testPingContactReturnsPartialWhenProcessorsDegraded(): void
+    {
+        $this->service->setRateLimiterService($this->mockRateLimiter);
+
+        $this->mockRateLimiter->expects($this->once())
+            ->method('checkLimit')
+            ->willReturn(['allowed' => true, 'remaining' => 2]);
+
+        $contact = [
+            'name' => 'test-contact',
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'status' => 'accepted',
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByNameOrAddress')
+            ->willReturn($contact);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Pong with degraded processors
+        $pongResponse = json_encode([
+            'status' => 'pong',
+            'chainValid' => true,
+            'prevTxid' => self::TEST_PREV_TXID,
+            'processorsRunning' => 1,
+            'processorsTotal' => 3
+        ]);
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn($pongResponse);
+
+        // Expect contact status to be updated to partial
+        $onlineStatusSet = null;
+        $this->mockContactRepo->expects($this->exactly(2))
+            ->method('updateContactFields')
+            ->willReturnCallback(function ($pubkey, $fields) use (&$onlineStatusSet) {
+                if (isset($fields['online_status'])) {
+                    $onlineStatusSet = $fields['online_status'];
+                }
+                return true;
+            });
+
+        $result = $this->service->pingContact('test-contact');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('partial', $result['online_status']);
+        $this->assertEquals(Constants::CONTACT_ONLINE_STATUS_PARTIAL, $onlineStatusSet);
+    }
+
+    /**
+     * Test pingContact returns online when all processors running
+     */
+    public function testPingContactReturnsOnlineWhenAllProcessorsRunning(): void
+    {
+        $this->service->setRateLimiterService($this->mockRateLimiter);
+
+        $this->mockRateLimiter->expects($this->once())
+            ->method('checkLimit')
+            ->willReturn(['allowed' => true, 'remaining' => 2]);
+
+        $contact = [
+            'name' => 'test-contact',
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'status' => 'accepted',
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByNameOrAddress')
+            ->willReturn($contact);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Pong with all processors running
+        $pongResponse = json_encode([
+            'status' => 'pong',
+            'chainValid' => true,
+            'prevTxid' => self::TEST_PREV_TXID,
+            'processorsRunning' => 3,
+            'processorsTotal' => 3
+        ]);
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn($pongResponse);
+
+        $this->mockContactRepo->expects($this->exactly(2))
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        $result = $this->service->pingContact('test-contact');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('online', $result['online_status']);
+    }
+
+    /**
+     * Test pingContact returns online when pong from older node (no processor fields)
+     */
+    public function testPingContactReturnsOnlineWhenOlderNodeNoProcFields(): void
+    {
+        $this->service->setRateLimiterService($this->mockRateLimiter);
+
+        $this->mockRateLimiter->expects($this->once())
+            ->method('checkLimit')
+            ->willReturn(['allowed' => true, 'remaining' => 2]);
+
+        $contact = [
+            'name' => 'test-contact',
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'status' => 'accepted',
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByNameOrAddress')
+            ->willReturn($contact);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Pong without processor fields (older node)
+        $pongResponse = json_encode([
+            'status' => 'pong',
+            'chainValid' => true,
+            'prevTxid' => self::TEST_PREV_TXID
+        ]);
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn($pongResponse);
+
+        $this->mockContactRepo->expects($this->exactly(2))
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        $result = $this->service->pingContact('test-contact');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('online', $result['online_status']);
     }
 }

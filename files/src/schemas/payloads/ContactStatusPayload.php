@@ -46,15 +46,17 @@ class ContactStatusPayload extends BasePayload
      * @param bool $chainValid Whether the chains match
      * @param int|null $availableCredit Available credit for the pinging contact (in cents)
      * @param string|null $currency Currency code for the available credit
+     * @param int|null $processorsRunning Number of message processors currently running
+     * @param int|null $processorsTotal Total expected message processors
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null): string
+    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
-        return json_encode([
+        $response = [
             'status' => 'pong',
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -63,7 +65,16 @@ class ContactStatusPayload extends BasePayload
             'availableCredit' => $availableCredit,
             'currency' => $currency,
             'time' => $this->timeUtility->getCurrentMicrotime()
-        ]);
+        ];
+
+        if ($processorsRunning !== null) {
+            $response['processorsRunning'] = $processorsRunning;
+        }
+        if ($processorsTotal !== null) {
+            $response['processorsTotal'] = $processorsTotal;
+        }
+
+        return json_encode($response);
     }
 
     /**

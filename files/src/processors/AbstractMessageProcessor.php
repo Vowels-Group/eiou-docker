@@ -479,6 +479,50 @@ abstract class AbstractMessageProcessor {
     }
 
     /**
+     * Check if a processor is running by validating its PID file
+     *
+     * Reads the PID from the lockfile, validates it's a positive integer,
+     * checks if the process exists via posix_kill(0), and verifies
+     * /proc/$pid/cmdline contains 'php' to guard against PID reuse.
+     *
+     * @param string $pidFile Path to the processor's PID/lock file
+     * @return bool True if the processor is running
+     */
+    public static function isProcessorRunning(string $pidFile): bool
+    {
+        if (!file_exists($pidFile)) {
+            return false;
+        }
+
+        $pidContent = @file_get_contents($pidFile);
+        if ($pidContent === false || trim($pidContent) === '') {
+            return false;
+        }
+
+        $pid = trim($pidContent);
+        if (!ctype_digit($pid) || (int)$pid <= 0) {
+            return false;
+        }
+
+        $pid = (int)$pid;
+
+        if (!@posix_kill($pid, 0)) {
+            // EPERM (errno 1) means "process exists but caller lacks permission to signal it"
+            // This happens when Apache (www-data) checks a root-owned processor
+            if (posix_get_last_error() !== 1) {
+                return false;
+            }
+        }
+
+        $cmdline = @file_get_contents("/proc/$pid/cmdline");
+        if ($cmdline === false || stripos($cmdline, 'php') === false) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Process messages - implemented by concrete classes
      *
      * @return int Number of messages processed

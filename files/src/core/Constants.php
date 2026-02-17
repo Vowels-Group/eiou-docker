@@ -236,6 +236,7 @@ class Constants {
 
     // Contact online status values
     const CONTACT_ONLINE_STATUS_ONLINE = 'online';
+    const CONTACT_ONLINE_STATUS_PARTIAL = 'partial';
     const CONTACT_ONLINE_STATUS_OFFLINE = 'offline';
     const CONTACT_ONLINE_STATUS_UNKNOWN = 'unknown';
 

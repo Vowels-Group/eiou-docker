@@ -246,7 +246,11 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Update ENUM columns to add new values
-    $enumUpdates = [];
+    $enumUpdates = [
+        'contacts' => [
+            'online_status' => "ENUM('online','partial','offline','unknown') DEFAULT 'unknown'",
+        ],
+    ];
 
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
@@ -257,8 +261,18 @@ function runColumnMigrations(PDO $pdo): array {
 
                 if ($columnInfo) {
                     $currentType = $columnInfo['Type'];
-                    // Check if 'sending' is already in the enum
-                    if (strpos($currentType, "'sending'") === false) {
+                    // Check if new ENUM values are already present by comparing definitions
+                    // Extract values from new definition to check against current type
+                    preg_match_all("/'/", $newEnumDef, $newMatches);
+                    $needsUpdate = false;
+                    preg_match_all("/'([^']+)'/", $newEnumDef, $newValues);
+                    foreach ($newValues[1] ?? [] as $val) {
+                        if (strpos($currentType, "'$val'") === false) {
+                            $needsUpdate = true;
+                            break;
+                        }
+                    }
+                    if ($needsUpdate) {
                         $pdo->exec("ALTER TABLE `$tableName` MODIFY COLUMN `$columnName` $newEnumDef");
                         $results["{$tableName}.{$columnName}_enum"] = 'updated';
                     } else {

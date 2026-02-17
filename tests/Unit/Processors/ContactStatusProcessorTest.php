@@ -480,6 +480,145 @@ class ContactStatusProcessorTest extends TestCase
     }
 
     // =========================================================================
+    // Partial Status Tests
+    // =========================================================================
+
+    /**
+     * Test pingContact marks contact as partial when processorsRunning < processorsTotal
+     */
+    public function testPingContactMarksContactPartialWhenProcessorsDegraded(): void
+    {
+        $contact = [
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->transactionRepository->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(null);
+
+        $this->contactStatusPayload->expects($this->once())
+            ->method('build')
+            ->willReturn(['type' => 'contact_status_ping']);
+
+        $this->transportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn(json_encode([
+                'status' => 'pong',
+                'chainValid' => true,
+                'processorsRunning' => 2,
+                'processorsTotal' => 3
+            ]));
+
+        // Track the online status value
+        $onlineStatusSet = null;
+        $this->contactRepository->expects($this->atLeastOnce())
+            ->method('updateContactFields')
+            ->willReturnCallback(function ($pubkey, $fields) use (&$onlineStatusSet) {
+                if (isset($fields['online_status'])) {
+                    $onlineStatusSet = $fields['online_status'];
+                }
+                return true;
+            });
+
+        $processor = $this->createProcessorWithMockedDependencies();
+
+        $this->invokeProtectedMethod($processor, 'pingContact', [$contact]);
+
+        $this->assertEquals(Constants::CONTACT_ONLINE_STATUS_PARTIAL, $onlineStatusSet,
+            'Contact should be marked as partial when processors are degraded');
+    }
+
+    /**
+     * Test pingContact marks contact as online when all processors running
+     */
+    public function testPingContactMarksContactOnlineWhenAllProcessorsRunning(): void
+    {
+        $contact = [
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->transactionRepository->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(null);
+
+        $this->contactStatusPayload->expects($this->once())
+            ->method('build')
+            ->willReturn(['type' => 'contact_status_ping']);
+
+        $this->transportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn(json_encode([
+                'status' => 'pong',
+                'chainValid' => true,
+                'processorsRunning' => 3,
+                'processorsTotal' => 3
+            ]));
+
+        $onlineStatusSet = null;
+        $this->contactRepository->expects($this->atLeastOnce())
+            ->method('updateContactFields')
+            ->willReturnCallback(function ($pubkey, $fields) use (&$onlineStatusSet) {
+                if (isset($fields['online_status'])) {
+                    $onlineStatusSet = $fields['online_status'];
+                }
+                return true;
+            });
+
+        $processor = $this->createProcessorWithMockedDependencies();
+
+        $this->invokeProtectedMethod($processor, 'pingContact', [$contact]);
+
+        $this->assertEquals(Constants::CONTACT_ONLINE_STATUS_ONLINE, $onlineStatusSet,
+            'Contact should be marked as online when all processors running');
+    }
+
+    /**
+     * Test pingContact marks contact as online when pong has no processor fields (backward compatible)
+     */
+    public function testPingContactMarksContactOnlineWhenNoProcessorFields(): void
+    {
+        $contact = [
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->transactionRepository->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(null);
+
+        $this->contactStatusPayload->expects($this->once())
+            ->method('build')
+            ->willReturn(['type' => 'contact_status_ping']);
+
+        // Older node: no processorsRunning/processorsTotal in response
+        $this->transportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn(json_encode([
+                'status' => 'pong',
+                'chainValid' => true
+            ]));
+
+        $onlineStatusSet = null;
+        $this->contactRepository->expects($this->atLeastOnce())
+            ->method('updateContactFields')
+            ->willReturnCallback(function ($pubkey, $fields) use (&$onlineStatusSet) {
+                if (isset($fields['online_status'])) {
+                    $onlineStatusSet = $fields['online_status'];
+                }
+                return true;
+            });
+
+        $processor = $this->createProcessorWithMockedDependencies();
+
+        $this->invokeProtectedMethod($processor, 'pingContact', [$contact]);
+
+        $this->assertEquals(Constants::CONTACT_ONLINE_STATUS_ONLINE, $onlineStatusSet,
+            'Contact should be marked online when pong lacks processor fields (backward compatible)');
+    }
+
+    // =========================================================================
     // Chain Validation Tests
     // =========================================================================
 
