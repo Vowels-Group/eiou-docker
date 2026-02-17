@@ -52,6 +52,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
 }
 
 .header h1 {
@@ -74,6 +76,7 @@ body {
     display: inline-block;
     flex-shrink: 0;
     white-space: nowrap;
+    margin-left: auto;
 }
 
 .logout-btn:hover {
@@ -242,10 +245,22 @@ body {
 
 /* Quick Actions */
 .quick-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    display: flex;
     gap: 1rem;
     margin-bottom: 2rem;
+}
+
+/* Hide descriptions at medium widths to keep cards compact on one line */
+@media (max-width: 992px) {
+    .action-card p {
+        display: none;
+    }
+    .action-card {
+        padding: 1rem 0.5rem;
+    }
+    .action-card h3 {
+        font-size: 0.85rem;
+    }
 }
 
 .action-card {
@@ -258,6 +273,8 @@ body {
     text-decoration: none;
     color: inherit;
     display: block;
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .action-card:hover {
@@ -1120,23 +1137,33 @@ body {
         grid-template-columns: 1fr;
     }
 
+    /* Horizontal slider for quick actions at tablet/small widths */
     .quick-actions {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 0.5rem;
+        overflow-x: auto;
+        gap: 0.75rem;
+        padding-bottom: 0.5rem;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE */
+    }
+
+    .quick-actions::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
     }
 
     .action-card {
-        padding: 0.75rem 0.25rem;
+        flex: 0 0 auto;
+        min-width: 100px;
+        padding: 0.75rem 0.5rem;
     }
 
     .action-card i {
-        font-size: 1.25rem;
-        margin-bottom: 0.25rem;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
     }
 
     .action-card h3 {
-        font-size: 0.7rem;
-        margin-bottom: 0.25rem;
+        font-size: 0.75rem;
+        margin-bottom: 0;
     }
 
     .action-card p {
@@ -1145,10 +1172,6 @@ body {
 
     .form-actions {
         flex-direction: column;
-    }
-
-    .header {
-        align-items: flex-start;
     }
 
     .header h1 {
@@ -1162,6 +1185,23 @@ body {
 
     .contacts-section {
         padding: 1rem;
+    }
+}
+
+/* Smaller cards on very small screens (phones) */
+@media (max-width: 480px) {
+    .action-card {
+        min-width: 80px;
+        padding: 0.6rem 0.4rem;
+    }
+
+    .action-card i {
+        font-size: 1.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .action-card h3 {
+        font-size: 0.65rem;
     }
 }
 
