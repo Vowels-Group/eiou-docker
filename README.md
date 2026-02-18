@@ -187,18 +187,23 @@ Below are all the .sh files listed for easy access, note the two versions of eac
 ### Line Topology (4 nodes)
 <img width="2640" height="192" alt="topological 4 - overview (alice, bob, carol, daniel)" src="https://github.com/user-attachments/assets/a5da5519-7c22-4591-89f1-e27d699c576b" />
 
-On the internal Docker network, each node's address is `http://<container-name>` (e.g., `http://alice`). These addresses are set automatically by `QUICKSTART`.
+The `eiou add` command syntax is: `eiou add <address> <name> <fee> <credit> <currency>` where:
+- `<address>` — the target node's URL (`http://`, `https://`, or `.onion` address). On the internal Docker network this is `http://<container-name>` (e.g., `http://bob`). Use `eiou info` on the target node to find its address.
+- `<name>` — a display name for the contact
+- `<fee>` — transaction fee percentage (e.g., `0.1` for 0.1%)
+- `<credit>` — credit limit extended to this contact
+- `<currency>` — currency code (e.g., `USD`)
 
 ```bash
 # alice adds bob and bob adds alice
-docker-compose -f docker-compose-4line.yml exec alice eiou add http://bob bob 0.1 1000 USD
-docker-compose -f docker-compose-4line.yml exec bob eiou add http://alice alice 0.1 1000 USD
+docker-compose -f docker-compose-4line.yml exec alice eiou add <address> bob <fee> <credit> <currency>
+docker-compose -f docker-compose-4line.yml exec bob eiou add <address> alice <fee> <credit> <currency>
 # bob adds carol and carol adds bob
-docker-compose -f docker-compose-4line.yml exec bob eiou add http://carol carol 0.1 1000 USD
-docker-compose -f docker-compose-4line.yml exec carol eiou add http://bob bob 0.1 1000 USD
+docker-compose -f docker-compose-4line.yml exec bob eiou add <address> carol <fee> <credit> <currency>
+docker-compose -f docker-compose-4line.yml exec carol eiou add <address> bob <fee> <credit> <currency>
 # carol adds daniel and daniel adds carol
-docker-compose -f docker-compose-4line.yml exec carol eiou add http://daniel daniel 0.1 1000 USD
-docker-compose -f docker-compose-4line.yml exec daniel eiou add http://carol carol 0.1 1000 USD
+docker-compose -f docker-compose-4line.yml exec carol eiou add <address> daniel <fee> <credit> <currency>
+docker-compose -f docker-compose-4line.yml exec daniel eiou add <address> carol <fee> <credit> <currency>
 ```
 
 ### Line Topology (10 nodes)
@@ -206,32 +211,32 @@ docker-compose -f docker-compose-4line.yml exec daniel eiou add http://carol car
 
 ```bash
 # node-a adds node-b and node-b adds node-a
-docker-compose -f docker-compose-10line.yml exec node-a eiou add http://node-b node-b 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-b eiou add http://node-a node-a 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-a eiou add <address> node-b <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-b eiou add <address> node-a <fee> <credit> <currency>
 # node-b adds node-c and node-c adds node-b
-docker-compose -f docker-compose-10line.yml exec node-b eiou add http://node-c node-c 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-c eiou add http://node-b node-b 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-b eiou add <address> node-c <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-c eiou add <address> node-b <fee> <credit> <currency>
 # node-c adds node-d and node-d adds node-c
-docker-compose -f docker-compose-10line.yml exec node-c eiou add http://node-d node-d 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-d eiou add http://node-c node-c 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-c eiou add <address> node-d <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-d eiou add <address> node-c <fee> <credit> <currency>
 # node-d adds node-e and node-e adds node-d
-docker-compose -f docker-compose-10line.yml exec node-d eiou add http://node-e node-e 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-e eiou add http://node-d node-d 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-d eiou add <address> node-e <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-e eiou add <address> node-d <fee> <credit> <currency>
 # node-e adds node-f and node-f adds node-e
-docker-compose -f docker-compose-10line.yml exec node-e eiou add http://node-f node-f 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-f eiou add http://node-e node-e 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-e eiou add <address> node-f <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-f eiou add <address> node-e <fee> <credit> <currency>
 # node-f adds node-g and node-g adds node-f
-docker-compose -f docker-compose-10line.yml exec node-f eiou add http://node-g node-g 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-g eiou add http://node-f node-f 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-f eiou add <address> node-g <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-g eiou add <address> node-f <fee> <credit> <currency>
 # node-g adds node-h and node-h adds node-g
-docker-compose -f docker-compose-10line.yml exec node-g eiou add http://node-h node-h 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-h eiou add http://node-g node-g 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-g eiou add <address> node-h <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-h eiou add <address> node-g <fee> <credit> <currency>
 # node-h adds node-i and node-i adds node-h
-docker-compose -f docker-compose-10line.yml exec node-h eiou add http://node-i node-i 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-i eiou add http://node-h node-h 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-h eiou add <address> node-i <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-i eiou add <address> node-h <fee> <credit> <currency>
 # node-i adds node-j and node-j adds node-i
-docker-compose -f docker-compose-10line.yml exec node-i eiou add http://node-j node-j 0.1 1000 USD
-docker-compose -f docker-compose-10line.yml exec node-j eiou add http://node-i node-i 0.1 1000 USD
+docker-compose -f docker-compose-10line.yml exec node-i eiou add <address> node-j <fee> <credit> <currency>
+docker-compose -f docker-compose-10line.yml exec node-j eiou add <address> node-i <fee> <credit> <currency>
 ```
 
 ### Cluster Topology (13 nodes)
@@ -240,45 +245,45 @@ docker-compose -f docker-compose-10line.yml exec node-j eiou add http://node-i n
 ```bash
 # bottom right branch
 # cluster-a (hub) adds cluster-a1 and cluster-a1 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add http://cluster-a1 cluster-a1 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add http://cluster-a cluster-a 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a1 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a <fee> <credit> <currency>
 # cluster-a1 adds cluster-a11 and cluster-a11 adds cluster-a1
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add http://cluster-a11 cluster-a11 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a11 eiou add http://cluster-a1 cluster-a1 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a11 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a11 eiou add <address> cluster-a1 <fee> <credit> <currency>
 # cluster-a1 adds cluster-a12 and cluster-a12 adds cluster-a1
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add http://cluster-a12 cluster-a12 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a12 eiou add http://cluster-a1 cluster-a1 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a12 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a12 eiou add <address> cluster-a1 <fee> <credit> <currency>
 
 # bottom left branch
 # cluster-a (hub) adds cluster-a2 and cluster-a2 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add http://cluster-a2 cluster-a2 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add http://cluster-a cluster-a 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a2 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a <fee> <credit> <currency>
 # cluster-a2 adds cluster-a21 and cluster-a21 adds cluster-a2
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add http://cluster-a21 cluster-a21 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a21 eiou add http://cluster-a2 cluster-a2 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a21 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a21 eiou add <address> cluster-a2 <fee> <credit> <currency>
 # cluster-a2 adds cluster-a22 and cluster-a22 adds cluster-a2
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add http://cluster-a22 cluster-a22 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a22 eiou add http://cluster-a2 cluster-a2 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a22 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a22 eiou add <address> cluster-a2 <fee> <credit> <currency>
 
 # top left branch
 # cluster-a (hub) adds cluster-a3 and cluster-a3 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add http://cluster-a3 cluster-a3 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add http://cluster-a cluster-a 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a3 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a <fee> <credit> <currency>
 # cluster-a3 adds cluster-a31 and cluster-a31 adds cluster-a3
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add http://cluster-a31 cluster-a31 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a31 eiou add http://cluster-a3 cluster-a3 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a31 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a31 eiou add <address> cluster-a3 <fee> <credit> <currency>
 # cluster-a3 adds cluster-a32 and cluster-a32 adds cluster-a3
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add http://cluster-a32 cluster-a32 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a32 eiou add http://cluster-a3 cluster-a3 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a32 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a32 eiou add <address> cluster-a3 <fee> <credit> <currency>
 
 # top right branch
 # cluster-a (hub) adds cluster-a4 and cluster-a4 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add http://cluster-a4 cluster-a4 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add http://cluster-a cluster-a 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a4 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a <fee> <credit> <currency>
 # cluster-a4 adds cluster-a41 and cluster-a41 adds cluster-a4
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add http://cluster-a41 cluster-a41 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a41 eiou add http://cluster-a4 cluster-a4 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a41 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a41 eiou add <address> cluster-a4 <fee> <credit> <currency>
 # cluster-a4 adds cluster-a42 and cluster-a42 adds cluster-a4
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add http://cluster-a42 cluster-a42 0.1 1000 USD
-docker-compose -f docker-compose-cluster.yml exec cluster-a42 eiou add http://cluster-a4 cluster-a4 0.1 1000 USD
+docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a42 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a42 eiou add <address> cluster-a4 <fee> <credit> <currency>
 ```
