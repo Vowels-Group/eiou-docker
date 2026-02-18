@@ -26,6 +26,9 @@ The project is currently in **ALPHA** status.
 - SSL certificate priority chain updated: External → Let's Encrypt → CA-signed → Self-signed
 - SSL section in `startup.sh` refactored from if/elif chain to sequential flag-based approach for cleaner fallback handling
 
+### Docs
+- Updated `SECURITY.md` to reference Let's Encrypt as the recommended production SSL option
+
 ## 2026-02-17
 
 ### Added
