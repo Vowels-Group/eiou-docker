@@ -15,9 +15,13 @@ Technical architecture documentation for the EIOU Docker node implementation.
 9. [P2P Networking](#p2p-networking) (Fast vs Best-Fee routing, per-hop expiration, multi-path sender tracking)
 10. [Transaction Lifecycle](#transaction-lifecycle)
 11. [Startup Sequence](#startup-sequence)
-12. [Security Model](#security-model)
-13. [Error Handling](#error-handling)
-14. [Related Documentation](#related-documentation)
+12. [Docker Topologies](#docker-topologies)
+13. [GUI Architecture](#gui-architecture)
+14. [CLI Architecture](#cli-architecture)
+15. [Payload Schemas](#payload-schemas)
+16. [Security Model](#security-model)
+17. [Error Handling](#error-handling)
+18. [Related Documentation](#related-documentation)
 
 ---
 
@@ -329,6 +333,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ApiKeyService` | API key management | ApiKeyRepo |
 | `TransactionRecoveryService` | Stuck transaction recovery | TransactionRecoveryRepo |
 | `RateLimiterService` | Request rate limiting | RateLimiterRepo |
+| `DatabaseLockingService` | Distributed locking via MariaDB `GET_LOCK()` / `RELEASE_LOCK()` | PDO |
 | `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo |
 | `DebugService` | Debug logging and diagnostics | DebugRepo |
 
@@ -341,6 +346,7 @@ The `UtilityServiceContainer` provides helper services for common operations:
 | `TimeUtilityService` | Timestamp formatting, timezone handling |
 | `CurrencyUtilityService` | Amount conversion, formatting |
 | `ValidationUtilityService` | Input validation, sanitization |
+| `GeneralUtilityService` | Miscellaneous helpers shared across services (ServiceContainer + UserContext access) |
 | `TransportUtilityService` | HTTP/HTTPS/Tor message transport; parallel batch sends via `curl_multi` with per-protocol concurrency limits |
 
 ### Circular Dependency Resolution
@@ -461,6 +467,16 @@ events instead of direct dependencies.
 | `BALANCE_SYNCED` | After contact balance sync |
 | `CONTACT_SYNCED` | After contact sync completes |
 | `CHAIN_CONFLICT_RESOLVED` | When chain conflict is resolved |
+
+**ChainDropEvents Constants:**
+
+| Event | When Dispatched |
+|-------|-----------------|
+| `CHAIN_DROP_PROPOSED` | When a chain drop is proposed to a contact |
+| `CHAIN_DROP_ACCEPTED` | When a chain drop proposal is accepted |
+| `CHAIN_DROP_REJECTED` | When a chain drop proposal is rejected |
+| `CHAIN_DROP_EXECUTED` | When a chain drop has been fully executed locally |
+| `TRANSACTION_RECOVERED_FROM_BACKUP` | When a missing transaction is recovered from a database backup instead of requiring a chain drop |
 
 **Usage Example:**
 
@@ -806,7 +822,9 @@ protected function processMessages(): int {
 
 ### P2pMessageProcessor
 
-Processes queued P2P routing messages with fast polling for network propagation.
+The P2P processor uses a coordinator+worker architecture for parallel P2P broadcast.
+The coordinator (`P2pMessageProcessor`) polls for queued P2P messages and spawns
+independent worker processes (`P2pWorker.php`) for each one via `proc_open`.
 
 | Setting | Value |
 |---------|-------|
@@ -816,22 +834,64 @@ Processes queued P2P routing messages with fast polling for network propagation.
 | Log Interval | 60 seconds |
 | Lockfile | `/tmp/p2pmessages_lock.pid` |
 
-**Processing Loop:**
-```php
-protected function processMessages(): int {
-    return $this->p2pService->processQueuedP2pMessages();
-}
+**Coordinator+Worker Model:**
+
+```
+P2pMessageProcessor (Coordinator)
+    |
+    +-- Poll for queued P2P messages
+    +-- For each queued P2P:
+    |     +-- Check per-transport worker limit (HTTP: 50, Tor: 5)
+    |     +-- Spawn P2pWorker.php via proc_open
+    |     +-- Track worker by transport type independently
+    |
+    +-- Reap finished workers, log results
+    +-- Recover stuck 'sending' P2Ps with dead worker PIDs (every 60s)
 ```
 
-**Mega-Batch Processing:**
+**Worker Lifecycle:**
 
-`processQueuedP2pMessages()` uses a 3-phase mega-batch approach to send all queued
-P2P messages in a single `curl_multi` call rather than one-at-a-time:
+Each `P2pWorker.php` process handles one P2P message end-to-end:
 
-1. **Phase 1 — Collect:** Iterates all queued P2Ps (up to `P2P_QUEUE_BATCH_SIZE`),
-   builds per-contact payloads, and accumulates them into a flat `$megaBatchSends` array.
-   A coalesce delay (`P2P_QUEUE_COALESCE_MS`, default 2000ms) groups P2Ps that arrive
-   within a short window into a single batch.
+1. **Claim:** Atomically transitions P2P from `queued` → `sending` via
+   `P2pRepository::claimQueuedP2p()`, recording `sending_started_at` and
+   `sending_worker_pid` for crash recovery
+2. **Broadcast:** Calls `P2pService::processSingleP2p()` which broadcasts to all
+   accepted contacts via its own `curl_multi` session
+3. **Complete:** Transitions P2P from `sending` → `sent`
+
+**Worker Pool Configuration:**
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| `P2P_MAX_WORKERS` (HTTP) | 50 | Per-transport concurrent workers |
+| `P2P_MAX_WORKERS` (HTTPS) | 50 | Per-transport concurrent workers |
+| `P2P_MAX_WORKERS` (Tor) | 5 | Lower limit to prevent SOCKS5 circuit overload |
+| `P2P_SENDING_TIMEOUT_SECONDS` | 300 | Crash recovery threshold for stuck workers |
+| Override | `EIOU_P2P_MAX_WORKERS` env var | Per-deployment tuning |
+
+**Crash Recovery:**
+
+The coordinator runs a recovery sweep every 60 seconds, finding P2P messages stuck
+in `sending` status beyond `P2P_SENDING_TIMEOUT_SECONDS`. If the worker PID is no
+longer alive, `P2pRepository::recoverStuckP2p()` resets the P2P to `queued` for
+re-processing.
+
+**P2P Status Flow:**
+
+```
+queued → sending → sent → found → completed
+                      ↘ expired / cancelled
+```
+
+**Mega-Batch Processing (within each worker):**
+
+Each worker's `processSingleP2p()` uses a 3-phase mega-batch approach to broadcast
+to all contacts in a single `curl_multi` call:
+
+1. **Phase 1 — Collect:** Builds per-contact payloads and accumulates them into a
+   flat `$megaBatchSends` array. A coalesce delay (`P2P_QUEUE_COALESCE_MS`, 2000ms)
+   groups concurrent P2Ps arriving within a short window.
 2. **Phase 2 — Fire:** Calls `TransportUtilityService::sendMultiBatch($megaBatchSends)`
    which executes all sends in parallel via `curl_multi` with a sliding-window concurrency
    limit (see [Transport Concurrency Control](#transport-concurrency-control)).
@@ -872,7 +932,7 @@ chains. Operates in 5-minute cycles.
 **Features:**
 
 - Pings one contact per iteration to spread load
-- Updates contact online status (online/offline/unknown)
+- Updates contact online status (online/partial/offline/unknown)
 - Validates transaction chain integrity (prev_txid matching)
 - Triggers sync if chains don't match
 - Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
@@ -916,11 +976,24 @@ The watchdog runs every 30 seconds and monitors processor health:
         +-- Check ContactStatus PID alive? (if enabled)
         |       |-- No: Restart (if < 10 restarts, > 60s cooldown)
         |
+        +-- Tor restart signal file? (/tmp/tor-restart-requested)
+        |       |-- Yes: Immediate Tor restart (within ~30s, bypasses 5-min cycle)
+        |       |-- Created by TransportUtilityService on SOCKS5 proxy failure
+        |
         +-- Tor self-health check (every 5 minutes)
                 |-- Curl own .onion via SOCKS5 proxy
                 |-- Failure: Fix HS dir permissions, restart Tor
                 |-- (max 5 restarts, 300s cooldown, resets on recovery)
 ```
+
+**Tor SOCKS5 Immediate Recovery:**
+
+When `TransportUtilityService::send()` encounters a SOCKS5 proxy connection failure
+during message delivery, it creates the signal file `/tmp/tor-restart-requested`. The
+watchdog checks for this file every 30 seconds (its normal cycle) and triggers an
+immediate Tor restart — reducing recovery time from up to 5 minutes (periodic health
+check) to ~30 seconds. The Tor restart counter resets after a 5-minute cooldown to
+prevent permanent Tor unavailability when recovery requires more than 5 restart attempts.
 
 **Shutdown Flag Lifecycle:**
 
@@ -972,7 +1045,9 @@ Each node maintains a MariaDB database with these primary tables:
 | `rate_limits` | Rate limiting state |
 | `chain_drop_proposals` | Mutual chain drop agreement tracking |
 | `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
+| `p2p_relayed_contacts` | Contacts that returned `already_relayed` during P2P broadcast (used by two-phase relay selection in best-fee mode) |
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
+| `contact_credit` | Per-contact available credit (pubkey_hash, available_credit, currency) updated on each successful ping |
 
 ### Repository Pattern
 
@@ -992,12 +1067,17 @@ AbstractRepository
     |       +-- TransactionContactRepository (contact-based queries)
     +-- P2pRepository
     +-- P2pSenderRepository
+    +-- P2pRelayedContactRepository
     +-- Rp2pRepository
     +-- Rp2pCandidateRepository
+    +-- ContactCreditRepository
     +-- MessageDeliveryRepository
     +-- DeadLetterQueueRepository
+    +-- DeliveryMetricsRepository
     +-- HeldTransactionRepository
+    +-- ChainDropProposalRepository
     +-- ApiKeyRepository
+    +-- DebugRepository
     +-- RateLimiterRepository
 ```
 
@@ -1099,6 +1179,21 @@ $row = $this->executeSelectOne($query, $params);
 ```
 
 This trait centralizes common query patterns to reduce code duplication across repositories.
+
+### Utils Infrastructure
+
+The `/src/utils/` directory provides cross-cutting infrastructure used throughout the
+application:
+
+| Utility | Purpose |
+|---------|---------|
+| `Logger` | File-based logging with severity levels, log rotation, and context tagging |
+| `SecureLogger` | Security-aware logger that redacts sensitive data (keys, mnemonics, auth codes) from log output |
+| `AdaptivePoller` | Dynamic polling interval adjustment based on workload — ramps down to min interval when busy, ramps up to max interval when idle; used by all background processors |
+| `AddressValidator` | Validates and normalizes node addresses (HTTP, HTTPS, Tor `.onion` formats) |
+| `InputValidator` | General-purpose input sanitization and validation for CLI and API inputs |
+| `Security` | Cryptographic helpers — message signing, signature verification, hash generation using secp256k1 ECDSA |
+| `SecureSeedphraseDisplay` | Secure terminal output for seed phrases — clears screen, displays temporarily, handles clipboard-safe formatting |
 
 ---
 
@@ -1797,9 +1892,12 @@ Contacts progress through states managed by the `contacts` table:
 | `blocked` | Contact blocked; incoming messages rejected |
 
 **Online Status:** Accepted contacts also have an `online_status` field updated by
-the `ContactStatusProcessor`: `online`, `offline`, or `unknown` (default). The processor
-pings one contact per cycle, validates chain integrity, and triggers sync if chains
-don't match.
+the `ContactStatusProcessor`: `online`, `partial`, `offline`, or `unknown` (default).
+The `partial` status indicates the node is reachable but has degraded message processors
+(some of P2P, Transaction, or Cleanup processors are not running). The pong response
+includes `processorsRunning` and `processorsTotal` fields for remote nodes to determine
+partial vs online status. The processor pings one contact per cycle, validates chain
+integrity, and triggers sync if chains don't match.
 
 **Contact Request Flow:**
 
@@ -1848,8 +1946,9 @@ review rather than being silently dropped.
 2. Register signal handlers (SIGTERM, SIGINT, SIGHUP)
          |
          v
-3. Generate or install SSL certificates
+3. Generate or install SSL certificates (priority chain)
    - Check /ssl-certs/ for external certs
+   - Check for Let's Encrypt (LETSENCRYPT_EMAIL env var → certbot)
    - Check /ssl-ca/ for CA-signed generation
    - Fall back to self-signed
          |
@@ -1924,6 +2023,219 @@ order causes runtime crashes.
 
 ---
 
+## Docker Topologies
+
+Four docker-compose files provide different network topologies for development and testing:
+
+| File | Nodes | Use Case |
+|------|-------|----------|
+| `docker-compose-single.yml` | 1 (`eiou-single`) | Basic development, startup validation |
+| `docker-compose-4line.yml` | 4 (`alice`, `bob`, `carol`, `daniel`) | Linear P2P routing tests (~1.1GB) |
+| `docker-compose-10line.yml` | 10 (`node-a` through `node-j`) | Extended routing, latency testing (~2.8GB) |
+| `docker-compose-cluster.yml` | 13 (`cluster-a0` hub + spokes) | Hub-and-spoke mesh topology |
+
+### Single Node
+
+```
++-------------+
+| eiou-single |
++-------------+
+```
+
+Used for startup validation, wallet generation testing, and single-node API/CLI
+development. Minimal resource footprint.
+
+### 4-Node Linear
+
+```
+alice <---> bob <---> carol <---> daniel
+```
+
+Each node is a direct contact of its neighbour. Tests P2P routing across 1-3 hops,
+transaction chain synchronization, and contact status monitoring.
+
+### 10-Node Linear
+
+```
+node-a <-> node-b <-> node-c <-> ... <-> node-j
+```
+
+Extended linear topology for testing deeper routing paths, per-hop expiration
+cascading in best-fee mode, and network propagation delays.
+
+### Cluster (Hub-and-Spoke Mesh)
+
+```
+  a31 a32     a41 a42
+    \  /       \  /
+     a3         a4
+       \       /
+         a0
+       /       \
+     a2         a1
+    /  \       /  \
+  a22 a21   a12  a11
+```
+
+Hub node (`cluster-a0`) connects to spoke nodes (`cluster-a1` through `cluster-a4`),
+each with their own leaf nodes. Tests multi-path routing, two-phase relay selection
+deadlock prevention, and multi-path sender tracking.
+
+---
+
+## GUI Architecture
+
+The Web GUI is a server-rendered PHP application served on the same port as the REST
+API (8080). It uses an MVC-like structure with controllers, helpers, and HTML templates.
+
+### GUI Component Structure
+
+```
+/src/gui/
+├── controllers/              # POST request handlers
+│   ├── ContactController     # Contact add, accept, block, delete, settings
+│   ├── TransactionController # Send eIOU, transaction operations
+│   └── SettingsController    # Node settings management
+├── helpers/                  # View data preparation
+│   ├── ContactDataBuilder    # Builds contact data arrays for templates
+│   ├── MessageHelper         # Flash message formatting and display
+│   └── ViewHelper            # Common view utilities
+├── functions/
+│   └── Functions             # Shared template functions
+├── includes/
+│   └── Session               # Secure session management (auth code-based)
+├── layout/
+│   ├── authenticationForm    # Login page (auth code entry)
+│   ├── wallet.html           # Main wallet layout (authenticated)
+│   └── walletSubParts/       # Wallet page sections
+│       ├── header             # Wallet title, logout button
+│       ├── banner             # System status banners
+│       ├── quickActions        # Action buttons (Send, Add Contact, etc.)
+│       ├── walletInformation   # Balance, earnings, available credit cards
+│       ├── contactSection      # Contact cards with scroll navigation
+│       ├── contactForm         # Contact modal (add/accept/view)
+│       ├── eiouForm            # Send eIOU form with P2P options
+│       ├── transactionHistory  # Recent transactions list
+│       ├── settingsSection     # Node settings panel
+│       ├── notifications       # Toast notification container
+│       └── floatingButtons     # Refresh and back-to-top buttons
+└── assets/
+    ├── css/                  # Stylesheets
+    ├── js/                   # JavaScript (vanilla, Tor-compatible)
+    └── fontawesome/          # Icon library
+```
+
+### Session Management
+
+Authentication uses the node's auth code (derived from the wallet seed). The `Session`
+class implements secure session handling:
+
+- Session cookies: `httponly`, `samesite=Strict`, `secure` (when HTTPS)
+- Auth code comparison with timing-safe equality check
+- Session regeneration on login to prevent fixation attacks
+
+### Tor Compatibility
+
+All GUI JavaScript uses Tor-compatible patterns:
+- `var` instead of `let`/`const` (older Tor Browser versions)
+- `className` instead of `classList`
+- Vendor-prefixed flex properties
+- No external resource loading (all assets bundled)
+
+---
+
+## CLI Architecture
+
+The CLI is the primary interface for node management, accessible via the `eiou` command
+inside the Docker container.
+
+### CLI Component Structure
+
+```
+/src/cli/
+├── CliOutputManager     # Output format controller (text or JSON mode)
+└── CliJsonResponse      # Standardized JSON response formatter (RFC 9457-inspired)
+
+/src/services/
+└── CliService           # Command implementations (88KB, largest service)
+```
+
+### Output Modes
+
+The `CliOutputManager` singleton supports two output modes:
+
+| Mode | Flag | Output |
+|------|------|--------|
+| Text (default) | — | Human-readable formatted output with colours |
+| JSON | `--json` | Structured JSON with metadata, timing, error codes |
+
+**JSON Response Format** (based on kubectl, docker CLI, gh CLI patterns):
+
+```json
+{
+  "status": "success",
+  "command": "send",
+  "data": { ... },
+  "metadata": {
+    "version": "1.0.0",
+    "nodeId": "alice",
+    "executionTime": "0.234s"
+  }
+}
+```
+
+### Command Dispatch
+
+The `Eiou.php` entry point handles command routing:
+
+```
+eiou <command> [args...] [--json] [--help]
+    |
+    +-- Parse arguments, detect --json flag
+    +-- Initialize Application singleton
+    +-- Route to CliService method
+    +-- Catch ServiceExceptions → formatted output
+```
+
+---
+
+## Payload Schemas
+
+The `/src/schemas/payloads/` directory defines structured payload builders for all
+message types exchanged between nodes. Each payload class extends `BasePayload` and
+provides type-safe construction of the EIOU wire protocol messages.
+
+### Payload Hierarchy
+
+```
+BasePayload (abstract)
+    |
+    +-- TransactionPayload    # Standard send transactions
+    +-- ContactPayload        # Contact request/acceptance messages
+    +-- ContactStatusPayload  # Ping/pong status messages
+    +-- P2pPayload            # P2P routing request messages
+    +-- Rp2pPayload           # Return P2P response messages
+    +-- MessagePayload        # General inter-node messages (sync, chain drop)
+    +-- UtilPayload           # Utility messages (debug, test)
+```
+
+### BasePayload
+
+The abstract `BasePayload` provides common functionality:
+
+- Access to `UserContext` for sender identity (public key, addresses)
+- Access to `UtilityServiceContainer` for currency formatting, time formatting,
+  validation, and transport services
+- Envelope construction with sender signature (secp256k1 ECDSA)
+
+### OutputSchema
+
+The `OutputSchema` class (`/src/schemas/OutputSchema.php`) defines standardized
+response formats for API and CLI output, ensuring consistent field naming and
+structure across all endpoints.
+
+---
+
 ## Security Model
 
 ### Key Management
@@ -1965,6 +2277,14 @@ TorKeyDerivation
 +-------------------+
 ```
 
+### Security Components
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation |
+| `KeyEncryption` | `/src/security/KeyEncryption.php` | AES-256-GCM encryption/decryption for private keys and auth codes |
+| `TorKeyDerivation` | `/src/security/TorKeyDerivation.php` | Derives Ed25519 keypairs from secp256k1 keys for Tor v3 hidden service addresses |
+
 ### Encrypted Storage
 
 | Item | Encryption | File |
@@ -1980,6 +2300,25 @@ TorKeyDerivation
 | HTTPS | TLS 1.2+ with auto-generated or custom certificates |
 | Tor | Onion routing for IP anonymization |
 | Message Signing | secp256k1 ECDSA signatures on all messages |
+
+**SSL Certificate Priority Chain:**
+
+| Priority | Source | Configuration |
+|----------|--------|---------------|
+| 1 | External certificates | Mount to `/ssl-certs/` volume |
+| 2 | Let's Encrypt (certbot) | `LETSENCRYPT_EMAIL` env var; persistent `/etc/letsencrypt` volume |
+| 3 | CA-signed generation | Mount CA key/cert to `/ssl-ca/` volume |
+| 4 | Self-signed (fallback) | Auto-generated on startup |
+
+**Let's Encrypt Integration:**
+
+- In-container certbot for single-node deployments
+- Host-level scripts for multi-node or wildcard certificates:
+  - `scripts/create-ssl-letsencrypt.sh` — obtain certs (HTTP-01 or DNS-01 wildcard)
+  - `scripts/renew-ssl-letsencrypt.sh` — automated renewal for cron
+- Automatic renewal cron inside containers using Let's Encrypt
+- Wildcard certs shared across multiple nodes via `/ssl-certs/` volume mount
+- Environment variables: `LETSENCRYPT_EMAIL`, `LETSENCRYPT_DOMAIN`, `LETSENCRYPT_STAGING`
 
 ### API Authentication
 
@@ -2268,8 +2607,20 @@ public function testSearchContactsWithInvalidName(): void
 | Repositories | `/etc/eiou/src/database/` |
 | Repository Traits | `/etc/eiou/src/database/traits/` |
 | Services | `/etc/eiou/src/services/` |
+| Service Proxies | `/etc/eiou/src/services/proxies/` |
 | Formatters | `/etc/eiou/src/formatters/` |
-| Utilities | `/etc/eiou/src/services/utilities/` |
+| Utility Services | `/etc/eiou/src/services/utilities/` |
+| Utils (Logging, Validation) | `/etc/eiou/src/utils/` |
+| Security (BIP39, Encryption) | `/etc/eiou/src/security/` |
+| Contracts (Interfaces) | `/etc/eiou/src/contracts/` |
+| Events | `/etc/eiou/src/events/` |
+| Payload Schemas | `/etc/eiou/src/schemas/payloads/` |
+| CLI | `/etc/eiou/src/cli/` |
+| GUI Controllers | `/etc/eiou/src/gui/controllers/` |
+| GUI Templates | `/etc/eiou/src/gui/layout/` |
+| GUI Helpers | `/etc/eiou/src/gui/helpers/` |
+| Startup Checks | `/etc/eiou/src/startup/` |
+| API Controller | `/etc/eiou/src/api/ApiController.php` |
 
 ---
 
