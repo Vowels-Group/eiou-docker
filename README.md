@@ -50,6 +50,8 @@ See [Testing Guide](docs/TESTING.md) for detailed documentation.
 
 ## Quick Start
 
+Each container uses the `QUICKSTART` environment variable (set in the compose file) to automatically generate a wallet, configure its HTTP/HTTPS address, generate SSL certificates, start Tor, and initialize all services on first boot. No manual setup is needed — containers are ready to use once healthy.
+
 ### Single Node Setup
 ```bash
 # Run a single EIOU node
@@ -100,15 +102,21 @@ docker-compose -f <config-file>.yml logs -f
 ```
 
 ### Execute Commands in Containers
+
+With `QUICKSTART` set in docker-compose, each container automatically generates a wallet and configures its address on startup. No manual `eiou generate` is needed.
+
 ```bash
-# Generate Tor address for a specific node
-docker-compose -f docker-compose-4line.yml exec alice eiou generate torAddressOnly
+# View a node's address and wallet info
+docker-compose -f docker-compose-4line.yml exec alice eiou info
 
-# Generate HTTP/HTTPS address for a specific node (setting hostname automatically derives hostname_secure)
-docker-compose -f docker-compose-4line.yml exec alice eiou generate http://alice
+# View detailed info including balances
+docker-compose -f docker-compose-4line.yml exec alice eiou info detail
 
-# Add a contact to a node
-docker-compose -f docker-compose-4line.yml exec alice eiou add <address> <name> <fee> <credit> <currency>
+# Add a contact to a node (address is the target node's HTTP/HTTPS/Tor URL)
+docker-compose -f docker-compose-4line.yml exec alice eiou add http://bob bob 0.1 1000 USD
+
+# Send a transaction
+docker-compose -f docker-compose-4line.yml exec alice eiou send bob 10 USD
 ```
 
 ### Stop and Cleanup
@@ -179,6 +187,13 @@ Below are all the .sh files listed for easy access, note the two versions of eac
 ### Line Topology (4 nodes)
 <img width="2640" height="192" alt="topological 4 - overview (alice, bob, carol, daniel)" src="https://github.com/user-attachments/assets/a5da5519-7c22-4591-89f1-e27d699c576b" />
 
+The `eiou add` command syntax is: `eiou add <address> <name> <fee> <credit> <currency>` where:
+- `<address>` — the target node's URL (`http://`, `https://`, or `.onion` address). On the internal Docker network this is `http://<container-name>` (e.g., `http://bob`). Use `eiou info` on the target node to find its address.
+- `<name>` — a display name for the contact
+- `<fee>` — transaction fee percentage (e.g., `0.1` for 0.1%)
+- `<credit>` — credit limit extended to this contact
+- `<currency>` — currency code (e.g., `USD`)
+
 ```bash
 # alice adds bob and bob adds alice
 docker-compose -f docker-compose-4line.yml exec alice eiou add <address> bob <fee> <credit> <currency>
@@ -229,29 +244,29 @@ docker-compose -f docker-compose-10line.yml exec node-j eiou add <address> node-
 
 ```bash
 # bottom right branch
-# cluster-a adds cluster-a1 and cluster-a1 adds cluster-a0
+# cluster-a0 (hub) adds cluster-a1 and cluster-a1 adds cluster-a0
 docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a1 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a1 adds cluster-a11 and cluster-a11 adds cluster-a1
 docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a11 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a11 eiou add <address> cluster-a1 <fee> <credit> <currency>
-# cluster-a1 adds cluster-a12 and cluster-a12 adds node-a1
+# cluster-a1 adds cluster-a12 and cluster-a12 adds cluster-a1
 docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a12 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a12 eiou add <address> cluster-a1 <fee> <credit> <currency>
 
 # bottom left branch
-# cluster-a adds cluster-a2 and cluster-a2 adds cluster-a0
+# cluster-a0 (hub) adds cluster-a2 and cluster-a2 adds cluster-a0
 docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a2 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a2 adds cluster-a21 and cluster-a21 adds cluster-a2
 docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a21 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a21 eiou add <address> cluster-a2 <fee> <credit> <currency>
-# cluster-a2 adds cluster-a22 and cluster-a22 adds cluster-a1
+# cluster-a2 adds cluster-a22 and cluster-a22 adds cluster-a2
 docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a22 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a22 eiou add <address> cluster-a2 <fee> <credit> <currency>
 
 # top left branch
-# cluster-a adds cluster-a3 and cluster-a3 adds cluster-a0
+# cluster-a0 (hub) adds cluster-a3 and cluster-a3 adds cluster-a0
 docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a3 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a3 adds cluster-a31 and cluster-a31 adds cluster-a3
@@ -262,7 +277,7 @@ docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> 
 docker-compose -f docker-compose-cluster.yml exec cluster-a32 eiou add <address> cluster-a3 <fee> <credit> <currency>
 
 # top right branch
-# cluster-a adds cluster-a4 and cluster-a4 adds cluster-a0
+# cluster-a0 (hub) adds cluster-a4 and cluster-a4 adds cluster-a0
 docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a4 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a4 adds cluster-a41 and cluster-a41 adds cluster-a4

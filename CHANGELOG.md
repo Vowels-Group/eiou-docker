@@ -28,6 +28,8 @@ The project is currently in **ALPHA** status.
 
 ### Docs
 - Updated `SECURITY.md` to reference Let's Encrypt as the recommended production SSL option
+- Updated `README.md`: removed obsolete `eiou generate` commands, added QUICKSTART explanation, added `eiou add` parameter reference explaining `<address>`, `<fee>`, `<credit>`, `<currency>` placeholders, fixed incorrect comments in cluster topology
+- Renamed cluster hub node from `cluster-a` to `cluster-a0` in `docker-compose-cluster.yml` to match README and naming convention
 
 ## 2026-02-17
 
