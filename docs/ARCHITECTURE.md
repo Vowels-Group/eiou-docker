@@ -12,7 +12,7 @@ Technical architecture documentation for the EIOU Docker node implementation.
 6. [Circular Dependency Management](#circular-dependency-management)
 7. [Message Processing Pipeline](#message-processing-pipeline)
 8. [Data Layer](#data-layer)
-9. [P2P Networking](#p2p-networking) (Fast vs Best-Fee routing, per-hop expiration, multi-path sender tracking)
+9. [P2P Networking](#p2p-networking)
 10. [Transaction Lifecycle](#transaction-lifecycle)
 11. [Startup Sequence](#startup-sequence)
 12. [Docker Topologies](#docker-topologies)
