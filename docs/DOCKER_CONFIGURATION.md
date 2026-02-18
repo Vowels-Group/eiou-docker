@@ -603,9 +603,48 @@ Required files in the mounted directory:
 ```bash
 # Generate CA once
 ./scripts/create-ssl-ca.sh ./ssl-ca
-
-# Install ca.crt in your browser's trust store
 ```
+
+Then install `ca.crt` in your browser or operating system trust store so that certificates signed by this CA are recognized as trusted:
+
+**Chrome / Edge (Windows):**
+1. Open `chrome://settings/security` (or `edge://settings/privacy`)
+2. Click **Manage certificates** (opens Windows certificate manager)
+3. Go to the **Trusted Root Certification Authorities** tab
+4. Click **Import...** → select `ssl-ca/ca.crt`
+5. Place in **Trusted Root Certification Authorities** → Finish
+6. Restart Chrome
+
+**Chrome / Edge (macOS):**
+1. Double-click `ssl-ca/ca.crt` — this opens Keychain Access
+2. Add to the **System** keychain
+3. Find **EIOU Root CA** in the list, double-click it
+4. Expand **Trust** → set **When using this certificate** to **Always Trust**
+5. Close and enter your password to confirm
+
+**Chrome (Linux):**
+1. Open `chrome://settings/certificates`
+2. Go to the **Authorities** tab
+3. Click **Import** → select `ssl-ca/ca.crt`
+4. Check **Trust this certificate for identifying websites** → OK
+
+**Firefox (all platforms):**
+
+Firefox uses its own certificate store, separate from the OS.
+
+1. Open `about:preferences#privacy`
+2. Scroll to **Certificates** → click **View Certificates...**
+3. Go to the **Authorities** tab
+4. Click **Import...** → select `ssl-ca/ca.crt`
+5. Check **Trust this CA to identify websites** → OK
+
+**Linux system-wide (for curl, wget, etc.):**
+```bash
+sudo cp ssl-ca/ca.crt /usr/local/share/ca-certificates/eiou-ca.crt
+sudo update-ca-certificates
+```
+
+After installing the CA, mount it in docker-compose so containers generate CA-signed certificates:
 
 ```yaml
 services:
