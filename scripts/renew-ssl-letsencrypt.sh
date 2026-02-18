@@ -23,15 +23,15 @@
 #
 # Examples:
 #   # Basic renewal (run from cron):
-#   ./scripts/renew-ssl-letsencrypt.sh -d wallet.eiou.org -o ./letsencrypt-certs
+#   ./scripts/renew-ssl-letsencrypt.sh -d wallet.example.com -o ./letsencrypt-certs
 #
 #   # Renew and gracefully reload all EIOU containers:
-#   ./scripts/renew-ssl-letsencrypt.sh -d wallet.eiou.org -o ./letsencrypt-certs \
+#   ./scripts/renew-ssl-letsencrypt.sh -d wallet.example.com -o ./letsencrypt-certs \
 #       --restart "eiou-*" --graceful
 #
 # Crontab entry (run daily at 3am):
 #   0 3 * * * /path/to/eiou-docker/scripts/renew-ssl-letsencrypt.sh \
-#       -d wallet.eiou.org -o /path/to/letsencrypt-certs >> /var/log/eiou-ssl-renew.log 2>&1
+#       -d wallet.example.com -o /path/to/letsencrypt-certs >> /var/log/eiou-ssl-renew.log 2>&1
 
 set -e
 

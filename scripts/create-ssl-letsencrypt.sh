@@ -27,17 +27,17 @@
 #
 # Examples:
 #   # Single domain (HTTP-01 — port 80 must be reachable):
-#   ./scripts/create-ssl-letsencrypt.sh -d wallet.eiou.org -e admin@eiou.org
+#   ./scripts/create-ssl-letsencrypt.sh -d wallet.example.com -e admin@example.com
 #
 #   # Same domain for 150 nodes on different ports (same command — one cert covers all ports):
-#   ./scripts/create-ssl-letsencrypt.sh -d wallet.eiou.org -e admin@eiou.org
+#   ./scripts/create-ssl-letsencrypt.sh -d wallet.example.com -e admin@example.com
 #
 #   # Wildcard cert for subdomains (DNS-01 — no port needed):
-#   ./scripts/create-ssl-letsencrypt.sh -d eiou.org -e admin@eiou.org \
+#   ./scripts/create-ssl-letsencrypt.sh -d example.com -e admin@example.com \
 #       --wildcard --dns-plugin cloudflare --credentials ./cloudflare.ini
 #
 #   # Test with staging server first (recommended):
-#   ./scripts/create-ssl-letsencrypt.sh -d wallet.eiou.org -e admin@eiou.org --staging
+#   ./scripts/create-ssl-letsencrypt.sh -d wallet.example.com -e admin@example.com --staging
 #
 # After obtaining the certificate, mount in docker-compose:
 #   volumes:
