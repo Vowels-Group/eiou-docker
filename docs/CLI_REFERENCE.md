@@ -259,7 +259,7 @@ eiou add <address> <name> <fee> <credit> <currency>
 | Argument | Type | Description |
 |----------|------|-------------|
 | `address` | required | Contact's node address (HTTP, HTTPS, or Tor) |
-| `name` | required | Display name for the contact |
+| `name` | required | Display name for the contact (use quotes for multi-word names, e.g., `"Jane Doe"`) |
 | `fee` | required | Fee percentage for transactions (e.g., 1.0) |
 | `credit` | required | Credit limit for this contact |
 | `currency` | required | Currency code (e.g., USD) |
@@ -268,6 +268,9 @@ eiou add <address> <name> <fee> <credit> <currency>
 ```bash
 # Add a new contact
 eiou add http://bob:8080 Bob 1.0 100 USD
+
+# Add with a multi-word name
+eiou add http://bob:8080 "Jane Doe" 1.0 100 USD
 
 # Add via Tor address
 eiou add abc123...onion Alice 0.5 500 EUR
@@ -399,9 +402,9 @@ eiou search alice --json
 
 ### ping
 
-Check if a contact is online and verify chain validity.
+Check if a contact is online, verify chain validity, and retrieve available credit.
 
-Ping compares chain heads with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). All gap detection is performed locally — no transaction lists are exchanged over the wire.
+Ping compares chain heads with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). All gap detection is performed locally — no transaction lists are exchanged over the wire. The pong response also includes the available credit the contact extends to you, which is stored locally for use by `viewcontact`, `search`, and `info`.
 
 **Syntax:**
 ```bash
@@ -422,10 +425,15 @@ eiou ping --json Alice
 ```
 
 **Output includes:**
-- Online status (online/offline)
+- Online status (`online`, `partial`, or `offline` — `partial` means the contact responded but not all processors are running)
 - Chain validity status (includes internal gap detection)
 - Response message
-- Available credit exchange (your credit with them is updated in the background)
+
+**Available credit exchange:**
+The pong response includes the available credit the contact has for you (how much you can spend with them), calculated as: what they sent you − what you sent them + their credit limit for you. This value is stored locally in the background and is visible via `viewcontact`, `search`, and `info`. The automatic ContactStatusProcessor also performs this exchange every ~5 minutes.
+
+**Chain mismatch behavior:**
+If the local and remote chain heads don't match, or if internal gaps are detected, ping automatically triggers a sync (including backup recovery on both sides). If the sync fails to resolve the gap, a chain drop is auto-proposed. See [Chain Drop Commands](#chain-drop-commands) for details.
 
 **Wallet restore behavior:**
 When a ping is received by a node that was restored from a seed phrase, the ContactStatusService detects the incoming ping from a previously unknown address, auto-creates a pending contact, and triggers a sync to restore the shared transaction chain. The prior contact then appears as a pending request that the restored wallet owner can review via `eiou pending` and re-accept via `eiou add`. This allows prior contacts to re-establish their relationship with a restored wallet simply by pinging it.
