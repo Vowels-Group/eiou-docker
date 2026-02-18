@@ -429,24 +429,76 @@ The container will:
 | `LETSENCRYPT_DOMAIN` | `$SSL_DOMAIN` | Domain for the certificate (falls back to SSL_DOMAIN → EIOU_HOST → QUICKSTART) |
 | `LETSENCRYPT_STAGING` | `false` | Use staging server for testing (certs won't be browser-trusted) |
 
-#### Multiple Nodes on One Server (Host-Level Wildcard)
+#### Multiple Nodes, Same Domain, Different Ports (Recommended)
 
-For 2–150+ nodes on one server, use a single wildcard certificate shared across all containers. The wildcard cert covers `*.yourdomain.com`, so every node (e.g., `alice.yourdomain.com:1154`, `bob.yourdomain.com:1155`) is trusted.
+SSL certificates validate the **domain name**, not the port. A single standard certificate for `wallet.eiou.org` is valid on every port — `https://wallet.eiou.org:1153`, `https://wallet.eiou.org:1154`, etc. This means 2–150+ nodes on one server can all share one regular (non-wildcard) certificate.
+
+**Step 1: Get a single cert (run once on the host):**
+
+```bash
+# Option A: HTTP-01 (if port 80 is open on the server)
+./scripts/create-ssl-letsencrypt.sh \
+    -d wallet.eiou.org \
+    -e admin@eiou.org
+
+# Option B: DNS-01 (no port 80 needed — uses DNS provider API)
+./scripts/create-ssl-letsencrypt.sh \
+    -d wallet.eiou.org \
+    -e admin@eiou.org \
+    --dns-plugin cloudflare \
+    --credentials ./cloudflare.ini
+```
+
+**Step 2: Mount the cert in all containers:**
+
+```yaml
+services:
+  node-1:
+    ports: ["1153:443"]
+    environment:
+      - QUICKSTART=wallet.eiou.org
+      - EIOU_PORT=1153
+    volumes:
+      - ./letsencrypt-certs:/ssl-certs:ro    # Shared cert
+
+  node-2:
+    ports: ["1154:443"]
+    environment:
+      - QUICKSTART=wallet.eiou.org
+      - EIOU_PORT=1154
+    volumes:
+      - ./letsencrypt-certs:/ssl-certs:ro    # Same cert
+
+  # ... repeat for all nodes (only port number changes)
+```
+
+Every container receives the same certificate file. Each node's Apache listens on 443 internally; Docker maps that to the unique external port. Only one DNS A record is needed — `wallet.eiou.org → <server IP>`.
+
+**Step 3: Set up renewal (host crontab):**
+
+```bash
+# Add to crontab (runs daily, only renews when < 30 days left)
+0 3 * * * /path/to/scripts/renew-ssl-letsencrypt.sh \
+    -d wallet.eiou.org -o /path/to/letsencrypt-certs \
+    --restart "eiou-*" --graceful
+```
+
+#### Multiple Nodes, Different Subdomains (Wildcard)
+
+If each node needs its own subdomain (e.g., `alice.eiou.org:1154`, `bob.eiou.org:1155`), use a wildcard certificate. A wildcard cert for `*.eiou.org` covers any single subdomain.
 
 **Step 1: Get the wildcard cert (run once on the host):**
 
 ```bash
-# Install certbot + DNS plugin on the host
+# Wildcard certs require DNS-01 (no HTTP-01 support)
 sudo apt install certbot python3-certbot-dns-cloudflare
 
-# Create DNS credentials file (Cloudflare example)
 echo "dns_cloudflare_api_token = YOUR_TOKEN" > cloudflare.ini
 chmod 600 cloudflare.ini
 
-# Get wildcard certificate
 ./scripts/create-ssl-letsencrypt.sh \
-    -d nodes.example.com \
-    -e admin@example.com \
+    -d eiou.org \
+    -e admin@eiou.org \
     --wildcard \
     --dns-plugin cloudflare \
     --credentials ./cloudflare.ini
@@ -459,37 +511,37 @@ services:
   alice:
     ports: ["1154:443"]
     environment:
-      - QUICKSTART=alice.nodes.example.com
+      - QUICKSTART=alice.eiou.org
       - EIOU_PORT=1154
     volumes:
-      - ./letsencrypt-certs:/ssl-certs:ro    # Shared cert
+      - ./letsencrypt-certs:/ssl-certs:ro
 
   bob:
     ports: ["1155:443"]
     environment:
-      - QUICKSTART=bob.nodes.example.com
+      - QUICKSTART=bob.eiou.org
       - EIOU_PORT=1155
     volumes:
-      - ./letsencrypt-certs:/ssl-certs:ro    # Same cert
+      - ./letsencrypt-certs:/ssl-certs:ro
 
-  # ... repeat for all nodes
+  # ... each node gets a unique subdomain + port
 ```
 
-**Step 3: Set up renewal (host crontab):**
+Each subdomain needs a DNS A record pointing to the server IP (or use a wildcard DNS record: `*.eiou.org → <server IP>`).
 
-```bash
-# Add to crontab (runs daily, only renews when < 30 days left)
-0 3 * * * /path/to/scripts/renew-ssl-letsencrypt.sh \
-    -d nodes.example.com -o /path/to/letsencrypt-certs \
-    --restart "eiou-*" --graceful
-```
+#### Which approach to choose
+
+| Setup | Cert Type | DNS Records | Best For |
+|-------|-----------|-------------|----------|
+| `wallet.eiou.org:1153`, `:1154`, ... | 1 standard cert | 1 A record | Simplest — all nodes share one domain |
+| `alice.eiou.org`, `bob.eiou.org`, ... | 1 wildcard cert | 1 per subdomain (or wildcard DNS) | Each node has its own identity |
 
 **DNS-01 vs HTTP-01:**
 
 | Challenge | Port Required | Wildcard Support | Best For |
 |-----------|--------------|------------------|----------|
-| HTTP-01 | Port 80 | No | Single node |
-| DNS-01 | None | Yes | Multi-node, no port 80 |
+| HTTP-01 | Port 80 | No | Single domain, port 80 available |
+| DNS-01 | None | Yes | Wildcard certs, no port 80 needed |
 
 DNS-01 uses your DNS provider's API to validate domain ownership — no port access needed. Supported providers include Cloudflare, Route53, DigitalOcean, Google Cloud DNS, and many more.
 
