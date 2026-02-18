@@ -480,14 +480,32 @@ services:
 
 Every container receives the same certificate file. Each node's Apache listens on 443 internally; Docker maps that to the unique external port. Only one DNS A record is needed — `wallet.eiou.org → <server IP>`.
 
-**Step 4: Set up renewal (host crontab):**
+**Step 4: Set up automatic renewal (host crontab):**
+
+Let's Encrypt certificates expire after 90 days. The renewal script checks whether the certificate is due for renewal (within 30 days of expiry) and only contacts Let's Encrypt when needed — so running it daily is safe and won't hit rate limits.
+
+Running the script manually is a one-time check:
 
 ```bash
-# Add to crontab (runs daily, only renews when < 30 days left)
+# One-time manual check (does NOT set up automatic renewal)
+./scripts/renew-ssl-letsencrypt.sh -d wallet.eiou.org -o ./letsencrypt-certs
+```
+
+To automate renewal, add a cron job on the host server:
+
+```bash
+# Open the root crontab
+sudo crontab -e
+
+# Add this line (runs daily at 3:00 AM):
 0 3 * * * /path/to/scripts/renew-ssl-letsencrypt.sh \
     -d wallet.eiou.org -o /path/to/letsencrypt-certs \
-    --restart "eiou-*" --graceful
+    --restart "eiou-*" --graceful >> /var/log/eiou-ssl-renew.log 2>&1
 ```
+
+Replace `/path/to/` with the actual paths on your server. The `--restart` and `--graceful` flags are optional — they tell the script to send a reload signal to running containers after a successful renewal so they pick up the new certificate without a full restart.
+
+Most days the cron job will do nothing. Certbot only renews when the certificate is within 30 days of expiry. When it does renew, the script copies the new files into the output directory and optionally reloads containers.
 
 #### Multiple Nodes, Different Subdomains (Wildcard)
 
