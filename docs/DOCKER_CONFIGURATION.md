@@ -32,6 +32,9 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 | `RESTORE_FILE` | (none) | No | Path to file containing seed phrase |
 | `SSL_DOMAIN` | `$EIOU_HOST` or `$QUICKSTART` | No | Primary domain for SSL certificate CN |
 | `SSL_EXTRA_SANS` | (none) | No | Additional Subject Alternative Names |
+| `LETSENCRYPT_EMAIL` | (none) | No | Email for Let's Encrypt — enables automatic trusted certs |
+| `LETSENCRYPT_DOMAIN` | `$SSL_DOMAIN` | No | Domain for Let's Encrypt certificate |
+| `LETSENCRYPT_STAGING` | `false` | No | Use Let's Encrypt staging server for testing |
 | `EIOU_HS_TIMEOUT` | `60` | No | Tor hidden service wait timeout (seconds) |
 | `EIOU_TOR_TIMEOUT` | `120` | No | Tor connectivity timeout (seconds) |
 | `EIOU_TEST_MODE` | `false` | No | Enable manual message processing |
@@ -381,22 +384,208 @@ services:
 The container selects SSL certificates in this order:
 
 1. **External certificates** (`/ssl-certs/server.crt`) - Mounted externally-obtained certs
-2. **CA-signed** (`/ssl-ca/ca.crt`) - Self-generated, signed by mounted CA
-3. **Self-signed** - Generated automatically using SSL_DOMAIN or QUICKSTART
+2. **Let's Encrypt** (automatic) - When `LETSENCRYPT_EMAIL` is set with a valid FQDN
+3. **CA-signed** (`/ssl-ca/ca.crt`) - Self-generated, signed by mounted CA
+4. **Self-signed** - Generated automatically using SSL_DOMAIN or QUICKSTART
 
-### Let's Encrypt Example
+### Let's Encrypt (Automatic — Recommended for Production)
+
+Let's Encrypt provides free, browser-trusted SSL certificates. Two approaches are supported:
+
+#### Single Node (In-Container Certbot)
+
+For a single node with port 80 reachable from the internet:
 
 ```yaml
 services:
   eiou:
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
-      - QUICKSTART=mynode
-      - SSL_DOMAIN=node.example.com
+      - QUICKSTART=node.example.com
+      - LETSENCRYPT_EMAIL=admin@example.com
+      # - LETSENCRYPT_STAGING=true   # Uncomment to test first (avoids rate limits)
     volumes:
-      - /etc/letsencrypt/live/node.example.com:/ssl-certs:ro
+      - eiou-letsencrypt:/etc/letsencrypt   # Persist certs across restarts
+volumes:
+  eiou-letsencrypt:
 ```
 
-### Local CA Example
+The container will:
+1. Request a certificate from Let's Encrypt on first boot
+2. Install a daily cron job for automatic renewal
+3. Fall back to self-signed if the request fails
+
+**Requirements:**
+- `LETSENCRYPT_EMAIL` must be set (also receives expiry warnings)
+- Domain must be a real FQDN (not IP, localhost, or container name)
+- Port 80 must be reachable from the public internet for the ACME HTTP-01 challenge
+- DNS must resolve the domain to the server's public IP
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LETSENCRYPT_EMAIL` | (none) | Email for Let's Encrypt registration — enables LE when set |
+| `LETSENCRYPT_DOMAIN` | `$SSL_DOMAIN` | Domain for the certificate (falls back to SSL_DOMAIN → EIOU_HOST → QUICKSTART) |
+| `LETSENCRYPT_STAGING` | `false` | Use staging server for testing (certs won't be browser-trusted) |
+
+#### Multiple Nodes, Same Domain, Different Ports (Recommended)
+
+SSL certificates validate the **domain name**, not the port. A single standard certificate for `wallet.example.com` is valid on every port — `https://wallet.example.com:1153`, `https://wallet.example.com:1154`, etc. This means 2–150+ nodes on one server can all share one regular (non-wildcard) certificate.
+
+**Step 1: Install certbot on the host server:**
+
+```bash
+sudo apt install certbot
+```
+
+**Step 2: Get a single cert (run once on the host):**
+
+```bash
+# Option A: HTTP-01 (if port 80 is open on the server)
+./scripts/create-ssl-letsencrypt.sh \
+    -d wallet.example.com \
+    -e admin@example.com
+
+# Option B: DNS-01 (no port 80 needed — uses DNS provider API)
+./scripts/create-ssl-letsencrypt.sh \
+    -d wallet.example.com \
+    -e admin@example.com \
+    --dns-plugin cloudflare \
+    --credentials ./cloudflare.ini
+```
+
+**Step 3: Mount the cert in all containers:**
+
+```yaml
+services:
+  node-1:
+    ports: ["1153:443"]
+    environment:
+      - QUICKSTART=wallet.example.com
+      - EIOU_PORT=1153
+    volumes:
+      - ./letsencrypt-certs:/ssl-certs:ro    # Shared cert
+
+  node-2:
+    ports: ["1154:443"]
+    environment:
+      - QUICKSTART=wallet.example.com
+      - EIOU_PORT=1154
+    volumes:
+      - ./letsencrypt-certs:/ssl-certs:ro    # Same cert
+
+  # ... repeat for all nodes (only port number changes)
+```
+
+Every container receives the same certificate file. Each node's Apache listens on 443 internally; Docker maps that to the unique external port. Only one DNS A record is needed — `wallet.example.com → <server IP>`.
+
+**Step 4: Set up automatic renewal (host crontab):**
+
+Let's Encrypt certificates expire after 90 days. The renewal script checks whether the certificate is due for renewal (within 30 days of expiry) and only contacts Let's Encrypt when needed — so running it daily is safe and won't hit rate limits.
+
+Running the script manually is a one-time check:
+
+```bash
+# One-time manual check (does NOT set up automatic renewal)
+./scripts/renew-ssl-letsencrypt.sh -d wallet.example.com -o ./letsencrypt-certs
+```
+
+To automate renewal, add a cron job on the host server:
+
+```bash
+# Open the root crontab
+sudo crontab -e
+
+# Add this line (runs daily at 3:00 AM):
+0 3 * * * /path/to/scripts/renew-ssl-letsencrypt.sh \
+    -d wallet.example.com -o /path/to/letsencrypt-certs \
+    --restart "eiou-*" --graceful >> /var/log/eiou-ssl-renew.log 2>&1
+```
+
+Replace `/path/to/` with the actual paths on your server. The `--restart` and `--graceful` flags are optional — they tell the script to send a reload signal to running containers after a successful renewal so they pick up the new certificate without a full restart.
+
+Most days the cron job will do nothing. Certbot only renews when the certificate is within 30 days of expiry. When it does renew, the script copies the new files into the output directory and optionally reloads containers.
+
+#### Multiple Nodes, Different Subdomains (Wildcard)
+
+If each node needs its own subdomain (e.g., `alice.example.com:1154`, `bob.example.com:1155`), use a wildcard certificate. A wildcard cert for `*.example.com` covers any single subdomain.
+
+**Step 1: Get the wildcard cert (run once on the host):**
+
+```bash
+# Wildcard certs require DNS-01 (no HTTP-01 support)
+sudo apt install certbot python3-certbot-dns-cloudflare
+
+echo "dns_cloudflare_api_token = YOUR_TOKEN" > cloudflare.ini
+chmod 600 cloudflare.ini
+
+./scripts/create-ssl-letsencrypt.sh \
+    -d example.com \
+    -e admin@example.com \
+    --wildcard \
+    --dns-plugin cloudflare \
+    --credentials ./cloudflare.ini
+```
+
+**Step 2: Mount the cert in all containers:**
+
+```yaml
+services:
+  alice:
+    ports: ["1154:443"]
+    environment:
+      - QUICKSTART=alice.example.com
+      - EIOU_PORT=1154
+    volumes:
+      - ./letsencrypt-certs:/ssl-certs:ro
+
+  bob:
+    ports: ["1155:443"]
+    environment:
+      - QUICKSTART=bob.example.com
+      - EIOU_PORT=1155
+    volumes:
+      - ./letsencrypt-certs:/ssl-certs:ro
+
+  # ... each node gets a unique subdomain + port
+```
+
+Each subdomain needs a DNS A record pointing to the server IP (or use a wildcard DNS record: `*.example.com → <server IP>`).
+
+#### Which approach to choose
+
+| Setup | Cert Type | DNS Records | Best For |
+|-------|-----------|-------------|----------|
+| `wallet.example.com:1153`, `:1154`, ... | 1 standard cert | 1 A record | Simplest — all nodes share one domain |
+| `alice.example.com`, `bob.example.com`, ... | 1 wildcard cert | 1 per subdomain (or wildcard DNS) | Each node has its own identity |
+
+**DNS-01 vs HTTP-01:**
+
+| Challenge | Port Required | Wildcard Support | Best For |
+|-----------|--------------|------------------|----------|
+| HTTP-01 | Port 80 | No | Single domain, port 80 available |
+| DNS-01 | None | Yes | Wildcard certs, no port 80 needed |
+
+DNS-01 uses your DNS provider's API to validate domain ownership — no port access needed. Supported providers include Cloudflare, Route53, DigitalOcean, Google Cloud DNS, and many more.
+
+### External Certificates (Manual)
+
+Mount externally-obtained certificates from any source:
+
+```yaml
+services:
+  eiou:
+    volumes:
+      - /path/to/certs:/ssl-certs:ro
+```
+
+Required files in the mounted directory:
+- `server.crt` - SSL certificate (PEM format)
+- `server.key` - Private key (PEM format)
+- `ca-chain.crt` (optional) - CA certificate chain
+
+### Local CA (Development/Testing)
 
 ```bash
 # Generate CA once
@@ -724,9 +913,20 @@ environment:
 **Cause:** Self-signed certificate not trusted by browser
 
 **Solutions:**
-1. Install CA-signed certificates (see SSL Certificate Configuration)
-2. Add exception in browser for development
-3. Use `./scripts/create-ssl-ca.sh` to create local CA
+1. Use Let's Encrypt for automatic trusted certificates (see SSL Certificate Configuration)
+2. Use `./scripts/create-ssl-ca.sh` to create local CA for development
+3. Add exception in browser for quick testing
+
+#### Let's Encrypt Certificate Request Failed
+
+**Cause:** ACME challenge could not be completed
+
+**Solutions:**
+- Ensure port 80 is reachable from the internet (for HTTP-01 challenge)
+- Verify the domain resolves to the server's public IP: `dig +short yourdomain.com`
+- Test with staging first: `LETSENCRYPT_STAGING=true` (avoids rate limits)
+- Check certbot logs: `docker exec <container> cat /var/log/letsencrypt/letsencrypt.log`
+- For multi-node setups, use the host-level wildcard approach instead (see docs)
 
 ### Performance Issues (WSL2)
 

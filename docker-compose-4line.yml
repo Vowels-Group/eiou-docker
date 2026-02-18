@@ -47,8 +47,11 @@ services:
       # SSL Configuration (optional):
       # - SSL_DOMAIN=alice.example.com     # Override certificate CN
       # - SSL_EXTRA_SANS=DNS:alice.local   # Additional SANs
-    # For CA-signed certificates across all nodes, uncomment:
-    # volumes (add to existing):
+    # For Let's Encrypt wildcard cert across all nodes:
+    # 1. Run: ./scripts/create-ssl-letsencrypt.sh -d nodes.example.com -e admin@example.com --wildcard --dns-plugin cloudflare --credentials ./cloudflare.ini
+    # 2. Uncomment and add to each node's volumes:
+    #   - ./letsencrypt-certs:/ssl-certs:ro
+    # For CA-signed certificates (development), uncomment:
     #   - ./ssl-ca:/ssl-ca:ro
     volumes:
       - alice-mysql-data:/var/lib/mysql
