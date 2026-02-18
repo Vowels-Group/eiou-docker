@@ -452,6 +452,16 @@ class TransportUtilityService implements TransportServiceInterface
                 'curl_errno' => $curlErrno
             ]);
 
+            // Signal watchdog to restart Tor immediately on SOCKS5 proxy failure
+            // errno 7 = CURLE_COULDNT_CONNECT (proxy unreachable)
+            if (str_contains($curlError, 'SOCKS5') || $curlErrno === 7) {
+                $signalFile = '/tmp/tor-restart-requested';
+                if (!file_exists($signalFile)) {
+                    @file_put_contents($signalFile, (string)time());
+                    Logger::getInstance()->warning("SOCKS5 proxy failure detected, signaling watchdog for immediate Tor restart");
+                }
+            }
+
             // Return a structured error response that can be parsed
             return json_encode([
                 'status' => 'error',
