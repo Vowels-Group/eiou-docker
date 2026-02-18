@@ -433,7 +433,13 @@ The container will:
 
 SSL certificates validate the **domain name**, not the port. A single standard certificate for `wallet.eiou.org` is valid on every port — `https://wallet.eiou.org:1153`, `https://wallet.eiou.org:1154`, etc. This means 2–150+ nodes on one server can all share one regular (non-wildcard) certificate.
 
-**Step 1: Get a single cert (run once on the host):**
+**Step 1: Install certbot on the host server:**
+
+```bash
+sudo apt install certbot
+```
+
+**Step 2: Get a single cert (run once on the host):**
 
 ```bash
 # Option A: HTTP-01 (if port 80 is open on the server)
@@ -449,7 +455,7 @@ SSL certificates validate the **domain name**, not the port. A single standard c
     --credentials ./cloudflare.ini
 ```
 
-**Step 2: Mount the cert in all containers:**
+**Step 3: Mount the cert in all containers:**
 
 ```yaml
 services:
@@ -474,7 +480,7 @@ services:
 
 Every container receives the same certificate file. Each node's Apache listens on 443 internally; Docker maps that to the unique external port. Only one DNS A record is needed — `wallet.eiou.org → <server IP>`.
 
-**Step 3: Set up renewal (host crontab):**
+**Step 4: Set up renewal (host crontab):**
 
 ```bash
 # Add to crontab (runs daily, only renews when < 30 days left)
