@@ -10,6 +10,22 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## [Unreleased]
+
+### Added
+- Let's Encrypt integration for automatic browser-trusted SSL certificates
+  - In-container certbot for single-node deployments (`LETSENCRYPT_EMAIL` env var)
+  - `scripts/create-ssl-letsencrypt.sh` — host-level script for obtaining certificates (HTTP-01 and DNS-01 wildcard)
+  - `scripts/renew-ssl-letsencrypt.sh` — host-level renewal script for cron automation
+  - Automatic renewal cron job inside containers using Let's Encrypt
+  - Support for sharing one wildcard cert across multiple nodes via `/ssl-certs/` volume
+- New environment variables: `LETSENCRYPT_EMAIL`, `LETSENCRYPT_DOMAIN`, `LETSENCRYPT_STAGING`
+- `/etc/letsencrypt` added as a persistent Docker volume for certificate state
+
+### Changed
+- SSL certificate priority chain updated: External → Let's Encrypt → CA-signed → Self-signed
+- SSL section in `startup.sh` refactored from if/elif chain to sequential flag-based approach for cleaner fallback handling
+
 ## 2026-02-17
 
 ### Added

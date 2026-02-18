@@ -26,6 +26,9 @@
 #   RESTORE_FILE        - Path to file containing seed phrase (more secure)
 #   SSL_DOMAIN          - Primary domain for SSL certificate CN
 #   SSL_EXTRA_SANS      - Additional Subject Alternative Names for SSL
+#   LETSENCRYPT_EMAIL   - Email for Let's Encrypt (enables automatic trusted certs)
+#   LETSENCRYPT_DOMAIN  - Domain for Let's Encrypt cert (default: SSL_DOMAIN)
+#   LETSENCRYPT_STAGING - Use staging server for testing (default: false)
 #   EIOU_HS_TIMEOUT     - Tor hidden service timeout in seconds (default: 60)
 #   EIOU_TOR_TIMEOUT    - Tor connectivity timeout in seconds (default: 120)
 #   EIOU_NAME           - Display name for the node (shown in local UI)
@@ -267,11 +270,14 @@ RESTORE_FILE=${RESTORE_FILE:-false}
 RESTORE=${RESTORE:-false}
 
 # =============================================================================
-# SSL CERTIFICATE GENERATION
+# SSL CERTIFICATE SETUP
 # =============================================================================
 # Environment Variables:
-#   SSL_DOMAIN      - Primary domain for certificate CN (default: QUICKSTART value or localhost)
-#   SSL_EXTRA_SANS  - Additional SANs in format "DNS:name,IP:addr" (comma-separated)
+#   SSL_DOMAIN          - Primary domain for certificate CN (default: QUICKSTART value or localhost)
+#   SSL_EXTRA_SANS      - Additional SANs in format "DNS:name,IP:addr" (comma-separated)
+#   LETSENCRYPT_EMAIL   - Email for Let's Encrypt registration (enables automatic LE certs)
+#   LETSENCRYPT_DOMAIN  - Domain for Let's Encrypt cert (default: SSL_DOMAIN)
+#   LETSENCRYPT_STAGING - Use Let's Encrypt staging server for testing (default: false)
 #
 # External Certificate Support:
 #   Mount certificates at /ssl-certs/ with files: server.crt, server.key, ca-chain.crt (optional)
@@ -279,10 +285,12 @@ RESTORE=${RESTORE:-false}
 # CA-Signed Certificate Support:
 #   Mount CA at /ssl-ca/ with files: ca.crt, ca.key
 #
-# Priority: 1. External certs (/ssl-certs/) 2. CA-signed (/ssl-ca/) 3. Auto-generated
+# Priority: 1. External (/ssl-certs/) 2. Let's Encrypt 3. CA-signed (/ssl-ca/) 4. Self-signed
 # =============================================================================
 
-# Check for externally provided certificates (Let's Encrypt, corporate CA, etc.)
+SSL_CERT_INSTALLED=false
+
+# --- Priority 1: Externally provided certificates ---
 if [ -f /ssl-certs/server.crt ] && [ -f /ssl-certs/server.key ]; then
     echo "Installing externally provided SSL certificates..."
 
@@ -299,9 +307,82 @@ if [ -f /ssl-certs/server.crt ] && [ -f /ssl-certs/server.key ]; then
     fi
 
     echo "External SSL certificates installed successfully."
+    SSL_CERT_INSTALLED=true
+fi
 
-# Generate certificate (self-signed or CA-signed) if none exists
-elif [ ! -f /etc/apache2/ssl/server.crt ]; then
+# --- Priority 2: Let's Encrypt automatic certificate ---
+# Requires LETSENCRYPT_EMAIL to be set and a valid FQDN domain.
+# Uses HTTP-01 challenge via certbot standalone mode (port 80 must be reachable).
+# Certs persist in /etc/letsencrypt/ volume across container restarts.
+if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
+    LE_DOMAIN="${LETSENCRYPT_DOMAIN:-${SSL_DOMAIN:-${EFFECTIVE_HOST:-}}}"
+
+    # Strip port from domain (e.g. "example.com:1154" → "example.com")
+    LE_DOMAIN=$(echo "$LE_DOMAIN" | sed 's/:[0-9]*$//')
+
+    # Validate domain: must be a real FQDN (not IP, localhost, or bare container name)
+    if echo "$LE_DOMAIN" | grep -qP '^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
+        echo "Let's Encrypt: Checking certificate for $LE_DOMAIN..."
+
+        # Check if a valid (not-yet-expired) cert already exists from a previous run
+        if [ -f "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" ] && \
+           [ -f "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" ] && \
+           openssl x509 -checkend 86400 -noout -in "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" 2>/dev/null; then
+
+            echo "  Existing Let's Encrypt certificate is still valid."
+            cp "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" /etc/apache2/ssl/server.crt
+            cp "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" /etc/apache2/ssl/server.key
+            chmod 600 /etc/apache2/ssl/server.key
+            chmod 644 /etc/apache2/ssl/server.crt
+            SSL_CERT_INSTALLED=true
+        else
+            # Request new certificate using certbot standalone mode
+            # Standalone runs its own HTTP server on port 80 (Apache hasn't started yet)
+            echo "  Requesting certificate from Let's Encrypt..."
+            CERTBOT_CMD="certbot certonly --standalone --non-interactive --agree-tos"
+            CERTBOT_CMD="$CERTBOT_CMD --email $LETSENCRYPT_EMAIL -d $LE_DOMAIN"
+
+            if [ "${LETSENCRYPT_STAGING:-false}" = "true" ]; then
+                CERTBOT_CMD="$CERTBOT_CMD --staging"
+                echo "  (Using staging server — certificate will NOT be browser-trusted)"
+            fi
+
+            if $CERTBOT_CMD 2>&1; then
+                echo "  Let's Encrypt certificate obtained successfully for $LE_DOMAIN"
+                cp "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" /etc/apache2/ssl/server.crt
+                cp "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" /etc/apache2/ssl/server.key
+                chmod 600 /etc/apache2/ssl/server.key
+                chmod 644 /etc/apache2/ssl/server.crt
+                SSL_CERT_INSTALLED=true
+            else
+                echo "  WARNING: Let's Encrypt certificate request failed."
+                echo "  Common causes:"
+                echo "    - Port 80 is not reachable from the internet"
+                echo "    - Domain '$LE_DOMAIN' does not resolve to this server's public IP"
+                echo "    - Rate limit exceeded (use LETSENCRYPT_STAGING=true for testing)"
+                echo "  Falling back to auto-generated certificate."
+            fi
+        fi
+
+        # Set up automatic renewal cron job (runs daily at 3am, renews if < 30 days left)
+        if [ "$SSL_CERT_INSTALLED" = "true" ]; then
+            LE_RENEW_HOOK="cp /etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem /etc/apache2/ssl/server.crt && cp /etc/letsencrypt/live/$LE_DOMAIN/privkey.pem /etc/apache2/ssl/server.key && chmod 600 /etc/apache2/ssl/server.key && chmod 644 /etc/apache2/ssl/server.crt && apache2ctl graceful"
+            # Append to crontab without duplicating (remove any existing certbot line first)
+            (crontab -l 2>/dev/null | grep -v 'certbot renew'; echo "0 3 * * * certbot renew --quiet --deploy-hook '$LE_RENEW_HOOK' >> /var/log/letsencrypt-renew.log 2>&1") | crontab -
+            echo "  Automatic renewal cron job installed (daily at 3:00 AM)."
+        fi
+    else
+        echo "WARNING: LETSENCRYPT_EMAIL is set but '$LE_DOMAIN' is not a valid FQDN."
+        echo "  Let's Encrypt requires a real domain name (e.g., node.example.com)."
+        echo "  It cannot issue certificates for IP addresses, 'localhost', or container names."
+        echo "  For multi-node setups, use scripts/create-ssl-letsencrypt.sh on the host"
+        echo "  to get a wildcard cert, then mount it at /ssl-certs/."
+        echo "  Falling back to auto-generated certificate."
+    fi
+fi
+
+# --- Priority 3/4: Generate certificate (CA-signed or self-signed) ---
+if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/apache2/ssl/server.crt ]; then
     echo "Generating SSL certificate..."
 
     # Determine primary CN
@@ -441,13 +522,16 @@ SSLEOF
 
         echo "  Self-signed certificate generated successfully."
         echo "  Note: Browsers will show warnings for self-signed certificates."
-        echo "  For trusted certificates, mount a CA at /ssl-ca/ or external certs at /ssl-certs/"
+        echo "  For trusted certificates, use Let's Encrypt (LETSENCRYPT_EMAIL),"
+        echo "  mount a CA at /ssl-ca/, or external certs at /ssl-certs/"
     fi
 
     rm -f /tmp/openssl-san.cnf
     chmod 600 /etc/apache2/ssl/server.key
     chmod 644 /etc/apache2/ssl/server.crt
-else
+
+# --- Existing certificate found (from volume persistence) ---
+elif [ "$SSL_CERT_INSTALLED" = "false" ]; then
     echo "Existing SSL certificate found, skipping generation."
 fi
 

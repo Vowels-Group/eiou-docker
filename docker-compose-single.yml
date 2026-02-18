@@ -69,6 +69,11 @@ services:
       #
       # Add Subject Alternative Names (DNS or IP):
       # - SSL_EXTRA_SANS=DNS:alt.local,IP:10.0.0.1
+      #
+      # Let's Encrypt automatic trusted certificates (requires real domain + port 80):
+      # - LETSENCRYPT_EMAIL=admin@example.com
+      # - LETSENCRYPT_DOMAIN=node.example.com
+      # - LETSENCRYPT_STAGING=true   # Remove after testing
 
       # TIMEOUT CONFIGURATION (optional - increase for WSL2/slow environments)
       # -----------------------------------------------------------------
@@ -102,14 +107,17 @@ services:
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
       - eiou-backups:/var/lib/eiou/backups
 
-      # OPTIONAL: External SSL certificates (Let's Encrypt, etc.)
-      # Uncomment to use externally-obtained certificates:
-      # - /path/to/certs:/ssl-certs:ro   # Mount server.crt, server.key
+      # OPTIONAL: Let's Encrypt certificate persistence
+      # Required when using LETSENCRYPT_EMAIL to persist certs across restarts:
+      # - eiou-letsencrypt:/etc/letsencrypt
 
-      # OPTIONAL: CA-signed certificates
+      # OPTIONAL: External SSL certificates (Let's Encrypt wildcard, commercial CA, etc.)
+      # Use with scripts/create-ssl-letsencrypt.sh for multi-node wildcard certs:
+      # - ./letsencrypt-certs:/ssl-certs:ro   # Mount server.crt, server.key
+
+      # OPTIONAL: CA-signed certificates (development/testing)
       # Generate CA with: ./scripts/create-ssl-ca.sh ./ssl-ca
-      # Uncomment to use CA-signed certificates:
-      # - ./ssl-ca:/ssl-ca:ro            # Mount ca.crt, ca.key
+      # - ./ssl-ca:/ssl-ca:ro                 # Mount ca.crt, ca.key
 
       # OPTIONAL: Wallet restoration from seed file
       # Uncomment with RESTORE_FILE env var:

@@ -23,6 +23,7 @@ FROM debian:12-slim
 # - cron: Scheduled task execution for maintenance jobs
 # - curl: HTTP client for peer-to-peer communication
 # - mariadb-server: Database for wallet, transactions, contacts
+# - certbot: Let's Encrypt ACME client for automatic SSL certificates
 # - openssl: SSL certificate generation and cryptography
 # - php, php-*: PHP runtime with required extensions
 #   - php-xml: DOM extension required for Composer dependency resolution
@@ -30,6 +31,7 @@ FROM debian:12-slim
 # - unzip: Required by Composer for package installation
 RUN apt-get update && apt-get install -y \
     apache2 \
+    certbot \
     cron \
     curl \
     mariadb-server \
@@ -168,7 +170,8 @@ RUN touch /var/log/php_errors.log && \
 # - /var/lib/mysql: Database files (transactions, contacts, balances)
 # - /etc/eiou: Wallet configuration, encryption keys, and web files (www/)
 # - /var/lib/eiou/backups: Encrypted database backups
-VOLUME ["/var/lib/mysql", "/etc/eiou", "/var/lib/eiou/backups"]
+# - /etc/letsencrypt: Let's Encrypt certificates and renewal state
+VOLUME ["/var/lib/mysql", "/etc/eiou", "/var/lib/eiou/backups", "/etc/letsencrypt"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/
