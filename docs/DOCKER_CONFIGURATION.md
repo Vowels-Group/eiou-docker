@@ -491,19 +491,32 @@ Running the script manually is a one-time check:
 ./scripts/renew-ssl-letsencrypt.sh -d wallet.example.com -o ./letsencrypt-certs
 ```
 
-To automate renewal, add a cron job on the host server:
+To automate renewal, add a cron job on the host server. Open the root crontab editor:
 
 ```bash
-# Open the root crontab
 sudo crontab -e
+```
 
-# Add this line (runs daily at 3:00 AM):
+This opens a text editor (usually `nano` or `vi`) showing the root user's scheduled tasks. Add the following line at the end of the file, then save and exit:
+
+```
 0 3 * * * /path/to/scripts/renew-ssl-letsencrypt.sh \
     -d wallet.example.com -o /path/to/letsencrypt-certs \
     --restart "eiou-*" --graceful >> /var/log/eiou-ssl-renew.log 2>&1
 ```
 
-Replace `/path/to/` with the actual paths on your server. The `--restart` and `--graceful` flags are optional — they tell the script to send a reload signal to running containers after a successful renewal so they pick up the new certificate without a full restart.
+Replace `/path/to/` with the actual absolute paths on your server (e.g., `/root/eiou-docker/scripts/...`).
+
+**Flag reference:**
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `-d wallet.example.com` | Yes | The domain name of the certificate to renew |
+| `-o /path/to/letsencrypt-certs` | Yes | Directory where the renewed cert files are copied (the same directory mounted as `/ssl-certs` in your containers) |
+| `--restart "eiou-*"` | No | After a successful renewal, restart Docker containers whose names match this pattern (e.g., `eiou-*` matches `eiou-node-1`, `eiou-node-2`, etc. — use the actual naming pattern of your containers) |
+| `--graceful` | No | Used with `--restart` — sends a reload signal (SIGHUP) to containers instead of fully restarting them, avoiding downtime |
+
+The `>> /var/log/eiou-ssl-renew.log 2>&1` part at the end redirects all output to a log file so you can check what happened later.
 
 Most days the cron job will do nothing. Certbot only renews when the certificate is within 30 days of expiry. When it does renew, the script copies the new files into the output directory and optionally reloads containers.
 
