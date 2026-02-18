@@ -244,9 +244,9 @@ docker-compose -f docker-compose-10line.yml exec node-j eiou add <address> node-
 
 ```bash
 # bottom right branch
-# cluster-a (hub) adds cluster-a1 and cluster-a1 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a1 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a <fee> <credit> <currency>
+# cluster-a0 (hub) adds cluster-a1 and cluster-a1 adds cluster-a0
+docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a1 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a1 adds cluster-a11 and cluster-a11 adds cluster-a1
 docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a11 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a11 eiou add <address> cluster-a1 <fee> <credit> <currency>
@@ -255,9 +255,9 @@ docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> 
 docker-compose -f docker-compose-cluster.yml exec cluster-a12 eiou add <address> cluster-a1 <fee> <credit> <currency>
 
 # bottom left branch
-# cluster-a (hub) adds cluster-a2 and cluster-a2 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a2 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a <fee> <credit> <currency>
+# cluster-a0 (hub) adds cluster-a2 and cluster-a2 adds cluster-a0
+docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a2 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a2 adds cluster-a21 and cluster-a21 adds cluster-a2
 docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a21 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a21 eiou add <address> cluster-a2 <fee> <credit> <currency>
@@ -266,9 +266,9 @@ docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> 
 docker-compose -f docker-compose-cluster.yml exec cluster-a22 eiou add <address> cluster-a2 <fee> <credit> <currency>
 
 # top left branch
-# cluster-a (hub) adds cluster-a3 and cluster-a3 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a3 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a <fee> <credit> <currency>
+# cluster-a0 (hub) adds cluster-a3 and cluster-a3 adds cluster-a0
+docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a3 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a3 adds cluster-a31 and cluster-a31 adds cluster-a3
 docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a31 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a31 eiou add <address> cluster-a3 <fee> <credit> <currency>
@@ -277,9 +277,9 @@ docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> 
 docker-compose -f docker-compose-cluster.yml exec cluster-a32 eiou add <address> cluster-a3 <fee> <credit> <currency>
 
 # top right branch
-# cluster-a (hub) adds cluster-a4 and cluster-a4 adds cluster-a
-docker-compose -f docker-compose-cluster.yml exec cluster-a eiou add <address> cluster-a4 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a <fee> <credit> <currency>
+# cluster-a0 (hub) adds cluster-a4 and cluster-a4 adds cluster-a0
+docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a4 <fee> <credit> <currency>
+docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a0 <fee> <credit> <currency>
 # cluster-a4 adds cluster-a41 and cluster-a41 adds cluster-a4
 docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a41 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a41 eiou add <address> cluster-a4 <fee> <credit> <currency>
