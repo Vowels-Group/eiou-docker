@@ -1181,8 +1181,10 @@ watchdog() {
     local TOR_LAST_CHECK=0
     local TOR_RESTART_COUNT=0
     local TOR_MAX_RESTARTS=5         # Max Tor restart attempts before giving up
-    local TOR_RESTART_COOLDOWN=300   # Minimum 5 minutes between Tor restarts
+    local TOR_RESTART_COOLDOWN=300   # Minimum 5 minutes between periodic Tor restarts
+    local TOR_SIGNAL_COOLDOWN=60    # Minimum 60 seconds between signal-triggered restarts
     local TOR_LAST_RESTART=0
+    local TOR_RESET_COOLDOWN=300    # Reset restart counter after 5 minutes of no restarts
     local TOR_HS_DIR="/var/lib/tor/hidden_service"
 
     local WAS_SHUTDOWN=false  # Track shutdown-to-normal transitions
@@ -1282,6 +1284,46 @@ watchdog() {
         fi
 
         # =====================================================================
+        # Tor SOCKS5 failure signal check (from PHP TransportUtilityService)
+        # =====================================================================
+        # PHP writes /tmp/tor-restart-requested when a SOCKS5 proxy failure
+        # is detected during message sending. This allows immediate restart
+        # (within ~30s) instead of waiting for the 5-minute periodic check.
+        # =====================================================================
+        if [ -n "$tor" ] && [ -f /tmp/tor-restart-requested ]; then
+            rm -f /tmp/tor-restart-requested
+            local TOR_TIME_SINCE_RESTART=$((CURRENT_TIME - TOR_LAST_RESTART))
+            if [ $TOR_RESTART_COUNT -lt $TOR_MAX_RESTARTS ] && [ $TOR_TIME_SINCE_RESTART -ge $TOR_SIGNAL_COOLDOWN ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: SOCKS5 failure signal detected — triggering immediate Tor restart"
+                TOR_RESTART_COUNT=$((TOR_RESTART_COUNT + 1))
+                TOR_LAST_RESTART=$CURRENT_TIME
+
+                if [ -d "$TOR_HS_DIR" ]; then
+                    chown -R debian-tor:debian-tor "$TOR_HS_DIR" 2>/dev/null || true
+                    chmod 700 "$TOR_HS_DIR" 2>/dev/null || true
+                    find "$TOR_HS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+                fi
+
+                pkill -x tor 2>/dev/null || true
+                sleep 2
+                if service tor start 2>/dev/null; then
+                    sleep 5
+                    if pgrep -x "tor" > /dev/null 2>&1; then
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully via signal (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS)"
+                    else
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
+                    fi
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal — start command failed"
+                fi
+            elif [ $TOR_RESTART_COUNT -ge $TOR_MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: SOCKS5 signal received but max restarts exceeded — waiting for cooldown reset"
+            else
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: SOCKS5 signal received but within cooldown — skipping restart"
+            fi
+        fi
+
+        # =====================================================================
         # Tor hidden service self-health check
         # =====================================================================
         # Periodically verify that our own .onion address is reachable through
@@ -1340,7 +1382,12 @@ watchdog() {
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart command failed"
                     fi
                 elif [ $TOR_RESTART_COUNT -ge $TOR_MAX_RESTARTS ]; then
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor exceeded max restarts ($TOR_MAX_RESTARTS) — hidden service may remain unreachable until container restart"
+                    if [ $TOR_TIME_SINCE_RESTART -ge $TOR_RESET_COOLDOWN ]; then
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Resetting Tor restart counter after 5m cooldown — retrying recovery"
+                        TOR_RESTART_COUNT=0
+                    else
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor exceeded max restarts ($TOR_MAX_RESTARTS) — will retry after cooldown ($((TOR_RESET_COOLDOWN - TOR_TIME_SINCE_RESTART))s remaining)"
+                    fi
                 fi
             else
                 # Self-check passed — reset restart counter on sustained success

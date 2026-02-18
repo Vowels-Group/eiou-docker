@@ -12,7 +12,11 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+## 2026-02-18
+
 ### Added
+- Immediate Tor SOCKS5 recovery: PHP transport layer now signals the watchdog via `/tmp/tor-restart-requested` when a SOCKS5 proxy failure is detected, triggering Tor restart within ~30 seconds instead of waiting for the 5-minute periodic health check
+- Tor restart counter reset after 5-minute cooldown — prevents permanent Tor unavailability when recovery takes longer than 5 restart attempts
 - Let's Encrypt integration for automatic browser-trusted SSL certificates
   - In-container certbot for single-node deployments (`LETSENCRYPT_EMAIL` env var)
   - `scripts/create-ssl-letsencrypt.sh` — host-level script for obtaining certificates (HTTP-01 and DNS-01 wildcard)
@@ -28,6 +32,7 @@ The project is currently in **ALPHA** status.
 
 ### Docs
 - Updated `SECURITY.md` to reference Let's Encrypt as the recommended production SSL option
+- Added Tor SOCKS5 recovery section to `ERROR_CODES.md` with manual restart trigger instructions
 - Updated `README.md`: removed obsolete `eiou generate` commands, added QUICKSTART explanation, added `eiou add` parameter reference explaining `<address>`, `<fee>`, `<credit>`, `<currency>` placeholders, fixed incorrect comments in cluster topology
 - Renamed cluster hub node from `cluster-a` to `cluster-a0` in `docker-compose-cluster.yml` to match README and naming convention
 

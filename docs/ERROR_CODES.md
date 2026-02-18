@@ -292,6 +292,22 @@ For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md#err
 | `NO_VIABLE_ROUTE` | 503 | No Viable Route | P2P routing could not find path | Increase `maxP2pLevel` or add more contacts |
 | `P2P_CANCELLED` | 503 | P2P Route Cancelled | P2P transaction was cancelled | Route expired; retry the transaction |
 
+### Tor SOCKS5 Recovery
+
+When a Tor SOCKS5 connection fails ("Can't complete SOCKS5 connection"), the local Tor proxy is broken. The node automatically detects this and signals the watchdog to restart Tor within ~30 seconds. The watchdog will attempt up to 5 restarts, then pause for a 5-minute cooldown before retrying.
+
+To **manually trigger an immediate Tor restart**, create the signal file:
+
+```bash
+docker exec <container> touch /tmp/tor-restart-requested
+```
+
+The watchdog picks up the signal within its next 30-second cycle. You can verify the restart in the container logs:
+
+```bash
+docker logs <container> 2>&1 | grep "WATCHDOG.*Tor"
+```
+
 ---
 
 ## Validation Errors
