@@ -145,14 +145,14 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | Layer | Configuration | Notes |
 |-------|---------------|-------|
 | Tor | Enabled by default | Provides IP anonymization via onion routing |
-| TLS | TLS 1.2+ with auto-generated or custom certificates | Self-signed by default; mount external certs for production |
+| TLS | TLS 1.2+ with auto-generated or custom certificates | Self-signed by default; use Let's Encrypt or mount external certs for production |
 | Transport priority | Tor > HTTPS > HTTP | System prefers the most secure transport available |
 | Internal network | Docker bridge network | Containers communicate over an isolated Docker network |
 
 **Recommendations:**
 
 - Use HTTPS or Tor for all inter-node communication in non-testing environments
-- Mount proper CA-signed SSL certificates for production deployments (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section)
+- Use Let's Encrypt certificates for production deployments, or mount your own CA-signed certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section)
 - Avoid exposing container ports directly to the public internet without a reverse proxy or firewall
 - The HTTP transport mode is intended for local Docker network testing only
 
@@ -219,7 +219,7 @@ EIOU Docker implements security at multiple layers. This section provides a brie
 
 | Layer | Protection |
 |-------|------------|
-| HTTPS | TLS 1.2+ with configurable certificate sources |
+| HTTPS | TLS 1.2+ with configurable certificate sources (Let's Encrypt, CA-signed, or self-signed) |
 | Tor | Onion routing for network-level anonymity |
 | Message signing | All P2P messages signed with secp256k1 ECDSA signatures |
 | Replay prevention | API timestamps validated within a 5-minute window |
@@ -235,7 +235,7 @@ The following are known security limitations of the current alpha release.
 | No formal audit | The codebase has not undergone a third-party security audit |
 | Alpha status | Software may contain undiscovered vulnerabilities; do not use for real financial transactions |
 | PHP processors run as root | Background message processors (P2P, Transaction, Cleanup, ContactStatus) run as the root user inside the container |
-| Self-signed certificates by default | Default TLS configuration uses self-signed certificates, which do not provide server identity verification |
+| Self-signed certificates by default | Default TLS configuration uses self-signed certificates, which do not provide server identity verification. Let's Encrypt support is available for browser-trusted certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section) |
 | Single-container architecture | Each node runs all services (web server, database, Tor, processors) in a single container, limiting isolation between components |
 | No HSM support | Private keys are stored encrypted on disk rather than in a hardware security module |
 | No multi-factor authentication | API access relies on HMAC-SHA256 key-based authentication without a second factor |
@@ -249,6 +249,7 @@ These limitations will be addressed as the project matures toward a production r
 
 - [Architecture - Security Model](docs/ARCHITECTURE.md#security-model) - Detailed security architecture documentation
 - [Docker Configuration - Security](docs/DOCKER_CONFIGURATION.md#security-configuration) - Container security settings
+- [Docker Configuration - SSL](docs/DOCKER_CONFIGURATION.md#ssl-certificate-configuration) - SSL certificate configuration including Let's Encrypt
 - [Docker Configuration - Wallet Restoration](docs/DOCKER_CONFIGURATION.md#wallet-restoration) - Secure seed phrase handling
 - [API Reference](docs/API_REFERENCE.md) - API authentication documentation
 - [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) - Error handling and logging standards
