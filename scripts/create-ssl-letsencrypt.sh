@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 #
 # Let's Encrypt Certificate Generator for EIOU Docker
@@ -9,7 +9,7 @@
 #
 # Use Cases:
 #   - Single node with a real domain (HTTP-01, simplest)
-#   - Multiple nodes on one server sharing one cert (DNS-01 wildcard)
+#   - Multiple nodes on one server sharing one cert (same domain, different ports)
 #   - Multiple nodes with individual subdomains (DNS-01 wildcard)
 #
 # Usage:
@@ -27,14 +27,17 @@
 #
 # Examples:
 #   # Single domain (HTTP-01 — port 80 must be reachable):
-#   ./scripts/create-ssl-letsencrypt.sh -d node.example.com -e admin@example.com
+#   ./scripts/create-ssl-letsencrypt.sh -d wallet.eiou.org -e admin@eiou.org
 #
-#   # Wildcard cert for 150 nodes (DNS-01 — no port needed):
-#   ./scripts/create-ssl-letsencrypt.sh -d nodes.example.com -e admin@example.com \
+#   # Same domain for 150 nodes on different ports (same command — one cert covers all ports):
+#   ./scripts/create-ssl-letsencrypt.sh -d wallet.eiou.org -e admin@eiou.org
+#
+#   # Wildcard cert for subdomains (DNS-01 — no port needed):
+#   ./scripts/create-ssl-letsencrypt.sh -d eiou.org -e admin@eiou.org \
 #       --wildcard --dns-plugin cloudflare --credentials ./cloudflare.ini
 #
 #   # Test with staging server first (recommended):
-#   ./scripts/create-ssl-letsencrypt.sh -d node.example.com -e admin@example.com --staging
+#   ./scripts/create-ssl-letsencrypt.sh -d wallet.eiou.org -e admin@eiou.org --staging
 #
 # After obtaining the certificate, mount in docker-compose:
 #   volumes:
@@ -59,7 +62,7 @@ CREDENTIALS_FILE=""
 STAGING=false
 
 # Parse arguments
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
         -d|--domain) DOMAIN="$2"; shift 2 ;;
         -e|--email) EMAIL="$2"; shift 2 ;;
@@ -72,31 +75,31 @@ while [[ $# -gt 0 ]]; do
             sed -n '3,/^$/p' "$0" | sed 's/^# \?//'
             exit 0
             ;;
-        *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
+        *) printf "${RED}Unknown option: %s${NC}\n" "$1"; exit 1 ;;
     esac
 done
 
-echo -e "${GREEN}================================================${NC}"
-echo -e "${GREEN}  EIOU Let's Encrypt Certificate Setup${NC}"
-echo -e "${GREEN}================================================${NC}"
+printf "${GREEN}================================================${NC}\n"
+printf "${GREEN}  EIOU Let's Encrypt Certificate Setup${NC}\n"
+printf "${GREEN}================================================${NC}\n"
 echo ""
 
 # Validate required arguments
 if [ -z "$DOMAIN" ]; then
-    echo -e "${RED}Error: --domain is required${NC}"
+    printf "${RED}Error: --domain is required${NC}\n"
     echo "Usage: $0 -d example.com -e admin@example.com [options]"
     exit 1
 fi
 
 if [ -z "$EMAIL" ]; then
-    echo -e "${RED}Error: --email is required${NC}"
+    printf "${RED}Error: --email is required${NC}\n"
     echo "Usage: $0 -d example.com -e admin@example.com [options]"
     exit 1
 fi
 
 # Check certbot is installed
-if ! command -v certbot &> /dev/null; then
-    echo -e "${RED}Error: certbot is not installed.${NC}"
+if ! command -v certbot >/dev/null 2>&1; then
+    printf "${RED}Error: certbot is not installed.${NC}\n"
     echo ""
     echo "Install certbot:"
     echo "  Ubuntu/Debian: sudo apt install certbot"
@@ -114,7 +117,7 @@ fi
 # Wildcard certs require DNS-01 challenge
 if [ "$WILDCARD" = true ]; then
     if [ -z "$DNS_PLUGIN" ]; then
-        echo -e "${RED}Error: --dns-plugin is required for wildcard certificates.${NC}"
+        printf "${RED}Error: --dns-plugin is required for wildcard certificates.${NC}\n"
         echo ""
         echo "Wildcard certificates require DNS-01 validation."
         echo "Supported DNS plugins: cloudflare, route53, digitalocean, google, ovh, linode"
@@ -125,9 +128,8 @@ if [ "$WILDCARD" = true ]; then
     fi
 
     # Check DNS plugin is installed
-    PLUGIN_CMD="certbot-dns-${DNS_PLUGIN}"
     if ! certbot plugins 2>/dev/null | grep -q "dns-${DNS_PLUGIN}"; then
-        echo -e "${YELLOW}Warning: DNS plugin 'dns-${DNS_PLUGIN}' may not be installed.${NC}"
+        printf "${YELLOW}Warning: DNS plugin 'dns-%s' may not be installed.${NC}\n" "$DNS_PLUGIN"
         echo "Install with: sudo apt install python3-certbot-dns-${DNS_PLUGIN}"
         echo "  — or: pip install certbot-dns-${DNS_PLUGIN}"
         echo ""
@@ -135,7 +137,7 @@ if [ "$WILDCARD" = true ]; then
     fi
 
     if [ -z "$CREDENTIALS_FILE" ]; then
-        echo -e "${RED}Error: --credentials is required for DNS-01 challenges.${NC}"
+        printf "${RED}Error: --credentials is required for DNS-01 challenges.${NC}\n"
         echo ""
         echo "Create a credentials file for your DNS provider."
         echo ""
@@ -163,7 +165,7 @@ if [ "$WILDCARD" = true ]; then
     fi
 
     if [ ! -f "$CREDENTIALS_FILE" ]; then
-        echo -e "${RED}Error: Credentials file not found: ${CREDENTIALS_FILE}${NC}"
+        printf "${RED}Error: Credentials file not found: %s${NC}\n" "$CREDENTIALS_FILE"
         exit 1
     fi
 fi
@@ -173,8 +175,8 @@ CERTBOT_ARGS="certonly --non-interactive --agree-tos --email $EMAIL"
 
 if [ "$STAGING" = true ]; then
     CERTBOT_ARGS="$CERTBOT_ARGS --staging"
-    echo -e "${YELLOW}Using Let's Encrypt STAGING server (certificates will NOT be browser-trusted)${NC}"
-    echo -e "${YELLOW}Remove --staging once you've verified everything works.${NC}"
+    printf "${YELLOW}Using Let's Encrypt STAGING server (certificates will NOT be browser-trusted)${NC}\n"
+    printf "${YELLOW}Remove --staging once you've verified everything works.${NC}\n"
     echo ""
 fi
 
@@ -198,10 +200,10 @@ echo "Email: ${EMAIL}"
 echo ""
 
 # Run certbot
-echo -e "${GREEN}[1/2]${NC} Obtaining certificate from Let's Encrypt..."
+printf "${GREEN}[1/2]${NC} Obtaining certificate from Let's Encrypt...\n"
 if ! certbot $CERTBOT_ARGS 2>&1; then
     echo ""
-    echo -e "${RED}Certificate request failed.${NC}"
+    printf "${RED}Certificate request failed.${NC}\n"
     echo ""
     if [ "$WILDCARD" = true ]; then
         echo "Troubleshooting DNS-01:"
@@ -219,17 +221,13 @@ if ! certbot $CERTBOT_ARGS 2>&1; then
 fi
 
 echo ""
-echo -e "${GREEN}[2/2]${NC} Copying certificates to output directory..."
+printf "${GREEN}[2/2]${NC} Copying certificates to output directory...\n"
 
 # Determine the live cert path
-if [ "$WILDCARD" = true ]; then
-    CERT_PATH="/etc/letsencrypt/live/${DOMAIN}"
-else
-    CERT_PATH="/etc/letsencrypt/live/${DOMAIN}"
-fi
+CERT_PATH="/etc/letsencrypt/live/${DOMAIN}"
 
 if [ ! -d "$CERT_PATH" ]; then
-    echo -e "${RED}Error: Certificate directory not found at ${CERT_PATH}${NC}"
+    printf "${RED}Error: Certificate directory not found at %s${NC}\n" "$CERT_PATH"
     echo "Check /etc/letsencrypt/live/ for the correct directory name."
     exit 1
 fi
@@ -245,9 +243,9 @@ chmod 600 "$OUTPUT_DIR/server.key"
 chmod 644 "$OUTPUT_DIR/ca-chain.crt"
 
 echo ""
-echo -e "${GREEN}================================================${NC}"
-echo -e "${GREEN}  Certificate Obtained Successfully!${NC}"
-echo -e "${GREEN}================================================${NC}"
+printf "${GREEN}================================================${NC}\n"
+printf "${GREEN}  Certificate Obtained Successfully!${NC}\n"
+printf "${GREEN}================================================${NC}\n"
 echo ""
 echo "Files created in ${OUTPUT_DIR}/:"
 echo "  - server.crt   (fullchain certificate)"
@@ -255,7 +253,7 @@ echo "  - server.key   (private key)"
 echo "  - ca-chain.crt (certificate chain)"
 echo ""
 if [ "$WILDCARD" = true ]; then
-    echo -e "${CYAN}Wildcard certificate covers:${NC}"
+    printf "${CYAN}Wildcard certificate covers:${NC}\n"
     echo "  - ${DOMAIN}"
     echo "  - *.${DOMAIN} (any subdomain)"
     echo ""
@@ -263,22 +261,23 @@ if [ "$WILDCARD" = true ]; then
     echo "Each subdomain can run on any port (e.g., :1154, :1155, etc.)"
 fi
 echo ""
-echo -e "${YELLOW}Next Steps:${NC}"
+printf "${YELLOW}Next Steps:${NC}\n"
 echo ""
 echo "1. Mount in docker-compose for all nodes:"
 echo ""
-echo "   ${GREEN}volumes:${NC}"
+echo "   volumes:"
 echo "     - ${OUTPUT_DIR}:/ssl-certs:ro"
 echo ""
 echo "   Example for multi-node:"
-echo "   ${GREEN}services:${NC}"
-echo "     alice:"
-echo "       ports: [\"1154:443\"]"
+echo "   services:"
+echo "     node-1:"
+echo "       ports: [\"1153:443\"]"
 echo "       environment:"
 if [ "$WILDCARD" = true ]; then
     echo "         - QUICKSTART=alice.${DOMAIN}"
 else
     echo "         - QUICKSTART=${DOMAIN}"
+    echo "         - EIOU_PORT=1153"
 fi
 echo "       volumes:"
 echo "         - ${OUTPUT_DIR}:/ssl-certs:ro"
@@ -287,5 +286,5 @@ echo "2. Set up automatic renewal:"
 echo "   ./scripts/renew-ssl-letsencrypt.sh -d ${DOMAIN} -o ${OUTPUT_DIR}"
 echo "   # Add to crontab: 0 3 * * * /path/to/renew-ssl-letsencrypt.sh ..."
 echo ""
-echo -e "${YELLOW}Certificate expires in 90 days. Set up renewal!${NC}"
+printf "${YELLOW}Certificate expires in 90 days. Set up renewal!${NC}\n"
 echo ""

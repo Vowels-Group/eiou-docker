@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 #
 # Let's Encrypt Certificate Renewal for EIOU Docker
@@ -23,15 +23,15 @@
 #
 # Examples:
 #   # Basic renewal (run from cron):
-#   ./scripts/renew-ssl-letsencrypt.sh -d example.com -o ./letsencrypt-certs
+#   ./scripts/renew-ssl-letsencrypt.sh -d wallet.eiou.org -o ./letsencrypt-certs
 #
 #   # Renew and gracefully reload all EIOU containers:
-#   ./scripts/renew-ssl-letsencrypt.sh -d example.com -o ./letsencrypt-certs \
+#   ./scripts/renew-ssl-letsencrypt.sh -d wallet.eiou.org -o ./letsencrypt-certs \
 #       --restart "eiou-*" --graceful
 #
 # Crontab entry (run daily at 3am):
 #   0 3 * * * /path/to/eiou-docker/scripts/renew-ssl-letsencrypt.sh \
-#       -d example.com -o /path/to/letsencrypt-certs >> /var/log/eiou-ssl-renew.log 2>&1
+#       -d wallet.eiou.org -o /path/to/letsencrypt-certs >> /var/log/eiou-ssl-renew.log 2>&1
 
 set -e
 
@@ -56,7 +56,7 @@ GRACEFUL=false
 STAGING=false
 
 # Parse arguments
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
         -o|--output) OUTPUT_DIR="$2"; shift 2 ;;
         -d|--domain) DOMAIN="$2"; shift 2 ;;
@@ -67,7 +67,7 @@ while [[ $# -gt 0 ]]; do
             sed -n '3,/^$/p' "$0" | sed 's/^# \?//'
             exit 0
             ;;
-        *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
+        *) printf "${RED}Unknown option: %s${NC}\n" "$1"; exit 1 ;;
     esac
 done
 
@@ -76,12 +76,12 @@ echo "[$TIMESTAMP] Let's Encrypt renewal check starting..."
 
 # Validate
 if [ -z "$DOMAIN" ]; then
-    echo -e "${RED}Error: --domain is required${NC}"
+    printf "${RED}Error: --domain is required${NC}\n"
     exit 1
 fi
 
-if ! command -v certbot &> /dev/null; then
-    echo -e "${RED}Error: certbot is not installed${NC}"
+if ! command -v certbot >/dev/null 2>&1; then
+    printf "${RED}Error: certbot is not installed${NC}\n"
     exit 1
 fi
 
@@ -97,7 +97,7 @@ CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
 if [ -f "$CERT_PATH" ]; then
     BEFORE_MTIME=$(stat -c %Y "$CERT_PATH" 2>/dev/null || stat -f %m "$CERT_PATH" 2>/dev/null)
 else
-    echo -e "${RED}Error: No existing certificate found for ${DOMAIN}${NC}"
+    printf "${RED}Error: No existing certificate found for %s${NC}\n" "$DOMAIN"
     echo "Run create-ssl-letsencrypt.sh first to obtain a certificate."
     exit 1
 fi
@@ -110,7 +110,7 @@ certbot $CERTBOT_ARGS 2>&1
 AFTER_MTIME=$(stat -c %Y "$CERT_PATH" 2>/dev/null || stat -f %m "$CERT_PATH" 2>/dev/null)
 
 if [ "$BEFORE_MTIME" != "$AFTER_MTIME" ]; then
-    echo -e "${GREEN}Certificate was renewed!${NC}"
+    printf "${GREEN}Certificate was renewed!${NC}\n"
     echo "Updating output directory: ${OUTPUT_DIR}"
 
     # Copy renewed certs to the shared output directory
@@ -133,7 +133,7 @@ if [ "$BEFORE_MTIME" != "$AFTER_MTIME" ]; then
         CONTAINERS=$(docker ps --filter "name=${RESTART_PATTERN}" --format "{{.Names}}" 2>/dev/null || true)
 
         if [ -z "$CONTAINERS" ]; then
-            echo -e "${YELLOW}Warning: No running containers match '${RESTART_PATTERN}'${NC}"
+            printf "${YELLOW}Warning: No running containers match '%s'${NC}\n" "$RESTART_PATTERN"
         else
             for CONTAINER in $CONTAINERS; do
                 if [ "$GRACEFUL" = true ]; then
@@ -145,7 +145,7 @@ if [ "$BEFORE_MTIME" != "$AFTER_MTIME" ]; then
                     docker restart "$CONTAINER" 2>/dev/null || true
                 fi
             done
-            echo -e "${GREEN}All containers notified.${NC}"
+            printf "${GREEN}All containers notified.${NC}\n"
         fi
     fi
 else

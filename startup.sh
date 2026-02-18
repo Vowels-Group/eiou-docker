@@ -321,7 +321,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
     LE_DOMAIN=$(echo "$LE_DOMAIN" | sed 's/:[0-9]*$//')
 
     # Validate domain: must be a real FQDN (not IP, localhost, or bare container name)
-    if echo "$LE_DOMAIN" | grep -qP '^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
+    if echo "$LE_DOMAIN" | grep -qE '^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'; then
         echo "Let's Encrypt: Checking certificate for $LE_DOMAIN..."
 
         # Check if a valid (not-yet-expired) cert already exists from a previous run
