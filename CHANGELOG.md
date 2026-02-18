@@ -28,6 +28,7 @@ The project is currently in **ALPHA** status.
 
 ### Docs
 - Updated `SECURITY.md` to reference Let's Encrypt as the recommended production SSL option
+- Updated `README.md`: removed obsolete `eiou generate` commands, added QUICKSTART explanation, fixed cluster hub container name (`cluster-a0` → `cluster-a`), replaced placeholder `<address>` examples with concrete `http://` URLs
 
 ## 2026-02-17
 
