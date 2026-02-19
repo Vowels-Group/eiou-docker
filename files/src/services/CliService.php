@@ -1888,19 +1888,33 @@ HELP;
                 if($this->contactRepository->contactExists($transportIndex, $address)){
                     $contactResult = $this->contactRepository->lookupByAddress($transportIndex, $address);
                 }
+                if ($contactResult && $transportIndex && isset($contactResult[$transportIndex])) {
+                    $sentTransactions = $this->transactionRepository->getSentUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
+                    $receivedTransactions = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
+                    $this->displayHistory($sentTransactions, 'sent', $displayLimit, $output);
+                    $this->displayHistory($receivedTransactions, 'received', $displayLimit, $output);
+                    return;
+                }
             } else {
-                // Check if the name yields an address
+                // Check if the name yields an address - query ALL transport addresses for this contact
                 $contactResult = $this->contactRepository->lookupByName($argv[2]);
                 if ($contactResult) {
-                    $transportIndex = $this->transportUtility->fallbackTransportType($argv[2], $contactResult);
+                    $sentTransactions = [];
+                    $receivedTransactions = [];
+                    foreach (Constants::VALID_TRANSPORT_INDICES as $type) {
+                        if (!empty($contactResult[$type])) {
+                            $sent = $this->transactionRepository->getSentUserTransactionsAddress($contactResult[$type], PHP_INT_MAX);
+                            $received = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult[$type], PHP_INT_MAX);
+                            $sentTransactions = array_merge($sentTransactions, $sent);
+                            $receivedTransactions = array_merge($receivedTransactions, $received);
+                        }
+                    }
+                    usort($sentTransactions, fn($a, $b) => strcmp($b['date'], $a['date']));
+                    usort($receivedTransactions, fn($a, $b) => strcmp($b['date'], $a['date']));
+                    $this->displayHistory($sentTransactions, 'sent', $displayLimit, $output);
+                    $this->displayHistory($receivedTransactions, 'received', $displayLimit, $output);
+                    return;
                 }
-            }
-            if ($contactResult && $transportIndex && isset($contactResult[$transportIndex])) {
-                $sentTransactions = $this->transactionRepository->getSentUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
-                $receivedTransactions = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
-                $this->displayHistory($sentTransactions, 'sent', $displayLimit, $output);
-                $this->displayHistory($receivedTransactions, 'received', $displayLimit, $output);
-                return;
             }
         }
         // If no address supplied, get all transactions
