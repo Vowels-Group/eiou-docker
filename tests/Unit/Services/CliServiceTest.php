@@ -609,9 +609,9 @@ class CliServiceTest extends TestCase
     }
 
     /**
-     * Test displayHistory with 'all' as display limit
+     * Test displayHistory with 0 as unlimited display limit
      */
-    public function testDisplayHistoryWithAllAsLimit(): void
+    public function testDisplayHistoryWithZeroAsUnlimited(): void
     {
         $this->outputManager->method('isJsonMode')
             ->willReturn(false);
@@ -629,7 +629,7 @@ class CliServiceTest extends TestCase
             ->willReturnCallback(fn($addr, $len) => substr($addr, 0, $len));
 
         ob_start();
-        $this->service->displayHistory($transactions, 'received', 'all', $this->outputManager);
+        $this->service->displayHistory($transactions, 'received', 0, $this->outputManager);
         $output = ob_get_clean();
 
         $this->assertStringContainsString('Displaying 2 out of 2', $output);

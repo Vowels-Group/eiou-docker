@@ -679,7 +679,7 @@ eiou history [address|name] [limit]
 | Argument | Type | Description |
 |----------|------|-------------|
 | `address\|name` | optional | Filter by specific contact |
-| `limit` | optional | Maximum transactions to display (or "all") |
+| `limit` | optional | Maximum transactions to display (0 = unlimited) |
 
 **Examples:**
 ```bash
@@ -689,8 +689,8 @@ eiou history
 # View history with specific contact
 eiou history Bob
 
-# View all history (no limit)
-eiou history all
+# View all history with Bob (no limit)
+eiou history Bob 0
 
 # JSON output
 eiou history --json
@@ -756,7 +756,7 @@ eiou changesettings [setting] [value]
 | `maxFee` | Maximum fee percentage | `5.0` |
 | `maxP2pLevel` | Maximum P2P routing hops | `3` |
 | `p2pExpiration` | P2P request timeout (seconds) | `300` |
-| `maxOutput` | Max display lines (integer or "all") | `50` |
+| `maxOutput` | Max display lines (0 = unlimited) | `50` |
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |

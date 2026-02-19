@@ -202,16 +202,11 @@ class CliService implements CliServiceInterface {
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'maxoutput'){
                 $key = 'maxOutput';
-                if($argv[3] === 'all'){
-                    $value = 'all';
-                } else{
-                    // Validate as positive integer using Security::sanitizeInt
-                    if (!is_numeric($argv[3]) || intval($argv[3]) <= 0) {
-                        $output->validationError('maxOutput', 'Max output must be a positive integer or \'all\'');
-                        return;
-                    }
-                    $value = intval($argv[3]);
+                if (!is_numeric($argv[3]) || intval($argv[3]) < 0) {
+                    $output->validationError('maxOutput', 'Max output must be a non-negative integer (0 = unlimited)');
+                    return;
                 }
+                $value = intval($argv[3]);
             } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
                 $key = 'defaultTransportMode';
                 $value = strtolower($argv[3]);
@@ -355,18 +350,14 @@ class CliService implements CliServiceInterface {
                     break;
 
                 case '8':
-                    echo "Enter new maximum of balance/transaction output lines to display: ";
+                    echo "Enter new maximum of balance/transaction output lines to display (0 = unlimited): ";
                     $key = 'maxOutput';
                     $read = trim(fgets(STDIN));
-                    if($read === 'all'){
-                        $value = 'all';
-                    } else{
-                        if (!is_numeric($read) || intval($read) <= 0) {
-                            echo "Error: Max output must be a positive integer or 'all'\n";
-                            return;
-                        }
-                        $value = intval($read);
+                    if (!is_numeric($read) || intval($read) < 0) {
+                        echo "Error: Max output must be a non-negative integer (0 = unlimited)\n";
+                        return;
                     }
+                    $value = intval($read);
                     break;
 
                 case '9':
@@ -509,7 +500,7 @@ class CliService implements CliServiceInterface {
             echo "\tDefault credit limit: " . $settings['default_credit_limit'] ."\n";
             echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
-            echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
+            echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
             if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
@@ -673,12 +664,12 @@ class CliService implements CliServiceInterface {
                 'usage' => 'history ([address/name]) ([limit])',
                 'arguments' => [
                     'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name'],
-                    'limit' => ['type' => 'optional', 'description' => 'Maximum transactions to display (integer or "all")']
+                    'limit' => ['type' => 'optional', 'description' => 'Maximum transactions to display (0 = unlimited)']
                 ],
                 'examples' => [
                     'history' => 'View all transaction history',
                     'history Bob' => 'View history with specific contact',
-                    'history all' => 'View all history (no limit)',
+                    'history Bob 0' => 'View all history with Bob (no limit)',
                     'history --json' => 'JSON output'
                 ]
             ],
@@ -741,7 +732,7 @@ class CliService implements CliServiceInterface {
                     'maxFee' => 'Maximum fee percentage (e.g., 5.0)',
                     'maxP2pLevel' => 'Maximum peer-to-peer routing hops (e.g., 3)',
                     'p2pExpiration' => 'Peer-to-peer request expiration time in seconds (e.g., 300)',
-                    'maxOutput' => 'Maximum lines of output to display (integer or "all")',
+                    'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
                     'defaultTransportMode' => 'Default transport type: http, https, or tor',
                     'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
                     'autoBackupEnabled' => 'Enable automatic daily database backups (true/false)',
@@ -1234,9 +1225,9 @@ HELP;
     public function displayUserInfo(array $argv, ?CliOutputManager $output = null) {
         $output = $output ?? CliOutputManager::getInstance();
 
-       // Define limit of output displayed
-        if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-            $displayLimit = $argv[3];
+       // Define limit of output displayed (0 = unlimited)
+        if(isset($argv[3]) && is_numeric($argv[3]) && intval($argv[3]) >= 0){
+            $displayLimit = intval($argv[3]);
         } else{
             $displayLimit = $this->currentUser->getMaxOutput();
         }
@@ -1705,12 +1696,12 @@ HELP;
                     $this->generalUtility->truncateAddress($res['counterparty'],30), 
                     $res['amount'], 
                     $res['currency']);
-            if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+            if($displayLimit > 0 && ($countrows >= $displayLimit)){
                 break;
-            } 
+            }
             $countrows += 1;
         }
-        if ($displayLimit === 'all' || $displayLimit > $countResults) {
+        if ($displayLimit === 0 || $displayLimit > $countResults) {
             $displayLimit = $countResults;
         } 
         echo "\t\t\t----- Displaying $displayLimit out of $countResults $direction balance(s) -----\n";
@@ -1863,8 +1854,9 @@ HELP;
     public function viewTransactionHistory(array $argv, ?CliOutputManager $output = null) {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-            $displayLimit = $argv[3];
+        // Display limit: 0 = unlimited, positive integer = cap output lines
+        if(isset($argv[3]) && is_numeric($argv[3]) && intval($argv[3]) >= 0){
+            $displayLimit = intval($argv[3]);
         } else{
             $displayLimit = $this->currentUser->getMaxOutput();
         }
@@ -1905,7 +1897,7 @@ HELP;
      *
      * @param array $transactions The formatted transaction data
      * @param string $direction received/send
-     * @param int|string $displayLimit The limit of output displayed
+     * @param int $displayLimit The limit of output displayed (0 = unlimited)
      * @param CliOutputManager|null $output Optional output manager for JSON support
     */
     public function displayHistory(array $transactions, string $direction, $displayLimit, ?CliOutputManager $output = null){
@@ -1914,9 +1906,9 @@ HELP;
         $countResults = count($transactions);
 
         if ($output->isJsonMode()) {
-            // Calculate effective display limit
+            // Calculate effective display limit (0 = unlimited)
             $effectiveLimit = $displayLimit;
-            if ($displayLimit === 'all') {
+            if ($displayLimit === 0) {
                 $effectiveLimit = $countResults;
             } elseif ($displayLimit > $countResults) {
                 $effectiveLimit = $countResults;
@@ -1926,7 +1918,7 @@ HELP;
             $txData = [];
             $count = 0;
             foreach ($transactions as $tx) {
-                if ($displayLimit !== 'all' && $count >= $displayLimit) {
+                if ($displayLimit > 0 && $count >= $displayLimit) {
                     break;
                 }
                 $txData[] = [
@@ -1966,14 +1958,14 @@ HELP;
                     str_pad($tx['amount'], 10, ' ') . " | " .
                     str_pad($tx['currency'], 10, ' ') . "\n" ;
 
-                if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+                if($displayLimit > 0 && ($countrows >= $displayLimit)){
                     break;
                 }
                 $countrows += 1;
             }
             echo "-------------------------------------------\n";
             $effectiveLimit = $displayLimit;
-            if($displayLimit === 'all'){
+            if($displayLimit === 0){
                 $effectiveLimit = $countResults;
             } elseif($displayLimit > $countResults){
                 $effectiveLimit = $countResults;
