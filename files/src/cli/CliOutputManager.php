@@ -48,6 +48,7 @@ class CliOutputManager
         $this->nodeId = $nodeId;
         $this->parseFlags($argv);
         $this->jsonResponse = new CliJsonResponse($this->command, $this->nodeId);
+        $this->jsonResponse->setIncludeMetadata($this->includeMetadata);
     }
 
     /**
