@@ -42,9 +42,20 @@ class DatabaseContext {
      * @return void
      */
     private function loadConfigFromFiles(): void {
-        if (file_exists('/etc/eiou/config/dbconfig.json')){
-            $this->databaseData = json_decode(file_get_contents('/etc/eiou/config/dbconfig.json'),true);
-            $this->initialized = true;
+        $path = '/etc/eiou/config/dbconfig.json';
+        if (file_exists($path)){
+            $contents = file_get_contents($path);
+            if ($contents === false) {
+                error_log("DatabaseContext: Failed to read $path");
+                return;
+            }
+            $decoded = json_decode($contents, true);
+            if (is_array($decoded)) {
+                $this->databaseData = $decoded;
+                $this->initialized = true;
+            } else {
+                error_log("DatabaseContext: Invalid JSON in $path (json_last_error: " . json_last_error_msg() . ")");
+            }
         }
     }
 

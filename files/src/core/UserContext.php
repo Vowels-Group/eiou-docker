@@ -47,14 +47,36 @@ class UserContext {
     private function loadConfigFromFiles(): void {
         if(!$this->initialized ){
             // Load in default config values
-            if (file_exists('/etc/eiou/config/defaultconfig.json')){
-                $this->userData = json_decode(file_get_contents('/etc/eiou/config/defaultconfig.json'),true);
-                 // Load in user config information
-                if (file_exists('/etc/eiou/config/userconfig.json')){
-                    $this->userData = array_merge($this->userData, json_decode(file_get_contents('/etc/eiou/config/userconfig.json'),true));
-                    $this->initialized = true;
+            $defaultPath = '/etc/eiou/config/defaultconfig.json';
+            if (file_exists($defaultPath)){
+                $contents = file_get_contents($defaultPath);
+                if ($contents === false) {
+                    error_log("UserContext: Failed to read $defaultPath");
+                    return;
                 }
-            }     
+                $decoded = json_decode($contents, true);
+                if (!is_array($decoded)) {
+                    error_log("UserContext: Invalid JSON in $defaultPath (json_last_error: " . json_last_error_msg() . ")");
+                    return;
+                }
+                $this->userData = $decoded;
+                // Load in user config information
+                $userPath = '/etc/eiou/config/userconfig.json';
+                if (file_exists($userPath)){
+                    $userContents = file_get_contents($userPath);
+                    if ($userContents === false) {
+                        error_log("UserContext: Failed to read $userPath");
+                        return;
+                    }
+                    $userDecoded = json_decode($userContents, true);
+                    if (is_array($userDecoded)) {
+                        $this->userData = array_merge($this->userData, $userDecoded);
+                        $this->initialized = true;
+                    } else {
+                        error_log("UserContext: Invalid JSON in $userPath (json_last_error: " . json_last_error_msg() . ")");
+                    }
+                }
+            }
         }
     }
 
