@@ -365,6 +365,7 @@ class ApiController {
                 $data['address'],           // $request[2] - recipient address
                 (string) $data['amount'],   // $request[3] - amount
                 $data['currency'],          // $request[4] - currency
+                $data['description'] ?? null, // $request[5] - optional description
                 '--json'                    // Enable JSON output mode
             ];
 

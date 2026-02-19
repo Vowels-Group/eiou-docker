@@ -958,16 +958,18 @@ class CliService implements CliServiceInterface {
             ],
             'send' => [
                 'description' => 'Send an eIOU transaction to a contact (direct or P2P relayed)',
-                'usage' => 'send [address/"name"] [amount] [currency] (--best)',
+                'usage' => 'send [address/"name"] [amount] [currency] ([description]) (--best)',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Recipient address or name (use quotes for multi-word names: "John Doe")'],
                     'amount' => ['type' => 'required', 'description' => 'Amount to send (positive number)'],
                     'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
+                    'description' => ['type' => 'optional', 'description' => 'Optional description attached to the transaction (visible to recipient)'],
                     '--best' => ['type' => 'optional', 'description' => '[EXPERIMENTAL] Collect all route responses and select lowest fee. Slower but cheaper. Ignored for Tor recipients.']
                 ],
                 'examples' => [
                     'send Bob 50 USD' => 'Send by contact name (fast mode)',
                     'send http://bob:8080 100 USD' => 'Send by address',
+                    'send Bob 50 USD "Coffee payment"' => 'Send with description',
                     'send Bob 50 USD --best' => 'Best-fee routing (experimental)',
                     'send Alice 25.50 USD --json' => 'JSON output'
                 ],
