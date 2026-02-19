@@ -12,6 +12,7 @@ use Eiou\Database\ApiKeyRepository;
 use Eiou\Utils\Logger;
 use Eiou\Exceptions\ServiceException;
 use Eiou\Processors\AbstractMessageProcessor;
+use Eiou\Utils\InputValidator;
 
 /**
  * API Controller
@@ -39,6 +40,18 @@ use Eiou\Processors\AbstractMessageProcessor;
  * - GET  /api/v1/system/status               - Get system status
  * - GET  /api/v1/system/metrics              - Get system metrics
  * - GET  /api/v1/system/settings             - Get system settings
+ * - PUT  /api/v1/system/settings             - Update system settings
+ * - POST /api/v1/system/sync                 - Trigger sync operation
+ * - POST /api/v1/system/shutdown             - Shutdown processors
+ * - POST /api/v1/system/start               - Start processors
+ *
+ * - POST /api/v1/chaindrop/propose           - Propose chain drop
+ * - POST /api/v1/chaindrop/accept            - Accept chain drop proposal
+ * - POST /api/v1/chaindrop/reject            - Reject chain drop proposal
+ * - GET  /api/v1/chaindrop                   - List chain drop proposals
+ *
+ * - POST /api/v1/keys/enable/:key_id        - Enable an API key
+ * - POST /api/v1/keys/disable/:key_id       - Disable an API key
  *
  * - GET    /api/v1/backup/status             - Get backup status and settings
  * - GET    /api/v1/backup/list               - List all backups
@@ -129,8 +142,9 @@ class ApiController {
             $response = match ($resource) {
                 'wallet' => $this->handleWallet($method, $action, $params, $body),
                 'contacts' => $this->handleContacts($method, $action, $id, $params, $body),
-                'system' => $this->handleSystem($method, $action, $params),
-                'keys' => $this->handleKeys($method, $action, $params, $body),
+                'system' => $this->handleSystem($method, $action, $params, $body),
+                'keys' => $this->handleKeys($method, $action, $id, $params, $body),
+                'chaindrop' => $this->handleChainDrop($method, $action, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
@@ -216,11 +230,15 @@ class ApiController {
     /**
      * Handle system endpoints
      */
-    private function handleSystem(string $method, ?string $action, array $params): array {
+    private function handleSystem(string $method, ?string $action, array $params, string $body = ''): array {
         return match (true) {
             $method === 'GET' && $action === 'status' => $this->getSystemStatus(),
             $method === 'GET' && $action === 'metrics' => $this->getSystemMetrics(),
             $method === 'GET' && $action === 'settings' => $this->getSystemSettings(),
+            $method === 'PUT' && $action === 'settings' => $this->updateSettings($body),
+            $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
+            $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
+            $method === 'POST' && $action === 'start' => $this->startProcessors(),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
         };
     }
@@ -228,7 +246,7 @@ class ApiController {
     /**
      * Handle API key management endpoints (admin only)
      */
-    private function handleKeys(string $method, ?string $action, array $params, string $body): array {
+    private function handleKeys(string $method, ?string $action, ?string $id, array $params, string $body): array {
         // Require admin permission for key management
         if (!$this->hasPermission('admin')) {
             return $this->errorResponse('Admin permission required', 403, 'permission_denied');
@@ -237,6 +255,8 @@ class ApiController {
         return match (true) {
             $method === 'GET' && !$action => $this->listApiKeys(),
             $method === 'POST' && !$action => $this->createApiKey($body),
+            $method === 'POST' && $action === 'enable' && $id !== null => $this->enableApiKey($id),
+            $method === 'POST' && $action === 'disable' && $id !== null => $this->disableApiKey($id),
             $method === 'DELETE' && $action => $this->deleteApiKey($action),
             default => $this->errorResponse('Unknown keys action', 404, 'unknown_action')
         };
@@ -385,14 +405,74 @@ class ApiController {
         $limit = min((int) ($params['limit'] ?? 50), 100);
         $offset = (int) ($params['offset'] ?? 0);
         $type = $params['type'] ?? null; // sent, received, relay
+        $contactFilter = $params['contact'] ?? null;
 
         $transactionRepo = $this->services->getTransactionRepository();
         $transactionStatsRepo = $this->services->getTransactionStatisticsRepository();
 
-        if ($type) {
-            $transactions = $transactionRepo->getTransactionsByType($type, $limit, $offset);
+        // If contact filter provided, resolve to addresses and filter
+        if ($contactFilter) {
+            $contactRepo = $this->services->getContactRepository();
+            $addressRepo = $this->services->getAddressRepository();
+
+            // Resolve contact by name or address
+            $contact = $contactRepo->lookupByName($contactFilter);
+            if (!$contact) {
+                $addressTypes = $addressRepo->getAllAddressTypes();
+                foreach ($addressTypes as $transportIndex) {
+                    $contact = $contactRepo->lookupByAddress($transportIndex, $contactFilter);
+                    if ($contact) {
+                        break;
+                    }
+                }
+            }
+
+            if (!$contact) {
+                return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+            }
+
+            // Get all transport addresses for this contact
+            $contactAddresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
+            $addresses = [];
+            $addressTypes = $addressRepo->getAllAddressTypes();
+            foreach ($addressTypes as $addrType) {
+                if (!empty($contactAddresses[$addrType])) {
+                    $addresses[] = $contactAddresses[$addrType];
+                }
+            }
+
+            if (empty($addresses)) {
+                return $this->successResponse([
+                    'transactions' => [],
+                    'pagination' => ['total' => 0, 'limit' => $limit, 'offset' => $offset],
+                    'contact' => $contactFilter
+                ]);
+            }
+
+            // Get all transactions then filter by contact addresses
+            $allTransactions = $transactionRepo->getTransactions($limit * 10);
+            $transactions = [];
+            foreach ($allTransactions as $tx) {
+                $matchesSender = in_array($tx['sender_address'] ?? '', $addresses, true);
+                $matchesReceiver = in_array($tx['receiver_address'] ?? '', $addresses, true);
+                if ($matchesSender || $matchesReceiver) {
+                    if ($type && ($tx['type'] ?? '') !== $type) {
+                        continue;
+                    }
+                    $transactions[] = $tx;
+                }
+            }
+
+            // Apply offset and limit
+            $total = count($transactions);
+            $transactions = array_slice($transactions, $offset, $limit);
         } else {
-            $transactions = $transactionRepo->getTransactions($limit, $offset);
+            if ($type) {
+                $transactions = $transactionRepo->getTransactionsByType($type, $limit, $offset);
+            } else {
+                $transactions = $transactionRepo->getTransactions($limit, $offset);
+            }
+            $total = $transactionStatsRepo->getTotalCount();
         }
 
         $result = [];
@@ -412,16 +492,20 @@ class ApiController {
             ];
         }
 
-        $total = $transactionStatsRepo->getTotalCount();
-
-        return $this->successResponse([
+        $responseData = [
             'transactions' => $result,
             'pagination' => [
                 'total' => $total,
                 'limit' => $limit,
                 'offset' => $offset
             ]
-        ]);
+        ];
+
+        if ($contactFilter) {
+            $responseData['contact'] = $contactFilter;
+        }
+
+        return $this->successResponse($responseData);
     }
 
     /**
@@ -443,9 +527,33 @@ class ApiController {
             $addresses[$type] = $userAddresses[$type] ?? null;
         }
 
+        // Fee earnings from P2P relay transactions
+        $p2pRepo = $this->services->getP2pRepository();
+        $feeEarnings = [];
+        $earningsRows = $p2pRepo->getUserTotalEarningsByCurrency();
+        foreach ($earningsRows as $row) {
+            $feeEarnings[] = [
+                'currency' => $row['currency'],
+                'total_amount' => $row['total_amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR
+            ];
+        }
+
+        // Total available credit from all contacts
+        $creditRepo = $this->services->getContactCreditRepository();
+        $availableCredit = [];
+        $creditRows = $creditRepo->getTotalAvailableCreditByCurrency();
+        foreach ($creditRows as $row) {
+            $availableCredit[] = [
+                'currency' => $row['currency'],
+                'total_available_credit' => $row['total_available_credit'] / Constants::CREDIT_CONVERSION_FACTOR
+            ];
+        }
+
         return $this->successResponse([
             'public_key_hash' => $currentUser->getPublicKeyHash(),
-            'addresses' => $addresses
+            'addresses' => $addresses,
+            'fee_earnings' => $feeEarnings,
+            'available_credit' => $availableCredit
         ]);
     }
 
@@ -1233,6 +1341,269 @@ class ApiController {
         ]);
     }
 
+    /**
+     * PUT /api/v1/system/settings
+     *
+     * Update system settings (one at a time)
+     */
+    private function updateSettings(string $body): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+
+        // Map API field names to internal config keys with their validation
+        $settingsMap = [
+            'default_fee' => ['key' => 'defaultFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
+            'default_credit_limit' => ['key' => 'defaultCreditLimit', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
+            'default_currency' => ['key' => 'defaultCurrency', 'validate' => 'validateCurrency', 'config' => 'defaultconfig.json'],
+            'min_fee' => ['key' => 'minFee', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
+            'max_fee' => ['key' => 'maxFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
+            'max_p2p_level' => ['key' => 'maxP2pLevel', 'validate' => 'validateRequestLevel', 'config' => 'defaultconfig.json'],
+            'p2p_expiration' => ['key' => 'p2pExpiration', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'max_output' => ['key' => 'maxOutput', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'default_transport_mode' => ['key' => 'defaultTransportMode', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'auto_refresh_enabled' => ['key' => 'autoRefreshEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'auto_backup_enabled' => ['key' => 'autoBackupEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'hostname' => ['key' => 'hostname', 'validate' => 'validateHostname', 'config' => 'userconfig.json'],
+            'name' => ['key' => 'name', 'validate' => null, 'config' => 'userconfig.json'],
+        ];
+
+        $updated = [];
+        $errors = [];
+
+        foreach ($data as $apiKey => $rawValue) {
+            if (!isset($settingsMap[$apiKey])) {
+                $errors[] = "Unknown setting: $apiKey";
+                continue;
+            }
+
+            $mapping = $settingsMap[$apiKey];
+            $configKey = $mapping['key'];
+            $validateMethod = $mapping['validate'];
+            $configFile = $mapping['config'];
+
+            // Validate the value
+            if ($validateMethod) {
+                if ($validateMethod === 'validatePositiveInteger') {
+                    $validation = InputValidator::$validateMethod($rawValue, Constants::P2P_MIN_EXPIRATION_SECONDS);
+                } else {
+                    $validation = InputValidator::$validateMethod($rawValue);
+                }
+                if (!$validation['valid']) {
+                    $errors[] = "$apiKey: " . $validation['error'];
+                    continue;
+                }
+                $value = $validation['value'];
+            } else {
+                // Custom validation for non-InputValidator fields
+                if ($configKey === 'maxOutput') {
+                    if (!is_numeric($rawValue) || intval($rawValue) < 0) {
+                        $errors[] = "max_output: Must be a non-negative integer (0 = unlimited)";
+                        continue;
+                    }
+                    $value = intval($rawValue);
+                } elseif ($configKey === 'defaultTransportMode') {
+                    $value = strtolower((string) $rawValue);
+                } elseif ($configKey === 'autoRefreshEnabled' || $configKey === 'autoBackupEnabled') {
+                    if (is_bool($rawValue)) {
+                        $value = $rawValue;
+                    } elseif (is_string($rawValue)) {
+                        $lower = strtolower($rawValue);
+                        if (in_array($lower, ['true', '1', 'on', 'yes'])) {
+                            $value = true;
+                        } elseif (in_array($lower, ['false', '0', 'off', 'no'])) {
+                            $value = false;
+                        } else {
+                            $errors[] = "$apiKey: Value must be true/false";
+                            continue;
+                        }
+                    } else {
+                        $value = (bool) $rawValue;
+                    }
+                } elseif ($configKey === 'name') {
+                    if (empty(trim((string) $rawValue))) {
+                        $errors[] = "name: Display name cannot be empty";
+                        continue;
+                    }
+                    $value = trim((string) $rawValue);
+                } else {
+                    $value = $rawValue;
+                }
+            }
+
+            // Handle hostname special case (derive hostname_secure)
+            $hostnameSecure = null;
+            if ($configKey === 'hostname') {
+                if (strpos($value, 'http://') === 0) {
+                    $hostnameSecure = 'https://' . substr($value, 7);
+                } elseif (strpos($value, 'https://') === 0) {
+                    $hostnameSecure = $value;
+                    $value = 'http://' . substr($value, 8);
+                } else {
+                    $hostnameSecure = 'https://' . $value;
+                    $value = 'http://' . $value;
+                }
+            }
+
+            // Write to config file
+            $configPath = '/etc/eiou/config/' . $configFile;
+            $configContent = json_decode(file_get_contents($configPath), true) ?? [];
+            $configContent[$configKey] = $value;
+            if ($hostnameSecure !== null) {
+                $configContent['hostname_secure'] = $hostnameSecure;
+            }
+            file_put_contents($configPath, json_encode($configContent, true), LOCK_EX);
+
+            // Regenerate SSL certificate when hostname changes
+            if ($configKey === 'hostname') {
+                $this->regenerateSslForHostname($value);
+            }
+
+            $updated[$apiKey] = $value;
+            if ($hostnameSecure !== null) {
+                $updated['hostname_secure'] = $hostnameSecure;
+            }
+        }
+
+        if (!empty($errors) && empty($updated)) {
+            return $this->errorResponse(implode('; ', $errors), 400, 'validation_error');
+        }
+
+        $response = [
+            'message' => 'Settings updated successfully',
+            'updated' => $updated
+        ];
+
+        if (!empty($errors)) {
+            $response['warnings'] = $errors;
+        }
+
+        return $this->successResponse($response);
+    }
+
+    /**
+     * POST /api/v1/system/sync
+     *
+     * Trigger sync operation
+     */
+    private function triggerSync(string $body): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        try {
+            $data = json_decode($body, true) ?? [];
+            $type = $data['type'] ?? null;
+            $syncService = $this->services->getSyncService();
+
+            // Create a JSON-mode output manager to capture results
+            $argv = ['eiou', 'sync', '--json'];
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
+            ob_start();
+            if ($type === 'contacts') {
+                $syncService->syncAllContacts($outputManager);
+            } elseif ($type === 'transactions') {
+                $syncService->syncAllTransactions($outputManager);
+            } elseif ($type === 'balances') {
+                $syncService->syncAllBalances($outputManager);
+            } else {
+                $syncService->syncAll($outputManager);
+            }
+            $output = ob_get_clean();
+
+            $cliResponse = $this->parseCliJsonResponse($output);
+
+            return $this->successResponse([
+                'message' => 'Sync completed',
+                'type' => $type ?? 'all',
+                'results' => $cliResponse['data'] ?? null
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Sync failed: ' . $e->getMessage(), 500, 'sync_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/system/shutdown
+     *
+     * Shutdown processors (flag + signal only, API stays responsive)
+     */
+    private function shutdownProcessors(): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        try {
+            // Set shutdown flag to prevent watchdog from restarting processors
+            $shutdownFlag = '/tmp/eiou_shutdown.flag';
+            file_put_contents($shutdownFlag, (string) time());
+
+            $pidFiles = glob('/tmp/*.pid') ?: [];
+            $processesTerminated = 0;
+            $pidFilesCleaned = 0;
+
+            foreach ($pidFiles as $item) {
+                if (is_file($item)) {
+                    $pid = trim(file_get_contents($item));
+                    if (is_numeric($pid) && function_exists('posix_kill') && posix_kill((int) $pid, SIGTERM)) {
+                        $processesTerminated++;
+                    }
+                    unlink($item);
+                    $pidFilesCleaned++;
+                }
+            }
+
+            return $this->successResponse([
+                'message' => 'Processors shutdown initiated',
+                'processes_terminated' => $processesTerminated,
+                'pid_files_cleaned' => $pidFilesCleaned
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Shutdown failed: ' . $e->getMessage(), 500, 'shutdown_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/system/start
+     *
+     * Start processors by removing shutdown flag
+     */
+    private function startProcessors(): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        try {
+            $shutdownFlag = '/tmp/eiou_shutdown.flag';
+            $wasShutdown = file_exists($shutdownFlag);
+
+            if (!$wasShutdown) {
+                return $this->successResponse([
+                    'message' => 'Processors are already running',
+                    'shutdown_flag_removed' => false,
+                    'action' => 'none'
+                ]);
+            }
+
+            unlink($shutdownFlag);
+
+            return $this->successResponse([
+                'message' => 'Processor restart initiated',
+                'shutdown_flag_removed' => true,
+                'action' => 'watchdog_will_restart'
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Start failed: ' . $e->getMessage(), 500, 'start_error');
+        }
+    }
+
     // ==================== Backup Endpoints ====================
 
     /**
@@ -1530,7 +1901,269 @@ class ApiController {
         return $this->successResponse(['message' => 'API key deleted successfully']);
     }
 
+    /**
+     * POST /api/v1/keys/enable/:key_id
+     */
+    private function enableApiKey(string $keyId): array {
+        $enabled = $this->apiKeyRepository->enableKey($keyId);
+
+        if (!$enabled) {
+            return $this->errorResponse('API key not found', 404, 'key_not_found');
+        }
+
+        return $this->successResponse(['message' => 'API key enabled successfully', 'key_id' => $keyId]);
+    }
+
+    /**
+     * POST /api/v1/keys/disable/:key_id
+     */
+    private function disableApiKey(string $keyId): array {
+        $disabled = $this->apiKeyRepository->disableKey($keyId);
+
+        if (!$disabled) {
+            return $this->errorResponse('API key not found', 404, 'key_not_found');
+        }
+
+        return $this->successResponse(['message' => 'API key disabled successfully', 'key_id' => $keyId]);
+    }
+
+    // ==================== Chain Drop Endpoints ====================
+
+    /**
+     * Handle chain drop endpoints
+     *
+     * Routes:
+     * - POST /api/v1/chaindrop/propose  - Propose chain drop
+     * - POST /api/v1/chaindrop/accept   - Accept chain drop proposal
+     * - POST /api/v1/chaindrop/reject   - Reject chain drop proposal
+     * - GET  /api/v1/chaindrop          - List chain drop proposals
+     */
+    private function handleChainDrop(string $method, ?string $action, array $params, string $body): array {
+        return match (true) {
+            $method === 'GET' && !$action => $this->listChainDrops($params),
+            $method === 'POST' && $action === 'propose' => $this->proposeChainDrop($body),
+            $method === 'POST' && $action === 'accept' => $this->acceptChainDrop($body),
+            $method === 'POST' && $action === 'reject' => $this->rejectChainDrop($body),
+            default => $this->errorResponse('Unknown chaindrop action', 404, 'unknown_action')
+        };
+    }
+
+    /**
+     * GET /api/v1/chaindrop
+     */
+    private function listChainDrops(array $params): array {
+        if (!$this->hasPermission('wallet:read')) {
+            return $this->permissionDenied('wallet:read');
+        }
+
+        try {
+            $chainDropService = $this->services->getChainDropService();
+            $contactFilter = $params['contact'] ?? null;
+
+            if ($contactFilter) {
+                $contactRepo = $this->services->getContactRepository();
+                $addressRepo = $this->services->getAddressRepository();
+
+                // Resolve contact by name or address
+                $contact = $contactRepo->lookupByName($contactFilter);
+                if (!$contact) {
+                    $addressTypes = $addressRepo->getAllAddressTypes();
+                    foreach ($addressTypes as $transportIndex) {
+                        $contact = $contactRepo->lookupByAddress($transportIndex, $contactFilter);
+                        if ($contact) {
+                            break;
+                        }
+                    }
+                }
+
+                if (!$contact) {
+                    return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+                }
+
+                $proposals = $chainDropService->getProposalsForContact($contact['pubkey_hash']);
+            } else {
+                $proposals = $chainDropService->getIncomingPendingProposals();
+            }
+
+            return $this->successResponse([
+                'proposals' => $proposals,
+                'count' => count($proposals)
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to list chain drop proposals: ' . $e->getMessage(), 500, 'chaindrop_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/chaindrop/propose
+     */
+    private function proposeChainDrop(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+
+        $contactAddress = $data['contact'] ?? $data['address'] ?? null;
+        if (!$contactAddress) {
+            return $this->errorResponse('Missing required field: contact', 400, 'missing_field');
+        }
+
+        try {
+            $contactRepo = $this->services->getContactRepository();
+            $addressRepo = $this->services->getAddressRepository();
+
+            // Resolve contact to pubkey_hash
+            $contact = $contactRepo->lookupByName($contactAddress);
+            if (!$contact) {
+                $addressTypes = $addressRepo->getAllAddressTypes();
+                foreach ($addressTypes as $transportIndex) {
+                    $contact = $contactRepo->lookupByAddress($transportIndex, $contactAddress);
+                    if ($contact) {
+                        break;
+                    }
+                }
+            }
+
+            if (!$contact) {
+                return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+            }
+
+            $chainDropService = $this->services->getChainDropService();
+            $result = $chainDropService->proposeChainDrop($contact['pubkey_hash']);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Chain drop proposed successfully',
+                    'proposal_id' => $result['proposal_id'],
+                    'missing_txid' => $result['missing_txid'] ?? null,
+                    'broken_txid' => $result['broken_txid'] ?? null
+                ], 201);
+            } else {
+                return $this->errorResponse($result['error'] ?? 'Failed to propose chain drop', 400, 'chaindrop_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to propose chain drop: ' . $e->getMessage(), 500, 'chaindrop_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/chaindrop/accept
+     */
+    private function acceptChainDrop(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data || empty($data['proposal_id'])) {
+            return $this->errorResponse('Missing required field: proposal_id', 400, 'missing_field');
+        }
+
+        try {
+            $chainDropService = $this->services->getChainDropService();
+            $result = $chainDropService->acceptProposal($data['proposal_id']);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Chain drop proposal accepted',
+                    'proposal_id' => $data['proposal_id']
+                ]);
+            } else {
+                return $this->errorResponse($result['error'] ?? 'Failed to accept proposal', 400, 'chaindrop_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to accept chain drop: ' . $e->getMessage(), 500, 'chaindrop_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/chaindrop/reject
+     */
+    private function rejectChainDrop(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data || empty($data['proposal_id'])) {
+            return $this->errorResponse('Missing required field: proposal_id', 400, 'missing_field');
+        }
+
+        try {
+            $chainDropService = $this->services->getChainDropService();
+            $result = $chainDropService->rejectProposal($data['proposal_id']);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Chain drop proposal rejected',
+                    'proposal_id' => $data['proposal_id']
+                ]);
+            } else {
+                return $this->errorResponse($result['error'] ?? 'Failed to reject proposal', 400, 'chaindrop_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to reject chain drop: ' . $e->getMessage(), 500, 'chaindrop_error');
+        }
+    }
+
     // ==================== Helper Methods ====================
+
+    /**
+     * Regenerate SSL certificate for a new hostname
+     */
+    private function regenerateSslForHostname(string $newHostname): void {
+        $sslCertPath = '/etc/apache2/ssl/server.crt';
+        $sslKeyPath = '/etc/apache2/ssl/server.key';
+
+        // Check if we're using externally provided certificates (don't regenerate those)
+        if (file_exists('/ssl-certs/server.crt')) {
+            return;
+        }
+
+        // Remove existing certificate to trigger regeneration
+        if (file_exists($sslCertPath)) {
+            unlink($sslCertPath);
+        }
+        if (file_exists($sslKeyPath)) {
+            unlink($sslKeyPath);
+        }
+
+        // Extract domain from hostname URL
+        $domain = preg_replace('#^https?://#', '', $newHostname);
+        $domain = rtrim($domain, '/');
+
+        $sanList = "DNS:localhost,DNS:{$domain}";
+
+        $containerHostname = gethostname();
+        if ($containerHostname && $containerHostname !== $domain) {
+            $sanList .= ",DNS:{$containerHostname}";
+        }
+
+        // Add IP addresses
+        $sanList .= ",IP:127.0.0.1";
+        $containerIp = gethostbyname($containerHostname ?: 'localhost');
+        if ($containerIp && $containerIp !== '127.0.0.1' && $containerIp !== $containerHostname) {
+            $sanList .= ",IP:{$containerIp}";
+        }
+
+        $opensslConf = tempnam('/tmp', 'ssl_');
+        file_put_contents($opensslConf, "[req]\ndefault_bits=2048\nprompt=no\ndefault_md=sha256\nx509_extensions=v3_ca\ndistinguished_name=dn\n[dn]\nCN={$domain}\n[v3_ca]\nsubjectAltName={$sanList}\n");
+
+        $sslDir = dirname($sslCertPath);
+        if (!is_dir($sslDir)) {
+            mkdir($sslDir, 0755, true);
+        }
+
+        exec("openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {$sslKeyPath} -out {$sslCertPath} -config {$opensslConf} 2>/dev/null");
+
+        if (file_exists($opensslConf)) {
+            unlink($opensslConf);
+        }
+    }
 
     /**
      * Check if authenticated key has a permission

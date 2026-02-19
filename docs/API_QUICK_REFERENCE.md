@@ -53,6 +53,19 @@ All requests require HMAC-SHA256 authentication:
 | `GET` | `/api/v1/system/status` | `system:read` | System health status |
 | `GET` | `/api/v1/system/metrics` | `system:read` | System metrics |
 | `GET` | `/api/v1/system/settings` | `system:read` | System settings |
+| `PUT` | `/api/v1/system/settings` | `admin` | Update system settings |
+| `POST` | `/api/v1/system/sync` | `admin` | Trigger sync operation |
+| `POST` | `/api/v1/system/shutdown` | `admin` | Shutdown background processors |
+| `POST` | `/api/v1/system/start` | `admin` | Start background processors |
+
+### Chain Drop Endpoints
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/chaindrop` | `wallet:read` | List chain drop proposals |
+| `POST` | `/api/v1/chaindrop/propose` | `wallet:send` | Propose chain drop with contact |
+| `POST` | `/api/v1/chaindrop/accept` | `wallet:send` | Accept chain drop proposal |
+| `POST` | `/api/v1/chaindrop/reject` | `wallet:send` | Reject chain drop proposal |
 
 ### Backup Endpoints
 
@@ -75,6 +88,8 @@ All requests require HMAC-SHA256 authentication:
 | `GET` | `/api/v1/keys` | `admin` | List all API keys |
 | `POST` | `/api/v1/keys` | `admin` | Create new API key |
 | `DELETE` | `/api/v1/keys/:key_id` | `admin` | Delete API key |
+| `POST` | `/api/v1/keys/enable/:key_id` | `admin` | Enable API key |
+| `POST` | `/api/v1/keys/disable/:key_id` | `admin` | Disable API key |
 
 ---
 
@@ -112,6 +127,8 @@ All requests require HMAC-SHA256 authentication:
 |----------|-----------|--------|
 | `/contacts` | `status` | `pending`, `accepted`, `blocked` |
 | `/transactions` | `type` | `sent`, `received`, `relay` |
+| `/transactions` | `contact` | Contact name or address |
+| `/chaindrop` | `contact` | Contact name or address |
 | `/contacts/search` | `q` or `query` | Search term |
 
 ---
@@ -161,6 +178,40 @@ All requests require HMAC-SHA256 authentication:
     "permissions": ["wallet:read", "contacts:read"],
     "rate_limit_per_minute": 100,
     "expires_at": "2027-01-01T00:00:00Z"
+}
+```
+
+### PUT /api/v1/system/settings
+
+```json
+{
+    "default_fee": 1.5,
+    "default_credit_limit": 200.00,
+    "hostname": "http://mynode"
+}
+```
+
+### POST /api/v1/system/sync
+
+```json
+{
+    "type": "contacts"
+}
+```
+
+### POST /api/v1/chaindrop/propose
+
+```json
+{
+    "contact": "Bob"
+}
+```
+
+### POST /api/v1/chaindrop/accept | reject
+
+```json
+{
+    "proposal_id": "cd_abc123"
 }
 ```
 

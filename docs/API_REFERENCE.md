@@ -10,8 +10,9 @@ Complete API documentation for the EIOU Docker node REST API.
 4. [Wallet Endpoints](#wallet-endpoints)
 5. [Contact Endpoints](#contact-endpoints)
 6. [System Endpoints](#system-endpoints)
-7. [Backup Endpoints](#backup-endpoints)
-8. [API Key Management](#api-key-management)
+7. [Chain Drop Endpoints](#chain-drop-endpoints)
+8. [Backup Endpoints](#backup-endpoints)
+9. [API Key Management](#api-key-management)
 
 ---
 
@@ -226,6 +227,8 @@ print(response.json())
 | `missing_field` | Required field is missing |
 | `invalid_amount` | Transaction amount is invalid |
 | `no_fields` | No fields provided for update |
+| `validation_error` | One or more setting values failed validation |
+| `unknown_setting` | Unrecognized setting name in update request |
 
 ### Rate Limiting (429)
 
@@ -249,6 +252,11 @@ print(response.json())
 | `unblock_failed` | Contact unblock operation failed |
 | `unblock_error` | Error during unblock operation |
 | `contact_add_failed` | Failed to add contact |
+| `chaindrop_failed` | Chain drop operation failed |
+| `chaindrop_error` | Error during chain drop operation |
+| `sync_error` | Sync operation failed |
+| `shutdown_error` | Shutdown operation failed |
+| `start_error` | Start operation failed |
 
 ### Server Errors (500)
 
@@ -303,7 +311,7 @@ curl -X GET "http://localhost:8080/api/v1/wallet/balance" \
 
 ### GET /api/v1/wallet/info
 
-Get wallet public key and addresses.
+Get wallet public key, addresses, fee earnings, and available credit.
 
 **Permission:** `wallet:read`
 
@@ -318,10 +326,26 @@ Get wallet public key and addresses.
             "http": "http://node.local:8080",
             "https": "https://node.local:8443",
             "tor": "abc123...onion"
-        }
+        },
+        "fee_earnings": [
+            {
+                "currency": "USD",
+                "total_amount": 12.50
+            }
+        ],
+        "available_credit": [
+            {
+                "currency": "USD",
+                "total_available_credit": 250.00
+            }
+        ]
     }
 }
 ```
+
+**Fields:**
+- `fee_earnings`: Total fees earned from P2P relay transactions, grouped by currency
+- `available_credit`: Total available credit extended by all contacts, grouped by currency
 
 ---
 
@@ -391,6 +415,7 @@ Get paginated transaction history.
 | `limit` | int | 50 | Number of transactions (max: 100) |
 | `offset` | int | 0 | Pagination offset |
 | `type` | string | null | Filter by type: `sent`, `received`, `relay` |
+| `contact` | string | null | Filter by contact name or address |
 
 **Response:**
 
@@ -1037,6 +1062,320 @@ Get system settings.
 
 ---
 
+### PUT /api/v1/system/settings
+
+Update system settings.
+
+**Permission:** `admin`
+
+**Request Body:**
+
+```json
+{
+    "default_fee": 1.5,
+    "default_credit_limit": 200.00,
+    "hostname": "http://mynode"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `default_fee` | number | Default fee percentage for new contacts |
+| `default_credit_limit` | number | Default credit limit for new contacts |
+| `default_currency` | string | Default currency code (e.g., USD) |
+| `min_fee` | number | Minimum fee amount |
+| `max_fee` | number | Maximum fee percentage |
+| `max_p2p_level` | int | Maximum P2P relay depth |
+| `p2p_expiration` | int | P2P request expiration in seconds |
+| `max_output` | int | Maximum CLI output lines (0 = unlimited) |
+| `default_transport_mode` | string | Default transport protocol (http, https, tor) |
+| `auto_refresh_enabled` | boolean | Enable/disable auto-refresh |
+| `auto_backup_enabled` | boolean | Enable/disable automatic backups |
+| `hostname` | string | Node hostname (triggers SSL cert regeneration) |
+| `name` | string | Node display name |
+
+All fields are optional. Only provided fields will be updated. Unknown fields return warnings.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Settings updated successfully",
+        "updated": {
+            "default_fee": 1.5,
+            "default_credit_limit": 200.00,
+            "hostname": "http://mynode",
+            "hostname_secure": "https://mynode"
+        }
+    }
+}
+```
+
+**Partial Success Response** (some fields valid, some invalid):
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Settings updated successfully",
+        "updated": {
+            "default_fee": 1.5
+        },
+        "warnings": [
+            "Unknown setting: invalid_key"
+        ]
+    }
+}
+```
+
+**Notes:**
+- Changing `hostname` automatically derives `hostname_secure` and regenerates the SSL certificate
+- Boolean fields accept: `true`/`false`, `"true"`/`"false"`, `"1"`/`"0"`, `"on"`/`"off"`, `"yes"`/`"no"`
+
+---
+
+### POST /api/v1/system/sync
+
+Trigger a sync operation to synchronize data with contacts.
+
+**Permission:** `admin`
+
+**Request Body (optional):**
+
+```json
+{
+    "type": "contacts"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | No | Sync type: `contacts`, `transactions`, `balances`, or omit for all |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Sync completed",
+        "type": "all",
+        "results": null
+    }
+}
+```
+
+---
+
+### POST /api/v1/system/shutdown
+
+Shutdown background processors. The API remains responsive; only background workers (P2P, transaction processor, etc.) are terminated.
+
+**Permission:** `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Processors shutdown initiated",
+        "processes_terminated": 3,
+        "pid_files_cleaned": 3
+    }
+}
+```
+
+**Fields:**
+- `processes_terminated`: Number of processes that received SIGTERM
+- `pid_files_cleaned`: Number of PID files removed
+
+**Notes:**
+- Creates a shutdown flag at `/tmp/eiou_shutdown.flag` to prevent the watchdog from restarting processors
+- The API server itself is not affected and continues to serve requests
+
+---
+
+### POST /api/v1/system/start
+
+Start background processors by removing the shutdown flag. The watchdog process will detect the flag removal and restart processors automatically.
+
+**Permission:** `admin`
+
+**Response (processors were stopped):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Processor restart initiated",
+        "shutdown_flag_removed": true,
+        "action": "watchdog_will_restart"
+    }
+}
+```
+
+**Response (processors already running):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Processors are already running",
+        "shutdown_flag_removed": false,
+        "action": "none"
+    }
+}
+```
+
+---
+
+## Chain Drop Endpoints
+
+Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions).
+
+### GET /api/v1/chaindrop
+
+List chain drop proposals.
+
+**Permission:** `wallet:read`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `contact` | string | null | Filter by contact name or address |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "proposals": [
+            {
+                "proposal_id": "cd_abc123",
+                "contact_pubkey_hash": "def456...",
+                "status": "pending",
+                "created_at": "2026-01-24T12:00:00Z"
+            }
+        ],
+        "count": 1
+    }
+}
+```
+
+**Notes:**
+- Without `contact` filter, returns all incoming pending proposals
+- With `contact` filter, returns all proposals (any status) for that contact
+
+---
+
+### POST /api/v1/chaindrop/propose
+
+Propose a chain drop with a contact. This initiates the process of resetting the transaction chain.
+
+**Permission:** `wallet:send`
+
+**Request Body:**
+
+```json
+{
+    "contact": "Bob"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact` | string | Yes | Contact name or address (also accepts `address` field name) |
+
+**Response (201 Created):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposed successfully",
+        "proposal_id": "cd_abc123",
+        "missing_txid": "tx_missing...",
+        "broken_txid": "tx_broken..."
+    }
+}
+```
+
+**Fields:**
+- `proposal_id`: Unique identifier for the proposal
+- `missing_txid`: The transaction ID that triggered the chain integrity issue (if applicable)
+- `broken_txid`: The transaction ID where the chain break was detected (if applicable)
+
+---
+
+### POST /api/v1/chaindrop/accept
+
+Accept a pending chain drop proposal.
+
+**Permission:** `wallet:send`
+
+**Request Body:**
+
+```json
+{
+    "proposal_id": "cd_abc123"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `proposal_id` | string | Yes | ID of the proposal to accept |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal accepted",
+        "proposal_id": "cd_abc123"
+    }
+}
+```
+
+---
+
+### POST /api/v1/chaindrop/reject
+
+Reject a pending chain drop proposal.
+
+**Permission:** `wallet:send`
+
+**Request Body:**
+
+```json
+{
+    "proposal_id": "cd_abc123"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `proposal_id` | string | Yes | ID of the proposal to reject |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal rejected",
+        "proposal_id": "cd_abc123"
+    }
+}
+```
+
+---
+
 ## Backup Endpoints
 
 Manage encrypted database backups.
@@ -1424,6 +1763,70 @@ Delete an API key.
     "data": {
         "message": "API key deleted successfully",
         "key_id": "eiou_xyz789"
+    }
+}
+```
+
+---
+
+### POST /api/v1/keys/enable/:key_id
+
+Enable a disabled API key.
+
+**Permission:** `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "API key enabled successfully",
+        "key_id": "eiou_xyz789"
+    }
+}
+```
+
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "error": {
+        "code": "key_not_found",
+        "message": "API key not found"
+    }
+}
+```
+
+---
+
+### POST /api/v1/keys/disable/:key_id
+
+Disable an API key without deleting it. Disabled keys return `auth_key_disabled` on authentication attempts.
+
+**Permission:** `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "API key disabled successfully",
+        "key_id": "eiou_xyz789"
+    }
+}
+```
+
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "error": {
+        "code": "key_not_found",
+        "message": "API key not found"
     }
 }
 ```
