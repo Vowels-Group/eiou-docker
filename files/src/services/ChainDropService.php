@@ -812,15 +812,23 @@ class ChainDropService implements ChainDropServiceInterface
     private function showHelp(CliOutputManager $output): void
     {
         $output->info("Chain Drop Agreement Commands:");
-        $output->info("  eiou chaindrop propose <contact_address>  - Propose dropping a missing transaction");
-        $output->info("  eiou chaindrop accept <proposal_id>       - Accept an incoming proposal");
-        $output->info("  eiou chaindrop reject <proposal_id>       - Reject an incoming proposal");
-        $output->info("  eiou chaindrop list [contact_address]     - List pending proposals");
-        $output->info("  eiou chaindrop help                       - Show this help");
+        $output->info("");
+        $output->info("  eiou chaindrop propose <contact>    Propose dropping a missing transaction");
+        $output->info("  eiou chaindrop accept <proposal_id> Accept an incoming proposal");
+        $output->info("  eiou chaindrop reject <proposal_id> Reject an incoming proposal");
+        $output->info("  eiou chaindrop list [contact]       List pending proposals (all or per contact)");
+        $output->info("  eiou chaindrop help                 Show this help");
+        $output->info("");
+        $output->info("Examples:");
+        $output->info("  eiou chaindrop propose https://bob   Propose dropping a gap with Bob");
+        $output->info("  eiou chaindrop accept cdp-abc123...  Accept an incoming proposal");
+        $output->info("  eiou chaindrop reject cdp-abc123...  Reject a proposal (chain stays broken)");
+        $output->info("  eiou chaindrop list                  List all incoming pending proposals");
+        $output->info("  eiou chaindrop list https://bob      List proposals for a specific contact");
         $output->info("");
         $output->info("When a chain gap exists, transactions with that contact are blocked.");
-        $output->info("Rejecting a proposal leaves the gap unresolved. A new proposal must");
-        $output->info("be accepted to restore the ability to transact.");
+        $output->info("Both sides must agree to drop the missing transaction to resume.");
+        $output->info("Rejecting a proposal leaves the gap unresolved.");
     }
 
     // =========================================================================

@@ -247,7 +247,7 @@ eiou add http://bob:8080 Bob 1.0 100 USD
 eiou add http://bob:8080 "Jane Doe" 1.0 100 USD
 
 # Add via Tor address
-eiou add abc123...onion Alice 0.5 500 EUR
+eiou add abc123...onion Alice 0.5 500 USD
 
 # JSON output
 eiou add http://charlie:8080 Charlie 1 200 USD --json
@@ -565,7 +565,7 @@ eiou send <address|name> <amount> <currency> [description] [--best]
 |----------|------|-------------|
 | `address\|name` | required | Recipient's address or display name |
 | `amount` | required | Amount to send (positive number) |
-| `currency` | required | Currency code (e.g., USD, EUR) |
+| `currency` | required | Currency code (e.g., USD) |
 | `description` | optional | Transaction description/memo text |
 
 **Flags:**
@@ -580,7 +580,7 @@ eiou send <address|name> <amount> <currency> [description] [--best]
 eiou send Bob 50 USD
 
 # Send by address
-eiou send http://bob:8080 100 EUR
+eiou send http://bob:8080 100 USD
 
 # Send with a description
 eiou send Bob 50 USD "Payment for lunch"
@@ -767,7 +767,7 @@ eiou changesettings [setting] [value]
 eiou changesettings
 
 # Direct setting change
-eiou changesettings defaultCurrency EUR
+eiou changesettings defaultCurrency USD
 eiou changesettings maxP2pLevel 5
 eiou changesettings maxOutput 0           # Unlimited output
 eiou changesettings autoRefreshEnabled true
