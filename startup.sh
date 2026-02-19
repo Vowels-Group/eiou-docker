@@ -854,14 +854,28 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "Quickstart mode enabled. Running generate command with address: $EFFECTIVE_URL"
         # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
         if [ "$EFFECTIVE_NAME" != "false" ]; then
-            eiou generate "$EFFECTIVE_URL" "$EFFECTIVE_NAME"
+            GENERATE_RESULT=$(eiou generate "$EFFECTIVE_URL" "$EFFECTIVE_NAME" 2>&1)
         else
-            eiou generate "$EFFECTIVE_URL"
+            GENERATE_RESULT=$(eiou generate "$EFFECTIVE_URL" 2>&1)
+        fi
+        GENERATE_EXIT_CODE=$?
+        echo "$GENERATE_RESULT"
+        if [ $GENERATE_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Wallet generation failed (exit code: $GENERATE_EXIT_CODE)"
+            echo "Cannot continue startup without a wallet. Exiting."
+            exit 1
         fi
         echo "Generate command completed."
     else
         # Run automatically without hostname (only tor)
-        eiou generate
+        GENERATE_RESULT=$(eiou generate 2>&1)
+        GENERATE_EXIT_CODE=$?
+        echo "$GENERATE_RESULT"
+        if [ $GENERATE_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Wallet generation failed (exit code: $GENERATE_EXIT_CODE)"
+            echo "Cannot continue startup without a wallet. Exiting."
+            exit 1
+        fi
         echo "Generate command completed."
     fi
 
