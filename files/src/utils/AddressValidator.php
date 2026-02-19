@@ -28,7 +28,7 @@ class AddressValidator
      */
     public static function isHttpsAddress(string $address): bool
     {
-        return preg_match('/^https:\/\//', $address) === 1;
+        return preg_match('/^https:\/\//i', $address) === 1;
     }
 
     /**
@@ -39,8 +39,8 @@ class AddressValidator
      */
     public static function isHttpAddress(string $address): bool
     {
-        return preg_match('/^http:\/\//', $address) === 1
-            && preg_match('/^https:\/\//', $address) === 0;
+        return preg_match('/^http:\/\//i', $address) === 1
+            && preg_match('/^https:\/\//i', $address) === 0;
     }
 
     /**

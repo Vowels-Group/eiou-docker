@@ -327,7 +327,7 @@ class TransactionRepository extends AbstractRepository {
         $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders) AND sender_address = ?";
+                    WHERE receiver_address IN ($placeholders) AND LOWER(sender_address) = LOWER(?)";
 
         $additionalParams = [$senderAddress];
         if ($currency !== null) {
@@ -368,7 +368,7 @@ class TransactionRepository extends AbstractRepository {
         $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders) AND receiver_address = ?";
+                    WHERE sender_address IN ($placeholders) AND LOWER(receiver_address) = LOWER(?)";
 
         $additionalParams = [$receiverAddress];
         if ($currency !== null) {
