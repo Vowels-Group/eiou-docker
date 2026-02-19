@@ -1310,6 +1310,8 @@ watchdog() {
                     sleep 5
                     if pgrep -x "tor" > /dev/null 2>&1; then
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully via signal (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS)"
+                        # Schedule a follow-up self-check in 30s to verify hidden service republished
+                        TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
                     fi
@@ -1374,7 +1376,9 @@ watchdog() {
                     if service tor start 2>/dev/null; then
                         sleep 5
                         if pgrep -x "tor" > /dev/null 2>&1; then
-                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — hidden service will republish within ~30s"
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~30s"
+                            # Schedule a follow-up self-check in 30s to verify hidden service republished
+                            TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
                         else
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                         fi
@@ -1388,6 +1392,10 @@ watchdog() {
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor exceeded max restarts ($TOR_MAX_RESTARTS) — will retry after cooldown ($((TOR_RESET_COOLDOWN - TOR_TIME_SINCE_RESTART))s remaining)"
                     fi
+                else
+                    # Recently restarted but still unreachable — schedule another check in 30s
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor still unreachable after recent restart — rechecking in ~30s"
+                    TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
                 fi
             else
                 # Self-check passed — reset restart counter on sustained success
