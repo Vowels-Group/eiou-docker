@@ -137,7 +137,7 @@ After restoring a wallet from a seed phrase, your previous contacts are not imme
 
 ### info
 
-Display wallet information including addresses and public key.
+Display wallet information including addresses, public key, fee earnings, and available credit.
 
 **Syntax:**
 ```bash
@@ -442,12 +442,18 @@ When a ping is received by a node that was restored from a seed phrase, the Cont
 
 ### block
 
-Block a contact from sending transactions.
+Block a contact from sending transactions to you. Blocked contacts cannot send you transactions or P2P requests — incoming messages from blocked contacts are rejected.
 
 **Syntax:**
 ```bash
 eiou block <address|name>
 ```
+
+**Arguments:**
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `address\|name` | required | Contact's address or display name to block |
 
 **Examples:**
 ```bash
@@ -473,12 +479,18 @@ eiou block http://badactor:8080 --json
 
 ### unblock
 
-Unblock a previously blocked contact.
+Unblock a previously blocked contact, allowing them to send transactions and P2P requests again.
 
 **Syntax:**
 ```bash
 eiou unblock <address|name>
 ```
+
+**Arguments:**
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `address\|name` | required | Contact's address or display name to unblock |
 
 **Examples:**
 ```bash
@@ -509,6 +521,12 @@ Delete a contact permanently.
 ```bash
 eiou delete <address|name>
 ```
+
+**Arguments:**
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `address\|name` | required | Contact's address or display name to delete |
 
 **Examples:**
 ```bash
@@ -667,7 +685,7 @@ eiou viewbalances --json
 
 ### history
 
-View transaction history.
+View transaction history with all contacts or a specific contact. Output is capped by the `maxOutput` setting (default: 5 lines) unless overridden with a limit argument.
 
 **Syntax:**
 ```bash
@@ -679,7 +697,7 @@ eiou history [address|name] [limit]
 | Argument | Type | Description |
 |----------|------|-------------|
 | `address\|name` | optional | Filter by specific contact |
-| `limit` | optional | Maximum transactions to display (or "all") |
+| `limit` | optional | Maximum transactions to display (0 = unlimited) |
 
 **Examples:**
 ```bash
@@ -689,8 +707,8 @@ eiou history
 # View history with specific contact
 eiou history Bob
 
-# View all history (no limit)
-eiou history all
+# View all history with Bob (no limit)
+eiou history Bob 0
 
 # JSON output
 eiou history --json
@@ -721,7 +739,7 @@ eiou viewsettings --json
 - Default credit limit
 - Max P2P routing level
 - P2P expiration time
-- Max output lines
+- Max output lines (displays "unlimited" when set to 0)
 - Default transport mode
 - Hostname (HTTP and HTTPS)
 - Auto-refresh status
@@ -756,7 +774,7 @@ eiou changesettings [setting] [value]
 | `maxFee` | Maximum fee percentage | `5.0` |
 | `maxP2pLevel` | Maximum P2P routing hops | `3` |
 | `p2pExpiration` | P2P request timeout (seconds) | `300` |
-| `maxOutput` | Max display lines (integer or "all") | `50` |
+| `maxOutput` | Max display lines (0 = unlimited) | `50` |
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
@@ -770,6 +788,7 @@ eiou changesettings
 # Direct setting change
 eiou changesettings defaultCurrency EUR
 eiou changesettings maxP2pLevel 5
+eiou changesettings maxOutput 0           # Unlimited output
 eiou changesettings autoRefreshEnabled true
 eiou changesettings autoBackupEnabled false
 
@@ -806,12 +825,17 @@ eiou sync
 # Sync only contacts
 eiou sync contacts
 
-# Sync only transactions
+# Sync only transactions (includes backup recovery)
 eiou sync transactions
 
-# Recalculate balances
+# Recalculate balances from transaction history
 eiou sync balances
 ```
+
+**Notes:**
+- Transaction sync verifies chain integrity locally for each contact
+- If gaps are found, backup recovery is attempted on both sides (local backups first, then remote)
+- If gaps remain after recovery, the output reports the gap count and recommends using `chaindrop` to resolve
 
 ---
 

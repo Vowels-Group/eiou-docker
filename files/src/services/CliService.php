@@ -202,16 +202,11 @@ class CliService implements CliServiceInterface {
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'maxoutput'){
                 $key = 'maxOutput';
-                if($argv[3] === 'all'){
-                    $value = 'all';
-                } else{
-                    // Validate as positive integer using Security::sanitizeInt
-                    if (!is_numeric($argv[3]) || intval($argv[3]) <= 0) {
-                        $output->validationError('maxOutput', 'Max output must be a positive integer or \'all\'');
-                        return;
-                    }
-                    $value = intval($argv[3]);
+                if (!is_numeric($argv[3]) || intval($argv[3]) < 0) {
+                    $output->validationError('maxOutput', 'Max output must be a non-negative integer (0 = unlimited)');
+                    return;
                 }
+                $value = intval($argv[3]);
             } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
                 $key = 'defaultTransportMode';
                 $value = strtolower($argv[3]);
@@ -355,18 +350,14 @@ class CliService implements CliServiceInterface {
                     break;
 
                 case '8':
-                    echo "Enter new maximum of balance/transaction output lines to display: ";
+                    echo "Enter new maximum of balance/transaction output lines to display (0 = unlimited): ";
                     $key = 'maxOutput';
                     $read = trim(fgets(STDIN));
-                    if($read === 'all'){
-                        $value = 'all';
-                    } else{
-                        if (!is_numeric($read) || intval($read) <= 0) {
-                            echo "Error: Max output must be a positive integer or 'all'\n";
-                            return;
-                        }
-                        $value = intval($read);
+                    if (!is_numeric($read) || intval($read) < 0) {
+                        echo "Error: Max output must be a non-negative integer (0 = unlimited)\n";
+                        return;
                     }
+                    $value = intval($read);
                     break;
 
                 case '9':
@@ -509,7 +500,7 @@ class CliService implements CliServiceInterface {
             echo "\tDefault credit limit: " . $settings['default_credit_limit'] ."\n";
             echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
-            echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
+            echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
             if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
@@ -530,183 +521,293 @@ class CliService implements CliServiceInterface {
         // Define all commands with their metadata
         $commands = [
             'info' => [
-                'description' => 'Display user information',
+                'description' => 'Display wallet information including addresses, public key, fee earnings, and available credit',
                 'usage' => 'info ([detail]) ([--show-auth])',
                 'arguments' => [
-                    'detail' => ['type' => 'optional', 'description' => 'Show detailed balance information'],
-                    '--show-auth' => ['type' => 'optional', 'description' => 'Securely display auth code via temp file']
-                ]
+                    'detail' => ['type' => 'optional', 'description' => 'Show detailed balance information with sent/received breakdown per currency'],
+                    '--show-auth' => ['type' => 'optional', 'description' => 'Securely display auth code via temp file (never shown in logs)']
+                ],
+                'examples' => [
+                    'info' => 'Basic wallet info (auth code redacted)',
+                    'info detail' => 'Detailed info with balance breakdown',
+                    'info --show-auth' => 'Show authentication code securely via temp file',
+                    'info --show-auth --json' => 'JSON output with auth code file path'
+                ],
+                'note' => 'The auth code is never exposed in command output to prevent leaks via Docker logs, shell history, or screen sharing. With --show-auth, the code is stored in a memory-only temp file (/dev/shm/) that auto-deletes after 5 minutes.'
             ],
             'add' => [
-                'description' => 'Add a new contact',
+                'description' => 'Add a new contact or accept an incoming contact request',
                 'usage' => 'add [address] [name] [fee] [credit] [currency]',
                 'arguments' => [
-                    'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor)'],
+                    'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor .onion)'],
                     'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
-                    'fee' => ['type' => 'required', 'description' => 'Fee percentage'],
-                    'credit' => ['type' => 'required', 'description' => 'Credit limit'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code']
-                ]
+                    'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
+                    'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD, EUR)']
+                ],
+                'examples' => [
+                    'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact',
+                    'add http://bob:8080 "Jane Doe" 1.0 100 USD' => 'Add with a multi-word name',
+                    'add abc123...onion Alice 0.5 500 EUR' => 'Add via Tor address',
+                    'add http://charlie:8080 Charlie 1 200 USD --json' => 'JSON output'
+                ],
+                'note' => 'Creates a pending contact request that the recipient must accept. To accept an incoming request, use add with the sender\'s address. Rate limited: 20 additions per minute.'
             ],
             'search' => [
-                'description' => 'Search for contact',
+                'description' => 'Search for contacts by name (partial match) or list all contacts',
                 'usage' => 'search ([name])',
                 'arguments' => [
-                    'name' => ['type' => 'optional', 'description' => 'Contact name to search']
-                ]
+                    'name' => ['type' => 'optional', 'description' => 'Search term (partial name match). Omit to list all contacts.']
+                ],
+                'examples' => [
+                    'search bob' => 'Search for contacts containing "bob"',
+                    'search' => 'List all contacts',
+                    'search alice --json' => 'JSON output'
+                ],
+                'note' => 'Shows name, address(es), status, fee percentage, credit limit, currency, your available credit (from pong), and their available credit (calculated).'
             ],
             'viewcontact' => [
-                'description' => 'View contact information',
+                'description' => 'View detailed information about a specific contact',
                 'usage' => 'viewcontact [address/name]',
                 'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name']
-                ]
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or display name']
+                ],
+                'examples' => [
+                    'viewcontact Bob' => 'View by name',
+                    'viewcontact http://bob:8080' => 'View by address',
+                    'viewcontact --json Bob' => 'JSON output'
+                ],
+                'note' => 'Shows name, status, addresses, public key, balance (received/sent/net), fee percentage, credit limit, your available credit with them (from pong, ~5 min refresh), and their available credit with you (calculated).'
             ],
             'update' => [
-                'description' => 'Update a contact',
-                'usage' => 'update [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit])',
+                'description' => 'Update contact settings (name, fee, credit limit, or all at once)',
+                'usage' => 'update [address/name] [all/name/fee/credit] ([values...])',
                 'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name'],
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or display name'],
                     'field' => ['type' => 'required', 'description' => 'Field to update: all, name, fee, or credit'],
-                    'values' => ['type' => 'optional', 'description' => 'New values for the field(s)']
+                    'values' => ['type' => 'optional', 'description' => 'New value(s) for the field(s)']
+                ],
+                'examples' => [
+                    'update Bob name Robert' => 'Rename contact',
+                    'update Bob fee 1.5' => 'Change fee percentage',
+                    'update Bob credit 500' => 'Change credit limit',
+                    'update Bob all NewName 2.0 1000' => 'Update all fields at once'
                 ]
             ],
             'block' => [
-                'description' => 'Block a contact',
+                'description' => 'Block a contact from sending transactions to you',
                 'usage' => 'block [address/name]',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Contact address or name to block']
-                ]
+                ],
+                'examples' => [
+                    'block SpamUser' => 'Block by name',
+                    'block http://badactor:8080' => 'Block by address',
+                    'block http://badactor:8080 --json' => 'JSON output'
+                ],
+                'note' => 'Blocked contacts cannot send you transactions or P2P requests. Incoming transactions from blocked contacts are rejected.'
             ],
             'unblock' => [
-                'description' => 'Unblock a contact',
+                'description' => 'Unblock a previously blocked contact',
                 'usage' => 'unblock [address/name]',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Contact address or name to unblock']
+                ],
+                'examples' => [
+                    'unblock SpamUser' => 'Unblock by name',
+                    'unblock http://user:8080 --json' => 'JSON output'
                 ]
             ],
             'delete' => [
-                'description' => 'Delete a contact',
+                'description' => 'Delete a contact permanently',
                 'usage' => 'delete [address/name]',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Contact address or name to delete']
+                ],
+                'examples' => [
+                    'delete OldContact' => 'Delete by name',
+                    'delete http://old:8080' => 'Delete by address',
+                    'delete OldContact --json' => 'JSON output'
                 ]
             ],
             'send' => [
-                'description' => 'Send an eIOU',
+                'description' => 'Send an eIOU transaction to a contact (direct or P2P relayed)',
                 'usage' => 'send [address/"name"] [amount] [currency] (--best)',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Recipient address or name (use quotes for multi-word names: "John Doe")'],
-                    'amount' => ['type' => 'required', 'description' => 'Amount to send'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code'],
-                    '--best' => ['type' => 'optional', 'description' => '[EXPERIMENTAL] Find the best fee route. This feature is experimental and may be slower or less reliable than the default first-available routing']
-                ]
+                    'amount' => ['type' => 'required', 'description' => 'Amount to send (positive number)'],
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD, EUR)'],
+                    '--best' => ['type' => 'optional', 'description' => '[EXPERIMENTAL] Collect all route responses and select lowest fee. Slower but cheaper. Ignored for Tor recipients.']
+                ],
+                'examples' => [
+                    'send Bob 50 USD' => 'Send by contact name (fast mode)',
+                    'send http://bob:8080 100 EUR' => 'Send by address',
+                    'send Bob 50 USD --best' => 'Best-fee routing (experimental)',
+                    'send Alice 25.50 USD --json' => 'JSON output'
+                ],
+                'note' => 'Direct contacts receive the transaction immediately. Non-contacts are reached via P2P relay through intermediaries. Default fast mode uses first available route. Chain integrity is verified before every send; gaps trigger auto-sync and chain drop proposal if needed. Rate limited: 30 per minute.'
             ],
             'viewbalances' => [
-                'description' => 'View eIOU balance(s)',
+                'description' => 'View eIOU balances with all contacts or a specific contact',
                 'usage' => 'viewbalances ([address/name])',
                 'arguments' => [
-                    'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name']
+                    'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name. Omit to view all balances.']
+                ],
+                'examples' => [
+                    'viewbalances' => 'View all balances',
+                    'viewbalances Bob' => 'View balance with specific contact',
+                    'viewbalances --json' => 'JSON output'
                 ]
             ],
             'history' => [
-                'description' => 'View transaction history for contacts',
-                'usage' => 'history ([address/name])',
+                'description' => 'View transaction history with all contacts or a specific contact',
+                'usage' => 'history ([address/name]) ([limit])',
                 'arguments' => [
-                    'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name']
+                    'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name'],
+                    'limit' => ['type' => 'optional', 'description' => 'Maximum transactions to display (0 = unlimited)']
+                ],
+                'examples' => [
+                    'history' => 'View all transaction history',
+                    'history Bob' => 'View history with specific contact',
+                    'history Bob 0' => 'View all history with Bob (no limit)',
+                    'history --json' => 'JSON output'
                 ]
             ],
             'pending' => [
                 'description' => 'View pending contact requests (incoming and outgoing)',
                 'usage' => 'pending',
-                'arguments' => []
+                'arguments' => [],
+                'examples' => [
+                    'pending' => 'View all pending requests',
+                    'pending --json' => 'JSON output'
+                ],
+                'note' => 'Shows incoming requests (from others awaiting your acceptance) and outgoing requests (your requests awaiting others). After a wallet restore, prior contacts that ping your node appear here as incoming requests. Contacts with transaction history are prior contacts that can be re-accepted with the add command.'
             ],
             'overview' => [
-                'description' => 'Display wallet overview (balances + recent transactions)',
+                'description' => 'Display wallet dashboard with balances and recent transactions',
                 'usage' => 'overview ([limit])',
                 'arguments' => [
                     'limit' => ['type' => 'optional', 'description' => 'Number of recent transactions to show (default: 5)']
+                ],
+                'examples' => [
+                    'overview' => 'Default dashboard (5 recent transactions)',
+                    'overview 10' => 'Show 10 recent transactions',
+                    'overview --json' => 'JSON output'
                 ]
             ],
             'help' => [
-                'description' => 'Display detailed help information',
+                'description' => 'Display help information for all commands or a specific command',
                 'usage' => 'help ([command])',
                 'arguments' => [
-                    'command' => ['type' => 'optional', 'description' => 'Specific command to get help for']
+                    'command' => ['type' => 'optional', 'description' => 'Specific command to get detailed help for']
+                ],
+                'examples' => [
+                    'help' => 'List all available commands',
+                    'help send' => 'Detailed help for the send command',
+                    'help --json' => 'JSON format help'
                 ]
             ],
             'viewsettings' => [
-                'description' => 'View current settings',
+                'description' => 'Display current wallet settings',
                 'usage' => 'viewsettings',
-                'arguments' => []
+                'arguments' => [],
+                'examples' => [
+                    'viewsettings' => 'View all settings',
+                    'viewsettings --json' => 'JSON output'
+                ],
+                'note' => 'Shows default currency, fee settings (min/default/max), credit limit, P2P routing level and expiration, max output lines, transport mode, hostname, auto-refresh, and auto-backup status.'
             ],
             'changesettings' => [
-                'description' => 'Change settings',
+                'description' => 'Change wallet settings (interactive or direct)',
                 'usage' => 'changesettings ([setting] [value])',
                 'arguments' => [
-                    'setting' => ['type' => 'optional', 'description' => 'Setting name to change'],
+                    'setting' => ['type' => 'optional', 'description' => 'Setting name to change (interactive mode if omitted)'],
                     'value' => ['type' => 'optional', 'description' => 'New value for the setting']
                 ],
                 'available_settings' => [
-                    'defaultFee' => 'Default fee percentage for transactions',
-                    'defaultCreditLimit' => 'Default credit limit for new contacts',
+                    'defaultFee' => 'Default fee percentage for transactions (e.g., 1.0)',
+                    'defaultCreditLimit' => 'Default credit limit for new contacts (e.g., 100)',
                     'defaultCurrency' => 'Default currency code (e.g., USD)',
-                    'minFee' => 'Minimum fee amount',
-                    'maxFee' => 'Maximum fee percentage',
-                    'maxP2pLevel' => 'Maximum peer-to-peer routing level',
-                    'p2pExpiration' => 'Peer-to-peer request expiration time (seconds)',
-                    'maxOutput' => 'Maximum lines of output to display (integer or "all")',
-                    'defaultTransportMode' => 'Default transport type (http, https, tor)',
+                    'minFee' => 'Minimum fee amount (e.g., 0.01)',
+                    'maxFee' => 'Maximum fee percentage (e.g., 5.0)',
+                    'maxP2pLevel' => 'Maximum peer-to-peer routing hops (e.g., 3)',
+                    'p2pExpiration' => 'Peer-to-peer request expiration time in seconds (e.g., 300)',
+                    'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
+                    'defaultTransportMode' => 'Default transport type: http, https, or tor',
                     'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
-                    'hostname' => 'Node hostname (e.g., http://alice). Setting this automatically derives hostname_secure (HTTPS version)',
+                    'autoBackupEnabled' => 'Enable automatic daily database backups (true/false)',
+                    'hostname' => 'Node hostname (e.g., http://alice). Automatically derives HTTPS version and regenerates SSL cert',
                     'name' => 'Display name for this node (shown in local UI)'
+                ],
+                'examples' => [
+                    'changesettings' => 'Interactive mode (prompts for setting)',
+                    'changesettings defaultCurrency EUR' => 'Change default currency',
+                    'changesettings maxP2pLevel 5' => 'Change max P2P routing hops',
+                    'changesettings autoRefreshEnabled true' => 'Enable auto-refresh',
+                    'changesettings defaultFee 1.5 --json' => 'JSON output'
                 ]
             ],
             'generate' => [
-                'description' => 'Generate a new wallet or restore from seed phrase',
+                'description' => 'Generate a new wallet or restore from a BIP39 seed phrase',
                 'usage' => 'generate [restore <24 words>] [restore-file <filepath>] [hostname]',
                 'arguments' => [
                     'restore' => ['type' => 'optional', 'description' => 'Restore wallet from BIP39 seed phrase (24 words)'],
-                    'restore-file' => ['type' => 'optional', 'description' => 'Restore wallet from seed phrase stored in file (more secure)'],
-                    'hostname' => ['type' => 'optional', 'description' => 'HTTP/S hostname for the wallet']
+                    'restore-file' => ['type' => 'optional', 'description' => 'Restore wallet from seed phrase stored in file (more secure - avoids process list exposure)'],
+                    'hostname' => ['type' => 'optional', 'description' => 'HTTP hostname for the wallet (e.g., http://alice)']
                 ],
                 'examples' => [
-                    'generate' => 'Create new wallet with seed phrase',
+                    'generate' => 'Create new wallet (seed phrase shown once)',
                     'generate restore word1 word2 ... word24' => 'Restore from 24-word seed',
-                    'generate restore-file /path/to/seedphrase' => 'Restore from seed phrase file (avoids process list exposure)'
-                ]
+                    'generate restore-file /path/to/seedphrase.txt' => 'Restore from file (recommended)',
+                    'generate http://mynode' => 'Generate with custom hostname',
+                    'generate --json' => 'JSON output'
+                ],
+                'note' => 'The seed phrase is displayed only once during generation - store it securely. Using restore-file is recommended as the seed phrase won\'t appear in process listings. After restoring, prior contacts are not immediately present; they reappear as pending requests when they ping your node (see: eiou help pending). Rate limited: 5 per 5 minutes.'
             ],
             'sync' => [
-                'description' => 'Synchronize data (contacts, transactions, balances)',
+                'description' => 'Synchronize data with contacts (contacts, transactions, balances)',
                 'usage' => 'sync ([type])',
                 'arguments' => [
-                    'type' => ['type' => 'optional', 'description' => 'Sync type: contacts, transactions, or balances. If omitted, syncs all.']
+                    'type' => ['type' => 'optional', 'description' => 'Sync type: contacts, transactions, or balances. Omit to sync all.']
                 ],
                 'examples' => [
                     'sync' => 'Sync all (contacts, transactions, and balances)',
                     'sync contacts' => 'Sync only contacts',
-                    'sync transactions' => 'Sync only transactions',
+                    'sync transactions' => 'Sync only transactions (includes backup recovery)',
                     'sync balances' => 'Recalculate balances from transaction history'
-                ]
+                ],
+                'note' => 'Transaction sync verifies chain integrity locally for each contact. If gaps are found, backup recovery is attempted on both sides. If gaps remain after recovery, the output reports the gap count and recommends using chaindrop to resolve.'
             ],
             'out' => [
                 'description' => 'Process outgoing message queue (pending transactions)',
                 'usage' => 'out',
                 'arguments' => [],
-                'note' => 'Requires EIOU_TEST_MODE=true'
+                'examples' => [
+                    'out' => 'Process all pending outgoing messages'
+                ],
+                'note' => 'Requires EIOU_TEST_MODE=true. Manually triggers the outgoing message processor. Used for testing and debugging.'
             ],
             'in' => [
                 'description' => 'Process incoming/held transactions',
                 'usage' => 'in',
                 'arguments' => [],
-                'note' => 'Requires EIOU_TEST_MODE=true'
+                'examples' => [
+                    'in' => 'Process all held incoming transactions'
+                ],
+                'note' => 'Requires EIOU_TEST_MODE=true. Processes held transactions that may have completed sync. Used for testing and debugging.'
             ],
             'ping' => [
-                'description' => 'Ping a contact to check their online status and chain validity',
+                'description' => 'Check if a contact is online, verify chain validity, and retrieve available credit',
                 'usage' => 'ping [address/name]',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Contact address or name to ping']
-                ]
+                ],
+                'examples' => [
+                    'ping Bob' => 'Ping by name',
+                    'ping http://bob:8080' => 'Ping by address',
+                    'ping --json Alice' => 'JSON output'
+                ],
+                'note' => 'Returns online status (online, partial, or offline). Verifies local chain integrity and compares chain heads with the remote contact. If a mismatch or gap is detected, auto-triggers sync (with backup recovery). If sync fails, auto-proposes a chain drop. The pong response also includes the available credit the contact extends to you (~5 min auto-refresh).'
             ],
             'apikey' => [
                 'description' => 'Manage API keys for external API access',
@@ -796,14 +897,16 @@ class CliService implements CliServiceInterface {
                 ]
             ],
             'shutdown' => [
-                'description' => 'Shutdown the application gracefully',
+                'description' => 'Gracefully shutdown all processors (P2P, Transaction, Cleanup, ContactStatus)',
                 'usage' => 'shutdown',
-                'arguments' => []
+                'arguments' => [],
+                'note' => 'Sends SIGTERM to all running processors, removes PID/lockfiles, and creates a shutdown flag to prevent watchdog restarts. Use "eiou start" to resume.'
             ],
             'start' => [
-                'description' => 'Start processors after a previous shutdown',
+                'description' => 'Resume processor operations after a previous shutdown',
                 'usage' => 'start',
-                'arguments' => []
+                'arguments' => [],
+                'note' => 'Removes the shutdown flag. The watchdog detects this and restarts all processors within 30 seconds. If no shutdown flag exists (processors already running), reports that and exits.'
             ],
             'chaindrop' => [
                 'description' => 'Manage chain drop agreements for resolving transaction chain gaps',
@@ -882,12 +985,8 @@ class CliService implements CliServiceInterface {
                 if (isset($commands[$specificCommand])) {
                     echo "\t" . $commands[$specificCommand]['usage'] . " - " . $commands[$specificCommand]['description'] . "\n";
 
-                    // Show detailed help for commands with subcommands
-                    if ($specificCommand === 'apikey') {
-                        $this->showApiKeyDetailedHelp();
-                    } elseif ($specificCommand === 'chaindrop') {
-                        $this->showChainDropDetailedHelp();
-                    }
+                    // Show detailed help for the specific command
+                    $this->showDetailedHelp($specificCommand, $commands[$specificCommand]);
                 } else {
                     echo "\tcommand does not exist.\n";
                 }
@@ -899,6 +998,82 @@ class CliService implements CliServiceInterface {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Display detailed help for a specific command in TTY mode.
+     *
+     * For commands with dedicated detailed help methods (apikey, chaindrop),
+     * delegates to those. For all other commands, renders a structured help
+     * output from the command definition array (arguments, examples, notes).
+     *
+     * @param string $command The command name
+     * @param array $definition The command definition from the $commands array
+     */
+    private function showDetailedHelp(string $command, array $definition): void {
+        // Commands with dedicated detailed help methods
+        if ($command === 'apikey') {
+            $this->showApiKeyDetailedHelp();
+            return;
+        }
+        if ($command === 'chaindrop') {
+            $this->showChainDropDetailedHelp();
+            return;
+        }
+
+        // Generic detailed help from command definition
+        echo "\n";
+
+        // Arguments
+        if (!empty($definition['arguments'])) {
+            echo "Arguments:\n";
+            foreach ($definition['arguments'] as $argName => $argInfo) {
+                $type = $argInfo['type'] ?? 'required';
+                $desc = $argInfo['description'] ?? '';
+                echo "  {$argName} ({$type})\n";
+                echo "    {$desc}\n";
+            }
+            echo "\n";
+        }
+
+        // Available settings (changesettings)
+        if (!empty($definition['available_settings'])) {
+            echo "Available settings:\n";
+            foreach ($definition['available_settings'] as $setting => $desc) {
+                echo "  {$setting}\n";
+                echo "    {$desc}\n";
+            }
+            echo "\n";
+        }
+
+        // Examples
+        if (!empty($definition['examples'])) {
+            echo "Examples:\n";
+            foreach ($definition['examples'] as $example => $desc) {
+                echo "  eiou {$example}\n";
+                echo "    {$desc}\n";
+            }
+            echo "\n";
+        }
+
+        // Actions (sub-commands)
+        if (!empty($definition['actions'])) {
+            echo "Actions:\n";
+            foreach ($definition['actions'] as $actionName => $actionInfo) {
+                $actionUsage = $actionInfo['usage'] ?? $actionName;
+                $actionDesc = $actionInfo['description'] ?? '';
+                echo "  {$actionUsage}\n";
+                echo "    {$actionDesc}\n";
+            }
+            echo "\n";
+        }
+
+        // Note
+        if (!empty($definition['note'])) {
+            echo "Note:\n";
+            echo "  {$definition['note']}\n";
+            echo "\n";
         }
     }
 
@@ -1050,9 +1225,9 @@ HELP;
     public function displayUserInfo(array $argv, ?CliOutputManager $output = null) {
         $output = $output ?? CliOutputManager::getInstance();
 
-       // Define limit of output displayed
-        if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-            $displayLimit = $argv[3];
+       // Define limit of output displayed (0 = unlimited)
+        if(isset($argv[3]) && is_numeric($argv[3]) && intval($argv[3]) >= 0){
+            $displayLimit = intval($argv[3]);
         } else{
             $displayLimit = $this->currentUser->getMaxOutput();
         }
@@ -1521,12 +1696,12 @@ HELP;
                     $this->generalUtility->truncateAddress($res['counterparty'],30), 
                     $res['amount'], 
                     $res['currency']);
-            if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+            if($displayLimit > 0 && ($countrows >= $displayLimit)){
                 break;
-            } 
+            }
             $countrows += 1;
         }
-        if ($displayLimit === 'all' || $displayLimit > $countResults) {
+        if ($displayLimit === 0 || $displayLimit > $countResults) {
             $displayLimit = $countResults;
         } 
         echo "\t\t\t----- Displaying $displayLimit out of $countResults $direction balance(s) -----\n";
@@ -1679,8 +1854,9 @@ HELP;
     public function viewTransactionHistory(array $argv, ?CliOutputManager $output = null) {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-            $displayLimit = $argv[3];
+        // Display limit: 0 = unlimited, positive integer = cap output lines
+        if(isset($argv[3]) && is_numeric($argv[3]) && intval($argv[3]) >= 0){
+            $displayLimit = intval($argv[3]);
         } else{
             $displayLimit = $this->currentUser->getMaxOutput();
         }
@@ -1721,7 +1897,7 @@ HELP;
      *
      * @param array $transactions The formatted transaction data
      * @param string $direction received/send
-     * @param int|string $displayLimit The limit of output displayed
+     * @param int $displayLimit The limit of output displayed (0 = unlimited)
      * @param CliOutputManager|null $output Optional output manager for JSON support
     */
     public function displayHistory(array $transactions, string $direction, $displayLimit, ?CliOutputManager $output = null){
@@ -1730,9 +1906,9 @@ HELP;
         $countResults = count($transactions);
 
         if ($output->isJsonMode()) {
-            // Calculate effective display limit
+            // Calculate effective display limit (0 = unlimited)
             $effectiveLimit = $displayLimit;
-            if ($displayLimit === 'all') {
+            if ($displayLimit === 0) {
                 $effectiveLimit = $countResults;
             } elseif ($displayLimit > $countResults) {
                 $effectiveLimit = $countResults;
@@ -1742,7 +1918,7 @@ HELP;
             $txData = [];
             $count = 0;
             foreach ($transactions as $tx) {
-                if ($displayLimit !== 'all' && $count >= $displayLimit) {
+                if ($displayLimit > 0 && $count >= $displayLimit) {
                     break;
                 }
                 $txData[] = [
@@ -1782,14 +1958,14 @@ HELP;
                     str_pad($tx['amount'], 10, ' ') . " | " .
                     str_pad($tx['currency'], 10, ' ') . "\n" ;
 
-                if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+                if($displayLimit > 0 && ($countrows >= $displayLimit)){
                     break;
                 }
                 $countrows += 1;
             }
             echo "-------------------------------------------\n";
             $effectiveLimit = $displayLimit;
-            if($displayLimit === 'all'){
+            if($displayLimit === 0){
                 $effectiveLimit = $countResults;
             } elseif($displayLimit > $countResults){
                 $effectiveLimit = $countResults;
