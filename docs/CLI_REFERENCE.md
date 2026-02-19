@@ -90,48 +90,22 @@ When using `--json`, all commands return a consistent response format:
 
 ## Wallet Commands
 
-### generate
+### generate (startup only)
 
-Generate a new wallet or restore from a BIP39 seed phrase.
+Wallet generation and restoration are handled automatically by `startup.sh` during container initialization. By the time the CLI is accessible, a wallet already exists, so running `eiou generate` will always return a "wallet already exists" error.
 
-**Syntax:**
-```bash
-eiou generate [restore <24 words>] [restore-file <filepath>] [hostname]
-```
+**Wallet creation** is configured via Docker environment variables:
 
-**Arguments:**
-
-| Argument | Type | Description |
-|----------|------|-------------|
-| `restore` | optional | Restore wallet from BIP39 seed phrase (24 words following this keyword) |
-| `restore-file` | optional | Path to file containing seed phrase (more secure - avoids process list exposure) |
-| `hostname` | optional | HTTP hostname for the wallet (e.g., `http://alice`) |
-
-**Examples:**
-```bash
-# Generate new wallet with auto-generated seed phrase
-eiou generate
-
-# Restore from 24-word seed phrase
-eiou generate restore word1 word2 word3 ... word24
-
-# Restore from seed phrase file (recommended for security)
-eiou generate restore-file /path/to/seedphrase.txt
-
-# Generate with custom hostname
-eiou generate http://mynode
-
-# JSON output
-eiou generate --json
-```
-
-**Notes:**
-- The seed phrase is displayed only once during generation - store it securely
-- Using `restore-file` is more secure as the seed phrase won't appear in process listings
-- Rate limited: 5 generations per 5 minutes
+| Variable | Description |
+|----------|-------------|
+| `QUICKSTART` | Hostname for quickstart mode (e.g., `alice`) — auto-generates wallet on first boot |
+| `EIOU_HOST` | Override hostname (takes priority over `QUICKSTART`) |
+| `EIOU_NAME` | Display name for the node |
+| `RESTORE` | BIP39 seed phrase (24 words) to restore an existing wallet |
+| `RESTORE_FILE` | Path to file containing seed phrase (recommended — more secure) |
 
 **Restoring contacts from a prior wallet:**
-After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou pending`) that you can re-accept with the `add` command. Prior contacts are identified by having existing transaction history after the sync completes.
+After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou pending`) that you can re-accept with the `add` command.
 
 ---
 
@@ -1246,7 +1220,6 @@ CLI commands are rate-limited per wallet to prevent abuse:
 |---------|-------|--------|----------------|
 | `send` | 30 | 60 seconds | 5 minutes |
 | `add` | 20 | 60 seconds | 5 minutes |
-| `generate` | 5 | 5 minutes | 15 minutes |
 | `backup` | 10 | 60 seconds | 5 minutes |
 | All others | 100 | 60 seconds | 5 minutes |
 
