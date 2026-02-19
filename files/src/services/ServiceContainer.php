@@ -799,6 +799,10 @@ class ServiceContainer implements ContainerInterface {
     /**
      * Get CliService instance
      *
+     * Note: ContactCreditRepository and P2pRepository are wired via setter
+     * injection in wireCircularDependencies(). This service must be initialized
+     * in wireAllServices() before that method runs.
+     *
      * @return CliService
      */
     public function getCliService(): CliServiceInterface {
@@ -1223,6 +1227,7 @@ class ServiceContainer implements ContainerInterface {
      * - SyncService --> HeldTransactionService (one-way setter injection)
      * - TransactionService --> P2pService, ContactService
      * - ChainOperationsService --> SyncService (for chain repair coordination)
+     * - CliService --> ContactCreditRepository, P2pRepository (for info command display)
      *
      * Future improvements (to reduce circular dependencies):
      * - Services can use SyncServiceProxy instead of direct SyncService injection
@@ -1328,8 +1333,10 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire CliService -> ContactCreditRepository
-        // Reason: CliService displays total available credit in user info
+        // Wire CliService -> ContactCreditRepository, P2pRepository
+        // Reason: CliService displays total available credit and fee earnings in user info
+        // IMPORTANT: CliService must be initialized in wireAllServices() before this runs,
+        // otherwise these setter injections are silently skipped (isset check fails)
         if (isset($this->services['CliService'])) {
             $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
             $this->services['CliService']->setP2pRepository($this->getP2pRepository());
@@ -1506,6 +1513,10 @@ class ServiceContainer implements ContainerInterface {
      * IMPORTANT: This method MUST be called before using services with circular
      * dependencies. Services no longer fall back to Application::getInstance()
      * and will throw RuntimeException if dependencies are not wired.
+     *
+     * IMPORTANT: Any service that receives setter injection in wireCircularDependencies()
+     * MUST be initialized here first, otherwise the isset() check will fail silently
+     * and the dependency will not be wired (the service will have null references).
      */
     public function wireAllServices(): void {
         // Initialize core services (order matters for some dependencies)
@@ -1534,6 +1545,10 @@ class ServiceContainer implements ContainerInterface {
         $this->getChainOperationsService();
         $this->getChainDropService();
         $this->getEventDispatcher();
+
+        // Initialize CLI service (must be before wireCircularDependencies
+        // so setter injection for ContactCreditRepository and P2pRepository runs)
+        $this->getCliService();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();

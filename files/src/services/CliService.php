@@ -1239,7 +1239,15 @@ HELP;
                     printf("\t\t%s: %s\n", $credit['currency'], $credit['total_available_credit']);
                 }
             } else {
-                echo "\t\t0.00\n";
+                // Show 0.00 for each known currency from balances
+                $balanceCurrencies = $balanceCurrencies ?? $this->balanceRepository->getUserBalance();
+                if (!empty($balanceCurrencies)) {
+                    foreach ($balanceCurrencies as $b) {
+                        printf("\t\t%s: 0.00\n", $b['currency']);
+                    }
+                } else {
+                    echo "\t\t0.00\n";
+                }
             }
 
             if ($showDetails){
