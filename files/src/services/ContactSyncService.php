@@ -947,6 +947,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     return $this->contactPayload->buildReceived($senderAddress);
                 }
                 // Contact is accepted or other status - return warning (already exists)
+                // Store any additional addresses from senderAddresses if present (re-add scenario)
+                if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                }
                 // Include all our known addresses so sender can store them (re-add scenario)
                 return $this->contactPayload->buildAlreadyExists($senderAddress, $myAddresses);
             } else{
@@ -976,6 +980,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
                 }
                 // Contact is accepted - update address and return 'updated'
+                // Store any additional addresses from senderAddresses if present
+                if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                }
                 // Include all our known addresses so sender can store them (re-add scenario)
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                     return $this->contactPayload->buildUpdated($senderAddress, $myAddresses);

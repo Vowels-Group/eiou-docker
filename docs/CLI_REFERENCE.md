@@ -309,7 +309,7 @@ eiou viewcontact --json Bob
 ```
 
 **Output includes:**
-- Contact name, status, addresses, public key
+- Contact name, status, addresses
 - Balance (received, sent, net)
 - Fee percentage and credit limit
 - Your available credit with them (received via ping/pong, ~5 min refresh)
