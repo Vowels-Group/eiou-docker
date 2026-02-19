@@ -175,14 +175,17 @@ class AddressValidatorTest extends TestCase
     }
 
     /**
-     * Test case sensitivity of protocol detection
+     * Test case insensitivity of protocol detection
      */
-    public function testCaseSensitivityOfProtocol(): void
+    public function testCaseInsensitivityOfProtocol(): void
     {
-        // Protocol matching is case-insensitive based on regex
         $this->assertTrue(AddressValidator::isHttpsAddress('https://example.com'));
-        // But uppercase would fail the current regex
-        $this->assertFalse(AddressValidator::isHttpsAddress('HTTPS://example.com'));
+        $this->assertTrue(AddressValidator::isHttpsAddress('HTTPS://example.com'));
+        $this->assertTrue(AddressValidator::isHttpsAddress('Https://example.com'));
+        $this->assertTrue(AddressValidator::isHttpAddress('HTTP://example.com'));
+        $this->assertTrue(AddressValidator::isHttpAddress('Http://example.com'));
+        $this->assertTrue(AddressValidator::isAddress('HTTPS://example.com'));
+        $this->assertTrue(AddressValidator::isAddress('HTTP://example.com'));
     }
 
     /**

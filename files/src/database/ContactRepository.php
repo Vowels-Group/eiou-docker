@@ -103,7 +103,7 @@ class ContactRepository extends AbstractRepository {
         }
         $query = "SELECT pubkey FROM {$this->tableName} c JOIN addresses a
                   ON c.pubkey_hash = a.pubkey_hash
-                  AND a.{$transportIndex} = :address";
+                  AND LOWER(a.{$transportIndex}) = LOWER(:address)";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -202,7 +202,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT COUNT(*) as count
                     FROM {$this->tableName} c JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
-                    AND a.{$transportIndex} = :address
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)
                     AND status = 'accepted'";
         $stmt = $this->execute($query, [':address' => $address]);
 
@@ -376,7 +376,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT c.status
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND a.{$transportIndex} = :address";
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)";
 
         $stmt = $this->execute($query, [':address' => $address]);
 
@@ -628,7 +628,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND a.{$transportIndex} = :address
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)
                     LIMIT 1";
         $stmt = $this->execute($query, [':address' => $address]);
 
@@ -749,7 +749,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT name
                     FROM {$this->tableName} c JOIN addresses a
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND a.{$transportIndex} = :address";
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)";
 
         $stmt = $this->execute($query, [':address' => $address]);
 
@@ -852,7 +852,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND a.{$transportIndex} = :address
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)
                     LIMIT 1";
         $stmt = $this->execute($query, [':address' => $address]);
 
@@ -956,7 +956,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT c.pubkey
                     FROM {$this->tableName} c JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
-                    AND a.{$transportIndex} = :address";
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -981,7 +981,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT c.pubkey_hash
                     FROM {$this->tableName} c JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
-                    AND a.{$transportIndex} = :address";
+                    AND LOWER(a.{$transportIndex}) = LOWER(:address)";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {

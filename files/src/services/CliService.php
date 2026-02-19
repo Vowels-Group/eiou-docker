@@ -1756,13 +1756,17 @@ HELP;
 
             if($balances){
                 foreach($balances as $balance){
-                    $balanceData['user']['balances'][] = [
-                        'currency' => $balance['currency'],
-                        'total_balance' => number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
-                    ];
-
                     if ($contactResult) {
                         $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'], $balance['currency']);
+                        $contactNetBalance = 0;
+                        foreach($contactBalances as $cb){
+                            $contactNetBalance += ($cb['received'] - $cb['sent']);
+                        }
+                        $balanceData['user']['balances'][] = [
+                            'currency' => $balance['currency'],
+                            'contact_balance' => number_format($contactNetBalance / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                            'total_balance' => number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                        ];
                         foreach($contactBalances as $contactBalance){
                             $balanceData['contacts'][] = [
                                 'name' => $contactResult['name'],
@@ -1772,17 +1776,23 @@ HELP;
                                 'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
                             ];
                         }
-                    } else if(isset($contacts)){
-                        foreach($contacts as $contact){
-                            $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
-                            foreach($contactBalances as $contactBalance){
-                                $balanceData['contacts'][] = [
-                                    'name' => $contact['name'],
-                                    'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'],
-                                    'currency' => $contactBalance['currency'],
-                                    'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
-                                    'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
-                                ];
+                    } else {
+                        $balanceData['user']['balances'][] = [
+                            'currency' => $balance['currency'],
+                            'total_balance' => number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                        ];
+                        if(isset($contacts)){
+                            foreach($contacts as $contact){
+                                $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
+                                foreach($contactBalances as $contactBalance){
+                                    $balanceData['contacts'][] = [
+                                        'name' => $contact['name'],
+                                        'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'],
+                                        'currency' => $contactBalance['currency'],
+                                        'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                        'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                                    ];
+                                }
                             }
                         }
                     }
@@ -1798,9 +1808,13 @@ HELP;
 
             if($balances){
                 foreach($balances as $balance){
-                    printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
                     if ($contactResult) {
                         $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
+                        $contactNetBalance = 0;
+                        foreach($contactBalances as $contactBalance){
+                            $contactNetBalance += ($contactBalance['received'] - $contactBalance['sent']);
+                        }
+                        printf("%s %s, Balance %s with %s: %.2f\n", 'me', $additionalInfo, $balance['currency'], $contactResult['name'], number_format($contactNetBalance / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
                         foreach($contactBalances as $contactBalance){
                             printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
                                 $contactResult['name'],
@@ -1814,6 +1828,7 @@ HELP;
                         }
                         return;
                     } else{
+                        printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
                         if(!isset($contacts) || !$contacts){
                             echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
                             continue;
@@ -1876,8 +1891,11 @@ HELP;
             } else {
                 // Check if the name yields an address
                 $contactResult = $this->contactRepository->lookupByName($argv[2]);
+                if ($contactResult) {
+                    $transportIndex = $this->transportUtility->fallbackTransportType($argv[2], $contactResult);
+                }
             }
-            if ($contactResult && $transportIndex) {
+            if ($contactResult && $transportIndex && isset($contactResult[$transportIndex])) {
                 $sentTransactions = $this->transactionRepository->getSentUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
                 $receivedTransactions = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
                 $this->displayHistory($sentTransactions, 'sent', $displayLimit, $output);
