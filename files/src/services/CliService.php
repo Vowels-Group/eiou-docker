@@ -543,12 +543,12 @@ class CliService implements CliServiceInterface {
                     'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD, EUR)']
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)']
                 ],
                 'examples' => [
                     'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact',
                     'add http://bob:8080 "Jane Doe" 1.0 100 USD' => 'Add with a multi-word name',
-                    'add abc123...onion Alice 0.5 500 EUR' => 'Add via Tor address',
+                    'add abc123...onion Alice 0.5 500 USD' => 'Add via Tor address',
                     'add http://charlie:8080 Charlie 1 200 USD --json' => 'JSON output'
                 ],
                 'note' => 'Creates a pending contact request that the recipient must accept. To accept an incoming request, use add with the sender\'s address. Rate limited: 20 additions per minute.'
@@ -591,8 +591,10 @@ class CliService implements CliServiceInterface {
                     'update Bob name Robert' => 'Rename contact',
                     'update Bob fee 1.5' => 'Change fee percentage',
                     'update Bob credit 500' => 'Change credit limit',
-                    'update Bob all NewName 2.0 1000' => 'Update all fields at once'
-                ]
+                    'update Bob all NewName 2.0 1000' => 'Update all fields at once',
+                    'update http://bob:8080 fee 2.0 --json' => 'Update by address with JSON output'
+                ],
+                'note' => 'Changes are local only — the contact is not notified. Fee percentage controls what you charge for relaying transactions through you for this contact. Credit limit is the maximum amount you allow this contact to owe you.'
             ],
             'block' => [
                 'description' => 'Block a contact from sending transactions to you',
@@ -616,7 +618,8 @@ class CliService implements CliServiceInterface {
                 'examples' => [
                     'unblock SpamUser' => 'Unblock by name',
                     'unblock http://user:8080 --json' => 'JSON output'
-                ]
+                ],
+                'note' => 'Restores the contact to their previous status (accepted or pending). They can resume sending transactions and P2P requests.'
             ],
             'delete' => [
                 'description' => 'Delete a contact permanently',
@@ -628,7 +631,8 @@ class CliService implements CliServiceInterface {
                     'delete OldContact' => 'Delete by name',
                     'delete http://old:8080' => 'Delete by address',
                     'delete OldContact --json' => 'JSON output'
-                ]
+                ],
+                'note' => 'Removes the contact and their addresses. Transaction history and balances are preserved. The contact can re-add you, which will appear as a new pending request.'
             ],
             'send' => [
                 'description' => 'Send an eIOU transaction to a contact (direct or P2P relayed)',
@@ -636,12 +640,12 @@ class CliService implements CliServiceInterface {
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Recipient address or name (use quotes for multi-word names: "John Doe")'],
                     'amount' => ['type' => 'required', 'description' => 'Amount to send (positive number)'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD, EUR)'],
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
                     '--best' => ['type' => 'optional', 'description' => '[EXPERIMENTAL] Collect all route responses and select lowest fee. Slower but cheaper. Ignored for Tor recipients.']
                 ],
                 'examples' => [
                     'send Bob 50 USD' => 'Send by contact name (fast mode)',
-                    'send http://bob:8080 100 EUR' => 'Send by address',
+                    'send http://bob:8080 100 USD' => 'Send by address',
                     'send Bob 50 USD --best' => 'Best-fee routing (experimental)',
                     'send Alice 25.50 USD --json' => 'JSON output'
                 ],
@@ -657,7 +661,8 @@ class CliService implements CliServiceInterface {
                     'viewbalances' => 'View all balances',
                     'viewbalances Bob' => 'View balance with specific contact',
                     'viewbalances --json' => 'JSON output'
-                ]
+                ],
+                'note' => 'Shows received, sent, and net balance per contact per currency. Balances are calculated from verified transaction chains. Use "all" as name to explicitly show all contacts.'
             ],
             'history' => [
                 'description' => 'View transaction history with all contacts or a specific contact',
@@ -671,7 +676,8 @@ class CliService implements CliServiceInterface {
                     'history Bob' => 'View history with specific contact',
                     'history Bob 0' => 'View all history with Bob (no limit)',
                     'history --json' => 'JSON output'
-                ]
+                ],
+                'note' => 'Shows transaction ID, direction (sent/received), amount, currency, timestamp, and contact name. Default limit is controlled by the maxOutput setting. Transactions are shown newest first.'
             ],
             'pending' => [
                 'description' => 'View pending contact requests (incoming and outgoing)',
@@ -693,7 +699,8 @@ class CliService implements CliServiceInterface {
                     'overview' => 'Default dashboard (5 recent transactions)',
                     'overview 10' => 'Show 10 recent transactions',
                     'overview --json' => 'JSON output'
-                ]
+                ],
+                'note' => 'Combines balance summary across all contacts with recent transaction activity. Useful as a quick status check.'
             ],
             'help' => [
                 'description' => 'Display help information for all commands or a specific command',
@@ -741,7 +748,7 @@ class CliService implements CliServiceInterface {
                 ],
                 'examples' => [
                     'changesettings' => 'Interactive mode (prompts for setting)',
-                    'changesettings defaultCurrency EUR' => 'Change default currency',
+                    'changesettings defaultCurrency USD' => 'Change default currency',
                     'changesettings maxP2pLevel 5' => 'Change max P2P routing hops',
                     'changesettings autoRefreshEnabled true' => 'Enable auto-refresh',
                     'changesettings defaultFee 1.5 --json' => 'JSON output'
@@ -855,12 +862,14 @@ class CliService implements CliServiceInterface {
                     'apikey enable <key_id>' => 'Enable a disabled API key'
                 ],
                 'permissions' => [
-                    'wallet:read' => 'Read wallet balance and transactions',
-                    'wallet:send' => 'Send transactions',
-                    'contacts:read' => 'List and view contacts',
-                    'contacts:write' => 'Add, update, delete contacts',
-                    'system:read' => 'View system status and metrics',
-                    'admin' => 'Full administrative access',
+                    'wallet:read' => 'Read wallet balance, info, and transactions',
+                    'wallet:send' => 'Send transactions, manage chain drops',
+                    'contacts:read' => 'List, view, search, and ping contacts',
+                    'contacts:write' => 'Add, update, delete, block/unblock contacts',
+                    'system:read' => 'View system status, metrics, and settings',
+                    'backup:read' => 'Read backup status/list, verify backups',
+                    'backup:write' => 'Create, restore, delete, enable/disable backups',
+                    'admin' => 'Full administrative access (settings, sync, shutdown, keys)',
                     'all' => 'All permissions (same as admin)'
                 ],
                 'api_usage' => [
@@ -873,16 +882,44 @@ class CliService implements CliServiceInterface {
                     'signature_format' => 'HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)',
                     'example_endpoints' => [
                         'GET /api/v1/wallet/balance' => 'Get wallet balances',
+                        'GET /api/v1/wallet/info' => 'Wallet public key, addresses, fee earnings',
                         'GET /api/v1/wallet/overview' => 'Wallet overview (balance + recent transactions)',
                         'POST /api/v1/wallet/send' => 'Send transaction',
                         'GET /api/v1/wallet/transactions' => 'Transaction history',
                         'GET /api/v1/contacts' => 'List contacts',
-                        'GET /api/v1/contacts/pending' => 'Pending contact requests',
-                        'GET /api/v1/contacts/search' => 'Search contacts by name',
                         'POST /api/v1/contacts' => 'Add contact',
+                        'GET /api/v1/contacts/pending' => 'Pending contact requests',
+                        'GET /api/v1/contacts/search?q=' => 'Search contacts by name',
+                        'GET /api/v1/contacts/:address' => 'Get contact details',
+                        'PUT /api/v1/contacts/:address' => 'Update contact',
+                        'DELETE /api/v1/contacts/:address' => 'Delete contact',
+                        'POST /api/v1/contacts/block/:address' => 'Block contact',
+                        'POST /api/v1/contacts/unblock/:address' => 'Unblock contact',
                         'POST /api/v1/contacts/ping/:address' => 'Ping contact',
                         'GET /api/v1/system/status' => 'System status',
-                        'GET /api/v1/system/settings' => 'System settings'
+                        'GET /api/v1/system/settings' => 'System settings',
+                        'PUT /api/v1/system/settings' => 'Update settings (admin)',
+                        'POST /api/v1/system/sync' => 'Trigger sync (admin)',
+                        'POST /api/v1/system/shutdown' => 'Shutdown processors (admin)',
+                        'POST /api/v1/system/start' => 'Start processors (admin)',
+                        'GET /api/v1/chaindrop' => 'List chain drop proposals',
+                        'POST /api/v1/chaindrop/propose' => 'Propose chain drop',
+                        'POST /api/v1/chaindrop/accept' => 'Accept chain drop',
+                        'POST /api/v1/chaindrop/reject' => 'Reject chain drop',
+                        'GET /api/v1/backup/status' => 'Backup status',
+                        'GET /api/v1/backup/list' => 'List backups',
+                        'POST /api/v1/backup/create' => 'Create backup',
+                        'POST /api/v1/backup/restore' => 'Restore from backup',
+                        'POST /api/v1/backup/verify' => 'Verify backup integrity',
+                        'DELETE /api/v1/backup/:filename' => 'Delete backup',
+                        'POST /api/v1/backup/enable' => 'Enable auto backups',
+                        'POST /api/v1/backup/disable' => 'Disable auto backups',
+                        'POST /api/v1/backup/cleanup' => 'Cleanup old backups',
+                        'GET /api/v1/keys' => 'List API keys (admin)',
+                        'POST /api/v1/keys' => 'Create API key (admin)',
+                        'DELETE /api/v1/keys/:key_id' => 'Delete API key (admin)',
+                        'POST /api/v1/keys/enable/:key_id' => 'Enable API key (admin)',
+                        'POST /api/v1/keys/disable/:key_id' => 'Disable API key (admin)'
                     ]
                 ]
             ],
@@ -890,12 +927,20 @@ class CliService implements CliServiceInterface {
                 'description' => 'Gracefully shutdown all processors (P2P, Transaction, Cleanup, ContactStatus)',
                 'usage' => 'shutdown',
                 'arguments' => [],
-                'note' => 'Sends SIGTERM to all running processors, removes PID/lockfiles, and creates a shutdown flag to prevent watchdog restarts. Use "eiou start" to resume.'
+                'examples' => [
+                    'shutdown' => 'Stop all background processors',
+                    'shutdown --json' => 'JSON output'
+                ],
+                'note' => 'Sends SIGTERM to all running processors, removes PID/lockfiles, and creates a shutdown flag to prevent watchdog restarts. The node remains accessible via CLI and API but will not process incoming or outgoing messages. Use "eiou start" to resume.'
             ],
             'start' => [
                 'description' => 'Resume processor operations after a previous shutdown',
                 'usage' => 'start',
                 'arguments' => [],
+                'examples' => [
+                    'start' => 'Resume all background processors',
+                    'start --json' => 'JSON output'
+                ],
                 'note' => 'Removes the shutdown flag. The watchdog detects this and restarts all processors within 30 seconds. If no shutdown flag exists (processors already running), reports that and exits.'
             ],
             'chaindrop' => [
@@ -947,6 +992,79 @@ class CliService implements CliServiceInterface {
                     'chaindrop list https://bob' => 'List proposals for a specific contact'
                 ],
                 'note' => 'While a chain gap exists, transactions with that contact are blocked. Rejecting a proposal leaves the gap unresolved.'
+            ],
+            'backup' => [
+                'description' => 'Manage encrypted database backups',
+                'usage' => 'backup <action> [arguments]',
+                'arguments' => [
+                    'action' => ['type' => 'required', 'description' => 'Action: create, restore, list, delete, verify, enable, disable, status, cleanup, help'],
+                    'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
+                ],
+                'actions' => [
+                    'create' => [
+                        'description' => 'Create a new encrypted backup',
+                        'usage' => 'backup create [name]',
+                        'arguments' => [
+                            'name' => ['type' => 'optional', 'description' => 'Custom name for the backup file']
+                        ]
+                    ],
+                    'restore' => [
+                        'description' => 'Restore database from an encrypted backup',
+                        'usage' => 'backup restore <filename> --confirm',
+                        'arguments' => [
+                            'filename' => ['type' => 'required', 'description' => 'Backup filename to restore from'],
+                            '--confirm' => ['type' => 'required', 'description' => 'Required flag to confirm the destructive operation']
+                        ]
+                    ],
+                    'list' => [
+                        'description' => 'List all available backups',
+                        'usage' => 'backup list'
+                    ],
+                    'delete' => [
+                        'description' => 'Delete a backup file',
+                        'usage' => 'backup delete <filename>',
+                        'arguments' => [
+                            'filename' => ['type' => 'required', 'description' => 'Backup filename to delete']
+                        ]
+                    ],
+                    'verify' => [
+                        'description' => 'Verify backup integrity',
+                        'usage' => 'backup verify <filename>',
+                        'arguments' => [
+                            'filename' => ['type' => 'required', 'description' => 'Backup filename to verify']
+                        ]
+                    ],
+                    'enable' => [
+                        'description' => 'Enable automatic daily backups',
+                        'usage' => 'backup enable'
+                    ],
+                    'disable' => [
+                        'description' => 'Disable automatic daily backups',
+                        'usage' => 'backup disable'
+                    ],
+                    'status' => [
+                        'description' => 'Show backup status and settings',
+                        'usage' => 'backup status'
+                    ],
+                    'cleanup' => [
+                        'description' => 'Remove old backups (keeps 3 most recent)',
+                        'usage' => 'backup cleanup'
+                    ],
+                    'help' => [
+                        'description' => 'Show backup help',
+                        'usage' => 'backup help'
+                    ]
+                ],
+                'examples' => [
+                    'backup create' => 'Create backup with auto-generated name',
+                    'backup create pre_upgrade' => 'Create backup with custom name',
+                    'backup list' => 'List all backups',
+                    'backup restore backup_20260124.eiou.enc --confirm' => 'Restore from backup',
+                    'backup verify backup_20260124.eiou.enc' => 'Verify backup integrity',
+                    'backup status' => 'Show backup status',
+                    'backup enable' => 'Enable automatic daily backups'
+                ],
+                'note' => 'Backups are AES-256-CBC encrypted using the node\'s master key. Automatic backups run daily at midnight when enabled. Cleanup keeps the 3 most recent backups.'
             ],
             'global_options' => [
                 'description' => 'Global options available for all commands',

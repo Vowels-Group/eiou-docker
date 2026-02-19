@@ -166,7 +166,7 @@ All requests require HMAC-SHA256 authentication:
     "name": "New Name",
     "fee_percent": 1.5,
     "credit_limit": 200.00,
-    "currency": "EUR"
+    "currency": "USD"
 }
 ```
 

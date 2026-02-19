@@ -277,7 +277,7 @@ For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md#err
 | `TRANSACTION_IN_PROGRESS` | 429 | Transaction In Progress | Another transaction is already processing | Wait for current transaction to complete |
 | `INSUFFICIENT_FUNDS` | 403 | Insufficient Funds | Not enough balance for transaction | Check balance with `eiou viewbalances` |
 | `INVALID_AMOUNT` | 400 | Invalid Amount | Transaction amount is invalid | Use positive numeric amount |
-| `INVALID_CURRENCY` | 400 | Invalid Currency | Currency code is not valid | Use valid currency code (e.g., USD, EUR) |
+| `INVALID_CURRENCY` | 400 | Invalid Currency | Currency code is not valid | Use valid currency code (e.g., USD) |
 | `INVALID_RECIPIENT` | 400 | Invalid Recipient | Recipient address is invalid | Verify recipient exists and address is correct |
 | `SELF_SEND` | 400 | Cannot Send to Yourself | Attempted self-transaction | Specify a different recipient |
 | `CHAIN_INTEGRITY_FAILED` | 500 | Chain Integrity Failed | Transaction chain verification failed | Contact is corrupted; may need resync |

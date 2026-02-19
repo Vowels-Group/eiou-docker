@@ -284,14 +284,14 @@ Create a new API key:
     eiou apikey create "My Application" wallet:read,contacts:read
 
   Available permissions:
-    - wallet:read     Read wallet balance and transactions
-    - wallet:send     Send transactions
-    - contacts:read   List and view contacts
-    - contacts:write  Add, update, delete contacts
-    - system:read     View system status and metrics
-    - backup:read     Read backup status and list, verify backups
-    - backup:write    Create, restore, delete backups
-    - admin           Full administrative access
+    - wallet:read     Read wallet balance, info, and transactions
+    - wallet:send     Send transactions, manage chain drops
+    - contacts:read   List, view, search, and ping contacts
+    - contacts:write  Add, update, delete, block/unblock contacts
+    - system:read     View system status, metrics, and settings
+    - backup:read     Read backup status/list, verify backups
+    - backup:write    Create, restore, delete, enable/disable backups
+    - admin           Full administrative access (settings, sync, shutdown, keys)
     - all             All permissions (same as admin)
 
 List all API keys:
@@ -323,22 +323,59 @@ The HMAC signature is calculated as:
 IMPORTANT: Never send the secret in requests - only the computed HMAC signature.
 The server retrieves and decrypts your secret to verify the signature.
 
-Example endpoints:
-  GET  /api/v1/wallet/balance       - Get wallet balances
-  GET  /api/v1/wallet/overview      - Wallet overview (balance + recent transactions)
-  POST /api/v1/wallet/send          - Send transaction
-  GET  /api/v1/wallet/transactions  - Transaction history
-  GET  /api/v1/contacts             - List contacts
-  GET  /api/v1/contacts/pending     - Pending contact requests
-  GET  /api/v1/contacts/search?q=   - Search contacts by name
-  POST /api/v1/contacts             - Add contact
-  POST /api/v1/contacts/ping/:addr  - Ping contact
-  GET  /api/v1/system/status        - System status
-  GET  /api/v1/system/settings      - System settings
-  GET  /api/v1/backup/status        - Backup status and settings
-  GET  /api/v1/backup/list          - List all backups
-  POST /api/v1/backup/create        - Create encrypted backup
-  POST /api/v1/backup/restore       - Restore from backup
+Available API endpoints:
+
+  Wallet:
+    GET  /api/v1/wallet/balance        - Get wallet balances
+    GET  /api/v1/wallet/info           - Wallet public key, addresses, fee earnings
+    GET  /api/v1/wallet/overview       - Wallet overview (balance + recent tx)
+    POST /api/v1/wallet/send           - Send transaction
+    GET  /api/v1/wallet/transactions   - Transaction history
+
+  Contacts:
+    GET    /api/v1/contacts            - List contacts
+    POST   /api/v1/contacts            - Add contact
+    GET    /api/v1/contacts/pending    - Pending contact requests
+    GET    /api/v1/contacts/search?q=  - Search contacts by name
+    GET    /api/v1/contacts/:address   - Get contact details
+    PUT    /api/v1/contacts/:address   - Update contact
+    DELETE /api/v1/contacts/:address   - Delete contact
+    POST   /api/v1/contacts/block/:addr    - Block contact
+    POST   /api/v1/contacts/unblock/:addr  - Unblock contact
+    POST   /api/v1/contacts/ping/:addr     - Ping contact
+
+  System (admin):
+    GET  /api/v1/system/status         - System status
+    GET  /api/v1/system/metrics        - System metrics
+    GET  /api/v1/system/settings       - System settings
+    PUT  /api/v1/system/settings       - Update settings
+    POST /api/v1/system/sync           - Trigger sync
+    POST /api/v1/system/shutdown       - Shutdown processors
+    POST /api/v1/system/start          - Start processors
+
+  Chain Drop:
+    GET  /api/v1/chaindrop             - List proposals
+    POST /api/v1/chaindrop/propose     - Propose chain drop
+    POST /api/v1/chaindrop/accept      - Accept proposal
+    POST /api/v1/chaindrop/reject      - Reject proposal
+
+  Backup:
+    GET    /api/v1/backup/status       - Backup status
+    GET    /api/v1/backup/list         - List backups
+    POST   /api/v1/backup/create       - Create backup
+    POST   /api/v1/backup/restore      - Restore from backup
+    POST   /api/v1/backup/verify       - Verify backup integrity
+    DELETE /api/v1/backup/:filename    - Delete backup
+    POST   /api/v1/backup/enable       - Enable auto backups
+    POST   /api/v1/backup/disable      - Disable auto backups
+    POST   /api/v1/backup/cleanup      - Cleanup old backups
+
+  API Keys (admin):
+    GET    /api/v1/keys                - List API keys
+    POST   /api/v1/keys               - Create API key
+    DELETE /api/v1/keys/:key_id        - Delete API key
+    POST   /api/v1/keys/enable/:key_id  - Enable API key
+    POST   /api/v1/keys/disable/:key_id - Disable API key
 
 HELP;
 

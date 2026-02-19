@@ -793,7 +793,7 @@ Update contact information.
     "name": "Robert",
     "fee_percent": 1.5,
     "credit_limit": 200.00,
-    "currency": "EUR"
+    "currency": "USD"
 }
 ```
 
@@ -811,7 +811,7 @@ All fields are optional. Only provided fields will be updated.
             "name": "Robert",
             "fee_percent": 1.5,
             "credit_limit": 200.00,
-            "currency": "EUR"
+            "currency": "USD"
         }
     }
 }
