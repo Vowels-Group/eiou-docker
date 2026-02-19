@@ -813,11 +813,11 @@ class ChainDropService implements ChainDropServiceInterface
     {
         $output->info("Chain Drop Agreement Commands:");
         $output->info("");
-        $output->info("  eiou chaindrop propose <contact>    Propose dropping a missing transaction");
-        $output->info("  eiou chaindrop accept <proposal_id> Accept an incoming proposal");
-        $output->info("  eiou chaindrop reject <proposal_id> Reject an incoming proposal");
-        $output->info("  eiou chaindrop list [contact]       List pending proposals (all or per contact)");
-        $output->info("  eiou chaindrop help                 Show this help");
+        $output->info("  eiou chaindrop propose <contact_address>  Propose dropping a missing transaction");
+        $output->info("  eiou chaindrop accept <proposal_id>       Accept an incoming proposal");
+        $output->info("  eiou chaindrop reject <proposal_id>       Reject an incoming proposal");
+        $output->info("  eiou chaindrop list [contact_address]     List pending proposals (all or per contact)");
+        $output->info("  eiou chaindrop help                       Show this help");
         $output->info("");
         $output->info("Examples:");
         $output->info("  eiou chaindrop propose https://bob   Propose dropping a gap with Bob");
