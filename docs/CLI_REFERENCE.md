@@ -582,7 +582,7 @@ Send an eIOU transaction to a contact.
 
 **Syntax:**
 ```bash
-eiou send <address|name> <amount> <currency> [--best]
+eiou send <address|name> <amount> <currency> [description] [--best]
 ```
 
 **Arguments:**
@@ -592,6 +592,7 @@ eiou send <address|name> <amount> <currency> [--best]
 | `address\|name` | required | Recipient's address or display name |
 | `amount` | required | Amount to send (positive number) |
 | `currency` | required | Currency code (e.g., USD, EUR) |
+| `description` | optional | Transaction description/memo text |
 
 **Flags:**
 
@@ -607,8 +608,14 @@ eiou send Bob 50 USD
 # Send by address
 eiou send http://bob:8080 100 EUR
 
+# Send with a description
+eiou send Bob 50 USD "Payment for lunch"
+
 # Send with best-fee routing (experimental)
 eiou send Bob 50 USD --best
+
+# Send with description and best-fee routing
+eiou send Bob 50 USD "Invoice #123" --best
 
 # JSON output
 eiou send Alice 25.50 USD --json
