@@ -334,7 +334,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionRecoveryService` | Stuck transaction recovery | TransactionRecoveryRepo |
 | `RateLimiterService` | Request rate limiting | RateLimiterRepo |
 | `DatabaseLockingService` | Distributed locking via MariaDB `GET_LOCK()` / `RELEASE_LOCK()` | PDO |
-| `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo |
+| `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo + setter: ContactCreditRepo, P2pRepo |
 | `DebugService` | Debug logging and diagnostics | DebugRepo |
 
 ### Utility Services
@@ -405,6 +405,10 @@ $this->services['ChainOperationsService']->setSyncService($this->services['SyncS
 $this->services['SyncService']->setBackupService($this->getBackupService());
 $this->services['ChainDropService']->setBackupService($this->getBackupService());
 $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
+
+// CliService - repositories for info command display (fee earnings, available credit)
+$this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
+$this->services['CliService']->setP2pRepository($this->getP2pRepository());
 ```
 
 ---
@@ -539,6 +543,7 @@ class SyncServiceProxy implements SyncTriggerInterface
 | Optional dependencies | Setter injection with null default | Debug services |
 | Circular dependencies | Setter injection | SyncService <-> HeldTransactionService |
 | Late-bound dependencies | Lazy proxy | SyncServiceProxy |
+| Deferred repo wiring | Setter injection with null guard | CliService (ContactCreditRepo, P2pRepo) |
 
 **Constructor Injection (Required - No Fallbacks):**
 
@@ -649,6 +654,7 @@ order constraints. Most circular dependencies have been eliminated:
 | Dependency | Pattern | Notes |
 |------------|---------|-------|
 | SyncService -> HeldTransactionService | Setter injection | Sync notifies held transaction service |
+| CliService -> ContactCreditRepo, P2pRepo | Setter injection | Info command displays fee earnings and available credit |
 
 ### How wireCircularDependencies() Works
 
@@ -689,6 +695,10 @@ public function wireCircularDependencies(): void {
     $this->services['ChainDropService']->setBackupService($this->getBackupService());
     $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
+
+    // CliService - repositories for info command display (fee earnings, available credit)
+    $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
+    $this->services['CliService']->setP2pRepository($this->getP2pRepository());
 }
 ```
 
@@ -702,6 +712,11 @@ public function wireCircularDependencies(): void {
        -> Initialize all services (constructor injection)
        -> wireCircularDependencies() (setter injection)
 ```
+
+**Important:** Every service that receives setter injection in `wireCircularDependencies()`
+must be initialized in `wireAllServices()` first. The wiring uses `isset()` guards, so
+if a service hasn't been created yet, the setter injection is silently skipped and the
+service will have null dependencies at runtime.
 
 ### Future Roadmap for Eliminating Cycles
 
