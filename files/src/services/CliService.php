@@ -748,21 +748,11 @@ class CliService implements CliServiceInterface {
                 ]
             ],
             'generate' => [
-                'description' => 'Generate a new wallet or restore from a BIP39 seed phrase',
-                'usage' => 'generate [restore <24 words>] [restore-file <filepath>] [hostname]',
-                'arguments' => [
-                    'restore' => ['type' => 'optional', 'description' => 'Restore wallet from BIP39 seed phrase (24 words)'],
-                    'restore-file' => ['type' => 'optional', 'description' => 'Restore wallet from seed phrase stored in file (more secure - avoids process list exposure)'],
-                    'hostname' => ['type' => 'optional', 'description' => 'HTTP hostname for the wallet (e.g., http://alice)']
-                ],
-                'examples' => [
-                    'generate' => 'Create new wallet (seed phrase shown once)',
-                    'generate restore word1 word2 ... word24' => 'Restore from 24-word seed',
-                    'generate restore-file /path/to/seedphrase.txt' => 'Restore from file (recommended)',
-                    'generate http://mynode' => 'Generate with custom hostname',
-                    'generate --json' => 'JSON output'
-                ],
-                'note' => 'The seed phrase is displayed only once during generation - store it securely. Using restore-file is recommended as the seed phrase won\'t appear in process listings. After restoring, prior contacts are not immediately present; they reappear as pending requests when they ping your node (see: eiou help pending). Rate limited: 5 per 5 minutes.'
+                'description' => 'Wallet generation and restoration (handled during container startup)',
+                'usage' => 'generate',
+                'arguments' => [],
+                'examples' => [],
+                'note' => 'Wallet creation is handled automatically by startup.sh during container initialization via Docker environment variables (QUICKSTART, EIOU_HOST, EIOU_NAME, RESTORE, RESTORE_FILE). This command cannot be used after the wallet has been created.'
             ],
             'sync' => [
                 'description' => 'Synchronize data with contacts (contacts, transactions, balances)',
