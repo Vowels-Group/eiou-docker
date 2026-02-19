@@ -403,4 +403,118 @@ class CliJsonResponseTest extends TestCase
         $this->assertNotNull($decoded);
         $this->assertEquals(JSON_ERROR_NONE, json_last_error());
     }
+
+    /**
+     * Test setIncludeMetadata excludes metadata from success response
+     */
+    public function testNoMetadataExcludesFromSuccessResponse(): void
+    {
+        $response = new CliJsonResponse('test');
+        $response->setIncludeMetadata(false);
+
+        $json = $response->success(['key' => 'value']);
+        $data = json_decode($json, true);
+
+        $this->assertTrue($data['success']);
+        $this->assertEquals(['key' => 'value'], $data['data']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test setIncludeMetadata excludes metadata from error response
+     */
+    public function testNoMetadataExcludesFromErrorResponse(): void
+    {
+        $response = new CliJsonResponse('test');
+        $response->setIncludeMetadata(false);
+
+        $json = $response->error('Something failed', ErrorCodes::GENERAL_ERROR);
+        $data = json_decode($json, true);
+
+        $this->assertFalse($data['success']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test setIncludeMetadata excludes metadata from list response
+     */
+    public function testNoMetadataExcludesFromListResponse(): void
+    {
+        $response = new CliJsonResponse();
+        $response->setIncludeMetadata(false);
+
+        $json = $response->list([['id' => 1]], 1);
+        $data = json_decode($json, true);
+
+        $this->assertTrue($data['success']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test setIncludeMetadata excludes metadata from table response
+     */
+    public function testNoMetadataExcludesFromTableResponse(): void
+    {
+        $response = new CliJsonResponse();
+        $response->setIncludeMetadata(false);
+
+        $json = $response->table(['Name'], [['Alice']]);
+        $data = json_decode($json, true);
+
+        $this->assertTrue($data['success']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test setIncludeMetadata excludes metadata from transaction response
+     */
+    public function testNoMetadataExcludesFromTransactionResponse(): void
+    {
+        $response = new CliJsonResponse();
+        $response->setIncludeMetadata(false);
+
+        $json = $response->transaction('success', 'Done', ['txid' => 'abc']);
+        $data = json_decode($json, true);
+
+        $this->assertTrue($data['success']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test setIncludeMetadata excludes metadata from settings response
+     */
+    public function testNoMetadataExcludesFromSettingsResponse(): void
+    {
+        $response = new CliJsonResponse();
+        $response->setIncludeMetadata(false);
+
+        $json = $response->settings(['fee' => 1.5]);
+        $data = json_decode($json, true);
+
+        $this->assertTrue($data['success']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test setIncludeMetadata returns self for fluent interface
+     */
+    public function testSetIncludeMetadataFluentInterface(): void
+    {
+        $response = new CliJsonResponse();
+        $result = $response->setIncludeMetadata(false);
+
+        $this->assertInstanceOf(CliJsonResponse::class, $result);
+    }
+
+    /**
+     * Test metadata is included by default
+     */
+    public function testMetadataIncludedByDefault(): void
+    {
+        $response = new CliJsonResponse('test');
+        $json = $response->success(['key' => 'value']);
+        $data = json_decode($json, true);
+
+        $this->assertArrayHasKey('metadata', $data);
+    }
 }

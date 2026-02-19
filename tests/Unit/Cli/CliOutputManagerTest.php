@@ -310,4 +310,34 @@ class CliOutputManagerTest extends TestCase
 
         $this->assertEquals('test-node', $data['metadata']['node_id']);
     }
+
+    /**
+     * Test --no-metadata flag excludes metadata from JSON output
+     */
+    public function testNoMetadataFlagExcludesMetadata(): void
+    {
+        $manager = new CliOutputManager(['script.php', 'info', '--json', '--no-metadata']);
+        $jsonResponse = $manager->getJsonResponse();
+
+        $json = $jsonResponse->success(['name' => 'Alice']);
+        $data = json_decode($json, true);
+
+        $this->assertTrue($data['success']);
+        $this->assertEquals(['name' => 'Alice'], $data['data']);
+        $this->assertArrayNotHasKey('metadata', $data);
+    }
+
+    /**
+     * Test metadata is included when --no-metadata is not passed
+     */
+    public function testMetadataIncludedWithoutFlag(): void
+    {
+        $manager = new CliOutputManager(['script.php', 'info', '--json']);
+        $jsonResponse = $manager->getJsonResponse();
+
+        $json = $jsonResponse->success(['name' => 'Alice']);
+        $data = json_decode($json, true);
+
+        $this->assertArrayHasKey('metadata', $data);
+    }
 }

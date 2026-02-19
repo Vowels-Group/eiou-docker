@@ -27,6 +27,9 @@ class CliJsonResponse
     /** @var string|null Node identifier */
     private ?string $nodeId = null;
 
+    /** @var bool Whether to include metadata in responses */
+    private bool $includeMetadata = true;
+
     /**
      * Constructor
      *
@@ -65,6 +68,18 @@ class CliJsonResponse
     }
 
     /**
+     * Set whether to include metadata in responses
+     *
+     * @param bool $include Whether to include metadata
+     * @return self
+     */
+    public function setIncludeMetadata(bool $include): self
+    {
+        $this->includeMetadata = $include;
+        return $this;
+    }
+
+    /**
      * Build success response
      *
      * @param mixed $data The response data
@@ -76,14 +91,13 @@ class CliJsonResponse
         $response = [
             'success' => true,
             'data' => $data,
-            'metadata' => $this->buildMetadata()
         ];
 
         if ($message !== null) {
             $response['message'] = $message;
         }
 
-        return $this->encode($response);
+        return $this->encode($this->withMetadata($response));
     }
 
     /**
@@ -114,10 +128,9 @@ class CliJsonResponse
                 'code' => $code,
                 'timestamp' => $this->getTimestamp()
             ], $additionalData),
-            'metadata' => $this->buildMetadata()
         ];
 
-        return $this->encode($response);
+        return $this->encode($this->withMetadata($response));
     }
 
     /**
@@ -151,7 +164,6 @@ class CliJsonResponse
         $response = [
             'success' => true,
             'data' => $items,
-            'metadata' => $this->buildMetadata()
         ];
 
         // Add pagination if provided
@@ -165,7 +177,7 @@ class CliJsonResponse
             ];
         }
 
-        return $this->encode($response);
+        return $this->encode($this->withMetadata($response));
     }
 
     /**
@@ -185,14 +197,13 @@ class CliJsonResponse
                 'rows' => $rows,
                 'row_count' => count($rows)
             ],
-            'metadata' => $this->buildMetadata()
         ];
 
         if ($title !== null) {
             $response['data']['title'] = $title;
         }
 
-        return $this->encode($response);
+        return $this->encode($this->withMetadata($response));
     }
 
     /**
@@ -210,10 +221,9 @@ class CliJsonResponse
             'status' => $status,
             'message' => $message,
             'data' => $transactionData,
-            'metadata' => $this->buildMetadata()
         ];
 
-        return $this->encode($response);
+        return $this->encode($this->withMetadata($response));
     }
 
     /**
@@ -230,14 +240,13 @@ class CliJsonResponse
             'data' => [
                 'settings' => $settings
             ],
-            'metadata' => $this->buildMetadata()
         ];
 
         if ($message !== null) {
             $response['message'] = $message;
         }
 
-        return $this->encode($response);
+        return $this->encode($this->withMetadata($response));
     }
 
     /**
@@ -401,6 +410,20 @@ class CliJsonResponse
         }
 
         return $metadata;
+    }
+
+    /**
+     * Conditionally add metadata to a response array
+     *
+     * @param array $response Response array to augment
+     * @return array Response with or without metadata
+     */
+    private function withMetadata(array $response): array
+    {
+        if ($this->includeMetadata) {
+            $response['metadata'] = $this->buildMetadata();
+        }
+        return $response;
     }
 
     /**
