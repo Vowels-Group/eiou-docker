@@ -35,6 +35,7 @@
 #   system       - System tests: shutdown, lockfiles, seedphrase
 #   performance  - Performance baseline benchmarks
 #   multisig     - Multisig setup, join, CLI, and repository tests
+#   mutual       - Mutual contact request auto-accept test
 #   bestfee      - Best-fee P2P route selection tests (best with collisions build)
 #
 # Environment Variables (for WSL2/slow environments):
@@ -51,7 +52,7 @@ if [ $# -eq 0 ]; then
     echo ""
     echo "Available builds: http4, http10, http13, collisions, collisionscluster"
     echo "Available modes:  http, https, tor (default: http)"
-    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, multisig, bestfee"
+    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, multisig, mutual, bestfee"
     exit 1
 fi
 
@@ -360,6 +361,7 @@ printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 TESTS_ALL="
 sslCertificateTest
 torTestSuite
+mutualContactTest
 addContactsTest
 sendMessageTest
 balanceTest
@@ -487,6 +489,11 @@ maxLevelCancelTest
 parallelBroadcastTest
 "
 
+# Mutual contact request tests (runs before addContactsTest to use clean state)
+TESTS_MUTUAL="
+mutualContactTest
+"
+
 # Select test order based on subset
 case "$SUBSET" in
     all)
@@ -524,6 +531,9 @@ case "$SUBSET" in
         ;;
     bestfee)
         TEST_ORDER="$TESTS_BESTFEE"
+        ;;
+    mutual)
+        TEST_ORDER="$TESTS_MUTUAL"
         ;;
 esac
 

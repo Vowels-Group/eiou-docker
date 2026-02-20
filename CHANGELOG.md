@@ -12,6 +12,10 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
+- Wire up dead-code `buildMutuallyAccepted()` payload in `ContactPayload.php` with `$txid` parameter for transaction synchronization
+
 ## 2026-02-18
 
 ### Added
