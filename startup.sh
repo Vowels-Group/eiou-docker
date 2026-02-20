@@ -1192,13 +1192,14 @@ watchdog() {
 
     # Tor hidden service self-health check
     local TOR_CHECK_INTERVAL=300     # Check Tor reachability every 5 minutes
-    local TOR_LAST_CHECK=0
+    local TOR_INITIAL_GRACE=120      # Wait 120s before first self-check (descriptor propagation)
+    local TOR_LAST_CHECK=$(($(date +%s) - TOR_CHECK_INTERVAL + TOR_INITIAL_GRACE))  # First check at ~120s, not immediately
     local TOR_RESTART_COUNT=0
     local TOR_MAX_RESTARTS=5         # Max Tor restart attempts before giving up
     local TOR_RESTART_COOLDOWN=300   # Minimum 5 minutes between periodic Tor restarts
     local TOR_VERIFY_COOLDOWN=90    # Shorter cooldown after post-restart verification failure
     local TOR_SIGNAL_COOLDOWN=60    # Minimum 60 seconds between signal-triggered restarts
-    local TOR_LAST_RESTART=0
+    local TOR_LAST_RESTART=$(date +%s)  # Treat initial Tor start as a "restart" for cooldown purposes
     local TOR_RESET_COOLDOWN=300    # Reset restart counter after 5 minutes of no restarts
     local TOR_HS_DIR="/var/lib/tor/hidden_service"
 
@@ -1231,8 +1232,8 @@ watchdog() {
             CLEANUP_LAST_RESTART=0
             CONTACT_STATUS_LAST_RESTART=0
             TOR_RESTART_COUNT=0
-            TOR_LAST_RESTART=0
-            TOR_LAST_CHECK=0
+            TOR_LAST_RESTART=$CURRENT_TIME
+            TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + TOR_INITIAL_GRACE))
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Shutdown flag cleared, resuming processor monitoring with reset counters"
         fi
 
