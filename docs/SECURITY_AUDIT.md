@@ -160,7 +160,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
 
 ## High Findings
 
-### H-1: TOCTOU Race in Send Lock
+### H-1: TOCTOU Race in Send Lock — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** `insertTransaction()` and `updateTrackingFields()` moved inside the `try` block in `handleDirectRoute()`, executing before the lock is released in `finally`.
 
 **Category:** Transaction & P2P
 **File:** `files/src/services/SendOperationService.php:289-337`
@@ -171,7 +174,10 @@ The contact send lock protects chain verification and data preparation, but the 
 
 ---
 
-### H-2: No Locking on P2P Transaction Sends
+### H-2: No Locking on P2P Transaction Sends — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** `sendP2pEiou()` now wraps the entire method body in `acquireContactSendLock`/`releaseContactSendLock` using the sender's public key hash.
 
 **Category:** Transaction & P2P
 **File:** `files/src/services/SendOperationService.php:385-394`
@@ -182,7 +188,10 @@ Unlike `handleDirectRoute()` which uses `acquireContactSendLock()`, the `sendP2p
 
 ---
 
-### H-3: Non-Atomic Balance Updates on Receive
+### H-3: Non-Atomic Balance Updates on Receive — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** `processIncomingDirect()` and `processIncomingP2p()` (end-recipient path) now wrap status + balance updates in `beginTransaction()`/`commit()` with rollback on exception. `AbstractRepository` transaction methods made public.
 
 **Category:** Transaction & P2P
 **File:** `files/src/services/TransactionProcessingService.php:276-279`
@@ -198,7 +207,10 @@ $this->balanceRepository->updateBalance($message['sender_public_key'], 'received
 
 ---
 
-### H-4: No Replay Protection for API Requests
+### H-4: No Replay Protection for API Requests — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** `X-API-Nonce` header required on all API requests (8-64 chars). Server-side nonce tracking via `api_nonces` table rejects duplicates within the timestamp window. Nonce included in HMAC signature string. Three new error codes added (`auth_missing_nonce`, `auth_invalid_nonce`, `auth_replay_detected`).
 
 **Category:** Authentication & Authorization
 **File:** `files/src/services/ApiAuthService.php:91-99`
@@ -222,7 +234,10 @@ The API endpoint for creating API keys accepts arbitrary permission strings and 
 
 ---
 
-### H-6: Path Traversal in Backup Delete Endpoint
+### H-6: Path Traversal in Backup Delete Endpoint — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** `Security::sanitizeFilename()` applied in both `ApiController::deleteBackup()` and `BackupService::deleteBackup()` before the filename is used.
 
 **Category:** Authentication & Authorization
 **Files:** `files/src/api/ApiController.php:1765`, `files/src/services/BackupService.php:287`
@@ -247,7 +262,10 @@ The authentication form does not include a CSRF token. Combined with missing rat
 
 ---
 
-### H-8: SSL Peer Verification Disabled by Default
+### H-8: SSL Peer Verification Disabled by Default — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** Changed `getenv('P2P_SSL_VERIFY') === 'true'` to `getenv('P2P_SSL_VERIFY') !== 'false'` in both `send()` and `createCurlHandle()`. SSL verification now enabled by default.
 
 **Category:** Docker & Infrastructure
 **File:** `files/src/services/utilities/TransportUtilityService.php:380-383`
@@ -295,7 +313,10 @@ Because `APP_ENV` is always `'development'`, full error details are rendered in 
 
 ---
 
-### H-11: Database Credentials Stored in Plaintext JSON
+### H-11: Database Credentials Stored in Plaintext JSON — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** `freshInstall()` now encrypts the database password via `KeyEncryption::encrypt()` (AES-256-GCM) and stores it as `dbPassEncrypted`. Encryption failure aborts setup (no plaintext fallback). File permissions set to 0600 with umask. `DatabaseContext::getDbPass()` and `BackupService::getDatabaseCredentials()` require encrypted format.
 
 **Category:** Cryptography & Keys
 **File:** `files/src/database/DatabaseSetup.php:104-126`
@@ -589,7 +610,10 @@ MariaDB installed from package with no password set. `mysqladmin ping` used with
 
 ---
 
-### M-31: Lock File Permissions World-Writable
+### M-31: Lock File Permissions World-Writable — REMEDIATED
+
+> **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
+> **Fix:** Lock file permissions changed from `0666` to `0600`.
 
 **Category:** Transaction & P2P
 **File:** `files/src/services/SendOperationService.php:130`
@@ -728,14 +752,14 @@ The codebase demonstrates mature security practices in many areas:
 
 | ID | Finding | Effort | Status |
 |----|---------|--------|--------|
-| H-1 | Move `insertTransaction()` inside send lock | Small | Open |
-| H-2 | Add locking to P2P transaction sends | Small | Open |
-| H-3 | Wrap balance updates in database transactions | Small | Open |
-| H-4 | Add nonce-based API replay protection | Medium | Open |
-| H-6 | Apply `sanitizeFilename()` in backup delete | Small | Open |
+| H-1 | Move `insertTransaction()` inside send lock | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
+| H-2 | Add locking to P2P transaction sends | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
+| H-3 | Wrap balance updates in database transactions | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
+| H-4 | Add nonce-based API replay protection | Medium | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
+| H-6 | Apply `sanitizeFilename()` in backup delete | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
 | H-7 | Add CSRF token to GUI login form | Small | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
-| H-8 | Default `P2P_SSL_VERIFY` to true | Small | Open |
-| H-11 | Encrypt database password in config file | Small | Open |
+| H-8 | Default `P2P_SSL_VERIFY` to true | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
+| H-11 | Encrypt database password in config file | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
 
 ### Medium-term (Next Release)
 
