@@ -352,6 +352,32 @@ class P2pService implements P2pServiceInterface {
     public function checkP2pPossible(array $request, bool $echo = true): bool {
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
+
+        // Rate limit P2P requests by sender public key hash
+        $senderKeyHash = hash('sha256', $pubkey);
+        $rateLimitKey = 'p2p:' . $senderKeyHash;
+        $testMode = getenv('EIOU_TEST_MODE') === 'true';
+        if (!$testMode && Constants::RATE_LIMIT_ENABLED) {
+            static $p2pRateCounts = [];
+            static $p2pRateWindow = null;
+            $now = time();
+            if ($p2pRateWindow === null || $now - $p2pRateWindow > 60) {
+                $p2pRateCounts = [];
+                $p2pRateWindow = $now;
+            }
+            $p2pRateCounts[$rateLimitKey] = ($p2pRateCounts[$rateLimitKey] ?? 0) + 1;
+            if ($p2pRateCounts[$rateLimitKey] > Constants::P2P_RATE_LIMIT_PER_MINUTE) {
+                Logger::getInstance()->warning("P2P rate limit exceeded", [
+                    'sender_key_hash' => substr($senderKeyHash, 0, 16),
+                    'count' => $p2pRateCounts[$rateLimitKey]
+                ]);
+                if ($echo) {
+                    echo $this->p2pPayload->buildRejection($request, 'rate_limited');
+                }
+                return false;
+            }
+        }
+
         // Check if User is not blocked
         if(!$this->contactService->isNotBlocked($pubkey)){
             if($echo){

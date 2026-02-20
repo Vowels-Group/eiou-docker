@@ -186,7 +186,7 @@ class TransactionController
                     'controller' => 'TransactionController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::getAppEnv() !== 'production'
+                $message = Constants::isDebug()
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';

@@ -369,4 +369,222 @@ class SecurityTest extends TestCase
         $this->assertEquals('***MASKED***', $masked['api_key']);
         $this->assertEquals('visible', $masked['public_data']);
     }
+
+    // =========================================================================
+    // M-7: stripNullBytes() rename tests
+    // =========================================================================
+
+    /**
+     * Test stripNullBytes removes null bytes (M-7)
+     */
+    public function testStripNullBytesRemovesNullBytes(): void
+    {
+        $input = "test\x00injection";
+        $result = Security::stripNullBytes($input);
+
+        $this->assertStringNotContainsString("\x00", $result);
+        $this->assertEquals('testinjection', $result);
+    }
+
+    /**
+     * Test stripNullBytes trims whitespace (M-7)
+     */
+    public function testStripNullBytesTrimsWhitespace(): void
+    {
+        $input = '  test value  ';
+        $result = Security::stripNullBytes($input);
+
+        $this->assertEquals('test value', $result);
+    }
+
+    /**
+     * Test deprecated sanitizeInput alias still works (M-7)
+     */
+    public function testSanitizeInputAliasCallsStripNullBytes(): void
+    {
+        $input = "alias\x00test";
+        $direct = Security::stripNullBytes($input);
+        $alias = Security::sanitizeInput($input);
+
+        $this->assertEquals($direct, $alias);
+        $this->assertEquals('aliastest', $alias);
+    }
+
+    /**
+     * Test sanitizeArray uses stripNullBytes internally (M-7)
+     */
+    public function testSanitizeArrayUsesStripNullBytesInternally(): void
+    {
+        $data = [
+            'key1' => "val\x00ue1",
+            'nested' => ['key2' => "val\x00ue2"]
+        ];
+
+        $result = Security::sanitizeArray($data);
+
+        $this->assertEquals('value1', $result['key1']);
+        $this->assertEquals('value2', $result['nested']['key2']);
+    }
+
+    // =========================================================================
+    // C-2: getClientIp() centralized IP resolution tests
+    // =========================================================================
+
+    /**
+     * Test getClientIp returns REMOTE_ADDR when no trusted proxies (C-2)
+     */
+    public function testGetClientIpReturnsRemoteAddrWhenNoTrustedProxies(): void
+    {
+        $originalServer = $_SERVER;
+        $originalEnv = getenv('TRUSTED_PROXIES');
+
+        try {
+            putenv('TRUSTED_PROXIES=');
+            $_SERVER['REMOTE_ADDR'] = '203.0.113.50';
+            $_SERVER['HTTP_X_FORWARDED_FOR'] = '10.0.0.1';
+
+            $result = Security::getClientIp();
+
+            $this->assertEquals('203.0.113.50', $result);
+        } finally {
+            $_SERVER = $originalServer;
+            if ($originalEnv !== false) {
+                putenv("TRUSTED_PROXIES=$originalEnv");
+            } else {
+                putenv('TRUSTED_PROXIES');
+            }
+        }
+    }
+
+    /**
+     * Test getClientIp trusts proxy headers from trusted proxy (C-2)
+     */
+    public function testGetClientIpTrustsHeadersFromTrustedProxy(): void
+    {
+        $originalServer = $_SERVER;
+        $originalEnv = getenv('TRUSTED_PROXIES');
+
+        try {
+            putenv('TRUSTED_PROXIES=10.0.0.1');
+            $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
+            $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.99';
+
+            $result = Security::getClientIp();
+
+            $this->assertEquals('203.0.113.99', $result);
+        } finally {
+            $_SERVER = $originalServer;
+            if ($originalEnv !== false) {
+                putenv("TRUSTED_PROXIES=$originalEnv");
+            } else {
+                putenv('TRUSTED_PROXIES');
+            }
+        }
+    }
+
+    /**
+     * Test getClientIp ignores proxy headers from untrusted source (C-2)
+     */
+    public function testGetClientIpIgnoresHeadersFromUntrustedSource(): void
+    {
+        $originalServer = $_SERVER;
+        $originalEnv = getenv('TRUSTED_PROXIES');
+
+        try {
+            putenv('TRUSTED_PROXIES=10.0.0.1');
+            $_SERVER['REMOTE_ADDR'] = '192.168.1.100'; // Not in trusted list
+            $_SERVER['HTTP_X_FORWARDED_FOR'] = '1.2.3.4';
+
+            $result = Security::getClientIp();
+
+            // Should return REMOTE_ADDR, not the spoofed header
+            $this->assertEquals('192.168.1.100', $result);
+        } finally {
+            $_SERVER = $originalServer;
+            if ($originalEnv !== false) {
+                putenv("TRUSTED_PROXIES=$originalEnv");
+            } else {
+                putenv('TRUSTED_PROXIES');
+            }
+        }
+    }
+
+    /**
+     * Test getClientIp prefers CF-Connecting-IP over X-Forwarded-For (C-2)
+     */
+    public function testGetClientIpPrefersCfConnectingIp(): void
+    {
+        $originalServer = $_SERVER;
+        $originalEnv = getenv('TRUSTED_PROXIES');
+
+        try {
+            putenv('TRUSTED_PROXIES=10.0.0.1');
+            $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
+            $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.10';
+            $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50';
+
+            $result = Security::getClientIp();
+
+            $this->assertEquals('198.51.100.10', $result);
+        } finally {
+            $_SERVER = $originalServer;
+            if ($originalEnv !== false) {
+                putenv("TRUSTED_PROXIES=$originalEnv");
+            } else {
+                putenv('TRUSTED_PROXIES');
+            }
+        }
+    }
+
+    /**
+     * Test getClientIp takes first IP from X-Forwarded-For chain (C-2)
+     */
+    public function testGetClientIpTakesFirstIpFromForwardedFor(): void
+    {
+        $originalServer = $_SERVER;
+        $originalEnv = getenv('TRUSTED_PROXIES');
+
+        try {
+            putenv('TRUSTED_PROXIES=10.0.0.1');
+            $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
+            unset($_SERVER['HTTP_CF_CONNECTING_IP']);
+            $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50, 10.0.0.2, 10.0.0.3';
+
+            $result = Security::getClientIp();
+
+            $this->assertEquals('203.0.113.50', $result);
+        } finally {
+            $_SERVER = $originalServer;
+            if ($originalEnv !== false) {
+                putenv("TRUSTED_PROXIES=$originalEnv");
+            } else {
+                putenv('TRUSTED_PROXIES');
+            }
+        }
+    }
+
+    /**
+     * Test getClientIp returns default when REMOTE_ADDR missing (C-2)
+     */
+    public function testGetClientIpReturnsDefaultWhenRemoteAddrMissing(): void
+    {
+        $originalServer = $_SERVER;
+        $originalEnv = getenv('TRUSTED_PROXIES');
+
+        try {
+            putenv('TRUSTED_PROXIES=');
+            unset($_SERVER['REMOTE_ADDR']);
+
+            $result = Security::getClientIp();
+
+            $this->assertEquals('0.0.0.0', $result);
+        } finally {
+            $_SERVER = $originalServer;
+            if ($originalEnv !== false) {
+                putenv("TRUSTED_PROXIES=$originalEnv");
+            } else {
+                putenv('TRUSTED_PROXIES');
+            }
+        }
+    }
 }

@@ -201,10 +201,10 @@ class ContactPayload extends BasePayload
      * Signs the same message content that the sender signed: {'type':'create','nonce':N}
      * This provides cryptographic proof that the recipient accepted the contact request.
      *
-     * @param int $nonce The signature nonce from the contact transaction
+     * @param string $nonce The signature nonce from the contact transaction
      * @return string|null Base64-encoded signature, or null if signing fails
      */
-    public function generateRecipientSignature(int $nonce): ?string
+    public function generateRecipientSignature(string $nonce): ?string
     {
         $messageContent = ['type' => 'create', 'nonce' => $nonce];
         $message = json_encode($messageContent);

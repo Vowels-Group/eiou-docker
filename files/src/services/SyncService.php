@@ -745,6 +745,17 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         'sender' => $tx['sender_address'] ?? 'unknown'
                     ];
 
+                    // Circuit breaker: abort sync if too many signature failures
+                    if (count($result['signature_failures']) >= 5) {
+                        Logger::getInstance()->warning("Sync circuit breaker triggered: too many signature failures", [
+                            'failure_count' => count($result['signature_failures']),
+                            'contact_address' => $contactAddress,
+                            'synced_so_far' => $syncedCount
+                        ]);
+                        $result['circuit_breaker'] = true;
+                        break; // Abort sync processing
+                    }
+
                     // CONTINUE processing - skip this transaction but process remaining ones
                     // This allows partial sync recovery instead of complete failure
                     continue;
@@ -1571,7 +1582,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // They are added via updateTrackingFields() after transaction insert
 
         // Nonce is added last by TransportUtilityService::sign()
-        $messageContent['nonce'] = (int)$tx['signature_nonce'];
+        $messageContent['nonce'] = $tx['signature_nonce'];
 
         return json_encode($messageContent);
     }
@@ -1600,7 +1611,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Contact payload after signing is simply: {'type': 'create', 'nonce': ...}
         $messageContent = [
             'type' => 'create',
-            'nonce' => (int)$tx['signature_nonce']
+            'nonce' => $tx['signature_nonce']
         ];
 
         return json_encode($messageContent);

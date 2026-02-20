@@ -1478,7 +1478,7 @@ class SyncServiceTest extends TestCase
             'txid' => $transaction['txid'],
             'previousTxid' => $transaction['previous_txid'],
             'memo' => $transaction['memo'],
-            'nonce' => (int)$nonce
+            'nonce' => $nonce
         ];
 
         $message = json_encode($messageContent);
@@ -2408,7 +2408,7 @@ class SyncServiceTest extends TestCase
             'txid' => $missingTx['txid'],
             'previousTxid' => $missingTx['previous_txid'],
             'memo' => $missingTx['memo'],
-            'nonce' => (int)$nonce
+            'nonce' => $nonce
         ];
         $message = json_encode($messageContent);
         $recipientSignature = '';
@@ -2841,7 +2841,7 @@ class SyncServiceTest extends TestCase
             'txid' => $validTx1['txid'],
             'previousTxid' => $validTx1['previous_txid'],
             'memo' => $validTx1['memo'],
-            'nonce' => (int)$nonce
+            'nonce' => $nonce
         ];
         $message = json_encode($messageContent);
         $recipientSignature = '';
@@ -2886,7 +2886,7 @@ class SyncServiceTest extends TestCase
             'txid' => $validTx2['txid'],
             'previousTxid' => $validTx2['previous_txid'],
             'memo' => $validTx2['memo'],
-            'nonce' => (int)$nonce2
+            'nonce' => $nonce2
         ];
         $message2 = json_encode($messageContent2);
         $recipientSignature2 = '';

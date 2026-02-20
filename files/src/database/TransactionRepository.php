@@ -905,10 +905,10 @@ class TransactionRepository extends AbstractRepository {
      *
      * @param string $txid Transaction ID
      * @param string $signature Base64-encoded signature
-     * @param int $nonce Signature nonce (unix timestamp)
+     * @param string $nonce Signature nonce
      * @return bool Success status
      */
-    public function updateSignatureData(string $txid, string $signature, int $nonce): bool {
+    public function updateSignatureData(string $txid, string $signature, string $nonce): bool {
         $affectedRows = $this->update([
             'sender_signature' => $signature,
             'signature_nonce' => $nonce

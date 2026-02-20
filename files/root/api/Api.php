@@ -27,6 +27,7 @@ $corsOrigins = Constants::API_CORS_ALLOWED_ORIGINS;
 if (!empty($corsOrigins)) {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     if ($corsOrigins === '*') {
+        error_log("SECURITY WARNING: CORS wildcard origin configured - restrict API_CORS_ALLOWED_ORIGINS in production");
         header('Access-Control-Allow-Origin: *');
     } else {
         $allowedOrigins = array_map('trim', explode(',', $corsOrigins));
@@ -36,7 +37,7 @@ if (!empty($corsOrigins)) {
         }
     }
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signature, Content-Type');
+    header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signature, X-API-Nonce, Content-Type');
 }
 
 // Handle preflight OPTIONS request

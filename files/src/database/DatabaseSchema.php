@@ -240,7 +240,7 @@ function getTransactionsTableSchema() {
         previous_txid VARCHAR(255),
         sender_signature TEXT,
         recipient_signature TEXT,                      /* Signature of receiver upon accepting transaction */
-        signature_nonce BIGINT,
+        signature_nonce VARCHAR(64),
         time BIGINT NULL,
         memo TEXT,
         description TEXT,

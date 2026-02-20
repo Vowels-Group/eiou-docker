@@ -364,14 +364,15 @@ class TransportUtilityService implements TransportServiceInterface
         // Default to https:// for secure P2P communication
         $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
 
-        $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+        $url = $protocol . $recipient . "/eiou/";
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Prevent payload leakage on redirects
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
 
         // SSL options for HTTPS connections
         // SSL peer verification is enabled by default (H-8 security remediation).
@@ -432,15 +433,16 @@ class TransportUtilityService implements TransportServiceInterface
     */
     public function sendByTor (string $recipient, string $signedPayload): string {
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
+        curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
         curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
         $response = curl_exec($ch);
 
         // Check for curl errors and log them
@@ -493,14 +495,14 @@ class TransportUtilityService implements TransportServiceInterface
         $ch = curl_init();
 
         if ($this->isTorAddress($recipient)) {
-            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
+            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
             curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
             curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         } else {
             $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
-            $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+            $url = $protocol . $recipient . "/eiou/";
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
@@ -522,9 +524,10 @@ class TransportUtilityService implements TransportServiceInterface
         }
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
 
         return $ch;
     }
@@ -779,8 +782,8 @@ class TransportUtilityService implements TransportServiceInterface
         $description = $messageContent['description'] ?? null;
         unset($messageContent['description']);
 
-        // Add nonce for replay protection
-        $nonce = time();
+        // Add cryptographic nonce for replay protection (128-bit hex string)
+        $nonce = bin2hex(random_bytes(16));
         $messageContent['nonce'] = $nonce;
 
         // JSON encode the message content (no duplication)

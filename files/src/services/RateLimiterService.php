@@ -7,6 +7,7 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Contracts\RateLimiterServiceInterface;
 use Eiou\Database\RateLimiterRepository;
+use Eiou\Utils\Logger;
 use Eiou\Utils\Security;
 
 /**
@@ -41,6 +42,13 @@ class RateLimiterService implements RateLimiterServiceInterface {
         // If rate limiting is disabled or in test mode, always allow
         $testMode = getenv('EIOU_TEST_MODE') === 'true';
         if (!Constants::RATE_LIMIT_ENABLED || $testMode) {
+            if ($testMode) {
+                static $testModeWarned = false;
+                if (!$testModeWarned) {
+                    Logger::getInstance()->warning("Rate limiting bypassed: EIOU_TEST_MODE is enabled");
+                    $testModeWarned = true;
+                }
+            }
             return [
                 'allowed' => true,
                 'remaining' => $maxAttempts,
@@ -131,8 +139,8 @@ class RateLimiterService implements RateLimiterServiceInterface {
      * @return bool True if allowed, sends HTTP 429 and returns false if blocked
      */
     public function enforce(string $action, array $limits = ['max' => 10, 'window' => 60, 'block' => 300]): bool {
-        // If rate limiting is disabled, skip all rate limit checks
-        if (!Constants::RATE_LIMIT_ENABLED) {
+        // If rate limiting is disabled or in test mode, skip all rate limit checks
+        if (!Constants::RATE_LIMIT_ENABLED || getenv('EIOU_TEST_MODE') === 'true') {
             return true;
         }
 

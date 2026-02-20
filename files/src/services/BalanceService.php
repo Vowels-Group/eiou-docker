@@ -156,8 +156,15 @@ class BalanceService implements BalanceServiceInterface
         // Sum all currency balances (typically just USD)
         // Balance is already in cents from BalanceRepository
         $totalCents = 0;
+        $maxCents = (int) (PHP_INT_MAX / 100);
         foreach ($balances as $balance) {
             $totalCents += (int) ($balance['total_balance'] ?? 0);
+        }
+
+        // Guard against integer overflow in balance accumulation
+        if (abs($totalCents) > $maxCents) {
+            \Eiou\Utils\Logger::getInstance()->warning("Balance overflow detected: totalCents={$totalCents} exceeds safe maximum={$maxCents}");
+            $totalCents = ($totalCents > 0) ? $maxCents : -$maxCents;
         }
 
         return $this->currencyUtility->convertCentsToDollars($totalCents);

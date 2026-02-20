@@ -123,6 +123,14 @@ services:
       # Uncomment with RESTORE_FILE env var:
       # - /path/to/seed.txt:/restore/seed:ro
 
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     stop_grace_period: 45s
     deploy:

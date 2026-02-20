@@ -104,7 +104,7 @@
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'Unknown'); ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>
                         </div>
                         <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <?php echo $tx['date']; ?>
+                            <?php echo htmlspecialchars($tx['date']); ?>
                             <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
                                 <?php if ($tx['status'] === 'pending'): ?>
                                     <i class="fas fa-hourglass-half"></i>
@@ -131,7 +131,7 @@
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
+                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], 2); ?> <?php echo htmlspecialchars($tx['currency']); ?>
                         <i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i>
                     </div>
                 </div>

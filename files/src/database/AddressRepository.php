@@ -75,7 +75,14 @@ class AddressRepository extends AbstractRepository {
             return false;
         }
 
-        $affectedRows = $this->update($fields, $this->primaryKey, $pubkeyHash);
+        // Filter to only valid transport columns to prevent arbitrary field updates
+        $validTransportFields = $this->getAllAddressTypes();
+        $filtered = array_intersect_key($fields, array_flip($validTransportFields));
+        if (empty($filtered)) {
+            return false;
+        }
+
+        $affectedRows = $this->update($filtered, $this->primaryKey, $pubkeyHash);
         return $affectedRows >= 0;
     }
 

@@ -224,7 +224,7 @@ class TransactionPayload extends BasePayload
         $messageContent['memo'] = $request['memo'] ?? 'standard';
 
         // Use the same nonce that was used by the sender
-        $messageContent['nonce'] = (int)($request['nonce'] ?? $request['signatureNonce'] ?? time());
+        $messageContent['nonce'] = $request['nonce'] ?? $request['signatureNonce'] ?? bin2hex(random_bytes(16));
 
         $message = json_encode($messageContent);
 

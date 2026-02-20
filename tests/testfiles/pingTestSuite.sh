@@ -1108,7 +1108,7 @@ verifySigResult=$(docker exec ${containerA} php -r "
     \$verifyPubkey = \$iAmSender ? \$contactB['pubkey'] : \$myPubkey;
 
     // Reconstruct the signed message: {'type':'create','nonce':N}
-    \$message = json_encode(['type' => 'create', 'nonce' => (int)\$fullTx['signature_nonce']]);
+    \$message = json_encode(['type' => 'create', 'nonce' => \$fullTx['signature_nonce']]);
 
     \$pubkeyResource = openssl_pkey_get_public(\$verifyPubkey);
     if (!\$pubkeyResource) { echo 'BAD_PUBKEY'; exit; }
