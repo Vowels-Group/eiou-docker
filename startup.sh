@@ -962,6 +962,76 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
             tail -10 /var/log/tor/log 2>/dev/null || true
         fi
     fi
+else
+    # Wallet already exists (volume restart) — check if Tor hidden service files need regeneration
+    # The HS directory is NOT in a Docker volume, so it's lost on container restart.
+    # Without the correct key files, Tor generates random keys → different .onion address
+    # → watchdog self-check fails forever because it curls the old address from userconfig.
+    HS_DIR="/var/lib/tor/hidden_service"
+
+    if [ ! -f "${HS_DIR}/hs_ed25519_secret_key" ] || [ ! -f "${HS_DIR}/hs_ed25519_public_key" ]; then
+        echo "Tor hidden service key files missing (container restart) — regenerating from seed..."
+
+        # Regenerate HS files from the encrypted mnemonic stored in userconfig.json
+        # SECURITY: stderr suppressed to prevent stack traces from leaking decrypted mnemonic
+        REGEN_RESULT=$(php -r '
+            require_once("/etc/eiou/vendor/autoload.php");
+            require_once("/etc/eiou/src/bootstrap.php");
+            use Eiou\Security\TorKeyDerivation;
+            use Eiou\Security\BIP39;
+            use Eiou\Security\KeyEncryption;
+
+            $config = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
+            if (!isset($config["mnemonic_encrypted"])) {
+                fwrite(STDERR, "No encrypted mnemonic in userconfig.json\n");
+                exit(1);
+            }
+
+            $mnemonic = KeyEncryption::decrypt($config["mnemonic_encrypted"]);
+            if (!$mnemonic) {
+                fwrite(STDERR, "Failed to decrypt mnemonic\n");
+                exit(1);
+            }
+
+            $seed = BIP39::mnemonicToSeed($mnemonic);
+            BIP39::secureClear($mnemonic);
+
+            $hostname = TorKeyDerivation::generateHiddenServiceFiles($seed);
+            BIP39::secureClear($seed);
+
+            echo $hostname;
+        ' 2>/dev/null)
+        REGEN_EXIT_CODE=$?
+
+        if [ $REGEN_EXIT_CODE -eq 0 ] && [ -n "$REGEN_RESULT" ]; then
+            echo "Hidden service keys regenerated: $REGEN_RESULT"
+
+            # Fix permissions for Tor
+            if [ -d "$HS_DIR" ]; then
+                chown -R debian-tor:debian-tor "$HS_DIR" 2>/dev/null || true
+                chmod 700 "$HS_DIR" 2>/dev/null || true
+                find "$HS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+            fi
+
+            # Restart Tor to load the regenerated keys
+            echo "Restarting Tor to load regenerated hidden service keys..."
+            pkill -x tor 2>/dev/null || true
+            sleep 2
+            if service tor start 2>/dev/null; then
+                sleep 3
+                if pgrep -x "tor" > /dev/null 2>&1; then
+                    echo "Tor restarted with correct hidden service keys."
+                else
+                    echo "WARNING: Tor process not running after restart"
+                fi
+            else
+                echo "WARNING: Tor restart command failed"
+            fi
+        else
+            echo "WARNING: Failed to regenerate hidden service keys"
+            echo "Tor may be running with incorrect .onion address"
+        fi
+    fi
 fi
 
 # Check if all precursors to the message processors are available and working
