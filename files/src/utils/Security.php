@@ -47,19 +47,24 @@ class Security {
     }
 
     /**
-     * Sanitize user input for database queries (additional layer beyond prepared statements)
+     * Strip null bytes and trim whitespace from input
      *
      * @param string $input User input to sanitize
      * @return string Sanitized input
      */
-    public static function sanitizeInput($input) {
+    public static function stripNullBytes($input) {
         // Remove null bytes
         $input = str_replace(chr(0), '', $input);
         // Trim whitespace
         $input = trim($input);
-        // Note: magic_quotes_gpc was removed in PHP 5.4 and is no longer needed
-        // Modern PHP versions don't have this issue
         return $input;
+    }
+
+    /**
+     * @deprecated Use stripNullBytes() instead
+     */
+    public static function sanitizeInput($input) {
+        return self::stripNullBytes($input);
     }
 
     /**
@@ -140,31 +145,6 @@ class Security {
         }
 
         return "An error occurred. Please try again later.";
-    }
-
-    /**
-     * Validate CSRF token
-     *
-     * @param string $token Token to validate
-     * @return bool True if valid
-     */
-    public static function validateCSRFToken($token) {
-        if (!isset($_SESSION['csrf_token'])) {
-            return false;
-        }
-        return hash_equals($_SESSION['csrf_token'], $token);
-    }
-
-    /**
-     * Generate CSRF token
-     *
-     * @return string CSRF token
-     */
-    public static function generateCSRFToken() {
-        if (!isset($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        }
-        return $_SESSION['csrf_token'];
     }
 
     /**
@@ -284,7 +264,7 @@ class Security {
             if (is_array($value)) {
                 $array[$key] = self::sanitizeArray($value);
             } elseif (is_string($value)) {
-                $array[$key] = self::sanitizeInput($value);
+                $array[$key] = self::stripNullBytes($value);
             }
         }
         return $array;

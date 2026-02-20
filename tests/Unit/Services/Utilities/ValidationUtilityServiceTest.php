@@ -157,9 +157,9 @@ class ValidationUtilityServiceTest extends TestCase
     }
 
     /**
-     * Test validateRequestLevel with negative values
+     * Test validateRequestLevel rejects negative request levels (M-9)
      */
-    public function testValidateRequestLevelWithNegativeValues(): void
+    public function testValidateRequestLevelRejectsNegativeRequestLevel(): void
     {
         $request = [
             'requestLevel' => -1,
@@ -168,7 +168,49 @@ class ValidationUtilityServiceTest extends TestCase
 
         $result = $this->service->validateRequestLevel($request);
 
-        $this->assertTrue($result);
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test validateRequestLevel caps maxRequestLevel with server-side max (M-9)
+     *
+     * The formula is: effectiveMax = min(clientMax, requestLevel + serverMax)
+     * With serverMax=6, a clientMax of 100 gets capped to requestLevel+6.
+     * The (int) cast prevents type-juggling attacks.
+     */
+    public function testValidateRequestLevelCapsWithServerSideMax(): void
+    {
+        // Server-side default is Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL (6)
+        // With requestLevel=0 and clientMax=100, effective = min(100, 0+6) = 6
+        // requestLevel=0 <= 6: passes
+        $this->assertTrue($this->service->validateRequestLevel([
+            'requestLevel' => 0,
+            'maxRequestLevel' => 100
+        ]));
+
+        // The int cast ensures string values are properly handled
+        $this->assertTrue($this->service->validateRequestLevel([
+            'requestLevel' => '2',
+            'maxRequestLevel' => '5'
+        ]));
+    }
+
+    /**
+     * Test validateRequestLevel enforces non-negative request levels (M-9)
+     */
+    public function testValidateRequestLevelEnforcesNonNegative(): void
+    {
+        // Zero is valid
+        $this->assertTrue($this->service->validateRequestLevel([
+            'requestLevel' => 0,
+            'maxRequestLevel' => 5
+        ]));
+
+        // Negative is invalid even if within maxRequestLevel range
+        $this->assertFalse($this->service->validateRequestLevel([
+            'requestLevel' => -1,
+            'maxRequestLevel' => 5
+        ]));
     }
 
     // =========================================================================

@@ -745,6 +745,17 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         'sender' => $tx['sender_address'] ?? 'unknown'
                     ];
 
+                    // Circuit breaker: abort sync if too many signature failures
+                    if (count($result['signature_failures']) >= 5) {
+                        Logger::getInstance()->warning("Sync circuit breaker triggered: too many signature failures", [
+                            'failure_count' => count($result['signature_failures']),
+                            'contact_address' => $contactAddress,
+                            'synced_so_far' => $syncedCount
+                        ]);
+                        $result['circuit_breaker'] = true;
+                        break 2; // Break out of both foreach loops
+                    }
+
                     // CONTINUE processing - skip this transaction but process remaining ones
                     // This allows partial sync recovery instead of complete failure
                     continue;

@@ -305,6 +305,58 @@ class SessionTest extends TestCase
     }
 
     /**
+     * Test validateCSRFToken rotates token after successful validation (M-3)
+     */
+    public function testValidateCSRFTokenRotatesTokenAfterSuccess(): void
+    {
+        $token = $this->session->generateCSRFToken();
+
+        // Verify token exists before validation
+        $this->assertArrayHasKey('csrf_token', $_SESSION);
+        $this->assertArrayHasKey('csrf_token_time', $_SESSION);
+
+        $result = $this->session->validateCSRFToken($token);
+
+        // Validation should succeed
+        $this->assertTrue($result);
+
+        // Token should be rotated (removed) after successful validation
+        $this->assertArrayNotHasKey('csrf_token', $_SESSION);
+        $this->assertArrayNotHasKey('csrf_token_time', $_SESSION);
+    }
+
+    /**
+     * Test validateCSRFToken does not rotate token on failure (M-3)
+     */
+    public function testValidateCSRFTokenDoesNotRotateOnFailure(): void
+    {
+        $token = $this->session->generateCSRFToken();
+
+        $result = $this->session->validateCSRFToken('wrong_token');
+
+        // Validation should fail
+        $this->assertFalse($result);
+
+        // Token should still exist after failed validation
+        $this->assertArrayHasKey('csrf_token', $_SESSION);
+        $this->assertEquals($token, $_SESSION['csrf_token']);
+    }
+
+    /**
+     * Test CSRF token cannot be reused after successful validation (M-3)
+     */
+    public function testCSRFTokenCannotBeReusedAfterValidation(): void
+    {
+        $token = $this->session->generateCSRFToken();
+
+        // First use should succeed
+        $this->assertTrue($this->session->validateCSRFToken($token));
+
+        // Second use of same token should fail (token was rotated)
+        $this->assertFalse($this->session->validateCSRFToken($token));
+    }
+
+    /**
      * Test getCSRFField returns hidden input HTML
      */
     public function testGetCSRFFieldReturnsHiddenInputHtml(): void

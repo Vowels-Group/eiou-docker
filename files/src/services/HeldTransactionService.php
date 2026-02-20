@@ -241,13 +241,13 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             );
 
             if (!$chainIntegrity['valid']) {
-                Logger::getInstance()->warning("Chain integrity check failed after sync, cannot resume held transactions", [
+                Logger::getInstance()->warning("Chain integrity check failed after sync, blocking held transaction processing", [
                     'contact_pubkey_hash' => $contactPubkeyHash,
                     'gaps' => $chainIntegrity['gaps'] ?? [],
                     'broken_txids' => $chainIntegrity['broken_txids'] ?? []
                 ]);
-                // Don't return - still try to process, but log the warning
-                // Some transactions may still be recoverable
+                $result['chain_integrity_failed'] = true;
+                return $result;
             }
 
             // Get all held transactions for this contact that completed sync

@@ -57,6 +57,14 @@ services:
       - alice-mysql-data:/var/lib/mysql
       - alice-files:/etc/eiou/
       - alice-backups:/var/lib/eiou/backups
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     stop_grace_period: 45s
     deploy:
@@ -89,6 +97,14 @@ services:
       - bob-mysql-data:/var/lib/mysql
       - bob-files:/etc/eiou/
       - bob-backups:/var/lib/eiou/backups
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     stop_grace_period: 45s
     deploy:
@@ -121,6 +137,14 @@ services:
       - carol-mysql-data:/var/lib/mysql
       - carol-files:/etc/eiou/
       - carol-backups:/var/lib/eiou/backups
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     stop_grace_period: 45s
     deploy:
@@ -153,6 +177,14 @@ services:
       - daniel-mysql-data:/var/lib/mysql
       - daniel-files:/etc/eiou/
       - daniel-backups:/var/lib/eiou/backups
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
     stop_grace_period: 45s
     deploy:

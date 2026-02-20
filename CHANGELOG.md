@@ -14,6 +14,45 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - Trusted proxies now configurable via CLI (`changesettings trustedProxies`) instead of requiring container rebuild
+- Rename `Security::sanitizeInput()` to `stripNullBytes()` for accuracy; deprecated alias retained
+- P2P transport payload moved from URL query parameter to POST body for privacy (backward-compatible receiver fallback)
+- P2P nonce changed from `time()` to `bin2hex(random_bytes(16))` for cryptographic uniqueness
+- Exception detail display gated behind `Constants::isDebug()` instead of `APP_ENV !== 'production'`
+- API authentication error messages normalized to prevent key state enumeration
+
+### Security
+- **M-1**: Validate SQL pattern before executing backup restore statements
+- **M-2**: Fix session cookie `secure` flag to properly detect HTTPS (handles proxy/edge cases)
+- **M-3**: Rotate CSRF tokens after successful validation to prevent reuse
+- **M-4**: Log warning when `EIOU_TEST_MODE` bypasses rate limiting; add bypass to `enforce()` for consistency
+- **M-5**: Normalize API error responses to generic "Invalid or inactive API key"
+- **M-6**: Remove duplicate CSRF implementation from `Security` class (Session class is canonical)
+- **M-7**: Rename misleading `sanitizeInput()` to `stripNullBytes()`
+- **M-8**: Warn on CORS wildcard configuration; add `X-API-Nonce` to allowed CORS headers
+- **M-9**: Cap P2P request level with server-side maximum from `UserContext::getMaxP2pLevel()`
+- **M-10**: Gate exception message exposure behind debug mode, not environment name
+- **M-11**: Add `htmlspecialchars()` to unencoded date and currency output in transaction history
+- **M-12**: Remove raw API key secret echo to prevent Docker log exposure
+- **M-14**: Remove legacy plaintext private key check from `hasKeys()`
+- **M-15**: Use RAM-backed `/dev/shm` for decrypted backup temp files with guaranteed cleanup
+- **M-16**: Add in-memory P2P rate limiting by sender public key (60 req/min)
+- **M-17**: Add terminal state guard and ownership check to transaction recovery
+- **M-19**: Add circuit breaker (5 failures) for sync signature verification failures
+- **M-20**: Filter address updates to valid transport columns via dynamic `getAllAddressTypes()`
+- **M-21**: Block held transaction processing when chain integrity check fails after sync
+- **M-23**: Add `no-new-privileges` and `pids_limit` to all Docker Compose files
+- **M-24**: Add Docker log rotation (json-file, 10MB/3 files) and in-container logrotate for Apache/PHP logs
+- **M-25**: Add HTTP-to-HTTPS redirect (except `/eiou` transport endpoint)
+- **M-26**: Harden SSL/TLS: disable SSLv3/TLSv1/TLSv1.1, strong cipher suite, HSTS header
+- **M-27**: Move transport payload from URL query parameter to POST body; disable redirect following
+- **M-28**: Replace timestamp nonce with cryptographic `random_bytes(16)` nonce
+- **M-29**: Verify Composer installer SHA-384 hash before execution
+- **M-30**: Harden MariaDB: bind to localhost, disable symbolic links
+- **M-32**: Add balance overflow guard with warning log
+
+### Docs
+- Mark medium-term security audit findings (M-1 through M-32) as remediated in `SECURITY_AUDIT.md`
+- Document container security hardening and log rotation in `DOCKER_CONFIGURATION.md`
 
 ### Fixed
 - Tor hidden service address mismatch on container restart: HS key regeneration check compared file existence but Tor had already started and generated random keys — now compares actual .onion address against userconfig to detect mismatches and regenerate correct keys from seed

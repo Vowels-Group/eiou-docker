@@ -69,20 +69,26 @@ class BackupService implements BackupServiceInterface
         $dbPass = $dbConfig['dbPass'];
 
         // Create temporary MySQL config file for secure password passing
-        $tempCnf = tempnam('/tmp', 'mysql_');
+        // Use /dev/shm (RAM-backed tmpfs) to avoid writing credentials to disk
+        $tmpDir = is_dir('/dev/shm') ? '/dev/shm' : '/tmp';
+        $tempCnf = tempnam($tmpDir, 'mysql_');
         chmod($tempCnf, 0600);
         file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
 
-        $cmd = sprintf(
-            'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s 2>&1',
-            escapeshellarg($tempCnf),
-            escapeshellarg($dbName)
-        );
+        try {
+            $cmd = sprintf(
+                'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s 2>&1',
+                escapeshellarg($tempCnf),
+                escapeshellarg($dbName)
+            );
 
-        $sqlDump = shell_exec($cmd);
-
-        // Securely remove temp config file
-        unlink($tempCnf);
+            $sqlDump = shell_exec($cmd);
+        } finally {
+            // Securely remove temp config file even on failure
+            if (file_exists($tempCnf)) {
+                unlink($tempCnf);
+            }
+        }
 
         // Better error diagnostics
         if (empty($sqlDump)) {
@@ -215,28 +221,37 @@ class BackupService implements BackupServiceInterface
         $dbPass = $dbConfig['dbPass'];
 
         // Write SQL to temp file for mysql import
-        $tempFile = tempnam('/tmp', 'eiou_restore_');
-        file_put_contents($tempFile, $sqlDump);
-        KeyEncryption::secureClear($sqlDump);
+        // Use /dev/shm (RAM-backed tmpfs) to avoid writing decrypted data to disk
+        $tmpDir = is_dir('/dev/shm') ? '/dev/shm' : '/tmp';
+        $tempFile = tempnam($tmpDir, 'eiou_restore_');
+        $tempCnf = null;
 
-        // Create temporary MySQL config file for secure password passing
-        $tempCnf = tempnam('/tmp', 'mysql_');
-        chmod($tempCnf, 0600);
-        file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
+        try {
+            file_put_contents($tempFile, $sqlDump);
+            KeyEncryption::secureClear($sqlDump);
 
-        $cmd = sprintf(
-            'mysql --defaults-extra-file=%s %s < %s 2>&1',
-            escapeshellarg($tempCnf),
-            escapeshellarg($dbName),
-            escapeshellarg($tempFile)
-        );
+            // Create temporary MySQL config file for secure password passing
+            $tempCnf = tempnam($tmpDir, 'mysql_');
+            chmod($tempCnf, 0600);
+            file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
 
-        $output = shell_exec($cmd);
+            $cmd = sprintf(
+                'mysql --defaults-extra-file=%s %s < %s 2>&1',
+                escapeshellarg($tempCnf),
+                escapeshellarg($dbName),
+                escapeshellarg($tempFile)
+            );
 
-        // Securely remove temp config file
-        unlink($tempCnf);
-
-        unlink($tempFile);
+            $output = shell_exec($cmd);
+        } finally {
+            // Guarantee cleanup of temp files even on crash
+            if ($tempCnf && file_exists($tempCnf)) {
+                unlink($tempCnf);
+            }
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+        }
 
         // Check for errors (mysql doesn't always return proper exit codes via shell_exec)
         if ($output && preg_match('/ERROR/i', $output)) {
@@ -673,6 +688,16 @@ class BackupService implements BackupServiceInterface
         }
 
         try {
+            // Validate SQL matches expected INSERT IGNORE pattern before executing
+            if (!preg_match('/^INSERT IGNORE INTO `transactions` VALUES \(.*\);$/', $searchResult['sql_insert'])) {
+                $result['error'] = 'SQL validation failed: unexpected statement format';
+                Logger::getInstance()->warning("Backup restore SQL validation failed", [
+                    'txid' => $txid,
+                    'sql_preview' => substr($searchResult['sql_insert'], 0, 100)
+                ]);
+                return $result;
+            }
+
             $stmt = $this->pdo->exec($searchResult['sql_insert']);
 
             // Verify the transaction now exists

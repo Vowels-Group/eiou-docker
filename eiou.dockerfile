@@ -41,13 +41,19 @@ RUN apt-get update && apt-get install -y \
     php-mbstring \
     php-mysql \
     php-xml \
+    logrotate \
     tor \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Composer for PSR-4 autoloading
-# Using the official installer script for security
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# Hash-verified install to prevent supply chain attacks
+RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
+    && EXPECTED_HASH=$(curl -sS https://composer.github.io/installer.sig) \
+    && ACTUAL_HASH=$(php -r "echo hash_file('sha384', '/tmp/composer-setup.php');") \
+    && if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then echo 'Composer installer corrupt'; exit 1; fi \
+    && php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+    && rm /tmp/composer-setup.php
 
 # Configure Tor hidden service:
 # - HiddenServiceDir: Directory for Tor identity keys and hostname
@@ -67,8 +73,8 @@ RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.c
 # Set ServerName to suppress Apache warning
 RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
 
-# Enable mod_rewrite for API routing and mod_ssl for HTTPS
-RUN a2enmod rewrite ssl
+# Enable mod_rewrite for API routing, mod_ssl for HTTPS, mod_headers for HSTS
+RUN a2enmod rewrite ssl headers
 
 # Create SSL certificate directory
 RUN mkdir -p /etc/apache2/ssl
@@ -92,11 +98,18 @@ RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.c
     echo '    RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf && \
     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf
 
+# HTTP to HTTPS redirect (except /eiou transport endpoint for P2P backward compatibility)
+RUN sed -i '/<\/VirtualHost>/i \    RewriteEngine On\n    RewriteCond %{HTTPS} off\n    RewriteCond %{REQUEST_URI} !^/eiou\n    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]' /etc/apache2/sites-available/000-default.conf
+
 # Create SSL VirtualHost configuration
 RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf && \
     echo '    ServerAdmin webmaster@localhost' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    DocumentRoot /var/www/html' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLEngine on' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    SSLCipherSuite HIGH:!aNULL:!MD5:!3DES:!RC4' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    SSLHonorCipherOrder on' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    Header always set Strict-Transport-Security "max-age=31536000"' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/default-ssl.conf && \
@@ -165,6 +178,13 @@ RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.lo
 RUN touch /var/log/php_errors.log && \
     chown www-data:www-data /var/log/php_errors.log && \
     chmod 640 /var/log/php_errors.log
+
+# MariaDB security hardening: bind to localhost only, disable symbolic links
+RUN printf '[mysqld]\nbind-address=127.0.0.1\nskip-symbolic-links\n' > /etc/mysql/conf.d/security.cnf
+
+# Log rotation for Apache and PHP application logs
+RUN printf '/var/log/apache2/*.log {\n    weekly\n    rotate 4\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 640 root adm\n    sharedscripts\n    postrotate\n        if [ -f /var/run/apache2/apache2.pid ]; then\n            /usr/sbin/apachectl graceful > /dev/null 2>&1 || true\n        fi\n    endscript\n}\n' > /etc/logrotate.d/apache2-eiou && \
+    printf '/var/log/php_errors.log {\n    weekly\n    rotate 4\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 640 www-data www-data\n}\n' > /etc/logrotate.d/php-eiou
 
 # Persistent volumes:
 # - /var/lib/mysql: Database files (transactions, contacts, balances)
