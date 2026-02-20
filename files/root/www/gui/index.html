@@ -50,15 +50,32 @@ if (isset($_GET['logout'])) {
 
 // Handle authentication POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
-    $submittedAuthCode = $_POST['authcode'];
+    // Rate limit GUI login attempts
+    $rateLimiter = $serviceContainer->getRateLimiterService();
+    $clientIp = \Eiou\Utils\Security::getClientIp();
+    $rateResult = $rateLimiter->checkLimit($clientIp, 'gui_login');
 
-    if ($user->has('authcode_encrypted') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
-        // Authentication successful, redirect to clean URL
-        header('Location: ' . $_SERVER['PHP_SELF']);
-        exit;
-    } else {
-        // Authentication failed, show error
+    if (!$rateResult['allowed']) {
         $authError = true;
+        $authErrorMessage = 'Too many login attempts. Please try again later.';
+    } else {
+        // Validate CSRF token on login POST
+        if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'])) {
+            $authError = true;
+            $authErrorMessage = 'Invalid request. Please refresh the page and try again.';
+        } else {
+            $submittedAuthCode = $_POST['authcode'];
+
+            if ($user->has('authcode_encrypted') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
+                // Authentication successful, redirect to clean URL
+                header('Location: ' . $_SERVER['PHP_SELF']);
+                exit;
+            } else {
+                // Authentication failed, show error
+                $authError = true;
+                $authErrorMessage = 'Invalid authentication code. Please try again.';
+            }
+        }
     }
 }
 

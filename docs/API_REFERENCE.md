@@ -52,6 +52,7 @@ Where `string_to_sign` is:
 - Timestamps must be within 5 minutes of server time (prevents replay attacks)
 - API secrets are never sent in requests - only the computed signature
 - Rate limiting is enforced per API key (default: 100 requests/minute)
+- Proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`) are only trusted when `REMOTE_ADDR` is in the trusted proxies list. Configure via CLI: `eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"` (see [CLI Reference — changesettings](CLI_REFERENCE.md#changesettings)). The `TRUSTED_PROXIES` environment variable takes precedence if set.
 
 ### Example: Bash
 

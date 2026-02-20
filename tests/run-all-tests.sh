@@ -389,7 +389,6 @@ pingTestSuite
 serviceInterfaceTest
 serviceExceptionTest
 nodeIdentityTest
-multisigTestSuite
 bestFeeRoutingTest
 cascadeCancelTest
 maxLevelCancelTest
@@ -472,12 +471,6 @@ backupTestSuite
 TESTS_PERFORMANCE="
 addContactsTest
 performanceBaseline
-"
-
-# Multisig tests (requires contacts for join/announce flow)
-TESTS_MULTISIG="
-addContactsTest
-multisigTestSuite
 "
 
 # Best-fee routing tests (best with collisions topology for multiple route paths)

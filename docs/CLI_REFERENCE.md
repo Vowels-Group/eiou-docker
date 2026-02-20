@@ -760,6 +760,7 @@ eiou changesettings [setting] [value]
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
+| `trustedProxies` | Trusted proxy IPs for header forwarding | `10.0.0.1,172.16.0.0/12` |
 
 **Examples:**
 ```bash
@@ -772,6 +773,8 @@ eiou changesettings maxP2pLevel 5
 eiou changesettings maxOutput 0           # Unlimited output
 eiou changesettings autoRefreshEnabled true
 eiou changesettings autoBackupEnabled false
+eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"
+eiou changesettings trustedProxies ""       # Clear (trust no proxies)
 
 # JSON output
 eiou changesettings defaultFee 1.5 --json

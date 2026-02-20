@@ -143,7 +143,7 @@ class ContactController
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::APP_ENV !== 'production'
+                $message = Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';
@@ -245,7 +245,7 @@ class ContactController
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::APP_ENV !== 'production'
+                $message = Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';
@@ -312,7 +312,7 @@ class ContactController
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::APP_ENV !== 'production'
+                $message = Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';
@@ -379,7 +379,7 @@ class ContactController
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::APP_ENV !== 'production'
+                $message = Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';
@@ -446,7 +446,7 @@ class ContactController
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::APP_ENV !== 'production'
+                $message = Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';
@@ -549,7 +549,7 @@ class ContactController
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
-                $message = Constants::APP_ENV !== 'production'
+                $message = Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error';
                 $messageType = 'error';
@@ -613,7 +613,7 @@ class ContactController
             echo json_encode([
                 'success' => false,
                 'error' => 'internal_error',
-                'message' => Constants::APP_ENV !== 'production'
+                'message' => Constants::getAppEnv() !== 'production'
                     ? 'Internal server error: ' . $e->getMessage()
                     : 'Internal server error'
             ]);
@@ -697,7 +697,7 @@ class ContactController
             echo json_encode([
                 'success' => false,
                 'error' => 'internal_error',
-                'message' => Constants::APP_ENV !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
+                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
             ]);
         }
     }
@@ -726,7 +726,7 @@ class ContactController
             echo json_encode([
                 'success' => false,
                 'error' => 'internal_error',
-                'message' => Constants::APP_ENV !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
+                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
             ]);
         }
     }
@@ -758,7 +758,7 @@ class ContactController
             echo json_encode([
                 'success' => false,
                 'error' => 'internal_error',
-                'message' => Constants::APP_ENV !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
+                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
             ]);
         }
     }

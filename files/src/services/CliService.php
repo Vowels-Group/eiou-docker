@@ -229,6 +229,14 @@ class CliService implements CliServiceInterface {
                     return;
                 }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'trustedproxies'){
+                $key = 'trustedProxies';
+                $validation = InputValidator::validateTrustedProxies($argv[3] ?? '');
+                if (!$validation['valid']) {
+                    $output->validationError('trustedProxies', $validation['error']);
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'name'){
                 $key = 'name';
                 if (!isset($argv[3]) || empty(trim($argv[3]))) {
@@ -264,6 +272,7 @@ class CliService implements CliServiceInterface {
             echo "\t10. Hostname\n";
             echo "\t11. Auto-refresh transactions\n";
             echo "\t12. Auto-backup database\n";
+            echo "\t13. Trusted proxy IPs\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -405,6 +414,17 @@ class CliService implements CliServiceInterface {
                     }
                     break;
 
+                case '13':
+                    echo "Enter trusted proxy IPs (comma-separated, empty to clear): ";
+                    $key = 'trustedProxies';
+                    $validation = InputValidator::validateTrustedProxies(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -486,7 +506,8 @@ class CliService implements CliServiceInterface {
             'hostname' => $this->currentUser->getHttpAddress(),
             'hostname_secure' => $this->currentUser->getHttpsAddress(),
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
-            'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled()
+            'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
+            'trusted_proxies' => $this->currentUser->getTrustedProxies()
         ];
 
         if ($output->isJsonMode()) {
@@ -506,6 +527,7 @@ class CliService implements CliServiceInterface {
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tTrusted proxies: " . ($settings['trusted_proxies'] ?: '(none)') . "\n";
         }
     }
 

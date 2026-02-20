@@ -7,6 +7,7 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Contracts\RateLimiterServiceInterface;
 use Eiou\Database\RateLimiterRepository;
+use Eiou\Utils\Security;
 
 /**
  * Rate Limiter Service
@@ -113,20 +114,13 @@ class RateLimiterService implements RateLimiterServiceInterface {
     /**
      * Get client IP address
      *
+     * Delegates to Security::getClientIp() which only trusts proxy headers
+     * when REMOTE_ADDR is in the trusted proxies list.
+     *
      * @return string IP address
      */
     public static function getClientIp(): string {
-        $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
-        foreach ($ipKeys as $key) {
-            if (array_key_exists($key, $_SERVER) === true) {
-                $ip = $_SERVER[$key];
-                if (strpos($ip, ',') !== false) {
-                    $ip = explode(',', $ip)[0];
-                }
-                return trim($ip);
-            }
-        }
-        return '0.0.0.0';
+        return Security::getClientIp();
     }
 
     /**

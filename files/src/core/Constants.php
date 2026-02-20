@@ -322,6 +322,10 @@ class Constants {
     const RATE_LIMIT_WINDOW_SECONDS = 60;          // Time window in seconds for counting attempts (default: 60)
     const RATE_LIMIT_BLOCK_SECONDS = 300;          // Seconds to block after limit exceeded (default: 300)
 
+    // Trusted proxy IPs (comma-separated). Only trust proxy headers (X-Forwarded-For, CF-Connecting-IP)
+    // when REMOTE_ADDR is in this list. Configure via CLI: changesettings trustedProxies "10.0.0.1,172.16.0.1"
+    const TRUSTED_PROXIES = '';
+
     /**
      * Check if automatic backups are enabled
      * Supports runtime override via EIOU_BACKUP_AUTO_ENABLED env variable
@@ -353,6 +357,34 @@ class Constants {
         }
         // Unknown protocol: use the lowest configured limit
         return min(self::P2P_MAX_WORKERS);
+    }
+
+    /**
+     * Get the application environment
+     * Supports runtime override via APP_ENV env variable
+     *
+     * @return string Current environment ('development', 'production', etc.)
+     */
+    public static function getAppEnv(): string {
+        $envValue = getenv('APP_ENV');
+        if ($envValue !== false && $envValue !== '') {
+            return $envValue;
+        }
+        return self::APP_ENV;
+    }
+
+    /**
+     * Check if debug mode is enabled
+     * Supports runtime override via APP_DEBUG env variable
+     *
+     * @return bool Whether debug mode is enabled
+     */
+    public static function isDebug(): bool {
+        $env = getenv('APP_DEBUG');
+        if ($env !== false) {
+            return filter_var($env, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::APP_DEBUG;
     }
 
     /**

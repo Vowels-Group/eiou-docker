@@ -438,6 +438,56 @@ class InputValidator {
     }
 
     /**
+     * Validate trusted proxies (comma-separated IP addresses or CIDR ranges)
+     *
+     * @param string $value Comma-separated list of IPs/CIDRs
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
+     */
+    public static function validateTrustedProxies($value): array {
+        if (!is_string($value)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Trusted proxies must be a string'];
+        }
+
+        $value = trim($value);
+
+        // Empty string is valid (means "trust no proxies")
+        if ($value === '') {
+            return ['valid' => true, 'value' => '', 'error' => null];
+        }
+
+        $entries = array_map('trim', explode(',', $value));
+        $normalized = [];
+
+        foreach ($entries as $entry) {
+            if ($entry === '') {
+                continue;
+            }
+
+            // Check for CIDR notation
+            if (strpos($entry, '/') !== false) {
+                $parts = explode('/', $entry, 2);
+                if (!filter_var($parts[0], FILTER_VALIDATE_IP)) {
+                    return ['valid' => false, 'value' => null, 'error' => 'Invalid IP address in CIDR: ' . $entry];
+                }
+                $prefix = intval($parts[1]);
+                $isV6 = filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6);
+                $maxPrefix = $isV6 ? 128 : 32;
+                if (!is_numeric($parts[1]) || $prefix < 0 || $prefix > $maxPrefix) {
+                    return ['valid' => false, 'value' => null, 'error' => 'Invalid CIDR prefix in: ' . $entry];
+                }
+                $normalized[] = $entry;
+            } else {
+                if (!filter_var($entry, FILTER_VALIDATE_IP)) {
+                    return ['valid' => false, 'value' => null, 'error' => 'Invalid IP address: ' . $entry];
+                }
+                $normalized[] = $entry;
+            }
+        }
+
+        return ['valid' => true, 'value' => implode(',', $normalized), 'error' => null];
+    }
+
+    /**
      * Validate complete transaction request
      *
      * @param array $request Transaction request data
