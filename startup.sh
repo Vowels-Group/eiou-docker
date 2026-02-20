@@ -1196,6 +1196,7 @@ watchdog() {
     local TOR_RESTART_COUNT=0
     local TOR_MAX_RESTARTS=5         # Max Tor restart attempts before giving up
     local TOR_RESTART_COOLDOWN=300   # Minimum 5 minutes between periodic Tor restarts
+    local TOR_VERIFY_COOLDOWN=90    # Shorter cooldown after post-restart verification failure
     local TOR_SIGNAL_COOLDOWN=60    # Minimum 60 seconds between signal-triggered restarts
     local TOR_LAST_RESTART=0
     local TOR_RESET_COOLDOWN=300    # Reset restart counter after 5 minutes of no restarts
@@ -1323,9 +1324,9 @@ watchdog() {
                 if service tor start 2>/dev/null; then
                     sleep 5
                     if pgrep -x "tor" > /dev/null 2>&1; then
-                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully via signal (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS)"
-                        # Schedule a follow-up self-check in 30s to verify hidden service republished
-                        TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully via signal (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS) — verifying hidden service in ~90s"
+                        # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
+                        TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
                     fi
@@ -1354,8 +1355,8 @@ watchdog() {
 
             # Self-check: curl our own .onion through the SOCKS5 proxy
             if ! curl --socks5-hostname 127.0.0.1:9050 \
-                    --connect-timeout 5 \
-                    --max-time 10 \
+                    --connect-timeout 15 \
+                    --max-time 20 \
                     --silent \
                     --fail \
                     --output /dev/null \
@@ -1390,9 +1391,9 @@ watchdog() {
                     if service tor start 2>/dev/null; then
                         sleep 5
                         if pgrep -x "tor" > /dev/null 2>&1; then
-                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~30s"
-                            # Schedule a follow-up self-check in 30s to verify hidden service republished
-                            TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
+                            # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
+                            TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                         else
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                         fi
@@ -1407,9 +1408,37 @@ watchdog() {
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor exceeded max restarts ($TOR_MAX_RESTARTS) — will retry after cooldown ($((TOR_RESET_COOLDOWN - TOR_TIME_SINCE_RESTART))s remaining)"
                     fi
                 else
-                    # Recently restarted but still unreachable — schedule another check in 30s
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor still unreachable after recent restart — rechecking in ~30s"
-                    TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
+                    # Recently restarted — check if enough time for descriptor propagation
+                    if [ $TOR_TIME_SINCE_RESTART -ge $TOR_VERIFY_COOLDOWN ]; then
+                        # Descriptor had enough time but still unreachable — retry restart
+                        TOR_RESTART_COUNT=$((TOR_RESTART_COUNT + 1))
+                        TOR_LAST_RESTART=$CURRENT_TIME
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Hidden service still unreachable after ${TOR_TIME_SINCE_RESTART}s — restarting Tor (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS)..."
+
+                        if [ -d "$TOR_HS_DIR" ]; then
+                            chown -R debian-tor:debian-tor "$TOR_HS_DIR" 2>/dev/null || true
+                            chmod 700 "$TOR_HS_DIR" 2>/dev/null || true
+                            find "$TOR_HS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+                        fi
+
+                        pkill -x tor 2>/dev/null || true
+                        sleep 2
+                        if service tor start 2>/dev/null; then
+                            sleep 5
+                            if pgrep -x "tor" > /dev/null 2>&1; then
+                                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
+                                TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
+                            else
+                                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
+                            fi
+                        else
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart command failed"
+                        fi
+                    else
+                        # Still within verification window — just recheck
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor still unreachable after recent restart — rechecking in ~30s"
+                        TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 30))
+                    fi
                 fi
             else
                 # Self-check passed — reset restart counter on sustained success
