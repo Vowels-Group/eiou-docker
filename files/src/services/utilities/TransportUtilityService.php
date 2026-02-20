@@ -780,8 +780,8 @@ class TransportUtilityService implements TransportServiceInterface
         $description = $messageContent['description'] ?? null;
         unset($messageContent['description']);
 
-        // Add cryptographic nonce for replay protection
-        $nonce = bin2hex(random_bytes(16));
+        // Add cryptographic nonce for replay protection (random int, fits BIGINT column)
+        $nonce = random_int(0, PHP_INT_MAX);
         $messageContent['nonce'] = $nonce;
 
         // JSON encode the message content (no duplication)
