@@ -183,10 +183,11 @@ class Application {
             $config['dbPassEncrypted'] = $encrypted;
             unset($config['dbPass']);
 
-            $oldUmask = umask(0077);
+            $oldUmask = umask(0027);
             file_put_contents($configPath, json_encode($config), LOCK_EX);
             umask($oldUmask);
-            chmod($configPath, 0600);
+            chmod($configPath, 0640);
+            chgrp($configPath, 'www-data');
 
             // Reload DatabaseContext so subsequent reads use encrypted version
             DatabaseContext::getInstance()->setdatabaseData($config);

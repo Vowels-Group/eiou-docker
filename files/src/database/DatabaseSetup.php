@@ -128,10 +128,11 @@ function freshInstall(){
         // Write the default configuration with restrictive permissions
         if($dbConfig !== []){
             $configPath = '/etc/eiou/config/dbconfig.json';
-            $oldUmask = umask(0077);
+            $oldUmask = umask(0027);
             file_put_contents($configPath, json_encode($dbConfig), LOCK_EX);
             umask($oldUmask);
-            chmod($configPath, 0600);
+            chmod($configPath, 0640);
+            chgrp($configPath, 'www-data');
         }
     }
 }
