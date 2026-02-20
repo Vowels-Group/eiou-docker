@@ -374,10 +374,15 @@ class TransportUtilityService implements TransportServiceInterface
         curl_setopt($ch, CURLOPT_POST, true);
 
         // SSL options for HTTPS connections
-        // SSL peer verification enabled by default for security.
-        // For self-signed certificates in mesh networks, set P2P_SSL_VERIFY=false.
+        // SSL peer verification is enabled by default (H-8 security remediation).
+        // Self-signed certificates (e.g. Docker mesh nodes using QUICKSTART) will
+        // be rejected unless one of the following is configured:
+        //   - P2P_SSL_VERIFY=false      → disables verification (development only)
+        //   - P2P_CA_CERT=/path/to/ca   → custom CA for verification
+        //   - EIOU_TEST_MODE=true        → disables verification (test suites)
         if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
-            $verifySsl = getenv('P2P_SSL_VERIFY') !== 'false';
+            $testMode = getenv('EIOU_TEST_MODE') === 'true';
+            $verifySsl = !$testMode && getenv('P2P_SSL_VERIFY') !== 'false';
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 
@@ -500,9 +505,10 @@ class TransportUtilityService implements TransportServiceInterface
             curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 
-            // SSL options for HTTPS connections
+            // SSL options for HTTPS connections (see sendByHttp for full documentation)
             if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
-                $verifySsl = getenv('P2P_SSL_VERIFY') !== 'false';
+                $testMode = getenv('EIOU_TEST_MODE') === 'true';
+                $verifySsl = !$testMode && getenv('P2P_SSL_VERIFY') !== 'false';
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 
