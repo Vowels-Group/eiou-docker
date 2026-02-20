@@ -753,7 +753,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                             'synced_so_far' => $syncedCount
                         ]);
                         $result['circuit_breaker'] = true;
-                        break 2; // Break out of both foreach loops
+                        break; // Abort sync processing
                     }
 
                     // CONTINUE processing - skip this transaction but process remaining ones
