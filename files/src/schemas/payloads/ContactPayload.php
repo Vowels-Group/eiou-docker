@@ -169,9 +169,10 @@ class ContactPayload extends BasePayload
      *
      * @param string $address The address to send the acceptance to
      * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
+     * @param string|null $txid The transaction ID for this contact (for txid synchronization)
      * @return string JSON-encoded contact accepted payload
      */
-    public function buildMutuallyAccepted(string $address, ?array $knownAddresses = null): string
+    public function buildMutuallyAccepted(string $address, ?array $knownAddresses = null, ?string $txid = null): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
@@ -184,6 +185,11 @@ class ContactPayload extends BasePayload
         // Include all known addresses if available
         if ($knownAddresses !== null) {
             $payload['senderAddresses'] = $this->filterAddresses($knownAddresses);
+        }
+
+        // Include txid for synchronized contact transactions
+        if ($txid !== null) {
+            $payload['txid'] = $txid;
         }
 
         return json_encode($payload);

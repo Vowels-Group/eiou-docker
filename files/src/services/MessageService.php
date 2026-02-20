@@ -426,8 +426,12 @@ class MessageService implements MessageServiceInterface {
         if($this->contactRepository->isAcceptedContactPubkey($pubkey)){
             echo $this->messagePayload->buildContactIsAccepted($address,true);
         }
-        // Contact is pending
+        // Contact is pending (they sent us a request we haven't accepted)
         elseif($this->contactRepository->hasPendingContact($pubkey)){
+            echo $this->messagePayload->buildContactIsNotYetAccepted($address);
+        }
+        // Mutual pending (we both sent requests to each other — name is set)
+        elseif($this->contactRepository->hasPendingContactInserted($pubkey)){
             echo $this->messagePayload->buildContactIsNotYetAccepted($address);
         } else{
             echo $this->messagePayload->buildContactIsUnknown($address);
