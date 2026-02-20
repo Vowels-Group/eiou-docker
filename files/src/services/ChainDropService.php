@@ -1153,7 +1153,7 @@ class ChainDropService implements ChainDropServiceInterface
             // Merge the new signature/nonce onto the existing transaction data
             $mergedTx = $rows[0];
             $mergedTx['sender_signature'] = $signature;
-            $mergedTx['signature_nonce'] = (int)$nonce;
+            $mergedTx['signature_nonce'] = $nonce;
 
             // Verify the new signature before storing
             if (!$this->syncTrigger->verifyTransactionSignaturePublic($mergedTx)) {
@@ -1163,7 +1163,7 @@ class ChainDropService implements ChainDropServiceInterface
                 continue;
             }
 
-            $updated = $this->transactionRepository->updateSignatureData($txid, $signature, (int)$nonce);
+            $updated = $this->transactionRepository->updateSignatureData($txid, $signature, $nonce);
             if ($updated) {
                 Logger::getInstance()->info("Chain drop: stored contact's re-signed transaction", [
                     'txid' => substr($txid, 0, 16) . '...'

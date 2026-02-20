@@ -312,10 +312,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $senderAddress The address of the contact who sent the request
      * @param string $currency The currency for the transaction
      * @param string|null $signature The sender's signature from the incoming request
-     * @param int|null $nonce The signature nonce from the incoming request
+     * @param string|null $nonce The signature nonce from the incoming request
      * @return string|null The txid on success, null on failure
      */
-    public function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD', ?string $signature = null, ?int $nonce = null): ?string {
+    public function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD', ?string $signature = null, ?string $nonce = null): ?string {
         // Generate time and txid on receiver side
         $time = $this->timeUtility->getCurrentMicrotime();
 
@@ -947,7 +947,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
         // Extract sender's signature data for storing with the contact transaction
         $signature = $request['signature'] ?? null;
-        $nonce = isset($request['nonce']) ? (int)$request['nonce'] : null;
+        $nonce = $request['nonce'] ?? null;
 
         // Extract sender's additional addresses for storage (allows fallback transport)
         $senderAddresses = $request['senderAddresses'] ?? [];
@@ -1144,7 +1144,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             return null;
         }
 
-        $recipientSig = $this->contactPayload->generateRecipientSignature((int)$txData['signature_nonce']);
+        $recipientSig = $this->contactPayload->generateRecipientSignature($txData['signature_nonce']);
 
         if ($recipientSig === null) {
             return null;

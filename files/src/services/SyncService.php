@@ -1582,7 +1582,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // They are added via updateTrackingFields() after transaction insert
 
         // Nonce is added last by TransportUtilityService::sign()
-        $messageContent['nonce'] = (int)$tx['signature_nonce'];
+        $messageContent['nonce'] = $tx['signature_nonce'];
 
         return json_encode($messageContent);
     }
@@ -1611,7 +1611,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Contact payload after signing is simply: {'type': 'create', 'nonce': ...}
         $messageContent = [
             'type' => 'create',
-            'nonce' => (int)$tx['signature_nonce']
+            'nonce' => $tx['signature_nonce']
         ];
 
         return json_encode($messageContent);

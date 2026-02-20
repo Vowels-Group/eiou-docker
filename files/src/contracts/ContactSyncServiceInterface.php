@@ -188,7 +188,7 @@ interface ContactSyncServiceInterface
         string $senderAddress,
         string $currency = 'USD',
         ?string $signature = null,
-        ?int $nonce = null
+        ?string $nonce = null
     ): ?string;
 
     /**
