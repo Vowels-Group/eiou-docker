@@ -25,22 +25,6 @@ interface ApiAuthServiceInterface
     ): array;
 
     /**
-     * Build the string to sign for HMAC.
-     *
-     * @param string $method HTTP method
-     * @param string $path Request path
-     * @param string $timestamp Unix timestamp
-     * @param string $body Request body
-     * @return string String to sign
-     */
-    public function buildStringToSign(
-        string $method,
-        string $path,
-        string $timestamp,
-        string $body
-    ): string;
-
-    /**
      * Check if authenticated key has a specific permission.
      *
      * @param array $keyData Key data from authentication

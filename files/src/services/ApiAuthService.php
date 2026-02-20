@@ -202,7 +202,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * @param string $nonce Unique request nonce for replay protection
      * @return string String to sign
      */
-    public function buildStringToSign(
+    private function buildStringToSign(
         string $method,
         string $path,
         string $timestamp,
@@ -236,7 +236,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * @param string $nonce Unique request nonce for replay protection
      * @return string The HMAC signature (hex encoded)
      */
-    public static function generateSignature(
+    private static function generateSignature(
         string $secret,
         string $method,
         string $path,

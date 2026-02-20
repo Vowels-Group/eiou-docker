@@ -84,6 +84,7 @@ class Security {
         header('Referrer-Policy: strict-origin-when-cross-origin');
 
         // Content Security Policy
+        // TODO (L-32): Replace 'unsafe-inline' with nonce-based CSP (requires refactoring all inline scripts to external files)
         header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
 
         // HSTS (HTTP Strict Transport Security) - only for HTTPS

@@ -75,6 +75,31 @@ The project is currently in **ALPHA** status.
 - **H-8**: Default `P2P_SSL_VERIFY` to `true` — HTTPS peer verification now enabled by default; self-signed certificates (e.g. QUICKSTART nodes) are rejected unless `P2P_SSL_VERIFY=false` or `P2P_CA_CERT` is set; automatically disabled in `EIOU_TEST_MODE`
 - **H-11**: Encrypt database password in config file — `dbconfig.json` password auto-migrated from plaintext `dbPass` to AES-256-GCM encrypted `dbPassEncrypted` on first Application boot after the master key is stable; file permissions restricted to 0600
 - **M-31**: Lock file permissions tightened from 0666 to 0600
+- **L-1/L-2**: Add SQL column whitelists to `TransactionStatisticsRepository` and `TransactionChainRepository`
+- **L-3**: Block raw SQL conditions via numeric keys in `QueryBuilder::buildWhereClause()`
+- **L-4**: Validate ORDER BY columns against `$allowedColumns` whitelist in `QueryBuilder`
+- **L-5**: Replace string interpolation with bound parameters in `MessageDeliveryRepository::markCompletedByHash()`
+- **L-7**: Harden `Session::clear()` to fully destroy session, invalidate cookie, and regenerate ID
+- **L-8**: Add `Security::setSecurityHeaders()` to API entry point
+- **L-9**: Prevent API key self-deletion in `ApiController::deleteApiKey()`
+- **L-11/L-12**: Reduce visibility of `buildStringToSign()` and `generateSignature()` to private in `ApiAuthService`
+- **L-13/L-14**: Add `htmlspecialchars()` encoding to currency and avatar initial output in contact section
+- **L-15**: Add `htmlspecialchars()` encoding to server info output in settings section
+- **L-16**: Replace user-manipulable `$_SERVER['PHP_SELF']` with `$_SERVER['SCRIPT_NAME']` in redirects
+- **L-17**: Add maximum length check (1024 chars) to signature validation in `InputValidator`
+- **L-18**: Tighten Tor address regex to validate v3 onion format (56 base32 chars)
+- **L-19**: Add null byte stripping and control character filtering to `BasePayload::sanitizeString()`
+- **L-20**: Fix double-encoding of flash messages by removing redundant `htmlspecialchars()` in `Functions.php`
+- **L-21**: Use constant-time `hash_equals()` for BIP39 mnemonic checksum comparison
+- **L-22**: Replace hardcoded HMAC context strings with class constants in `BIP39` and `TorKeyDerivation`
+- **L-23**: Upgrade SSL certificate RSA key size from 2048 to 4096 bits
+- **L-24**: Use `secureClear()` with fallback for all sensitive memory clearing in `KeyEncryption`
+- **L-25**: Filter encrypted key blobs from `UserContext::getAll()` and `toArray()` output
+- **L-26**: Replace weak `rand()` with CSPRNG `random_int()` in P2P request level generation
+- **L-27**: Add security warning when seed phrase is passed via CLI arguments (visible in process listings)
+- **L-29**: Suppress Apache `ServerTokens`/`ServerSignature` and PHP `expose_php` in Docker image
+- **L-34**: Replace predictable `microtime()` with `random_bytes()` in chain drop proposal ID generation
+- **L-35**: Hash long lock names instead of truncating to prevent collisions in `DatabaseLockingService`
 
 ## 2026-02-18
 

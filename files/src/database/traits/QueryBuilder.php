@@ -179,8 +179,8 @@ trait QueryBuilder
         $parts = [];
         foreach ($conditions as $key => $value) {
             if (is_numeric($key)) {
-                // Raw SQL condition string
-                $parts[] = $value;
+                // Numeric keys (raw SQL conditions) are blocked to prevent SQL injection
+                throw new \InvalidArgumentException("Raw SQL conditions via numeric keys are not allowed in QueryBuilder");
             } elseif (strpos($key, ' ') !== false) {
                 // Key contains operator (e.g., "column >")
                 $parts[] = "{$key} ?";
@@ -212,10 +212,16 @@ trait QueryBuilder
         $parts = [];
         foreach ($columns as $key => $value) {
             if (is_numeric($key)) {
-                // Simple column name, default to ASC
+                // Simple column name, default to ASC - validate if allowedColumns is available
+                if (isset($this->allowedColumns) && !empty($this->allowedColumns) && !$this->isValidColumn($value)) {
+                    continue;
+                }
                 $parts[] = $value;
             } else {
-                // Column with explicit direction
+                // Column with explicit direction - validate if allowedColumns is available
+                if (isset($this->allowedColumns) && !empty($this->allowedColumns) && !$this->isValidColumn($key)) {
+                    continue;
+                }
                 $direction = strtoupper($value) === 'DESC' ? 'DESC' : 'ASC';
                 $parts[] = "{$key} {$direction}";
             }

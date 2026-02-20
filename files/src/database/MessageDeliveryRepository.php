@@ -356,19 +356,20 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @return int Number of updated records
      */
     public function markCompletedByHash(string $messageType, string $hash): int {
-        $completedStage = Constants::DELIVERY_COMPLETED;
-        $failedStage = Constants::DELIVERY_FAILED;
         $query = "UPDATE {$this->tableName}
-                  SET delivery_stage = '{$completedStage}',
+                  SET delivery_stage = :completed_stage,
                       updated_at = NOW()
                   WHERE message_type = :type
                     AND message_id LIKE :pattern
-                    AND delivery_stage NOT IN ('{$completedStage}', '{$failedStage}')";
+                    AND delivery_stage NOT IN (:exclude_completed, :exclude_failed)";
 
         $stmt = $this->pdo->prepare($query);
         $pattern = '%' . $hash . '%';
+        $stmt->bindValue(':completed_stage', Constants::DELIVERY_COMPLETED, PDO::PARAM_STR);
         $stmt->bindValue(':type', $messageType, PDO::PARAM_STR);
         $stmt->bindValue(':pattern', $pattern, PDO::PARAM_STR);
+        $stmt->bindValue(':exclude_completed', Constants::DELIVERY_COMPLETED, PDO::PARAM_STR);
+        $stmt->bindValue(':exclude_failed', Constants::DELIVERY_FAILED, PDO::PARAM_STR);
 
         try {
             $stmt->execute();

@@ -49,6 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Initialize application
 try {
     $app = Application::getInstance();
+
+    // Set security headers for API responses
+    \Eiou\Utils\Security::setSecurityHeaders();
 } catch (\Exception $e) {
     http_response_code(ErrorCodes::HTTP_INTERNAL_SERVER_ERROR);
     echo json_encode([

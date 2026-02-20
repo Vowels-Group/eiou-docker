@@ -101,6 +101,12 @@ RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.c
 # HTTP to HTTPS redirect (except /eiou transport endpoint for P2P backward compatibility)
 RUN sed -i '/<\/VirtualHost>/i \    RewriteEngine On\n    RewriteCond %{HTTPS} off\n    RewriteCond %{REQUEST_URI} !^/eiou\n    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]' /etc/apache2/sites-available/000-default.conf
 
+# Suppress server version information in responses (L-29)
+RUN echo 'ServerTokens Prod' >> /etc/apache2/conf-available/security.conf && \
+    echo 'ServerSignature Off' >> /etc/apache2/conf-available/security.conf && \
+    a2enconf security 2>/dev/null || true && \
+    echo 'expose_php = Off' > /usr/local/etc/php/conf.d/security-headers.ini
+
 # Create SSL VirtualHost configuration
 RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf && \
     echo '    ServerAdmin webmaster@localhost' >> /etc/apache2/sites-available/default-ssl.conf && \

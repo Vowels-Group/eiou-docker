@@ -1892,6 +1892,11 @@ class ApiController {
      * DELETE /api/v1/keys/:key_id
      */
     private function deleteApiKey(string $keyId): array {
+        // Prevent deleting the API key used to authenticate this request
+        if ($keyId === $this->authenticatedKey['key_id']) {
+            return $this->errorResponse('Cannot delete the API key used for this request', 409, 'self_deletion_not_allowed');
+        }
+
         $deleted = $this->apiKeyRepository->deleteKey($keyId);
 
         if (!$deleted) {

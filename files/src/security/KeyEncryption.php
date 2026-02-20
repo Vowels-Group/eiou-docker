@@ -109,7 +109,7 @@ class KeyEncryption {
             OPENSSL_RAW_DATA,
             $iv,
             $tag,
-            '',  // Additional authenticated data (AAD) - empty for now
+            '',  // TODO (L-28): Add AAD for context binding (requires encrypted data format migration)
             self::TAG_LENGTH
         );
 
@@ -118,10 +118,9 @@ class KeyEncryption {
         }
 
         // Clear sensitive data from memory
-        if (function_exists('sodium_memzero')) {
-            sodium_memzero($key);
-            sodium_memzero($plaintext);
-        }
+        self::secureClear($key);
+        self::secureClear($plaintext);
+        self::secureClear($iv);
 
         return [
             'ciphertext' => base64_encode($ciphertext),
@@ -166,16 +165,12 @@ class KeyEncryption {
 
         if ($plaintext === false) {
             // Clear sensitive data before throwing
-            if (function_exists('sodium_memzero')) {
-                sodium_memzero($key);
-            }
+            self::secureClear($key);
             throw new RuntimeException('Decryption failed - data may be corrupted or tampered');
         }
 
         // Clear encryption key from memory
-        if (function_exists('sodium_memzero')) {
-            sodium_memzero($key);
-        }
+        self::secureClear($key);
 
         return $plaintext;
     }

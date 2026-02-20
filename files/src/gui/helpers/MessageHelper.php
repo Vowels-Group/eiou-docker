@@ -131,7 +131,7 @@ class MessageHelper
     public static function redirectMessage(string $message, string $messageType, ?string $url = null): void
     {
         if ($url === null) {
-            $url = $_SERVER['PHP_SELF'];
+            $url = $_SERVER['SCRIPT_NAME'];
         }
 
         // Store message in session as a flash message (read-once, auto-cleared)

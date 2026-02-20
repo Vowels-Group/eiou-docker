@@ -379,12 +379,12 @@
             }
             ?>
             <table class="debug-info-table">
-                <tr><td><strong>PHP Version</strong></td><td><?php echo phpversion(); ?></td></tr>
-                <tr><td><strong>SAPI</strong></td><td><?php echo php_sapi_name(); ?></td></tr>
-                <tr><td><strong>OS</strong></td><td><?php echo PHP_OS; ?></td></tr>
+                <tr><td><strong>PHP Version</strong></td><td><?php echo htmlspecialchars(phpversion()); ?></td></tr>
+                <tr><td><strong>SAPI</strong></td><td><?php echo htmlspecialchars(php_sapi_name()); ?></td></tr>
+                <tr><td><strong>OS</strong></td><td><?php echo htmlspecialchars(PHP_OS); ?></td></tr>
                 <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
                 <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
-                <tr><td><strong>Server Software</strong></td><td><?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'N/A'; ?></td></tr>
+                <tr><td><strong>Server Software</strong></td><td><?php echo htmlspecialchars($_SERVER['SERVER_SOFTWARE'] ?? 'N/A'); ?></td></tr>
                 <tr><td><strong>App Debug Mode</strong></td><td><?php echo \Eiou\Core\Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>

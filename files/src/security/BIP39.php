@@ -34,6 +34,16 @@ class BIP39 {
     private const SEED_LENGTH = 64;
 
     /**
+     * HMAC context for EC key derivation
+     */
+    private const HMAC_CONTEXT_EC_KEY = 'eiou-ec-key';
+
+    /**
+     * HMAC context for authentication code derivation
+     */
+    private const HMAC_CONTEXT_AUTH_CODE = 'eiou-auth-code';
+
+    /**
      * BIP39 English wordlist (2048 words)
      * @var array
      */
@@ -154,7 +164,7 @@ class BIP39 {
         $expectedChecksumBits = substr($expectedChecksumBits, 0, (int) $checksumBits);
 
         // Verify checksum
-        return $checksumBitsStr === $expectedChecksumBits;
+        return hash_equals($expectedChecksumBits, $checksumBitsStr);
     }
 
     /**
@@ -208,7 +218,7 @@ class BIP39 {
      */
     public static function seedToKeyPair(string $seed): array {
         // Derive 32-byte EC private key deterministically from seed
-        $privateKeyBytes = hash_hmac('sha256', $seed, 'eiou-ec-key', true);
+        $privateKeyBytes = hash_hmac('sha256', $seed, self::HMAC_CONTEXT_EC_KEY, true);
 
         // Get the preferred EC curve (secp256k1 if available, otherwise prime256v1)
         $curveName = self::getPreferredCurve();
@@ -286,7 +296,7 @@ class BIP39 {
         // For both secp256k1 and prime256v1, we check if all bytes are zero
         if ($privateKeyBytes === str_repeat("\x00", 32)) {
             // Extremely unlikely, but hash again if we get all zeros
-            $privateKeyBytes = hash_hmac('sha256', $privateKeyBytes, 'eiou-ec-key-retry', true);
+            $privateKeyBytes = hash_hmac('sha256', $privateKeyBytes, self::HMAC_CONTEXT_EC_KEY . '-retry', true);
         }
 
         return $privateKeyBytes;
@@ -515,7 +525,7 @@ class BIP39 {
         // Derive authcode deterministically using HMAC-SHA256 with unique context
         // The context string 'eiou-auth-code' ensures this derivation is
         // independent from key pair and Tor address derivations
-        $derivedBytes = hash_hmac('sha256', $seed, 'eiou-auth-code', true);
+        $derivedBytes = hash_hmac('sha256', $seed, self::HMAC_CONTEXT_AUTH_CODE, true);
 
         // Convert to hex and truncate to desired length
         // Default 20 hex chars = 10 bytes = 80 bits of entropy (matches original)

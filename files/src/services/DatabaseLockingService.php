@@ -315,7 +315,8 @@ class DatabaseLockingService implements LockingServiceInterface
 
         // Truncate if necessary (max 64 chars for MySQL)
         if (strlen($prefixedName) > self::MAX_LOCK_NAME_LENGTH) {
-            $prefixedName = substr($prefixedName, 0, self::MAX_LOCK_NAME_LENGTH);
+            $hash = substr(hash('sha256', $cleanName), 0, self::MAX_LOCK_NAME_LENGTH - strlen(self::LOCK_PREFIX));
+            $prefixedName = self::LOCK_PREFIX . $hash;
         }
 
         return $prefixedName;

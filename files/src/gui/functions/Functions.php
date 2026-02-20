@@ -96,8 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_updates'])) {
 // Get message from session flash messages (set by controllers, read-once)
 // Flash messages are cleared after reading so they don't re-appear on refresh
 if (isset($_SESSION['message'])) {
-    $messageForDisplay = htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8');
-    $messageTypeForDisplay = htmlspecialchars($_SESSION['message_type'] ?? 'info', ENT_QUOTES, 'UTF-8');
+    $messageForDisplay = $_SESSION['message'];
+    $messageTypeForDisplay = $_SESSION['message_type'] ?? 'info';
     unset($_SESSION['message'], $_SESSION['message_type']);
 } else {
     $messageForDisplay = '';

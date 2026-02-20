@@ -435,7 +435,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/apache2/ssl/server.crt ]; 
     # Modern browsers require SANs - CN alone is deprecated
     cat > /tmp/openssl-san.cnf << SSLEOF
 [req]
-default_bits = 2048
+default_bits = 4096
 prompt = no
 default_md = sha256
 distinguished_name = dn
@@ -467,7 +467,7 @@ SSLEOF
         CA_SIGN_OK=true
 
         # Generate private key and CSR
-        if ! openssl req -new -nodes -newkey rsa:2048 \
+        if ! openssl req -new -nodes -newkey rsa:4096 \
             -keyout /etc/apache2/ssl/server.key \
             -out /tmp/server.csr \
             -config /tmp/openssl-san.cnf \
@@ -502,7 +502,7 @@ SSLEOF
             echo "  WARNING: CA-signed certificate generation failed. Falling back to self-signed."
             rm -f /etc/apache2/ssl/server.key /etc/apache2/ssl/server.crt
 
-            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            openssl req -x509 -nodes -days 365 -newkey rsa:4096 \
                 -keyout /etc/apache2/ssl/server.key \
                 -out /etc/apache2/ssl/server.crt \
                 -config /tmp/openssl-san.cnf \
@@ -514,7 +514,7 @@ SSLEOF
         # Generate self-signed certificate
         echo "  Generating self-signed certificate..."
 
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        openssl req -x509 -nodes -days 365 -newkey rsa:4096 \
             -keyout /etc/apache2/ssl/server.key \
             -out /etc/apache2/ssl/server.crt \
             -config /tmp/openssl-san.cnf \

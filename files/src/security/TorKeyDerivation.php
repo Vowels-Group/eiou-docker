@@ -38,6 +38,11 @@ class TorKeyDerivation
     private const TOR_HIDDEN_SERVICE_DIR = '/var/lib/tor/hidden_service';
 
     /**
+     * HMAC context for Tor key derivation
+     */
+    private const HMAC_CONTEXT_TOR = 'eiou-tor-hidden-service';
+
+    /**
      * Derive Ed25519 keypair from BIP39 seed for Tor hidden service
      *
      * Tor expects the "expanded" secret key format (64 bytes):
@@ -58,7 +63,7 @@ class TorKeyDerivation
 
         // Derive a 32-byte Ed25519 seed from the BIP39 seed
         // Use HMAC-SHA256 with a unique context to derive the Tor key seed
-        $torSeed = hash_hmac('sha256', $seed, 'eiou-tor-hidden-service', true);
+        $torSeed = hash_hmac('sha256', $seed, self::HMAC_CONTEXT_TOR, true);
 
         // Expand the seed to Tor's expected format using SHA-512
         // This matches Tor's ed25519_donna_expandsecret() function
