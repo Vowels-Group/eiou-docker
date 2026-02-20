@@ -6,6 +6,7 @@ namespace Eiou\Core;
 use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
+use Eiou\Security\KeyEncryption;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\RateLimiterService;
@@ -97,6 +98,9 @@ class Application {
         // Start PDO connection
         $this->getDatabase();
 
+        // Encrypt plaintext dbPass if present (one-time migration)
+        $this->migrateDbConfigEncryption();
+
         // Run migrations for existing databases to add new tables
         $this->runMigrations();
 
@@ -148,6 +152,55 @@ class Application {
             $this->pdo = createPDOConnection();
         } catch (Exception $e) {
             Logger::getInstance()->logException($e, [], 'ERROR');
+        }
+    }
+
+    /**
+     * Migrate plaintext dbPass to encrypted dbPassEncrypted in dbconfig.json.
+     *
+     * freshInstall() writes plaintext to avoid master-key timing issues during
+     * initial setup. This migration encrypts it once the master key is stable
+     * and the PDO connection has proven the password works. Idempotent — skips
+     * if already encrypted.
+     */
+    private function migrateDbConfigEncryption(): void {
+        $configPath = '/etc/eiou/config/dbconfig.json';
+        if (!file_exists($configPath)) {
+            return;
+        }
+
+        $raw = file_get_contents($configPath);
+        if ($raw === false) {
+            return;
+        }
+        $config = json_decode($raw, true);
+        if (!is_array($config) || !isset($config['dbPass'])) {
+            return; // Already encrypted or invalid — nothing to do
+        }
+
+        try {
+            $encrypted = KeyEncryption::encrypt($config['dbPass']);
+            $config['dbPassEncrypted'] = $encrypted;
+            unset($config['dbPass']);
+
+            $oldUmask = umask(0077);
+            file_put_contents($configPath, json_encode($config), LOCK_EX);
+            umask($oldUmask);
+            chmod($configPath, 0600);
+
+            // Reload DatabaseContext so subsequent reads use encrypted version
+            DatabaseContext::getInstance()->setdatabaseData($config);
+
+            if ($this->loggerLoaded()) {
+                $this->getLogger()->info("Migrated dbconfig.json: plaintext dbPass encrypted");
+            }
+        } catch (Exception $e) {
+            // Non-fatal: plaintext password still works, encryption will retry next boot
+            if ($this->loggerLoaded()) {
+                $this->getLogger()->warning("dbconfig.json encryption migration deferred", [
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
     }
 

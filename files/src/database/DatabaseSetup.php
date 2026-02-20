@@ -4,7 +4,6 @@
 namespace Eiou\Database;
 
 use Eiou\Utils\Logger;
-use Eiou\Security\KeyEncryption;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -102,26 +101,15 @@ function freshInstall(){
                 );
             }
 
-            // Encrypt the database password before storing (plaintext storage not permitted)
-            try {
-                $encryptedPass = KeyEncryption::encrypt($dbPass);
-            } catch (\Exception $encError) {
-                Logger::getInstance()->error("Failed to encrypt db password, aborting setup", [
-                    'error' => $encError->getMessage()
-                ]);
-                throw new RuntimeException(
-                    'Database setup failed: unable to encrypt database password.',
-                    500,
-                    $encError
-                );
-            }
-
-            // Overwrite database configuration to the config file
+            // Write database configuration with plaintext password initially.
+            // The password will be encrypted on the next Application boot via
+            // migrateDbConfigEncryption() — this avoids master-key timing issues
+            // during fresh install where the key may not yet be stable.
             $dbConfig = [
                 'dbHost' => addslashes($dbHost),
                 'dbName' => addslashes($dbName),
                 'dbUser' => addslashes($dbUser),
-                'dbPassEncrypted' => $encryptedPass,
+                'dbPass' => addslashes($dbPass),
             ];
 
 

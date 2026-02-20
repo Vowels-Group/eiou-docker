@@ -140,7 +140,12 @@ class DatabaseContext {
     }
 
     /**
-     * Get database password (decrypts from encrypted storage)
+     * Get database password (decrypts if stored encrypted, falls back to plaintext)
+     *
+     * On fresh install the password is written as plaintext 'dbPass'. The
+     * Application boot migration (migrateDbConfigEncryption) converts it to
+     * 'dbPassEncrypted'. Both formats are supported here so the PDO connection
+     * works before AND after the migration runs.
      *
      * @return string|null
      */
@@ -154,8 +159,8 @@ class DatabaseContext {
                 return null;
             }
         }
-        error_log("DatabaseContext: No encrypted database password found in config");
-        return null;
+        // Plaintext fallback — only present before migrateDbConfigEncryption() runs
+        return $this->get('dbPass') ?? null;
     }
 
     /**

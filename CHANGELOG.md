@@ -35,7 +35,7 @@ The project is currently in **ALPHA** status.
 - **H-4**: Add nonce-based API replay protection — `X-API-Nonce` header required on all API requests, server-side nonce tracking rejects duplicates within the timestamp window, nonce included in HMAC signature
 - **H-6**: Sanitize filename in backup delete endpoint — `Security::sanitizeFilename()` applied in both `ApiController::deleteBackup()` and `BackupService::deleteBackup()` to prevent path traversal via `../../` in filenames
 - **H-8**: Default `P2P_SSL_VERIFY` to `true` — HTTPS peer verification now enabled by default; set `P2P_SSL_VERIFY=false` to opt out for self-signed certificate environments
-- **H-11**: Encrypt database password in config file — `dbconfig.json` now stores the password encrypted via `KeyEncryption::encrypt()` (AES-256-GCM) with file permissions restricted to 0600; plaintext `dbPass` storage removed (fresh install will fail if encryption unavailable)
+- **H-11**: Encrypt database password in config file — `dbconfig.json` password auto-migrated from plaintext `dbPass` to AES-256-GCM encrypted `dbPassEncrypted` on first Application boot after the master key is stable; file permissions restricted to 0600
 - **M-31**: Lock file permissions tightened from 0666 to 0600
 
 ## 2026-02-18

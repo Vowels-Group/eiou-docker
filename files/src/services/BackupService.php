@@ -892,7 +892,7 @@ class BackupService implements BackupServiceInterface
             return null;
         }
 
-        // Decrypt password from encrypted storage (plaintext dbPass no longer supported)
+        // Decrypt password if stored encrypted, fall back to plaintext
         if (isset($config['dbPassEncrypted']) && is_array($config['dbPassEncrypted'])) {
             try {
                 $config['dbPass'] = \Eiou\Security\KeyEncryption::decrypt($config['dbPassEncrypted']);
@@ -900,8 +900,8 @@ class BackupService implements BackupServiceInterface
                 Logger::getInstance()->error("Failed to decrypt database password", ['error' => $e->getMessage()]);
                 return null;
             }
-        } else {
-            Logger::getInstance()->error("No encrypted database password found in config", ['path' => $configFile]);
+        } elseif (!isset($config['dbPass'])) {
+            Logger::getInstance()->error("No database password found in config", ['path' => $configFile]);
             return null;
         }
 
