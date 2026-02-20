@@ -99,7 +99,7 @@ show_available_subsets() {
 }
 
 # Validate SUBSET is one of the allowed values
-VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance multisig bestfee"
+VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance multisig mutual bestfee"
 if ! echo "$VALID_SUBSETS" | grep -qw "$SUBSET"; then
     printf "${RED}Error: Invalid test subset '${SUBSET}'${NC}\n"
     show_available_subsets
