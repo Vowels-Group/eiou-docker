@@ -968,9 +968,21 @@ else
     # Without the correct key files, Tor generates random keys → different .onion address
     # → watchdog self-check fails forever because it curls the old address from userconfig.
     HS_DIR="/var/lib/tor/hidden_service"
+    HS_HOSTNAME_FILE="${HS_DIR}/hostname"
 
-    if [ ! -f "${HS_DIR}/hs_ed25519_secret_key" ] || [ ! -f "${HS_DIR}/hs_ed25519_public_key" ]; then
-        echo "Tor hidden service key files missing (container restart) — regenerating from seed..."
+    # Compare the .onion address Tor is currently using with the one in userconfig.
+    # On container restart, Tor starts before this block and generates random keys
+    # (HS dir is not in a volume), so the files exist but with the WRONG address.
+    EXPECTED_ONION=$(php -r '$c = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true); echo $c["torAddress"] ?? "";' 2>/dev/null)
+    CURRENT_ONION=""
+    if [ -f "$HS_HOSTNAME_FILE" ]; then
+        CURRENT_ONION=$(tr -d '\n' < "$HS_HOSTNAME_FILE" 2>/dev/null)
+    fi
+
+    if [ -n "$EXPECTED_ONION" ] && [ "$CURRENT_ONION" != "$EXPECTED_ONION" ]; then
+        echo "Tor hidden service address mismatch (container restart) — regenerating from seed..."
+        echo "  Expected: $EXPECTED_ONION"
+        echo "  Current:  ${CURRENT_ONION:-(missing)}"
 
         # Regenerate HS files from the encrypted mnemonic stored in userconfig.json
         # SECURITY: stderr suppressed to prevent stack traces from leaking decrypted mnemonic

@@ -13,7 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
-- Tor hidden service keys lost on container restart: HS directory is not in a Docker volume, so Tor generated random keys while the watchdog curled the old deterministic .onion address from userconfig — now regenerates HS key files from the stored encrypted seed on startup when missing
+- Tor hidden service address mismatch on container restart: HS key regeneration check compared file existence but Tor had already started and generated random keys — now compares actual .onion address against userconfig to detect mismatches and regenerate correct keys from seed
 - Tor watchdog initial boot: first self-check now waits 120s (descriptor propagation grace period) instead of firing immediately on the first watchdog loop — prevents restart doom loop on fresh container start while avoiding a 5-minute blind spot
 - Tor watchdog recovery: increase post-restart verification window from 30s to 90s to match descriptor propagation time, allow follow-up restart after 90s instead of waiting full 5-minute cooldown, increase self-check timeout for slow Tor circuits
 - Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
