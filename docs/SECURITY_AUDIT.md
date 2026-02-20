@@ -316,7 +316,7 @@ Because `APP_ENV` is always `'development'`, full error details are rendered in 
 ### H-11: Database Credentials Stored in Plaintext JSON — REMEDIATED
 
 > **Status:** Fixed in [PR #641](https://github.com/eiou-org/eiou-docker/pull/641)
-> **Fix:** `freshInstall()` now encrypts the database password via `KeyEncryption::encrypt()` (AES-256-GCM) and stores it as `dbPassEncrypted`. Encryption failure aborts setup (no plaintext fallback). File permissions set to 0600 with umask. `DatabaseContext::getDbPass()` and `BackupService::getDatabaseCredentials()` require encrypted format.
+> **Fix:** New `Application::migrateDbConfigEncryption()` auto-migrates plaintext `dbPass` to AES-256-GCM encrypted `dbPassEncrypted` on first boot after the master key is stable. `freshInstall()` writes plaintext initially to avoid key-timing issues during setup; encryption is deferred to the migration. File permissions set to 0600. Handles both fresh installs and upgrades from existing plaintext configs.
 
 **Category:** Cryptography & Keys
 **File:** `files/src/database/DatabaseSetup.php:104-126`
