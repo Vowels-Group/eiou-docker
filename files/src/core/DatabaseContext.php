@@ -140,7 +140,7 @@ class DatabaseContext {
     }
 
     /**
-     * Get database password (decrypts if stored encrypted, falls back to plaintext for backward compatibility)
+     * Get database password (decrypts from encrypted storage)
      *
      * @return string|null
      */
@@ -154,7 +154,8 @@ class DatabaseContext {
                 return null;
             }
         }
-        return $this->get('dbPass') ?? null;
+        error_log("DatabaseContext: No encrypted database password found in config");
+        return null;
     }
 
     /**

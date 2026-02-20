@@ -102,14 +102,18 @@ function freshInstall(){
                 );
             }
 
-            // Encrypt the database password before storing
-            $encryptedPass = null;
+            // Encrypt the database password before storing (plaintext storage not permitted)
             try {
                 $encryptedPass = KeyEncryption::encrypt($dbPass);
             } catch (\Exception $encError) {
-                Logger::getInstance()->warning("Could not encrypt db password, storing plaintext", [
+                Logger::getInstance()->error("Failed to encrypt db password, aborting setup", [
                     'error' => $encError->getMessage()
                 ]);
+                throw new RuntimeException(
+                    'Database setup failed: unable to encrypt database password.',
+                    500,
+                    $encError
+                );
             }
 
             // Overwrite database configuration to the config file
@@ -117,13 +121,8 @@ function freshInstall(){
                 'dbHost' => addslashes($dbHost),
                 'dbName' => addslashes($dbName),
                 'dbUser' => addslashes($dbUser),
+                'dbPassEncrypted' => $encryptedPass,
             ];
-
-            if ($encryptedPass !== null) {
-                $dbConfig['dbPassEncrypted'] = $encryptedPass;
-            } else {
-                $dbConfig['dbPass'] = addslashes($dbPass);
-            }
 
 
         } catch (PDOException $e) {
