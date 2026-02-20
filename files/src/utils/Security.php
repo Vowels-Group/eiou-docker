@@ -11,6 +11,7 @@ namespace Eiou\Utils;
 use Exception;
 use RuntimeException;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 
 class Security {
     /**
@@ -357,8 +358,11 @@ class Security {
     public static function getClientIp(): string {
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        // Parse trusted proxies from env var or constant
-        $trustedProxiesStr = getenv('TRUSTED_PROXIES') ?: Constants::TRUSTED_PROXIES;
+        // Parse trusted proxies from: env var > persisted config > constant
+        $trustedProxiesStr = getenv('TRUSTED_PROXIES') ?: '';
+        if ($trustedProxiesStr === '') {
+            $trustedProxiesStr = UserContext::getInstance()->getTrustedProxies();
+        }
         $trustedProxies = array_filter(array_map('trim', explode(',', $trustedProxiesStr)));
 
         // Only check proxy headers if REMOTE_ADDR is a trusted proxy

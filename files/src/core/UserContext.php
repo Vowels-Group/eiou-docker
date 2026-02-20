@@ -468,6 +468,15 @@ class UserContext {
     }
 
     /**
+     * Get trusted proxy IPs (comma-separated)
+     *
+     * @return string
+     */
+    public function getTrustedProxies(): string {
+        return (string) ($this->get('trustedProxies') ?? Constants::TRUSTED_PROXIES);
+    }
+
+    /**
      * Get all user data as array
      *
      * @return array

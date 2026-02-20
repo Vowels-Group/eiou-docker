@@ -12,9 +12,12 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- Trusted proxies now configurable via CLI (`changesettings trustedProxies`) instead of requiring container rebuild
+
 ### Security
 - **C-1**: Verify cryptographic signatures on re-signed transactions in `ChainDropService::processResignedTransactions()` before storing — prevents accepting forged chain drop data
-- **C-2**: Centralize IP resolution in `Security::getClientIp()` — only trust proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`) when `REMOTE_ADDR` is in the trusted proxies list (configurable via `TRUSTED_PROXIES` env var)
+- **C-2**: Centralize IP resolution in `Security::getClientIp()` — only trust proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`) when `REMOTE_ADDR` is in the trusted proxies list (configurable via CLI or `TRUSTED_PROXIES` env var)
 - **C-3**: Add rate limiting and CSRF token validation to the GUI login form — prevents brute-force auth code guessing
 - **H-9/H-10**: Make `APP_ENV` and `APP_DEBUG` overridable via environment variables (`Constants::getAppEnv()`, `Constants::isDebug()`) — allows production hardening without code changes; gate `display_errors` behind debug flag
 

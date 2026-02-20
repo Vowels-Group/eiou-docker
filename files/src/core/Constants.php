@@ -323,7 +323,7 @@ class Constants {
     const RATE_LIMIT_BLOCK_SECONDS = 300;          // Seconds to block after limit exceeded (default: 300)
 
     // Trusted proxy IPs (comma-separated). Only trust proxy headers (X-Forwarded-For, CF-Connecting-IP)
-    // when REMOTE_ADDR is in this list. Override via TRUSTED_PROXIES env var.
+    // when REMOTE_ADDR is in this list. Configure via CLI: changesettings trustedProxies "10.0.0.1,172.16.0.1"
     const TRUSTED_PROXIES = '';
 
     /**
