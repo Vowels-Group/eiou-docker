@@ -727,6 +727,49 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     return;
                 }
             }
+            // Remote auto-accepted because they already had us as a pending contact (mutual request)
+            elseif($responseData['status'] === Constants::STATUS_ACCEPTED){
+                // Insert contact on our end with returned pubkey
+                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
+                    // Accept the contact (sets status to 'accepted', inserts balances, creates credit, syncs balance)
+                    $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
+
+                    // Insert contact transaction if one doesn't already exist
+                    if (!$this->contactTransactionExists($senderPublicKey)) {
+                        $txid = $responseData['txid'] ?? null;
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
+                    }
+
+                    // Update delivery stage
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                    $contactData['pubkey'] = $senderPublicKey;
+                    $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (mutual request)");
+                } else {
+                    $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
+                    return;
+                }
+            }
             // Our contact pubkey exists on their end, but not provided address
             // we are known under a different address or transport type
             // Note: If contact existed locally, we would have returned early above
@@ -924,8 +967,41 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // (they added us before but we never accepted, then they deleted and re-added)
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
-                    // Contact exists as pending - check if we have the contact transaction
-                    // If they're re-adding us and we don't have their contact tx, we need to create one
+                    // Check if WE initiated a request to them (name is set when we sent the request)
+                    if ($existingContact['name'] !== null) {
+                        // Mutual request: we sent them a request and they sent us one
+                        // Auto-accept using the values WE set when we sent our request
+                        if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                        }
+
+                        $this->acceptContact(
+                            $senderPublicKey,
+                            $existingContact['name'],
+                            (float)$existingContact['fee_percent'],
+                            (float)$existingContact['credit_limit'],
+                            $existingContact['currency']
+                        );
+
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        // Ensure we have a received contact transaction
+                        $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
+                            $senderPublicKeyHash
+                        );
+                        $txid = null;
+                        if (!$hasContactTx) {
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                            $this->completeReceivedContactTransaction($senderPublicKey);
+                        } else {
+                            $this->completeReceivedContactTransaction($senderPublicKey);
+                        }
+
+                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid);
+                    }
+
+                    // Contact exists as pending with name=null (they sent us a request first)
+                    // Check if we have the contact transaction
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                         $senderPublicKeyHash
                     );
@@ -958,26 +1034,57 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // Check contact status - if pending, treat as re-confirmation with new address
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
-                    // Contact is pending - update their address
-                    if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                        // Store any additional addresses from senderAddresses if present
-                        if (!empty($senderAddresses) && is_array($senderAddresses)) {
-                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
-                        }
-                        // Check if we have the contact transaction
+                    // Update their address first
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (!empty($senderAddresses) && is_array($senderAddresses)) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                    }
+
+                    // Check if WE initiated a request to them (name is set when we sent the request)
+                    if ($existingContact['name'] !== null) {
+                        // Mutual request: we sent them a request and they sent us one (via different address)
+                        // Auto-accept using the values WE set when we sent our request
+                        $this->acceptContact(
+                            $senderPublicKey,
+                            $existingContact['name'],
+                            (float)$existingContact['fee_percent'],
+                            (float)$existingContact['credit_limit'],
+                            $existingContact['currency']
+                        );
+
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        // Ensure we have a received contact transaction
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                             $senderPublicKeyHash
                         );
-
+                        $txid = null;
                         if (!$hasContactTx) {
-                            // Create the contact transaction on our side
                             $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
-                            return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
+                            $this->completeReceivedContactTransaction($senderPublicKey);
+                        } else {
+                            $this->completeReceivedContactTransaction($senderPublicKey);
                         }
 
-                        // Return 'received' so sender handles it like a new contact request
-                        return $this->contactPayload->buildReceived($senderAddress);
+                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid);
                     }
+
+                    // Contact is pending with name=null (they sent us a request first)
+                    // Check if we have the contact transaction
+                    $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
+                        $senderPublicKeyHash
+                    );
+
+                    if (!$hasContactTx) {
+                        // Create the contact transaction on our side
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                        return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
+                    }
+
+                    // Return 'received' so sender handles it like a new contact request
+                    return $this->contactPayload->buildReceived($senderAddress);
                 }
                 // Contact is accepted - update address and return 'updated'
                 // Store any additional addresses from senderAddresses if present

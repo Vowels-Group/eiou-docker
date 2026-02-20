@@ -360,16 +360,17 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     //   If acceptance is automatic then able to check through following inquiry
                     //   Otherwise would need to inquire again down the line (through sync or otherwise)
                     $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
-                    $syncResponse = $this->transportUtility->send($contactAddress, $messagePayload);
-                    if($status === Constants::STATUS_ACCEPTED){
-                        $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
+                    $inquiryResponse = json_decode($this->transportUtility->send($contactAddress, $messagePayload), true);
+                    if(isset($inquiryResponse['status']) && $inquiryResponse['status'] === Constants::STATUS_ACCEPTED){
+                        $inquiryPubkey = $inquiryResponse['senderPublicKey'];
+                        $this->contactRepository->updateStatus($inquiryPubkey, Constants::STATUS_ACCEPTED);
                         output(outputContactSuccesfullySynced($contactAddress),$echo);
 
                         // Dispatch contact synced event
                         EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [
-                            'contact_pubkey' => $senderPublicKey ?? null,
+                            'contact_pubkey' => $inquiryPubkey,
                             'contact_address' => $contactAddress,
-                            'status' => $status,
+                            'status' => Constants::STATUS_ACCEPTED,
                             'was_pending' => true
                         ]);
 
