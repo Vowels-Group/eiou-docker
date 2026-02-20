@@ -342,7 +342,7 @@ The RESTORE environment variable containing the 24-word seed phrase remains read
 
 ### M-1: Raw SQL Execution from Backup File Content — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added regex validation to verify SQL matches expected `INSERT IGNORE INTO \`transactions\` VALUES (...)` pattern before execution.
 
 **Category:** SQL Injection
@@ -354,7 +354,7 @@ Raw SQL strings extracted from encrypted backup files are passed to `PDO::exec()
 
 ### M-2: Session Cookie `secure` Flag Conditional on HTTPS — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Changed to `!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'` for proper HTTPS detection.
 
 **Category:** Auth & Session
@@ -366,7 +366,7 @@ The `secure` flag is set based on `isset($_SERVER['HTTPS'])`, allowing session c
 
 ### M-3: CSRF Token Not Rotated After Use — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** CSRF token is now unset after successful validation, forcing regeneration on next use.
 
 **Category:** Auth & Session
@@ -378,7 +378,7 @@ CSRF tokens are generated once per session and never rotated after successful va
 
 ### M-4: Rate Limiting Bypass via Environment Variable — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added one-time warning log when `EIOU_TEST_MODE` bypasses rate limiting. Added bypass check to `enforce()` for consistency.
 
 **Category:** Auth & Session
@@ -390,7 +390,7 @@ CSRF tokens are generated once per session and never rotated after successful va
 
 ### M-5: Information Leakage in API Error Responses — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Replaced distinct error messages with generic "Invalid or inactive API key" for all authentication failures. Internal error codes retained for logging.
 
 **Category:** Auth & Session
@@ -402,7 +402,7 @@ Error messages reveal internal configuration (max request age, per-key rate limi
 
 ### M-6: Duplicate CSRF Token Implementation — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Removed duplicate `Security::validateCSRFToken()` and `Security::generateCSRFToken()` static methods. Session class is the single CSRF implementation.
 
 **Category:** Auth & Session
@@ -414,7 +414,7 @@ Two independent CSRF implementations both use `$_SESSION['csrf_token']` with dif
 
 ### M-7: `sanitizeInput()` Only Removes Null Bytes — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Renamed to `stripNullBytes()` to accurately describe behavior. Deprecated alias `sanitizeInput()` retained for backward compatibility.
 
 **Category:** Input Validation
@@ -426,7 +426,7 @@ The method name implies comprehensive sanitization but only removes null bytes a
 
 ### M-8: CORS Wildcard Configuration Possible — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added warning log when CORS wildcard is configured. Added `X-API-Nonce` to allowed headers list.
 
 **Category:** Input Validation
@@ -438,7 +438,7 @@ If `API_CORS_ALLOWED_ORIGINS` is configured as `'*'`, the API allows requests fr
 
 ### M-9: `validateRequestLevel()` Trusts Request-Supplied Maximum — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Server-side max from `UserContext::getMaxP2pLevel()` now caps the request-supplied `maxRequestLevel`. Added integer cast and lower-bound check.
 
 **Category:** Input Validation
@@ -450,7 +450,7 @@ P2P request level validation checks `requestLevel <= maxRequestLevel` but both v
 
 ### M-10: Exception Messages Exposed in Non-Production — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Changed exception detail guard from `Constants::getAppEnv() !== 'production'` to `Constants::isDebug()` across all controllers (ContactController, TransactionController).
 
 **Category:** Input Validation
@@ -462,7 +462,7 @@ Full exception messages displayed via toast notifications in non-production envi
 
 ### M-11: Unencoded Transaction Date in Template — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added `htmlspecialchars()` to unencoded date and currency output in `transactionHistory.html`.
 
 **Category:** Input Validation
@@ -474,7 +474,7 @@ Transaction date echoed without `htmlspecialchars()` while other fields on the s
 
 ### M-12: API Key Secret Echoed to Docker Logs — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Removed raw `echo` block that output secret to stdout. Only structured `$this->output->success()` call retained.
 
 **Category:** Cryptography
@@ -495,7 +495,7 @@ The master key is randomly generated and not derived from the BIP39 seed. Loss o
 
 ### M-14: Legacy Plaintext Private Key Check in UserContext — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Removed `|| $this->has('private')` from `hasKeys()`. Only checks for `private_encrypted`.
 
 **Category:** Cryptography
@@ -507,7 +507,7 @@ The master key is randomly generated and not derived from the BIP39 seed. Loss o
 
 ### M-15: Decrypted Backup Written to /tmp Without Encryption — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Changed temp files to `/dev/shm` (RAM-backed tmpfs). Wrapped in `try/finally` for guaranteed cleanup on crash.
 
 **Category:** Cryptography
@@ -519,7 +519,7 @@ Decrypted SQL dump written to `/tmp` in plaintext during restore. Should use `/d
 
 ### M-16: No P2P Request Rate Limiting — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added in-memory rate limiting by sender public key hash in `checkP2pPossible()` (60 requests/minute per sender).
 
 **Category:** Transaction & P2P
@@ -531,7 +531,7 @@ No rate limiting on incoming P2P requests. Each request triggers database lookup
 
 ### M-17: Transaction Recovery Lacks Authorization — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added terminal state guard (prevents retry from completed/cancelled) and ownership check (verifies transaction belongs to current user).
 
 **Category:** Transaction & P2P
@@ -543,7 +543,7 @@ No rate limiting on incoming P2P requests. Each request triggers database lookup
 
 ### M-18: P2P Message Authentication Weakness — ACKNOWLEDGED
 
-> **Status:** Acknowledged (defense-in-depth)
+> **Status:** Acknowledged in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642) (defense-in-depth)
 > **Note:** The hash-based check is a secondary validation layer. Primary message authentication occurs at the transport layer via Ed25519 signature verification in `verifyRequestSignature()`. The transport signature covers the full message content including sender identity. Relay nodes cannot forge valid transport signatures.
 
 **Category:** Transaction & P2P
@@ -555,7 +555,7 @@ P2P message validity check only verifies `H(address + salt + time) == hash`, but
 
 ### M-19: Sync Continues After Signature Failures — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added circuit breaker (5 signature failures threshold) that aborts sync and logs a security warning when exceeded.
 
 **Category:** Transaction & P2P
@@ -567,7 +567,7 @@ Sync processing skips transactions with invalid signatures but continues process
 
 ### M-20: Contact Sync Accepts Unvalidated Remote Addresses — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** `AddressRepository::updateContactFields()` now dynamically filters to valid transport columns via `getAllAddressTypes()`, preventing arbitrary field updates.
 
 **Category:** Transaction & P2P
@@ -579,7 +579,7 @@ Remote party provides network addresses during contact sync without challenge-re
 
 ### M-21: Held Transactions Processed Despite Chain Integrity Failure — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Changed from "log and continue" to "log and return early" when chain integrity check fails after sync.
 
 **Category:** Transaction & P2P
@@ -600,7 +600,7 @@ No `USER` directive. PID 1 and background PHP processors run as root.
 
 ### M-23: No Container Security Hardening — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added `security_opt: [no-new-privileges:true]` and `pids_limit: 200` to all compose files. Documented `docker run` equivalents in DOCKER_CONFIGURATION.md.
 
 **Category:** Docker & Infrastructure
@@ -612,7 +612,7 @@ Missing `security_opt`, `cap_drop`, `no-new-privileges`, `pids_limit` directives
 
 ### M-24: No Docker Log Rotation — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added `logging:` config (json-file, 10m max, 3 files) to all compose files. Added `logrotate` inside container for Apache/PHP logs. Documented daemon-level config in DOCKER_CONFIGURATION.md.
 
 **Category:** Docker & Infrastructure
@@ -624,7 +624,7 @@ No `logging:` configuration. Default json-file driver has no size limit, risking
 
 ### M-25: HTTP Port Exposed Without Redirect to HTTPS — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added HTTP-to-HTTPS redirect in Apache HTTP VirtualHost. The `/eiou` transport endpoint is excluded for P2P backward compatibility.
 
 **Category:** Docker & Infrastructure
@@ -636,7 +636,7 @@ Both ports 80 and 443 serve the full application. No HTTP-to-HTTPS redirect conf
 
 ### M-26: SSL/TLS Protocol and Cipher Hardening Missing — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added `SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1`, `SSLCipherSuite HIGH:!aNULL:!MD5:!3DES:!RC4`, `SSLHonorCipherOrder on`, and HSTS header to SSL VirtualHost. Enabled `mod_headers`.
 
 **Category:** Docker & Infrastructure
@@ -648,7 +648,7 @@ SSL VirtualHost does not set `SSLProtocol`, `SSLCipherSuite`, or `SSLHonorCipher
 
 ### M-27: Payload Sent via URL Query Parameter — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Moved payload to `CURLOPT_POSTFIELDS` (POST body). Disabled `CURLOPT_FOLLOWLOCATION` to prevent leakage on redirects. Receiver updated to read from POST body with GET fallback.
 
 **Category:** Docker & Infrastructure
@@ -660,7 +660,7 @@ Signed transaction payloads appended to URLs despite POST method, appearing in s
 
 ### M-28: Timestamp-Only Nonce for P2P Replay Protection — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Changed nonce from `time()` to `bin2hex(random_bytes(16))` for cryptographic uniqueness.
 
 **Category:** Docker & Infrastructure
@@ -672,7 +672,7 @@ Nonce is `time()` (seconds resolution). Messages within the same second share id
 
 ### M-29: Composer Installed Without Hash Verification — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Replaced piped `curl|php` with hash-verified install: downloads installer, verifies SHA-384 against `composer.github.io/installer.sig`, aborts if mismatch.
 
 **Category:** Docker & Infrastructure
@@ -684,7 +684,7 @@ Composer installed via piped `curl|php` without SHA-384 hash verification of the
 
 ### M-30: MariaDB Runs With Default Configuration — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added `/etc/mysql/conf.d/security.cnf` with `bind-address=127.0.0.1` (container-local only) and `skip-symbolic-links`.
 
 **Category:** Docker & Infrastructure
@@ -708,7 +708,7 @@ Lock files created with `chmod 0666`. Should use `0600`.
 
 ### M-32: Balance Overflow Not Checked — REMEDIATED
 
-> **Status:** Fixed in PR (medium-term security remediations)
+> **Status:** Fixed in [PR #642](https://github.com/eiou-org/eiou-docker/pull/642)
 > **Fix:** Added overflow guard after balance accumulation. If `abs($totalCents)` exceeds `PHP_INT_MAX / 100`, logs warning and clamps to safe maximum.
 
 **Category:** Transaction & P2P
@@ -850,22 +850,47 @@ The codebase demonstrates mature security practices in many areas:
 
 ### Medium-term (Next Release)
 
-| ID | Finding | Effort |
-|----|---------|--------|
-| H-5 | Validate API key creation permissions | Small |
-| H-12 | Deprecate RESTORE env var | Medium |
-| M-16 | Implement P2P rate limiting | Medium |
-| M-18 | Strengthen P2P message authentication | Large |
-| M-22 | Run PHP processors as non-root | Medium |
-| M-26 | Add SSL protocol/cipher hardening | Small |
-| M-27 | Move payload to POST body | Medium |
-| M-29 | Use hash-verified Composer install | Small |
-| M-12 | Route API key display through secure mechanism | Small |
-| M-13 | Evaluate master key recovery strategy | Large |
+| ID | Finding | Effort | Status |
+|----|---------|--------|--------|
+| M-1 | Validate SQL pattern in backup restore | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-2 | Fix session cookie `secure` flag HTTPS detection | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-3 | Rotate CSRF token after successful validation | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-4 | Log warning when test mode bypasses rate limiting | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-5 | Normalize API authentication error messages | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-6 | Remove duplicate CSRF implementation from Security class | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-7 | Rename misleading `sanitizeInput()` to `stripNullBytes()` | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-8 | Warn on CORS wildcard; add `X-API-Nonce` to allowed headers | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-9 | Cap request level with server-side maximum | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-10 | Gate exception messages behind debug mode | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-11 | Add `htmlspecialchars()` to unencoded template output | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-12 | Remove raw API key secret echo from Docker logs | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-14 | Remove legacy plaintext private key check | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-15 | Use RAM-backed temp files for decrypted backups | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-16 | Implement P2P rate limiting by sender | Medium | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-17 | Add authorization to transaction recovery | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-18 | Strengthen P2P message authentication | Large | Acknowledged ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-19 | Add circuit breaker for sync signature failures | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-20 | Validate remote address fields in contact sync | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-21 | Block held transactions on chain integrity failure | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-23 | Add container security hardening (`no-new-privileges`, `pids_limit`) | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-24 | Add Docker log rotation | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-25 | Add HTTP-to-HTTPS redirect | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-26 | Add SSL protocol/cipher hardening | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-27 | Move payload to POST body | Medium | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-28 | Replace timestamp nonce with cryptographic nonce | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-29 | Use hash-verified Composer install | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-30 | Harden MariaDB configuration | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
+| M-31 | Tighten lock file permissions | Small | Fixed ([PR #641](https://github.com/eiou-org/eiou-docker/pull/641)) |
+| M-32 | Add balance overflow guard | Small | Fixed ([PR #642](https://github.com/eiou-org/eiou-docker/pull/642)) |
 
 ### Long-term (Backlog)
 
-All remaining medium and low findings. Focus on defense-in-depth improvements, consistent output encoding, Docker hardening, and cryptographic enhancements.
+| ID | Finding | Effort | Status |
+|----|---------|--------|--------|
+| M-13 | Evaluate master key recovery strategy | Large | Open |
+| M-22 | Run PHP processors as non-root | Medium | Open |
+
+All remaining low findings. Focus on defense-in-depth improvements, consistent output encoding, and cryptographic enhancements.
 
 ---
 
