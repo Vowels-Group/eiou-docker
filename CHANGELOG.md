@@ -15,6 +15,8 @@ The project is currently in **ALPHA** status.
 ### Fixed
 - Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
 - Wire up dead-code `buildMutuallyAccepted()` payload in `ContactPayload.php` with `$txid` parameter for transaction synchronization
+- Fix sync inquiry misidentifying mutual pending contacts as "unknown" — `hasPendingContactInserted()` now checked for the case where both sides initiated requests
+- Fix stale `$status` variable in `syncSingleContact()` re-send path — response was never decoded and status check always used the original rejected value, causing sync to report failure even after successful mutual acceptance
 
 ## 2026-02-18
 
