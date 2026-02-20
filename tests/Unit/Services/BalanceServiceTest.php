@@ -599,6 +599,30 @@ class BalanceServiceTest extends TestCase
         $this->assertEquals(60.0, $result);
     }
 
+    /**
+     * Test getUserTotalBalance clamps on overflow (M-32)
+     */
+    public function testGetUserTotalBalanceClampsOnOverflow(): void
+    {
+        // Create balances that would sum to more than PHP_INT_MAX / 100
+        $maxCents = (int) (PHP_INT_MAX / 100);
+        $this->balanceRepository->expects($this->once())
+            ->method('getUserBalance')
+            ->willReturn([
+                ['currency' => 'USD', 'total_balance' => $maxCents],
+                ['currency' => 'EUR', 'total_balance' => 1000]
+            ]);
+
+        $this->currencyUtility->expects($this->once())
+            ->method('convertCentsToDollars')
+            ->with($maxCents) // Should be clamped to maxCents, not maxCents+1000
+            ->willReturn(999999999.99);
+
+        $result = $this->balanceService->getUserTotalBalance();
+
+        $this->assertNotNull($result);
+    }
+
     // =========================================================================
     // getContactBalance() Tests
     // =========================================================================

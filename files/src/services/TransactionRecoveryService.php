@@ -211,6 +211,29 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
                 return $result;
             }
 
+            // Prevent transitioning from terminal states
+            $terminalStatuses = [Constants::STATUS_COMPLETED, Constants::STATUS_CANCELLED];
+            if (in_array($transaction['status'] ?? '', $terminalStatuses, true) && $action === 'retry') {
+                $result['message'] = 'Cannot retry a transaction in terminal state: ' . $transaction['status'];
+                return $result;
+            }
+
+            // Verify the transaction belongs to the current user
+            $userAddresses = \Eiou\Core\UserContext::getInstance()->getUserAddresses();
+            $userPubkey = \Eiou\Core\UserContext::getInstance()->getPublicKey();
+            $isSender = in_array($transaction['sender_address'] ?? '', $userAddresses, true)
+                || ($transaction['sender_public_key'] ?? '') === $userPubkey;
+            $isReceiver = in_array($transaction['receiver_address'] ?? '', $userAddresses, true)
+                || ($transaction['receiver_public_key'] ?? '') === $userPubkey;
+            if (!$isSender && !$isReceiver) {
+                $result['message'] = 'Transaction does not belong to this user';
+                Logger::getInstance()->warning("Unauthorized transaction resolution attempt", [
+                    'txid' => $txid,
+                    'action' => $action
+                ]);
+                return $result;
+            }
+
             switch ($action) {
                 case 'retry':
                     // Reset to pending with recovery count unchanged

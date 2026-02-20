@@ -112,34 +112,13 @@ class ApiKeyService implements ApiKeyServiceInterface {
         try {
             $key = $this->repository->createKey($name, $permissions);
 
+            // Return key details via structured output only (prevents secret leaking to Docker logs)
             $this->output->success("API key created successfully!", [
                 'key_id' => $key['key_id'],
                 'secret' => $key['secret'],
                 'name' => $key['name'],
                 'permissions' => $key['permissions']
-            ], "Save this information securely!");
-
-            // Display in CLI format
-            echo "\n";
-            echo "===== API KEY CREATED =====\n";
-            echo "Key ID:      " . $key['key_id'] . "\n";
-            echo "Secret:      " . $key['secret'] . "\n";
-            echo "Name:        " . $key['name'] . "\n";
-            echo "Permissions: " . implode(', ', $key['permissions']) . "\n";
-            echo "===========================\n";
-            echo "\n";
-            echo "IMPORTANT: Save the secret now! It will not be shown again.\n";
-            echo "\n";
-            echo "To use this key, include these headers in your API requests:\n";
-            echo "  X-API-Key: " . $key['key_id'] . "\n";
-            echo "  X-API-Timestamp: <unix_timestamp>\n";
-            echo "  X-API-Signature: <hmac_signature>\n";
-            echo "\n";
-            echo "The HMAC signature is computed as:\n";
-            echo "  HMAC-SHA256(secret, METHOD + \"\\n\" + PATH + \"\\n\" + TIMESTAMP + \"\\n\" + BODY)\n";
-            echo "\n";
-            echo "NOTE: Never send the secret in requests - only the computed HMAC signature.\n";
-            echo "\n";
+            ], "Save this information securely! The secret will not be shown again.");
 
         } catch (Exception $e) {
             $this->output->error('Failed to create API key: ' . $e->getMessage(), ErrorCodes::CREATE_FAILED, 500);

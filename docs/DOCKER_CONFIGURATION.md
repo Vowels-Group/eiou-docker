@@ -790,6 +790,48 @@ EIOU containers run as root during initialization, then services drop privileges
 | `/var/lib/tor/hidden_service/` | 700 | debian-tor | Tor keys |
 | `/etc/apache2/ssl/server.key` | 600 | root | SSL private key |
 
+### Container Security Hardening
+
+The reference compose files include security hardening directives:
+
+```yaml
+security_opt:
+  - no-new-privileges:true    # Prevent privilege escalation
+pids_limit: 200               # Limit process count per container
+```
+
+For `docker run` users, add equivalent flags:
+
+```bash
+docker run --security-opt no-new-privileges:true --pids-limit 200 ...
+```
+
+### Log Rotation
+
+Docker stdout/stderr log rotation is configured in the reference compose files:
+
+```yaml
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+```
+
+For `docker run` users or daemon-level configuration, add to `/etc/docker/daemon.json`:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+```
+
+Application logs (Apache, PHP) inside the container are rotated by `logrotate` (weekly, 4 rotations, compressed).
+
 ### Secure Seed Phrase Handling
 
 **Best Practices:**

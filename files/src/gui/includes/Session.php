@@ -25,7 +25,7 @@ class Session
                 'lifetime' => 0, // Session cookie (expires when browser closes)
                 'path' => '/',
                 'domain' => '', // Current domain
-                'secure' => isset($_SERVER['HTTPS']), // Only send over HTTPS if available
+                'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', // Only send over HTTPS if available
                 'httponly' => true, // Prevent JavaScript access
                 'samesite' => 'Strict' // Prevent CSRF attacks
             ];
@@ -196,7 +196,13 @@ class Session
         }
 
         // Validate token using constant-time comparison
-        return hash_equals($_SESSION['csrf_token'], $token);
+        if (hash_equals($_SESSION['csrf_token'], $token)) {
+            // Rotate token after successful validation to prevent reuse
+            unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+            return true;
+        }
+
+        return false;
     }
 
     /**

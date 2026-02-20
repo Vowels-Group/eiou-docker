@@ -183,8 +183,8 @@ class UserContext {
         // Check for public key
         $hasPublic = null !== $this->getPublicKey();
 
-        // Check for private key (encrypted or plaintext)
-        $hasPrivate = $this->has('private_encrypted') || $this->has('private');
+        // Check for private key (encrypted only - plaintext keys are no longer supported)
+        $hasPrivate = $this->has('private_encrypted');
 
         return $hasPublic && $hasPrivate;
     }

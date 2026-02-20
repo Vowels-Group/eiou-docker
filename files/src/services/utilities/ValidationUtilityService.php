@@ -42,7 +42,12 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
             return false;
         }
 
-        return $request['requestLevel'] <= $request['maxRequestLevel'];
+        $requestLevel = (int) $request['requestLevel'];
+        // Use server-side max to prevent client-supplied values from bypassing limits
+        $serverMax = \Eiou\Core\UserContext::getInstance()->getMaxP2pLevel();
+        $maxRequestLevel = min((int) $request['maxRequestLevel'], $requestLevel + $serverMax);
+
+        return $requestLevel >= 0 && $requestLevel <= $maxRequestLevel;
     }
 
     /**

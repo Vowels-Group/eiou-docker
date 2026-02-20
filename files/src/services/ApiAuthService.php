@@ -109,17 +109,17 @@ class ApiAuthService implements ApiAuthServiceInterface {
         // Look up the API key to get the secret hash
         $keyData = $this->apiKeyRepository->getByKeyId($apiKey);
         if (!$keyData) {
-            return $this->authError('Invalid API key', ErrorCodes::AUTH_INVALID_KEY);
+            return $this->authError('Invalid or inactive API key', ErrorCodes::AUTH_INVALID_KEY);
         }
 
-        // Check if key is enabled
+        // Check if key is enabled (generic message to prevent key enumeration)
         if (!$keyData['enabled']) {
-            return $this->authError('API key is disabled', ErrorCodes::AUTH_KEY_DISABLED);
+            return $this->authError('Invalid or inactive API key', ErrorCodes::AUTH_KEY_DISABLED);
         }
 
-        // Check if key is expired
+        // Check if key is expired (generic message to prevent key enumeration)
         if ($keyData['expires_at'] && strtotime($keyData['expires_at']) < time()) {
-            return $this->authError('API key has expired', ErrorCodes::AUTH_KEY_EXPIRED);
+            return $this->authError('Invalid or inactive API key', ErrorCodes::AUTH_KEY_EXPIRED);
         }
 
         // Check rate limit

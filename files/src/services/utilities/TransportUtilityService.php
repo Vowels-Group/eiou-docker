@@ -364,14 +364,15 @@ class TransportUtilityService implements TransportServiceInterface
         // Default to https:// for secure P2P communication
         $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
 
-        $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+        $url = $protocol . $recipient . "/eiou";
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Prevent payload leakage on redirects
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
 
         // SSL options for HTTPS connections
         // SSL peer verification is enabled by default (H-8 security remediation).
@@ -779,8 +780,8 @@ class TransportUtilityService implements TransportServiceInterface
         $description = $messageContent['description'] ?? null;
         unset($messageContent['description']);
 
-        // Add nonce for replay protection
-        $nonce = time();
+        // Add cryptographic nonce for replay protection
+        $nonce = bin2hex(random_bytes(16));
         $messageContent['nonce'] = $nonce;
 
         // JSON encode the message content (no duplication)
