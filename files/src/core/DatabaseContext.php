@@ -3,6 +3,7 @@
 
 namespace Eiou\Core;
 
+use Eiou\Security\KeyEncryption;
 use Exception;
 
 /**
@@ -139,11 +140,20 @@ class DatabaseContext {
     }
 
     /**
-     * Get database password
+     * Get database password (decrypts if stored encrypted, falls back to plaintext for backward compatibility)
      *
      * @return string|null
      */
     public function getDbPass(): ?string {
+        $encrypted = $this->get('dbPassEncrypted');
+        if (is_array($encrypted) && isset($encrypted['ciphertext'], $encrypted['iv'], $encrypted['tag'])) {
+            try {
+                return KeyEncryption::decrypt($encrypted);
+            } catch (Exception $e) {
+                error_log("DatabaseContext: Failed to decrypt dbPass: " . $e->getMessage());
+                return null;
+            }
+        }
         return $this->get('dbPass') ?? null;
     }
 

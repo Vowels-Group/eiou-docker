@@ -59,6 +59,9 @@ class ErrorCodes
     public const AUTH_INVALID_SIGNATURE = 'AUTH_INVALID_SIGNATURE';
     public const AUTH_INVALID_SIGNATURE_FORMAT = 'AUTH_INVALID_SIGNATURE_FORMAT';
     public const AUTH_INVALID_CREDENTIALS = 'AUTH_INVALID_CREDENTIALS';
+    public const AUTH_MISSING_NONCE = 'AUTH_MISSING_NONCE';
+    public const AUTH_INVALID_NONCE = 'AUTH_INVALID_NONCE';
+    public const AUTH_REPLAY_DETECTED = 'AUTH_REPLAY_DETECTED';
 
     // Rate limiting errors
     public const RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED';
@@ -227,6 +230,9 @@ class ErrorCodes
             self::AUTH_INVALID_SIGNATURE => 401,
             self::AUTH_INVALID_SIGNATURE_FORMAT => 401,
             self::AUTH_INVALID_CREDENTIALS => 401,
+            self::AUTH_MISSING_NONCE => 401,
+            self::AUTH_INVALID_NONCE => 401,
+            self::AUTH_REPLAY_DETECTED => 401,
 
             // 403 Forbidden
             self::PERMISSION_DENIED => 403,
@@ -333,6 +339,9 @@ class ErrorCodes
             self::AUTH_INVALID_SIGNATURE => 'Invalid Signature',
             self::AUTH_INVALID_SIGNATURE_FORMAT => 'Invalid Signature Format',
             self::AUTH_INVALID_CREDENTIALS => 'Invalid Credentials',
+            self::AUTH_MISSING_NONCE => 'Missing Nonce',
+            self::AUTH_INVALID_NONCE => 'Invalid Nonce',
+            self::AUTH_REPLAY_DETECTED => 'Replay Detected',
 
             self::RATE_LIMIT_EXCEEDED => 'Rate Limit Exceeded',
 

@@ -72,6 +72,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
         $apiKey = $this->getHeader($headers, 'X-API-Key');
         $timestamp = $this->getHeader($headers, 'X-API-Timestamp');
         $signature = $this->getHeader($headers, 'X-API-Signature');
+        $nonce = $this->getHeader($headers, 'X-API-Nonce');
 
         // Validate all required headers are present
         if (!$apiKey) {
@@ -82,6 +83,12 @@ class ApiAuthService implements ApiAuthServiceInterface {
         }
         if (!$signature) {
             return $this->authError('Missing X-API-Signature header', ErrorCodes::AUTH_MISSING_SIGNATURE);
+        }
+        if (!$nonce) {
+            return $this->authError('Missing X-API-Nonce header', ErrorCodes::AUTH_MISSING_NONCE);
+        }
+        if (strlen($nonce) < 8 || strlen($nonce) > 64) {
+            return $this->authError('Invalid nonce format', ErrorCodes::AUTH_INVALID_NONCE);
         }
 
         // Validate timestamp format
@@ -94,7 +101,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
         $now = time();
         if (abs($now - $timestampInt) > self::MAX_REQUEST_AGE) {
             return $this->authError(
-                'Request timestamp too old or in the future. Max age: ' . self::MAX_REQUEST_AGE . ' seconds',
+                'Request timestamp too old or in the future',
                 ErrorCodes::AUTH_EXPIRED_TIMESTAMP
             );
         }
@@ -119,9 +126,14 @@ class ApiAuthService implements ApiAuthServiceInterface {
         $requestCount = $this->apiKeyRepository->getRequestCount($apiKey, 60);
         if ($requestCount >= $keyData['rate_limit_per_minute']) {
             return $this->authError(
-                'Rate limit exceeded. Limit: ' . $keyData['rate_limit_per_minute'] . '/minute',
+                'Rate limit exceeded',
                 ErrorCodes::RATE_LIMIT_EXCEEDED
             );
+        }
+
+        // Nonce replay protection — reject duplicate nonces within the timestamp window
+        if (!$this->apiKeyRepository->checkAndStoreNonce($apiKey, $nonce, self::MAX_REQUEST_AGE)) {
+            return $this->authError('Duplicate nonce (possible replay)', ErrorCodes::AUTH_REPLAY_DETECTED);
         }
 
         // Retrieve decrypted secret from database for HMAC verification
@@ -131,8 +143,8 @@ class ApiAuthService implements ApiAuthServiceInterface {
             return $this->authError('Invalid API credentials', ErrorCodes::AUTH_INVALID_CREDENTIALS);
         }
 
-        // Build the string to sign
-        $stringToSign = $this->buildStringToSign($method, $path, $timestamp, $body);
+        // Build the string to sign (includes nonce for replay protection)
+        $stringToSign = $this->buildStringToSign($method, $path, $timestamp, $body, $nonce);
 
         // Calculate expected HMAC using the decrypted secret
         $expectedHmac = hash_hmac(self::HMAC_ALGORITHM, $stringToSign, $secret);
@@ -187,22 +199,25 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * @param string $path Request path
      * @param string $timestamp Unix timestamp
      * @param string $body Request body
+     * @param string $nonce Unique request nonce for replay protection
      * @return string String to sign
      */
     public function buildStringToSign(
         string $method,
         string $path,
         string $timestamp,
-        string $body
+        string $body,
+        string $nonce = ''
     ): string {
         // Normalize method to uppercase
         $method = strtoupper($method);
 
-        // Build canonical string: METHOD\nPATH\nTIMESTAMP\nBODY
+        // Build canonical string: METHOD\nPATH\nTIMESTAMP\nNONCE\nBODY
         return implode("\n", [
             $method,
             $path,
             $timestamp,
+            $nonce,
             $body
         ]);
     }
@@ -218,6 +233,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * @param string $path Request path
      * @param string $timestamp Unix timestamp
      * @param string $body Request body
+     * @param string $nonce Unique request nonce for replay protection
      * @return string The HMAC signature (hex encoded)
      */
     public static function generateSignature(
@@ -225,12 +241,14 @@ class ApiAuthService implements ApiAuthServiceInterface {
         string $method,
         string $path,
         string $timestamp,
-        string $body = ''
+        string $body = '',
+        string $nonce = ''
     ): string {
         $stringToSign = implode("\n", [
             strtoupper($method),
             $path,
             $timestamp,
+            $nonce,
             $body
         ]);
 

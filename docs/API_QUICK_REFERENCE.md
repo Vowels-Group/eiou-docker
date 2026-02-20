@@ -12,9 +12,10 @@ All requests require HMAC-SHA256 authentication:
 |--------|-------|
 | `X-API-Key` | Your API key ID (`eiou_...`) |
 | `X-API-Timestamp` | Unix timestamp (seconds) |
+| `X-API-Nonce` | Unique request ID (8-64 chars) |
 | `X-API-Signature` | HMAC-SHA256 signature |
 
-**Signature:** `HMAC-SHA256(secret, METHOD\nPATH\nTIMESTAMP\nBODY)`
+**Signature:** `HMAC-SHA256(secret, METHOD\nPATH\nTIMESTAMP\nNONCE\nBODY)`
 
 ---
 
@@ -294,12 +295,14 @@ All requests require HMAC-SHA256 authentication:
 API_KEY="eiou_xxx"
 API_SECRET="your_secret"
 TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -hex 16)
 PATH="/api/v1/wallet/balance"
-SIGNATURE=$(echo -en "GET\n$PATH\n$TIMESTAMP\n" | openssl dgst -sha256 -hmac "$API_SECRET" | cut -d' ' -f2)
+SIGNATURE=$(echo -en "GET\n$PATH\n$TIMESTAMP\n$NONCE\n" | openssl dgst -sha256 -hmac "$API_SECRET" | cut -d' ' -f2)
 
 curl "http://localhost:8080$PATH" \
   -H "X-API-Key: $API_KEY" \
   -H "X-API-Timestamp: $TIMESTAMP" \
+  -H "X-API-Nonce: $NONCE" \
   -H "X-API-Signature: $SIGNATURE"
 ```
 
@@ -308,11 +311,13 @@ curl "http://localhost:8080$PATH" \
 ```bash
 BODY='{"address":"http://bob:8080","amount":25,"currency":"USD"}'
 PATH="/api/v1/wallet/send"
-SIGNATURE=$(echo -en "POST\n$PATH\n$TIMESTAMP\n$BODY" | openssl dgst -sha256 -hmac "$API_SECRET" | cut -d' ' -f2)
+NONCE=$(openssl rand -hex 16)
+SIGNATURE=$(echo -en "POST\n$PATH\n$TIMESTAMP\n$NONCE\n$BODY" | openssl dgst -sha256 -hmac "$API_SECRET" | cut -d' ' -f2)
 
 curl -X POST "http://localhost:8080$PATH" \
   -H "X-API-Key: $API_KEY" \
   -H "X-API-Timestamp: $TIMESTAMP" \
+  -H "X-API-Nonce: $NONCE" \
   -H "X-API-Signature: $SIGNATURE" \
   -H "Content-Type: application/json" \
   -d "$BODY"

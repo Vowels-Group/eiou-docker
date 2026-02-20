@@ -26,6 +26,7 @@ The EIOU API uses HMAC-SHA256 signature-based authentication to secure all reque
 |--------|-------------|
 | `X-API-Key` | Your API key ID (format: `eiou_...`) |
 | `X-API-Timestamp` | Unix timestamp of request (seconds since epoch) |
+| `X-API-Nonce` | Unique request identifier (8-64 chars, prevents replay attacks) |
 | `X-API-Signature` | HMAC-SHA256 signature of the request |
 
 ### Signature Generation
@@ -39,17 +40,19 @@ signature = HMAC-SHA256(string_to_sign, api_secret)
 Where `string_to_sign` is:
 
 ```
-{METHOD}\n{PATH}\n{TIMESTAMP}\n{BODY}
+{METHOD}\n{PATH}\n{TIMESTAMP}\n{NONCE}\n{BODY}
 ```
 
 - `METHOD`: HTTP method in uppercase (GET, POST, PUT, DELETE)
 - `PATH`: Request path (e.g., `/api/v1/wallet/balance`)
 - `TIMESTAMP`: Same Unix timestamp as the header
+- `NONCE`: Same unique nonce as the header
 - `BODY`: Request body (empty string for GET requests)
 
 ### Security Notes
 
-- Timestamps must be within 5 minutes of server time (prevents replay attacks)
+- Timestamps must be within 5 minutes of server time
+- Each nonce can only be used once within the timestamp window (prevents replay attacks)
 - API secrets are never sent in requests - only the computed signature
 - Rate limiting is enforced per API key (default: 100 requests/minute)
 - Proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`) are only trusted when `REMOTE_ADDR` is in the trusted proxies list. Configure via CLI: `eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"` (see [CLI Reference — changesettings](CLI_REFERENCE.md#changesettings)). The `TRUSTED_PROXIES` environment variable takes precedence if set.
@@ -63,14 +66,16 @@ API_SECRET="your_api_secret"
 METHOD="GET"
 PATH="/api/v1/wallet/balance"
 TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -hex 16)
 BODY=""
 
-STRING_TO_SIGN="${METHOD}\n${PATH}\n${TIMESTAMP}\n${BODY}"
+STRING_TO_SIGN="${METHOD}\n${PATH}\n${TIMESTAMP}\n${NONCE}\n${BODY}"
 SIGNATURE=$(echo -en "$STRING_TO_SIGN" | openssl dgst -sha256 -hmac "$API_SECRET" | cut -d' ' -f2)
 
 curl -X GET "http://localhost:8080${PATH}" \
   -H "X-API-Key: $API_KEY" \
   -H "X-API-Timestamp: $TIMESTAMP" \
+  -H "X-API-Nonce: $NONCE" \
   -H "X-API-Signature: $SIGNATURE"
 ```
 
@@ -83,15 +88,17 @@ $apiSecret = 'your_api_secret';
 $method = 'GET';
 $path = '/api/v1/wallet/balance';
 $timestamp = time();
+$nonce = bin2hex(random_bytes(16));
 $body = '';
 
-$stringToSign = "{$method}\n{$path}\n{$timestamp}\n{$body}";
+$stringToSign = "{$method}\n{$path}\n{$timestamp}\n{$nonce}\n{$body}";
 $signature = hash_hmac('sha256', $stringToSign, $apiSecret);
 
 $ch = curl_init("http://localhost:8080{$path}");
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     "X-API-Key: {$apiKey}",
     "X-API-Timestamp: {$timestamp}",
+    "X-API-Nonce: {$nonce}",
     "X-API-Signature: {$signature}"
 ]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -108,9 +115,10 @@ const apiSecret = 'your_api_secret';
 const method = 'GET';
 const path = '/api/v1/wallet/balance';
 const timestamp = Math.floor(Date.now() / 1000);
+const nonce = crypto.randomBytes(16).toString('hex');
 const body = '';
 
-const stringToSign = `${method}\n${path}\n${timestamp}\n${body}`;
+const stringToSign = `${method}\n${path}\n${timestamp}\n${nonce}\n${body}`;
 const signature = crypto.createHmac('sha256', apiSecret).update(stringToSign).digest('hex');
 
 fetch(`http://localhost:8080${path}`, {
@@ -118,6 +126,7 @@ fetch(`http://localhost:8080${path}`, {
     headers: {
         'X-API-Key': apiKey,
         'X-API-Timestamp': timestamp.toString(),
+        'X-API-Nonce': nonce,
         'X-API-Signature': signature
     }
 });
@@ -128,6 +137,7 @@ fetch(`http://localhost:8080${path}`, {
 ```python
 import hashlib
 import hmac
+import secrets
 import time
 import requests
 
@@ -136,9 +146,10 @@ api_secret = 'your_api_secret'
 method = 'GET'
 path = '/api/v1/wallet/balance'
 timestamp = str(int(time.time()))
+nonce = secrets.token_hex(16)
 body = ''
 
-string_to_sign = f"{method}\n{path}\n{timestamp}\n{body}"
+string_to_sign = f"{method}\n{path}\n{timestamp}\n{nonce}\n{body}"
 signature = hmac.new(
     api_secret.encode(),
     string_to_sign.encode(),
@@ -150,6 +161,7 @@ response = requests.get(
     headers={
         'X-API-Key': api_key,
         'X-API-Timestamp': timestamp,
+        'X-API-Nonce': nonce,
         'X-API-Signature': signature
     }
 )
@@ -202,6 +214,9 @@ print(response.json())
 | `auth_invalid_signature` | HMAC signature verification failed |
 | `auth_invalid_timestamp` | Timestamp is not a valid number |
 | `auth_expired_timestamp` | Timestamp is too old (>5 minutes) |
+| `auth_missing_nonce` | X-API-Nonce header not provided |
+| `auth_invalid_nonce` | Nonce format invalid (must be 8-64 characters) |
+| `auth_replay_detected` | Nonce has already been used (replay attack) |
 | `auth_key_disabled` | API key has been disabled |
 | `auth_key_expired` | API key has expired |
 
@@ -305,6 +320,7 @@ Get wallet balances grouped by contact.
 curl -X GET "http://localhost:8080/api/v1/wallet/balance" \
   -H "X-API-Key: $API_KEY" \
   -H "X-API-Timestamp: $TIMESTAMP" \
+  -H "X-API-Nonce: $NONCE" \
   -H "X-API-Signature: $SIGNATURE"
 ```
 
@@ -499,6 +515,7 @@ Send a transaction to a contact.
 curl -X POST "http://localhost:8080/api/v1/wallet/send" \
   -H "X-API-Key: $API_KEY" \
   -H "X-API-Timestamp: $TIMESTAMP" \
+  -H "X-API-Nonce: $NONCE" \
   -H "X-API-Signature: $SIGNATURE" \
   -H "Content-Type: application/json" \
   -d '{"address":"http://bob.local:8080","amount":25.00,"currency":"USD"}'

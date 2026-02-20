@@ -301,6 +301,17 @@ function getApiRequestLogTableSchema() {
     )";
 }
 
+// API Nonce tracking table for replay protection
+function getApiNoncesTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS api_nonces (
+        nonce VARCHAR(64) NOT NULL,
+        key_id VARCHAR(32) NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (key_id, nonce),
+        INDEX idx_api_nonces_created (created_at)
+    )";
+}
+
 // Message Delivery Tracking table - tracks multi-stage acknowledgments and retries
 function getMessageDeliveryTableSchema() {
     return "CREATE TABLE IF NOT EXISTS message_delivery (

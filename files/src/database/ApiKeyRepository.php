@@ -280,6 +280,39 @@ class ApiKeyRepository extends AbstractRepository {
     }
 
     /**
+     * Check and store a nonce for replay protection.
+     * Returns true if the nonce is new (not seen before), false if it's a replay.
+     * Also prunes expired nonces older than the given window.
+     *
+     * @param string $keyId API key
+     * @param string $nonce Nonce value
+     * @param int $windowSeconds Time window for nonce validity
+     * @return bool True if nonce is new and was stored, false if duplicate
+     */
+    public function checkAndStoreNonce(string $keyId, string $nonce, int $windowSeconds = 300): bool {
+        // Prune expired nonces (older than window)
+        $pruneSql = "DELETE FROM api_nonces WHERE created_at < DATE_SUB(NOW(6), INTERVAL :window SECOND)";
+        $pruneStmt = $this->pdo->prepare($pruneSql);
+        $pruneStmt->execute([':window' => $windowSeconds]);
+
+        // Check if nonce already exists for this key
+        $checkSql = "SELECT 1 FROM api_nonces WHERE key_id = :key_id AND nonce = :nonce";
+        $checkStmt = $this->pdo->prepare($checkSql);
+        $checkStmt->execute([':key_id' => $keyId, ':nonce' => $nonce]);
+
+        if ($checkStmt->fetch()) {
+            return false; // Duplicate nonce — replay attempt
+        }
+
+        // Store the new nonce
+        $insertSql = "INSERT INTO api_nonces (key_id, nonce) VALUES (:key_id, :nonce)";
+        $insertStmt = $this->pdo->prepare($insertSql);
+        $insertStmt->execute([':key_id' => $keyId, ':nonce' => $nonce]);
+
+        return true;
+    }
+
+    /**
      * Check if a key has a specific permission
      *
      * @param array $keyPermissions The key's permissions array

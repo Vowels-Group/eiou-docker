@@ -374,11 +374,10 @@ class TransportUtilityService implements TransportServiceInterface
         curl_setopt($ch, CURLOPT_POST, true);
 
         // SSL options for HTTPS connections
-        // For self-signed certificates in mesh networks, we disable strict verification
-        // but still use encrypted transport. For production with CA-signed certs,
-        // set P2P_SSL_VERIFY=true environment variable.
+        // SSL peer verification enabled by default for security.
+        // For self-signed certificates in mesh networks, set P2P_SSL_VERIFY=false.
         if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
-            $verifySsl = getenv('P2P_SSL_VERIFY') === 'true';
+            $verifySsl = getenv('P2P_SSL_VERIFY') !== 'false';
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 
@@ -503,7 +502,7 @@ class TransportUtilityService implements TransportServiceInterface
 
             // SSL options for HTTPS connections
             if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
-                $verifySsl = getenv('P2P_SSL_VERIFY') === 'true';
+                $verifySsl = getenv('P2P_SSL_VERIFY') !== 'false';
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 

@@ -4,6 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Utils\Logger;
+use Eiou\Security\KeyEncryption;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -79,6 +80,7 @@ function freshInstall(){
                 $dbConn->exec(getRp2pTableSchema());
                 $dbConn->exec(getApiKeysTableSchema());
                 $dbConn->exec(getApiRequestLogTableSchema());
+                $dbConn->exec(getApiNoncesTableSchema());
                 $dbConn->exec(getMessageDeliveryTableSchema());
                 $dbConn->exec(getDeadLetterQueueTableSchema());
                 $dbConn->exec(getDeliveryMetricsTableSchema());
@@ -100,13 +102,28 @@ function freshInstall(){
                 );
             }
 
+            // Encrypt the database password before storing
+            $encryptedPass = null;
+            try {
+                $encryptedPass = KeyEncryption::encrypt($dbPass);
+            } catch (\Exception $encError) {
+                Logger::getInstance()->warning("Could not encrypt db password, storing plaintext", [
+                    'error' => $encError->getMessage()
+                ]);
+            }
+
             // Overwrite database configuration to the config file
-             $dbConfig = [
-                'dbHost' => addslashes($dbHost), // Database Host
-                'dbName' => addslashes($dbName), // Database Name
-                'dbUser' => addslashes($dbUser), // Database User
-                'dbPass' => addslashes($dbPass)  // Database password
+            $dbConfig = [
+                'dbHost' => addslashes($dbHost),
+                'dbName' => addslashes($dbName),
+                'dbUser' => addslashes($dbUser),
             ];
+
+            if ($encryptedPass !== null) {
+                $dbConfig['dbPassEncrypted'] = $encryptedPass;
+            } else {
+                $dbConfig['dbPass'] = addslashes($dbPass);
+            }
 
 
         } catch (PDOException $e) {
@@ -120,10 +137,14 @@ function freshInstall(){
                 $e
             );
         }
-   
-        // Write the default configuration
+
+        // Write the default configuration with restrictive permissions
         if($dbConfig !== []){
-            file_put_contents('/etc/eiou/config/dbconfig.json', json_encode($dbConfig), LOCK_EX);
+            $configPath = '/etc/eiou/config/dbconfig.json';
+            $oldUmask = umask(0077);
+            file_put_contents($configPath, json_encode($dbConfig), LOCK_EX);
+            umask($oldUmask);
+            chmod($configPath, 0600);
         }
     }
 }
@@ -146,6 +167,7 @@ function runMigrations(PDO $pdo): array {
         'p2p_senders' => 'getP2pSendersTableSchema',
         'p2p_relayed_contacts' => 'getP2pRelayedContactsTableSchema',
         'contact_credit' => 'getContactCreditTableSchema',
+        'api_nonces' => 'getApiNoncesTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
