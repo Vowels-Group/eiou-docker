@@ -536,28 +536,6 @@ elif [ "$SSL_CERT_INSTALLED" = "false" ]; then
 fi
 
 # =============================================================================
-# CONFIG FILE MIGRATION (Pre-#573 → Post-#573)
-# =============================================================================
-# Prior to PR #573, config files lived at /etc/eiou/ root level. After #573
-# they moved to /etc/eiou/config/. When upgrading from an older image, the
-# volume still has files at the old location. Migrate them before anything
-# else checks for config.
-# =============================================================================
-
-if [ -f /etc/eiou/userconfig.json ] && [ ! -f /etc/eiou/config/userconfig.json ]; then
-    echo "Migrating config files from legacy location to /etc/eiou/config/..."
-    mkdir -p /etc/eiou/config
-    for f in userconfig.json dbconfig.json defaultconfig.json .master.key; do
-        if [ -f "/etc/eiou/$f" ]; then
-            cp -p "/etc/eiou/$f" "/etc/eiou/config/$f"
-            rm "/etc/eiou/$f"
-            echo "  Migrated $f"
-        fi
-    done
-    echo "Config migration completed."
-fi
-
-# =============================================================================
 # SOURCE FILE SYNC (Docker Volume Update)
 # =============================================================================
 # The /etc/eiou directory is a Docker volume. When the image is updated, the
