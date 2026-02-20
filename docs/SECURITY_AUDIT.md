@@ -72,7 +72,10 @@ All PHP source files in `files/src/`, `files/root/`, configuration files, Docker
 
 ## Critical Findings
 
-### C-1: Chain Drop Accepts Re-signed Transactions Without Signature Verification
+### C-1: Chain Drop Accepts Re-signed Transactions Without Signature Verification — REMEDIATED
+
+> **Status:** Fixed in [PR #635](https://github.com/eiou-org/eiou-docker/pull/635)
+> **Fix:** `processResignedTransactions()` now fetches the full transaction from DB, merges the new signature/nonce, and calls `SyncTrigger::verifyTransactionSignaturePublic()` before storing. Null guard added for `$this->syncTrigger`.
 
 **Category:** Transaction & P2P
 **File:** `files/src/services/ChainDropService.php:1125-1146`
@@ -101,7 +104,10 @@ private function processResignedTransactions(array $resignedTransactions): void
 
 ---
 
-### C-2: IP Address Spoofing Bypasses All Rate Limiting
+### C-2: IP Address Spoofing Bypasses All Rate Limiting — REMEDIATED
+
+> **Status:** Fixed in [PR #635](https://github.com/eiou-org/eiou-docker/pull/635)
+> **Fix:** New centralized `Security::getClientIp()` only trusts proxy headers (`CF-Connecting-IP`, `X-Forwarded-For`) when `REMOTE_ADDR` is in the `TRUSTED_PROXIES` list. `RateLimiterService` and `ApiAuthService` now delegate to it. `TRUSTED_PROXIES` configurable via env var.
 
 **Category:** Authentication & Authorization
 **Files:** `files/src/services/RateLimiterService.php:118-130`, `files/src/services/ApiAuthService.php:345-357`
@@ -126,7 +132,10 @@ public static function getClientIp(): string {
 
 ---
 
-### C-3: No Rate Limiting on GUI Login Authentication
+### C-3: No Rate Limiting on GUI Login Authentication — REMEDIATED
+
+> **Status:** Fixed in [PR #635](https://github.com/eiou-org/eiou-docker/pull/635)
+> **Fix:** GUI login POST now calls `RateLimiterService::checkLimit()` with `gui_login` action before processing credentials. CSRF token validation also added (see H-7).
 
 **Category:** Authentication & Authorization
 **File:** `files/root/www/gui/index.html:52-63`
@@ -224,7 +233,10 @@ The filename parameter is URL-decoded and concatenated with the backup directory
 
 ---
 
-### H-7: CSRF Token Missing on GUI Login Form
+### H-7: CSRF Token Missing on GUI Login Form — REMEDIATED
+
+> **Status:** Fixed in [PR #635](https://github.com/eiou-org/eiou-docker/pull/635)
+> **Fix:** Hidden CSRF token field added to `authenticationForm.html`. Login POST validates the token via `$secureSession->validateCSRFToken()` before processing credentials.
 
 **Category:** Authentication & Authorization
 **File:** `files/src/gui/layout/authenticationForm.html:19-23`
@@ -253,7 +265,10 @@ curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
 
 ---
 
-### H-9: APP_ENV Hardcoded to 'development'
+### H-9: APP_ENV Hardcoded to 'development' — REMEDIATED
+
+> **Status:** Fixed in [PR #635](https://github.com/eiou-org/eiou-docker/pull/635)
+> **Fix:** New `Constants::getAppEnv()` method reads `APP_ENV` env var with fallback to the constant. All 14 direct `Constants::APP_ENV` references migrated. New `Constants::isDebug()` reads `APP_DEBUG` env var. `Application::isDebug()` and `DebugService::setupErrorLogging()` updated.
 
 **Category:** Docker & Infrastructure
 **File:** `files/src/core/Constants.php:44-46`
@@ -266,7 +281,10 @@ curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
 
 ---
 
-### H-10: Verbose Error Display in All Environments
+### H-10: Verbose Error Display in All Environments — REMEDIATED
+
+> **Status:** Fixed in [PR #635](https://github.com/eiou-org/eiou-docker/pull/635)
+> **Fix:** `ErrorHandler::isProduction()` now uses `Constants::getAppEnv()` (env var override). `DebugService::setupErrorLogging()` gates `display_errors` behind `Constants::isDebug()`. Setting `APP_ENV=production APP_DEBUG=false` now hides error details.
 
 **Category:** Docker & Infrastructure
 **File:** `files/src/core/ErrorHandler.php:91-98, 138-149`
@@ -698,26 +716,26 @@ The codebase demonstrates mature security practices in many areas:
 
 ### Immediate (Production Blockers)
 
-| ID | Finding | Effort |
-|----|---------|--------|
-| C-1 | Verify signatures in chain drop `processResignedTransactions()` | Small |
-| C-2 | Fix `getClientIp()` to only trust proxy headers from trusted IPs | Small |
-| C-3 | Add rate limiting to GUI login handler | Small |
-| H-9 | Make `APP_ENV`/`APP_DEBUG` configurable via env vars | Small |
-| H-10 | Follows from H-9 -- errors hidden in production | -- |
+| ID | Finding | Effort | Status |
+|----|---------|--------|--------|
+| C-1 | Verify signatures in chain drop `processResignedTransactions()` | Small | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
+| C-2 | Fix `getClientIp()` to only trust proxy headers from trusted IPs | Small | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
+| C-3 | Add rate limiting to GUI login handler | Small | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
+| H-9 | Make `APP_ENV`/`APP_DEBUG` configurable via env vars | Small | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
+| H-10 | Follows from H-9 -- errors hidden in production | -- | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
 
 ### Short-term (Next Sprint)
 
-| ID | Finding | Effort |
-|----|---------|--------|
-| H-1 | Move `insertTransaction()` inside send lock | Small |
-| H-2 | Add locking to P2P transaction sends | Small |
-| H-3 | Wrap balance updates in database transactions | Small |
-| H-4 | Add nonce-based API replay protection | Medium |
-| H-6 | Apply `sanitizeFilename()` in backup delete | Small |
-| H-7 | Add CSRF token to GUI login form | Small |
-| H-8 | Default `P2P_SSL_VERIFY` to true | Small |
-| H-11 | Encrypt database password in config file | Small |
+| ID | Finding | Effort | Status |
+|----|---------|--------|--------|
+| H-1 | Move `insertTransaction()` inside send lock | Small | Open |
+| H-2 | Add locking to P2P transaction sends | Small | Open |
+| H-3 | Wrap balance updates in database transactions | Small | Open |
+| H-4 | Add nonce-based API replay protection | Medium | Open |
+| H-6 | Apply `sanitizeFilename()` in backup delete | Small | Open |
+| H-7 | Add CSRF token to GUI login form | Small | Fixed ([PR #635](https://github.com/eiou-org/eiou-docker/pull/635)) |
+| H-8 | Default `P2P_SSL_VERIFY` to true | Small | Open |
+| H-11 | Encrypt database password in config file | Small | Open |
 
 ### Medium-term (Next Release)
 
