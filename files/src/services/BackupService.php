@@ -284,6 +284,7 @@ class BackupService implements BackupServiceInterface
 
     public function deleteBackup(string $filename): array
     {
+        $filename = \Eiou\Utils\Security::sanitizeFilename($filename);
         $filepath = $this->backupDirectory . '/' . $filename;
 
         if (!file_exists($filepath)) {
@@ -886,8 +887,21 @@ class BackupService implements BackupServiceInterface
         }
 
         $config = json_decode(file_get_contents($configFile), true);
-        if (!$config || !isset($config['dbHost'], $config['dbName'], $config['dbUser'], $config['dbPass'])) {
+        if (!$config || !isset($config['dbHost'], $config['dbName'], $config['dbUser'])) {
             Logger::getInstance()->error("Invalid database config", ['path' => $configFile]);
+            return null;
+        }
+
+        // Decrypt password if stored encrypted, fall back to plaintext
+        if (isset($config['dbPassEncrypted']) && is_array($config['dbPassEncrypted'])) {
+            try {
+                $config['dbPass'] = \Eiou\Security\KeyEncryption::decrypt($config['dbPassEncrypted']);
+            } catch (\Exception $e) {
+                Logger::getInstance()->error("Failed to decrypt database password", ['error' => $e->getMessage()]);
+                return null;
+            }
+        } elseif (!isset($config['dbPass'])) {
+            Logger::getInstance()->error("No database password found in config", ['path' => $configFile]);
             return null;
         }
 

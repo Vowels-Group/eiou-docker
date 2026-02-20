@@ -127,7 +127,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             return false;
         }
 
-        @chmod($lockFile, 0666);
+        @chmod($lockFile, 0600);
 
         $startTime = time();
         while (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
@@ -325,16 +325,16 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
                 if ($chainVerification['synced']) output(outputSyncChainRepairedBeforeSend(), 'SILENT');
             }
             $data = $this->prepareStandardTransactionData($request, $contactInfo);
+
+            $payload = $this->transactionPayload->build($data);
+            $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
+            $this->transactionRepository->updateTrackingFields($data['txid'], $data['end_recipient_address'] ?? null, $data['initial_sender_address'] ?? null);
         } catch (\InvalidArgumentException $e) {
             $output->error("Cannot send transaction: " . $e->getMessage(), ErrorCodes::NO_VIABLE_TRANSPORT, 400, ['recipient' => $request[2] ?? null]);
             return;
         } finally {
             $this->releaseContactSendLock($contactPubkeyHash);
         }
-
-        $payload = $this->transactionPayload->build($data);
-        $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
-        $this->transactionRepository->updateTrackingFields($data['txid'], $data['end_recipient_address'] ?? null, $data['initial_sender_address'] ?? null);
 
         $output->success("Transaction sent successfully to " . $data['receiverAddress'], [
             'status' => Constants::STATUS_SENT, 'type' => 'direct',
@@ -384,13 +384,25 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
      */
     public function sendP2pEiou(array $request): void {
         output(outputP2pEiouSend($request), 'SILENT');
-        $p2p = $this->p2pRepository->getByHash($request['hash']);
-        $data = $this->prepareP2pTransactionData($request, $p2p['description'] ?? null);
 
-        $payload = $this->transactionPayload->build($data);
-        $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
-        $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
-        $this->transactionRepository->updateTrackingFields($data['txid'], $data['end_recipient_address'] ?? null, $data['initial_sender_address'] ?? null);
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $request['senderPublicKey'] ?? '');
+
+        if (!$this->acquireContactSendLock($contactPubkeyHash)) {
+            $this->secureLogger->warning("P2P send lock contention, skipping", ['hash' => $request['hash'] ?? 'unknown']);
+            return;
+        }
+
+        try {
+            $p2p = $this->p2pRepository->getByHash($request['hash']);
+            $data = $this->prepareP2pTransactionData($request, $p2p['description'] ?? null);
+
+            $payload = $this->transactionPayload->build($data);
+            $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
+            $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
+            $this->transactionRepository->updateTrackingFields($data['txid'], $data['end_recipient_address'] ?? null, $data['initial_sender_address'] ?? null);
+        } finally {
+            $this->releaseContactSendLock($contactPubkeyHash);
+        }
     }
 
     /** Send a transaction message with optional delivery tracking */

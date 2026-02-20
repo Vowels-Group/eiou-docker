@@ -1762,7 +1762,7 @@ class ApiController {
             return $this->permissionDenied('backup:write');
         }
 
-        $filename = urldecode($filename);
+        $filename = \Eiou\Utils\Security::sanitizeFilename(urldecode($filename));
 
         try {
             $backupService = $this->services->getBackupService();

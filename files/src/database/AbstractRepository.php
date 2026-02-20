@@ -403,7 +403,7 @@ abstract class AbstractRepository {
      *
      * @return bool Success status
      */
-    protected function beginTransaction(): bool {
+    public function beginTransaction(): bool {
         try {
             return $this->pdo->beginTransaction();
         } catch (PDOException $e) {
@@ -417,7 +417,7 @@ abstract class AbstractRepository {
      *
      * @return bool Success status
      */
-    protected function commit(): bool {
+    public function commit(): bool {
         try {
             return $this->pdo->commit();
         } catch (PDOException $e) {
@@ -431,7 +431,7 @@ abstract class AbstractRepository {
      *
      * @return bool Success status
      */
-    protected function rollback(): bool {
+    public function rollback(): bool {
         try {
             return $this->pdo->rollBack();
         } catch (PDOException $e) {

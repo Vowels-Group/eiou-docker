@@ -29,6 +29,14 @@ The project is currently in **ALPHA** status.
 - **C-2**: Centralize IP resolution in `Security::getClientIp()` — only trust proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`) when `REMOTE_ADDR` is in the trusted proxies list (configurable via CLI or `TRUSTED_PROXIES` env var)
 - **C-3**: Add rate limiting and CSRF token validation to the GUI login form — prevents brute-force auth code guessing
 - **H-9/H-10**: Make `APP_ENV` and `APP_DEBUG` overridable via environment variables (`Constants::getAppEnv()`, `Constants::isDebug()`) — allows production hardening without code changes; gate `display_errors` behind debug flag
+- **H-1**: Move `insertTransaction()` inside the contact send lock in `handleDirectRoute()` — prevents TOCTOU race where concurrent sends to the same contact could use the same `previous_txid`
+- **H-2**: Add contact send locking to `sendP2pEiou()` — P2P transaction inserts now protected by the same lock pattern as direct sends, preventing chain forks from concurrent P2P route completions
+- **H-3**: Wrap transaction status + balance updates in database transactions — prevents balance discrepancy if a crash occurs between `updateStatus()` and `updateBalance()` during incoming transaction processing
+- **H-4**: Add nonce-based API replay protection — `X-API-Nonce` header required on all API requests, server-side nonce tracking rejects duplicates within the timestamp window, nonce included in HMAC signature
+- **H-6**: Sanitize filename in backup delete endpoint — `Security::sanitizeFilename()` applied in both `ApiController::deleteBackup()` and `BackupService::deleteBackup()` to prevent path traversal via `../../` in filenames
+- **H-8**: Default `P2P_SSL_VERIFY` to `true` — HTTPS peer verification now enabled by default; self-signed certificates (e.g. QUICKSTART nodes) are rejected unless `P2P_SSL_VERIFY=false` or `P2P_CA_CERT` is set; automatically disabled in `EIOU_TEST_MODE`
+- **H-11**: Encrypt database password in config file — `dbconfig.json` password auto-migrated from plaintext `dbPass` to AES-256-GCM encrypted `dbPassEncrypted` on first Application boot after the master key is stable; file permissions restricted to 0600
+- **M-31**: Lock file permissions tightened from 0666 to 0600
 
 ## 2026-02-18
 

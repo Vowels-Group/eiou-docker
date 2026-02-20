@@ -79,6 +79,7 @@ function freshInstall(){
                 $dbConn->exec(getRp2pTableSchema());
                 $dbConn->exec(getApiKeysTableSchema());
                 $dbConn->exec(getApiRequestLogTableSchema());
+                $dbConn->exec(getApiNoncesTableSchema());
                 $dbConn->exec(getMessageDeliveryTableSchema());
                 $dbConn->exec(getDeadLetterQueueTableSchema());
                 $dbConn->exec(getDeliveryMetricsTableSchema());
@@ -100,12 +101,15 @@ function freshInstall(){
                 );
             }
 
-            // Overwrite database configuration to the config file
-             $dbConfig = [
-                'dbHost' => addslashes($dbHost), // Database Host
-                'dbName' => addslashes($dbName), // Database Name
-                'dbUser' => addslashes($dbUser), // Database User
-                'dbPass' => addslashes($dbPass)  // Database password
+            // Write database configuration with plaintext password initially.
+            // The password will be encrypted on the next Application boot via
+            // migrateDbConfigEncryption() — this avoids master-key timing issues
+            // during fresh install where the key may not yet be stable.
+            $dbConfig = [
+                'dbHost' => addslashes($dbHost),
+                'dbName' => addslashes($dbName),
+                'dbUser' => addslashes($dbUser),
+                'dbPass' => addslashes($dbPass),
             ];
 
 
@@ -120,10 +124,15 @@ function freshInstall(){
                 $e
             );
         }
-   
-        // Write the default configuration
+
+        // Write the default configuration with restrictive permissions
         if($dbConfig !== []){
-            file_put_contents('/etc/eiou/config/dbconfig.json', json_encode($dbConfig), LOCK_EX);
+            $configPath = '/etc/eiou/config/dbconfig.json';
+            $oldUmask = umask(0027);
+            file_put_contents($configPath, json_encode($dbConfig), LOCK_EX);
+            umask($oldUmask);
+            chmod($configPath, 0640);
+            chgrp($configPath, 'www-data');
         }
     }
 }
@@ -146,6 +155,7 @@ function runMigrations(PDO $pdo): array {
         'p2p_senders' => 'getP2pSendersTableSchema',
         'p2p_relayed_contacts' => 'getP2pRelayedContactsTableSchema',
         'contact_credit' => 'getContactCreditTableSchema',
+        'api_nonces' => 'getApiNoncesTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

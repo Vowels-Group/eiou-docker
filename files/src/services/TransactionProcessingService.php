@@ -275,8 +275,15 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
     private function processIncomingDirect(array $message, string $txid): void
     {
-        $this->transactionRepository->updateStatus($txid, Constants::STATUS_COMPLETED, true);
-        $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
+        $this->transactionRepository->beginTransaction();
+        try {
+            $this->transactionRepository->updateStatus($txid, Constants::STATUS_COMPLETED, true);
+            $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
+            $this->transactionRepository->commit();
+        } catch (\Exception $e) {
+            $this->transactionRepository->rollback();
+            throw $e;
+        }
         output(outputTransactionAmountReceived($message), 'SILENT');
 
         $this->ensureDescriptionFromP2p($message);
@@ -368,11 +375,18 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
             output(outputTransactionInsertion($insertTransactionResponse));
         } else {
-            // End recipient
-            $this->p2pRepository->updateStatus($memo, Constants::STATUS_COMPLETED, true);
-            $this->transactionRepository->updateStatus($memo, Constants::STATUS_COMPLETED);
-            $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
-            $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
+            // End recipient — wrap status + balance updates in a DB transaction
+            $this->transactionRepository->beginTransaction();
+            try {
+                $this->p2pRepository->updateStatus($memo, Constants::STATUS_COMPLETED, true);
+                $this->transactionRepository->updateStatus($memo, Constants::STATUS_COMPLETED);
+                $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
+                $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
+                $this->transactionRepository->commit();
+            } catch (\Exception $e) {
+                $this->transactionRepository->rollback();
+                throw $e;
+            }
 
             // Update sender_address if the actual transaction sender differs from stored P2P sender
             // This happens in multi-path routing when the chosen route uses a different upstream node
