@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Docs
+- Full security audit report (`docs/SECURITY_AUDIT.md`) covering SQL injection, authentication, input validation/XSS, cryptography, Docker infrastructure, and transaction/P2P business logic — 60 findings across 6 domains
+
 ## 2026-02-18
 
 ### Added
