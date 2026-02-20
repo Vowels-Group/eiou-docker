@@ -42,7 +42,9 @@ function freshInstall(){
             $dbUser = 'eiou_user_' . bin2hex(random_bytes(8));
             $dbPass = bin2hex(random_bytes(16));
 
-            // Create database if it doesn't exist
+            // SECURITY NOTE (L-6): DDL statements (CREATE DATABASE, ALTER TABLE, SHOW COLUMNS)
+            // cannot use PDO prepared statement placeholders. Values here are hardcoded in code,
+            // not from user input, so direct interpolation is acceptable.
             $rootConn->exec("CREATE DATABASE IF NOT EXISTS `$dbName`");
 
             // Create user with limited privileges (if not exists)

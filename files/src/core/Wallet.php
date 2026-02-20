@@ -217,6 +217,13 @@ class Wallet{
         $seedWords = array_slice($argv, 3);
         $mnemonic = implode(' ', $seedWords);
 
+        // SECURITY WARNING (L-27): Seed phrase passed via CLI arguments is visible in
+        // process listings (ps aux). For production use, prefer the restore-file method.
+        if (function_exists('error_log')) {
+            error_log('SECURITY NOTICE: Wallet restore initiated via CLI arguments. '
+                . 'Seed phrase may be visible in process listings. Consider using restore-file method instead.');
+        }
+
         // Validate word count
         $wordCount = count($seedWords);
         if ($wordCount !== 24) {

@@ -176,7 +176,7 @@ class ChainDropService implements ChainDropServiceInterface
             );
 
             // Generate proposal ID
-            $proposalId = 'cdp-' . hash('sha256', $missingTxid . $brokenTxid . microtime(true));
+            $proposalId = 'cdp-' . hash('sha256', $missingTxid . $brokenTxid . random_bytes(16));
 
             // Create proposal record
             $created = $this->proposalRepository->createProposal([

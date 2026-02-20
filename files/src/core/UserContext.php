@@ -18,6 +18,12 @@ use Exception;
 class UserContext {
     private static ?UserContext $instance = null;
     private array $userData = [];
+
+    /**
+     * Keys containing sensitive encrypted data that should not be exposed via getAll()/toArray()
+     */
+    private const SENSITIVE_KEYS = ['private_encrypted', 'authcode_encrypted', 'mnemonic_encrypted'];
+
     private bool $initialized = false;
 
     /**
@@ -129,7 +135,7 @@ class UserContext {
      * @return array
      */
     public function getAll(): array {
-        return $this->userData;
+        return array_diff_key($this->userData, array_flip(self::SENSITIVE_KEYS));
     }
 
     /**
@@ -482,7 +488,7 @@ class UserContext {
      * @return array
      */
     public function toArray(): array {
-        return $this->userData;
+        return array_diff_key($this->userData, array_flip(self::SENSITIVE_KEYS));
     }
 
     /**

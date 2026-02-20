@@ -372,6 +372,11 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Signature cannot be empty'];
         }
 
+        // Check maximum length (ed25519 base64 signatures are ~88 chars; 1024 is generous)
+        if (strlen($signature) > Constants::VALIDATION_SIGNATURE_MAX_LENGTH) {
+            return ['valid' => false, 'value' => null, 'error' => 'Signature exceeds maximum allowed length'];
+        }
+
         // Base64 encoded signatures should only contain valid characters
         if (!preg_match('/^[A-Za-z0-9+\/=]+$/', $signature)) {
             return ['valid' => false, 'value' => null, 'error' => 'Invalid signature format'];

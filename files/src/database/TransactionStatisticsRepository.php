@@ -19,6 +19,19 @@ use PDOException;
 class TransactionStatisticsRepository extends AbstractRepository
 {
     use QueryBuilder;
+
+    /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'tx_type', 'type', 'status', 'sender_address', 'sender_public_key',
+        'sender_public_key_hash', 'receiver_address', 'receiver_public_key',
+        'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
+        'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
+        'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
+        'sending_started_at', 'recovery_count', 'needs_manual_review'
+    ];
+
     /**
      * Constructor
      *

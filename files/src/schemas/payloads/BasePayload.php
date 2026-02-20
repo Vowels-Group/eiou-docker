@@ -120,6 +120,8 @@ abstract class BasePayload
         if (!is_string($value)) {
             $value = (string) $value;
         }
+        $value = str_replace("\0", '', $value);
+        $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $value);
         return trim($value);
     }
 
