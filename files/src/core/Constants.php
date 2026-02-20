@@ -49,6 +49,7 @@ class Constants {
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
     // Only set to false for debugging during development.
     const RATE_LIMIT_ENABLED = true;
+    const P2P_RATE_LIMIT_PER_MINUTE = 60;
 
     // API
     const API_ENABLED = true;

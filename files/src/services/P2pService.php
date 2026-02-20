@@ -366,7 +366,7 @@ class P2pService implements P2pServiceInterface {
                 $p2pRateWindow = $now;
             }
             $p2pRateCounts[$rateLimitKey] = ($p2pRateCounts[$rateLimitKey] ?? 0) + 1;
-            if ($p2pRateCounts[$rateLimitKey] > Constants::P2P_RATE_LIMIT_PER_MINUTE ?? 60) {
+            if ($p2pRateCounts[$rateLimitKey] > Constants::P2P_RATE_LIMIT_PER_MINUTE) {
                 Logger::getInstance()->warning("P2P rate limit exceeded", [
                     'sender_key_hash' => substr($senderKeyHash, 0, 16),
                     'count' => $p2pRateCounts[$rateLimitKey]
