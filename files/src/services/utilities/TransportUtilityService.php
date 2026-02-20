@@ -364,7 +364,7 @@ class TransportUtilityService implements TransportServiceInterface
         // Default to https:// for secure P2P communication
         $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
 
-        $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+        $url = $protocol . $recipient . "/eiou/?payload=" . urlencode($signedPayload);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
@@ -432,7 +432,7 @@ class TransportUtilityService implements TransportServiceInterface
     */
     public function sendByTor (string $recipient, string $signedPayload): string {
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
+        curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/?payload=" . urlencode($signedPayload));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
@@ -493,14 +493,14 @@ class TransportUtilityService implements TransportServiceInterface
         $ch = curl_init();
 
         if ($this->isTorAddress($recipient)) {
-            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
+            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/?payload=" . urlencode($signedPayload));
             curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
             curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         } else {
             $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
-            $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+            $url = $protocol . $recipient . "/eiou/?payload=" . urlencode($signedPayload);
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
