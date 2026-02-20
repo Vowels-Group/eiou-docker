@@ -239,7 +239,7 @@ class ErrorHandler {
      * @return bool
      */
     private static function isProduction() {
-        return Constants::APP_ENV === 'production' || !Constants::APP_ENV;
+        return Constants::getAppEnv() === 'production' || !Constants::getAppEnv();
     }
 
     /**

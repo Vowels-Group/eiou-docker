@@ -7,6 +7,7 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Contracts\ApiAuthServiceInterface;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Utils\Logger;
+use Eiou\Utils\Security;
 
 /**
  * API Authentication Service with HMAC Signature Verification
@@ -340,19 +341,12 @@ class ApiAuthService implements ApiAuthServiceInterface {
     /**
      * Get client IP address
      *
+     * Delegates to Security::getClientIp() which only trusts proxy headers
+     * when REMOTE_ADDR is in the trusted proxies list.
+     *
      * @return string IP address
      */
     public static function getClientIp(): string {
-        $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
-        foreach ($ipKeys as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = $_SERVER[$key];
-                if (strpos($ip, ',') !== false) {
-                    $ip = explode(',', $ip)[0];
-                }
-                return trim($ip);
-            }
-        }
-        return '0.0.0.0';
+        return Security::getClientIp();
     }
 }

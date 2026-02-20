@@ -1124,6 +1124,11 @@ class ChainDropService implements ChainDropServiceInterface
      */
     private function processResignedTransactions(array $resignedTransactions): void
     {
+        if (!$this->syncTrigger) {
+            Logger::getInstance()->critical("Cannot process re-signed transactions: no sync trigger configured, skipping signature verification");
+            return;
+        }
+
         foreach ($resignedTransactions as $txData) {
             $txid = $txData['txid'] ?? null;
             $signature = $txData['sender_signature'] ?? null;
@@ -1132,6 +1137,28 @@ class ChainDropService implements ChainDropServiceInterface
             if (!$txid || !$signature || $nonce === null) {
                 Logger::getInstance()->warning("Skipping invalid re-signed transaction data", [
                     'txid' => $txid
+                ]);
+                continue;
+            }
+
+            // Fetch the full transaction from DB to verify the new signature
+            $rows = $this->transactionRepository->getByTxid($txid);
+            if (empty($rows)) {
+                Logger::getInstance()->warning("Chain drop: cannot verify re-signed transaction, txid not found in DB", [
+                    'txid' => substr($txid, 0, 16) . '...'
+                ]);
+                continue;
+            }
+
+            // Merge the new signature/nonce onto the existing transaction data
+            $mergedTx = $rows[0];
+            $mergedTx['sender_signature'] = $signature;
+            $mergedTx['signature_nonce'] = (int)$nonce;
+
+            // Verify the new signature before storing
+            if (!$this->syncTrigger->verifyTransactionSignaturePublic($mergedTx)) {
+                Logger::getInstance()->warning("Chain drop: re-signed transaction failed signature verification, skipping", [
+                    'txid' => substr($txid, 0, 16) . '...'
                 ]);
                 continue;
             }

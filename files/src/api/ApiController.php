@@ -1264,7 +1264,7 @@ class ApiController {
         return $this->successResponse([
             'status' => 'operational',
             'version' => Constants::APP_VERSION ?? '1.0.0',
-            'environment' => Constants::APP_ENV ?? 'production',
+            'environment' => Constants::getAppEnv(),
             'database' => $dbStatus,
             'processors' => $processors,
             'timestamp' => date('c')

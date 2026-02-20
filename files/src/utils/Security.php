@@ -347,6 +347,43 @@ class Security {
     }
 
     /**
+     * Get client IP address, only trusting proxy headers from trusted proxies
+     *
+     * If REMOTE_ADDR is in the trusted proxies list, checks proxy headers
+     * (CF-Connecting-IP, X-Forwarded-For). Otherwise returns REMOTE_ADDR directly.
+     *
+     * @return string Client IP address
+     */
+    public static function getClientIp(): string {
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+        // Parse trusted proxies from env var or constant
+        $trustedProxiesStr = getenv('TRUSTED_PROXIES') ?: Constants::TRUSTED_PROXIES;
+        $trustedProxies = array_filter(array_map('trim', explode(',', $trustedProxiesStr)));
+
+        // Only check proxy headers if REMOTE_ADDR is a trusted proxy
+        if (!empty($trustedProxies) && in_array($remoteAddr, $trustedProxies, true)) {
+            // Check proxy headers in priority order
+            $proxyHeaders = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR'];
+            foreach ($proxyHeaders as $header) {
+                if (!empty($_SERVER[$header])) {
+                    $ip = $_SERVER[$header];
+                    // X-Forwarded-For can contain multiple IPs; take the first (client IP)
+                    if (strpos($ip, ',') !== false) {
+                        $ip = explode(',', $ip)[0];
+                    }
+                    $ip = trim($ip);
+                    if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                        return $ip;
+                    }
+                }
+            }
+        }
+
+        return $remoteAddr;
+    }
+
+    /**
      * Log security event
      *
      * @param string $event Event description

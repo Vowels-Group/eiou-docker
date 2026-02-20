@@ -495,7 +495,7 @@ class Application {
      * @return bool
      */
     public function isDevelopment(): bool {
-        return Constants::APP_ENV === 'development';
+        return Constants::getAppEnv() === 'development';
     }
 
     /**
@@ -504,7 +504,7 @@ class Application {
      * @return bool
      */
     public function isDebug(): bool {
-        return Constants::APP_DEBUG === true;
+        return Constants::isDebug();
     }
 
     /**
