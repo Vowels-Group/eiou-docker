@@ -28,18 +28,12 @@ failure=0
 # Use first container for testing
 testContainer="${containers[0]}"
 
-# Determine local API base URL based on MODE
-LOCAL_API_BASE="$(getExpectedProtocol)localhost"
+# API endpoints always use HTTPS (server redirects HTTP→HTTPS)
+LOCAL_API_BASE="https://localhost"
+CURL_SSL_FLAG="-k"
 echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   API Base: ${LOCAL_API_BASE}"
 echo -e "\t   Mode: ${MODE}"
-
-# Set curl SSL flag for HTTPS mode
-if [[ "$MODE" == "https" ]]; then
-    CURL_SSL_FLAG="-k"
-else
-    CURL_SSL_FLAG=""
-fi
 
 ############################ API KEY SETUP ############################
 

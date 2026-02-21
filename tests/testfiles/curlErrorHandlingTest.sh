@@ -58,8 +58,11 @@ echo -e "\n[Test 2: HTTP Timeout Configuration]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-# Check the actual source code for timeout value - specifically for sendByHttp function
-timeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function sendByTor/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_TIMEOUT,' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
+# Resolve HTTP timeout from Constants (source uses Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, not a literal)
+timeoutCheck=$(docker exec ${container} php -r "
+    require_once('/etc/eiou/src/core/Constants.php');
+    echo \Eiou\Core\Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS;
+" 2>/dev/null || echo "0")
 
 if [[ "$timeoutCheck" == "15" ]]; then
     printf "\t   HTTP timeout is 15 seconds ${GREEN}PASSED${NC}\n"
@@ -93,7 +96,11 @@ echo -e "\n[Test 4: Tor Timeout Configuration]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-torTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByTor/,/function sign/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_TIMEOUT,' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
+# Resolve Tor timeout from Constants (source uses Constants::TOR_TRANSPORT_TIMEOUT_SECONDS, not a literal)
+torTimeoutCheck=$(docker exec ${container} php -r "
+    require_once('/etc/eiou/src/core/Constants.php');
+    echo \Eiou\Core\Constants::TOR_TRANSPORT_TIMEOUT_SECONDS;
+" 2>/dev/null || echo "0")
 
 if [[ "$torTimeoutCheck" == "30" ]]; then
     printf "\t   Tor timeout is 30 seconds ${GREEN}PASSED${NC}\n"
@@ -110,7 +117,8 @@ echo -e "\n[Test 5: Tor Connect Timeout Configuration]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-torConnectTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByTor/,/function sign/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_CONNECTTIMEOUT' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
+# Use tighter function boundary (sendByTor to createCurlHandle) to avoid capturing createCurlHandle's values
+torConnectTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByTor/,/function createCurlHandle/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_CONNECTTIMEOUT' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
 
 if [[ "$torConnectTimeoutCheck" == "10" ]]; then
     printf "\t   Tor connect timeout is 10 seconds ${GREEN}PASSED${NC}\n"
@@ -438,8 +446,8 @@ echo -e "\n[Test 17: Proper Resource Cleanup on Error]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-# Verify curl_close is called in error path
-cleanupCheck=$(docker exec ${container} sh -c "grep -B20 \"'status' => 'error'\" /etc/eiou/src/services/utilities/TransportUtilityService.php | grep -c 'curl_close'" 2>/dev/null || echo "0")
+# Verify curl_close is called in error path (restrict to sendByHttp/sendByTor, use -B25 for Tor's wider gap)
+cleanupCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function createCurlHandle/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep -B25 \"'status' => 'error'\" | grep -c 'curl_close'" 2>/dev/null || echo "0")
 
 if [[ "$cleanupCheck" -ge "2" ]]; then
     printf "\t   Curl handle properly closed on error ${GREEN}PASSED${NC}\n"

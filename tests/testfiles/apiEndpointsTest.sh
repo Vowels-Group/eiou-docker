@@ -44,18 +44,11 @@ echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   Real contact: ${realContactContainer} (${realContactAddress})"
 echo -e "\t   Mode: ${MODE}"
 
-# Determine local API base URL based on MODE
-# In HTTPS mode, use https://localhost; in HTTP mode, use http://localhost
-# This ensures API tests use the correct protocol matching the container's configuration
-LOCAL_API_BASE="$(getExpectedProtocol)localhost"
+# API endpoints always use HTTPS (server redirects HTTP→HTTPS)
+# MODE still controls P2P transport tests, but API is always HTTPS
+LOCAL_API_BASE="https://localhost"
+CURL_SSL_FLAG="-k"
 echo -e "\t   API Base: ${LOCAL_API_BASE}"
-
-# Set curl SSL flag for HTTPS mode (accept self-signed certificates)
-if [[ "$MODE" == "https" ]]; then
-    CURL_SSL_FLAG="-k"
-else
-    CURL_SSL_FLAG=""
-fi
 
 # Helper function to display API request details
 display_api_request() {
