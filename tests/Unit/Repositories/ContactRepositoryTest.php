@@ -362,14 +362,7 @@ class ContactRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(false);
+            ->willThrowException(new \PDOException('Database error'));
 
         $result = $this->repository->updateContactStatus('contact-pubkey-123', 'accepted');
 

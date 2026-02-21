@@ -1070,13 +1070,12 @@ class UtilPayloadTest extends TestCase
     /**
      * Test buildMaintenanceMode with empty string message uses default
      */
-    public function testBuildMaintenanceModeWithEmptyStringMessageUsesDefault(): void
+    public function testBuildMaintenanceModeWithEmptyStringPreservesEmptyString(): void
     {
-        // Empty string is falsy but not null, so it won't use default
+        // Empty string is not null, so ?? does not trigger the default
         $result = UtilPayload::buildMaintenanceMode(null, '');
 
-        // Empty string evaluates to false in ?? operator, so default is used
-        $this->assertEquals('System is currently under maintenance', $result['message']);
+        $this->assertEquals('', $result['message']);
     }
 
     // =========================================================================

@@ -430,7 +430,7 @@ class UserContextTest extends TestCase
         $instance->setUserData([
             'hostname' => 'http://example.com',
             'hostname_secure' => 'https://secure.example.com',
-            'torAddress' => 'abc123xyz.onion'
+            'torAddress' => 'abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.onion'
         ]);
 
         $locaters = $instance->getUserLocaters();
@@ -716,7 +716,7 @@ class UserContextTest extends TestCase
         return [
             'http address' => ['http://example.com', 'isHttpAddress', true],
             'https address' => ['https://example.com', 'isHttpsAddress', true],
-            'tor address' => ['abcdef1234567890abcdef1234567890abcdef1234567890abcdefab.onion', 'isTorAddress', true],
+            'tor address' => ['abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.onion', 'isTorAddress', true],
             'http is not https' => ['http://example.com', 'isHttpsAddress', false],
             'https is not http' => ['https://example.com', 'isHttpAddress', false],
             'regular domain is not tor' => ['http://example.com', 'isTorAddress', false],

@@ -119,7 +119,9 @@ class AbstractMessageProcessorTest extends TestCase
      */
     public function testInitializeCreatesLockfileWithPid(): void
     {
+        ob_start();
         $this->processor->initialize();
+        ob_end_clean();
 
         $this->assertFileExists($this->testLockfile);
         $this->assertEquals((string)getmypid(), trim(file_get_contents($this->testLockfile)));
@@ -130,7 +132,9 @@ class AbstractMessageProcessorTest extends TestCase
      */
     public function testInitializeCreatesAdaptivePollerInstance(): void
     {
+        ob_start();
         $this->processor->initialize();
+        ob_end_clean();
 
         $this->assertInstanceOf(AdaptivePoller::class, $this->processor->getPoller());
     }
@@ -375,8 +379,10 @@ class AbstractMessageProcessorTest extends TestCase
      */
     public function testMaybeLogStatisticsResetsTotalProcessedAfterLogging(): void
     {
-        // Initialize processor
+        // Initialize processor (suppress startup output)
+        ob_start();
         $this->processor->initialize();
+        ob_end_clean();
 
         // Set up processed count and old log time
         $this->processor->setTotalProcessed(100);
@@ -394,8 +400,10 @@ class AbstractMessageProcessorTest extends TestCase
      */
     public function testMaybeLogStatisticsDoesNothingBeforeInterval(): void
     {
-        // Initialize processor
+        // Initialize processor (suppress startup output)
+        ob_start();
         $this->processor->initialize();
+        ob_end_clean();
 
         // Set up processed count and recent log time
         $this->processor->setTotalProcessed(100);
@@ -521,8 +529,10 @@ class AbstractMessageProcessorTest extends TestCase
      */
     public function testOnShutdownHookIsCalledDuringShutdown(): void
     {
-        // Initialize first
+        // Initialize first (suppress startup output)
+        ob_start();
         $this->processor->initialize();
+        ob_end_clean();
 
         ob_start();
         $this->processor->publicShutdown();
@@ -729,5 +739,11 @@ class ConcreteTestProcessor extends AbstractMessageProcessor
     protected function onShutdown(): void
     {
         $this->onShutdownCalled = true;
+    }
+
+    // Override to prevent flushing PHPUnit's output buffers during tests
+    protected function flushBuffers(): void
+    {
+        clearstatcache(true);
     }
 }

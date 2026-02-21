@@ -38,17 +38,7 @@ class BalanceRepositoryTest extends TestCase
      */
     private function createRepositoryWithMockedPdo(PDO $pdo): BalanceRepository
     {
-        $repository = new class($pdo) extends BalanceRepository {
-            public function __construct(PDO $pdo)
-            {
-                $this->pdo = $pdo;
-                $this->tableName = 'balances';
-                $this->primaryKey = 'pubkey_hash';
-                $this->allowedColumns = ['id', 'pubkey_hash', 'received', 'sent', 'currency'];
-            }
-        };
-
-        return $repository;
+        return new TestableBalanceRepository($pdo);
     }
 
     // =========================================================================
@@ -329,6 +319,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$boundParams) {
                 $boundParams[$key] = $value;
+                return true;
             });
 
         $this->stmt->expects($this->once())
@@ -356,7 +347,7 @@ class BalanceRepositoryTest extends TestCase
         $currency = 'USD';
 
         // Create a partial mock to mock the received/sent methods
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableBalanceRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getContactReceivedBalance', 'getContactSentBalance'])
             ->getMock();
@@ -384,7 +375,7 @@ class BalanceRepositoryTest extends TestCase
         $pubkey = 'test-public-key';
         $currency = 'USD';
 
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableBalanceRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getContactReceivedBalance', 'getContactSentBalance'])
             ->getMock();
@@ -849,6 +840,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$boundParams) {
                 $boundParams[$key] = $value;
+                return true;
             });
 
         $this->stmt->expects($this->once())
@@ -884,6 +876,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$boundParams) {
                 $boundParams[$key] = $value;
+                return true;
             });
 
         $this->stmt->expects($this->once())
@@ -1031,5 +1024,20 @@ class BalanceRepositoryTest extends TestCase
         $result = $this->repository->updateBothDirectionBalance($amounts, $contactPubkeyHash, $currency);
 
         $this->assertFalse($result);
+    }
+}
+
+/**
+ * Named testable subclass to bypass AbstractRepository constructor dependencies.
+ * Anonymous classes cannot be used with getMockBuilder due to '@' in class names.
+ */
+class TestableBalanceRepository extends BalanceRepository
+{
+    public function __construct(PDO $pdo)
+    {
+        $this->pdo = $pdo;
+        $this->tableName = 'balances';
+        $this->primaryKey = 'pubkey_hash';
+        $this->allowedColumns = ['id', 'pubkey_hash', 'received', 'sent', 'currency'];
     }
 }

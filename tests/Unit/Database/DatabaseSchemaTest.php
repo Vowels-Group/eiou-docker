@@ -520,7 +520,7 @@ class DatabaseSchemaTest extends TestCase
             'previous_txid VARCHAR(255)',
             'sender_signature TEXT',
             'recipient_signature TEXT',
-            'signature_nonce BIGINT',
+            'signature_nonce VARCHAR(64)',
             'time BIGINT',
             'memo TEXT',
             'description TEXT',

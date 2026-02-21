@@ -266,8 +266,6 @@ class SendOperationServiceTest extends TestCase
             ->with('contact_send_' . $contactHash);
 
         $this->service->releaseContactSendLock($contactHash);
-
-        $this->expectNotToPerformAssertions();
     }
 
     // =========================================================================
@@ -425,24 +423,82 @@ class SendOperationServiceTest extends TestCase
     /**
      * Test getContactService throws RuntimeException when not injected
      *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit. The test would require refactoring
-     * SendOperationService to inject InputValidator or use a different testing approach.
+     * Uses real InputValidator since all its methods are static (cannot be mocked).
+     * Crafts request that passes all validations to reach getContactService().
      */
     public function testGetContactServiceThrowsRuntimeExceptionWhenNotInjected(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+
+        // Use real InputValidator (all methods are static, no side effects)
+        $service = new SendOperationService(
+            $this->mockTransactionRepo,
+            $this->mockAddressRepo,
+            $this->mockP2pRepo,
+            $this->mockTransactionPayload,
+            $this->mockTransportUtility,
+            $this->mockTimeUtility,
+            new InputValidator(),
+            $this->mockUserContext,
+            $this->mockLogger,
+            $this->mockMessageDeliveryService,
+            $this->mockLockingService
+        );
+
+        // getAllAddresses must return truthy to pass the "no contacts" check
+        $this->mockAddressRepo->expects($this->once())
+            ->method('getAllAddresses')
+            ->willReturn(['http://contact.example.com']);
+
+        // Do NOT call setContactService - expect RuntimeException
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('ContactService not injected');
+
+        // Valid request: 5 params, valid URL, valid amount, valid currency
+        $request = ['send', 'eiou', 'http://recipient.example.com', '100', 'USD'];
+        $service->sendEiou($request, $mockOutput);
     }
 
     /**
      * Test getP2pService throws RuntimeException when not injected
      *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit.
+     * Uses real InputValidator. When contactService returns null (no contact found),
+     * sendEiou falls through to handleP2pRoute which calls getP2pService().
      */
     public function testGetP2pServiceThrowsRuntimeExceptionWhenNotInjected(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+
+        $service = new SendOperationService(
+            $this->mockTransactionRepo,
+            $this->mockAddressRepo,
+            $this->mockP2pRepo,
+            $this->mockTransactionPayload,
+            $this->mockTransportUtility,
+            $this->mockTimeUtility,
+            new InputValidator(),
+            $this->mockUserContext,
+            $this->mockLogger,
+            $this->mockMessageDeliveryService,
+            $this->mockLockingService
+        );
+
+        $this->mockAddressRepo->expects($this->once())
+            ->method('getAllAddresses')
+            ->willReturn(['http://contact.example.com']);
+
+        // Set contact service but return null (no contact found) to trigger P2P route
+        $service->setContactService($this->mockContactService);
+        $this->mockContactService->expects($this->once())
+            ->method('lookupContactInfoWithDisambiguation')
+            ->willReturn(null);
+
+        // Do NOT call setP2pService - expect RuntimeException
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('P2pService not injected');
+
+        $request = ['send', 'eiou', 'http://recipient.example.com', '100', 'USD'];
+        $service->sendEiou($request, $mockOutput);
     }
 
     /**
@@ -477,58 +533,121 @@ class SendOperationServiceTest extends TestCase
     // =========================================================================
 
     /**
-     * Test sendEiou with invalid amount returns error
+     * Test sendEiou with too few parameters returns error
      *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit.
+     * Uses real InputValidator. validateArgvAmount checks count($argv) < 4.
+     * Passing only 3 elements triggers the validation failure.
      */
     public function testSendEiouWithInvalidAmountReturnsError(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+        $service = $this->createServiceWithRealValidator();
+
+        $mockOutput->expects($this->once())
+            ->method('error')
+            ->with($this->stringContains('Invalid parameter amount'));
+
+        // Only 3 elements - validateArgvAmount expects 4
+        $request = ['send', 'eiou', 'http://recipient.example.com'];
+        $service->sendEiou($request, $mockOutput);
     }
 
     /**
      * Test sendEiou with invalid address and name returns error
-     *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit.
      */
     public function testSendEiouWithInvalidAddressAndNameReturnsError(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+        $service = $this->createServiceWithRealValidator();
+
+        $mockOutput->expects($this->once())
+            ->method('error')
+            ->with($this->stringContains('Invalid Address/name'));
+
+        // '!!!invalid!!!' fails both validateAddress and validateContactName
+        $request = ['send', 'eiou', '!!!invalid!!!', '100', 'USD'];
+        $service->sendEiou($request, $mockOutput);
     }
 
     /**
      * Test sendEiou prevents self-send
-     *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit.
      */
     public function testSendEiouPreventsSelfSend(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+        $service = $this->createServiceWithRealValidator();
+
+        // Mock UserContext to report the address as own address
+        $this->mockUserContext->expects($this->any())
+            ->method('isMyAddress')
+            ->with('http://self.example.com')
+            ->willReturn(true);
+
+        $mockOutput->expects($this->once())
+            ->method('error')
+            ->with($this->stringContains('Cannot send to yourself'));
+
+        $request = ['send', 'eiou', 'http://self.example.com', '100', 'USD'];
+        $service->sendEiou($request, $mockOutput);
     }
 
     /**
      * Test sendEiou with invalid currency returns error
-     *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit.
      */
     public function testSendEiouWithInvalidCurrencyReturnsError(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+        $service = $this->createServiceWithRealValidator();
+
+        $mockOutput->expects($this->once())
+            ->method('error')
+            ->with($this->stringContains('Invalid currency'));
+
+        // 'XYZ' is not in the allowed currencies list
+        $request = ['send', 'eiou', 'http://recipient.example.com', '100', 'XYZ'];
+        $service->sendEiou($request, $mockOutput);
     }
 
     /**
      * Test sendEiou with no contacts returns error
-     *
-     * Note: This test is skipped because InputValidator::validateArgvAmount is a static
-     * method that cannot be mocked in PHPUnit.
      */
     public function testSendEiouWithNoContactsReturnsError(): void
     {
-        $this->markTestSkipped('InputValidator::validateArgvAmount is a static method that cannot be mocked');
+        $mockOutput = $this->createMock(CliOutputManager::class);
+        $service = $this->createServiceWithRealValidator();
+
+        // Return empty/falsy from getAllAddresses
+        $this->mockAddressRepo->expects($this->once())
+            ->method('getAllAddresses')
+            ->willReturn([]);
+
+        $mockOutput->expects($this->once())
+            ->method('error')
+            ->with($this->stringContains('No contacts available'));
+
+        $request = ['send', 'eiou', 'http://recipient.example.com', '100', 'USD'];
+        $service->sendEiou($request, $mockOutput);
+    }
+
+    /**
+     * Create a SendOperationService with real InputValidator
+     * (all InputValidator methods are static - cannot be mocked by PHPUnit)
+     */
+    private function createServiceWithRealValidator(): SendOperationService
+    {
+        return new SendOperationService(
+            $this->mockTransactionRepo,
+            $this->mockAddressRepo,
+            $this->mockP2pRepo,
+            $this->mockTransactionPayload,
+            $this->mockTransportUtility,
+            $this->mockTimeUtility,
+            new InputValidator(),
+            $this->mockUserContext,
+            $this->mockLogger,
+            $this->mockMessageDeliveryService,
+            $this->mockLockingService
+        );
     }
 
     // =========================================================================
@@ -606,10 +725,15 @@ class SendOperationServiceTest extends TestCase
     {
         $this->service->setTransactionService($this->mockTransactionService);
 
+        // Lock must succeed for the method to proceed
+        $this->mockLockingService->method('acquireLock')
+            ->willReturn(true);
+
         $request = [
             'hash' => 'test-p2p-hash',
             'amount' => 1000,
-            'currency' => 'USD'
+            'currency' => 'USD',
+            'senderPublicKey' => 'test-sender-pubkey'
         ];
 
         $p2pData = [

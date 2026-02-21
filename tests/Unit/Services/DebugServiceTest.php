@@ -12,6 +12,8 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\MockObject\MockObject;
 use Eiou\Services\DebugService;
 use Eiou\Database\DebugRepository;
@@ -327,14 +329,18 @@ class DebugServiceTest extends TestCase
      *
      * Runs in a separate process so we can load a Constants class with
      * APP_DEBUG = false, simulating a production deployment.
-     *
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
      */
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
     public function testOutputDoesNotInsertDebugWhenDebugDisabled(): void
     {
+        // This test requires Constants to not be autoloaded yet so we can override APP_DEBUG
+        if (class_exists('Eiou\\Core\\Constants', false)) {
+            $this->markTestSkipped('Constants class already loaded - cannot override in this environment');
+        }
+
         // Define a Constants class with APP_DEBUG = false before autoloader loads the real one
-        eval('namespace Eiou\Core; class Constants { const APP_DEBUG = false; public static function get($key, $default = null) { $c = self::class . "::" . $key; return defined($c) ? constant($c) : $default; } }');
+        eval('namespace Eiou\Core; class Constants { const APP_DEBUG = false; public static function get($key, $default = null) { $c = self::class . "::" . $key; return defined($c) ? constant($c) : $default; } public static function isDebug(): bool { return false; } public static function getAppEnv(): string { return "production"; } }');
 
         $debugRepository = $this->createMock(\Eiou\Database\DebugRepository::class);
         $userContext = $this->createMock(\Eiou\Core\UserContext::class);
@@ -433,7 +439,9 @@ class DebugServiceTest extends TestCase
         $this->service->setupErrorLogging();
 
         // Verify settings were applied
-        $this->assertEquals('1', ini_get('display_errors'));
+        // display_errors depends on Constants::isDebug() — '1' in debug mode, '0' otherwise
+        $expectedDisplayErrors = Constants::isDebug() ? '1' : '0';
+        $this->assertEquals($expectedDisplayErrors, ini_get('display_errors'));
         $this->assertEquals('1', ini_get('log_errors'));
         $this->assertEquals(E_ALL, error_reporting());
 

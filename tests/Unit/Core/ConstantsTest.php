@@ -96,7 +96,7 @@ class ConstantsTest extends TestCase
         $this->assertEquals(300, Constants::P2P_DEFAULT_EXPIRATION_SECONDS);
         $this->assertEquals(60, Constants::P2P_MIN_EXPIRATION_SECONDS);
         $this->assertEquals(1000, Constants::P2P_REQUEST_LEVEL_VALIDATION_MAX);
-        $this->assertEquals(20, Constants::P2P_MAX_ROUTING_LEVEL);
+        $this->assertEquals(10, Constants::P2P_MAX_ROUTING_LEVEL);
     }
 
     /**

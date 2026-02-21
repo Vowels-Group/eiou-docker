@@ -274,7 +274,7 @@ class TransactionChainRepositoryTest extends TestCase
             ->method('execute');
 
         $fetchIndex = 0;
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(5)) // 1 summary + 3 txids + 1 false terminator
             ->method('fetch')
             ->willReturnCallback(function() use (&$fetchIndex, $summaryData, $txidList) {
                 $fetchIndex++;
