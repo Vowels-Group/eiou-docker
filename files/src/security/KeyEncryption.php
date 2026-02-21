@@ -117,16 +117,19 @@ class KeyEncryption {
             throw new RuntimeException('Encryption failed: ' . openssl_error_string());
         }
 
+        // Encode output before clearing sensitive source data
+        $result = [
+            'ciphertext' => base64_encode($ciphertext),
+            'iv' => base64_encode($iv),
+            'tag' => base64_encode($tag)
+        ];
+
         // Clear sensitive data from memory
         self::secureClear($key);
         self::secureClear($plaintext);
         self::secureClear($iv);
 
-        return [
-            'ciphertext' => base64_encode($ciphertext),
-            'iv' => base64_encode($iv),
-            'tag' => base64_encode($tag)
-        ];
+        return $result;
     }
 
     /**
