@@ -309,15 +309,17 @@ echo -e "\n[Test 5: Destination node at boundary is NOT cancelled]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\t-> Testing that destination match at maxRequestLevel still processes as found on ${testSender}"
 
-testSenderAddress="${containerAddresses[${testSender}]}"
-
 destCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$p2pService = \$app->services->getP2pService();
+    \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
-    // Use container address from test framework (UserContext may not have locaters populated)
-    \$myAddress = '${testSenderAddress}';
+    // Use the same address resolution that handleP2pRequest uses:
+    // resolveUserAddressForTransport(\$request['senderAddress']) determines
+    // which address matchYourselfP2P will check against.
+    \$senderAddress = 'http://test-upstream-sender.test:80';
+    \$myAddress = \$transport->resolveUserAddressForTransport(\$senderAddress);
 
     // Create a hash that matches this node (so matchYourselfP2P returns true)
     \$salt = 'dest-test-salt-' . time();
@@ -325,7 +327,7 @@ destCheck=$(docker exec ${testSender} php -r "
     \$hash = hash('sha256', \$myAddress . \$salt . \$time);
 
     \$request = [
-        'senderAddress' => 'http://test-upstream-sender.test:80',
+        'senderAddress' => \$senderAddress,
         'senderPublicKey' => 'test-pubkey-dest-' . bin2hex(random_bytes(16)),
         'hash' => \$hash,
         'salt' => \$salt,

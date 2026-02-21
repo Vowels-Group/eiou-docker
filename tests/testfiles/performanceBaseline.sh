@@ -48,7 +48,7 @@ echo -e "\t   Mode: ${MODE}"
 # These are baseline thresholds - adjust based on your environment
 
 MAX_SINGLE_TX_TIME_MS=5000       # Max time for single transaction processing
-MAX_BATCH_TX_TOTAL_TIME_MS=30000 # Max time for 10 transactions batch
+MAX_BATCH_TX_TOTAL_TIME_MS=45000 # Max time for 10 transactions batch (250ms inter-send delay)
 MAX_API_RESPONSE_TIME_MS=2000    # Max time for API endpoint response
 MAX_DB_QUERY_TIME_MS=1000        # Max time for simple database query
 MAX_SIGNATURE_TIME_MS=500        # Max time for signature generation
@@ -472,8 +472,8 @@ if [[ -n "$realContactAddress" ]]; then
             if (\$result && isset(\$result['success']) && \$result['success'] === true) {
                 \$success_count++;
             }
-            // Small delay to prevent rate limiting
-            usleep(100000); // 100ms
+            // Delay between sends to prevent rate limiting and nonce collisions
+            usleep(250000); // 250ms
         }
 
         \$end = microtime(true);

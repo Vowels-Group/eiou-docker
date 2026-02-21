@@ -602,9 +602,8 @@ while [ $elapsed -lt $cancelTimeout ]; do
     p2pStatus=$(docker exec ${testSender} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        \$stmt = \$pdo->prepare('SELECT status FROM p2p WHERE fast = 0 AND id > ? ORDER BY id ASC LIMIT 1');
-        \$stmt->execute([${lastP2pId}]);
-        \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+        \$stmt = \$pdo->query('SELECT status FROM p2p WHERE fast = 0 AND id > ${lastP2pId} ORDER BY id ASC LIMIT 1');
+        \$row = \$stmt ? \$stmt->fetch(PDO::FETCH_ASSOC) : false;
         echo \$row ? \$row['status'] : 'UNKNOWN';
     " 2>/dev/null || echo "UNKNOWN")
 
