@@ -27,18 +27,12 @@ failure=0
 # Use first container for testing
 testContainer="${containers[0]}"
 
-# Determine local API base URL based on MODE
-LOCAL_API_BASE="$(getExpectedProtocol)localhost"
+# API endpoints always use HTTPS (server redirects HTTP→HTTPS)
+LOCAL_API_BASE="https://localhost"
+CURL_SSL_FLAG="-k"
 echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   API Base: ${LOCAL_API_BASE}"
 echo -e "\t   Mode: ${MODE}"
-
-# Set curl SSL flag for HTTPS mode
-if [[ "$MODE" == "https" ]]; then
-    CURL_SSL_FLAG="-k"
-else
-    CURL_SSL_FLAG=""
-fi
 
 ############################ API KEY SETUP ############################
 
@@ -69,7 +63,7 @@ echo -e "\n[Section 1: Missing Required Fields]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing POST /api/v1/contacts without 'name' field"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 body='{"address":"http://test.example.com"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -77,7 +71,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -86,6 +80,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -103,7 +98,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing POST /api/v1/contacts without 'address' field"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 body='{"name":"Test Contact"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -111,7 +106,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -120,6 +115,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -137,7 +133,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing POST /api/v1/wallet/send without 'amount' field"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
 body='{"address":"http://test.example.com","currency":"USD"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -145,7 +141,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -154,6 +150,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -175,7 +172,7 @@ echo -e "\n[Section 2: Invalid Field Types]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing string instead of number for amount"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
 body='{"address":"http://test.example.com","amount":"not_a_number","currency":"USD"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -183,7 +180,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -192,6 +189,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -209,7 +207,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing negative amount value"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
 body='{"address":"http://test.example.com","amount":"-100","currency":"USD"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -217,7 +215,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -226,6 +224,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -243,7 +242,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing zero amount value"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
 body='{"address":"http://test.example.com","amount":"0","currency":"USD"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -251,7 +250,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -260,6 +259,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -281,7 +281,7 @@ echo -e "\n[Section 3: Boundary Values]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing empty string for contact name"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 body='{"name":"","address":"http://test.example.com"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -289,7 +289,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -298,6 +298,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -315,7 +316,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing very long string for contact name (>1000 chars)"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 # Generate a long name string (1100 characters)
 longName=$(docker exec ${testContainer} php -r "echo str_repeat('A', 1100);" 2>/dev/null)
@@ -325,7 +326,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -334,6 +335,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -356,7 +358,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing empty JSON body for POST /api/v1/contacts"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 body='{}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -364,7 +366,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -373,6 +375,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -394,7 +397,7 @@ echo -e "\n[Section 4: Special Characters and Encoding]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing unicode characters in contact name"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 body='{"name":"Test \u4e2d\u6587 Contact \u00e9","address":"http://unicode-test.example.com"}'
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
@@ -402,7 +405,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -411,6 +414,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -429,7 +433,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing null byte injection in name field"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 # JSON with escaped null byte
 body='{"name":"Test\u0000Null","address":"http://null-test.example.com"}'
@@ -438,7 +442,7 @@ bodyB64=$(printf '%s' "$body" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${bodyB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -447,6 +451,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -473,7 +478,7 @@ echo -e "\n[Section 5: Malformed JSON]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing unclosed JSON bracket"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 malformedBody='{"name":"Test","address":"http://test.example.com"'
 malformedB64=$(printf '%s' "$malformedBody" | base64 -w 0)
@@ -481,7 +486,7 @@ malformedB64=$(printf '%s' "$malformedBody" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${malformedB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -490,6 +495,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${malformedBody}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -507,7 +513,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing invalid JSON syntax (trailing comma)"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 malformedBody='{"name":"Test","address":"http://test.example.com",}'
 malformedB64=$(printf '%s' "$malformedBody" | base64 -w 0)
@@ -515,7 +521,7 @@ malformedB64=$(printf '%s' "$malformedBody" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${malformedB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -524,6 +530,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${malformedBody}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
@@ -541,7 +548,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing non-JSON content submission"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 plainTextBody='This is not JSON at all'
 plainTextB64=$(printf '%s' "$plainTextBody" | base64 -w 0)
@@ -549,7 +556,7 @@ plainTextB64=$(printf '%s' "$plainTextBody" | base64 -w 0)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = base64_decode('${plainTextB64}');
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -558,6 +565,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${plainTextBody}" \
     "${LOCAL_API_BASE}${path}" 2>&1)

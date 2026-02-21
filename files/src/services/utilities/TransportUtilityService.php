@@ -579,7 +579,7 @@ class TransportUtilityService implements TransportServiceInterface
         foreach ($handles as $recipient => $ch) {
             $response = $responses[$recipient] ?? null;
 
-            if ($response === false || $response === null) {
+            if ($response === false || $response === null || $response === '') {
                 $curlError = curl_error($ch);
                 $curlErrno = curl_errno($ch);
 
@@ -660,7 +660,7 @@ class TransportUtilityService implements TransportServiceInterface
         foreach ($handles as $key => $ch) {
             $response = $responses[$key] ?? null;
 
-            if ($response === false || $response === null) {
+            if ($response === false || $response === null || $response === '') {
                 $curlError = curl_error($ch);
                 $curlErrno = curl_errno($ch);
 

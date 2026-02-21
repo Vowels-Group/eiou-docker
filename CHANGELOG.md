@@ -13,6 +13,14 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Fix API test suite failures caused by HTTP→HTTPS redirect (PR #644): always use `https://localhost` with `-k` for API endpoint tests; add `X-API-Nonce` header and nonce in HMAC signature to all authenticated API test requests; fix `curlErrorHandlingTest` tests 2, 4, 5, 17 to resolve timeout constants via PHP and use correct function boundaries; pipe large API responses via stdin instead of command-line args to avoid `Argument list too long` errors in response format validation tests (apiEndpointsTest and cliCommandsTest); clarify curlErrorHandlingTest Test 13 output message
+- Fix `contactNameTest` Test 4 (Duplicate Name Detection) skipping on all topologies: dynamically find a container with 2+ accepted contacts instead of hardcoding `containers[2]` which may not be a contact of the sender in line topologies
+- Fix `bestFeeRoutingTest` Test 11 (Dead-end cascade cancel) querying wrong P2P record: record last P2P id before send and filter by `id > lastId` to avoid picking up Test 9's paid record
+- Fix `maxLevelCancelTest` Test 5 (Destination at boundary): use `resolveUserAddressForTransport()` to get the same address that `handleP2pRequest` uses, so the hash matches correctly
+- Fix `parallelBroadcastTest` Test 8: handle empty string curl responses as errors in `TransportUtilityService::sendBatch()` and `sendMultiBatch()`
+- Fix `chainDropTestSuite` Sections 1-8 failing at proposal delivery: add `cleanup_backups` to `clean_chain()` so backup recovery doesn't short-circuit `proposeChainDrop()` before sending the proposal message
+- Fix `performanceBaseline` batch transaction test: increase inter-send delay from 100ms to 250ms and timeout from 30s to 45s to prevent rate-limiting failures
+- Improve `pingTestSuite` Tests 6.1/6.3 diagnostic output with pubkey hash comparison
 - Fix Docker build failure: use Debian PHP conf path (`/etc/php/*/conf.d/`) instead of Docker-official-image path (`/usr/local/etc/php/conf.d/`) for `expose_php` setting; fix `|| true` operator precedence in security config step
 - Fix KeyEncryption::encrypt() clearing IV before base64-encoding it, causing all encrypted data to have empty IVs and fail on decrypt
 

@@ -36,25 +36,19 @@ if [[ -z "$testContainer" ]]; then
     exit 0
 fi
 
-# Determine local API base URL based on MODE
-LOCAL_API_BASE="$(getExpectedProtocol)localhost"
+# API endpoints always use HTTPS (server redirects HTTP→HTTPS)
+LOCAL_API_BASE="https://localhost"
+CURL_SSL_FLAG="-k"
 echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   API Base: ${LOCAL_API_BASE}"
 echo -e "\t   Mode: ${MODE}"
-
-# Set curl SSL flag for HTTPS mode
-if [[ "$MODE" == "https" ]]; then
-    CURL_SSL_FLAG="-k"
-else
-    CURL_SSL_FLAG=""
-fi
 
 ############################ PERFORMANCE THRESHOLDS ############################
 # All times in milliseconds
 # These are baseline thresholds - adjust based on your environment
 
 MAX_SINGLE_TX_TIME_MS=5000       # Max time for single transaction processing
-MAX_BATCH_TX_TOTAL_TIME_MS=30000 # Max time for 10 transactions batch
+MAX_BATCH_TX_TOTAL_TIME_MS=45000 # Max time for 10 transactions batch (250ms inter-send delay)
 MAX_API_RESPONSE_TIME_MS=2000    # Max time for API endpoint response
 MAX_DB_QUERY_TIME_MS=1000        # Max time for simple database query
 MAX_SIGNATURE_TIME_MS=500        # Max time for signature generation
@@ -202,12 +196,12 @@ echo -e "\n[Section 2: API Endpoint Response Times]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing /api/v1/system/status response time"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/system/status"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -220,6 +214,7 @@ statusTimeResult=$(docker exec ${testContainer} php -r "
         'X-API-Key: ${apiKeyId}',
         'X-API-Timestamp: ${timestamp}',
         'X-API-Signature: ${signature}',
+        'X-API-Nonce: ${nonce}',
         'Content-Type: application/json'
     ]);
     curl_setopt(\$ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -245,12 +240,12 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing /api/v1/wallet/balance response time"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/balance"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -263,6 +258,7 @@ balanceTimeResult=$(docker exec ${testContainer} php -r "
         'X-API-Key: ${apiKeyId}',
         'X-API-Timestamp: ${timestamp}',
         'X-API-Signature: ${signature}',
+        'X-API-Nonce: ${nonce}',
         'Content-Type: application/json'
     ]);
     curl_setopt(\$ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -288,12 +284,12 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing /api/v1/contacts response time"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -306,6 +302,7 @@ contactsTimeResult=$(docker exec ${testContainer} php -r "
         'X-API-Key: ${apiKeyId}',
         'X-API-Timestamp: ${timestamp}',
         'X-API-Signature: ${signature}',
+        'X-API-Nonce: ${nonce}',
         'Content-Type: application/json'
     ]);
     curl_setopt(\$ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -475,8 +472,8 @@ if [[ -n "$realContactAddress" ]]; then
             if (\$result && isset(\$result['success']) && \$result['success'] === true) {
                 \$success_count++;
             }
-            // Small delay to prevent rate limiting
-            usleep(100000); // 100ms
+            // Delay between sends to prevent rate limiting and nonce collisions
+            usleep(250000); // 250ms
         }
 
         \$end = microtime(true);

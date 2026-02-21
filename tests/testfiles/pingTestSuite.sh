@@ -980,15 +980,28 @@ dualSigResultA=$(docker exec ${containerA} php -r "
         exit;
     }
 
-    // Find contact transaction between A and B (try both directions)
+    // Find contact transaction between A and B (try both directions via repo)
     \$tcRepo = \$app->services->getTransactionContactRepository();
     \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
     if (!\$tx) {
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     }
 
+    // If repo lookup fails, diagnose why
     if (!\$tx) {
-        echo json_encode(['result' => 'NO_CONTACT_TX']);
+        \$algo = \Eiou\Core\Constants::HASH_ALGORITHM;
+        \$myHash = hash(\$algo, \$myPubkey);
+        \$bHash = hash(\$algo, \$contactB['pubkey']);
+        \$stmt = \$pdo->query(\"SELECT txid, sender_public_key_hash, receiver_public_key_hash FROM transactions WHERE tx_type = 'contact' LIMIT 5\");
+        \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode([
+            'result' => 'NO_CONTACT_TX',
+            'my_hash' => substr(\$myHash, 0, 16),
+            'b_hash' => substr(\$bHash, 0, 16),
+            'stored_txs' => array_map(function(\$r) {
+                return ['txid' => substr(\$r['txid'], 0, 12), 's' => substr(\$r['sender_public_key_hash'], 0, 16), 'r' => substr(\$r['receiver_public_key_hash'], 0, 16)];
+            }, \$rows)
+        ]);
         exit;
     }
 
@@ -1091,7 +1104,11 @@ verifySigResult=$(docker exec ${containerA} php -r "
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
         \$iAmSender = false;
     }
-    if (!\$tx) { echo 'NO_CONTACT_TX'; exit; }
+    if (!\$tx) {
+        \$contactTxCount = (int) \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE tx_type = 'contact'\")->fetchColumn();
+        echo 'NO_CONTACT_TX:contact_txs=' . \$contactTxCount;
+        exit;
+    }
 
     // Get full transaction data
     \$stmt = \$pdo->prepare('SELECT signature_nonce, recipient_signature FROM transactions WHERE txid = :txid');

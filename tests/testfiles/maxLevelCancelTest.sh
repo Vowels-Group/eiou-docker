@@ -313,15 +313,13 @@ destCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$p2pService = \$app->services->getP2pService();
-    \$user = \$app->services->getCurrentUser();
+    \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
-    // Get this node's address
-    \$locaters = \$user->getUserLocaters();
-    \$myAddress = \$locaters['http'] ?? \$locaters['https'] ?? null;
-    if (!\$myAddress) {
-        echo 'NO_ADDRESS';
-        exit;
-    }
+    // Use the same address resolution that handleP2pRequest uses:
+    // resolveUserAddressForTransport(\$request['senderAddress']) determines
+    // which address matchYourselfP2P will check against.
+    \$senderAddress = 'http://test-upstream-sender.test:80';
+    \$myAddress = \$transport->resolveUserAddressForTransport(\$senderAddress);
 
     // Create a hash that matches this node (so matchYourselfP2P returns true)
     \$salt = 'dest-test-salt-' . time();
@@ -329,7 +327,7 @@ destCheck=$(docker exec ${testSender} php -r "
     \$hash = hash('sha256', \$myAddress . \$salt . \$time);
 
     \$request = [
-        'senderAddress' => 'http://test-upstream-sender.test:80',
+        'senderAddress' => \$senderAddress,
         'senderPublicKey' => 'test-pubkey-dest-' . bin2hex(random_bytes(16)),
         'hash' => \$hash,
         'salt' => \$salt,

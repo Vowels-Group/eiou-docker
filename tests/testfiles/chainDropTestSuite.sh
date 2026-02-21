@@ -284,6 +284,10 @@ clean_chain() {
     local senderDeleted=$(clean_chain_on ${sender} ${senderPubkeyHash} ${receiverPubkeyHash})
     local receiverDeleted=$(clean_chain_on ${receiver} ${receiverPubkeyHash} ${senderPubkeyHash})
     cleanup_proposals
+    # Remove backups so proposeChainDrop doesn't short-circuit via backup recovery
+    # (backup recovery returns early without sending a proposal to the contact)
+    cleanup_backups ${sender}
+    cleanup_backups ${receiver}
     echo -e "\t   Deleted ${senderDeleted:-0} sender txs, ${receiverDeleted:-0} receiver txs"
 }
 

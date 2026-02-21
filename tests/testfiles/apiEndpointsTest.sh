@@ -44,18 +44,11 @@ echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   Real contact: ${realContactContainer} (${realContactAddress})"
 echo -e "\t   Mode: ${MODE}"
 
-# Determine local API base URL based on MODE
-# In HTTPS mode, use https://localhost; in HTTP mode, use http://localhost
-# This ensures API tests use the correct protocol matching the container's configuration
-LOCAL_API_BASE="$(getExpectedProtocol)localhost"
+# API endpoints always use HTTPS (server redirects HTTP→HTTPS)
+# MODE still controls P2P transport tests, but API is always HTTPS
+LOCAL_API_BASE="https://localhost"
+CURL_SSL_FLAG="-k"
 echo -e "\t   API Base: ${LOCAL_API_BASE}"
-
-# Set curl SSL flag for HTTPS mode (accept self-signed certificates)
-if [[ "$MODE" == "https" ]]; then
-    CURL_SSL_FLAG="-k"
-else
-    CURL_SSL_FLAG=""
-fi
 
 # Helper function to display API request details
 display_api_request() {
@@ -164,7 +157,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing GET /api/v1/system/status"
 
 # Generate timestamp and signature for API request
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 method="GET"
 path="/api/v1/system/status"
 body=""
@@ -173,7 +166,7 @@ body=""
 # New format: only send the HMAC, never the secret
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"${method}\\n${path}\\n${timestamp}\\n${body}\";
+    \$message = \"${method}\\n${path}\\n${timestamp}\\n${nonce}\\n${body}\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -181,6 +174,7 @@ statusResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/system/status" 2>&1)
 
@@ -200,12 +194,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/wallet/info"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/info"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -213,6 +207,7 @@ infoResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/wallet/info" 2>&1)
 
@@ -232,12 +227,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/wallet/balance"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/balance"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -245,6 +240,7 @@ balanceResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/wallet/balance" 2>&1)
 
@@ -264,12 +260,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/contacts"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -277,6 +273,7 @@ contactsResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts" 2>&1)
 
@@ -296,12 +293,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/wallet/transactions"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/transactions"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -309,6 +306,7 @@ transactionsResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/wallet/transactions" 2>&1)
 
@@ -328,12 +326,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/system/metrics"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/system/metrics"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -341,6 +339,7 @@ metricsResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/system/metrics" 2>&1)
 
@@ -380,12 +379,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing invalid API path"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/invalid/path"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -393,6 +392,7 @@ invalidResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/invalid/path" 2>&1)
 
@@ -413,9 +413,9 @@ echo -e "\n[Response Format Validation Tests]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating successResponse() format structure"
 
-# Use the cached statusResponse from earlier test
-formatValid=$(docker exec ${testContainer} php -r "
-    \$json = '${statusResponse}';
+# Use the cached statusResponse from earlier test (pipe via stdin to avoid ARG_MAX)
+formatValid=$(printf '%s' "${statusResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     // Check required fields for success response
@@ -451,8 +451,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating errorResponse() format structure"
 
-errorFormatValid=$(docker exec ${testContainer} php -r "
-    \$json = '${unauthorizedResponse}';
+errorFormatValid=$(printf '%s' "${unauthorizedResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     // Check required fields for error response
@@ -492,8 +492,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating wallet info addresses structure"
 
-walletInfoValid=$(docker exec ${testContainer} php -r "
-    \$json = '${infoResponse}';
+walletInfoValid=$(printf '%s' "${infoResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasAddresses = isset(\$response['data']['addresses']) && is_array(\$response['data']['addresses']);
@@ -518,8 +518,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating contacts list structure"
 
-contactsValid=$(docker exec ${testContainer} php -r "
-    \$json = '${contactsResponse}';
+contactsValid=$(printf '%s' "${contactsResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasContacts = isset(\$response['data']['contacts']) && is_array(\$response['data']['contacts']);
@@ -544,8 +544,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating transactions pagination structure"
 
-txPaginationValid=$(docker exec ${testContainer} php -r "
-    \$json = '${transactionsResponse}';
+txPaginationValid=$(printf '%s' "${transactionsResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasTransactions = isset(\$response['data']['transactions']) && is_array(\$response['data']['transactions']);
@@ -573,8 +573,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating system status structure"
 
-sysStatusValid=$(docker exec ${testContainer} php -r "
-    \$json = '${statusResponse}';
+sysStatusValid=$(printf '%s' "${statusResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasStatus = isset(\$response['data']['status']);
@@ -600,8 +600,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating system metrics structure"
 
-metricsStructValid=$(docker exec ${testContainer} php -r "
-    \$json = '${metricsResponse}';
+metricsStructValid=$(printf '%s' "${metricsResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasTransactions = isset(\$response['data']['transactions']) && is_array(\$response['data']['transactions']);
@@ -630,7 +630,7 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing POST /api/v1/wallet/send"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
 # Use real contact address from containerAddresses
 sendBody="{\"address\":\"${realContactAddress}\",\"amount\":\"0.01\",\"currency\":\"USD\"}"
@@ -640,7 +640,7 @@ display_api_request "${testContainer}" "POST" "/api/v1/wallet/send" "${sendBody}
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = '${sendBody}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -649,6 +649,7 @@ sendResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${sendBody}" \
     "${LOCAL_API_BASE}/api/v1/wallet/send" 2>&1)
@@ -675,7 +676,7 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing POST /api/v1/contacts"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 # Use real contact address from containerAddresses - may already exist but API should respond properly
 contactBody="{\"name\":\"API Test Contact\",\"address\":\"${realContactAddress}\"}"
@@ -685,7 +686,7 @@ display_api_request "${testContainer}" "POST" "/api/v1/contacts" "${contactBody}
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = '${contactBody}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -694,6 +695,7 @@ createContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${contactBody}" \
     "${LOCAL_API_BASE}/api/v1/contacts" 2>&1)
@@ -722,14 +724,14 @@ totaltests=$(( totaltests + 1 ))
 realContactNameForGet="${realContactContainer}"
 echo -e "\n\t-> Testing GET /api/v1/contacts/:address"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/${realContactNameForGet}"
 
 display_api_request "${testContainer}" "GET" "/api/v1/contacts/${realContactNameForGet}" "" "${realContactNameForGet}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -737,6 +739,7 @@ getContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/${realContactNameForGet}" 2>&1)
 
@@ -765,14 +768,14 @@ totaltests=$(( totaltests + 1 ))
 testDeleteAddress="${realContactContainer}"
 echo -e "\n\t-> Testing DELETE /api/v1/contacts/:address"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/${testDeleteAddress}"
 
 display_api_request "${testContainer}" "DELETE" "/api/v1/contacts/${testDeleteAddress}" "" "${testDeleteAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"DELETE\\n${path}\\n${timestamp}\\n\";
+    \$message = \"DELETE\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -781,6 +784,7 @@ deleteContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/${testDeleteAddress}" 2>&1)
 
@@ -808,14 +812,14 @@ totaltests=$(( totaltests + 1 ))
 blockAddress="${realContactAddress}"
 echo -e "\n\t-> Testing POST /api/v1/contacts/block/:address"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/block/${blockAddress}"
 
 display_api_request "${testContainer}" "POST" "/api/v1/contacts/block/${blockAddress}" "" "${blockAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -824,6 +828,7 @@ blockContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/block/${blockAddress}" 2>&1)
 
@@ -851,14 +856,14 @@ totaltests=$(( totaltests + 1 ))
 unblockAddress="${realContactAddress}"
 echo -e "\n\t-> Testing POST /api/v1/contacts/unblock/:address"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/unblock/${unblockAddress}"
 
 display_api_request "${testContainer}" "POST" "/api/v1/contacts/unblock/${unblockAddress}" "" "${unblockAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -867,6 +872,7 @@ unblockContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} 
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/unblock/${unblockAddress}" 2>&1)
 
@@ -904,14 +910,14 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
 
     echo -e "\n\t-> Testing GET /api/v1/contacts/:address (viewbalances contact)"
 
-    timestamp=$(date +%s)
+    timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
     path="/api/v1/contacts/${realContactNameFromViewbalances}"
 
     display_api_request "${testContainer}" "GET" "/api/v1/contacts/${realContactNameFromViewbalances}" "" "${realContactNameFromViewbalances}"
 
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
-        \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+        \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
@@ -919,6 +925,7 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
+        -H "X-API-Nonce: ${nonce}" \
         -H "Content-Type: application/json" \
         "${LOCAL_API_BASE}/api/v1/contacts/${realContactNameFromViewbalances}" 2>&1)
 
@@ -944,7 +951,7 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
 
     echo -e "\n\t-> Testing POST /api/v1/wallet/send (viewbalances contact)"
 
-    timestamp=$(date +%s)
+    timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
     path="/api/v1/wallet/send"
     realSendBody="{\"address\":\"${realContactNameFromViewbalances}\",\"amount\":\"0.01\",\"currency\":\"USD\"}"
 
@@ -953,7 +960,7 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
         \$body = '${realSendBody}';
-        \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+        \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
@@ -962,6 +969,7 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
+        -H "X-API-Nonce: ${nonce}" \
         -H "Content-Type: application/json" \
         -d "${realSendBody}" \
         "${LOCAL_API_BASE}/api/v1/wallet/send" 2>&1)
@@ -991,12 +999,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/wallet/overview"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/overview"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1004,6 +1012,7 @@ overviewResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/wallet/overview" 2>&1)
 
@@ -1023,12 +1032,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/contacts/pending"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/pending"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1036,6 +1045,7 @@ pendingResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/pending" 2>&1)
 
@@ -1055,12 +1065,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/contacts/search"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/search"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1068,6 +1078,7 @@ searchApiResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/search" 2>&1)
 
@@ -1087,12 +1098,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/system/settings"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/system/settings"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1100,6 +1111,7 @@ settingsApiResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/system/settings" 2>&1)
 
@@ -1120,14 +1132,14 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing POST /api/v1/contacts/ping/:address"
 
 pingAddress="${realContactAddress}"
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts/ping/${pingAddress}"
 
 display_api_request "${testContainer}" "POST" "/api/v1/contacts/ping/${pingAddress}" "" "${pingAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1136,6 +1148,7 @@ pingApiResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/contacts/ping/${pingAddress}" 2>&1)
 
@@ -1161,12 +1174,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/backup/status"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/backup/status"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1174,6 +1187,7 @@ backupStatusResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/backup/status" 2>&1)
 
@@ -1193,12 +1207,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing GET /api/v1/backup/list"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/backup/list"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1206,6 +1220,7 @@ backupListResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/backup/list" 2>&1)
 
@@ -1225,14 +1240,14 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing POST /api/v1/backup/create"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/backup/create"
 backupCreateBody='{"name":"api_test_backup"}'
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = '${backupCreateBody}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1241,6 +1256,7 @@ backupCreateResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     -d "${backupCreateBody}" \
     "${LOCAL_API_BASE}/api/v1/backup/create" 2>&1)
@@ -1266,14 +1282,14 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing POST /api/v1/backup/verify"
 
 if [[ -n "$backupFilename" ]]; then
-    timestamp=$(date +%s)
+    timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
     path="/api/v1/backup/verify"
     backupVerifyBody="{\"filename\":\"${backupFilename}\"}"
 
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
         \$body = '${backupVerifyBody}';
-        \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+        \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
@@ -1282,6 +1298,7 @@ if [[ -n "$backupFilename" ]]; then
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
+        -H "X-API-Nonce: ${nonce}" \
         -H "Content-Type: application/json" \
         -d "${backupVerifyBody}" \
         "${LOCAL_API_BASE}/api/v1/backup/verify" 2>&1)
@@ -1307,14 +1324,14 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing POST /api/v1/backup/restore (without confirm)"
 
 if [[ -n "$backupFilename" ]]; then
-    timestamp=$(date +%s)
+    timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
     path="/api/v1/backup/restore"
     backupRestoreNoConfirmBody="{\"filename\":\"${backupFilename}\"}"
 
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
         \$body = '${backupRestoreNoConfirmBody}';
-        \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+        \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
@@ -1323,6 +1340,7 @@ if [[ -n "$backupFilename" ]]; then
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
+        -H "X-API-Nonce: ${nonce}" \
         -H "Content-Type: application/json" \
         -d "${backupRestoreNoConfirmBody}" \
         "${LOCAL_API_BASE}/api/v1/backup/restore" 2>&1)
@@ -1348,12 +1366,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing POST /api/v1/backup/enable"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/backup/enable"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1362,6 +1380,7 @@ backupEnableResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/backup/enable" 2>&1)
 
@@ -1381,12 +1400,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing POST /api/v1/backup/disable"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/backup/disable"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1395,6 +1414,7 @@ backupDisableResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/backup/disable" 2>&1)
 
@@ -1414,12 +1434,12 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing POST /api/v1/backup/cleanup"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/backup/cleanup"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -1428,6 +1448,7 @@ backupCleanupResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
     -H "Content-Type: application/json" \
     "${LOCAL_API_BASE}/api/v1/backup/cleanup" 2>&1)
 
@@ -1448,12 +1469,12 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing DELETE /api/v1/backup/:filename"
 
 if [[ -n "$backupFilename" ]]; then
-    timestamp=$(date +%s)
+    timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
     path="/api/v1/backup/${backupFilename}"
 
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
-        \$message = \"DELETE\\n${path}\\n${timestamp}\\n\";
+        \$message = \"DELETE\\n${path}\\n${timestamp}\\n${nonce}\\n\";
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
@@ -1462,6 +1483,7 @@ if [[ -n "$backupFilename" ]]; then
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
+        -H "X-API-Nonce: ${nonce}" \
         -H "Content-Type: application/json" \
         "${LOCAL_API_BASE}/api/v1/backup/${backupFilename}" 2>&1)
 
