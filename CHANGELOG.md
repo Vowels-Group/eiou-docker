@@ -13,7 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
-- Fix API test suite failures caused by HTTP→HTTPS redirect (PR #644): always use `https://localhost` with `-k` for API endpoint tests; fix `curlErrorHandlingTest` tests 2, 4, 5, 17 to resolve timeout constants via PHP and use correct function boundaries
+- Fix API test suite failures caused by HTTP→HTTPS redirect (PR #644): always use `https://localhost` with `-k` for API endpoint tests; add `X-API-Nonce` header and nonce in HMAC signature to all authenticated API test requests; fix `curlErrorHandlingTest` tests 2, 4, 5, 17 to resolve timeout constants via PHP and use correct function boundaries
 - Fix Docker build failure: use Debian PHP conf path (`/etc/php/*/conf.d/`) instead of Docker-official-image path (`/usr/local/etc/php/conf.d/`) for `expose_php` setting; fix `|| true` operator precedence in security config step
 - Fix KeyEncryption::encrypt() clearing IV before base64-encoding it, causing all encrypted data to have empty IVs and fail on decrypt
 

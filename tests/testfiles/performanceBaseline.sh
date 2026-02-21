@@ -196,12 +196,12 @@ echo -e "\n[Section 2: API Endpoint Response Times]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing /api/v1/system/status response time"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/system/status"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -214,6 +214,7 @@ statusTimeResult=$(docker exec ${testContainer} php -r "
         'X-API-Key: ${apiKeyId}',
         'X-API-Timestamp: ${timestamp}',
         'X-API-Signature: ${signature}',
+        'X-API-Nonce: ${nonce}',
         'Content-Type: application/json'
     ]);
     curl_setopt(\$ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -239,12 +240,12 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing /api/v1/wallet/balance response time"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/balance"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -257,6 +258,7 @@ balanceTimeResult=$(docker exec ${testContainer} php -r "
         'X-API-Key: ${apiKeyId}',
         'X-API-Timestamp: ${timestamp}',
         'X-API-Signature: ${signature}',
+        'X-API-Nonce: ${nonce}',
         'Content-Type: application/json'
     ]);
     curl_setopt(\$ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -282,12 +284,12 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing /api/v1/contacts response time"
 
-timestamp=$(date +%s)
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/contacts"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$message = \"GET\\n${path}\\n${timestamp}\\n${nonce}\\n\";
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -300,6 +302,7 @@ contactsTimeResult=$(docker exec ${testContainer} php -r "
         'X-API-Key: ${apiKeyId}',
         'X-API-Timestamp: ${timestamp}',
         'X-API-Signature: ${signature}',
+        'X-API-Nonce: ${nonce}',
         'Content-Type: application/json'
     ]);
     curl_setopt(\$ch, CURLOPT_SSL_VERIFYPEER, false);
