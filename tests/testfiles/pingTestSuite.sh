@@ -980,15 +980,19 @@ dualSigResultA=$(docker exec ${containerA} php -r "
         exit;
     }
 
-    // Find contact transaction between A and B (try both directions)
+    // Find contact transaction between A and B (try both directions via repo)
     \$tcRepo = \$app->services->getTransactionContactRepository();
     \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
     if (!\$tx) {
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     }
 
+    // If repo lookup fails, try direct SQL as fallback (in case pubkey hashing differs)
     if (!\$tx) {
-        echo json_encode(['result' => 'NO_CONTACT_TX']);
+        \$stmt = \$pdo->query(\"SELECT txid, signature_nonce, tx_type FROM transactions WHERE tx_type = 'contact' ORDER BY id DESC LIMIT 5\");
+        \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        \$contactTxCount = (int) \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE tx_type = 'contact'\")->fetchColumn();
+        echo json_encode(['result' => 'NO_CONTACT_TX', 'contact_tx_count' => \$contactTxCount, 'recent_txids' => array_column(\$rows, 'txid')]);
         exit;
     }
 
@@ -1091,7 +1095,11 @@ verifySigResult=$(docker exec ${containerA} php -r "
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
         \$iAmSender = false;
     }
-    if (!\$tx) { echo 'NO_CONTACT_TX'; exit; }
+    if (!\$tx) {
+        \$contactTxCount = (int) \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE tx_type = 'contact'\")->fetchColumn();
+        echo 'NO_CONTACT_TX:contact_txs=' . \$contactTxCount;
+        exit;
+    }
 
     // Get full transaction data
     \$stmt = \$pdo->prepare('SELECT signature_nonce, recipient_signature FROM transactions WHERE txid = :txid');

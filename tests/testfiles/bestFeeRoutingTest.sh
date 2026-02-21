@@ -573,6 +573,16 @@ fi
 echo -e "\n[Test 11: Dead-end cascade cancel (non-existent recipient)]"
 
 totaltests=$(( totaltests + 1 ))
+
+# Record last P2P id so we query only records from THIS send (not Test 9's paid record)
+lastP2pId=$(docker exec ${testSender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$stmt = \$pdo->query('SELECT MAX(id) as max_id FROM p2p');
+    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+    echo \$row['max_id'] ?? 0;
+" 2>/dev/null || echo "0")
+
 echo -e "\t-> Sending 5 USD from ${testSender} to non-existent address with --best (expect fast cancel)"
 
 cancelStartTime=$(date +%s)
@@ -588,11 +598,12 @@ cancelDetected=0
 while [ $elapsed -lt $cancelTimeout ]; do
     sleep 5
 
-    # Check if the P2P was cancelled on the originator
+    # Check if the P2P was cancelled on the originator (only records created after Test 11 send)
     p2pStatus=$(docker exec ${testSender} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        \$stmt = \$pdo->query('SELECT status FROM p2p WHERE fast = 0 ORDER BY id DESC LIMIT 1');
+        \$stmt = \$pdo->prepare('SELECT status FROM p2p WHERE fast = 0 AND id > ? ORDER BY id ASC LIMIT 1');
+        \$stmt->execute([${lastP2pId}]);
         \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
         echo \$row ? \$row['status'] : 'UNKNOWN';
     " 2>/dev/null || echo "UNKNOWN")

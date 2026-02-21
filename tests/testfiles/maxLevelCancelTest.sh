@@ -309,19 +309,15 @@ echo -e "\n[Test 5: Destination node at boundary is NOT cancelled]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\t-> Testing that destination match at maxRequestLevel still processes as found on ${testSender}"
 
+testSenderAddress="${containerAddresses[${testSender}]}"
+
 destCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$p2pService = \$app->services->getP2pService();
-    \$user = \$app->services->getCurrentUser();
 
-    // Get this node's address
-    \$locaters = \$user->getUserLocaters();
-    \$myAddress = \$locaters['http'] ?? \$locaters['https'] ?? null;
-    if (!\$myAddress) {
-        echo 'NO_ADDRESS';
-        exit;
-    }
+    // Use container address from test framework (UserContext may not have locaters populated)
+    \$myAddress = '${testSenderAddress}';
 
     // Create a hash that matches this node (so matchYourselfP2P returns true)
     \$salt = 'dest-test-salt-' . time();

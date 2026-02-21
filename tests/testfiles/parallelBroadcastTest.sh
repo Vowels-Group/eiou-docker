@@ -215,26 +215,33 @@ errorCheck=$(docker exec ${testContainer} php -r "
 
     // Should have results keyed by each recipient
     if (count(\$results) !== 2) {
-        echo 'WRONG_COUNT:' . count(\$results);
+        echo 'WRONG_COUNT:' . count(\$results) . ':keys=' . implode(',', array_keys(\$results));
         exit;
     }
 
     // Each result should have response, signature, nonce fields
-    \$allValid = true;
     foreach (\$results as \$addr => \$result) {
         if (!isset(\$result['response']) || !isset(\$result['signature']) || !isset(\$result['nonce'])) {
-            \$allValid = false;
-            break;
+            \$missing = [];
+            if (!isset(\$result['response'])) \$missing[] = 'response';
+            if (!isset(\$result['signature'])) \$missing[] = 'signature';
+            if (!isset(\$result['nonce'])) \$missing[] = 'nonce';
+            echo 'MISSING_FIELDS:' . implode(',', \$missing) . ':addr=' . \$addr;
+            exit;
         }
         // Response should be JSON with error status
         \$decoded = json_decode(\$result['response'], true);
-        if (\$decoded === null || (\$decoded['status'] ?? '') !== 'error') {
-            \$allValid = false;
-            break;
+        if (\$decoded === null) {
+            echo 'JSON_DECODE_FAIL:' . substr(\$result['response'], 0, 100);
+            exit;
+        }
+        if ((\$decoded['status'] ?? '') !== 'error') {
+            echo 'WRONG_STATUS:' . (\$decoded['status'] ?? 'none') . ':addr=' . \$addr;
+            exit;
         }
     }
 
-    echo \$allValid ? 'OK' : 'INVALID_STRUCTURE';
+    echo 'OK';
 " 2>&1 | tail -1)
 
 if [ "$errorCheck" = "OK" ]; then
