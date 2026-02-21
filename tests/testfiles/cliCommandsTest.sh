@@ -384,8 +384,8 @@ fi
 # Test 18: Validate JSON is parseable
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing JSON output is valid JSON"
-jsonValidOutput=$(docker exec ${testContainer} php -r "
-    \$json = '${jsonStructureOutput}';
+jsonValidOutput=$(printf '%s' "${jsonStructureOutput}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$decoded = json_decode(\$json, true);
     if (\$decoded !== null && json_last_error() === JSON_ERROR_NONE) {
         echo 'VALID_JSON';

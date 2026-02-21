@@ -340,7 +340,7 @@ if [[ ${#containersLinkKeys[@]} -gt 0 ]]; then
 
     if [[ "$successResult" =~ ^SUCCESS ]]; then
         responseType=$(echo "$successResult" | cut -d: -f2)
-        printf "\t   HTTP request to container succeeded ${GREEN}PASSED${NC} (response: %s)\n" "${responseType}"
+        printf "\t   HTTP transport to container working ${GREEN}PASSED${NC} (server replied: %s)\n" "${responseType}"
         passed=$(( passed + 1 ))
     else
         printf "\t   HTTP request to container ${RED}FAILED${NC} (%s)\n" "${successResult}"
