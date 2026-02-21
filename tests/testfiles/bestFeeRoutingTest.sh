@@ -583,10 +583,29 @@ lastP2pId=$(docker exec ${testSender} php -r "
     echo \$row['max_id'] ?? 0;
 " 2>/dev/null || echo "0")
 
+# Find an isolated node (0 expected contacts) for dead-end testing
+DEAD_END_ADDRESS=""
+for node in "${!expectedContacts[@]}"; do
+    if [ "${expectedContacts[$node]}" -eq 0 ] 2>/dev/null; then
+        DEAD_END_ADDRESS="${containerAddresses[$node]}"
+        break
+    fi
+done
+# If no isolated node in this topology, generate a non-existent address
+if [ -z "$DEAD_END_ADDRESS" ]; then
+    if [[ "${MODE:-http}" == "tor" ]]; then
+        DEAD_END_ADDRESS="nonexistenteiounode$(date +%s)abcdefghijklmnopqrst.onion"
+    elif [[ "${MODE:-http}" == "https" ]]; then
+        DEAD_END_ADDRESS="https://nonexistent-eiou-node-$(date +%s)"
+    else
+        DEAD_END_ADDRESS="http://nonexistent-eiou-node-$(date +%s)"
+    fi
+fi
+
 echo -e "\t-> Sending 5 USD from ${testSender} to non-existent address with --best (expect fast cancel)"
 
 cancelStartTime=$(date +%s)
-cancelSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[A12]} 5 USD --best 2>&1)
+cancelSendResult=$(docker exec ${testSender} eiou send ${DEAD_END_ADDRESS} 5 USD --best 2>&1)
 
 # With cascade cancel, dead-end nodes cancel immediately and propagate upstream.
 # The originator should see cancellation well before full expiration.
