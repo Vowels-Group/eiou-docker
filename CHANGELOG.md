@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Fix Docker build failure: use Debian PHP conf path (`/etc/php/*/conf.d/`) instead of Docker-official-image path (`/usr/local/etc/php/conf.d/`) for `expose_php` setting; fix `|| true` operator precedence in security config step
+
 ### Changed
 - Trusted proxies now configurable via CLI (`changesettings trustedProxies`) instead of requiring container rebuild
 - Rename `Security::sanitizeInput()` to `stripNullBytes()` for accuracy; deprecated alias retained

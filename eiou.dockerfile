@@ -104,8 +104,10 @@ RUN sed -i '/<\/VirtualHost>/i \    RewriteEngine On\n    RewriteCond %{HTTPS} o
 # Suppress server version information in responses (L-29)
 RUN echo 'ServerTokens Prod' >> /etc/apache2/conf-available/security.conf && \
     echo 'ServerSignature Off' >> /etc/apache2/conf-available/security.conf && \
-    a2enconf security 2>/dev/null || true && \
-    echo 'expose_php = Off' > /usr/local/etc/php/conf.d/security-headers.ini
+    (a2enconf security 2>/dev/null || true) && \
+    for dir in /etc/php/*/apache2/conf.d /etc/php/*/cli/conf.d; do \
+        [ -d "$dir" ] && echo 'expose_php = Off' > "$dir/security-headers.ini"; \
+    done
 
 # Create SSL VirtualHost configuration
 RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf && \
