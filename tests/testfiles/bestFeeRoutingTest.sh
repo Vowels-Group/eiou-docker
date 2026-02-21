@@ -325,21 +325,18 @@ totaltests=$(( totaltests + 1 ))
 #   JITTER        = +0/1 (random_int(0,1) added to maxLevel)
 #
 # hopWait = max(floor(expiration / HOP_DIVISOR) - HOP_BUFFER, MIN_HOP_WAIT)
-#   300s expiration: floor(300/12)-2 = 23s per hop
 #
-# Relay expirations (scaledWait = hopWait × remainingHops, A0→A11 shortest = 4 hops):
-#   A1/A2 (3 remaining): 23 × 3 = 69s
-#   A4/A5 (2 remaining): 23 × 2 = 46s
-#   A8    (1 remaining): 23 × 1 = 23s
-#
-# Each level gets ~23s breathing room before its upstream expires.
+# In a line topology (A-B-C-D), there's only ONE route, so best-fee mode
+# just needs enough time for the P2P to traverse and the rp2p to cascade back.
+# Fast mode takes ~30-60s for 3 hops, so 90s is plenty. The selection happens
+# via CleanupService expiration fallback, so expiration = total test time.
 #
 # Tor mode needs higher expiration because inter-node messages travel over Tor
 # (30s timeout per request), so the RP2P cascade propagation is slower.
 if [[ "${MODE:-http}" == "tor" ]]; then
-    testExpiration=450
+    testExpiration=180
 else
-    testExpiration=300
+    testExpiration=90
 fi
 echo -e "\t-> Setting P2P expiration to ${testExpiration}s on ${testSender}"
 docker exec ${testSender} php -r "
