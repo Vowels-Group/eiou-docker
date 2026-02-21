@@ -52,163 +52,428 @@ class ChainOperationsServiceTest extends TestCase
         );
     }
 
-    /**
-     * Test verifyChainIntegrity returns valid chain status
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
+    // =========================================================================
+    // verifyChainIntegrity Tests
+    // =========================================================================
+
     public function testVerifyChainIntegrityReturnsValidChainStatus(): void
     {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
+        $expectedStatus = [
+            'valid' => true,
+            'has_transactions' => true,
+            'transaction_count' => 5,
+            'gaps' => [],
+            'broken_txids' => []
+        ];
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
+            ->willReturn($expectedStatus);
+
+        $this->mockLogger->expects($this->once())
+            ->method('debug')
+            ->with('Chain integrity verification completed', $this->anything());
+
+        $result = $this->service->verifyChainIntegrity(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(5, $result['transaction_count']);
+        $this->assertEmpty($result['gaps']);
     }
 
-    /**
-     * Test verifyChainIntegrity handles exceptions gracefully
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
     public function testVerifyChainIntegrityHandlesExceptionsGracefully(): void
     {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willThrowException(new Exception('Database connection lost'));
+
+        $this->mockLogger->expects($this->once())
+            ->method('logException');
+
+        $result = $this->service->verifyChainIntegrity(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertFalse($result['valid']);
+        $this->assertFalse($result['has_transactions']);
+        $this->assertEquals(0, $result['transaction_count']);
+        $this->assertArrayHasKey('error', $result);
+        $this->assertEquals('Database connection lost', $result['error']);
     }
 
-    /**
-     * Test getCorrectPreviousTxid returns txid when exists
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testGetCorrectPreviousTxidReturnsTxidWhenExists(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test getCorrectPreviousTxid returns null when first transaction
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testGetCorrectPreviousTxidReturnsNullWhenFirstTransaction(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test getCorrectPreviousTxid handles exceptions
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testGetCorrectPreviousTxidHandlesExceptions(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded when chain is already valid
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededWhenChainIsAlreadyValid(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded when sync service not available
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededWhenSyncServiceNotAvailable(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded successful repair
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededSuccessfulRepair(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded when repair partially succeeds
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededWhenRepairPartiallySucceeds(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded when sync fails but chain becomes valid
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededWhenSyncFailsButChainBecomesValid(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded when sync completely fails
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededWhenSyncCompletelyFails(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test repairChainIfNeeded handles exception during repair
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testRepairChainIfNeededHandlesExceptionDuringRepair(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test setSyncService properly sets the sync service
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
-    public function testSetSyncServiceProperlySetsTheSyncService(): void
-    {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
-    }
-
-    /**
-     * Test verifyChainIntegrity with chain containing gaps
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
     public function testVerifyChainIntegrityWithChainContainingGaps(): void
     {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
+        $expectedStatus = [
+            'valid' => false,
+            'has_transactions' => true,
+            'transaction_count' => 10,
+            'gaps' => ['missing-txid-1', 'missing-txid-2'],
+            'broken_txids' => ['broken-1', 'broken-2']
+        ];
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn($expectedStatus);
+
+        $result = $this->service->verifyChainIntegrity(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertFalse($result['valid']);
+        $this->assertTrue($result['has_transactions']);
+        $this->assertCount(2, $result['gaps']);
+        $this->assertCount(2, $result['broken_txids']);
     }
 
-    /**
-     * Test verifyChainIntegrity with empty chain (no transactions)
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
     public function testVerifyChainIntegrityWithEmptyChain(): void
     {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
+        $expectedStatus = [
+            'valid' => true,
+            'has_transactions' => false,
+            'transaction_count' => 0,
+            'gaps' => [],
+            'broken_txids' => []
+        ];
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn($expectedStatus);
+
+        $result = $this->service->verifyChainIntegrity(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['valid']);
+        $this->assertFalse($result['has_transactions']);
+        $this->assertEquals(0, $result['transaction_count']);
     }
 
-    /**
-     * Test repairChainIfNeeded with empty chain (no repair needed)
-     *
-     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
-     */
+    // =========================================================================
+    // getCorrectPreviousTxid Tests
+    // =========================================================================
+
+    public function testGetCorrectPreviousTxidReturnsTxidWhenExists(): void
+    {
+        $this->mockTxRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
+            ->willReturn(self::TEST_TXID);
+
+        $this->mockLogger->expects($this->once())
+            ->method('debug')
+            ->with('Previous txid lookup completed', $this->anything());
+
+        $result = $this->service->getCorrectPreviousTxid(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertEquals(self::TEST_TXID, $result);
+    }
+
+    public function testGetCorrectPreviousTxidReturnsNullWhenFirstTransaction(): void
+    {
+        $this->mockTxRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(null);
+
+        $result = $this->service->getCorrectPreviousTxid(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertNull($result);
+    }
+
+    public function testGetCorrectPreviousTxidHandlesExceptions(): void
+    {
+        $this->mockTxRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willThrowException(new Exception('Query failed'));
+
+        $this->mockLogger->expects($this->once())
+            ->method('logException');
+
+        $result = $this->service->getCorrectPreviousTxid(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertNull($result);
+    }
+
+    // =========================================================================
+    // setSyncService Tests
+    // =========================================================================
+
+    public function testSetSyncServiceProperlySetsTheSyncService(): void
+    {
+        $this->service->setSyncService($this->mockSyncService);
+
+        // Verify sync service is set by triggering a repair that requires it
+        $this->mockUserContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        // Chain has gaps (not valid) - will need sync service
+        $this->mockChainRepo->expects($this->atLeastOnce())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 3,
+                'gaps' => ['missing-1'],
+                'broken_txids' => ['broken-1']
+            ]);
+
+        // Sync service should be called (proves it was set)
+        $this->mockSyncService->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => false, 'synced_count' => 0, 'error' => 'test']);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['repair_attempted']);
+    }
+
+    // =========================================================================
+    // repairChainIfNeeded Tests
+    // =========================================================================
+
+    public function testRepairChainIfNeededWhenChainIsAlreadyValid(): void
+    {
+        $this->mockUserContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => true,
+                'has_transactions' => true,
+                'transaction_count' => 5,
+                'gaps' => [],
+                'broken_txids' => []
+            ]);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['was_valid']);
+        $this->assertFalse($result['repair_attempted']);
+    }
+
+    public function testRepairChainIfNeededWhenSyncServiceNotAvailable(): void
+    {
+        // Do NOT call setSyncService - syncService stays null
+        $this->mockUserContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 3,
+                'gaps' => ['missing-1'],
+                'broken_txids' => ['broken-1']
+            ]);
+
+        $this->mockLogger->expects($this->atLeastOnce())
+            ->method('warning');
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertFalse($result['success']);
+        $this->assertFalse($result['was_valid']);
+        $this->assertFalse($result['repair_attempted']);
+        $this->assertEquals('Sync service not available to repair chain', $result['error']);
+    }
+
+    public function testRepairChainIfNeededSuccessfulRepair(): void
+    {
+        $this->service->setSyncService($this->mockSyncService);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $callCount = 0;
+        $this->mockChainRepo->expects($this->exactly(2))
+            ->method('verifyChainIntegrity')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                if ($callCount === 1) {
+                    // First call: chain has gaps
+                    return [
+                        'valid' => false,
+                        'has_transactions' => true,
+                        'transaction_count' => 3,
+                        'gaps' => ['missing-1'],
+                        'broken_txids' => ['broken-1']
+                    ];
+                }
+                // Second call: chain repaired
+                return [
+                    'valid' => true,
+                    'has_transactions' => true,
+                    'transaction_count' => 5,
+                    'gaps' => [],
+                    'broken_txids' => []
+                ];
+            });
+
+        $this->mockSyncService->expects($this->once())
+            ->method('syncTransactionChain')
+            ->with(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY)
+            ->willReturn(['success' => true, 'synced_count' => 2]);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['was_valid']);
+        $this->assertTrue($result['repair_attempted']);
+        $this->assertEquals(2, $result['synced_count']);
+    }
+
+    public function testRepairChainIfNeededWhenRepairPartiallySucceeds(): void
+    {
+        $this->service->setSyncService($this->mockSyncService);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $this->mockChainRepo->expects($this->exactly(2))
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 3,
+                'gaps' => ['missing-1'],
+                'broken_txids' => ['broken-1']
+            ]);
+
+        $this->mockSyncService->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => true, 'synced_count' => 1]);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['repair_attempted']);
+        $this->assertStringContainsString('gaps remaining', $result['error']);
+    }
+
+    public function testRepairChainIfNeededWhenSyncFailsButChainBecomesValid(): void
+    {
+        $this->service->setSyncService($this->mockSyncService);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $callCount = 0;
+        $this->mockChainRepo->expects($this->exactly(2))
+            ->method('verifyChainIntegrity')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                if ($callCount === 1) {
+                    return [
+                        'valid' => false,
+                        'has_transactions' => true,
+                        'transaction_count' => 3,
+                        'gaps' => ['missing-1'],
+                        'broken_txids' => ['broken-1']
+                    ];
+                }
+                // Chain became valid despite sync failure
+                return [
+                    'valid' => true,
+                    'has_transactions' => true,
+                    'transaction_count' => 4,
+                    'gaps' => [],
+                    'broken_txids' => []
+                ];
+            });
+
+        $this->mockSyncService->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => false, 'synced_count' => 0, 'error' => 'timeout']);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['repair_attempted']);
+    }
+
+    public function testRepairChainIfNeededWhenSyncCompletelyFails(): void
+    {
+        $this->service->setSyncService($this->mockSyncService);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $this->mockChainRepo->expects($this->exactly(2))
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 3,
+                'gaps' => ['missing-1'],
+                'broken_txids' => ['broken-1']
+            ]);
+
+        $this->mockSyncService->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => false, 'synced_count' => 0, 'error' => 'connection refused']);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['repair_attempted']);
+        $this->assertStringContainsString('connection refused', $result['error']);
+    }
+
+    public function testRepairChainIfNeededHandlesExceptionDuringRepair(): void
+    {
+        $this->service->setSyncService($this->mockSyncService);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 3,
+                'gaps' => ['missing-1'],
+                'broken_txids' => ['broken-1']
+            ]);
+
+        $this->mockSyncService->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willThrowException(new Exception('Unexpected error'));
+
+        $this->mockLogger->expects($this->atLeastOnce())
+            ->method('logException');
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('Unexpected error', $result['error']);
+    }
+
     public function testRepairChainIfNeededWithEmptyChain(): void
     {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
+        $this->mockUserContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn(self::TEST_USER_PUBKEY);
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => true,
+                'has_transactions' => false,
+                'transaction_count' => 0,
+                'gaps' => [],
+                'broken_txids' => []
+            ]);
+
+        $result = $this->service->repairChainIfNeeded(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['was_valid']);
+        $this->assertFalse($result['repair_attempted']);
     }
 }

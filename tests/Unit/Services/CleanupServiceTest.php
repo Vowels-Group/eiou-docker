@@ -928,7 +928,7 @@ class CleanupServiceTest extends TestCase
      * expiration. They should expire normally so handleRp2pCandidate can collect
      * all responses from contacts.
      */
-    public function testExpireMessageSkipsCandidateSelectionForOriginator(): void
+    public function testExpireMessageTriggersSelectionForOriginatorWithCandidates(): void
     {
         $rp2pService = $this->createMock(Rp2pServiceInterface::class);
         $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
@@ -947,11 +947,13 @@ class CleanupServiceTest extends TestCase
         $this->transactionRepository->method('getByMemo')
             ->willReturn([]);
 
-        // Should NOT check candidates (originator skips step 1.5)
-        $rp2pCandidateRepo->expects($this->never())
-            ->method('getCandidateCount');
+        // Both relay and originator nodes select on expiration when candidates exist
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('getCandidateCount')
+            ->with(self::TEST_HASH)
+            ->willReturn(0);
 
-        // Should NOT select route
+        // No candidates, so should NOT select route
         $rp2pService->expects($this->never())
             ->method('selectAndForwardBestRp2p');
 
@@ -959,7 +961,7 @@ class CleanupServiceTest extends TestCase
         $this->transportUtility->method('send')
             ->willReturn(json_encode(['status' => null]));
 
-        // Should expire normally
+        // Should expire normally (no candidates to select from)
         $this->p2pRepository->expects($this->once())
             ->method('updateStatus')
             ->with(self::TEST_HASH, Constants::STATUS_EXPIRED);

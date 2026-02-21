@@ -38,17 +38,7 @@ class AddressRepositoryTest extends TestCase
      */
     private function createRepositoryWithMockedPdo(PDO $pdo): AddressRepository
     {
-        $repository = new class($pdo) extends AddressRepository {
-            public function __construct(PDO $pdo)
-            {
-                $this->pdo = $pdo;
-                $this->tableName = 'addresses';
-                $this->primaryKey = 'pubkey_hash';
-                $this->allowedColumns = ['id', 'pubkey_hash', 'http', 'https', 'tor'];
-            }
-        };
-
-        return $repository;
+        return new TestableAddressRepository($pdo);
     }
 
     // =========================================================================
@@ -125,6 +115,7 @@ class AddressRepositoryTest extends TestCase
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$boundValues) {
                 $boundValues[$key] = $value;
+                return true;
             });
 
         $this->stmt->expects($this->once())
@@ -199,15 +190,21 @@ class AddressRepositoryTest extends TestCase
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, 'test-key');
         $fields = ['http' => 'http://new-address.example.com'];
 
-        $this->pdo->expects($this->once())
+        // getAllAddressTypes() and update() each call prepare()
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->atLeastOnce())
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute');
+
+        // getAllAddressTypes() calls fetchAll
+        $this->stmt->expects($this->any())
+            ->method('fetchAll')
+            ->willReturn(['http', 'https', 'tor']);
 
         $this->stmt->expects($this->once())
             ->method('rowCount')
@@ -239,15 +236,21 @@ class AddressRepositoryTest extends TestCase
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, 'test-key');
         $fields = ['http' => 'http://same-address.example.com'];
 
-        $this->pdo->expects($this->once())
+        // getAllAddressTypes() and update() each call prepare()
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->atLeastOnce())
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute');
+
+        // getAllAddressTypes() calls fetchAll
+        $this->stmt->expects($this->any())
+            ->method('fetchAll')
+            ->willReturn(['http', 'https', 'tor']);
 
         $this->stmt->expects($this->once())
             ->method('rowCount')
@@ -485,7 +488,7 @@ class AddressRepositoryTest extends TestCase
         ];
 
         // Need to mock getAllAddressTypes for transport validation
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableAddressRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getAllAddressTypes'])
             ->getMock();
@@ -534,7 +537,7 @@ class AddressRepositoryTest extends TestCase
      */
     public function testGetAllAddressesReturnsEmptyArrayForInvalidTransportIndex(): void
     {
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableAddressRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getAllAddressTypes'])
             ->getMock();
@@ -559,7 +562,7 @@ class AddressRepositoryTest extends TestCase
     {
         $expectedHash = hash(Constants::HASH_ALGORITHM, 'test-key');
 
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableAddressRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getAllAddressTypes'])
             ->getMock();
@@ -593,7 +596,7 @@ class AddressRepositoryTest extends TestCase
      */
     public function testGetContactPubkeyHashReturnsNullWhenNotFound(): void
     {
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableAddressRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getAllAddressTypes'])
             ->getMock();
@@ -623,7 +626,7 @@ class AddressRepositoryTest extends TestCase
      */
     public function testGetContactPubkeyHashReturnsNullForInvalidTransportIndex(): void
     {
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableAddressRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getAllAddressTypes'])
             ->getMock();
@@ -644,7 +647,7 @@ class AddressRepositoryTest extends TestCase
     {
         $expectedHash = hash(Constants::HASH_ALGORITHM, 'test-key');
 
-        $repository = $this->getMockBuilder(get_class($this->repository))
+        $repository = $this->getMockBuilder(TestableAddressRepository::class)
             ->setConstructorArgs([$this->pdo])
             ->onlyMethods(['getAllAddressTypes'])
             ->getMock();
@@ -757,5 +760,20 @@ class AddressRepositoryTest extends TestCase
         $this->assertContains('http', $allowedColumns);
         $this->assertContains('https', $allowedColumns);
         $this->assertContains('tor', $allowedColumns);
+    }
+}
+
+/**
+ * Named testable subclass to bypass AbstractRepository constructor dependencies.
+ * Anonymous classes cannot be used with getMockBuilder due to '@' in class names.
+ */
+class TestableAddressRepository extends AddressRepository
+{
+    public function __construct(PDO $pdo)
+    {
+        $this->pdo = $pdo;
+        $this->tableName = 'addresses';
+        $this->primaryKey = 'pubkey_hash';
+        $this->allowedColumns = ['id', 'pubkey_hash', 'http', 'https', 'tor'];
     }
 }

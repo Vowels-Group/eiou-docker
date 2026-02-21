@@ -169,7 +169,7 @@ class UserContext {
         if ($this->has('private_encrypted')) {
             try {
                 return KeyEncryption::decrypt($this->get('private_encrypted'));
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 // Log decryption failure but don't expose details
                 Logger::getInstance()->error('Failed to decrypt private key', [
                     'error' => $e->getMessage()
@@ -208,7 +208,7 @@ class UserContext {
         if ($this->has('authcode_encrypted')) {
             try {
                 return KeyEncryption::decrypt($this->get('authcode_encrypted'));
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 // Log decryption failure but don't expose details
                 Logger::getInstance()->error('Failed to decrypt auth code', [
                     'error' => $e->getMessage()

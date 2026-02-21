@@ -73,6 +73,17 @@ class SyncServiceTest extends TestCase
             ->method('getTransportUtility')
             ->willReturn($this->mockTransportUtility);
 
+        // Default mock for verifyChainIntegrity - returns valid empty chain
+        $this->mockChainRepo->expects($this->any())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => true,
+                'has_transactions' => false,
+                'transaction_count' => 0,
+                'gaps' => [],
+                'broken_txids' => []
+            ]);
+
         $this->service = new SyncService(
             $this->mockContactRepo,
             $this->mockAddressRepo,
@@ -1529,6 +1540,40 @@ class SyncServiceTest extends TestCase
         $this->assertEquals(1, $result['synced_count']);
     }
 
+    /**
+     * Create a SyncService that bypasses signature verification for chain conflict tests.
+     * Signature verification uses openssl_verify() which requires real keys.
+     * Chain conflict resolution tests focus on the conflict logic, not crypto.
+     */
+    private function createServiceWithBypassedSignatureVerification(): SyncService
+    {
+        $service = $this->getMockBuilder(SyncService::class)
+            ->setConstructorArgs([
+                $this->mockContactRepo,
+                $this->mockAddressRepo,
+                $this->mockP2pRepo,
+                $this->mockRp2pRepo,
+                $this->mockTransactionRepo,
+                $this->mockChainRepo,
+                $this->mockTxContactRepo,
+                $this->mockBalanceRepo,
+                $this->mockUtilityContainer,
+                $this->mockUserContext
+            ])
+            ->onlyMethods(['verifyTransactionSignature', 'verifyRecipientSignature'])
+            ->getMock();
+
+        $service->expects($this->any())
+            ->method('verifyTransactionSignature')
+            ->willReturn(true);
+
+        $service->expects($this->any())
+            ->method('verifyRecipientSignature')
+            ->willReturn(true);
+
+        return $service;
+    }
+
     // =========================================================================
     // Chain Conflict Resolution Tests
     // =========================================================================
@@ -1628,7 +1673,8 @@ class SyncServiceTest extends TestCase
      */
     public function testResolveChainConflictRemoteWinsLexicographically(): void
     {
-        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $contactAddress = 'http://contact.example.com';
         $contactPubkey = 'contact-public-key';
@@ -1699,6 +1745,11 @@ class SyncServiceTest extends TestCase
             ->method('transactionExistsTxid')
             ->willReturn(false);
 
+        // Remote transaction is inserted after conflict resolution
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('insertTransaction')
+            ->willReturn('aaa-remote-txid');
+
         // When remote wins, we need to re-sign our local transaction
         // First update previous_txid
         $this->mockChainRepo->expects($this->once())
@@ -1736,7 +1787,7 @@ class SyncServiceTest extends TestCase
             ->with('bbb-local-txid', Constants::STATUS_PENDING, true)
             ->willReturn(true);
 
-        $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
 
         // Remote wins because aaa < bbb lexicographically
         $this->assertTrue($result['success']);
@@ -1751,7 +1802,8 @@ class SyncServiceTest extends TestCase
      */
     public function testResolveChainConflictIdenticalTxidsNoChange(): void
     {
-        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $contactAddress = 'http://contact.example.com';
         $contactPubkey = 'contact-public-key';
@@ -1809,23 +1861,20 @@ class SyncServiceTest extends TestCase
                 'latestTxid' => $sharedTxid
             ]));
 
-        // When txids match, getLocalTransactionByPreviousTxid returns the local tx
-        // but the conflict detection check (localConflict['txid'] !== $tx['txid'])
-        // will be false, so no conflict is detected
-        $this->mockChainRepo->expects($this->once())
-            ->method('getLocalTransactionByPreviousTxid')
-            ->willReturn($localConflictingTx);
-
-        // Transaction already exists (identical txid)
+        // Transaction already exists (identical txid) - skipped before conflict check
         $this->mockTransactionRepo->expects($this->any())
             ->method('transactionExistsTxid')
             ->with($sharedTxid)
             ->willReturn(true);
 
-        $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
+        // getLocalTransactionByPreviousTxid is never called because the
+        // transaction is skipped via continue when transactionExistsTxid returns true
+        $this->mockChainRepo->expects($this->never())
+            ->method('getLocalTransactionByPreviousTxid');
 
-        // No conflict detected because txids are identical
-        // (the check localConflict['txid'] !== tx['txid'] is false)
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
+
+        // No conflict detected because transaction already exists and is skipped
         $this->assertTrue($result['success']);
         $this->assertEquals(0, $result['conflicts_resolved']);
         $this->assertEquals(0, $result['synced_count']); // Skipped as it already exists
@@ -1839,7 +1888,8 @@ class SyncServiceTest extends TestCase
      */
     public function testResignLocalTransactionUpdatesSignature(): void
     {
-        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $contactAddress = 'http://contact.example.com';
         $contactPubkey = 'contact-public-key';
@@ -1905,6 +1955,11 @@ class SyncServiceTest extends TestCase
             ->method('transactionExistsTxid')
             ->willReturn(false);
 
+        // Remote transaction is inserted before re-signing
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('insertTransaction')
+            ->willReturn('aaa-winner');
+
         // Update previous_txid for losing transaction
         $this->mockChainRepo->expects($this->once())
             ->method('updatePreviousTxid')
@@ -1939,7 +1994,7 @@ class SyncServiceTest extends TestCase
             ->method('updateStatus')
             ->willReturn(true);
 
-        $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
 
         $this->assertTrue($result['success']);
         $this->assertEquals(1, $result['conflicts_resolved']);
@@ -1953,7 +2008,8 @@ class SyncServiceTest extends TestCase
      */
     public function testResignLocalTransactionSetsStatusToPending(): void
     {
-        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $contactAddress = 'http://contact.example.com';
         $contactPubkey = 'contact-public-key';
@@ -2017,6 +2073,11 @@ class SyncServiceTest extends TestCase
             ->method('transactionExistsTxid')
             ->willReturn(false);
 
+        // Remote transaction is inserted before re-signing
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('insertTransaction')
+            ->willReturn('aaa-winner');
+
         $this->mockChainRepo->expects($this->once())
             ->method('updatePreviousTxid')
             ->willReturn(true);
@@ -2043,7 +2104,7 @@ class SyncServiceTest extends TestCase
             ->with('zzz-loser', Constants::STATUS_PENDING, true)
             ->willReturn(true);
 
-        $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
 
         $this->assertTrue($result['success']);
     }
@@ -2056,7 +2117,8 @@ class SyncServiceTest extends TestCase
      */
     public function testResignLocalTransactionHandlesSigningFailure(): void
     {
-        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $contactAddress = 'http://contact.example.com';
         $contactPubkey = 'contact-public-key';
@@ -2120,6 +2182,11 @@ class SyncServiceTest extends TestCase
             ->method('transactionExistsTxid')
             ->willReturn(false);
 
+        // Remote transaction is inserted before re-signing
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('insertTransaction')
+            ->willReturn('inserted-txid');
+
         $this->mockChainRepo->expects($this->once())
             ->method('updatePreviousTxid')
             ->willReturn(true);
@@ -2128,16 +2195,16 @@ class SyncServiceTest extends TestCase
             ->method('getByTxid')
             ->willReturn([array_merge($localLosingTx, ['previous_txid' => 'aaa-winner'])]);
 
-        // Signing fails - returns null/false
+        // Signing fails - returns false (method return type is array|false)
         $this->mockTransportUtility->expects($this->once())
             ->method('signWithCapture')
-            ->willReturn(null);
+            ->willReturn(false);
 
         // updateSignatureData should NOT be called since signing failed
         $this->mockTransactionRepo->expects($this->never())
             ->method('updateSignatureData');
 
-        $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
 
         // Sync should still complete successfully despite re-signing failure
         // The conflict was detected and resolved (counted), even if re-signing failed
@@ -2153,7 +2220,8 @@ class SyncServiceTest extends TestCase
      */
     public function testChainConflictCountsInSyncResult(): void
     {
-        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $contactAddress = 'http://contact.example.com';
         $contactPubkey = 'contact-public-key';
@@ -2209,6 +2277,10 @@ class SyncServiceTest extends TestCase
             'previous_txid' => 'previous-tx-123',
             'sender_address' => 'http://user.example.com',
             'sender_public_key' => 'user-public-key',
+            'receiver_address' => 'http://contact.example.com',
+            'receiver_public_key' => 'contact-public-key',
+            'amount' => 500,
+            'currency' => 'USD',
             'memo' => 'standard',
             'status' => 'sent'
         ];
@@ -2218,6 +2290,10 @@ class SyncServiceTest extends TestCase
             'previous_txid' => 'aaa-remote-1',
             'sender_address' => 'http://user.example.com',
             'sender_public_key' => 'user-public-key',
+            'receiver_address' => 'http://contact.example.com',
+            'receiver_public_key' => 'contact-public-key',
+            'amount' => 1000,
+            'currency' => 'USD',
             'memo' => 'standard',
             'status' => 'sent'
         ];
@@ -2245,6 +2321,11 @@ class SyncServiceTest extends TestCase
         $this->mockTransactionRepo->expects($this->any())
             ->method('transactionExistsTxid')
             ->willReturn(false);
+
+        // Remote transactions are inserted
+        $this->mockTransactionRepo->expects($this->exactly(2))
+            ->method('insertTransaction')
+            ->willReturn('inserted-txid');
 
         // Both conflicts require re-signing (remote wins in both cases: aaa < zzz, bbb < yyy)
         $this->mockChainRepo->expects($this->exactly(2))
@@ -2278,7 +2359,7 @@ class SyncServiceTest extends TestCase
             ->method('updateStatus')
             ->willReturn(true);
 
-        $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
 
         $this->assertTrue($result['success']);
         // Verify both conflicts were counted

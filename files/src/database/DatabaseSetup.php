@@ -151,13 +151,14 @@ function runMigrations(PDO $pdo): array {
     $results = [];
 
     // List of migration tables to create (added after initial release)
+    // Use fully-qualified names since dynamic calls don't use namespace resolution
     $migrations = [
-        'chain_drop_proposals' => 'getChainDropProposalsTableSchema',
-        'rp2p_candidates' => 'getRp2pCandidatesTableSchema',
-        'p2p_senders' => 'getP2pSendersTableSchema',
-        'p2p_relayed_contacts' => 'getP2pRelayedContactsTableSchema',
-        'contact_credit' => 'getContactCreditTableSchema',
-        'api_nonces' => 'getApiNoncesTableSchema',
+        'chain_drop_proposals' => __NAMESPACE__ . '\\getChainDropProposalsTableSchema',
+        'rp2p_candidates' => __NAMESPACE__ . '\\getRp2pCandidatesTableSchema',
+        'p2p_senders' => __NAMESPACE__ . '\\getP2pSendersTableSchema',
+        'p2p_relayed_contacts' => __NAMESPACE__ . '\\getP2pRelayedContactsTableSchema',
+        'contact_credit' => __NAMESPACE__ . '\\getContactCreditTableSchema',
+        'api_nonces' => __NAMESPACE__ . '\\getApiNoncesTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

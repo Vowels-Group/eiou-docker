@@ -1325,7 +1325,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      * @param array $tx Transaction data with sender_signature and signature_nonce
      * @return bool True if signature is valid, false otherwise
      */
-    private function verifyTransactionSignature(array $tx): bool {
+    protected function verifyTransactionSignature(array $tx): bool {
         // Both signature and nonce are required for verification
         if (empty($tx['sender_signature']) || empty($tx['signature_nonce'])) {
             // Log missing signature data
@@ -1424,7 +1424,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      * @param array $tx Transaction data with recipient_signature
      * @return bool True if signature is valid or not required, false if required but invalid
      */
-    private function verifyRecipientSignature(array $tx): bool {
+    protected function verifyRecipientSignature(array $tx): bool {
         $status = $tx['status'] ?? '';
 
         // Recipient signature only required for accepted/completed transactions

@@ -55,11 +55,11 @@ class UtilPayload extends BasePayload
     /**
      * Build invalid transaction ID rejection payload
      *
-     * @param string $previousTxResult Previous transaction result
+     * @param array $previousTxResult Previous transaction result
      * @param array $request Current request data
      * @return string JSON encoded invalid transaction ID payload
      */
-    public static function buildInvalidTransactionId(string $previousTxResult, array $request): string
+    public static function buildInvalidTransactionId(array $previousTxResult, array $request): string
     {
         $expectedTxid = $previousTxResult['txid'] ?? 'unknown';
         $receivedTxid = $request['previousTxid'] ?? 'none';
@@ -96,7 +96,8 @@ class UtilPayload extends BasePayload
      */
     public function buildInvalidSource(array $message): string
     {
-        $receiver = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
+        $senderAddress = $message['senderAddress'] ?? '';
+        $receiver = $senderAddress !== '' ? $this->transportUtility->resolveUserAddressForTransport($senderAddress) : 'unknown';
 
         return json_encode([
             'status' => Constants::STATUS_REJECTED,

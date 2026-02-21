@@ -679,15 +679,15 @@ class HeldTransactionServiceTest extends TestCase
                 'broken_txids' => ['broken1']
             ]);
 
-        $this->heldRepository->expects($this->once())
-            ->method('getHeldTransactionsForContact')
-            ->willReturn([]);
+        // Code returns early when chain integrity fails (before fetching held transactions)
+        $this->heldRepository->expects($this->never())
+            ->method('getHeldTransactionsForContact');
 
-        // Should still continue processing despite invalid chain
         $result = $this->service->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
 
         $this->assertEquals(0, $result['resumed_count']);
         $this->assertEquals(0, $result['failed_count']);
+        $this->assertTrue($result['chain_integrity_failed']);
     }
 
     /**

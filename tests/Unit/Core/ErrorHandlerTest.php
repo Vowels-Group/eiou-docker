@@ -15,6 +15,7 @@ use Eiou\Core\ErrorHandler;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Exceptions\ServiceException;
+use Eiou\Exceptions\RecoverableServiceException;
 use Exception;
 use ReflectionClass;
 
@@ -32,6 +33,25 @@ class ErrorHandlerTest extends TestCase
         $requestIdProperty = $reflection->getProperty('requestId');
         $requestIdProperty->setAccessible(true);
         $requestIdProperty->setValue(null, null);
+    }
+
+    protected function tearDown(): void
+    {
+        // Only restore handlers if ErrorHandler::init() was called during this test
+        $reflection = new ReflectionClass(ErrorHandler::class);
+        $initializedProperty = $reflection->getProperty('initialized');
+        $initializedProperty->setAccessible(true);
+        if ($initializedProperty->getValue(null)) {
+            restore_error_handler();
+            restore_exception_handler();
+        }
+
+        // Reset errorHandlers static property
+        $handlersProperty = $reflection->getProperty('errorHandlers');
+        $handlersProperty->setAccessible(true);
+        $handlersProperty->setValue(null, []);
+
+        parent::tearDown();
     }
 
     /**
@@ -250,11 +270,11 @@ class ErrorHandlerTest extends TestCase
      */
     public function testCreateErrorResponseWithContextFromServiceException(): void
     {
-        $exception = new ServiceException(
+        $exception = new RecoverableServiceException(
             'Test service error',
             'TEST_ERROR',
-            400,
-            ['context' => 'test']
+            ['context' => 'test'],
+            400
         );
 
         $response = ErrorHandler::createErrorResponseWithContext($exception);
@@ -270,7 +290,7 @@ class ErrorHandlerTest extends TestCase
     {
         ErrorHandler::setRequestId('test_req_id');
 
-        $exception = new ServiceException('Error', 'ERROR', 500);
+        $exception = new RecoverableServiceException('Error', 'ERROR', [], 500);
         $response = ErrorHandler::createErrorResponseWithContext($exception);
 
         $this->assertEquals('test_req_id', $response['request_id']);
@@ -283,7 +303,7 @@ class ErrorHandlerTest extends TestCase
     {
         ErrorHandler::setRequestId('default_id');
 
-        $exception = new ServiceException('Error', 'ERROR', 500);
+        $exception = new RecoverableServiceException('Error', 'ERROR', [], 500);
         $response = ErrorHandler::createErrorResponseWithContext($exception, 'explicit_id');
 
         $this->assertEquals('explicit_id', $response['request_id']);
@@ -458,10 +478,15 @@ class ErrorHandlerTest extends TestCase
      */
     public function testHandleErrorReturnsTrueForHandledErrors(): void
     {
+        // Ensure error reporting includes E_WARNING
+        $originalReporting = error_reporting(E_ALL);
+
         // Capture output
         ob_start();
         $result = ErrorHandler::handleError(E_WARNING, 'Test warning', __FILE__, __LINE__);
         ob_end_clean();
+
+        error_reporting($originalReporting);
 
         $this->assertTrue($result);
     }
@@ -500,7 +525,7 @@ class ErrorHandlerTest extends TestCase
      */
     public function testHandleExceptionHandlesServiceException(): void
     {
-        $exception = new ServiceException('Service error', 'SERVICE_ERROR', 400);
+        $exception = new RecoverableServiceException('Service error', 'SERVICE_ERROR', [], 400);
 
         ob_start();
         ErrorHandler::handleException($exception);

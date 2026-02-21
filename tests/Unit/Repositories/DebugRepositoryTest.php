@@ -61,14 +61,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugInsertsEntrySuccessfully(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 
@@ -91,14 +92,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugWithMinimalDataUsesDefaults(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 
@@ -113,14 +115,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugHandlesPdoExceptionGracefully(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willThrowException(new PDOException('Database error'));
 
@@ -139,13 +142,14 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugEncodesContextAsJson(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
         $jsonEncodedContext = null;
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$jsonEncodedContext) {
                 if ($key === ':context') {
@@ -154,7 +158,7 @@ class DebugRepositoryTest extends TestCase
                 return true;
             });
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 
@@ -561,14 +565,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugWithNullContext(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 
@@ -587,14 +592,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugWithEmptyContextArray(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 
@@ -620,14 +626,15 @@ class DebugRepositoryTest extends TestCase
             $stmt = $this->createMock(PDOStatement::class);
             $repository = new DebugRepository($pdo);
 
-            $pdo->expects($this->once())
+            // insertDebug calls prepare once, but random pruneOldEntries may call it again
+            $pdo->expects($this->atLeastOnce())
                 ->method('prepare')
                 ->willReturn($stmt);
 
-            $stmt->expects($this->exactly(6))
+            $stmt->expects($this->atLeast(6))
                 ->method('bindValue');
 
-            $stmt->expects($this->once())
+            $stmt->expects($this->atLeastOnce())
                 ->method('execute')
                 ->willReturn(true);
 
@@ -646,14 +653,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugWithVeryLongMessage(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 
@@ -671,14 +679,15 @@ class DebugRepositoryTest extends TestCase
      */
     public function testInsertDebugWithComplexContextObject(): void
     {
-        $this->pdo->expects($this->once())
+        // prepare may be called more than once (pruneOldEntries random trigger)
+        $this->pdo->expects($this->atLeastOnce())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(6))
+        $this->stmt->expects($this->atLeast(6))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->atLeastOnce())
             ->method('execute')
             ->willReturn(true);
 

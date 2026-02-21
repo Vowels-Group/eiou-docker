@@ -558,11 +558,11 @@ class Rp2pServiceCascadeCancelTest extends TestCase
                 'fast' => 0,
             ]);
 
-        // selectAndForwardBestRp2p should be triggered: it calls getBestCandidate
+        // selectAndForwardBestRp2p should be triggered: it calls getCandidatesByHash
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn([
+            ->willReturn([[
                 'hash' => self::TEST_HASH,
                 'time' => 1234567890,
                 'amount' => 10050,
@@ -571,10 +571,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
                 'sender_address' => self::TEST_ADDRESS,
                 'sender_signature' => 'test-sig',
                 'fee_amount' => 50,
-            ]);
-
-        $rp2pCandidateRepo->method('getCandidateCount')
-            ->willReturn(1);
+            ]]);
 
         // P2P record for handleRp2pRequest
         $this->p2pRepository->method('getByHash')
@@ -637,11 +634,15 @@ class Rp2pServiceCascadeCancelTest extends TestCase
                 'fast' => 0,
             ]);
 
-        // No best candidate found
+        // No candidates found via getCandidatesByHash
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
+
+        // getByHash returns a P2P with non-cancelled status (for guard check)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn(['hash' => self::TEST_HASH, 'status' => 'sent']);
 
         // Should cancel the P2P
         $this->p2pRepository->expects($this->once())
@@ -874,11 +875,15 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         $this->rp2pRepository->method('rp2pExists')
             ->willReturn(false);
 
-        // No best candidate found
+        // No candidates found via getCandidatesByHash
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
+
+        // getByHash returns a P2P with non-cancelled status (for guard check)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn(['hash' => self::TEST_HASH, 'status' => 'sent']);
 
         // Should cancel the P2P
         $this->p2pRepository->expects($this->once())
@@ -1098,11 +1103,15 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             ]);
 
         // selectAndForwardBestRp2p should be triggered (Phase 2)
-        // No candidates -> cancel + propagate
+        // No candidates via getCandidatesByHash -> cancel + propagate
         $rp2pCandidateRepo->expects($this->once())
-            ->method('getBestCandidate')
+            ->method('getCandidatesByHash')
             ->with(self::TEST_HASH)
-            ->willReturn(null);
+            ->willReturn([]);
+
+        // getByHash returns a P2P with non-cancelled status (for guard check)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn(['hash' => self::TEST_HASH, 'status' => 'sent']);
 
         $this->p2pRepository->expects($this->once())
             ->method('updateStatus')

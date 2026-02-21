@@ -178,7 +178,6 @@ class TransactionProcessingServiceTest extends TestCase
             ->willReturn($this->mockTimeUtility);
 
         $this->service->setUtilityContainer($mockUtilityContainer);
-        $this->expectNotToPerformAssertions();
     }
 
     // =========================================================================
@@ -192,7 +191,15 @@ class TransactionProcessingServiceTest extends TestCase
      */
     public function testProcessTransactionWithMissingRequiredFieldsThrowsException(): void
     {
-        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
+        // processTransaction requires 'memo' and 'senderAddress' keys
+        $this->mockLogger->expects($this->once())
+            ->method('error')
+            ->with('Missing required fields in transaction request', $this->anything());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid transaction request structure');
+
+        $this->service->processTransaction(['someKey' => 'value']);
     }
 
     /**

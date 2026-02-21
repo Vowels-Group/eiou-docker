@@ -345,8 +345,8 @@ class ChainDropServiceTest extends TestCase
             ->method('updateStatus')
             ->with(self::TEST_PROPOSAL_ID, 'accepted');
 
-        // Contact address lookup for sending acceptance
-        $this->contactRepository->expects($this->once())
+        // Contact address lookup (called for balance sync and sending acceptance)
+        $this->contactRepository->expects($this->exactly(2))
             ->method('lookupByPubkeyHash')
             ->with($contactPubkeyHash)
             ->willReturn(['http' => self::TEST_CONTACT_ADDRESS]);

@@ -440,14 +440,7 @@ class DeadLetterQueueRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(false);
+            ->willThrowException(new \PDOException('Database error'));
 
         $result = $this->repository->markRetrying(1);
 
@@ -486,14 +479,7 @@ class DeadLetterQueueRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(false);
+            ->willThrowException(new \PDOException('Database error'));
 
         $result = $this->repository->markResolved(1);
 
@@ -553,14 +539,7 @@ class DeadLetterQueueRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(false);
+            ->willThrowException(new \PDOException('Database error'));
 
         $result = $this->repository->markAbandoned(1);
 
@@ -599,14 +578,7 @@ class DeadLetterQueueRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(false);
+            ->willThrowException(new \PDOException('Database error'));
 
         $result = $this->repository->returnToPending(1);
 
