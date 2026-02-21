@@ -413,9 +413,9 @@ echo -e "\n[Response Format Validation Tests]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating successResponse() format structure"
 
-# Use the cached statusResponse from earlier test
-formatValid=$(docker exec ${testContainer} php -r "
-    \$json = '${statusResponse}';
+# Use the cached statusResponse from earlier test (pipe via stdin to avoid ARG_MAX)
+formatValid=$(printf '%s' "${statusResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     // Check required fields for success response
@@ -451,8 +451,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating errorResponse() format structure"
 
-errorFormatValid=$(docker exec ${testContainer} php -r "
-    \$json = '${unauthorizedResponse}';
+errorFormatValid=$(printf '%s' "${unauthorizedResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     // Check required fields for error response
@@ -492,8 +492,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating wallet info addresses structure"
 
-walletInfoValid=$(docker exec ${testContainer} php -r "
-    \$json = '${infoResponse}';
+walletInfoValid=$(printf '%s' "${infoResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasAddresses = isset(\$response['data']['addresses']) && is_array(\$response['data']['addresses']);
@@ -518,8 +518,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating contacts list structure"
 
-contactsValid=$(docker exec ${testContainer} php -r "
-    \$json = '${contactsResponse}';
+contactsValid=$(printf '%s' "${contactsResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasContacts = isset(\$response['data']['contacts']) && is_array(\$response['data']['contacts']);
@@ -544,8 +544,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating transactions pagination structure"
 
-txPaginationValid=$(docker exec ${testContainer} php -r "
-    \$json = '${transactionsResponse}';
+txPaginationValid=$(printf '%s' "${transactionsResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasTransactions = isset(\$response['data']['transactions']) && is_array(\$response['data']['transactions']);
@@ -573,8 +573,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating system status structure"
 
-sysStatusValid=$(docker exec ${testContainer} php -r "
-    \$json = '${statusResponse}';
+sysStatusValid=$(printf '%s' "${statusResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasStatus = isset(\$response['data']['status']);
@@ -600,8 +600,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Validating system metrics structure"
 
-metricsStructValid=$(docker exec ${testContainer} php -r "
-    \$json = '${metricsResponse}';
+metricsStructValid=$(printf '%s' "${metricsResponse}" | docker exec -i ${testContainer} php -r "
+    \$json = file_get_contents('php://stdin');
     \$response = json_decode(\$json, true);
 
     \$hasTransactions = isset(\$response['data']['transactions']) && is_array(\$response['data']['transactions']);
