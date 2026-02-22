@@ -984,7 +984,7 @@ To restore from an encrypted backup file:
 Remove all data and start fresh:
 
 ```bash
-docker-compose -f docker-compose-single.yml down -v
+docker compose down -v
 ```
 
 ---
@@ -1131,4 +1131,4 @@ docker exec <container> tail -f /var/log/php_errors.log
 - [CLI Reference](CLI_REFERENCE.md) - Command-line interface documentation
 - [API Reference](API_REFERENCE.md) - REST API documentation
 - [Error Codes](ERROR_CODES.md) - Complete error code reference
-- [docker-compose-single.yml](../docker-compose-single.yml) - Reference template with inline documentation
+- [docker-compose.yml](../docker-compose.yml) - Reference template with inline documentation
