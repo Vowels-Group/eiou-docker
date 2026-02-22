@@ -30,7 +30,8 @@ docker compose up -d --build
 docker compose logs -f
 
 # Open the web GUI
-# http://localhost (HTTP) or https://localhost (HTTPS, self-signed cert)
+# https://localhost (HTTP redirects to HTTPS by default — your browser will show a certificate warning for the self-signed cert, this is expected)
+# For Tor: use Tor Browser and navigate to your node's .onion address (no certificate warning)
 ```
 
 The container automatically generates a wallet, starts Tor, and initializes all services. With the default `QUICKSTART=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for local testing. For production use (public IP, trusted SSL, custom domain), see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
@@ -77,12 +78,10 @@ All configuration is done through environment variables and volume mounts in `do
 
 The `NODE_NAME` variable controls the container name and all volume names (default: `eiou-node`). Change it to run multiple independent nodes or to customize naming:
 
-```bash
-# Option 1: set in a .env file next to docker-compose.yml
-echo "NODE_NAME=my-wallet" > .env
+Create a `.env` file next to `docker-compose.yml` with the following content:
 
-# Option 2: inline
-NODE_NAME=my-wallet docker compose up -d --build
+```
+NODE_NAME=my-wallet
 ```
 
 This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wallet-files`, `my-wallet-backups`.
