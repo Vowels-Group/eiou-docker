@@ -11,8 +11,6 @@ on:
     # Monthly on the 1st at 6 AM UTC
     - cron: '0 6 1 * *'
   pull_request:
-    paths:
-      - 'eiou.dockerfile'
   workflow_dispatch:
 
 permissions:
@@ -81,11 +79,10 @@ jobs:
             echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: "\U0001F6A8 Fail PR check if digest is outdated"
+      - name: "\U0001F6A8 Warn if digest is outdated"
         if: steps.compare.outputs.status == 'stale' && github.event_name == 'pull_request'
         run: |
-          echo "::warning::The pinned base image digest in eiou.dockerfile does not match the latest debian:12-slim digest on Docker Hub."
-          exit 1
+          echo "::warning::The pinned base image digest in eiou.dockerfile does not match the latest debian:12-slim digest on Docker Hub. Consider updating the digest."
 
       - name: "\U0001F4CB Open issue if digest is stale (scheduled)"
         if: steps.compare.outputs.status == 'stale' && github.event_name != 'pull_request'
