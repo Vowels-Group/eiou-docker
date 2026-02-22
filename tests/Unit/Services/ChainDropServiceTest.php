@@ -305,6 +305,188 @@ class ChainDropServiceTest extends TestCase
     }
 
     // =========================================================================
+    // handleIncomingProposal() Simultaneous Proposal Tiebreak Tests
+    // =========================================================================
+
+    /**
+     * Create a ChainDropService with a custom user pubkey hash for tiebreak tests
+     */
+    private function createServiceWithPubkeyHash(string $pubkeyHash): ChainDropService
+    {
+        $userContext = $this->createMock(UserContext::class);
+        $userContext->method('getPublicKey')->willReturn(self::TEST_USER_PUBKEY);
+        $userContext->method('getPublicKeyHash')->willReturn($pubkeyHash);
+        $userContext->method('getUserAddresses')->willReturn(['http://myaddress.example.com']);
+
+        return new ChainDropService(
+            $this->proposalRepository,
+            $this->transactionChainRepository,
+            $this->transactionRepository,
+            $this->contactRepository,
+            $this->utilityContainer,
+            $userContext
+        );
+    }
+
+    /**
+     * Test: when both sides propose simultaneously and we win the tiebreak (lower hash),
+     * auto-accept by executing the drop and sending acceptance for their proposal
+     */
+    public function testHandleIncomingProposalAutoAcceptsOnMutualProposalWhenTiebreakWins(): void
+    {
+        $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
+
+        // Our hash is lower → we win the tiebreak
+        $service = $this->createServiceWithPubkeyHash(str_repeat('0', 64));
+
+        $existingOutgoing = [
+            'proposal_id' => 'cdp-our-outgoing',
+            'contact_pubkey_hash' => $contactPubkeyHash,
+            'missing_txid' => self::TEST_MISSING_TXID,
+            'broken_txid' => self::TEST_BROKEN_TXID,
+            'previous_txid_before_gap' => self::TEST_PREVIOUS_TXID,
+            'direction' => 'outgoing',
+            'status' => 'pending'
+        ];
+
+        $this->proposalRepository->expects($this->once())
+            ->method('getActiveProposalForGap')
+            ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
+            ->willReturn($existingOutgoing);
+
+        // executeChainDrop: update previous_txid succeeds
+        $this->transactionChainRepository->expects($this->once())
+            ->method('updatePreviousTxid')
+            ->with(self::TEST_BROKEN_TXID, self::TEST_PREVIOUS_TXID)
+            ->willReturn(true);
+
+        // executeChainDrop: transaction not sent by us (no re-sign needed)
+        $this->transactionRepository->expects($this->once())
+            ->method('getByTxid')
+            ->with(self::TEST_BROKEN_TXID)
+            ->willReturn(['sender_public_key_hash' => 'other-sender-hash', 'memo' => 'standard']);
+
+        // For updateChainStatusAfterDrop
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true, 'gaps' => [], 'broken_txids' => [], 'transaction_count' => 7]);
+
+        // Contact lookups for balance sync, chain status, and address resolution
+        $this->contactRepository->method('lookupByPubkeyHash')
+            ->willReturn([
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
+                'http' => self::TEST_CONTACT_ADDRESS
+            ]);
+
+        // Verify markExecuted called on our outgoing proposal
+        $this->proposalRepository->expects($this->once())
+            ->method('markExecuted')
+            ->with('cdp-our-outgoing');
+
+        // Verify createProposal is NOT called (no incoming proposal stored)
+        $this->proposalRepository->expects($this->never())
+            ->method('createProposal');
+
+        $service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
+    }
+
+    /**
+     * Test: when both sides propose simultaneously and we lose the tiebreak (higher hash),
+     * silently return and let the other side handle it
+     */
+    public function testHandleIncomingProposalDefersOnMutualProposalWhenTiebreakLoses(): void
+    {
+        $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
+
+        // Our hash is higher → we lose the tiebreak
+        $service = $this->createServiceWithPubkeyHash(str_repeat('f', 64));
+
+        $existingOutgoing = [
+            'proposal_id' => 'cdp-our-outgoing',
+            'contact_pubkey_hash' => $contactPubkeyHash,
+            'missing_txid' => self::TEST_MISSING_TXID,
+            'broken_txid' => self::TEST_BROKEN_TXID,
+            'previous_txid_before_gap' => self::TEST_PREVIOUS_TXID,
+            'direction' => 'outgoing',
+            'status' => 'pending'
+        ];
+
+        $this->proposalRepository->expects($this->once())
+            ->method('getActiveProposalForGap')
+            ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
+            ->willReturn($existingOutgoing);
+
+        // Verify no chain drop execution
+        $this->transactionChainRepository->expects($this->never())
+            ->method('updatePreviousTxid');
+
+        // Verify markExecuted is NOT called
+        $this->proposalRepository->expects($this->never())
+            ->method('markExecuted');
+
+        // Verify createProposal is NOT called
+        $this->proposalRepository->expects($this->never())
+            ->method('createProposal');
+
+        $service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
+    }
+
+    /**
+     * Test: when an incoming proposal arrives for a gap that already has an incoming proposal,
+     * skip it (true duplicate — not a simultaneous proposal)
+     */
+    public function testHandleIncomingProposalSkipsDuplicateIncomingProposal(): void
+    {
+        $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
+
+        $existingIncoming = [
+            'proposal_id' => 'cdp-existing-incoming',
+            'contact_pubkey_hash' => $contactPubkeyHash,
+            'missing_txid' => self::TEST_MISSING_TXID,
+            'broken_txid' => self::TEST_BROKEN_TXID,
+            'previous_txid_before_gap' => self::TEST_PREVIOUS_TXID,
+            'direction' => 'incoming',
+            'status' => 'pending'
+        ];
+
+        $this->proposalRepository->expects($this->once())
+            ->method('getActiveProposalForGap')
+            ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
+            ->willReturn($existingIncoming);
+
+        // Verify no chain drop execution
+        $this->transactionChainRepository->expects($this->never())
+            ->method('updatePreviousTxid');
+
+        // Verify createProposal is NOT called
+        $this->proposalRepository->expects($this->never())
+            ->method('createProposal');
+
+        // Verify markExecuted is NOT called
+        $this->proposalRepository->expects($this->never())
+            ->method('markExecuted');
+
+        $this->service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
+    }
+
+    // =========================================================================
     // acceptProposal() Tests
     // =========================================================================
 

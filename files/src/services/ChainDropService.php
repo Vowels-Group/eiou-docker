@@ -278,6 +278,58 @@ class ChainDropService implements ChainDropServiceInterface
             // Check for existing active proposal for this gap
             $existing = $this->proposalRepository->getActiveProposalForGap($contactPubkeyHash, $missingTxid);
             if ($existing) {
+                // Simultaneous proposal: both sides proposed the same gap at the same time.
+                // Use deterministic tiebreaker so exactly one side auto-accepts.
+                if ($existing['direction'] === 'outgoing' && $existing['status'] === 'pending') {
+                    $ourPubkeyHash = $this->currentUser->getPublicKeyHash();
+                    if ($ourPubkeyHash < $contactPubkeyHash) {
+                        // We win the tiebreak — execute drop and send acceptance for their proposal
+                        Logger::getInstance()->info("Simultaneous chain drop: tiebreak winner, auto-accepting", [
+                            'our_proposal_id' => $existing['proposal_id'],
+                            'their_proposal_id' => $proposalId
+                        ]);
+
+                        $dropResult = $this->executeChainDrop($existing);
+                        if ($dropResult['success']) {
+                            $this->syncContactBalanceAfterDrop($existing['contact_pubkey_hash']);
+                            $this->updateChainStatusAfterDrop($existing['contact_pubkey_hash']);
+
+                            $contactAddress = $this->resolveContactAddress($contactPubkeyHash);
+                            if ($contactAddress) {
+                                $acceptPayload = $this->messagePayload->buildChainDropAcceptance(
+                                    $contactAddress,
+                                    $proposalId,
+                                    $dropResult['resigned_transactions'] ?? []
+                                );
+                                $this->transportUtility->send($contactAddress, $acceptPayload);
+                            }
+
+                            $this->proposalRepository->markExecuted($existing['proposal_id']);
+
+                            EventDispatcher::getInstance()->dispatch(ChainDropEvents::CHAIN_DROP_EXECUTED, [
+                                'proposal_id' => $existing['proposal_id'],
+                                'contact_pubkey_hash' => $existing['contact_pubkey_hash'],
+                                'missing_txid' => $existing['missing_txid'],
+                                'broken_txid' => $existing['broken_txid'],
+                                'new_previous_txid' => $existing['previous_txid_before_gap']
+                            ]);
+                        } else {
+                            Logger::getInstance()->warning("Simultaneous chain drop auto-accept failed", [
+                                'proposal_id' => $existing['proposal_id'],
+                                'error' => $dropResult['error'] ?? 'unknown'
+                            ]);
+                        }
+                    } else {
+                        // We lose the tiebreak — let the other side handle it
+                        Logger::getInstance()->info("Simultaneous chain drop: tiebreak loser, deferring", [
+                            'our_proposal_id' => $existing['proposal_id'],
+                            'their_proposal_id' => $proposalId
+                        ]);
+                    }
+                    return;
+                }
+
+                // Existing is incoming (true duplicate) — skip
                 Logger::getInstance()->info("Chain drop proposal already exists for this gap", [
                     'existing_proposal_id' => $existing['proposal_id'],
                     'incoming_proposal_id' => $proposalId
