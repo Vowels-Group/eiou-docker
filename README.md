@@ -30,7 +30,9 @@ docker compose up -d --build
 docker compose logs -f
 
 # Open the web GUI
-# http://localhost (HTTP) or https://localhost (HTTPS, self-signed cert)
+# http://localhost (HTTP)
+# https://localhost (HTTPS — your browser will show a certificate warning for the self-signed cert, this is expected)
+# For Tor: use Tor Browser and navigate to your node's .onion address (no certificate warning)
 ```
 
 The container automatically generates a wallet, starts Tor, and initializes all services. With the default `QUICKSTART=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for local testing. For production use (public IP, trusted SSL, custom domain), see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
