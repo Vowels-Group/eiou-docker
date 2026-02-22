@@ -1,0 +1,301 @@
+# Copyright 2025-2026 Vowels Group, LLC
+# =============================================================================
+# EIOU Docker Compose
+# =============================================================================
+#
+# Runs a single EIOU node with all services (Apache, MariaDB, Tor, PHP).
+#
+# Quick start:
+#   docker compose up -d --build
+#
+# Stop (preserves data):
+#   docker compose down
+#
+# Stop and delete all data:
+#   docker compose down -v
+#
+# View logs:
+#   docker compose logs -f
+#
+# NODE_NAME controls the container name and volume names.
+# Change it here, in a .env file, or inline:
+#   NODE_NAME=my-wallet docker compose up -d --build
+#
+# =============================================================================
+
+x-node-name: &node-name ${NODE_NAME:-eiou-node}
+
+services:
+  eiou:
+    build:
+      context: .
+      dockerfile: eiou.dockerfile
+    container_name: *node-name
+    networks:
+      - eiou-network
+    ports:
+      - "80:80"
+      - "443:443"
+
+    # =========================================================================
+    # ENVIRONMENT VARIABLES
+    # =========================================================================
+    #
+    # All variables have sensible defaults. Set QUICKSTART for HTTP/HTTPS
+    # mode, or omit it entirely for a Tor-only node.
+    #
+    # Full reference: docs/DOCKER_CONFIGURATION.md
+    #
+    # =========================================================================
+    environment:
+
+      # -----------------------------------------------------------------------
+      # NODE IDENTITY
+      # -----------------------------------------------------------------------
+
+      # QUICKSTART (recommended)
+      # Sets the node's hostname for HTTP/HTTPS mode. The node will be
+      # reachable at http://<value> and https://<value> within the Docker
+      # network. Also used as the display name and SSL certificate CN
+      # unless overridden by the variables below.
+      # If omitted, the node runs in Tor-only mode (reachable only via
+      # its auto-generated .onion address).
+      - QUICKSTART=eiou
+
+      # EIOU_NAME (optional)
+      # Display name shown in the local GUI wallet header and startup logs.
+      # Purely cosmetic — never broadcast to contacts or other nodes.
+      # Default: uses QUICKSTART value.
+      # - EIOU_NAME=My Node
+
+      # EIOU_HOST (optional)
+      # Externally reachable address (IP or domain name).
+      # Use this when your container is reachable at an address different
+      # from the QUICKSTART hostname (e.g., a public IP or domain).
+      # Default: uses QUICKSTART value.
+      # - EIOU_HOST=192.168.1.100
+
+      # EIOU_PORT (optional)
+      # Port appended to HTTP/HTTPS URLs. Use when mapping to a non-standard
+      # port (e.g., docker runs on 8443 externally).
+      # Default: not appended (standard ports 80/443 assumed).
+      # - EIOU_PORT=8443
+
+      # -----------------------------------------------------------------------
+      # WALLET RESTORATION (optional — choose one method)
+      # -----------------------------------------------------------------------
+      # Use these to restore an existing wallet from a BIP39 24-word seed
+      # phrase. If neither is set, a new wallet is generated on first boot.
+
+      # Method 1 — File-based (RECOMMENDED)
+      # More secure: seed phrase is not visible in process listings or
+      # environment variable dumps. Requires the seed file volume mount below.
+      # - RESTORE_FILE=/restore/seed
+
+      # Method 2 — Environment variable (less secure)
+      # Seed phrase may appear in logs, docker inspect, or process listings.
+      # The container clears this variable after successful restoration.
+      # Note: quotes are required when using docker run -e, but optional here.
+      # - RESTORE=word1 word2 word3 ... word24
+
+      # -----------------------------------------------------------------------
+      # SSL CERTIFICATE CONFIGURATION (optional)
+      # -----------------------------------------------------------------------
+      # When QUICKSTART is set, the container auto-generates a self-signed SSL
+      # certificate. These variables let you customize or replace it.
+      #
+      # Certificate selection priority:
+      #   1. External certs mounted at /ssl-certs (server.crt, server.key)
+      #   2. Let's Encrypt (when LETSENCRYPT_EMAIL is set)
+      #   3. CA-signed (when /ssl-ca/ca.crt is mounted)
+      #   4. Self-signed (automatic fallback)
+
+      # SSL_DOMAIN (optional)
+      # Override the Common Name (CN) in the SSL certificate.
+      # Default: uses EIOU_HOST, then QUICKSTART.
+      # - SSL_DOMAIN=node.example.com
+
+      # SSL_EXTRA_SANS (optional)
+      # Additional Subject Alternative Names for the certificate.
+      # Format: comma-separated TYPE:value pairs.
+      # Supported: DNS:hostname, IP:address
+      # - SSL_EXTRA_SANS=DNS:alt.example.com,IP:10.0.0.1
+
+      # LETSENCRYPT_EMAIL (optional)
+      # Setting this enables automatic Let's Encrypt certificate requests.
+      # Requires: real FQDN domain, port 80 reachable from the internet.
+      # Also receives certificate expiry warnings.
+      # - LETSENCRYPT_EMAIL=admin@example.com
+
+      # LETSENCRYPT_DOMAIN (optional)
+      # Domain for the Let's Encrypt certificate.
+      # Default: uses SSL_DOMAIN, then EIOU_HOST, then QUICKSTART.
+      # - LETSENCRYPT_DOMAIN=node.example.com
+
+      # LETSENCRYPT_STAGING (optional)
+      # Use the Let's Encrypt staging server for testing (avoids rate limits).
+      # Staging certificates are NOT browser-trusted. Remove after testing.
+      # - LETSENCRYPT_STAGING=true
+
+      # P2P_SSL_VERIFY (optional)
+      # Verify SSL certificates when making outbound HTTPS P2P connections.
+      # Set to false when all nodes use self-signed certificates.
+      # Default: true
+      # - P2P_SSL_VERIFY=false
+
+      # P2P_CA_CERT (optional)
+      # Path to a CA certificate file for P2P SSL verification.
+      # Use with the CA volume mount below to trust a shared CA.
+      # - P2P_CA_CERT=/ssl-ca/ca.crt
+
+      # -----------------------------------------------------------------------
+      # TIMEOUT CONFIGURATION (optional)
+      # -----------------------------------------------------------------------
+      # Increase these for WSL2 or slow/resource-constrained environments.
+
+      # EIOU_HS_TIMEOUT (optional)
+      # Seconds to wait for the Tor hidden service to become available.
+      # Default: 60
+      # - EIOU_HS_TIMEOUT=60
+
+      # EIOU_TOR_TIMEOUT (optional)
+      # Seconds to wait for Tor network connectivity verification.
+      # Default: 120
+      # - EIOU_TOR_TIMEOUT=120
+
+      # -----------------------------------------------------------------------
+      # FEATURE FLAGS (optional)
+      # -----------------------------------------------------------------------
+
+      # EIOU_TEST_MODE (optional)
+      # Enables manual message processing (eiou in / eiou out commands)
+      # and bypasses rate limiting. For development/testing ONLY.
+      # Default: false
+      # - EIOU_TEST_MODE=true
+
+      # EIOU_CONTACT_STATUS_ENABLED (optional)
+      # Controls the background processor that pings contacts to update
+      # their online/offline status. Disable in low-bandwidth environments
+      # or during automated testing.
+      # Default: true
+      # - EIOU_CONTACT_STATUS_ENABLED=true
+
+      # EIOU_BACKUP_AUTO_ENABLED (optional)
+      # Automatic daily encrypted database backups at midnight.
+      # Backups use AES-256-GCM encryption with the wallet's master key.
+      # Only the 3 most recent backups are retained.
+      # Default: true
+      # - EIOU_BACKUP_AUTO_ENABLED=true
+
+      # EIOU_AUTO_CHAIN_DROP_PROPOSE (optional)
+      # Auto-propose chain drops when send/ping detects a mutual gap that
+      # sync and backup recovery cannot repair.
+      # Default: true
+      # - EIOU_AUTO_CHAIN_DROP_PROPOSE=true
+
+      # EIOU_AUTO_CHAIN_DROP_ACCEPT (optional)
+      # Auto-accept incoming chain drop proposals (with balance guard).
+      # The balance guard blocks auto-accept if missing transactions include
+      # net payments owed to this node.
+      # Default: false (all proposals require manual review)
+      # - EIOU_AUTO_CHAIN_DROP_ACCEPT=false
+
+    # =========================================================================
+    # VOLUME MOUNTS
+    # =========================================================================
+    #
+    # Named volumes persist data across container restarts and rebuilds.
+    # Volume names are derived from NODE_NAME (default: eiou-node).
+    # Use 'docker compose down -v' to remove all data and start fresh.
+    #
+    # BACKUP PRIORITY:
+    #   CRITICAL — mysql-data (transactions, contacts, balances)
+    #   CRITICAL — files (wallet keys, encryption keys, config)
+    #   CRITICAL — backups (encrypted database backups)
+    #
+    # =========================================================================
+    volumes:
+      # Database: transactions, contacts, balances
+      # This is your transaction history — back this up.
+      - mysql-data:/var/lib/mysql
+
+      # Config: wallet private keys, encryption keys, userconfig.json
+      # Without this, your wallet identity is lost — back this up.
+      - files:/etc/eiou/
+
+      # Backups: encrypted daily database backups (AES-256-GCM)
+      # Off-site storage recommended for disaster recovery.
+      - backups:/var/lib/eiou/backups
+
+      # OPTIONAL: Let's Encrypt certificate persistence
+      # Required when using LETSENCRYPT_EMAIL so certificates survive restarts.
+      # If you uncomment this, also uncomment letsencrypt in the volumes
+      # section at the bottom of this file.
+      # - letsencrypt:/etc/letsencrypt
+
+      # OPTIONAL: External SSL certificates (Let's Encrypt wildcard, commercial CA)
+      # Mount a directory containing server.crt and server.key (PEM format).
+      # Optional: ca-chain.crt for the CA certificate chain.
+      # See: docs/DOCKER_CONFIGURATION.md#external-certificates-manual
+      # - ./my-certs:/ssl-certs:ro
+
+      # OPTIONAL: CA-signed certificates (development/testing)
+      # Generate a CA first: ./scripts/create-ssl-ca.sh ./ssl-ca
+      # Then install ssl-ca/ca.crt in your browser trust store.
+      # See: docs/DOCKER_CONFIGURATION.md#local-ca-developmenttesting
+      # - ./ssl-ca:/ssl-ca:ro
+
+      # OPTIONAL: Wallet restoration from seed file (TEMPORARY MOUNT)
+      # Use with RESTORE_FILE=/restore/seed environment variable.
+      # After successful restoration, remove this mount AND delete the seed
+      # file from disk. Never leave seed phrases on persistent storage.
+      # - /path/to/seed.txt:/restore/seed:ro
+
+    # =========================================================================
+    # CONTAINER SETTINGS
+    # =========================================================================
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+          pids: 200
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
+
+networks:
+  eiou-network:
+    driver: bridge
+    name: eiou-network
+
+# =============================================================================
+# NAMED VOLUMES
+# =============================================================================
+# Volume names are derived from NODE_NAME (default: eiou-node).
+# To completely reset all data: docker compose down -v
+# =============================================================================
+volumes:
+  mysql-data:
+    name: ${NODE_NAME:-eiou-node}-mysql-data
+  files:
+    name: ${NODE_NAME:-eiou-node}-files
+  backups:
+    name: ${NODE_NAME:-eiou-node}-backups
+  # Uncomment if using LETSENCRYPT_EMAIL:
+  # letsencrypt:
+  #   name: ${NODE_NAME:-eiou-node}-letsencrypt

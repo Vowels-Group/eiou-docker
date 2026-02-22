@@ -1,289 +1,322 @@
-# EIOU Docker Compose Setup
+# EIOU Docker
 
-This repository provides Docker Compose configurations for running EIOU nodes in various network topologies. Each configuration includes named volumes for persistent data storage and automatic network setup.
+Run an EIOU node with a single `docker compose` command. The container includes everything needed: Apache, MariaDB, Tor, PHP processors, and the web GUI.
 
 ## Key Features
-- **Contact Management**: Build and manage trust networks with configurable fees and credit limits
-- **P2P Transactions**: Automatic multi-hop payment routing through trust networks
-- **Multi-Transport**: HTTP, HTTPS, and Tor network support
-- **REST API**: Full API with HMAC-SHA256 authentication
-- **Web GUI Dashboard**: Full-featured web interface for node management and monitoring
-- **CLI Interface**: Complete command-line management tools
-- **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
-- **Persistent Storage**: Named volumes for MySQL data, configuration, and backups
+
+- **Web GUI Dashboard** — manage contacts, transactions, and node settings from your browser
+- **P2P Transactions** — automatic multi-hop payment routing through trust networks
+- **Multi-Transport** — HTTP, HTTPS, and Tor (.onion) support out of the box
+- **REST API** — full API with HMAC-SHA256 authentication
+- **CLI Interface** — complete command-line management via `eiou` commands
+- **Encrypted Backups** — automatic daily database backups encrypted with AES-256-GCM
+- **Persistent Storage** — named Docker volumes keep your data across restarts and rebuilds
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (includes Docker Compose)
+
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/eiou-org/eiou-docker.git
+cd eiou-docker
+
+# Start the node
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Open the web GUI
+# http://localhost (HTTP) or https://localhost (HTTPS, self-signed cert)
+```
+
+The container automatically generates a wallet, starts Tor, and initializes all services. With the default `QUICKSTART=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for local testing. For production use (public IP, trusted SSL, custom domain), see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
+
+## Container Management
+
+```bash
+# Check container status and health
+docker compose ps
+
+# View real-time logs
+docker compose logs -f
+
+# Execute CLI commands inside the container
+docker exec eiou-node eiou info              # Node address, Tor address, public key
+docker exec eiou-node eiou info detail       # Detailed info including balances
+docker exec eiou-node eiou contacts          # List contacts
+
+# Add a contact (address is the other node's HTTP/HTTPS/Tor URL)
+docker exec eiou-node eiou add <address> <name> <fee> <credit> <currency>
+
+# Send a transaction (by contact name or address)
+docker exec eiou-node eiou send <contact-name-or-address> <amount> <currency>
+
+# Restart the container
+docker compose restart
+
+# Stop (preserves all data in volumes)
+docker compose down
+
+# Stop and DELETE all data (fresh start)
+docker compose down -v
+```
+
+## Configuration
+
+All configuration is done through environment variables and volume mounts in `docker-compose.yml`. The file is heavily commented — open it and uncomment what you need.
+
+### Container & Volume Naming
+
+The `NODE_NAME` variable controls the container name and all volume names (default: `eiou-node`). Change it to run multiple independent nodes or to customize naming:
+
+```bash
+# Option 1: set in a .env file next to docker-compose.yml
+echo "NODE_NAME=my-wallet" > .env
+
+# Option 2: inline
+NODE_NAME=my-wallet docker compose up -d --build
+```
+
+This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wallet-files`, `my-wallet-backups`.
+
+### Environment Variables
+
+#### Node Identity
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `QUICKSTART` | No | *(none)* | Node hostname for HTTP/HTTPS mode. Sets the address, display name, and SSL certificate CN. The node is reachable at `http://<value>` within Docker. If omitted, the node runs in **Tor-only mode** (reachable only via its .onion address) |
+| `EIOU_NAME` | No | `QUICKSTART` | Display name shown in the local GUI header and logs. Cosmetic only — never sent to other nodes |
+| `EIOU_HOST` | No | `QUICKSTART` | Externally reachable address (IP or domain). Use when the public address differs from the container hostname |
+| `EIOU_PORT` | No | *(none)* | Port appended to URLs. Use when mapping to a non-standard external port (e.g., `8443`) |
+
+**Example — production node with public IP:**
+
+```yaml
+environment:
+  - QUICKSTART=mynode
+  - EIOU_NAME=My EIOU Node
+  - EIOU_HOST=88.99.69.172
+  - EIOU_PORT=8443
+```
+
+This generates addresses `http://88.99.69.172:8443` and `https://88.99.69.172:8443`, with "My EIOU Node" as the local display name.
+
+**Priority:** Address: `EIOU_HOST` > `QUICKSTART` | Name: `EIOU_NAME` > `QUICKSTART` | SSL CN: `SSL_DOMAIN` > `EIOU_HOST` > `QUICKSTART`
+
+#### Wallet Restoration
+
+To restore an existing wallet from a BIP39 24-word seed phrase, use one of these methods. If neither is set, a fresh wallet is generated on first boot.
+
+| Variable | Description |
+|----------|-------------|
+| `RESTORE_FILE` | Path inside the container to a file containing the seed phrase. **Recommended** — the seed is not exposed in process listings or `docker inspect`. Requires a corresponding volume mount (see below) |
+| `RESTORE` | The seed phrase directly as an environment variable. Less secure — visible in logs and `docker inspect`. Value **must be quoted** (contains spaces). Cleared by the container after restoration |
+
+**Example — file-based restoration (recommended):**
+
+```yaml
+environment:
+  - QUICKSTART=mynode
+  - RESTORE_FILE=/restore/seed
+volumes:
+  - /secure/path/seed.txt:/restore/seed:ro
+```
+
+Create the seed file: `echo "word1 word2 ... word24" > seed.txt && chmod 600 seed.txt`
+
+After successful restoration, remove the volume mount and restart. Don't leave seed files mounted permanently.
+
+#### SSL Certificates
+
+The container auto-generates a self-signed certificate by default. Override with trusted certificates using these variables.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SSL_DOMAIN` | `EIOU_HOST` or `QUICKSTART` | Override the certificate Common Name (CN) |
+| `SSL_EXTRA_SANS` | *(none)* | Additional Subject Alternative Names. Format: `DNS:alt.local,IP:10.0.0.1` |
+| `LETSENCRYPT_EMAIL` | *(none)* | **Setting this enables Let's Encrypt.** Email for registration and expiry warnings. Requires a real FQDN and port 80 reachable from the internet |
+| `LETSENCRYPT_DOMAIN` | `SSL_DOMAIN` | Domain for the Let's Encrypt certificate |
+| `LETSENCRYPT_STAGING` | `false` | Use the staging server for testing (avoids rate limits, certs won't be browser-trusted) |
+| `P2P_SSL_VERIFY` | `true` | Verify SSL certificates on outbound P2P HTTPS connections. Set to `false` when all nodes use self-signed certs |
+| `P2P_CA_CERT` | *(none)* | Path to a CA certificate for P2P verification. Use with the `/ssl-ca` volume mount |
+
+**Certificate selection priority:**
+1. External certs mounted at `/ssl-certs` (server.crt, server.key)
+2. Let's Encrypt (when `LETSENCRYPT_EMAIL` is set)
+3. CA-signed (when `/ssl-ca/ca.crt` is mounted)
+4. Self-signed (automatic)
+
+See [docs/DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md#ssl-certificate-configuration) for multi-node SSL setups, wildcard certificates, and browser CA trust installation.
+
+#### Timeouts
+
+Increase these for WSL2 or resource-constrained environments.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EIOU_HS_TIMEOUT` | `60` | Seconds to wait for Tor hidden service |
+| `EIOU_TOR_TIMEOUT` | `120` | Seconds to wait for Tor network connectivity |
+
+#### Feature Flags
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EIOU_TEST_MODE` | `false` | Enable manual message processing (`eiou in`/`eiou out`) and bypass rate limiting. **Development only** |
+| `EIOU_CONTACT_STATUS_ENABLED` | `true` | Background processor that pings contacts for online/offline status. Disable to reduce network traffic |
+| `EIOU_BACKUP_AUTO_ENABLED` | `true` | Automatic encrypted database backups at midnight. Keeps 3 most recent |
+| `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | Auto-propose chain drops when mutual gaps are detected that sync cannot repair |
+| `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | Auto-accept chain drop proposals (with balance guard). Default is off — proposals require manual review |
+
+### Volume Mounts
+
+#### Required Volumes (enabled by default)
+
+These named volumes persist your data across container restarts and rebuilds. Volume names are derived from `NODE_NAME` (default: `eiou-node`). **Back up regularly.**
+
+| Volume | Container Path | Contents | Backup Priority |
+|--------|----------------|----------|-----------------|
+| `{NODE_NAME}-mysql-data` | `/var/lib/mysql` | Transaction history, contacts, balances | **Critical** |
+| `{NODE_NAME}-files` | `/etc/eiou/` | Wallet private keys, encryption keys, configuration | **Critical** |
+| `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
+
+To completely reset and start fresh: `docker compose down -v`
+
+#### Optional Volumes (commented out in docker-compose.yml)
+
+Uncomment these in `docker-compose.yml` as needed:
+
+| Volume | Container Path | When to Use |
+|--------|----------------|-------------|
+| `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | With `LETSENCRYPT_EMAIL` — persists certificates across restarts |
+| `./my-certs` | `/ssl-certs:ro` | External SSL certificates (server.crt, server.key, optional ca-chain.crt) |
+| `./ssl-ca` | `/ssl-ca:ro` | Local CA for development. Generate with `./scripts/create-ssl-ca.sh ./ssl-ca` |
+| `/path/to/seed.txt` | `/restore/seed:ro` | **Temporary** — wallet restoration only. Use with `RESTORE_FILE=/restore/seed`. Remove this mount and delete the seed file from disk after successful restoration. Never leave seed phrases on persistent storage |
+
+### Resource Limits
+
+The default configuration allocates:
+
+| Resource | Limit | Reservation |
+|----------|-------|-------------|
+| CPU | 1.0 core | — |
+| Memory | 512 MB | 256 MB |
+
+Adjust in the `deploy.resources` section of `docker-compose.yml` if needed.
+
+## Backups
+
+### Automatic Backups
+
+Enabled by default (`EIOU_BACKUP_AUTO_ENABLED=true`). Runs at midnight, encrypts with AES-256-GCM, retains 3 most recent backups.
+
+### Manual Backup Commands
+
+```bash
+docker exec eiou-node eiou backup create                              # Create backup now
+docker exec eiou-node eiou backup list                                # List available backups
+docker exec eiou-node eiou backup restore <backup-file> --confirm     # Restore from backup
+docker exec eiou-node eiou backup cleanup                             # Delete old backups (keeps 3)
+```
+
+### Volume-Level Backup
+
+For complete disaster recovery, back up Docker volumes directly:
+
+```bash
+# Backup (replace eiou-node with your NODE_NAME if changed)
+docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup alpine tar czf /backup/mysql-data.tar.gz -C /data .
+docker run --rm -v eiou-node-files:/data -v $(pwd):/backup alpine tar czf /backup/files.tar.gz -C /data .
+docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup alpine tar czf /backup/backups.tar.gz -C /data .
+
+# Restore
+docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup alpine sh -c "cd /data && tar xzf /backup/mysql-data.tar.gz"
+docker run --rm -v eiou-node-files:/data -v $(pwd):/backup alpine sh -c "cd /data && tar xzf /backup/files.tar.gz"
+docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup alpine sh -c "cd /data && tar xzf /backup/backups.tar.gz"
+```
+
+## Troubleshooting
+
+### Container won't start
+
+```bash
+docker compose logs                      # Check startup logs
+docker compose down -v && docker compose up -d --build   # Fresh start
+```
+
+### Container stuck at "Waiting for MariaDB"
+
+Normal on first boot — MariaDB initialization takes up to 2 minutes. If it persists, ensure at least 512MB memory is available.
+
+### SSL certificate warnings in browser
+
+Expected with the default self-signed certificate. Options:
+1. Accept the browser warning for quick testing
+2. Use Let's Encrypt for trusted certs (`LETSENCRYPT_EMAIL`)
+3. Create a local CA: `./scripts/create-ssl-ca.sh ./ssl-ca`
+
+### P2P HTTPS fails between nodes (self-signed certs)
+
+Set `P2P_SSL_VERIFY=false` or use a shared CA. See [SSL troubleshooting](docs/DOCKER_CONFIGURATION.md#p2p-https-fails-between-docker-nodes-self-signed-certificates).
+
+### Slow startup on WSL2
+
+Increase timeouts:
+```yaml
+environment:
+  - EIOU_HS_TIMEOUT=120
+  - EIOU_TOR_TIMEOUT=240
+```
+
+### Log locations inside the container
+
+| Log | Path |
+|-----|------|
+| Apache access | `/var/log/apache2/access.log` |
+| Apache errors | `/var/log/apache2/error.log` |
+| PHP errors | `/var/log/php_errors.log` |
+| Tor | `/var/log/tor/log` |
+
+```bash
+docker exec eiou-node tail -f /var/log/apache2/error.log
+docker exec eiou-node tail -f /var/log/php_errors.log
+```
+
+## Multi-Node Testing
+
+The old multi-node compose files (4-line, 10-line, 13-node cluster) are archived in [`tests/old/compose-files/`](tests/old/compose-files/) along with demo topologies in [`tests/old/demo/`](tests/old/demo/) for HTTP, HTTPS, and Tor setups.
+
+To run multiple nodes, duplicate the service block in `docker-compose.yml` with unique container names, ports, and volume names. See [docs/DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md#port-mappings) for port mapping conventions.
 
 ## Testing
 
-The project includes comprehensive testing infrastructure:
-
 ```bash
-# Run unit tests (PHPUnit)
+# Unit tests (PHPUnit)
 cd files && composer test
 
-# Run integration tests
+# Integration tests
 cd tests && ./run-all-tests.sh http4
 ```
 
-See [Testing Guide](docs/TESTING.md) for detailed documentation.
+See [Testing Guide](docs/TESTING.md) for details.
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
+| [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Full environment variable, volume, SSL, and network reference |
 | [Architecture](docs/ARCHITECTURE.md) | System architecture and design |
-| [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Environment variables and volume mounts |
 | [Upgrade Guide](docs/UPGRADE_GUIDE.md) | How to update your node while preserving data |
 | [API Reference](docs/API_REFERENCE.md) | REST API documentation |
 | [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
 | [GUI Reference](docs/GUI_REFERENCE.md) | Web interface documentation |
 | [GUI Quick Reference](docs/GUI_QUICK_REFERENCE.md) | GUI feature summary |
 | [CLI Reference](docs/CLI_REFERENCE.md) | Command-line interface documentation |
+| [CLI Demo Guide](docs/CLI_DEMO_GUIDE.md) | Step-by-step CLI command walkthrough |
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 | [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
-| [CLI Demo Guide](docs/CLI_DEMO_GUIDE.md) | Step-by-step CLI command walkthrough |
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
-
-## Prerequisites
-
-- Docker
-- Docker Compose
-
-## Quick Start
-
-Each container uses the `QUICKSTART` environment variable (set in the compose file) to automatically generate a wallet, configure its HTTP/HTTPS address, generate SSL certificates, start Tor, and initialize all services on first boot. No manual setup is needed — containers are ready to use once healthy.
-
-### Single Node Setup
-```bash
-# Run a single EIOU node
-docker-compose -f docker-compose-single.yml up -d --build
-```
-
-### 4-Node Line Setup (Alice, Bob, Carol, Daniel)
-```bash
-# Run 4 nodes in a line topology
-docker-compose -f docker-compose-4line.yml up -d --build
-```
-
-### 10-Node Line Setup
-```bash
-# Run 10 nodes in a line topology
-docker-compose -f docker-compose-10line.yml up -d --build
-```
-
-### 13-Node Cluster Setup
-```bash
-# Run 13 nodes in a cluster topology
-docker-compose -f docker-compose-cluster.yml up -d --build
-```
-
-## Available Configurations (pre-made)
-
-| Configuration | Nodes | Memory Usage | HTTP Ports | HTTPS Ports | Description |
-|---------------|-------|--------------|------------|-------------|-------------|
-| [`docker-compose-single.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-single.yml) | 1 | ~512MB | 80 | 443 | Single EIOU node for testing |
-| [`docker-compose-4line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-4line.yml) | 4 | ~2GB | 8080-8083 | 8443-8446 | Basic 4-node line topology |
-| [`docker-compose-10line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-10line.yml) | 10 | ~5GB | 8080-8089 | 8443-8452 | Extended 10-node line topology |
-| [`docker-compose-cluster.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-cluster.yml) | 13 | ~6.5GB | 8080-8092 | 8443-8455 | Cluster topology with hierarchical structure |
-
-**Resource Limits:** All containers are configured with resource limits (1.0 CPU, 512MB memory limit, 256MB reservation).
-
-## Container Management
-
-### View Running Containers
-```bash
-# List all running containers
-docker-compose -f <config-file>.yml ps
-
-# View logs from all containers
-docker-compose -f <config-file>.yml logs
-
-# Follow logs in real-time
-docker-compose -f <config-file>.yml logs -f
-```
-
-### Execute Commands in Containers
-
-With `QUICKSTART` set in docker-compose, each container automatically generates a wallet and configures its address on startup. No manual `eiou generate` is needed.
-
-```bash
-# View a node's address and wallet info
-docker-compose -f docker-compose-4line.yml exec alice eiou info
-
-# View detailed info including balances
-docker-compose -f docker-compose-4line.yml exec alice eiou info detail
-
-# Add a contact to a node (address is the target node's HTTP/HTTPS/Tor URL)
-docker-compose -f docker-compose-4line.yml exec alice eiou add http://bob bob 0.1 1000 USD
-
-# Send a transaction
-docker-compose -f docker-compose-4line.yml exec alice eiou send bob 10 USD
-```
-
-### Stop and Cleanup
-```bash
-# Stop all containers (preserves data)
-docker-compose -f <config-file>.yml down
-
-# Stop and remove all data volumes (WARNING: deletes all data)
-docker-compose -f <config-file>.yml down -v
-
-# Restart all containers
-docker-compose -f <config-file>.yml restart
-
-# Restart specific container
-docker-compose -f docker-compose-4line.yml restart alice
-```
-
-## Network Topologies (conceptuals)
-
-### Pre-made test topologies
-Under [tests/old/demo](https://github.com/eiou-org/eiou-docker/tree/main/tests/old/demo) are three folders containing pre-made topologies for HTTP, HTTPS, and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
-
-Below are all the .sh files listed for easy access, note the two versions of each file. The 'basic setup' and 'basic test setup', the former sets up the topology as described in the image in the folder. The later does the same as the former but also runs a few functions, like sending some transactions and checking contact information.
-
-#### HTTP
-| Configuration | Nodes | Memory Usage | Description |
-|---------------|-------|--------------|-------------|
-| [http4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [http4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [demo4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(basic%20setup%2C%20shell%20script)%20copy.sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [demo4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [http10 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
-| [http10 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
-| [Small Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
-| [Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
-| [HTTP Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
-| [HTTP Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
-
-
-#### HTTPS
-| Configuration | Nodes | Memory Usage | Description |
-|---------------|-------|--------------|-------------|
-| [https4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%20line%20(http4%20~1.1gb%20memory)/https4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [https4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%20line%20(http4%20~1.1gb%20memory)/https4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [demo4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [demo4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [https10 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/10%20contacts%20line%20(http10%20~2.8gb%20memory)/https10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
-| [https10 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/10%20contacts%20line%20(http10%20~2.8gb%20memory)/https10%20(shell%20test%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
-| [HTTPS Small Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/https_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
-| [HTTPS Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/https_small_cluster%20(shell%20test%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
-| [HTTPS Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/https_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
-| [HTTPS Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/https_cluster%20(shell%20test%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
-
-
-#### TOR
-| Configuration | Nodes | Memory Usage | Description |
-|---------------|-------|--------------|-------------|
-| [tor4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/4%20contacts%20line%20(tor4%20~1.1gb%20memory)/tor4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [tor4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/4%20contacts%20line%20(tor4%20~1.1gb%20memory)/tor4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [tor10 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/10%20contacts%20line%20(tor10%20~2.8gb%20memory)/tor10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
-| [tor10 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/10%20contacts%20line%20(tor10%20~2.8gb%20memory)/tor10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
-| [Tor Small Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/13%20contacts%20cluster%20(tor_small_cluster%20~3.5gb%20memory)/tor_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
-| [Tor Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/13%20contacts%20cluster%20(tor_small_cluster%20~3.5gb%20memory)/tor_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
-| [Tor Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/37%20contacts%20cluster%20(tor_cluster%20%20~9.5gb%20memory)/tor_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
-| [Tor Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/37%20contacts%20cluster%20(tor_cluster%20%20~9.5gb%20memory)/tor_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
-
-
-### Line Topology (4 nodes)
-<img width="2640" height="192" alt="topological 4 - overview (alice, bob, carol, daniel)" src="https://github.com/user-attachments/assets/a5da5519-7c22-4591-89f1-e27d699c576b" />
-
-The `eiou add` command syntax is: `eiou add <address> <name> <fee> <credit> <currency>` where:
-- `<address>` — the target node's URL (`http://`, `https://`, or `.onion` address). On the internal Docker network this is `http://<container-name>` (e.g., `http://bob`). Use `eiou info` on the target node to find its address.
-- `<name>` — a display name for the contact
-- `<fee>` — transaction fee percentage (e.g., `0.1` for 0.1%)
-- `<credit>` — credit limit extended to this contact
-- `<currency>` — currency code (e.g., `USD`)
-
-```bash
-# alice adds bob and bob adds alice
-docker-compose -f docker-compose-4line.yml exec alice eiou add <address> bob <fee> <credit> <currency>
-docker-compose -f docker-compose-4line.yml exec bob eiou add <address> alice <fee> <credit> <currency>
-# bob adds carol and carol adds bob
-docker-compose -f docker-compose-4line.yml exec bob eiou add <address> carol <fee> <credit> <currency>
-docker-compose -f docker-compose-4line.yml exec carol eiou add <address> bob <fee> <credit> <currency>
-# carol adds daniel and daniel adds carol
-docker-compose -f docker-compose-4line.yml exec carol eiou add <address> daniel <fee> <credit> <currency>
-docker-compose -f docker-compose-4line.yml exec daniel eiou add <address> carol <fee> <credit> <currency>
-```
-
-### Line Topology (10 nodes)
-<img width="2640" height="192" alt="toplogical 10" src="https://github.com/user-attachments/assets/15c36014-1e25-4a32-9bdf-b2b3f1f9948f" />
-
-```bash
-# node-a adds node-b and node-b adds node-a
-docker-compose -f docker-compose-10line.yml exec node-a eiou add <address> node-b <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-b eiou add <address> node-a <fee> <credit> <currency>
-# node-b adds node-c and node-c adds node-b
-docker-compose -f docker-compose-10line.yml exec node-b eiou add <address> node-c <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-c eiou add <address> node-b <fee> <credit> <currency>
-# node-c adds node-d and node-d adds node-c
-docker-compose -f docker-compose-10line.yml exec node-c eiou add <address> node-d <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-d eiou add <address> node-c <fee> <credit> <currency>
-# node-d adds node-e and node-e adds node-d
-docker-compose -f docker-compose-10line.yml exec node-d eiou add <address> node-e <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-e eiou add <address> node-d <fee> <credit> <currency>
-# node-e adds node-f and node-f adds node-e
-docker-compose -f docker-compose-10line.yml exec node-e eiou add <address> node-f <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-f eiou add <address> node-e <fee> <credit> <currency>
-# node-f adds node-g and node-g adds node-f
-docker-compose -f docker-compose-10line.yml exec node-f eiou add <address> node-g <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-g eiou add <address> node-f <fee> <credit> <currency>
-# node-g adds node-h and node-h adds node-g
-docker-compose -f docker-compose-10line.yml exec node-g eiou add <address> node-h <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-h eiou add <address> node-g <fee> <credit> <currency>
-# node-h adds node-i and node-i adds node-h
-docker-compose -f docker-compose-10line.yml exec node-h eiou add <address> node-i <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-i eiou add <address> node-h <fee> <credit> <currency>
-# node-i adds node-j and node-j adds node-i
-docker-compose -f docker-compose-10line.yml exec node-i eiou add <address> node-j <fee> <credit> <currency>
-docker-compose -f docker-compose-10line.yml exec node-j eiou add <address> node-i <fee> <credit> <currency>
-```
-
-### Cluster Topology (13 nodes)
-<img width="2640" height="1414" alt="topological cluster 13" src="https://github.com/user-attachments/assets/187cfd3b-f16d-4aaf-88bf-e46630192ff2" />
-
-```bash
-# bottom right branch
-# cluster-a0 (hub) adds cluster-a1 and cluster-a1 adds cluster-a0
-docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a1 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a0 <fee> <credit> <currency>
-# cluster-a1 adds cluster-a11 and cluster-a11 adds cluster-a1
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a11 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a11 eiou add <address> cluster-a1 <fee> <credit> <currency>
-# cluster-a1 adds cluster-a12 and cluster-a12 adds cluster-a1
-docker-compose -f docker-compose-cluster.yml exec cluster-a1 eiou add <address> cluster-a12 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a12 eiou add <address> cluster-a1 <fee> <credit> <currency>
-
-# bottom left branch
-# cluster-a0 (hub) adds cluster-a2 and cluster-a2 adds cluster-a0
-docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a2 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a0 <fee> <credit> <currency>
-# cluster-a2 adds cluster-a21 and cluster-a21 adds cluster-a2
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a21 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a21 eiou add <address> cluster-a2 <fee> <credit> <currency>
-# cluster-a2 adds cluster-a22 and cluster-a22 adds cluster-a2
-docker-compose -f docker-compose-cluster.yml exec cluster-a2 eiou add <address> cluster-a22 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a22 eiou add <address> cluster-a2 <fee> <credit> <currency>
-
-# top left branch
-# cluster-a0 (hub) adds cluster-a3 and cluster-a3 adds cluster-a0
-docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a3 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a0 <fee> <credit> <currency>
-# cluster-a3 adds cluster-a31 and cluster-a31 adds cluster-a3
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a31 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a31 eiou add <address> cluster-a3 <fee> <credit> <currency>
-# cluster-a3 adds cluster-a32 and cluster-a32 adds cluster-a3
-docker-compose -f docker-compose-cluster.yml exec cluster-a3 eiou add <address> cluster-a32 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a32 eiou add <address> cluster-a3 <fee> <credit> <currency>
-
-# top right branch
-# cluster-a0 (hub) adds cluster-a4 and cluster-a4 adds cluster-a0
-docker-compose -f docker-compose-cluster.yml exec cluster-a0 eiou add <address> cluster-a4 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a0 <fee> <credit> <currency>
-# cluster-a4 adds cluster-a41 and cluster-a41 adds cluster-a4
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a41 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a41 eiou add <address> cluster-a4 <fee> <credit> <currency>
-# cluster-a4 adds cluster-a42 and cluster-a42 adds cluster-a4
-docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a42 <fee> <credit> <currency>
-docker-compose -f docker-compose-cluster.yml exec cluster-a42 eiou add <address> cluster-a4 <fee> <credit> <currency>
-```
