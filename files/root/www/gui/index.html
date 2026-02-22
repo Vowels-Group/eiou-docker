@@ -108,8 +108,9 @@ if (!$secureSession->checkSessionTimeout()) {
 
 // If we get here, authentication is valid and session is active
 
-// Verify CSRF token for POST requests
-$secureSession->verifyCSRFToken();
+// Note: CSRF verification is handled by each controller method individually.
+// A global verifyCSRFToken() call here would consume (rotate) the token before
+// the controller can validate it, causing all POST actions to fail with 403.
 
 // Generate CSRF token for forms
 $csrfToken = $secureSession->getCSRFToken();
