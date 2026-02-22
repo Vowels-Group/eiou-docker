@@ -1,0 +1,123 @@
+# Copyright 2025-2026 Vowels Group, LLC
+#
+# Runs Docker integration tests on pull requests. Builds the eiou image,
+# deploys a 4-node HTTP topology, and runs the quick test subset.
+#
+# GitHub Actions runners: 2 vCPUs, 7GB RAM, Docker pre-installed.
+# The http4 topology (~1.1GB RAM) fits comfortably. Larger topologies
+# (http10 ~2.8GB, http13 ~3.5GB) are available via manual dispatch.
+
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'files/src/**'
+      - 'files/composer.json'
+      - 'tests/**'
+      - 'eiou.dockerfile'
+      - 'startup.sh'
+      - 'baseconfig/**'
+      - 'scripts/**'
+  workflow_dispatch:
+    inputs:
+      topology:
+        description: 'Test topology'
+        required: true
+        default: 'http4'
+        type: choice
+        options:
+          - http4
+          - http10
+          - http13
+          - collisions
+          - collisionscluster
+      subset:
+        description: 'Test subset'
+        required: true
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - all
+          - contacts
+          - transactions
+          - messaging
+          - api
+          - sync
+          - system
+          - bestfee
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Docker Integration (${{ github.event.inputs.topology || 'http4' }} / ${{ github.event.inputs.subset || 'quick' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Create Docker network"
+        run: docker network create --driver bridge eiou-network
+
+      - name: "Build Docker image"
+        run: docker build -f eiou.dockerfile -t eiou/eiou .
+
+      - name: "Run integration tests"
+        working-directory: tests
+        env:
+          EIOU_INIT_TIMEOUT: '180'
+          TEST_TIMEOUT: '60'
+        run: |
+          TOPOLOGY="${{ github.event.inputs.topology || 'http4' }}"
+          SUBSET="${{ github.event.inputs.subset || 'quick' }}"
+          ./run-all-tests.sh "$TOPOLOGY" http "$SUBSET"
+
+      - name: "Capture container logs"
+        if: failure()
+        run: |
+          mkdir -p test-artifacts
+          for container in $(docker ps -a --filter "network=eiou-network" --format "{{.Names}}"); do
+            echo "=== ${container} ===" > "test-artifacts/${container}.log"
+            docker logs "$container" >> "test-artifacts/${container}.log" 2>&1 || true
+            echo "" >> "test-artifacts/${container}.log"
+            echo "=== PHP Error Log ===" >> "test-artifacts/${container}.log"
+            docker exec "$container" cat /var/log/php_errors.log >> "test-artifacts/${container}.log" 2>&1 || true
+          done
+
+      - name: "Upload test artifacts"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: test-artifacts/
+          retention-days: 7
+
+      - name: "Cleanup containers"
+        if: always()
+        run: |
+          docker ps -a --filter "network=eiou-network" --format "{{.Names}}" | xargs -r docker rm -f
+          docker network rm eiou-network 2>/dev/null || true
+          docker volume prune -f
+
+      - name: "Test summary"
+        if: always()
+        run: |
+          TOPOLOGY="${{ github.event.inputs.topology || 'http4' }}"
+          SUBSET="${{ github.event.inputs.subset || 'quick' }}"
+          echo "### Integration Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Topology**: ${TOPOLOGY}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Subset**: ${SUBSET}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Mode**: http" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "All integration tests passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Integration tests failed. Check uploaded artifacts for container logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
