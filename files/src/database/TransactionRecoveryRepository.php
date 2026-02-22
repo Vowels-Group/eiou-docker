@@ -333,6 +333,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     CASE WHEN tx_type = 'p2p' THEN 'p2p_request' ELSE 'transaction' END as source_type,
                     NULL as destination_address,
                     NULL as fee_amount,
+                    NULL as rp2p_amount,
                     CASE
                         WHEN status = 'pending' THEN 'pending'
                         WHEN status = 'sent' THEN 'sending'
@@ -365,6 +366,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     CASE WHEN t.tx_type = 'p2p' THEN 'p2p_request' ELSE 'transaction' END as source_type,
                     NULL as destination_address,
                     NULL as fee_amount,
+                    NULL as rp2p_amount,
                     'syncing' as phase,
                     1 as is_held
                   FROM {$this->tableName} t
@@ -391,10 +393,12 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     'p2p_request' as source_type,
                     destination_address,
                     my_fee_amount as fee_amount,
+                    rp2p_amount,
                     CASE
                         WHEN status IN ('initial', 'queued') THEN 'pending'
                         WHEN status = 'sent' THEN 'route_search'
                         WHEN status = 'found' THEN 'route_found'
+                        WHEN status = 'awaiting_approval' THEN 'awaiting_approval'
                         ELSE 'pending'
                     END as phase,
                     0 as is_held

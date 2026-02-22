@@ -146,6 +146,24 @@
                     Automatically backup database daily at midnight (encrypted with wallet key)
                 </small>
             </div>
+
+            <!-- Auto-Accept P2P Transaction Toggle -->
+            <div class="form-group">
+                <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
+                <div class="toggle-row">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
+                        <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
+                    </span>
+                </div>
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
+                </small>
+            </div>
         </div>
 
         <div class="form-actions" style="margin-top: 1.5rem;">

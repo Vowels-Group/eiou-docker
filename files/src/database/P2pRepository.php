@@ -22,7 +22,7 @@ class P2pRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'hash', 'salt', 'time', 'expiration', 'currency', 'amount',
-        'my_fee_amount', 'destination_address', 'destination_pubkey',
+        'my_fee_amount', 'rp2p_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
         'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
@@ -728,6 +728,39 @@ class P2pRepository extends AbstractRepository {
 
         $stmt = $this->execute($query, [':hash' => $hash]);
         return $stmt !== false;
+    }
+
+    /**
+     * Set the RP2P total amount on a P2P record
+     *
+     * Used when auto-accept is disabled to store the total cost
+     * (including all relay fees) for the approval UI.
+     *
+     * @param string $hash P2P hash
+     * @param int $rp2pAmount Total amount from RP2P response
+     * @return bool Success status
+     */
+    public function setRp2pAmount(string $hash, int $rp2pAmount): bool {
+        $affectedRows = $this->update(['rp2p_amount' => $rp2pAmount], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Get a P2P record that is awaiting approval
+     *
+     * @param string $hash P2P hash
+     * @return array|null P2P data or null if not found or not in awaiting_approval status
+     */
+    public function getAwaitingApproval(string $hash): ?array {
+        $query = "SELECT * FROM {$this->tableName} WHERE hash = :hash AND status = :status";
+        $stmt = $this->execute($query, [':hash' => $hash, ':status' => Constants::STATUS_AWAITING_APPROVAL]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
     }
 
     /**

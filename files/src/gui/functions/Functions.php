@@ -86,6 +86,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit;
     }
+
+    // AJAX-only P2P approval actions (returns JSON, exits immediately)
+    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction'])) {
+        try {
+            $transactionController->routeAction();
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 }
 
 // Handle GET requests for update checking

@@ -298,9 +298,22 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Check if original p2p was sent by user
         if(isset($p2p['destination_address'])) {
-            $this->p2pRepository->updateStatus($request['hash'], 'found');
-            // Send transaction through rp2p chain using P2pTransactionSenderInterface
-            $this->getP2pTransactionSender()->sendP2pEiou($request);
+            $autoAccept = $this->currentUser->getAutoAcceptTransaction();
+            if ($autoAccept) {
+                $this->p2pRepository->updateStatus($request['hash'], 'found');
+                // Send transaction through rp2p chain using P2pTransactionSenderInterface
+                $this->getP2pTransactionSender()->sendP2pEiou($request);
+            } else {
+                // Store RP2P total amount on P2P record for approval UI
+                $this->p2pRepository->setRp2pAmount($request['hash'], $request['amount']);
+                $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_AWAITING_APPROVAL);
+                Logger::getInstance()->info("P2P transaction awaiting user approval", [
+                    'hash' => $request['hash'],
+                    'amount' => $p2p['amount'],
+                    'rp2p_amount' => $request['amount'],
+                    'fee' => $request['amount'] - $p2p['amount'],
+                ]);
+            }
         } else{
                 // Send rp2p back to ALL upstream senders (multi-path support)
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found

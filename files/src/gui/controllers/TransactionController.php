@@ -6,6 +6,10 @@ namespace Eiou\Gui\Controllers;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactService;
 use Eiou\Services\TransactionService;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Contracts\P2pTransactionSenderInterface;
+use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Utils\Logger;
@@ -38,6 +42,26 @@ class TransactionController
     private $transactionService;
 
     /**
+     * @var P2pRepository|null P2P repository for approval gate
+     */
+    private ?P2pRepository $p2pRepository = null;
+
+    /**
+     * @var Rp2pRepository|null RP2P repository for approval gate
+     */
+    private ?Rp2pRepository $rp2pRepository = null;
+
+    /**
+     * @var P2pTransactionSenderInterface|null Sender for approved P2P transactions
+     */
+    private ?P2pTransactionSenderInterface $p2pTransactionSender = null;
+
+    /**
+     * @var P2pServiceInterface|null P2P service for cancel notification propagation
+     */
+    private ?P2pServiceInterface $p2pService = null;
+
+    /**
      * Constructor
      *
      * @param Session $session
@@ -45,7 +69,7 @@ class TransactionController
      * @param TransactionService $transactionService
      */
     public function __construct(
-        Session $session, 
+        Session $session,
         ContactService $contactService,
         TransactionService $transactionService
         )
@@ -53,6 +77,27 @@ class TransactionController
         $this->session = $session;
         $this->contactService = $contactService;
         $this->transactionService = $transactionService;
+    }
+
+    /**
+     * Set P2P approval gate dependencies (setter injection)
+     *
+     * @param P2pRepository $p2pRepository
+     * @param Rp2pRepository $rp2pRepository
+     * @param P2pTransactionSenderInterface $sender
+     * @param P2pServiceInterface $p2pService
+     * @return void
+     */
+    public function setP2pApprovalDependencies(
+        P2pRepository $p2pRepository,
+        Rp2pRepository $rp2pRepository,
+        P2pTransactionSenderInterface $sender,
+        P2pServiceInterface $p2pService
+    ): void {
+        $this->p2pRepository = $p2pRepository;
+        $this->rp2pRepository = $rp2pRepository;
+        $this->p2pTransactionSender = $sender;
+        $this->p2pService = $p2pService;
     }
 
     /**
@@ -227,6 +272,128 @@ class TransactionController
     }
 
     /**
+     * Handle P2P transaction approval (AJAX)
+     *
+     * @return void
+     */
+    public function handleApproveP2p(): void
+    {
+        header('Content-Type: application/json');
+
+        $this->session->verifyCSRFToken();
+
+        if ($this->p2pRepository === null || $this->rp2pRepository === null || $this->p2pTransactionSender === null) {
+            echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
+            return;
+        }
+
+        $hash = Security::sanitizeInput($_POST['hash'] ?? '');
+        if (empty($hash)) {
+            echo json_encode(['success' => false, 'error' => 'missing_hash', 'message' => 'Transaction hash is required']);
+            return;
+        }
+
+        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
+        if (!$p2p) {
+            echo json_encode(['success' => false, 'error' => 'not_found', 'message' => 'Transaction not found or not awaiting approval']);
+            return;
+        }
+
+        // Verify the P2P belongs to this user (has destination_address = originator)
+        if (empty($p2p['destination_address'])) {
+            echo json_encode(['success' => false, 'error' => 'not_originator', 'message' => 'Only the transaction originator can approve']);
+            return;
+        }
+
+        // Get the stored RP2P response to build the request for sendP2pEiou
+        $rp2p = $this->rp2pRepository->getByHash($hash);
+        if (!$rp2p) {
+            echo json_encode(['success' => false, 'error' => 'rp2p_not_found', 'message' => 'Route response not found']);
+            return;
+        }
+
+        // Build the request array from stored RP2P data
+        $request = [
+            'hash' => $rp2p['hash'],
+            'time' => $rp2p['time'],
+            'amount' => (int) $rp2p['amount'],
+            'currency' => $rp2p['currency'],
+            'senderPublicKey' => $rp2p['sender_public_key'],
+            'senderAddress' => $rp2p['sender_address'],
+            'signature' => $rp2p['sender_signature'],
+        ];
+
+        try {
+            $this->p2pRepository->updateStatus($hash, 'found');
+            $this->p2pTransactionSender->sendP2pEiou($request);
+
+            Logger::getInstance()->info("P2P transaction approved by user", ['hash' => $hash]);
+            echo json_encode(['success' => true]);
+        } catch (\Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'controller' => 'TransactionController',
+                'action' => 'handleApproveP2p',
+                'hash' => $hash,
+            ]);
+            echo json_encode(['success' => false, 'error' => 'send_failed', 'message' => 'Failed to send transaction']);
+        }
+    }
+
+    /**
+     * Handle P2P transaction rejection (AJAX)
+     *
+     * @return void
+     */
+    public function handleRejectP2p(): void
+    {
+        header('Content-Type: application/json');
+
+        $this->session->verifyCSRFToken();
+
+        if ($this->p2pRepository === null) {
+            echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
+            return;
+        }
+
+        $hash = Security::sanitizeInput($_POST['hash'] ?? '');
+        if (empty($hash)) {
+            echo json_encode(['success' => false, 'error' => 'missing_hash', 'message' => 'Transaction hash is required']);
+            return;
+        }
+
+        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
+        if (!$p2p) {
+            echo json_encode(['success' => false, 'error' => 'not_found', 'message' => 'Transaction not found or not awaiting approval']);
+            return;
+        }
+
+        // Verify the P2P belongs to this user (has destination_address = originator)
+        if (empty($p2p['destination_address'])) {
+            echo json_encode(['success' => false, 'error' => 'not_originator', 'message' => 'Only the transaction originator can reject']);
+            return;
+        }
+
+        try {
+            $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
+
+            // Propagate cancel upstream
+            if ($this->p2pService !== null) {
+                $this->p2pService->sendCancelNotificationForHash($hash);
+            }
+
+            Logger::getInstance()->info("P2P transaction rejected by user", ['hash' => $hash]);
+            echo json_encode(['success' => true]);
+        } catch (\Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'controller' => 'TransactionController',
+                'action' => 'handleRejectP2p',
+                'hash' => $hash,
+            ]);
+            echo json_encode(['success' => false, 'error' => 'reject_failed', 'message' => 'Failed to reject transaction']);
+        }
+    }
+
+    /**
      * Route transaction actions based on POST data
      *
      * @return void
@@ -248,6 +415,12 @@ class TransactionController
         switch ($action) {
             case 'sendEIOU':
                 $this->handleSendEIOU();
+                break;
+            case 'approveP2pTransaction':
+                $this->handleApproveP2p();
+                break;
+            case 'rejectP2pTransaction':
+                $this->handleRejectP2p();
                 break;
         }
     }

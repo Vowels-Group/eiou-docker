@@ -40,6 +40,7 @@
                             'pending' => ['label' => 'Pending', 'short' => 'Pending', 'icon' => 'fa-hourglass-half', 'color' => '#6c757d'],
                             'route_search' => ['label' => 'Searching for route...', 'short' => 'Searching...', 'icon' => 'fa-search', 'color' => '#ffc107'],
                             'route_found' => ['label' => 'Route found', 'short' => 'Found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
+                            'awaiting_approval' => ['label' => 'Awaiting your approval', 'short' => 'Approve?', 'icon' => 'fa-question-circle', 'color' => '#e83e8c'],
                             'sending' => ['label' => 'Sending...', 'short' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
                             'syncing' => ['label' => 'Syncing chain...', 'short' => 'Syncing...', 'icon' => 'fa-link', 'color' => '#fd7e14']
                         ];
@@ -64,6 +65,25 @@
                         <?php if (!empty($ipTx['fee_amount'])): ?>
                         <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (($ipTx['phase'] ?? '') === 'awaiting_approval'): ?>
+                    <div class="tx-approval-actions" style="margin-top: 0.5rem;">
+                        <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
+                            <div>Amount: <?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
+                            <?php if (!empty($ipTx['rp2p_amount'])): ?>
+                            <div>Route Fee: <?php echo number_format(($ipTx['rp2p_amount'] - $ipTx['amount']) / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
+                            <div><strong>Total Cost: <?php echo number_format($ipTx['rp2p_amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
+                            <?php endif; ?>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); approveP2pTransaction('<?php echo htmlspecialchars($ipTx['txid']); ?>')">
+                                <i class="fas fa-check"></i> Approve &amp; Send
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); rejectP2pTransaction('<?php echo htmlspecialchars($ipTx['txid']); ?>')">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </div>
                     </div>
                     <?php endif; ?>
                     <?php if ($isHeld): ?>
@@ -256,4 +276,33 @@
 
     // Stop auto-refresh when leaving page
     window.addEventListener('beforeunload', window.stopAutoRefresh);
+
+    // P2P Transaction Approval/Rejection
+    function approveP2pTransaction(hash) {
+        if (!confirm('Are you sure you want to approve and send this transaction?')) return;
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { alert('CSRF token not found'); return; }
+        fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value)
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.success) { window.location.reload(); }
+            else { alert('Error: ' + (data.message || 'Unknown error')); }
+        }).catch(function() { alert('Network error'); });
+    }
+
+    function rejectP2pTransaction(hash) {
+        if (!confirm('Are you sure you want to reject this transaction?')) return;
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { alert('CSRF token not found'); return; }
+        fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value)
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.success) { window.location.reload(); }
+            else { alert('Error: ' + (data.message || 'Unknown error')); }
+        }).catch(function() { alert('Network error'); });
+    }
 </script>

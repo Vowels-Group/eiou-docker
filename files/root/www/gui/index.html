@@ -39,6 +39,12 @@ $user = UserContext::getInstance();
 // Create controllers
 $contactController = new ContactController($secureSession, $contactService);
 $transactionController = new TransactionController($secureSession, $contactService, $transactionService);
+$transactionController->setP2pApprovalDependencies(
+    $serviceContainer->getP2pRepository(),
+    $serviceContainer->getRp2pRepository(),
+    $serviceContainer->getSendOperationService(),
+    $serviceContainer->getP2pService()
+);
 $settingsController = new SettingsController($secureSession);
 
 // Handle logout request

@@ -221,6 +221,17 @@ class CliService implements CliServiceInterface {
                     $output->validationError('autoRefreshEnabled', 'Value must be true/false, on/off, yes/no, or 1/0');
                     return;
                 }
+            } elseif(strtolower($argv[2]) === 'autoaccepttransaction'){
+                $key = 'autoAcceptTransaction';
+                $inputValue = strtolower($argv[3]);
+                if ($inputValue === 'true' || $inputValue === '1' || $inputValue === 'on' || $inputValue === 'yes') {
+                    $value = true;
+                } elseif ($inputValue === 'false' || $inputValue === '0' || $inputValue === 'off' || $inputValue === 'no') {
+                    $value = false;
+                } else {
+                    $output->validationError('autoAcceptTransaction', 'Value must be true/false, on/off, yes/no, or 1/0');
+                    return;
+                }
             } elseif(strtolower($argv[2]) === 'hostname'){
                 $key = 'hostname';
                 $validation = InputValidator::validateHostname($argv[3]);
@@ -273,6 +284,7 @@ class CliService implements CliServiceInterface {
             echo "\t11. Auto-refresh transactions\n";
             echo "\t12. Auto-backup database\n";
             echo "\t13. Trusted proxy IPs\n";
+            echo "\t14. Auto-accept P2P transactions\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -425,6 +437,20 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
+                case '14':
+                    echo "Auto-accept P2P transactions when route found? (yes/no): ";
+                    $key = 'autoAcceptTransaction';
+                    $inputValue = strtolower(trim(fgets(STDIN)));
+                    if ($inputValue === 'yes' || $inputValue === 'y' || $inputValue === 'true' || $inputValue === '1' || $inputValue === 'on') {
+                        $value = true;
+                    } elseif ($inputValue === 'no' || $inputValue === 'n' || $inputValue === 'false' || $inputValue === '0' || $inputValue === 'off') {
+                        $value = false;
+                    } else {
+                        echo "Error: Please enter yes or no\n";
+                        return;
+                    }
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -507,6 +533,7 @@ class CliService implements CliServiceInterface {
             'hostname_secure' => $this->currentUser->getHttpsAddress(),
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
+            'auto_accept_transaction' => $this->currentUser->getAutoAcceptTransaction(),
             'trusted_proxies' => $this->currentUser->getTrustedProxies()
         ];
 
@@ -527,6 +554,7 @@ class CliService implements CliServiceInterface {
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto-accept P2P transactions: " . ($settings['auto_accept_transaction'] ? 'enabled' : 'disabled') . "\n";
             echo "\tTrusted proxies: " . ($settings['trusted_proxies'] ?: '(none)') . "\n";
         }
     }
