@@ -1327,10 +1327,12 @@ class ServiceContainer implements ContainerInterface {
             }
         }
 
-        // Wire ChainDropService -> SyncTriggerInterface (via proxy)
+        // Wire ChainDropService -> SyncTriggerInterface (via proxy), BalanceRepository
         // Reason: ChainDropService needs to recalculate balances after dropping transactions
+        // and needs BalanceRepository for auto-accept balance guard
         if (isset($this->services['ChainDropService'])) {
             $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
+            $this->services['ChainDropService']->setBalanceRepository($this->getBalanceRepository());
         }
 
         // Wire CliService -> ContactCreditRepository, P2pRepository

@@ -10,6 +10,7 @@ use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Database\BalanceRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Schemas\Payloads\MessagePayload;
@@ -51,6 +52,7 @@ class ChainDropService implements ChainDropServiceInterface
     private TransactionPayload $transactionPayload;
     private ?BackupServiceInterface $backupService = null;
     private ?SyncTriggerInterface $syncTrigger = null;
+    private ?BalanceRepository $balanceRepository = null;
 
     /**
      * Set the backup service for transaction recovery from backups
@@ -70,6 +72,16 @@ class ChainDropService implements ChainDropServiceInterface
     public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void
     {
         $this->syncTrigger = $syncTrigger;
+    }
+
+    /**
+     * Set the balance repository for auto-accept balance guard
+     *
+     * @param BalanceRepository $balanceRepository Balance repository
+     */
+    public function setBalanceRepository(BalanceRepository $balanceRepository): void
+    {
+        $this->balanceRepository = $balanceRepository;
     }
 
     /**
@@ -349,6 +361,35 @@ class ChainDropService implements ChainDropServiceInterface
                     'proposal_id' => $proposalId,
                     'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...'
                 ]);
+
+                // Auto-accept with balance guard
+                if (Constants::isAutoChainDropAcceptEnabled()) {
+                    if ($this->isAutoAcceptSafe($contactPubkeyHash, $senderPubkey)) {
+                        try {
+                            $acceptResult = $this->acceptProposal($proposalId);
+                            if ($acceptResult['success']) {
+                                Logger::getInstance()->info("Chain drop proposal auto-accepted", [
+                                    'proposal_id' => $proposalId
+                                ]);
+                            } else {
+                                Logger::getInstance()->warning("Chain drop auto-accept failed", [
+                                    'proposal_id' => $proposalId,
+                                    'error' => $acceptResult['error'] ?? 'unknown'
+                                ]);
+                            }
+                        } catch (Exception $e) {
+                            Logger::getInstance()->logException($e, [
+                                'method' => 'handleIncomingProposal',
+                                'auto_accept' => true
+                            ]);
+                        }
+                    } else {
+                        Logger::getInstance()->info("Chain drop auto-accept blocked by balance guard", [
+                            'proposal_id' => $proposalId,
+                            'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...'
+                        ]);
+                    }
+                }
             }
 
         } catch (Exception $e) {
@@ -669,6 +710,77 @@ class ChainDropService implements ChainDropServiceInterface
     public function expireStaleProposals(): int
     {
         return $this->proposalRepository->expireOldProposals();
+    }
+
+    // =========================================================================
+    // AUTO-ACCEPT BALANCE GUARD
+    // =========================================================================
+
+    /**
+     * Check if auto-accepting a chain drop proposal is safe by comparing
+     * stored balances against transaction-calculated balances.
+     *
+     * If missing transactions include net payments TO us (i.e. the proposer
+     * paid us money that would be erased by the drop), auto-accept is blocked
+     * and manual review is required.
+     *
+     * @param string $contactPubkeyHash The contact's public key hash
+     * @param string $senderPubkey The contact's public key
+     * @return bool True if auto-accept is safe
+     */
+    private function isAutoAcceptSafe(string $contactPubkeyHash, string $senderPubkey): bool
+    {
+        if ($this->balanceRepository === null) {
+            return false; // Can't verify — err on side of caution
+        }
+
+        $userAddresses = $this->currentUser->getUserAddresses();
+        $userPubkey = $this->currentUser->getPublicKey();
+
+        // Get all transactions between us and this contact
+        $transactions = $this->transactionRepository->getTransactionsBetweenPubkeys($userPubkey, $senderPubkey);
+
+        // Calculate balance from existing transactions per currency
+        $currencies = [];
+        foreach ($transactions as $tx) {
+            if ($tx['status'] !== Constants::STATUS_COMPLETED) {
+                continue;
+            }
+            $currency = $tx['currency'];
+            if (!isset($currencies[$currency])) {
+                $currencies[$currency] = ['received' => 0, 'sent' => 0];
+            }
+            if (in_array($tx['sender_address'], $userAddresses)) {
+                $currencies[$currency]['sent'] += $tx['amount'];
+            } elseif (in_array($tx['receiver_address'], $userAddresses)) {
+                $currencies[$currency]['received'] += $tx['amount'];
+            }
+        }
+
+        // Compare with stored balance for each currency
+        foreach ($currencies as $currency => $txAmounts) {
+            $storedReceived = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
+            $storedSent = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
+
+            $missingReceived = $storedReceived - $txAmounts['received'];
+            $missingSent = $storedSent - $txAmounts['sent'];
+            $netMissing = $missingReceived - $missingSent;
+
+            if ($netMissing > 0) {
+                // Missing transactions include net payments TO us
+                // Proposer may be trying to erase their debt
+                Logger::getInstance()->info("Chain drop auto-accept blocked: missing txs favor proposer", [
+                    'currency' => $currency,
+                    'stored_received' => $storedReceived,
+                    'tx_received' => $txAmounts['received'],
+                    'missing_received' => $missingReceived,
+                    'net_missing' => $netMissing
+                ]);
+                return false;
+            }
+        }
+
+        return true; // Safe — no currency shows debt erasure risk
     }
 
     // =========================================================================

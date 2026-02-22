@@ -539,7 +539,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         }
 
                         // Auto-propose chain drop if sync completed but mutual gaps remain
-                        if ($syncResult && !($syncResult['chain_valid'] ?? true) && !empty($syncResult['chain_gaps'] ?? []) && $this->chainDropService) {
+                        if ($syncResult && !($syncResult['chain_valid'] ?? true) && !empty($syncResult['chain_gaps'] ?? []) && $this->chainDropService && Constants::isAutoChainDropProposeEnabled()) {
                             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                             try {
                                 $proposeResult = $this->chainDropService->proposeChainDrop($contactPubkeyHash);

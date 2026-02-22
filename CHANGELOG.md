@@ -12,6 +12,11 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Add `AUTO_CHAIN_DROP_PROPOSE` and `AUTO_CHAIN_DROP_ACCEPT` toggles in Constants.php with env var overrides (`EIOU_AUTO_CHAIN_DROP_PROPOSE`, `EIOU_AUTO_CHAIN_DROP_ACCEPT`)
+- Add auto-accept for incoming chain drop proposals with balance guard to prevent debt erasure
+- Balance guard compares stored balance vs transaction-calculated balance to detect if missing transactions include payments owed to us; blocks auto-accept when net missing favors proposer
+
 ### Fixed
 - Fix `bestFeeRoutingTest` Test 11 and `cascadeCancelTest` Tests 5-7 failing on http4 topology: dead-end cancel tests used hardcoded `containerAddresses[A12]` which only exists in collisions/http13 topologies; now dynamically finds an isolated node (0 expected contacts) via `expectedContacts`, falling back to a MODE-appropriate generated address
 - Fix 79 unit test failures across 26 files: ErrorHandler tearDown removing PHPUnit's handlers (45 failures), repository tests expecting false from AbstractRepository::execute() (5), SyncService chain conflict tests failing due to private signature verification methods and missing test data fields (8), DebugRepository random pruneOldEntries breaking strict mock expectations (8), tor address validation with wrong length (2), namespace-unqualified dynamic function calls in DatabaseSetup migrations (1), AbstractMessageProcessor flushing PHPUnit output buffers (1), UtilPayload null senderAddress handling (1), and various mock return type mismatches

@@ -20,6 +20,7 @@ use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Database\BalanceRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
@@ -32,6 +33,7 @@ class ChainDropServiceTest extends TestCase
     private MockObject|TransactionChainRepository $transactionChainRepository;
     private MockObject|TransactionRepository $transactionRepository;
     private MockObject|ContactRepository $contactRepository;
+    private MockObject|BalanceRepository $balanceRepository;
     private MockObject|UtilityServiceContainer $utilityContainer;
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|UserContext $userContext;
@@ -56,6 +58,7 @@ class ChainDropServiceTest extends TestCase
         $this->transactionChainRepository = $this->createMock(TransactionChainRepository::class);
         $this->transactionRepository = $this->createMock(TransactionRepository::class);
         $this->contactRepository = $this->createMock(ContactRepository::class);
+        $this->balanceRepository = $this->createMock(BalanceRepository::class);
         $this->utilityContainer = $this->createMock(UtilityServiceContainer::class);
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->userContext = $this->createMock(UserContext::class);
@@ -81,6 +84,8 @@ class ChainDropServiceTest extends TestCase
             ->willReturn(self::TEST_USER_PUBKEY);
         $this->userContext->method('getPublicKeyHash')
             ->willReturn(hash('sha256', self::TEST_USER_PUBKEY));
+        $this->userContext->method('getUserAddresses')
+            ->willReturn(['http://myaddress.example.com']);
 
         // Default transport utility behavior
         $this->transportUtility->method('resolveUserAddressForTransport')
@@ -501,5 +506,281 @@ class ChainDropServiceTest extends TestCase
 
         $this->assertCount(2, $result);
         $this->assertEquals($expected, $result);
+    }
+
+    // =========================================================================
+    // Auto-Accept Toggle and Balance Guard Tests
+    // =========================================================================
+
+    /**
+     * Test auto-accept triggers when toggle is ON and balance guard is safe
+     */
+    public function testAutoAcceptTriggersWhenBalanceGuardSafe(): void
+    {
+        $senderPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
+
+        // Wire BalanceRepository for balance guard
+        $this->service->setBalanceRepository($this->balanceRepository);
+
+        // No existing active proposal
+        $this->proposalRepository->method('getActiveProposalForGap')
+            ->willReturn(null);
+
+        // Chain integrity: gap on first call, valid on second (after drop)
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturnOnConsecutiveCalls(
+                [
+                    'valid' => false,
+                    'gaps' => [self::TEST_MISSING_TXID],
+                    'broken_txids' => [self::TEST_BROKEN_TXID],
+                    'transaction_count' => 8
+                ],
+                ['valid' => true, 'gaps' => [], 'broken_txids' => [], 'transaction_count' => 7]
+            );
+
+        // Chain lookup for findPreviousTxidBeforeGap
+        $this->transactionChainRepository->method('getTransactionChain')
+            ->willReturn([
+                ['txid' => self::TEST_PREVIOUS_TXID],
+                ['txid' => self::TEST_BROKEN_TXID]
+            ]);
+
+        // Proposal creation succeeds
+        $this->proposalRepository->method('createProposal')
+            ->willReturn(true);
+
+        // Balance guard: no transactions between us = no debt risk
+        $this->transactionRepository->method('getTransactionsBetweenPubkeys')
+            ->willReturn([]);
+
+        // acceptProposal: return the stored proposal
+        $this->proposalRepository->method('getByProposalId')
+            ->with(self::TEST_PROPOSAL_ID)
+            ->willReturn([
+                'proposal_id' => self::TEST_PROPOSAL_ID,
+                'contact_pubkey_hash' => $senderPubkeyHash,
+                'missing_txid' => self::TEST_MISSING_TXID,
+                'broken_txid' => self::TEST_BROKEN_TXID,
+                'previous_txid_before_gap' => self::TEST_PREVIOUS_TXID,
+                'direction' => 'incoming',
+                'status' => 'pending'
+            ]);
+
+        // executeChainDrop
+        $this->transactionChainRepository->method('updatePreviousTxid')
+            ->willReturn(true);
+        $this->transactionRepository->method('getByTxid')
+            ->willReturn(['sender_public_key_hash' => 'other-sender-hash', 'memo' => 'standard']);
+
+        // Contact lookups (for updateChainStatusAfterDrop and resolveContactAddress)
+        $this->contactRepository->method('lookupByPubkeyHash')
+            ->willReturn([
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
+                'http' => self::TEST_CONTACT_ADDRESS
+            ]);
+
+        // KEY ASSERTION: updateStatus called with 'accepted' proves auto-accept executed
+        $this->proposalRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_PROPOSAL_ID, 'accepted');
+
+        $this->service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
+    }
+
+    /**
+     * Test auto-accept blocked when balance guard detects debt erasure risk
+     */
+    public function testAutoAcceptBlockedByBalanceGuard(): void
+    {
+        // Wire BalanceRepository for balance guard
+        $this->service->setBalanceRepository($this->balanceRepository);
+
+        // No existing active proposal
+        $this->proposalRepository->method('getActiveProposalForGap')
+            ->willReturn(null);
+
+        // Local chain has the gap
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'gaps' => [self::TEST_MISSING_TXID],
+                'broken_txids' => [self::TEST_BROKEN_TXID],
+                'transaction_count' => 8
+            ]);
+
+        $this->transactionChainRepository->method('getTransactionChain')
+            ->willReturn([
+                ['txid' => self::TEST_PREVIOUS_TXID],
+                ['txid' => self::TEST_BROKEN_TXID]
+            ]);
+
+        $this->proposalRepository->method('createProposal')
+            ->willReturn(true);
+
+        // Balance guard: transaction shows we received 1000 from contact
+        $this->transactionRepository->method('getTransactionsBetweenPubkeys')
+            ->willReturn([
+                [
+                    'status' => 'completed',
+                    'currency' => 'USD',
+                    'sender_address' => self::TEST_CONTACT_ADDRESS,
+                    'receiver_address' => 'http://myaddress.example.com',
+                    'amount' => 1000
+                ]
+            ]);
+
+        // Stored balance shows higher received than transaction sum
+        // missing_received = 2000 - 1000 = 1000, missing_sent = 0, net_missing = 1000 > 0 → BLOCKED
+        $this->balanceRepository->method('getContactReceivedBalance')
+            ->willReturn(2000);
+        $this->balanceRepository->method('getContactSentBalance')
+            ->willReturn(0);
+
+        // KEY ASSERTION: acceptProposal should NOT be called (guard blocks)
+        $this->proposalRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
+    }
+
+    /**
+     * Test auto-accept skipped when toggle is OFF via env var
+     */
+    public function testAutoAcceptSkippedWhenToggleOff(): void
+    {
+        putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT=false');
+
+        try {
+            // Wire BalanceRepository (would be safe, but toggle is OFF)
+            $this->service->setBalanceRepository($this->balanceRepository);
+
+            $this->proposalRepository->method('getActiveProposalForGap')
+                ->willReturn(null);
+
+            $this->transactionChainRepository->method('verifyChainIntegrity')
+                ->willReturn([
+                    'valid' => false,
+                    'gaps' => [self::TEST_MISSING_TXID],
+                    'broken_txids' => [self::TEST_BROKEN_TXID],
+                    'transaction_count' => 8
+                ]);
+
+            $this->transactionChainRepository->method('getTransactionChain')
+                ->willReturn([
+                    ['txid' => self::TEST_PREVIOUS_TXID],
+                    ['txid' => self::TEST_BROKEN_TXID]
+                ]);
+
+            $this->proposalRepository->method('createProposal')
+                ->willReturn(true);
+
+            // KEY ASSERTIONS: neither balance guard nor acceptProposal should be called
+            $this->transactionRepository->expects($this->never())
+                ->method('getTransactionsBetweenPubkeys');
+            $this->proposalRepository->expects($this->never())
+                ->method('updateStatus');
+
+            $this->service->handleIncomingProposal([
+                'proposalId' => self::TEST_PROPOSAL_ID,
+                'missingTxid' => self::TEST_MISSING_TXID,
+                'brokenTxid' => self::TEST_BROKEN_TXID,
+                'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+                'senderAddress' => self::TEST_CONTACT_ADDRESS
+            ]);
+        } finally {
+            putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
+        }
+    }
+
+    /**
+     * Test auto-accept blocked when BalanceRepository is not wired
+     */
+    public function testAutoAcceptBlockedWithoutBalanceRepository(): void
+    {
+        // Do NOT wire BalanceRepository — isAutoAcceptSafe returns false
+
+        $this->proposalRepository->method('getActiveProposalForGap')
+            ->willReturn(null);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'gaps' => [self::TEST_MISSING_TXID],
+                'broken_txids' => [self::TEST_BROKEN_TXID],
+                'transaction_count' => 8
+            ]);
+
+        $this->transactionChainRepository->method('getTransactionChain')
+            ->willReturn([
+                ['txid' => self::TEST_PREVIOUS_TXID],
+                ['txid' => self::TEST_BROKEN_TXID]
+            ]);
+
+        $this->proposalRepository->method('createProposal')
+            ->willReturn(true);
+
+        // KEY ASSERTION: acceptProposal should NOT be called (guard fails without BalanceRepository)
+        $this->proposalRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
+    }
+
+    /**
+     * Test auto-propose skipped in Constants when toggle is OFF via env var
+     */
+    public function testAutoChainDropProposeToggle(): void
+    {
+        // Default should be enabled
+        $this->assertTrue(Constants::isAutoChainDropProposeEnabled());
+
+        // Disable via env var
+        putenv('EIOU_AUTO_CHAIN_DROP_PROPOSE=false');
+        try {
+            $this->assertFalse(Constants::isAutoChainDropProposeEnabled());
+        } finally {
+            putenv('EIOU_AUTO_CHAIN_DROP_PROPOSE');
+        }
+
+        // Should be back to default
+        $this->assertTrue(Constants::isAutoChainDropProposeEnabled());
+    }
+
+    /**
+     * Test auto-accept toggle in Constants with env var override
+     */
+    public function testAutoChainDropAcceptToggle(): void
+    {
+        // Default should be enabled
+        $this->assertTrue(Constants::isAutoChainDropAcceptEnabled());
+
+        // Disable via env var
+        putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT=false');
+        try {
+            $this->assertFalse(Constants::isAutoChainDropAcceptEnabled());
+        } finally {
+            putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
+        }
+
+        // Should be back to default
+        $this->assertTrue(Constants::isAutoChainDropAcceptEnabled());
     }
 }
