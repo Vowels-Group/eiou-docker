@@ -107,7 +107,7 @@ if (isset($_SESSION['message'])) {
 // Get user based data
 $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
-$totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTotalEarnings());
+$totalEarnings = $currencyUtility->convertMinorToMajor($p2pService->getUserTotalEarnings());
 
 // Per-currency balance data for future-proof dashboard display
 $totalBalanceByCurrency = [];
@@ -116,7 +116,7 @@ if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
             'currency' => $bal['currency'],
-            'total' => number_format($currencyUtility->convertCentsToDollars((int)($bal['total_balance'] ?? 0)), 2)
+            'total' => number_format($currencyUtility->convertMinorToMajor((int)($bal['total_balance'] ?? 0)), 2)
         ];
     }
 }
@@ -128,7 +128,7 @@ if (!empty($earningsRaw)) {
     foreach ($earningsRaw as $earn) {
         $totalEarningsByCurrency[] = [
             'currency' => $earn['currency'],
-            'total' => number_format($currencyUtility->convertCentsToDollars((int)($earn['total_amount'] ?? 0)), 2)
+            'total' => number_format($currencyUtility->convertMinorToMajor((int)($earn['total_amount'] ?? 0)), 2)
         ];
     }
 }
@@ -330,7 +330,8 @@ try {
         if ($hash && !isset($availableCreditByContact[$hash])) {
             $creditData = $contactCreditRepo->getAvailableCredit($hash);
             if ($creditData !== null) {
-                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR;
+                $contactCurrency = $c['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::CONVERSION_FACTORS[$contactCurrency];
             }
         }
     }
@@ -339,7 +340,7 @@ try {
     foreach ($creditTotals as $row) {
         $totalAvailableCreditByCurrency[] = [
             'currency' => $row['currency'],
-            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::CREDIT_CONVERSION_FACTOR, 2)
+            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::CONVERSION_FACTORS[$row['currency']], 2)
         ];
     }
 } catch (Exception $e) {

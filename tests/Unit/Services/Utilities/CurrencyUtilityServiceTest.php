@@ -22,58 +22,58 @@ class CurrencyUtilityServiceTest extends TestCase
     }
 
     /**
-     * Test convert cents to dollars basic conversion
+     * Test convert minor to major units basic conversion
      */
-    public function testConvertCentsToDollarsBasic(): void
+    public function testConvertMinorToMajorBasic(): void
     {
-        $this->assertEquals(1.00, $this->service->convertCentsToDollars(100));
-        $this->assertEquals(10.50, $this->service->convertCentsToDollars(1050));
-        $this->assertEquals(0.01, $this->service->convertCentsToDollars(1));
+        $this->assertEquals(1.00, $this->service->convertMinorToMajor(100));
+        $this->assertEquals(10.50, $this->service->convertMinorToMajor(1050));
+        $this->assertEquals(0.01, $this->service->convertMinorToMajor(1));
     }
 
     /**
-     * Test convert cents to dollars with zero
+     * Test convert minor to major units with zero
      */
-    public function testConvertCentsToDollarsWithZero(): void
+    public function testConvertMinorToMajorWithZero(): void
     {
-        $this->assertEquals(0.00, $this->service->convertCentsToDollars(0));
+        $this->assertEquals(0.00, $this->service->convertMinorToMajor(0));
     }
 
     /**
-     * Test convert cents to dollars with negative amounts
+     * Test convert minor to major units with negative amounts
      */
-    public function testConvertCentsToDollarsWithNegative(): void
+    public function testConvertMinorToMajorWithNegative(): void
     {
-        $this->assertEquals(-5.00, $this->service->convertCentsToDollars(-500));
+        $this->assertEquals(-5.00, $this->service->convertMinorToMajor(-500));
     }
 
     /**
-     * Test convert dollars to cents basic conversion
+     * Test convert major to minor units basic conversion
      */
-    public function testConvertDollarsToCentsBasic(): void
+    public function testConvertMajorToMinorBasic(): void
     {
-        $this->assertEquals(100, $this->service->convertDollarsToCents(1.00));
-        $this->assertEquals(1050, $this->service->convertDollarsToCents(10.50));
-        $this->assertEquals(1, $this->service->convertDollarsToCents(0.01));
+        $this->assertEquals(100, $this->service->convertMajorToMinor(1.00));
+        $this->assertEquals(1050, $this->service->convertMajorToMinor(10.50));
+        $this->assertEquals(1, $this->service->convertMajorToMinor(0.01));
     }
 
     /**
-     * Test convert dollars to cents with zero
+     * Test convert major to minor units with zero
      */
-    public function testConvertDollarsToCentsWithZero(): void
+    public function testConvertMajorToMinorWithZero(): void
     {
-        $this->assertEquals(0, $this->service->convertDollarsToCents(0.00));
+        $this->assertEquals(0, $this->service->convertMajorToMinor(0.00));
     }
 
     /**
-     * Test convert dollars to cents rounds correctly
+     * Test convert major to minor units rounds correctly
      */
-    public function testConvertDollarsToCentsRounding(): void
+    public function testConvertMajorToMinorRounding(): void
     {
-        // 1.999 should round to 200 cents
-        $this->assertEquals(200, $this->service->convertDollarsToCents(1.999));
-        // 1.994 should round to 199 cents
-        $this->assertEquals(199, $this->service->convertDollarsToCents(1.994));
+        // 1.999 should round to 200 minor units
+        $this->assertEquals(200, $this->service->convertMajorToMinor(1.999));
+        // 1.994 should round to 199 minor units
+        $this->assertEquals(199, $this->service->convertMajorToMinor(1.994));
     }
 
     /**
@@ -138,11 +138,11 @@ class CurrencyUtilityServiceTest extends TestCase
      */
     public function testConversionRoundTrip(): void
     {
-        $originalCents = 1234;
-        $dollars = $this->service->convertCentsToDollars($originalCents);
-        $backToCents = $this->service->convertDollarsToCents($dollars);
+        $originalMinorUnits = 1234;
+        $majorUnits = $this->service->convertMinorToMajor($originalMinorUnits);
+        $backToMinorUnits = $this->service->convertMajorToMinor($majorUnits);
 
-        $this->assertEquals($originalCents, $backToCents);
+        $this->assertEquals($originalMinorUnits, $backToMinorUnits);
     }
 
     /**
@@ -150,22 +150,68 @@ class CurrencyUtilityServiceTest extends TestCase
      */
     public function testLargeAmounts(): void
     {
-        $largeCents = 100000000; // 1 million dollars
-        $dollars = $this->service->convertCentsToDollars($largeCents);
+        $largeMinorUnits = 100000000; // 1 million major units
+        $majorUnits = $this->service->convertMinorToMajor($largeMinorUnits);
 
-        $this->assertEquals(1000000.00, $dollars);
-        $this->assertEquals('1,000,000.00 USD', $this->service->formatCurrency($largeCents));
+        $this->assertEquals(1000000.00, $majorUnits);
+        $this->assertEquals('1,000,000.00 USD', $this->service->formatCurrency($largeMinorUnits));
     }
 
     /**
-     * Test fractional cents handling
+     * Test fractional minor units handling
      */
-    public function testFractionalCentsHandling(): void
+    public function testFractionalMinorUnitsHandling(): void
     {
-        // Float input with sub-cent precision
-        $result = $this->service->convertCentsToDollars(99.5);
+        // Float input with sub-unit precision
+        $result = $this->service->convertMinorToMajor(99.5);
 
         $this->assertIsFloat($result);
         $this->assertEquals(0.995, $result);
+    }
+
+    /**
+     * Test convertMinorToMajor with explicit USD currency
+     */
+    public function testConvertMinorToMajorWithExplicitCurrency(): void
+    {
+        $this->assertEquals(1.00, $this->service->convertMinorToMajor(100, 'USD'));
+        $this->assertEquals(10.50, $this->service->convertMinorToMajor(1050, 'USD'));
+    }
+
+    /**
+     * Test convertMajorToMinor with explicit USD currency
+     */
+    public function testConvertMajorToMinorWithExplicitCurrency(): void
+    {
+        $this->assertEquals(100, $this->service->convertMajorToMinor(1.00, 'USD'));
+        $this->assertEquals(1050, $this->service->convertMajorToMinor(10.50, 'USD'));
+    }
+
+    /**
+     * Test calculateFee with explicit USD currency
+     */
+    public function testCalculateFeeWithExplicitCurrency(): void
+    {
+        // 10% fee on 1000 minor units ($10.00) = $1.00 = 100 minor units
+        $fee = $this->service->calculateFee(1000, 10.0, 0.01, 'USD');
+        $this->assertEquals(100, $fee);
+    }
+
+    /**
+     * Test convertMinorToMajor throws for unknown currency
+     */
+    public function testConvertMinorToMajorThrowsForUnknownCurrency(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->convertMinorToMajor(100, 'XYZ');
+    }
+
+    /**
+     * Test convertMajorToMinor throws for unknown currency
+     */
+    public function testConvertMajorToMinorThrowsForUnknownCurrency(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->convertMajorToMinor(1.00, 'XYZ');
     }
 }

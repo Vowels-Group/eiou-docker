@@ -22,40 +22,40 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
     }
 
     /**
-     * Format currency from cents to dollars with currency suffix
+     * Format currency from minor units to major units with currency suffix
      *
-     * @param float $amountInCents Amount in cents
+     * @param float $amountInMinorUnits Amount in minor units (e.g. cents)
      * @param string $currency Currency code (default: USD)
      * @return string Formatted currency string
      */
-    public function formatCurrency(float $amountInCents, string $currency = 'USD'): string
+    public function formatCurrency(float $amountInMinorUnits, string $currency = 'USD'): string
     {
-        $amountInDollars = $this->convertCentsToDollars($amountInCents);
-        return number_format($amountInDollars, 2) . ' ' . $currency;
+        $amountInMajorUnits = $this->convertMinorToMajor($amountInMinorUnits);
+        return number_format($amountInMajorUnits, 2) . ' ' . $currency;
     }
 
     /**
-     * Convert amount from cents to dollars
+     * Convert amount from minor units to major units
      *
-     * @param float $amountInCents Amount in cents
-     * @return float Amount in dollars
+     * @param float $amountInMinorUnits Amount in minor units (e.g. cents)
+     * @param string $currency Currency code (default: USD)
+     * @return float Amount in major units (e.g. dollars)
      */
-    public function convertCentsToDollars(float $amountInCents): float
+    public function convertMinorToMajor(float $amountInMinorUnits, string $currency = 'USD'): float
     {
-        $conversionFactor = Constants::TRANSACTION_USD_CONVERSION_FACTOR ?? 100;
-        return $amountInCents / $conversionFactor;
+        return $amountInMinorUnits / Constants::getConversionFactor($currency);
     }
 
     /**
-     * Convert amount from dollars to cents
+     * Convert amount from major units to minor units
      *
-     * @param float $amountInDollars Amount in dollars
-     * @return int Amount in cents
+     * @param float $amountInMajorUnits Amount in major units (e.g. dollars)
+     * @param string $currency Currency code (default: USD)
+     * @return int Amount in minor units (e.g. cents)
      */
-    public function convertDollarsToCents(float $amountInDollars): int
+    public function convertMajorToMinor(float $amountInMajorUnits, string $currency = 'USD'): int
     {
-        $conversionFactor = Constants::TRANSACTION_USD_CONVERSION_FACTOR ?? 100;
-        return (int) round($amountInDollars * $conversionFactor);
+        return (int) round($amountInMajorUnits * Constants::getConversionFactor($currency));
     }
 
     /**
@@ -64,12 +64,14 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
      * @param float $amount Base amount
      * @param float $feePercent Fee percentage (e.g., 2.5 for 2.5%)
      * @param float $minumFee Fee amount (e.g., 0.01 for 1 cent)
+     * @param string $currency Currency code (default: USD)
      * @return int Fee amount in cents
      */
-    public function calculateFee(float $amount, float $feePercent, float $minumFee): int
+    public function calculateFee(float $amount, float $feePercent, float $minumFee, string $currency = 'USD'): int
     {
-        $amount = (int) round(($amount / Constants::TRANSACTION_USD_CONVERSION_FACTOR)  * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
-        $minumFee = $minumFee * Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        $conversionFactor = Constants::getConversionFactor($currency);
+        $amount = (int) round(($amount / $conversionFactor)  * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
+        $minumFee = $minumFee * $conversionFactor;
         if($amount < $minumFee){
             return  (int) round($minumFee);
         }

@@ -99,9 +99,9 @@ class BalanceServiceTest extends TestCase
             ->willReturn([]);
 
         $this->currencyUtility->expects($this->exactly(3))
-            ->method('convertCentsToDollars')
-            ->willReturnCallback(function ($cents) {
-                return $cents / 100;
+            ->method('convertMinorToMajor')
+            ->willReturnCallback(function ($minorAmount) {
+                return $minorAmount / 100;
             });
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
@@ -174,9 +174,9 @@ class BalanceServiceTest extends TestCase
             ->willReturn([]);
 
         $this->currencyUtility->expects($this->exactly(6))
-            ->method('convertCentsToDollars')
-            ->willReturnCallback(function ($cents) {
-                return $cents / 100;
+            ->method('convertMinorToMajor')
+            ->willReturnCallback(function ($minorAmount) {
+                return $minorAmount / 100;
             });
 
         $result = $this->balanceService->contactBalanceConversion($contacts);
@@ -229,9 +229,9 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        // With zero values, convertCentsToDollars should not be called for balance/fee/credit_limit
+        // With zero values, convertMinorToMajor should not be called for balance/fee/credit_limit
         $this->currencyUtility->expects($this->never())
-            ->method('convertCentsToDollars');
+            ->method('convertMinorToMajor');
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
 
@@ -278,9 +278,9 @@ class BalanceServiceTest extends TestCase
             ->willReturn([]);
 
         $this->currencyUtility->expects($this->exactly(2))
-            ->method('convertCentsToDollars')
-            ->willReturnCallback(function ($cents) {
-                return $cents / 100;
+            ->method('convertMinorToMajor')
+            ->willReturnCallback(function ($minorAmount) {
+                return $minorAmount / 100;
             });
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
@@ -327,9 +327,9 @@ class BalanceServiceTest extends TestCase
             ->willReturn([]);
 
         $this->currencyUtility->expects($this->exactly(3))
-            ->method('convertCentsToDollars')
-            ->willReturnCallback(function ($cents) {
-                return $cents / 100;
+            ->method('convertMinorToMajor')
+            ->willReturnCallback(function ($minorAmount) {
+                return $minorAmount / 100;
             });
 
         $result = $this->balanceService->contactBalanceConversion([$contact], 10);
@@ -378,9 +378,9 @@ class BalanceServiceTest extends TestCase
             ->willReturn($transactions);
 
         $this->currencyUtility->expects($this->exactly(3))
-            ->method('convertCentsToDollars')
-            ->willReturnCallback(function ($cents) {
-                return $cents / 100;
+            ->method('convertMinorToMajor')
+            ->willReturnCallback(function ($minorAmount) {
+                return $minorAmount / 100;
             });
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
@@ -425,9 +425,9 @@ class BalanceServiceTest extends TestCase
             ->willReturn([]);
 
         $this->currencyUtility->expects($this->exactly(3))
-            ->method('convertCentsToDollars')
-            ->willReturnCallback(function ($cents) {
-                return $cents / 100;
+            ->method('convertMinorToMajor')
+            ->willReturnCallback(function ($minorAmount) {
+                return $minorAmount / 100;
             });
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
@@ -482,7 +482,7 @@ class BalanceServiceTest extends TestCase
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
+            ->method('convertMinorToMajor')
             ->with(5000)
             ->willReturn(50.0);
 
@@ -504,7 +504,7 @@ class BalanceServiceTest extends TestCase
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
+            ->method('convertMinorToMajor')
             ->with(8000)
             ->willReturn(80.0);
 
@@ -525,7 +525,7 @@ class BalanceServiceTest extends TestCase
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
+            ->method('convertMinorToMajor')
             ->with(0)
             ->willReturn(0.0);
 
@@ -546,7 +546,7 @@ class BalanceServiceTest extends TestCase
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
+            ->method('convertMinorToMajor')
             ->with(-2500)
             ->willReturn(-25.0);
 
@@ -567,7 +567,7 @@ class BalanceServiceTest extends TestCase
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
+            ->method('convertMinorToMajor')
             ->with(0)
             ->willReturn(0.0);
 
@@ -590,7 +590,7 @@ class BalanceServiceTest extends TestCase
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
+            ->method('convertMinorToMajor')
             ->with(6000)
             ->willReturn(60.0);
 
@@ -605,17 +605,17 @@ class BalanceServiceTest extends TestCase
     public function testGetUserTotalBalanceClampsOnOverflow(): void
     {
         // Create balances that would sum to more than PHP_INT_MAX / 100
-        $maxCents = (int) (PHP_INT_MAX / 100);
+        $maxMinorUnits = (int) (PHP_INT_MAX / 100);
         $this->balanceRepository->expects($this->once())
             ->method('getUserBalance')
             ->willReturn([
-                ['currency' => 'USD', 'total_balance' => $maxCents],
+                ['currency' => 'USD', 'total_balance' => $maxMinorUnits],
                 ['currency' => 'EUR', 'total_balance' => 1000]
             ]);
 
         $this->currencyUtility->expects($this->once())
-            ->method('convertCentsToDollars')
-            ->with($maxCents) // Should be clamped to maxCents, not maxCents+1000
+            ->method('convertMinorToMajor')
+            ->with($maxMinorUnits) // Should be clamped to maxCents, not maxCents+1000
             ->willReturn(999999999.99);
 
         $result = $this->balanceService->getUserTotalBalance();

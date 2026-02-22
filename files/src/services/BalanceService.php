@@ -120,9 +120,9 @@ class BalanceService implements BalanceServiceInterface
 
             $contactsWithBalances[] = array_merge($addressesAssociative, [
                 'name' => $contact['name'],
-                'balance' => $balance ? $this->currencyUtility->convertCentsToDollars($balance) : $balance,
-                'fee' => $feePercent ? $this->currencyUtility->convertCentsToDollars($feePercent) : $feePercent,
-                'credit_limit' => $creditLimit ? $this->currencyUtility->convertCentsToDollars($creditLimit) : $creditLimit,
+                'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
+                'fee' => $feePercent ? $this->currencyUtility->convertMinorToMajor($feePercent) : $feePercent,
+                'credit_limit' => $creditLimit ? $this->currencyUtility->convertMinorToMajor($creditLimit) : $creditLimit,
                 'currency' => $contact['currency'],
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
@@ -143,7 +143,7 @@ class BalanceService implements BalanceServiceInterface
      * This ensures consistency with transaction validation and prevents counting
      * pending/in-progress transactions as available funds.
      *
-     * @return string Balance formatted as dollars (e.g., "10.50")
+     * @return string Balance formatted as major units (e.g., "10.50")
      */
     public function getUserTotalBalance(): string
     {
@@ -154,20 +154,20 @@ class BalanceService implements BalanceServiceInterface
         }
 
         // Sum all currency balances (typically just USD)
-        // Balance is already in cents from BalanceRepository
-        $totalCents = 0;
-        $maxCents = (int) (PHP_INT_MAX / 100);
+        // Balance is already in minor units from BalanceRepository
+        $totalMinorUnits = 0;
+        $maxMinorUnits = (int) (PHP_INT_MAX / 100);
         foreach ($balances as $balance) {
-            $totalCents += (int) ($balance['total_balance'] ?? 0);
+            $totalMinorUnits += (int) ($balance['total_balance'] ?? 0);
         }
 
         // Guard against integer overflow in balance accumulation
-        if (abs($totalCents) > $maxCents) {
-            \Eiou\Utils\Logger::getInstance()->warning("Balance overflow detected: totalCents={$totalCents} exceeds safe maximum={$maxCents}");
-            $totalCents = ($totalCents > 0) ? $maxCents : -$maxCents;
+        if (abs($totalMinorUnits) > $maxMinorUnits) {
+            \Eiou\Utils\Logger::getInstance()->warning("Balance overflow detected: totalMinorUnits={$totalMinorUnits} exceeds safe maximum={$maxMinorUnits}");
+            $totalMinorUnits = ($totalMinorUnits > 0) ? $maxMinorUnits : -$maxMinorUnits;
         }
 
-        return $this->currencyUtility->convertCentsToDollars($totalCents);
+        return $this->currencyUtility->convertMinorToMajor($totalMinorUnits);
     }
 
     /**
@@ -175,7 +175,7 @@ class BalanceService implements BalanceServiceInterface
      *
      * @param string $userPubkey User's public key
      * @param string $contactPubkey Contact's public key
-     * @return int Balance in cents
+     * @return int Balance in minor units
      */
     public function getContactBalance(string $userPubkey, string $contactPubkey): int
     {

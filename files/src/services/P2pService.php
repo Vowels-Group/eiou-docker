@@ -711,8 +711,8 @@ class P2pService implements P2pServiceInterface {
         $data['receiverAddress'] = $request[2];
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
-        $data['amount'] = round($validatedAmount * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
         $data['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY; // Default to USD
+        $data['amount'] = round($validatedAmount * Constants::CONVERSION_FACTORS[$data['currency']]); // Convert to cents
 
         // Additional data preparation - Use cryptographically secure random
         try {
