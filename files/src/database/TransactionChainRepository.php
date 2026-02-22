@@ -71,19 +71,17 @@ class TransactionChainRepository extends AbstractRepository
             'gap_context' => []
         ];
 
-        // Get all settled transactions between the two parties
-        // Only include completed/accepted/paid — these form the permanent chain.
-        // In-flight statuses (pending, sending, sent) are excluded because:
-        //   - A mid-send transaction may reference a previous_txid that hasn't
-        //     been synced yet, causing a false chain gap report
-        //   - These transactions may still be re-signed with a different
-        //     previous_txid after sync (see HeldTransactionService)
-        // Terminal non-chain statuses (cancelled, rejected, expired, failed)
-        // are also excluded as they don't contribute to the chain.
+        // Get all active transactions between the two parties (excluding cancelled/rejected).
+        // We need ALL active txids in the lookup set so that a completed transaction
+        // referencing an in-flight transaction's txid doesn't falsely report a gap.
+        // However, we only CHECK previous_txid links on settled transactions
+        // (completed/accepted/paid) because in-flight transactions (pending/sending/sent)
+        // may reference a previous_txid that hasn't been synced yet, or may be re-signed
+        // with a different previous_txid after sync (see HeldTransactionService).
         $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
                          OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                  AND status IN ('completed', 'accepted', 'paid')
+                  AND status NOT IN ('cancelled', 'rejected')
                   ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
 
         $stmt = $this->execute($query, [
@@ -98,24 +96,36 @@ class TransactionChainRepository extends AbstractRepository
         }
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $result['transaction_count'] = count($transactions);
-        $result['has_transactions'] = count($transactions) > 0;
 
         if (count($transactions) === 0) {
             return $result;
         }
 
-        // Build a set of all txids for quick lookup
+        // Build a set of ALL active txids for lookup (including in-flight)
+        // This ensures a completed tx referencing a sending tx's txid won't false-gap
         $txidSet = [];
+        // Separate settled transactions for chain-link checking
+        $settledStatuses = ['completed', 'accepted', 'paid'];
+        $settledTransactions = [];
         foreach ($transactions as $tx) {
             $txidSet[$tx['txid']] = true;
+            if (in_array($tx['status'], $settledStatuses, true)) {
+                $settledTransactions[] = $tx;
+            }
         }
 
-        // Check each transaction's previous_txid exists (except first transaction which has null)
+        $result['transaction_count'] = count($settledTransactions);
+        $result['has_transactions'] = count($settledTransactions) > 0;
+
+        if (count($settledTransactions) === 0) {
+            return $result;
+        }
+
+        // Check each settled transaction's previous_txid exists in the full txid set
         // Also build gap context: for each gap, identify the last valid txid before it
         // and the first valid txid after it, so the GUI can show where gaps are in the chain
         $prevValidTxid = null;
-        foreach ($transactions as $tx) {
+        foreach ($settledTransactions as $tx) {
             $prevTxid = $tx['previous_txid'];
 
             // Skip if previous_txid is null (first transaction in chain)
@@ -124,7 +134,7 @@ class TransactionChainRepository extends AbstractRepository
                 continue;
             }
 
-            // Check if previous_txid exists in our local chain
+            // Check if previous_txid exists in our local chain (any active status)
             if (!isset($txidSet[$prevTxid])) {
                 $result['valid'] = false;
                 $result['gaps'][] = $prevTxid;

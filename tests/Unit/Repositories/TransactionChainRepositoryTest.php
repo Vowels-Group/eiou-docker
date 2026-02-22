@@ -146,26 +146,72 @@ class TransactionChainRepositoryTest extends TestCase
         $this->assertEquals(0, $result['transaction_count']);
     }
 
-    public function testVerifyChainIntegrityQueryOnlyIncludesSettledStatuses(): void
+    public function testVerifyChainIntegritySkipsInFlightTransactionLinks(): void
     {
         $userPublicKey = 'user-pubkey';
         $contactPublicKey = 'contact-pubkey';
 
-        // Verify the query uses a whitelist of settled statuses (completed, accepted, paid)
-        // rather than a blacklist, to prevent false chain gaps from in-flight transactions
+        // Chain: tx1 (completed) → tx2 (sending, points to missing txX) → tx3 (completed, points to tx2)
+        // tx2 is in-flight — its previous_txid link should NOT be checked (txX isn't synced yet)
+        // tx3 references tx2's txid — tx2's txid should still be in the lookup set
+        // Result: chain should be VALID (no false gaps in either direction)
+        $transactions = [
+            ['txid' => 'tx1', 'previous_txid' => null, 'status' => 'completed'],
+            ['txid' => 'tx2', 'previous_txid' => 'txX', 'status' => 'sending'],  // in-flight, skip check
+            ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 txid in lookup
+        ];
+
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains("status IN ('completed', 'accepted', 'paid')"))
             ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->exactly(4))
+            ->method('bindValue');
 
         $this->stmt->expects($this->once())
             ->method('execute');
 
         $this->stmt->expects($this->once())
             ->method('fetchAll')
-            ->willReturn([]);
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($transactions);
 
-        $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
+        $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(2, $result['transaction_count']); // only settled count
+        $this->assertEmpty($result['gaps']);
+    }
+
+    public function testVerifyChainIntegrityDetectsRealGapInSettledTransactions(): void
+    {
+        $userPublicKey = 'user-pubkey';
+        $contactPublicKey = 'contact-pubkey';
+
+        // tx3 (completed) references tx2 which doesn't exist at all — real gap
+        $transactions = [
+            ['txid' => 'tx1', 'previous_txid' => null, 'status' => 'completed'],
+            ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 missing entirely
+        ];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->exactly(4))
+            ->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute');
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->willReturn($transactions);
+
+        $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
+
+        $this->assertFalse($result['valid']);
+        $this->assertContains('tx2', $result['gaps']);
     }
 
     public function testVerifyChainIntegrityHandlesQueryFailure(): void
