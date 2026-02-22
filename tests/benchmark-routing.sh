@@ -366,7 +366,7 @@ do_send() {
     local balance_cmd="php -r \"
         require_once('${BOOTSTRAP_PATH}');
         \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-        echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+        echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
     \""
 
     # Get initial balance
@@ -558,7 +558,7 @@ do_burst() {
     local balance_cmd="php -r \"
         require_once('${BOOTSTRAP_PATH}');
         \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-        echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+        echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
     \""
 
     # ---- Phase 1: Fire all sends ----

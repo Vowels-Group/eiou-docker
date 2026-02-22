@@ -152,7 +152,7 @@ function outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedRe
 }
 
 function outputSendTransaction($payload){
-    return "[Transaction] Sending " . $payload['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
+    return "[Transaction] Sending " . $payload['amount']/Constants::CONVERSION_FACTORS[$payload['currency']] . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
 }
 
 function outputSendTransactionCompletionMessageMemo($message){
@@ -172,7 +172,7 @@ function outputSendTransactionOnwards($message){
 }
 
 function outputTransactionAmountReceived($message){
-    return "[Transaction] Received " . $message['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $message['currency'] . " from " . $message['sender_address']."\n";
+    return "[Transaction] Received " . $message['amount']/Constants::CONVERSION_FACTORS[$message['currency']] . " " . $message['currency'] . " from " . $message['sender_address']."\n";
 }
 
 function outputTransactionExpired($message){
@@ -188,11 +188,11 @@ function outputTransactionInquiryResponse($response){
 }
 
 function outputTransactionP2pSentSuccesfully($p2p){
-    return "[Transaction] Sent " . $p2p['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
+    return "[Transaction] Sent " . $p2p['amount']/Constants::CONVERSION_FACTORS[$p2p['currency']] . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
 }
 
 function outputTransactionDirectSentSuccesfully($data){
-    return "[Transaction] Sent " . $data['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
+    return "[Transaction] Sent " . $data['amount']/Constants::CONVERSION_FACTORS[$data['currency']] . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
 }
 
 function outputTransactionDescriptionUpdated($description,$typeTransaction,$memo){

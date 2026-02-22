@@ -65,7 +65,25 @@ class Constants {
     const TRANSACTION_MAX_AMOUNT = 999999999;
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
     const TRANSACTION_MINIMUM_FEE = 0.01;
-    const TRANSACTION_USD_CONVERSION_FACTOR = 100; // Store cents as integers
+    // Currency conversion factors: base unit (cents) to display unit (dollars)
+    const CONVERSION_FACTORS = [
+        'USD' => 100,
+    ];
+
+    /**
+     * Get the conversion factor for a given currency
+     *
+     * @param string $currency Currency code (e.g., 'USD')
+     * @return int Conversion factor
+     * @throws \InvalidArgumentException If currency has no defined factor
+     */
+    public static function getConversionFactor(string $currency): int
+    {
+        if (!isset(self::CONVERSION_FACTORS[$currency])) {
+            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
+        }
+        return self::CONVERSION_FACTORS[$currency];
+    }
 
     // Transaction processor polling intervals (milliseconds)
     const TRANSACTION_MIN_INTERVAL_MS = 100;
@@ -204,7 +222,7 @@ class Constants {
     const TIME_HOURS_PER_DAY = 24;
 
     // Percentage/Math constants
-    const CREDIT_CONVERSION_FACTOR = 100;
+    // Credits use the same currency conversion system — use CONVERSION_FACTORS[$currency]
     const FEE_CONVERSION_FACTOR = 100; // Convert percentage to basis points (0.1% = 10)
     const FEE_PERCENT_DECIMAL_PRECISION = 2;
 

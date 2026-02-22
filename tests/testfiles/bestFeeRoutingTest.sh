@@ -211,7 +211,7 @@ echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} (default fast 
 initialBalanceFast=$(docker exec ${testReceiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-    echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+    echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
 " 2>/dev/null || echo "0")
 
 # Send without flags (default fast mode: first route wins)
@@ -225,7 +225,7 @@ echo -e "\t   Waiting for fast mode routing (timeout: ${fastTimeout}s)..."
 balance_cmd="php -r \"
     require_once('${BOOTSTRAP_PATH}');
     \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-    echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+    echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
 \""
 
 newBalanceFast=$(wait_for_balance_change "${testReceiver}" "$initialBalanceFast" "$balance_cmd" "$fastTimeout" "fast mode send")
@@ -354,7 +354,7 @@ echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} with --best (b
 initialBalanceBest=$(docker exec ${testReceiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-    echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+    echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
 " 2>/dev/null || echo "0")
 
 # Start timing benchmark

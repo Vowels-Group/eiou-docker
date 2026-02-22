@@ -319,9 +319,9 @@ class UtilityServiceContainerTest extends TestCase
     {
         $currencyUtility = $this->utilityContainer->getCurrencyUtility();
 
-        $dollars = $currencyUtility->convertCentsToDollars(100);
+        $majorUnits = $currencyUtility->convertMinorToMajor(100);
 
-        $this->assertEquals(1.0, $dollars);
+        $this->assertEquals(1.0, $majorUnits);
     }
 
     /**

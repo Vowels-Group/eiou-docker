@@ -10,29 +10,31 @@ namespace Eiou\Contracts;
 interface CurrencyUtilityServiceInterface
 {
     /**
-     * Format currency from cents to dollars with currency suffix
+     * Format currency from minor units to major units with currency suffix
      *
-     * @param float $amountInCents Amount in cents
+     * @param float $amountInMinorUnits Amount in minor units (e.g. cents)
      * @param string $currency Currency code (default: USD)
      * @return string Formatted currency string
      */
-    public function formatCurrency(float $amountInCents, string $currency = 'USD'): string;
+    public function formatCurrency(float $amountInMinorUnits, string $currency = 'USD'): string;
 
     /**
-     * Convert amount from cents to dollars
+     * Convert amount from minor units to major units
      *
-     * @param float $amountInCents Amount in cents
-     * @return float Amount in dollars
+     * @param float $amountInMinorUnits Amount in minor units (e.g. cents)
+     * @param string $currency Currency code (default: USD)
+     * @return float Amount in major units (e.g. dollars)
      */
-    public function convertCentsToDollars(float $amountInCents): float;
+    public function convertMinorToMajor(float $amountInMinorUnits, string $currency = 'USD'): float;
 
     /**
-     * Convert amount from dollars to cents
+     * Convert amount from major units to minor units
      *
-     * @param float $amountInDollars Amount in dollars
-     * @return int Amount in cents
+     * @param float $amountInMajorUnits Amount in major units (e.g. dollars)
+     * @param string $currency Currency code (default: USD)
+     * @return int Amount in minor units (e.g. cents)
      */
-    public function convertDollarsToCents(float $amountInDollars): int;
+    public function convertMajorToMinor(float $amountInMajorUnits, string $currency = 'USD'): int;
 
     /**
      * Calculate fee amount from percentage
@@ -40,9 +42,10 @@ interface CurrencyUtilityServiceInterface
      * @param float $amount Base amount
      * @param float $feePercent Fee percentage (e.g., 2.5 for 2.5%)
      * @param float $minumFee Fee amount (e.g., 0.01 for 1 cent)
+     * @param string $currency Currency code (default: USD)
      * @return int Fee amount in cents
      */
-    public function calculateFee(float $amount, float $feePercent, float $minumFee): int;
+    public function calculateFee(float $amount, float $feePercent, float $minumFee, string $currency = 'USD'): int;
 
     /**
      * Calculate fee percentage from amounts

@@ -23,17 +23,18 @@ use Eiou\Core\Constants;
 class TransactionFormatter
 {
     /**
-     * Convert amount from cents to display value
+     * Convert amount from minor units to display value
      *
-     * @param int|null $cents Amount in cents
-     * @return float|null Amount in dollars/base units
+     * @param int|null $minorAmount Amount in minor units (e.g. cents)
+     * @param string $currency Currency code (default: USD)
+     * @return float|null Amount in major units (e.g. dollars)
      */
-    public static function convertAmount(?int $cents): ?float
+    public static function convertAmount(?int $minorAmount, string $currency = 'USD'): ?float
     {
-        if ($cents === null) {
+        if ($minorAmount === null) {
             return null;
         }
-        return $cents / Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        return $minorAmount / Constants::CONVERSION_FACTORS[$currency];
     }
 
     /**
@@ -49,7 +50,7 @@ class TransactionFormatter
         return [
             'date' => $tx['timestamp'],
             'type' => $type,
-            'amount' => self::convertAmount((int)$tx['amount']),
+            'amount' => self::convertAmount((int)$tx['amount'], $tx['currency']),
             'currency' => $tx['currency'],
             'counterparty' => $counterparty
         ];
@@ -98,7 +99,7 @@ class TransactionFormatter
             'status' => $tx['status'],
             'date' => $tx['timestamp'],
             'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-            'amount' => self::convertAmount((int)$tx['amount']),
+            'amount' => self::convertAmount((int)$tx['amount'], $tx['currency']),
             'currency' => $tx['currency'],
             'counterparty' => $counterpartyDisplay,
             'counterparty_address' => $counterpartyAddress,
@@ -113,8 +114,8 @@ class TransactionFormatter
             'end_recipient_address' => $tx['end_recipient_address'] ?? null,
             'initial_sender_address' => $tx['initial_sender_address'] ?? null,
             'p2p_destination' => $tx['p2p_destination'] ?? null,
-            'p2p_amount' => isset($tx['p2p_amount']) ? self::convertAmount((int)$tx['p2p_amount']) : null,
-            'p2p_fee' => isset($tx['p2p_fee']) ? self::convertAmount((int)$tx['p2p_fee']) : null
+            'p2p_amount' => isset($tx['p2p_amount']) ? self::convertAmount((int)$tx['p2p_amount'], $tx['currency']) : null,
+            'p2p_fee' => isset($tx['p2p_fee']) ? self::convertAmount((int)$tx['p2p_fee'], $tx['currency']) : null
         ];
     }
 
@@ -151,7 +152,7 @@ class TransactionFormatter
             'status' => $tx['status'] ?? Constants::STATUS_COMPLETED,
             'date' => $tx['timestamp'],
             'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-            'amount' => self::convertAmount((int)$tx['amount']),
+            'amount' => self::convertAmount((int)$tx['amount'], $tx['currency']),
             'currency' => $tx['currency'],
             'sender_address' => $tx['sender_address'] ?? '',
             'receiver_address' => $tx['receiver_address'] ?? '',

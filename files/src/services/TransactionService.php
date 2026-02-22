@@ -259,8 +259,8 @@ class TransactionService implements TransactionServiceInterface {
 
         $data['txType'] = 'standard';
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
-        $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR);
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+        $data['amount'] = round($request[3] * Constants::CONVERSION_FACTORS[$data['currency']]);
         $data['memo'] = 'standard';
         $data['description'] = $request[5] ?? null;
 
@@ -319,11 +319,11 @@ class TransactionService implements TransactionServiceInterface {
         // Inline fallback for backward compatibility
         $balances = $this->balanceRepository->getUserBalance();
         if ($balances === null || empty($balances)) return "0.00";
-        $totalCents = 0;
+        $totalMinorUnits = 0;
         foreach ($balances as $balance) {
-            $totalCents += (int) ($balance['total_balance'] ?? 0);
+            $totalMinorUnits += (int) ($balance['total_balance'] ?? 0);
         }
-        return $this->currencyUtility->convertCentsToDollars($totalCents);
+        return $this->currencyUtility->convertMinorToMajor($totalMinorUnits);
     }
 
     public function contactBalanceConversion($contacts, int $transactionLimit = 5): array {
@@ -349,9 +349,9 @@ class TransactionService implements TransactionServiceInterface {
             $transactions = $this->transactionContactRepository->getTransactionsWithContact($contactAddrs, $transactionLimit);
             $result[] = array_merge($addresses, [
                 'name' => $contact['name'],
-                'balance' => $balance ? $this->currencyUtility->convertCentsToDollars($balance) : $balance,
-                'fee' => $contact['fee_percent'] ? $this->currencyUtility->convertCentsToDollars($contact['fee_percent']) : $contact['fee_percent'],
-                'credit_limit' => $contact['credit_limit'] ? $this->currencyUtility->convertCentsToDollars($contact['credit_limit']) : $contact['credit_limit'],
+                'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
+                'fee' => $contact['fee_percent'] ? $this->currencyUtility->convertMinorToMajor($contact['fee_percent']) : $contact['fee_percent'],
+                'credit_limit' => $contact['credit_limit'] ? $this->currencyUtility->convertMinorToMajor($contact['credit_limit']) : $contact['credit_limit'],
                 'currency' => $contact['currency'],
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',

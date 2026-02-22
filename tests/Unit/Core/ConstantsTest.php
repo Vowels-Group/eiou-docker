@@ -258,7 +258,7 @@ class ConstantsTest extends TestCase
         $this->assertEquals(999999999, Constants::TRANSACTION_MAX_AMOUNT);
         $this->assertEquals('USD', Constants::TRANSACTION_DEFAULT_CURRENCY);
         $this->assertEquals(0.01, Constants::TRANSACTION_MINIMUM_FEE);
-        $this->assertEquals(100, Constants::TRANSACTION_USD_CONVERSION_FACTOR);
+        $this->assertEquals(100, Constants::CONVERSION_FACTORS['USD']);
     }
 
     /**
@@ -341,9 +341,27 @@ class ConstantsTest extends TestCase
      */
     public function testConversionFactorConstantsAreDefined(): void
     {
-        $this->assertEquals(100, Constants::CREDIT_CONVERSION_FACTOR);
+        $this->assertEquals(100, Constants::CONVERSION_FACTORS['USD']);
         $this->assertEquals(100, Constants::FEE_CONVERSION_FACTOR);
         $this->assertEquals(2, Constants::FEE_PERCENT_DECIMAL_PRECISION);
+    }
+
+    /**
+     * Test getConversionFactor returns correct value for known currency
+     */
+    public function testGetConversionFactorReturnsValueForKnownCurrency(): void
+    {
+        $this->assertEquals(100, Constants::getConversionFactor('USD'));
+    }
+
+    /**
+     * Test getConversionFactor throws for unknown currency
+     */
+    public function testGetConversionFactorThrowsForUnknownCurrency(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('No conversion factor defined for currency: XYZ');
+        Constants::getConversionFactor('XYZ');
     }
 
     /**
@@ -405,7 +423,7 @@ class ConstantsTest extends TestCase
         // Transaction constants
         $expectedTransactionConstants = [
             'TRANSACTION_MAX_AMOUNT', 'TRANSACTION_DEFAULT_CURRENCY',
-            'TRANSACTION_MINIMUM_FEE', 'TRANSACTION_USD_CONVERSION_FACTOR',
+            'TRANSACTION_MINIMUM_FEE', 'CONVERSION_FACTORS',
             'TRANSACTION_MIN_INTERVAL_MS', 'TRANSACTION_MAX_INTERVAL_MS',
             'TRANSACTION_IDLE_INTERVAL_MS', 'TRANSACTION_ADAPTIVE_POLLING'
         ];

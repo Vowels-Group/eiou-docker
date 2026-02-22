@@ -247,9 +247,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             $output->error("Invalid credit: " . $creditValidation['error'], ErrorCodes::INVALID_CREDIT, 400);
             return;
         }
-        $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
-
-        // Validate currency
+        // Validate currency (needed before credit conversion)
         $currencyValidation = $this->inputValidator->validateCurrency($data[6] ?? 'USD');
         if (!$currencyValidation['valid']) {
             $this->secureLogger->warning("Invalid currency", [
@@ -260,6 +258,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
         $currency = $currencyValidation['value'];
+        $credit = $creditValidation['value'] * Constants::CONVERSION_FACTORS[$currency];
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -533,7 +532,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                         try {
                             $creditData = $this->contactCreditRepository->getAvailableCredit($hash);
                             if ($creditData !== null) {
-                                $result['my_available_credit'] = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+                                $resultCurrency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                            $result['my_available_credit'] = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$resultCurrency];
                             }
                         } catch (\Exception $e) {
                             // Non-critical
@@ -545,8 +545,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $balanceData = $this->balanceRepository->getContactBalanceByPubkeyHash($hash, $currency);
                         if ($balanceData && count($balanceData) > 0) {
                             $b = $balanceData[0];
-                            $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($result['credit_limit'] ?? 0));
-                            $result['their_available_credit'] = $theirCents / Constants::CREDIT_CONVERSION_FACTOR;
+                            $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($result['credit_limit'] ?? 0));
+                            $result['their_available_credit'] = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
                         }
                     } catch (\Exception $e) {
                         // Non-critical
@@ -564,7 +564,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                     }
                     $contact['status'] = $result['status'] ?? null;
                     $contact['fee_percent'] = isset($result['fee_percent']) ? $result['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null;
-                    $contact['credit_limit'] = isset($result['credit_limit']) ? $result['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null;
+                    $contact['credit_limit'] = isset($result['credit_limit']) ? $result['credit_limit'] / Constants::CONVERSION_FACTORS[$result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY] : null;
                     $contact['my_available_credit'] = $result['my_available_credit'];
                     $contact['their_available_credit'] = $result['their_available_credit'];
                     $contact['currency'] = $result['currency'] ?? null;
@@ -584,7 +584,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                     }
                     echo "\t    Status: " . ($contact['status'] ?? 'N/A') . "\n";
                     if (isset($contact['fee_percent'])) echo "\t    Fee: " . ($contact['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
-                    if (isset($contact['credit_limit'])) echo "\t    Credit Limit: " . ($contact['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
+                    if (isset($contact['credit_limit'])) echo "\t    Credit Limit: " . ($contact['credit_limit'] / Constants::CONVERSION_FACTORS[$contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY]) . "\n";
                     if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], 2) . "\n";
                     if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], 2) . "\n";
                     if (isset($contact['currency'])) echo "\t    Currency: " . $contact['currency'] . "\n";
@@ -655,7 +655,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                 try {
                     $creditData = $this->contactCreditRepository->getAvailableCredit($contactResult['pubkey_hash']);
                     if ($creditData !== null) {
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::CREDIT_CONVERSION_FACTOR;
+                        $contactCurrency = $contactResult['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                        $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$contactCurrency];
                     }
                 } catch (\Exception $e) {
                     // Non-critical — skip available credit display
@@ -670,8 +671,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $balanceData = $this->balanceRepository->getContactBalanceByPubkeyHash($contactResult['pubkey_hash'], $currency);
                     if ($balanceData && count($balanceData) > 0) {
                         $b = $balanceData[0];
-                        $theirCents = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contactResult['credit_limit'] ?? 0));
-                        $theirAvailableCredit = $theirCents / Constants::CREDIT_CONVERSION_FACTOR;
+                        $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contactResult['credit_limit'] ?? 0));
+                        $theirAvailableCredit = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
                     }
                 } catch (\Exception $e) {
                     // Non-critical
@@ -686,7 +687,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 $contact['pubkey'] = $contactResult['pubkey'] ?? null;
                 $contact['status'] = $contactResult['status'] ?? null;
                 $contact['fee_percent'] = isset($contactResult['fee_percent']) ? $contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null;
-                $contact['credit_limit'] = isset($contactResult['credit_limit']) ? $contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null;
+                $contact['credit_limit'] = isset($contactResult['credit_limit']) ? $contactResult['credit_limit'] / Constants::CONVERSION_FACTORS[$contactResult['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY] : null;
                 $contact['my_available_credit'] = $myAvailableCredit;
                 $contact['their_available_credit'] = $theirAvailableCredit;
                 $contact['currency'] = $contactResult['currency'] ?? null;
@@ -699,7 +700,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 }
                 echo "\tStatus: " . ($contactResult['status'] ?? 'N/A') . "\n";
                 if (isset($contactResult['fee_percent'])) echo "\tFee: " . ($contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
-                if (isset($contactResult['credit_limit'])) echo "\tCredit Limit: " . ($contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
+                if (isset($contactResult['credit_limit'])) echo "\tCredit Limit: " . ($contactResult['credit_limit'] / Constants::CONVERSION_FACTORS[$contactResult['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY]) . "\n";
                 if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, 2) . "\n";
                 if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, 2) . "\n";
                 if (isset($contactResult['currency'])) echo "\tCurrency: " . $contactResult['currency'] . "\n";
@@ -1166,13 +1167,13 @@ class ContactManagementService implements ContactManagementServiceInterface
             $updateFields['fee_percent'] = $value * Constants::FEE_CONVERSION_FACTOR;
             $updateData['fee'] = $value;
         } elseif ($field === 'credit') {
-            $updateFields['credit_limit'] = $value * Constants::CREDIT_CONVERSION_FACTOR;
+            $updateFields['credit_limit'] = $value * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY];
             $updateFields['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
             $updateData['credit'] = $value;
         } elseif ($field === 'all') {
             $updateFields['name'] = $value;
             $updateFields['fee_percent'] = $value2 * Constants::FEE_CONVERSION_FACTOR;
-            $updateFields['credit_limit'] = $value3 * Constants::CREDIT_CONVERSION_FACTOR;
+            $updateFields['credit_limit'] = $value3 * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY];
             $updateFields['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
             $updateData['name'] = $value;
             $updateData['fee'] = $value2;

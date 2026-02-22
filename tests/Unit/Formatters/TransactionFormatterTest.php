@@ -16,9 +16,9 @@ use Eiou\Core\Constants;
 class TransactionFormatterTest extends TestCase
 {
     /**
-     * Test convertAmount with valid cents
+     * Test convertAmount with valid minor units
      */
-    public function testConvertAmountWithValidCents(): void
+    public function testConvertAmountWithValidMinorUnits(): void
     {
         $this->assertEquals(1.00, TransactionFormatter::convertAmount(100));
         $this->assertEquals(10.50, TransactionFormatter::convertAmount(1050));
