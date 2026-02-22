@@ -12,6 +12,11 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
+- Archive old multi-node compose files to `tests/old/compose-files/`
+- Rewrite README.md to focus on the single compose file with comprehensive configuration reference
+
 ### Added
 - Show chain gap transaction details in GUI: displays the last valid txid before each gap, the missing txid, and the first valid txid after each gap (with full txid on hover) so users can identify exactly where chain breaks occur
 - Display chain gap count in GUI — badge shows "Chain Gap (N)" when multiple gaps exist, and chain drop section shows "Gap 1 of N" context with multi-gap info text
