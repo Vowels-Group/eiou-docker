@@ -1702,8 +1702,9 @@ function openContactModal(contact, openTab) {
             chainText = 'Valid';
             chainClass = 'chain-valid';
         } else {
-            chainText = 'Needs Sync';
+            chainText = 'Chain Gap';
             chainClass = 'chain-invalid';
+            isClickable = true;
         }
         chainStatusEl.textContent = chainText;
         chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');
@@ -1761,6 +1762,10 @@ function openContactModal(contact, openTab) {
             } else if (proposal.status === 'rejected') {
                 if (chainDropRejected) chainDropRejected.style.display = 'block';
             }
+        } else if (contact.valid_chain === false || contact.valid_chain === 0) {
+            // Chain is invalid but no proposal exists yet — show propose button
+            chainDropSection.style.display = 'block';
+            if (chainDropPropose) chainDropPropose.style.display = 'block';
         } else {
             chainDropSection.style.display = 'none';
         }
