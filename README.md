@@ -37,6 +37,8 @@ The container automatically generates a wallet, starts Tor, and initializes all 
 
 ## Container Management
 
+In the examples below, `eiou-node` is the container name (set via `NODE_NAME`, see [Container & Volume Naming](#container--volume-naming)).
+
 ```bash
 # Check container status and health
 docker compose ps
@@ -64,6 +66,8 @@ docker compose down
 # Stop and DELETE all data (fresh start)
 docker compose down -v
 ```
+
+For the full list of CLI commands, see the [CLI Reference](docs/CLI_REFERENCE.md).
 
 ## Configuration
 
