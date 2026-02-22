@@ -294,7 +294,7 @@ class Constants {
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
     const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
     const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
-    const AUTO_CHAIN_DROP_ACCEPT = true;           // Auto-accept incoming chain drop proposals (with balance guard)
+    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals (with balance guard) - default OFF for safety
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

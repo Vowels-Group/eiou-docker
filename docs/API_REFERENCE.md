@@ -1252,7 +1252,7 @@ Start background processors by removing the shutdown flag. The watchdog process 
 
 ## Chain Drop Endpoints
 
-Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions).
+Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions). Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`); when enabled, a balance guard blocks acceptance if missing transactions include net payments owed to us.
 
 ### GET /api/v1/chaindrop
 

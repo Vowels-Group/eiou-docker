@@ -321,7 +321,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactStatusService` | Contact ping/status checking; auto-creates pending contacts for unknown pings (wallet restore scenario) | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService, ChainDropService |
 | `SyncService` | Transaction chain synchronization | ContactRepo, AddressRepo, P2pRepo, Rp2pRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, BalanceRepo, UtilityContainer, HeldTransactionService, BackupService |
-| `ChainDropService` | Chain drop agreement protocol | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy |
+| `ChainDropService` | Chain drop agreement protocol with auto-accept balance guard | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy, BalanceRepo |
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
 | `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
@@ -694,6 +694,7 @@ public function wireCircularDependencies(): void {
     $this->services['SyncService']->setBackupService($this->getBackupService());
     $this->services['ChainDropService']->setBackupService($this->getBackupService());
     $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['ChainDropService']->setBalanceRepository($this->getBalanceRepository());
     $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
 
     // CliService - repositories for info command display (fee earnings, available credit)
@@ -1869,7 +1870,15 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
 
 **Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a chain drop
 when sync detects mutual gaps. The `ContactStatusService` calls `proposeChainDrop()` after
-`syncTransactionChain()` returns with unresolved `chain_gaps`.
+`syncTransactionChain()` returns with unresolved `chain_gaps`. Controlled by
+`Constants::isAutoChainDropProposeEnabled()` (env: `EIOU_AUTO_CHAIN_DROP_PROPOSE`, default: `true`).
+
+**Auto-Accept:** Incoming proposals can be auto-accepted when `Constants::isAutoChainDropAcceptEnabled()`
+is true (env: `EIOU_AUTO_CHAIN_DROP_ACCEPT`, default: `false` for safety). A **balance guard** runs
+before auto-accepting: it compares stored balances (from `BalanceRepository`) against balances
+calculated from existing transactions. If the missing transactions include net payments TO us
+(`net_missing > 0`), auto-accept is blocked and the proposal requires manual review. This prevents
+a malicious proposer from erasing debt by forcing a chain drop on transactions where they owed us money.
 
 **Post-Drop Actions:** After successful execution, `ChainDropService` recalculates the contact
 balance (via `SyncTriggerInterface::syncContactBalance()`) and updates `valid_chain` in the
