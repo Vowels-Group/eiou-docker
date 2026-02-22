@@ -146,6 +146,28 @@ class TransactionChainRepositoryTest extends TestCase
         $this->assertEquals(0, $result['transaction_count']);
     }
 
+    public function testVerifyChainIntegrityQueryOnlyIncludesSettledStatuses(): void
+    {
+        $userPublicKey = 'user-pubkey';
+        $contactPublicKey = 'contact-pubkey';
+
+        // Verify the query uses a whitelist of settled statuses (completed, accepted, paid)
+        // rather than a blacklist, to prevent false chain gaps from in-flight transactions
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains("status IN ('completed', 'accepted', 'paid')"))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('execute');
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->willReturn([]);
+
+        $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
+    }
+
     public function testVerifyChainIntegrityHandlesQueryFailure(): void
     {
         $userPublicKey = 'user-pubkey';

@@ -21,6 +21,7 @@ The project is currently in **ALPHA** status.
 - Show "Propose Dropping Missing Transaction(s)" button in GUI contact modal when chain gap detected but no proposal exists yet
 
 ### Fixed
+- Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks settled transactions (completed, accepted, paid) instead of including in-flight statuses (pending, sending, sent) that may reference previous_txids not yet synced locally
 - Fix all GUI POST actions (ping, send, chain drop, settings) returning 403: global CSRF check added in PR #644 consumed (rotated) the token before controllers could validate it, causing every authenticated POST to fail with "CSRF token validation failed"
 - Fix Tor hidden service GUI inaccessible: HTTP→HTTPS redirect (from PR #644) blocked .onion access because port 443 is not mapped through the hidden service; skip HTTPS redirect for .onion hosts since Tor already provides end-to-end encryption
 - Fix simultaneous chain drop proposals causing both sides stuck in "Awaiting Acceptance": when both contacts propose the same gap, the node with the lower pubkey hash auto-accepts using a deterministic tiebreaker

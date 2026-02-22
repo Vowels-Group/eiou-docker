@@ -71,11 +71,19 @@ class TransactionChainRepository extends AbstractRepository
             'gap_context' => []
         ];
 
-        // Get all transactions between the two parties (excluding cancelled/rejected)
+        // Get all settled transactions between the two parties
+        // Only include completed/accepted/paid — these form the permanent chain.
+        // In-flight statuses (pending, sending, sent) are excluded because:
+        //   - A mid-send transaction may reference a previous_txid that hasn't
+        //     been synced yet, causing a false chain gap report
+        //   - These transactions may still be re-signed with a different
+        //     previous_txid after sync (see HeldTransactionService)
+        // Terminal non-chain statuses (cancelled, rejected, expired, failed)
+        // are also excluded as they don't contribute to the chain.
         $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
                          OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                  AND status NOT IN ('cancelled', 'rejected')
+                  AND status IN ('completed', 'accepted', 'paid')
                   ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
 
         $stmt = $this->execute($query, [
