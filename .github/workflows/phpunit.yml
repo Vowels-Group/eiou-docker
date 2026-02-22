@@ -1,0 +1,69 @@
+# Copyright 2025-2026 Vowels Group, LLC
+#
+# Runs the PHPUnit test suite on every pull request and push to main.
+# Ensures PHP code changes don't introduce regressions.
+
+name: PHPUnit Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'files/src/**'
+      - 'files/composer.json'
+      - 'files/composer.lock'
+      - 'tests/Unit/**'
+      - 'tests/bootstrap.php'
+      - 'tests/phpunit.xml.dist'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'files/src/**'
+      - 'files/composer.json'
+      - 'files/composer.lock'
+      - 'tests/Unit/**'
+      - 'tests/bootstrap.php'
+      - 'tests/phpunit.xml.dist'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phpunit:
+    name: PHPUnit Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Set up PHP 8.1"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo, pdo_sqlite, mbstring, json
+          coverage: none
+
+      - name: "Install Composer dependencies"
+        working-directory: files
+        run: composer install --no-interaction --prefer-dist
+
+      - name: "Prepare PHPUnit config"
+        run: cp tests/phpunit.xml.dist tests/phpunit.xml
+
+      - name: "Run PHPUnit"
+        working-directory: files
+        run: vendor/bin/phpunit --configuration ../tests/phpunit.xml --no-progress --colors=always
+
+      - name: "Test summary"
+        if: always()
+        run: |
+          echo "### PHPUnit Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "All tests passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "One or more tests failed. Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+          fi
