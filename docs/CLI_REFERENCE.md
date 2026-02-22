@@ -759,6 +759,7 @@ eiou changesettings [setting] [value]
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
+| `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 | `trustedProxies` | Trusted proxy IPs for header forwarding | `10.0.0.1,172.16.0.0/12` |
 
@@ -773,6 +774,7 @@ eiou changesettings maxP2pLevel 5
 eiou changesettings maxOutput 0           # Unlimited output
 eiou changesettings autoRefreshEnabled true
 eiou changesettings autoBackupEnabled false
+eiou changesettings autoAcceptTransaction false  # Require approval before sending P2P
 eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"
 eiou changesettings trustedProxies ""       # Clear (trust no proxies)
 

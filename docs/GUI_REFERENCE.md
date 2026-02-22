@@ -199,6 +199,7 @@ Handles settings and debug operations.
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
+| `autoAcceptTransaction` | bool | Auto-accept P2P transactions when route found |
 
 ---
 
