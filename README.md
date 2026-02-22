@@ -78,10 +78,10 @@ All configuration is done through environment variables and volume mounts in `do
 
 The `NODE_NAME` variable controls the container name and all volume names (default: `eiou-node`). Change it to run multiple independent nodes or to customize naming:
 
-Create a `.env` file next to `docker-compose.yml`:
+Create a `.env` file next to `docker-compose.yml` with the following content:
 
-```bash
-echo "NODE_NAME=my-wallet" > .env
+```
+NODE_NAME=my-wallet
 ```
 
 This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wallet-files`, `my-wallet-backups`.
