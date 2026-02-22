@@ -18,8 +18,8 @@
 #   docker compose logs -f
 #
 # NODE_NAME controls the container name and volume names.
-# Change it here, in a .env file, or inline:
-#   NODE_NAME=my-wallet docker compose up -d --build
+# Set it in a .env file next to this file:
+#   echo "NODE_NAME=my-wallet" > .env
 #
 # =============================================================================
 
