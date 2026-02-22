@@ -19,6 +19,11 @@ The project is currently in **ALPHA** status.
 - Add auto-accept for incoming chain drop proposals with balance guard to prevent debt erasure
 - Balance guard compares stored balance vs transaction-calculated balance to detect if missing transactions include payments owed to us; blocks auto-accept when net missing favors proposer
 - Show "Propose Dropping Missing Transaction(s)" button in GUI contact modal when chain gap detected but no proposal exists yet
+- CI workflow to check base image digest monthly and on Dockerfile PRs; opens GitHub issue when upstream publishes a new digest (#523)
+- `scripts/check-base-image.sh` for local verification of base image digest
+
+### Security
+- **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
 
 ### Fixed
 - Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets
