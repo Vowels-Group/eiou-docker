@@ -57,7 +57,7 @@ jobs:
 
       - name: "Run PHPUnit"
         working-directory: files
-        run: vendor/bin/phpunit --configuration ../tests/phpunit.xml --no-progress --colors=always
+        run: vendor/bin/phpunit --configuration ../tests/phpunit.xml --colors=always
 
       - name: "Test summary"
         if: always()
