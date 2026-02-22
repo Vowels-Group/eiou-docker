@@ -953,6 +953,103 @@ else
     passed=$(( passed + 1 ))
 fi
 
+##################### SECTION 5: Re-establish Contacts for Dual-Sig Testing #####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 5: Re-establish Contacts for Dual-Signature Testing"
+echo "========================================================================"
+echo -e "Ensuring fresh contact transactions exist with dual signatures\n"
+
+# After Section 3's wallet wipe/restore and preceding test suites (seedphraseTestSuite
+# operates on container A), contact transactions between A and B may be missing or have
+# stale pubkey hashes. Re-establish contacts to ensure fresh contact TXs with dual sigs.
+
+############################ TEST 5.1: RE-ESTABLISH A-B CONTACT TX IF MISSING ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[5.1 Ensure A has contact transaction with B]"
+
+contactTxCheckA=$(docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) { echo 'NO_CONTACT'; exit; }
+
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+    }
+    echo \$tx ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT" ]]; then
+    echo -e "\t   A→B contact TX missing, re-establishing contact..."
+
+    # Delete A's contact with B so eiou add can recreate it with a fresh contact TX
+    docker exec ${containerA} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+        if (\$contactB) {
+            \$pdo = \$app->services->getPdo();
+            \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contactB['pubkey']);
+            \$pdo->exec(\"DELETE FROM contacts WHERE pubkey_hash = '\" . \$pubkeyHash . \"'\");
+            \$pdo->exec(\"DELETE FROM addresses WHERE pubkey_hash = '\" . \$pubkeyHash . \"'\");
+        }
+    " 2>/dev/null
+
+    # Re-add B from A (creates fresh contact TX with dual signature on acceptance)
+    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
+    wait_for_queue_processed ${containerA}
+    wait_for_queue_processed ${containerB}
+
+    # Wait for contact to be accepted
+    reAddElapsed=0
+    while [ $reAddElapsed -lt 15 ]; do
+        reAddStatus=$(docker exec ${containerA} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
+            echo \$app->services->getContactRepository()->getContactStatus('${transportB}', '${addressB}') ?? 'none';
+        " 2>/dev/null || echo "none")
+
+        if [[ "$reAddStatus" == "accepted" ]]; then
+            break
+        fi
+        sleep 1
+        reAddElapsed=$((reAddElapsed + 1))
+    done
+
+    # Verify contact TX was created
+    reAddTxCheck=$(docker exec ${containerA} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+        \$myPubkey = \$config['public'];
+        \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+        if (!\$contactB) { echo 'NO_CONTACT'; exit; }
+        \$tcRepo = \$app->services->getTransactionContactRepository();
+        \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+        if (!\$tx) { \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey); }
+        echo \$tx ? 'EXISTS' : 'STILL_MISSING';
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$reAddTxCheck" == "EXISTS" ]]; then
+        printf "\t   A→B contact re-established with fresh TX ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   A→B contact TX re-establishment ${RED}FAILED${NC} - ${reAddTxCheck} (status: ${reAddStatus})\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   A→B contact TX already exists ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+fi
+
 ##################### SECTION 6: Dual-Signature Protocol Verification #####################
 
 echo -e "\n"
@@ -987,7 +1084,37 @@ dualSigResultA=$(docker exec ${containerA} php -r "
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     }
 
-    // If repo lookup fails, diagnose why
+    // If repo lookup fails, try direct DB lookup using stored public keys
+    // (handles case where pubkey hash in contacts table diverged from TX)
+    if (!\$tx) {
+        \$algo = \Eiou\Core\Constants::HASH_ALGORITHM;
+        \$myHash = hash(\$algo, \$myPubkey);
+        \$stmt = \$pdo->prepare(\"SELECT txid, signature_nonce, sender_public_key_hash, receiver_public_key_hash,
+            receiver_public_key FROM transactions WHERE tx_type = 'contact'
+            AND (sender_public_key_hash = :myHash1 OR receiver_public_key_hash = :myHash2)\");
+        \$stmt->execute([':myHash1' => \$myHash, ':myHash2' => \$myHash]);
+        \$candidates = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Match by checking if the other party's stored pubkey matches B
+        \$bHash = hash(\$algo, \$contactB['pubkey']);
+        foreach (\$candidates as \$candidate) {
+            \$otherHash = (\$candidate['sender_public_key_hash'] === \$myHash)
+                ? \$candidate['receiver_public_key_hash']
+                : \$candidate['sender_public_key_hash'];
+            // Check if the stored full pubkey hashes to B's hash OR if the receiver_public_key matches B
+            if (\$otherHash === \$bHash) {
+                \$tx = \$candidate;
+                break;
+            }
+            // Also check via full public key stored in TX
+            if (isset(\$candidate['receiver_public_key']) && hash(\$algo, \$candidate['receiver_public_key']) === \$bHash) {
+                \$tx = \$candidate;
+                break;
+            }
+        }
+    }
+
+    // If still not found, diagnose why
     if (!\$tx) {
         \$algo = \Eiou\Core\Constants::HASH_ALGORITHM;
         \$myHash = hash(\$algo, \$myPubkey);
@@ -1104,6 +1231,29 @@ verifySigResult=$(docker exec ${containerA} php -r "
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
         \$iAmSender = false;
     }
+
+    // Fallback: direct DB lookup using stored public keys
+    if (!\$tx) {
+        \$algo = \Eiou\Core\Constants::HASH_ALGORITHM;
+        \$myHash = hash(\$algo, \$myPubkey);
+        \$bHash = hash(\$algo, \$contactB['pubkey']);
+        \$stmt = \$pdo->prepare(\"SELECT txid, signature_nonce, sender_public_key_hash, receiver_public_key_hash
+            FROM transactions WHERE tx_type = 'contact'
+            AND (sender_public_key_hash = :myHash1 OR receiver_public_key_hash = :myHash2)\");
+        \$stmt->execute([':myHash1' => \$myHash, ':myHash2' => \$myHash]);
+        \$candidates = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach (\$candidates as \$candidate) {
+            \$otherHash = (\$candidate['sender_public_key_hash'] === \$myHash)
+                ? \$candidate['receiver_public_key_hash']
+                : \$candidate['sender_public_key_hash'];
+            if (\$otherHash === \$bHash) {
+                \$tx = \$candidate;
+                \$iAmSender = (\$candidate['sender_public_key_hash'] === \$myHash);
+                break;
+            }
+        }
+    }
+
     if (!\$tx) {
         \$contactTxCount = (int) \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE tx_type = 'contact'\")->fetchColumn();
         echo 'NO_CONTACT_TX:contact_txs=' . \$contactTxCount;
