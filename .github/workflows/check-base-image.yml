@@ -1,0 +1,136 @@
+# Copyright 2025-2026 Vowels Group, LLC
+#
+# Checks whether the SHA256 digest pinned in eiou.dockerfile still matches the
+# latest digest published on Docker Hub for debian:12-slim. Opens a GitHub issue
+# when the digest is outdated (scheduled runs) or fails the check (PR runs).
+
+name: Check Base Image Digest
+
+on:
+  schedule:
+    # Monthly on the 1st at 6 AM UTC
+    - cron: '0 6 1 * *'
+  pull_request:
+    paths:
+      - 'eiou.dockerfile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-digest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "\U0001F4E5 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "\U0001F50D Extract pinned digest from Dockerfile"
+        id: pinned
+        run: |
+          PINNED=$(grep -oP '(?<=@)sha256:[a-f0-9]+' eiou.dockerfile | head -1)
+          if [ -z "$PINNED" ]; then
+            echo "::error::No SHA256 digest found in eiou.dockerfile"
+            exit 1
+          fi
+          echo "digest=$PINNED" >> "$GITHUB_OUTPUT"
+          echo "Pinned digest: $PINNED"
+
+      - name: "\U0001F310 Query Docker Hub for latest digest"
+        id: latest
+        run: |
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/debian:pull" \
+            | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+          LATEST=$(curl -sI \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+            "https://registry-1.docker.io/v2/library/debian/manifests/12-slim" \
+            | grep -i docker-content-digest | tr -d '\r' | awk '{print $2}')
+          if [ -z "$LATEST" ]; then
+            echo "::error::Failed to retrieve latest digest from Docker Hub"
+            exit 1
+          fi
+          echo "digest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest digest: $LATEST"
+
+      - name: "\U00002696 Compare digests"
+        id: compare
+        run: |
+          PINNED="${{ steps.pinned.outputs.digest }}"
+          LATEST="${{ steps.latest.outputs.digest }}"
+          if [ "$PINNED" = "$LATEST" ]; then
+            echo "status=current" >> "$GITHUB_OUTPUT"
+            echo "### Base image is up to date" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pinned digest matches the latest \`debian:12-slim\` on Docker Hub." >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Digest:** \`$PINNED\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "status=stale" >> "$GITHUB_OUTPUT"
+            echo "### Base image digest is outdated" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| | Digest |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| **Pinned** | \`$PINNED\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| **Latest** | \`$LATEST\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Update \`eiou.dockerfile\`:" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`\`\`dockerfile" >> "$GITHUB_STEP_SUMMARY"
+            echo "FROM debian:12-slim@$LATEST" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: "\U0001F6A8 Fail PR check if digest is outdated"
+        if: steps.compare.outputs.status == 'stale' && github.event_name == 'pull_request'
+        run: |
+          echo "::warning::The pinned base image digest in eiou.dockerfile does not match the latest debian:12-slim digest on Docker Hub."
+          exit 1
+
+      - name: "\U0001F4CB Open issue if digest is stale (scheduled)"
+        if: steps.compare.outputs.status == 'stale' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Base image digest outdated for debian:12-slim"
+
+          # Check for existing open issue with the same title
+          EXISTING=$(gh issue list --state open --search "$TITLE" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #$EXISTING already open -- skipping."
+            exit 0
+          fi
+
+          BODY=$(cat <<'ISSUE_EOF'
+          ## Base Image Digest Outdated
+
+          The SHA256 digest pinned in `eiou.dockerfile` no longer matches the latest `debian:12-slim` digest on Docker Hub.
+
+          | | Digest |
+          |---|---|
+          | **Pinned** | `${{ steps.pinned.outputs.digest }}` |
+          | **Latest** | `${{ steps.latest.outputs.digest }}` |
+
+          ### How to update
+
+          ```bash
+          # Option 1: Use the helper script
+          ./scripts/check-base-image.sh
+
+          # Option 2: Manual update
+          docker pull debian:12-slim
+          docker inspect --format='{{index .RepoDigests 0}}' debian:12-slim
+          # Replace the digest in eiou.dockerfile
+          ```
+
+          Update the `FROM` line in `eiou.dockerfile`:
+
+          ```dockerfile
+          FROM debian:12-slim@${{ steps.latest.outputs.digest }}
+          ```
+
+          This issue was opened automatically by the `check-base-image` workflow.
+          ISSUE_EOF
+          )
+
+          gh issue create --title "$TITLE" --body "$BODY" --label "security"

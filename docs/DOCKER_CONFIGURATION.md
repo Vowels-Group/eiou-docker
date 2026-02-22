@@ -832,6 +832,12 @@ For `docker run` users or daemon-level configuration, add to `/etc/docker/daemon
 
 Application logs (Apache, PHP) inside the container are rotated by `logrotate` (weekly, 4 rotations, compressed).
 
+### Base Image Pinning
+
+The base image in `eiou.dockerfile` is pinned to a SHA256 digest to ensure reproducible builds and prevent supply chain attacks from upstream tag republishing.
+
+To check whether the pinned digest is current, run `./scripts/check-base-image.sh`. For full verification and update instructions, see [SECURITY.md](../SECURITY.md#base-image-integrity).
+
 ### Secure Seed Phrase Handling
 
 **Best Practices:**

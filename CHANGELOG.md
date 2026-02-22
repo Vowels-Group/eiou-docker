@@ -12,6 +12,13 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- CI workflow to check base image digest monthly and on Dockerfile PRs; opens GitHub issue when upstream publishes a new digest (#523)
+- `scripts/check-base-image.sh` for local verification of base image digest
+
+### Security
+- **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
+
 ### Fixed
 - Fix `bestFeeRoutingTest` Test 11 and `cascadeCancelTest` Tests 5-7 failing on http4 topology: dead-end cancel tests used hardcoded `containerAddresses[A12]` which only exists in collisions/http13 topologies; now dynamically finds an isolated node (0 expected contacts) via `expectedContacts`, falling back to a MODE-appropriate generated address
 - Fix 79 unit test failures across 26 files: ErrorHandler tearDown removing PHPUnit's handlers (45 failures), repository tests expecting false from AbstractRepository::execute() (5), SyncService chain conflict tests failing due to private signature verification methods and missing test data fields (8), DebugRepository random pruneOldEntries breaking strict mock expectations (8), tor address validation with wrong length (2), namespace-unqualified dynamic function calls in DatabaseSetup migrations (1), AbstractMessageProcessor flushing PHPUnit output buffers (1), UtilPayload null senderAddress handling (1), and various mock return type mismatches
