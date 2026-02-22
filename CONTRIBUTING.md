@@ -123,6 +123,30 @@ eiou-docker/
   scripts/                Helper scripts
 ```
 
+### Base Image Maintenance
+
+The base image in `eiou.dockerfile` is pinned to a SHA256 digest rather than a mutable tag. This ensures reproducible builds and prevents supply chain attacks where a compromised upstream tag republish silently changes the image content.
+
+**Checking the current digest:**
+
+```bash
+./scripts/check-base-image.sh
+```
+
+**Updating the digest manually:**
+
+```bash
+docker pull debian:12-slim
+docker inspect --format='{{index .RepoDigests 0}}' debian:12-slim
+# Update the FROM line in eiou.dockerfile with the new digest
+```
+
+CI checks the digest monthly and opens a GitHub issue when it becomes stale. When updating, keep the tag alongside the digest for readability:
+
+```dockerfile
+FROM debian:12-slim@sha256:<new-digest>
+```
+
 ---
 
 ## Development Workflow

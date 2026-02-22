@@ -172,6 +172,49 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 - Review exposed ports and limit them to what is required for your topology
 - Use Docker Compose v2 to enforce resource limits (v1 ignores the `deploy` section)
 
+### Base Image Integrity
+
+The Dockerfile pins the base image (`debian:12-slim`) to a SHA256 digest rather than relying on the mutable tag alone. This prevents supply chain attacks where a compromised tag republish silently replaces the image content.
+
+**Verifying the digest:**
+
+1. Using Docker:
+
+```bash
+docker pull debian:12-slim
+docker images --digests debian
+# Compare the DIGEST column against the value in eiou.dockerfile
+```
+
+2. Using the Docker Hub registry API (no Docker required):
+
+```bash
+TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/debian:pull" \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl -sI -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+  "https://registry-1.docker.io/v2/library/debian/manifests/12-slim" \
+  | grep -i docker-content-digest
+```
+
+3. Using the helper script:
+
+```bash
+./scripts/check-base-image.sh
+```
+
+**Updating the digest:**
+
+When a new upstream image is published, update the `FROM` line in `eiou.dockerfile`:
+
+```bash
+docker pull debian:12-slim
+docker inspect --format='{{index .RepoDigests 0}}' debian:12-slim
+# Replace the digest in the FROM line
+```
+
+CI monitors the digest monthly and opens a GitHub issue when it becomes stale.
+
 ### Environment Variable Hygiene
 
 | Variable | Risk | Mitigation |

@@ -16,7 +16,7 @@
 # - PHP runtime for application logic
 # =============================================================================
 
-FROM debian:12-slim
+FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 # Install required packages:
 # - apache2: Web server for GUI and REST API endpoints
