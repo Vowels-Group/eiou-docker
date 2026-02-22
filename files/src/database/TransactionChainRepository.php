@@ -67,7 +67,8 @@ class TransactionChainRepository extends AbstractRepository
             'has_transactions' => false,
             'transaction_count' => 0,
             'gaps' => [],
-            'broken_txids' => []
+            'broken_txids' => [],
+            'gap_context' => []
         ];
 
         // Get all transactions between the two parties (excluding cancelled/rejected)
@@ -103,11 +104,15 @@ class TransactionChainRepository extends AbstractRepository
         }
 
         // Check each transaction's previous_txid exists (except first transaction which has null)
+        // Also build gap context: for each gap, identify the last valid txid before it
+        // and the first valid txid after it, so the GUI can show where gaps are in the chain
+        $prevValidTxid = null;
         foreach ($transactions as $tx) {
             $prevTxid = $tx['previous_txid'];
 
             // Skip if previous_txid is null (first transaction in chain)
             if ($prevTxid === null) {
+                $prevValidTxid = $tx['txid'];
                 continue;
             }
 
@@ -116,7 +121,14 @@ class TransactionChainRepository extends AbstractRepository
                 $result['valid'] = false;
                 $result['gaps'][] = $prevTxid;
                 $result['broken_txids'][] = $tx['txid'];
+                $result['gap_context'][] = [
+                    'missing_txid' => $prevTxid,
+                    'before_txid' => $prevValidTxid,
+                    'after_txid' => $tx['txid']
+                ];
             }
+
+            $prevValidTxid = $tx['txid'];
         }
 
         return $result;

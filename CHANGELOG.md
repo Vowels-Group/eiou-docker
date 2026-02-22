@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Show chain gap transaction details in GUI: displays the last valid txid before each gap, the missing txid, and the first valid txid after each gap (with full txid on hover) so users can identify exactly where chain breaks occur
 - Display chain gap count in GUI — badge shows "Chain Gap (N)" when multiple gaps exist, and chain drop section shows "Gap 1 of N" context with multi-gap info text
 - Add `AUTO_CHAIN_DROP_PROPOSE` and `AUTO_CHAIN_DROP_ACCEPT` toggles in Constants.php with env var overrides (`EIOU_AUTO_CHAIN_DROP_PROPOSE`, `EIOU_AUTO_CHAIN_DROP_ACCEPT`)
 - Add auto-accept for incoming chain drop proposals with balance guard to prevent debt erasure

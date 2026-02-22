@@ -1769,6 +1769,33 @@ function openContactModal(contact, openTab) {
         } else {
             chainDropSection.style.display = 'none';
         }
+
+        // Populate chain gap details if available
+        var gapDetailsEl = document.getElementById('chain_gap_details');
+        if (gapDetailsEl) {
+            gapDetailsEl.innerHTML = '';
+            gapDetailsEl.style.display = 'none';
+            if (contact.chain_gap_details && contact.chain_gap_details.length > 0) {
+                gapDetailsEl.style.display = 'block';
+                var html = '<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.75rem; font-size: 0.85rem;">';
+                html += '<div style="font-weight: 600; margin-bottom: 0.5rem; color: #495057;"><i class="fas fa-search"></i> Gap Details (' + contact.chain_gap_details.length + ' gap' + (contact.chain_gap_details.length > 1 ? 's' : '') + ')</div>';
+                for (var i = 0; i < contact.chain_gap_details.length; i++) {
+                    var gap = contact.chain_gap_details[i];
+                    var shortMissing = gap.missing_txid ? gap.missing_txid.substring(0, 12) + '...' : '?';
+                    var shortBefore = gap.before_txid ? gap.before_txid.substring(0, 12) + '...' : '(start)';
+                    var shortAfter = gap.after_txid ? gap.after_txid.substring(0, 12) + '...' : '(end)';
+                    html += '<div style="font-family: monospace; padding: 0.25rem 0; border-top: ' + (i > 0 ? '1px solid #dee2e6' : 'none') + '; margin-top: ' + (i > 0 ? '0.25rem' : '0') + '; padding-top: ' + (i > 0 ? '0.25rem' : '0') + ';">';
+                    html += '<span style="color: #28a745;" title="' + (gap.before_txid || 'chain start') + '">' + shortBefore + '</span>';
+                    html += ' <i class="fas fa-arrow-right" style="color: #6c757d; font-size: 0.75rem;"></i> ';
+                    html += '<span style="color: #dc3545; text-decoration: line-through;" title="Missing: ' + (gap.missing_txid || '?') + '">' + shortMissing + '</span>';
+                    html += ' <i class="fas fa-arrow-right" style="color: #6c757d; font-size: 0.75rem;"></i> ';
+                    html += '<span style="color: #28a745;" title="' + (gap.after_txid || 'chain end') + '">' + shortAfter + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                gapDetailsEl.innerHTML = html;
+            }
+        }
     }
 
     // Set form values
