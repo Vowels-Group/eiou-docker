@@ -98,8 +98,12 @@ RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.c
     echo '    RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf && \
     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf
 
-# HTTP to HTTPS redirect (except /eiou transport endpoint for P2P backward compatibility)
-RUN sed -i '/<\/VirtualHost>/i \    RewriteEngine On\n    RewriteCond %{HTTPS} off\n    RewriteCond %{REQUEST_URI} !^/eiou\n    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]' /etc/apache2/sites-available/000-default.conf
+# HTTP to HTTPS redirect
+# Exceptions:
+#   - /eiou transport endpoint: P2P backward compatibility (nodes may still use HTTP)
+#   - .onion hosts: Tor hidden services are already end-to-end encrypted;
+#     HTTPS is unnecessary and port 443 is not mapped through the hidden service
+RUN sed -i '/<\/VirtualHost>/i \    RewriteEngine On\n    RewriteCond %{HTTPS} off\n    RewriteCond %{HTTP_HOST} !\\.onion$ [NC]\n    RewriteCond %{REQUEST_URI} !^/eiou\n    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]' /etc/apache2/sites-available/000-default.conf
 
 # Suppress server version information in responses (L-29)
 RUN echo 'ServerTokens Prod' >> /etc/apache2/conf-available/security.conf && \

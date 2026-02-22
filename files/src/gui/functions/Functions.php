@@ -270,6 +270,31 @@ foreach ($contactArrays as &$contacts) {
 }
 unset($contacts);
 
+// Compute chain gap details for contacts with invalid chains
+// Shows which txids are valid before/after each gap so users can investigate
+$tcRepo = null;
+try {
+    $tcRepo = $serviceContainer->getTransactionChainRepository();
+} catch (Exception $e) {
+    // Repository not available, skip gap details
+}
+if ($tcRepo && $user->has('public')) {
+    $myPubkey = $user->getPublicKey();
+    foreach ($acceptedContacts as &$contact) {
+        if (($contact['valid_chain'] ?? null) === 0 && !empty($contact['pubkey'])) {
+            try {
+                $integrity = $tcRepo->verifyChainIntegrity($myPubkey, $contact['pubkey']);
+                if (!$integrity['valid'] && !empty($integrity['gap_context'])) {
+                    $contact['chain_gap_details'] = $integrity['gap_context'];
+                }
+            } catch (Exception $e) {
+                // Skip this contact's gap details on error
+            }
+        }
+    }
+    unset($contact);
+}
+
 // Dead Letter Queue - track newly added items for notification
 $newlyAddedToDlq = [];
 try {

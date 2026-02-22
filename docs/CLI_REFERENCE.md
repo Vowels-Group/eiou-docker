@@ -1019,10 +1019,11 @@ All detection is local — no transaction lists are sent over the wire.
 **Flow (when backup recovery fails):**
 1. Contact A detects chain gap (`send` or `ping` auto-proposes, or `sync` reveals the gap)
 2. Sync attempts backup recovery on both sides (automatic, no user action needed)
-3. If recovery fails, a chain drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
-4. Contact B checks incoming proposals: `eiou chaindrop list` (or sees GUI notification banner)
-5. Contact B runs: `eiou chaindrop accept <proposal_id>` (or accepts via GUI)
-6. Both chains are repaired, balances recalculated, and transactions can resume
+3. If recovery fails and auto-propose is enabled (`EIOU_AUTO_CHAIN_DROP_PROPOSE=true`, default), a chain drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
+4. If auto-accept is enabled (`EIOU_AUTO_CHAIN_DROP_ACCEPT=true`, default OFF), Contact B's node auto-accepts the proposal if the balance guard passes (missing transactions don't include net payments owed to us). If the guard blocks or auto-accept is disabled, the proposal requires manual review.
+5. Contact B checks incoming proposals: `eiou chaindrop list` (or sees GUI notification banner)
+6. Contact B runs: `eiou chaindrop accept <proposal_id>` (or accepts via GUI)
+7. Both chains are repaired, balances recalculated, and transactions can resume
 
 For multiple gaps, repeat the propose/accept cycle for each gap.
 
@@ -1102,6 +1103,9 @@ Reject (success):
 - `reject` leaves the chain gap unresolved — transactions remain blocked until a new proposal is accepted
 - Proposals expire automatically after their configured timeout
 - Rate limited: 10 chain drop operations per minute
+- Auto-propose controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` env var (default: `true`)
+- Auto-accept controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` env var (default: `false` — requires manual accept)
+- When auto-accept is enabled, a balance guard blocks acceptance if missing transactions include net payments owed to us (prevents debt erasure)
 
 ---
 

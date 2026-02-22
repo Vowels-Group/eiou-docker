@@ -13,6 +13,12 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Show chain gap transaction details in GUI: displays the last valid txid before each gap, the missing txid, and the first valid txid after each gap (with full txid on hover) so users can identify exactly where chain breaks occur
+- Display chain gap count in GUI — badge shows "Chain Gap (N)" when multiple gaps exist, and chain drop section shows "Gap 1 of N" context with multi-gap info text
+- Add `AUTO_CHAIN_DROP_PROPOSE` and `AUTO_CHAIN_DROP_ACCEPT` toggles in Constants.php with env var overrides (`EIOU_AUTO_CHAIN_DROP_PROPOSE`, `EIOU_AUTO_CHAIN_DROP_ACCEPT`)
+- Add auto-accept for incoming chain drop proposals with balance guard to prevent debt erasure
+- Balance guard compares stored balance vs transaction-calculated balance to detect if missing transactions include payments owed to us; blocks auto-accept when net missing favors proposer
+- Show "Propose Dropping Missing Transaction(s)" button in GUI contact modal when chain gap detected but no proposal exists yet
 - CI workflow to check base image digest monthly and on Dockerfile PRs; opens GitHub issue when upstream publishes a new digest (#523)
 - `scripts/check-base-image.sh` for local verification of base image digest
 
@@ -20,6 +26,10 @@ The project is currently in **ALPHA** status.
 - **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
 
 ### Fixed
+- Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets
+- Fix all GUI POST actions (ping, send, chain drop, settings) returning 403: global CSRF check added in PR #644 consumed (rotated) the token before controllers could validate it, causing every authenticated POST to fail with "CSRF token validation failed"
+- Fix Tor hidden service GUI inaccessible: HTTP→HTTPS redirect (from PR #644) blocked .onion access because port 443 is not mapped through the hidden service; skip HTTPS redirect for .onion hosts since Tor already provides end-to-end encryption
+- Fix simultaneous chain drop proposals causing both sides stuck in "Awaiting Acceptance": when both contacts propose the same gap, the node with the lower pubkey hash auto-accepts using a deterministic tiebreaker
 - Fix `bestFeeRoutingTest` Test 11 and `cascadeCancelTest` Tests 5-7 failing on http4 topology: dead-end cancel tests used hardcoded `containerAddresses[A12]` which only exists in collisions/http13 topologies; now dynamically finds an isolated node (0 expected contacts) via `expectedContacts`, falling back to a MODE-appropriate generated address
 - Fix 79 unit test failures across 26 files: ErrorHandler tearDown removing PHPUnit's handlers (45 failures), repository tests expecting false from AbstractRepository::execute() (5), SyncService chain conflict tests failing due to private signature verification methods and missing test data fields (8), DebugRepository random pruneOldEntries breaking strict mock expectations (8), tor address validation with wrong length (2), namespace-unqualified dynamic function calls in DatabaseSetup migrations (1), AbstractMessageProcessor flushing PHPUnit output buffers (1), UtilPayload null senderAddress handling (1), and various mock return type mismatches
 - Implement 24 previously-skipped unit tests: ChainOperationsService chain verification/repair tests (16), SendOperationService validation and dependency injection tests (7), TransactionProcessingService missing fields test (1)
@@ -33,6 +43,13 @@ The project is currently in **ALPHA** status.
 - Improve `pingTestSuite` Tests 6.1/6.3 diagnostic output with pubkey hash comparison
 - Fix Docker build failure: use Debian PHP conf path (`/etc/php/*/conf.d/`) instead of Docker-official-image path (`/usr/local/etc/php/conf.d/`) for `expose_php` setting; fix `|| true` operator precedence in security config step
 - Fix KeyEncryption::encrypt() clearing IV before base64-encoding it, causing all encrypted data to have empty IVs and fail on decrypt
+- Tor hidden service address mismatch on container restart: HS key regeneration check compared file existence but Tor had already started and generated random keys — now compares actual .onion address against userconfig to detect mismatches and regenerate correct keys from seed
+- Tor watchdog initial boot: first self-check now waits 120s (descriptor propagation grace period) instead of firing immediately on the first watchdog loop — prevents restart doom loop on fresh container start while avoiding a 5-minute blind spot
+- Tor watchdog recovery: increase post-restart verification window from 30s to 90s to match descriptor propagation time, allow follow-up restart after 90s instead of waiting full 5-minute cooldown, increase self-check timeout for slow Tor circuits
+- Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
+- Wire up dead-code `buildMutuallyAccepted()` payload in `ContactPayload.php` with `$txid` parameter for transaction synchronization
+- Fix sync inquiry misidentifying mutual pending contacts as "unknown" — `hasPendingContactInserted()` now checked for the case where both sides initiated requests
+- Fix stale `$status` variable in `syncSingleContact()` re-send path — response was never decoded and status check always used the original rejected value, causing sync to report failure even after successful mutual acceptance
 
 ### Changed
 - Trusted proxies now configurable via CLI (`changesettings trustedProxies`) instead of requiring container rebuild
@@ -71,20 +88,6 @@ The project is currently in **ALPHA** status.
 - **M-29**: Verify Composer installer SHA-384 hash before execution
 - **M-30**: Harden MariaDB: bind to localhost, disable symbolic links
 - **M-32**: Add balance overflow guard with warning log
-
-### Docs
-- Document container security hardening and log rotation in `DOCKER_CONFIGURATION.md`
-
-### Fixed
-- Tor hidden service address mismatch on container restart: HS key regeneration check compared file existence but Tor had already started and generated random keys — now compares actual .onion address against userconfig to detect mismatches and regenerate correct keys from seed
-- Tor watchdog initial boot: first self-check now waits 120s (descriptor propagation grace period) instead of firing immediately on the first watchdog loop — prevents restart doom loop on fresh container start while avoiding a 5-minute blind spot
-- Tor watchdog recovery: increase post-restart verification window from 30s to 90s to match descriptor propagation time, allow follow-up restart after 90s instead of waiting full 5-minute cooldown, increase self-check timeout for slow Tor circuits
-- Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
-- Wire up dead-code `buildMutuallyAccepted()` payload in `ContactPayload.php` with `$txid` parameter for transaction synchronization
-- Fix sync inquiry misidentifying mutual pending contacts as "unknown" — `hasPendingContactInserted()` now checked for the case where both sides initiated requests
-- Fix stale `$status` variable in `syncSingleContact()` re-send path — response was never decoded and status check always used the original rejected value, causing sync to report failure even after successful mutual acceptance
-
-### Security
 - **C-1**: Verify cryptographic signatures on re-signed transactions in `ChainDropService::processResignedTransactions()` before storing — prevents accepting forged chain drop data
 - **C-2**: Centralize IP resolution in `Security::getClientIp()` — only trust proxy headers (`X-Forwarded-For`, `CF-Connecting-IP`) when `REMOTE_ADDR` is in the trusted proxies list (configurable via CLI or `TRUSTED_PROXIES` env var)
 - **C-3**: Add rate limiting and CSRF token validation to the GUI login form — prevents brute-force auth code guessing
@@ -122,6 +125,9 @@ The project is currently in **ALPHA** status.
 - **L-29**: Suppress Apache `ServerTokens`/`ServerSignature` and PHP `expose_php` in Docker image
 - **L-34**: Replace predictable `microtime()` with `random_bytes()` in chain drop proposal ID generation
 - **L-35**: Hash long lock names instead of truncating to prevent collisions in `DatabaseLockingService`
+
+### Docs
+- Document container security hardening and log rotation in `DOCKER_CONFIGURATION.md`
 
 ## 2026-02-18
 

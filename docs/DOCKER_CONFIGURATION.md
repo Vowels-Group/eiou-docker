@@ -40,6 +40,8 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 | `EIOU_TEST_MODE` | `false` | No | Enable manual message processing |
 | `EIOU_CONTACT_STATUS_ENABLED` | `true` | No | Enable contact status pinging |
 | `EIOU_BACKUP_AUTO_ENABLED` | `true` | No | Enable/disable automatic daily backups |
+| `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | No | Auto-propose chain drops when mutual gaps detected |
+| `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming chain drop proposals (with balance guard) |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates for P2P HTTPS connections. Set to `false` for self-signed certs |
 | `P2P_CA_CERT` | (none) | No | Path to CA certificate file for P2P SSL verification |
 
@@ -208,6 +210,37 @@ environment:
 - Only the 3 most recent backups are retained (configurable)
 - Backups are encrypted with AES-256-GCM
 - Restore requires wallet restoration first (master key dependency)
+
+#### EIOU_AUTO_CHAIN_DROP_PROPOSE
+
+Controls whether chain drops are automatically proposed when `send` or `ping` detects a mutual gap that sync and backup recovery cannot repair.
+
+```yaml
+environment:
+  - EIOU_AUTO_CHAIN_DROP_PROPOSE=true   # Enable (default)
+  - EIOU_AUTO_CHAIN_DROP_PROPOSE=false  # Disable — require manual `eiou chaindrop propose`
+```
+
+**Notes:**
+- When disabled, users must manually run `eiou chaindrop propose <contact>` or use the GUI
+- Sync and backup recovery still run automatically regardless of this setting
+- Only affects auto-proposal; incoming proposals are still received and stored
+
+#### EIOU_AUTO_CHAIN_DROP_ACCEPT
+
+Controls whether incoming chain drop proposals are automatically accepted. A **balance guard** compares stored balances against transaction-calculated balances to block proposals where missing transactions would erase debt owed to us.
+
+```yaml
+environment:
+  - EIOU_AUTO_CHAIN_DROP_ACCEPT=false  # Disable (default) — require manual accept
+  - EIOU_AUTO_CHAIN_DROP_ACCEPT=true   # Enable — auto-accept with balance guard
+```
+
+**Notes:**
+- Default is OFF for safety — all proposals require manual review via CLI or GUI
+- When enabled, the balance guard blocks auto-accept if `net_missing > 0` (missing transactions include net payments to us that would be erased)
+- Blocked proposals remain pending for manual review
+- The guard compares stored balance (from `balances` table) with balance calculated from existing transactions; if they match, `net_missing = 0` and auto-accept proceeds
 
 ---
 

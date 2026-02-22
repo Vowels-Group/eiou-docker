@@ -293,6 +293,8 @@ class Constants {
     const CONTACT_TRANSACTIONS_LIMIT = 5;          // Max transactions per contact in combined queries (default: 5)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
     const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
+    const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
+    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals (with balance guard) - default OFF for safety
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)
@@ -340,6 +342,34 @@ class Constants {
             return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
         }
         return self::BACKUP_AUTO_ENABLED;
+    }
+
+    /**
+     * Check if automatic chain drop proposals are enabled
+     * Supports runtime override via EIOU_AUTO_CHAIN_DROP_PROPOSE env variable
+     *
+     * @return bool Whether automatic chain drop proposals are enabled
+     */
+    public static function isAutoChainDropProposeEnabled(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_PROPOSE');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::AUTO_CHAIN_DROP_PROPOSE;
+    }
+
+    /**
+     * Check if automatic chain drop acceptance is enabled
+     * Supports runtime override via EIOU_AUTO_CHAIN_DROP_ACCEPT env variable
+     *
+     * @return bool Whether automatic chain drop acceptance is enabled
+     */
+    public static function isAutoChainDropAcceptEnabled(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::AUTO_CHAIN_DROP_ACCEPT;
     }
 
     /**
