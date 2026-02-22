@@ -18,6 +18,10 @@ The project is currently in **ALPHA** status.
 - Rewrite README.md to focus on the single compose file with comprehensive configuration reference
 
 ### Added
+- Add P2P transaction approval gate: configurable toggle (`AUTO_ACCEPT_TRANSACTION`) that pauses P2P transactions at the RP2P response stage so the originator can review route fees before committing; relay nodes always auto-forward regardless of the setting (#663)
+- Add `awaiting_approval` P2P status and `rp2p_amount` column to store total route cost for the approval UI
+- Add approve/reject AJAX endpoints in GUI with fee breakdown (amount, route fee, total cost) and confirmation prompts
+- Add `autoAcceptTransaction` to CLI changesettings (item 14), GUI settings toggle, and settings display
 - Show chain gap transaction details in GUI: displays the last valid txid before each gap, the missing txid, and the first valid txid after each gap (with full txid on hover) so users can identify exactly where chain breaks occur
 - Display chain gap count in GUI — badge shows "Chain Gap (N)" when multiple gaps exist, and chain drop section shows "Gap 1 of N" context with multi-gap info text
 - Add `AUTO_CHAIN_DROP_PROPOSE` and `AUTO_CHAIN_DROP_ACCEPT` toggles in Constants.php with env var overrides (`EIOU_AUTO_CHAIN_DROP_PROPOSE`, `EIOU_AUTO_CHAIN_DROP_ACCEPT`)
