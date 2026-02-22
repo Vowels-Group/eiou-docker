@@ -39,10 +39,10 @@ jobs:
       - name: "Checkout repository"
         uses: actions/checkout@v4
 
-      - name: "Set up PHP 8.1"
+      - name: "Set up PHP 8.2"
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.2'
           extensions: pdo, pdo_sqlite, mbstring, json
           coverage: none
 
