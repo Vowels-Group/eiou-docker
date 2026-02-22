@@ -1,3 +1,18 @@
 files/src/config/userconfig.json
 files/src/config/dbconfig.json
-files/src/config/defaultconfig.json 
+files/src/config/defaultconfig.json
+
+# Repository files not needed in the image
+.github/
+.git/
+.gitignore
+.gitattributes
+docker-compose.yml
+tests/
+docs/
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+README.md
+SECURITY.md
+CLAUDE.md
