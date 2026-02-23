@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Eiou\Database\ContactRepository;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use PDO;
 use PDOStatement;
 
@@ -1344,5 +1345,101 @@ class ContactRepositoryTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertEmpty($result);
+    }
+
+    // =========================================================================
+    // generateContactId() Deterministic Tests
+    // =========================================================================
+
+    /**
+     * Test generateContactId produces the same ID for the same contact pubkey
+     */
+    public function testGenerateContactIdIsDeterministic(): void
+    {
+        $userContext = UserContext::getInstance();
+        $userContext->setUserData(['public' => 'user-public-key-abc']);
+
+        $method = new \ReflectionMethod(ContactRepository::class, 'generateContactId');
+        $method->setAccessible(true);
+
+        $contactPubkey = 'contact-public-key-xyz';
+
+        $id1 = $method->invoke($this->repository, $contactPubkey);
+        $id2 = $method->invoke($this->repository, $contactPubkey);
+
+        $this->assertEquals($id1, $id2, 'Same contact pubkey should produce the same contact ID');
+    }
+
+    /**
+     * Test generateContactId produces different IDs for different contact pubkeys
+     */
+    public function testGenerateContactIdDiffersForDifferentContacts(): void
+    {
+        $userContext = UserContext::getInstance();
+        $userContext->setUserData(['public' => 'user-public-key-abc']);
+
+        $method = new \ReflectionMethod(ContactRepository::class, 'generateContactId');
+        $method->setAccessible(true);
+
+        $id1 = $method->invoke($this->repository, 'contact-pubkey-one');
+        $id2 = $method->invoke($this->repository, 'contact-pubkey-two');
+
+        $this->assertNotEquals($id1, $id2, 'Different contact pubkeys should produce different contact IDs');
+    }
+
+    /**
+     * Test generateContactId produces different IDs for different users (same contact)
+     */
+    public function testGenerateContactIdDiffersPerUser(): void
+    {
+        $userContext = UserContext::getInstance();
+        $method = new \ReflectionMethod(ContactRepository::class, 'generateContactId');
+        $method->setAccessible(true);
+
+        $contactPubkey = 'shared-contact-pubkey';
+
+        $userContext->setUserData(['public' => 'user-one-pubkey']);
+        $id1 = $method->invoke($this->repository, $contactPubkey);
+
+        $userContext->setUserData(['public' => 'user-two-pubkey']);
+        $id2 = $method->invoke($this->repository, $contactPubkey);
+
+        $this->assertNotEquals($id1, $id2, 'Different users should produce different contact IDs for the same contact');
+    }
+
+    /**
+     * Test generateContactId returns 64-character hex string
+     */
+    public function testGenerateContactIdReturnsValidHexString(): void
+    {
+        $userContext = UserContext::getInstance();
+        $userContext->setUserData(['public' => 'user-public-key-abc']);
+
+        $method = new \ReflectionMethod(ContactRepository::class, 'generateContactId');
+        $method->setAccessible(true);
+
+        $id = $method->invoke($this->repository, 'contact-pubkey');
+
+        $this->assertEquals(64, strlen($id), 'Contact ID should be 64 characters (SHA-256 HMAC hex output)');
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $id, 'Contact ID should be lowercase hex');
+    }
+
+    /**
+     * Test generateContactId falls back to random when user context has no public key
+     */
+    public function testGenerateContactIdFallsBackToRandomWithoutUserPubkey(): void
+    {
+        $userContext = UserContext::getInstance();
+        $userContext->setUserData([]);
+
+        $method = new \ReflectionMethod(ContactRepository::class, 'generateContactId');
+        $method->setAccessible(true);
+
+        $id1 = $method->invoke($this->repository, 'contact-pubkey');
+        $id2 = $method->invoke($this->repository, 'contact-pubkey');
+
+        // Random fallback should produce different IDs each time
+        $this->assertNotEquals($id1, $id2, 'Without user pubkey, fallback should generate random IDs');
+        $this->assertEquals(64, strlen($id1), 'Fallback contact ID should be 64 characters');
     }
 }
