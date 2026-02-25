@@ -379,11 +379,7 @@ class BackupService implements BackupServiceInterface
 
     public function isAutoBackupEnabled(): bool
     {
-        $setting = $this->currentUser->get('autoBackupEnabled');
-        if ($setting !== null) {
-            return (bool) $setting;
-        }
-        return Constants::isAutoBackupEnabled();
+        return $this->currentUser->getAutoBackupEnabled();
     }
 
     public function setAutoBackupEnabled(bool $enabled): array

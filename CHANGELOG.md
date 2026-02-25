@@ -18,6 +18,10 @@ The project is currently in **ALPHA** status.
 - Expose all 26 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
 
 ### Changed
+- Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
+- Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
+
+### Changed
 - Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
 - Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
 - Archive old multi-node compose files to `tests/old/compose-files/`
