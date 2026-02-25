@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use PDO;
 use PDOException;
 
@@ -79,7 +80,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function addPendingContact(string $senderPublicKey): string {
         $data = [
-            'contact_id' => $this->generateContactId(),
+            'contact_id' => $this->generateContactId($senderPublicKey),
             'pubkey' => $senderPublicKey,
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
             'name' => null,
@@ -543,7 +544,7 @@ class ContactRepository extends AbstractRepository {
         string $currency
     ): bool {
         $data = [
-            'contact_id' => $this->generateContactId(),
+            'contact_id' => $this->generateContactId($contactPublicKey),
             'pubkey' => $contactPublicKey,
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPublicKey),
             'name' => $name,
@@ -558,13 +559,27 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
-     * Generate a unique random contact ID
+     * Generate a deterministic contact ID from the contact's public key
      *
-     * @return string A random 128-character alphanumeric string
+     * Uses HMAC-SHA256 with the current user's public key as the HMAC key
+     * and the contact's public key as the message. This ensures:
+     * - Same user + same contact = same contact_id every time
+     * - Different users get different contact_ids for the same contact
+     * - Contact ID is not guessable without knowing the user's public key
+     *
+     * @param string $contactPubkey The contact's public key
+     * @return string A deterministic 64-character hex string
      */
-    private function generateContactId(): string {
-        // Generate 64 bytes of random data and convert to hex (128 characters)
-        return bin2hex(random_bytes(64));
+    private function generateContactId(string $contactPubkey): string {
+        $userContext = UserContext::getInstance();
+        $userPubkey = $userContext->getPublicKey();
+
+        if ($userPubkey === null) {
+            // Fallback to random generation if user context is not available
+            return bin2hex(random_bytes(32));
+        }
+
+        return hash_hmac(Constants::HASH_ALGORITHM, $contactPubkey, $userPubkey);
     }
 
     /**
