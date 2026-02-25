@@ -662,6 +662,70 @@ class UserContext {
     }
 
     // =========================================================================
+    // RATE LIMITING GETTERS
+    // =========================================================================
+
+    /**
+     * Get P2P rate limit per minute
+     *
+     * @return int
+     */
+    public function getP2pRateLimitPerMinute(): int {
+        return max(1, (int) ($this->get('p2pRateLimitPerMinute') ?? Constants::P2P_RATE_LIMIT_PER_MINUTE));
+    }
+
+    /**
+     * Get rate limit max attempts
+     *
+     * @return int
+     */
+    public function getRateLimitMaxAttempts(): int {
+        return max(1, (int) ($this->get('rateLimitMaxAttempts') ?? Constants::RATE_LIMIT_MAX_ATTEMPTS));
+    }
+
+    /**
+     * Get rate limit window seconds
+     *
+     * @return int
+     */
+    public function getRateLimitWindowSeconds(): int {
+        return max(1, (int) ($this->get('rateLimitWindowSeconds') ?? Constants::RATE_LIMIT_WINDOW_SECONDS));
+    }
+
+    /**
+     * Get rate limit block seconds
+     *
+     * @return int
+     */
+    public function getRateLimitBlockSeconds(): int {
+        return max(1, (int) ($this->get('rateLimitBlockSeconds') ?? Constants::RATE_LIMIT_BLOCK_SECONDS));
+    }
+
+    // =========================================================================
+    // NETWORK GETTERS
+    // =========================================================================
+
+    /**
+     * Get HTTP transport timeout seconds
+     *
+     * @return int
+     */
+    public function getHttpTransportTimeoutSeconds(): int {
+        $val = (int) ($this->get('httpTransportTimeoutSeconds') ?? Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
+        return max(5, min(120, $val));
+    }
+
+    /**
+     * Get Tor transport timeout seconds
+     *
+     * @return int
+     */
+    public function getTorTransportTimeoutSeconds(): int {
+        $val = (int) ($this->get('torTransportTimeoutSeconds') ?? Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
+        return max(10, min(300, $val));
+    }
+
+    // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
 

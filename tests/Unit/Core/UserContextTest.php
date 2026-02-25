@@ -924,4 +924,107 @@ class UserContextTest extends TestCase
         $this->assertSame(1, $instance->getCleanupRp2pRetentionDays());
         $this->assertSame(1, $instance->getCleanupMetricsRetentionDays());
     }
+
+    // =========================================================================
+    // RATE LIMITING GETTERS
+    // =========================================================================
+
+    public function testGetP2pRateLimitPerMinuteDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::P2P_RATE_LIMIT_PER_MINUTE, $instance->getP2pRateLimitPerMinute());
+    }
+
+    public function testGetP2pRateLimitPerMinuteFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['p2pRateLimitPerMinute' => 120]);
+        $this->assertSame(120, $instance->getP2pRateLimitPerMinute());
+    }
+
+    public function testGetRateLimitMaxAttemptsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::RATE_LIMIT_MAX_ATTEMPTS, $instance->getRateLimitMaxAttempts());
+    }
+
+    public function testGetRateLimitWindowSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::RATE_LIMIT_WINDOW_SECONDS, $instance->getRateLimitWindowSeconds());
+    }
+
+    public function testGetRateLimitBlockSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::RATE_LIMIT_BLOCK_SECONDS, $instance->getRateLimitBlockSeconds());
+    }
+
+    public function testRateLimitMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'p2pRateLimitPerMinute' => 0,
+            'rateLimitMaxAttempts' => 0,
+            'rateLimitWindowSeconds' => 0,
+            'rateLimitBlockSeconds' => -1,
+        ]);
+        $this->assertSame(1, $instance->getP2pRateLimitPerMinute());
+        $this->assertSame(1, $instance->getRateLimitMaxAttempts());
+        $this->assertSame(1, $instance->getRateLimitWindowSeconds());
+        $this->assertSame(1, $instance->getRateLimitBlockSeconds());
+    }
+
+    // =========================================================================
+    // NETWORK GETTERS
+    // =========================================================================
+
+    public function testGetHttpTransportTimeoutSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $instance->getHttpTransportTimeoutSeconds());
+    }
+
+    public function testGetHttpTransportTimeoutSecondsFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['httpTransportTimeoutSeconds' => 30]);
+        $this->assertSame(30, $instance->getHttpTransportTimeoutSeconds());
+    }
+
+    public function testGetHttpTransportTimeoutSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['httpTransportTimeoutSeconds' => 2]);
+        $this->assertSame(5, $instance->getHttpTransportTimeoutSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['httpTransportTimeoutSeconds' => 200]);
+        $this->assertSame(120, $instance->getHttpTransportTimeoutSeconds());
+    }
+
+    public function testGetTorTransportTimeoutSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::TOR_TRANSPORT_TIMEOUT_SECONDS, $instance->getTorTransportTimeoutSeconds());
+    }
+
+    public function testGetTorTransportTimeoutSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torTransportTimeoutSeconds' => 5]);
+        $this->assertSame(10, $instance->getTorTransportTimeoutSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torTransportTimeoutSeconds' => 500]);
+        $this->assertSame(300, $instance->getTorTransportTimeoutSeconds());
+    }
 }
