@@ -879,6 +879,51 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Get non-contact transactions between two pubkeys
+     *
+     * Same as getTransactionsBetweenPubkeys but excludes contact transactions
+     * (tx_type='contact'). Used to detect prior transaction history without
+     * false positives from the contact request transaction itself.
+     *
+     * @param string $pubkey1 First pubkey
+     * @param string $pubkey2 Second pubkey
+     * @param int $limit Max results (0 = unlimited)
+     * @return array Transaction records
+     */
+    public function getNonContactTransactionsBetweenPubkeys(string $pubkey1, string $pubkey2, int $limit = 0): array {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey1);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey2);
+
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE tx_type != 'contact'
+                  AND ((sender_public_key_hash = :sender_pubkey_hash1 AND receiver_public_key_hash = :receiver_pubkey_hash1)
+                     OR (sender_public_key_hash = :receiver_pubkey_hash2 AND receiver_public_key_hash = :sender_pubkey_hash2))
+                  ORDER BY timestamp DESC";
+
+        if ($limit > 0) {
+            $query .= " LIMIT :limit";
+        }
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':sender_pubkey_hash1', $senderPublicKeyHash);
+        $stmt->bindValue(':receiver_pubkey_hash1', $receiverPublicKeyHash);
+        $stmt->bindValue(':receiver_pubkey_hash2', $receiverPublicKeyHash);
+        $stmt->bindValue(':sender_pubkey_hash2', $senderPublicKeyHash);
+
+        if ($limit > 0) {
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        }
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve non-contact transactions between pubkeys", $e);
+            return [];
+        }
+    }
+
+    /**
      * Get timestamp column Tranasactions (for ordering check)
      *
      * @return array Timestamp column
