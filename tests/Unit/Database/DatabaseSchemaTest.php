@@ -14,37 +14,64 @@ use PHPUnit\Framework\Attributes\CoversFunction;
 $filesRoot = defined('EIOU_FILES_ROOT') ? EIOU_FILES_ROOT : dirname(__DIR__, 3) . '/files';
 require_once $filesRoot . '/src/database/DatabaseSchema.php';
 
+// Contacts & Network
 use function Eiou\Database\getContactsTableSchema;
 use function Eiou\Database\getAddressTableSchema;
+use function Eiou\Database\getContactCreditTableSchema;
+
+// Transactions & Chain Integrity
+use function Eiou\Database\getTransactionsTableSchema;
 use function Eiou\Database\getBalancesTableSchema;
-use function Eiou\Database\getDebugTableSchema;
+use function Eiou\Database\getHeldTransactionsTableSchema;
+use function Eiou\Database\getChainDropProposalsTableSchema;
+
+// P2P Routing
 use function Eiou\Database\getP2pTableSchema;
 use function Eiou\Database\getRp2pTableSchema;
-use function Eiou\Database\getTransactionsTableSchema;
-use function Eiou\Database\getApiKeysTableSchema;
-use function Eiou\Database\getApiRequestLogTableSchema;
+use function Eiou\Database\getRp2pCandidatesTableSchema;
+use function Eiou\Database\getP2pSendersTableSchema;
+use function Eiou\Database\getP2pRelayedContactsTableSchema;
+
+// Message Delivery
 use function Eiou\Database\getMessageDeliveryTableSchema;
 use function Eiou\Database\getDeadLetterQueueTableSchema;
 use function Eiou\Database\getDeliveryMetricsTableSchema;
-use function Eiou\Database\getRateLimitsTableSchema;
-use function Eiou\Database\getHeldTransactionsTableSchema;
-use function Eiou\Database\getP2pSendersTableSchema;
 
+// API
+use function Eiou\Database\getApiKeysTableSchema;
+use function Eiou\Database\getApiRequestLogTableSchema;
+use function Eiou\Database\getApiNoncesTableSchema;
+
+// System & Security
+use function Eiou\Database\getDebugTableSchema;
+use function Eiou\Database\getRateLimitsTableSchema;
+
+// Contacts & Network
 #[CoversFunction('Eiou\Database\getContactsTableSchema')]
 #[CoversFunction('Eiou\Database\getAddressTableSchema')]
+#[CoversFunction('Eiou\Database\getContactCreditTableSchema')]
+// Transactions & Chain Integrity
+#[CoversFunction('Eiou\Database\getTransactionsTableSchema')]
 #[CoversFunction('Eiou\Database\getBalancesTableSchema')]
-#[CoversFunction('Eiou\Database\getDebugTableSchema')]
+#[CoversFunction('Eiou\Database\getHeldTransactionsTableSchema')]
+#[CoversFunction('Eiou\Database\getChainDropProposalsTableSchema')]
+// P2P Routing
 #[CoversFunction('Eiou\Database\getP2pTableSchema')]
 #[CoversFunction('Eiou\Database\getRp2pTableSchema')]
-#[CoversFunction('Eiou\Database\getTransactionsTableSchema')]
-#[CoversFunction('Eiou\Database\getApiKeysTableSchema')]
-#[CoversFunction('Eiou\Database\getApiRequestLogTableSchema')]
+#[CoversFunction('Eiou\Database\getRp2pCandidatesTableSchema')]
+#[CoversFunction('Eiou\Database\getP2pSendersTableSchema')]
+#[CoversFunction('Eiou\Database\getP2pRelayedContactsTableSchema')]
+// Message Delivery
 #[CoversFunction('Eiou\Database\getMessageDeliveryTableSchema')]
 #[CoversFunction('Eiou\Database\getDeadLetterQueueTableSchema')]
 #[CoversFunction('Eiou\Database\getDeliveryMetricsTableSchema')]
+// API
+#[CoversFunction('Eiou\Database\getApiKeysTableSchema')]
+#[CoversFunction('Eiou\Database\getApiRequestLogTableSchema')]
+#[CoversFunction('Eiou\Database\getApiNoncesTableSchema')]
+// System & Security
+#[CoversFunction('Eiou\Database\getDebugTableSchema')]
 #[CoversFunction('Eiou\Database\getRateLimitsTableSchema')]
-#[CoversFunction('Eiou\Database\getHeldTransactionsTableSchema')]
-#[CoversFunction('Eiou\Database\getP2pSendersTableSchema')]
 class DatabaseSchemaTest extends TestCase
 {
     // =========================================================================

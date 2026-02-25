@@ -3,6 +3,11 @@
 
 namespace Eiou\Database;
 
+// ============================================================================
+// CONTACTS & NETWORK
+// Tables related to contact management, network addresses, and credit limits
+// ============================================================================
+
 // Contacts table
 function getContactsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contacts (
@@ -52,6 +57,85 @@ function getAddressTableSchema(){
     )";
 }
 
+// Contact Credit table - stores available credit information from contacts, updated during ping
+function getContactCreditTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS contact_credit (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey_hash VARCHAR(64) NOT NULL UNIQUE,
+        available_credit INT DEFAULT 0,
+        currency VARCHAR(10),
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_contact_credit_pubkey_hash (pubkey_hash)
+    )";
+}
+
+// ============================================================================
+// TRANSACTIONS & CHAIN INTEGRITY
+// Tables for transaction records, balances, held transactions, and chain repairs
+// ============================================================================
+
+// Transactions table
+function getTransactionsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        tx_type ENUM(
+            'standard',  /* Transaction is direct to known contact */
+            'p2p',       /* Transaction is p2p to unknown contact (or part of p2p chain to known contact) */
+            'contact'    /* Contact request transaction (amount=0, first transaction to establish contact) */
+        ) DEFAULT 'standard',
+        type ENUM(
+            'received',  /* Transaction was received by user */
+            'sent',      /* Transaction was sent by user */
+            'relay'      /* Transaction was a relay, user is intermediary */
+        ) DEFAULT 'sent',
+        status ENUM(
+            'pending',   /* Transaction has been created */
+            'sending',   /* Transaction claimed for processing, prevents duplicates */
+            'sent',      /* Transaction has been sent onwards*/
+            'accepted',  /* Transaction has been accepted by peer */
+            'rejected',  /* Transaction has been rejected by peer */
+            'cancelled', /* Transaction has not been received by peer in time */
+            'completed', /* Transaction has been accepted by final recipient */
+            'failed'     /* Transaction failed after max recovery attempts, needs manual review */
+        ) DEFAULT 'pending',
+        sender_address VARCHAR(255) NOT NULL,
+        sender_public_key TEXT NOT NULL,
+        sender_public_key_hash VARCHAR(64),
+        receiver_address VARCHAR(255) NOT NULL,
+        receiver_public_key TEXT NOT NULL,
+        receiver_public_key_hash VARCHAR(64),
+        amount INT NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
+        txid VARCHAR(255) UNIQUE NOT NULL,
+        previous_txid VARCHAR(255),
+        sender_signature TEXT,
+        recipient_signature TEXT,                      /* Signature of receiver upon accepting transaction */
+        signature_nonce VARCHAR(64),
+        time BIGINT NULL,
+        memo TEXT,
+        description TEXT,
+        initial_sender_address VARCHAR(255) DEFAULT NULL,
+        end_recipient_address VARCHAR(255) DEFAULT NULL,
+        sending_started_at DATETIME(6) DEFAULT NULL,  /* When processing started, for recovery timeout detection */
+        recovery_count INT DEFAULT 0,                  /* Number of times this transaction has been recovered */
+        needs_manual_review TINYINT(1) DEFAULT 0,      /* Flag for transactions needing manual intervention */
+        INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
+        INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
+        INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
+        INDEX idx_transactions_chain (sender_public_key_hash, receiver_public_key_hash, timestamp DESC),
+        INDEX idx_transactions_status (status),
+        INDEX idx_transactions_timestamp (timestamp),
+        INDEX idx_transactions_status_timestamp (status, timestamp DESC),
+        INDEX idx_transactions_txid (txid),
+        INDEX idx_transactions_previous_txid (previous_txid),
+        INDEX idx_transactions_memo (memo(255)),
+        INDEX idx_transactions_initial_sender (initial_sender_address),
+        INDEX idx_transactions_end_recipient (end_recipient_address),
+        INDEX idx_transactions_sending_recovery (status, sending_started_at)  /* For finding stuck transactions */
+    )";
+}
+
 // Balance table
 function getBalancesTableSchema() {
     return "CREATE TABLE IF NOT EXISTS balances (
@@ -64,22 +148,75 @@ function getBalancesTableSchema() {
     )";
 }
 
-// Debug table
-function getDebugTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS debug (
+// Held Transactions table - tracks transactions pending resync completion
+function getHeldTransactionsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS held_transactions (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
-        level ENUM('SILENT', 'ECHO', 'INFO', 'WARNING', 'ERROR', 'CRITICAL') NOT NULL,
-        message TEXT NOT NULL,
-        context JSON,
-        file VARCHAR(255),
-        line INTEGER,
-        trace TEXT,
-        INDEX idx_timestamp (timestamp),
-        INDEX idx_level (level),
-        INDEX idx_level_timestamp (level, timestamp)
+        contact_pubkey_hash VARCHAR(64) NOT NULL,
+        txid VARCHAR(255) NOT NULL,
+        original_previous_txid VARCHAR(255),
+        expected_previous_txid VARCHAR(255),
+        transaction_type ENUM('standard', 'p2p') DEFAULT 'standard',
+        hold_reason ENUM(
+            'invalid_previous_txid',
+            'sync_in_progress'
+        ) DEFAULT 'invalid_previous_txid',
+        sync_status ENUM(
+            'not_started',
+            'in_progress',
+            'completed',
+            'failed'
+        ) DEFAULT 'not_started',
+        retry_count INT DEFAULT 0,
+        max_retries INT DEFAULT 3,
+        held_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        last_sync_attempt TIMESTAMP(6) NULL,
+        next_retry_at TIMESTAMP(6) NULL,
+        resolved_at TIMESTAMP(6) NULL,
+        INDEX idx_held_contact (contact_pubkey_hash),
+        INDEX idx_held_txid (txid),
+        INDEX idx_held_status (sync_status),
+        INDEX idx_held_contact_status (contact_pubkey_hash, sync_status),
+        INDEX idx_held_next_retry (next_retry_at, sync_status)
     )";
 }
+
+// Chain Drop Proposals table - tracks mutual agreements to drop missing transactions
+function getChainDropProposalsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS chain_drop_proposals (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        proposal_id VARCHAR(255) NOT NULL UNIQUE,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,
+        missing_txid VARCHAR(255) NOT NULL,
+        broken_txid VARCHAR(255) NOT NULL,
+        previous_txid_before_gap VARCHAR(255),
+        direction ENUM('outgoing', 'incoming') NOT NULL,
+        status ENUM(
+            'pending',
+            'accepted',
+            'executed',
+            'rejected',
+            'expired',
+            'failed'
+        ) DEFAULT 'pending',
+        gap_context JSON,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP(6) NOT NULL,
+        resolved_at TIMESTAMP(6) NULL,
+        INDEX idx_cdp_proposal_id (proposal_id),
+        INDEX idx_cdp_contact (contact_pubkey_hash),
+        INDEX idx_cdp_status (status),
+        INDEX idx_cdp_contact_status (contact_pubkey_hash, status),
+        INDEX idx_cdp_missing_txid (missing_txid),
+        INDEX idx_cdp_expires (expires_at, status)
+    )";
+}
+
+// ============================================================================
+// P2P ROUTING
+// Tables for peer-to-peer payment routing, responses, candidates, and relays
+// ============================================================================
 
 // P2p table
 function getP2pTableSchema() {
@@ -128,7 +265,7 @@ function getP2pTableSchema() {
         INDEX idx_p2p_hash (hash),
         INDEX idx_p2p_status (status),
         INDEX idx_p2p_created_at (created_at),
-        INDEX idx_p2p_status_created_at (status, created_at ASC),  
+        INDEX idx_p2p_status_created_at (status, created_at ASC),
         INDEX idx_p2p_sender_address (sender_address),
         INDEX idx_p2p_sender_address_status (sender_address, status),
         INDEX idx_p2p_destination (destination_address),
@@ -203,114 +340,10 @@ function getP2pRelayedContactsTableSchema() {
     )";
 }
 
-// Transactions table
-function getTransactionsTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        tx_type ENUM(
-            'standard',  /* Transaction is direct to known contact */
-            'p2p',       /* Transaction is p2p to unknown contact (or part of p2p chain to known contact) */
-            'contact'    /* Contact request transaction (amount=0, first transaction to establish contact) */
-        ) DEFAULT 'standard',
-        type ENUM(
-            'received',  /* Transaction was received by user */
-            'sent',      /* Transaction was sent by user */
-            'relay'      /* Transaction was a relay, user is intermediary */
-        ) DEFAULT 'sent',
-        status ENUM(
-            'pending',   /* Transaction has been created */
-            'sending',   /* Transaction claimed for processing, prevents duplicates */
-            'sent',      /* Transaction has been sent onwards*/
-            'accepted',  /* Transaction has been accepted by peer */
-            'rejected',  /* Transaction has been rejected by peer */
-            'cancelled', /* Transaction has not been received by peer in time */
-            'completed', /* Transaction has been accepted by final recipient */
-            'failed'     /* Transaction failed after max recovery attempts, needs manual review */
-        ) DEFAULT 'pending',
-        sender_address VARCHAR(255) NOT NULL,
-        sender_public_key TEXT NOT NULL,
-        sender_public_key_hash VARCHAR(64),
-        receiver_address VARCHAR(255) NOT NULL,
-        receiver_public_key TEXT NOT NULL,
-        receiver_public_key_hash VARCHAR(64),
-        amount INT NOT NULL,
-        currency VARCHAR(10) NOT NULL,
-        timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
-        txid VARCHAR(255) UNIQUE NOT NULL,
-        previous_txid VARCHAR(255),
-        sender_signature TEXT,
-        recipient_signature TEXT,                      /* Signature of receiver upon accepting transaction */
-        signature_nonce VARCHAR(64),
-        time BIGINT NULL,
-        memo TEXT,
-        description TEXT,
-        initial_sender_address VARCHAR(255) DEFAULT NULL,
-        end_recipient_address VARCHAR(255) DEFAULT NULL,
-        sending_started_at DATETIME(6) DEFAULT NULL,  /* When processing started, for recovery timeout detection */
-        recovery_count INT DEFAULT 0,                  /* Number of times this transaction has been recovered */
-        needs_manual_review TINYINT(1) DEFAULT 0,      /* Flag for transactions needing manual intervention */
-        INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
-        INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
-        INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
-        INDEX idx_transactions_chain (sender_public_key_hash, receiver_public_key_hash, timestamp DESC),
-        INDEX idx_transactions_status (status),
-        INDEX idx_transactions_timestamp (timestamp),
-        INDEX idx_transactions_status_timestamp (status, timestamp DESC),
-        INDEX idx_transactions_txid (txid),
-        INDEX idx_transactions_previous_txid (previous_txid),
-        INDEX idx_transactions_memo (memo(255)),
-        INDEX idx_transactions_initial_sender (initial_sender_address),
-        INDEX idx_transactions_end_recipient (end_recipient_address),
-        INDEX idx_transactions_sending_recovery (status, sending_started_at)  /* For finding stuck transactions */
-    )";
-}
-
-// API Keys table for external API access
-function getApiKeysTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS api_keys (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        key_id VARCHAR(32) NOT NULL UNIQUE,
-        encrypted_secret JSON NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        permissions JSON NOT NULL,
-        rate_limit_per_minute INT DEFAULT 100,
-        enabled TINYINT(1) DEFAULT 1,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        last_used_at TIMESTAMP(6) NULL,
-        expires_at TIMESTAMP(6) NULL,
-        INDEX idx_api_keys_key_id (key_id),
-        INDEX idx_api_keys_enabled (enabled),
-        INDEX idx_api_keys_expires (expires_at)
-    )";
-}
-
-// API Request Log table for audit trail
-function getApiRequestLogTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS api_request_log (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        key_id VARCHAR(32) NOT NULL,
-        endpoint VARCHAR(255) NOT NULL,
-        method VARCHAR(10) NOT NULL,
-        ip_address VARCHAR(45) NOT NULL,
-        request_timestamp TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        response_code INT NOT NULL,
-        response_time_ms INT,
-        INDEX idx_api_log_key_id (key_id),
-        INDEX idx_api_log_timestamp (request_timestamp),
-        INDEX idx_api_log_endpoint (endpoint)
-    )";
-}
-
-// API Nonce tracking table for replay protection
-function getApiNoncesTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS api_nonces (
-        nonce VARCHAR(64) NOT NULL,
-        key_id VARCHAR(32) NOT NULL,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (key_id, nonce),
-        INDEX idx_api_nonces_created (created_at)
-    )";
-}
+// ============================================================================
+// MESSAGE DELIVERY
+// Tables for tracking message delivery, failed messages, and delivery metrics
+// ============================================================================
 
 // Message Delivery Tracking table - tracks multi-stage acknowledgments and retries
 function getMessageDeliveryTableSchema() {
@@ -389,6 +422,80 @@ function getDeliveryMetricsTableSchema() {
     )";
 }
 
+// ============================================================================
+// API
+// Tables for API key management, request logging, and replay protection
+// ============================================================================
+
+// API Keys table for external API access
+function getApiKeysTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS api_keys (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        key_id VARCHAR(32) NOT NULL UNIQUE,
+        encrypted_secret JSON NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        permissions JSON NOT NULL,
+        rate_limit_per_minute INT DEFAULT 100,
+        enabled TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMP(6) NULL,
+        expires_at TIMESTAMP(6) NULL,
+        INDEX idx_api_keys_key_id (key_id),
+        INDEX idx_api_keys_enabled (enabled),
+        INDEX idx_api_keys_expires (expires_at)
+    )";
+}
+
+// API Request Log table for audit trail
+function getApiRequestLogTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS api_request_log (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        key_id VARCHAR(32) NOT NULL,
+        endpoint VARCHAR(255) NOT NULL,
+        method VARCHAR(10) NOT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        request_timestamp TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        response_code INT NOT NULL,
+        response_time_ms INT,
+        INDEX idx_api_log_key_id (key_id),
+        INDEX idx_api_log_timestamp (request_timestamp),
+        INDEX idx_api_log_endpoint (endpoint)
+    )";
+}
+
+// API Nonce tracking table for replay protection
+function getApiNoncesTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS api_nonces (
+        nonce VARCHAR(64) NOT NULL,
+        key_id VARCHAR(32) NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (key_id, nonce),
+        INDEX idx_api_nonces_created (created_at)
+    )";
+}
+
+// ============================================================================
+// SYSTEM & SECURITY
+// Tables for debugging, rate limiting, and system-level concerns
+// ============================================================================
+
+// Debug table
+function getDebugTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS debug (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
+        level ENUM('SILENT', 'ECHO', 'INFO', 'WARNING', 'ERROR', 'CRITICAL') NOT NULL,
+        message TEXT NOT NULL,
+        context JSON,
+        file VARCHAR(255),
+        line INTEGER,
+        trace TEXT,
+        INDEX idx_timestamp (timestamp),
+        INDEX idx_level (level),
+        INDEX idx_level_timestamp (level, timestamp)
+    )";
+}
+
 // Rate Limits table - prevents abuse and brute force attacks
 function getRateLimitsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS rate_limits (
@@ -401,82 +508,5 @@ function getRateLimitsTableSchema() {
         blocked_until TIMESTAMP NULL,
         INDEX idx_identifier_action (identifier, action),
         INDEX idx_blocked_until (blocked_until)
-    )";
-}
-
-// Held Transactions table - tracks transactions pending resync completion
-function getHeldTransactionsTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS held_transactions (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        contact_pubkey_hash VARCHAR(64) NOT NULL,
-        txid VARCHAR(255) NOT NULL,
-        original_previous_txid VARCHAR(255),
-        expected_previous_txid VARCHAR(255),
-        transaction_type ENUM('standard', 'p2p') DEFAULT 'standard',
-        hold_reason ENUM(
-            'invalid_previous_txid',
-            'sync_in_progress'
-        ) DEFAULT 'invalid_previous_txid',
-        sync_status ENUM(
-            'not_started',
-            'in_progress',
-            'completed',
-            'failed'
-        ) DEFAULT 'not_started',
-        retry_count INT DEFAULT 0,
-        max_retries INT DEFAULT 3,
-        held_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        last_sync_attempt TIMESTAMP(6) NULL,
-        next_retry_at TIMESTAMP(6) NULL,
-        resolved_at TIMESTAMP(6) NULL,
-        INDEX idx_held_contact (contact_pubkey_hash),
-        INDEX idx_held_txid (txid),
-        INDEX idx_held_status (sync_status),
-        INDEX idx_held_contact_status (contact_pubkey_hash, sync_status),
-        INDEX idx_held_next_retry (next_retry_at, sync_status)
-    )";
-}
-
-// Chain Drop Proposals table - tracks mutual agreements to drop missing transactions
-function getChainDropProposalsTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS chain_drop_proposals (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        proposal_id VARCHAR(255) NOT NULL UNIQUE,
-        contact_pubkey_hash VARCHAR(64) NOT NULL,
-        missing_txid VARCHAR(255) NOT NULL,
-        broken_txid VARCHAR(255) NOT NULL,
-        previous_txid_before_gap VARCHAR(255),
-        direction ENUM('outgoing', 'incoming') NOT NULL,
-        status ENUM(
-            'pending',
-            'accepted',
-            'executed',
-            'rejected',
-            'expired',
-            'failed'
-        ) DEFAULT 'pending',
-        gap_context JSON,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP(6) NOT NULL,
-        resolved_at TIMESTAMP(6) NULL,
-        INDEX idx_cdp_proposal_id (proposal_id),
-        INDEX idx_cdp_contact (contact_pubkey_hash),
-        INDEX idx_cdp_status (status),
-        INDEX idx_cdp_contact_status (contact_pubkey_hash, status),
-        INDEX idx_cdp_missing_txid (missing_txid),
-        INDEX idx_cdp_expires (expires_at, status)
-    )";
-}
-
-// Contact Credit table - stores available credit information from contacts, updated during ping
-function getContactCreditTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS contact_credit (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash VARCHAR(64) NOT NULL UNIQUE,
-        available_credit INT DEFAULT 0,
-        currency VARCHAR(10),
-        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_contact_credit_pubkey_hash (pubkey_hash)
     )";
 }
