@@ -419,7 +419,7 @@ class BackupService implements BackupServiceInterface
         return [
             'enabled' => $this->isAutoBackupEnabled(),
             'backup_count' => count($backups),
-            'retention_count' => Constants::BACKUP_RETENTION_COUNT,
+            'retention_count' => $this->currentUser->getBackupRetentionCount(),
             'last_backup' => $lastBackup ? $lastBackup['created_at'] : null,
             'last_backup_file' => $lastBackup ? $lastBackup['filename'] : null,
             'backup_directory' => $this->backupDirectory,
@@ -432,7 +432,7 @@ class BackupService implements BackupServiceInterface
     public function cleanupOldBackups(): array
     {
         $backups = $this->listBackups();
-        $retentionCount = Constants::BACKUP_RETENTION_COUNT;
+        $retentionCount = $this->currentUser->getBackupRetentionCount();
         $deletedFiles = [];
 
         if (count($backups) > $retentionCount) {
@@ -614,8 +614,8 @@ class BackupService implements BackupServiceInterface
 
     private function getNextScheduledBackup(): string
     {
-        $hour = Constants::BACKUP_CRON_HOUR;
-        $minute = Constants::BACKUP_CRON_MINUTE;
+        $hour = $this->currentUser->getBackupCronHour();
+        $minute = $this->currentUser->getBackupCronMinute();
 
         $next = new DateTime();
         $next->setTime($hour, $minute, 0);

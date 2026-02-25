@@ -562,6 +562,106 @@ class UserContext {
     }
 
     // =========================================================================
+    // BACKUP & LOGGING GETTERS
+    // =========================================================================
+
+    /**
+     * Get backup retention count
+     *
+     * @return int
+     */
+    public function getBackupRetentionCount(): int {
+        return max(1, (int) ($this->get('backupRetentionCount') ?? Constants::BACKUP_RETENTION_COUNT));
+    }
+
+    /**
+     * Get backup cron hour (0-23)
+     *
+     * @return int
+     */
+    public function getBackupCronHour(): int {
+        $val = (int) ($this->get('backupCronHour') ?? Constants::BACKUP_CRON_HOUR);
+        return max(0, min(23, $val));
+    }
+
+    /**
+     * Get backup cron minute (0-59)
+     *
+     * @return int
+     */
+    public function getBackupCronMinute(): int {
+        $val = (int) ($this->get('backupCronMinute') ?? Constants::BACKUP_CRON_MINUTE);
+        return max(0, min(59, $val));
+    }
+
+    /**
+     * Get log level
+     *
+     * @return string
+     */
+    public function getLogLevel(): string {
+        return (string) ($this->get('logLevel') ?? Constants::LOG_LEVEL);
+    }
+
+    /**
+     * Get log max entries
+     *
+     * @return int
+     */
+    public function getLogMaxEntries(): int {
+        return max(10, (int) ($this->get('logMaxEntries') ?? Constants::LOG_MAX_ENTRIES));
+    }
+
+    // =========================================================================
+    // DATA RETENTION GETTERS
+    // =========================================================================
+
+    /**
+     * Get delivery retention days
+     *
+     * @return int
+     */
+    public function getCleanupDeliveryRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupDeliveryRetentionDays') ?? Constants::CLEANUP_DELIVERY_RETENTION_DAYS));
+    }
+
+    /**
+     * Get DLQ retention days
+     *
+     * @return int
+     */
+    public function getCleanupDlqRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupDlqRetentionDays') ?? Constants::CLEANUP_DLQ_RETENTION_DAYS));
+    }
+
+    /**
+     * Get held transaction retention days
+     *
+     * @return int
+     */
+    public function getCleanupHeldTxRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupHeldTxRetentionDays') ?? Constants::CLEANUP_HELD_TX_RETENTION_DAYS));
+    }
+
+    /**
+     * Get RP2P retention days
+     *
+     * @return int
+     */
+    public function getCleanupRp2pRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupRp2pRetentionDays') ?? Constants::CLEANUP_RP2P_RETENTION_DAYS));
+    }
+
+    /**
+     * Get metrics retention days
+     *
+     * @return int
+     */
+    public function getCleanupMetricsRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupMetricsRetentionDays') ?? Constants::CLEANUP_METRICS_RETENTION_DAYS));
+    }
+
+    // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
 

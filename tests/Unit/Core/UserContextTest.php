@@ -766,4 +766,162 @@ class UserContextTest extends TestCase
 
         $this->assertNull($instance->getAuthCode());
     }
+
+    // =========================================================================
+    // BACKUP & LOGGING GETTERS
+    // =========================================================================
+
+    public function testGetBackupRetentionCountDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::BACKUP_RETENTION_COUNT, $instance->getBackupRetentionCount());
+    }
+
+    public function testGetBackupRetentionCountFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupRetentionCount' => 7]);
+        $this->assertSame(7, $instance->getBackupRetentionCount());
+    }
+
+    public function testGetBackupRetentionCountMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupRetentionCount' => 0]);
+        $this->assertSame(1, $instance->getBackupRetentionCount());
+    }
+
+    public function testGetBackupCronHourDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::BACKUP_CRON_HOUR, $instance->getBackupCronHour());
+    }
+
+    public function testGetBackupCronHourFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupCronHour' => 14]);
+        $this->assertSame(14, $instance->getBackupCronHour());
+    }
+
+    public function testGetBackupCronHourClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupCronHour' => 25]);
+        $this->assertSame(23, $instance->getBackupCronHour());
+    }
+
+    public function testGetBackupCronMinuteDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::BACKUP_CRON_MINUTE, $instance->getBackupCronMinute());
+    }
+
+    public function testGetBackupCronMinuteFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupCronMinute' => 30]);
+        $this->assertSame(30, $instance->getBackupCronMinute());
+    }
+
+    public function testGetLogLevelDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LOG_LEVEL, $instance->getLogLevel());
+    }
+
+    public function testGetLogLevelFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['logLevel' => 'DEBUG']);
+        $this->assertSame('DEBUG', $instance->getLogLevel());
+    }
+
+    public function testGetLogMaxEntriesDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LOG_MAX_ENTRIES, $instance->getLogMaxEntries());
+    }
+
+    public function testGetLogMaxEntriesFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['logMaxEntries' => 500]);
+        $this->assertSame(500, $instance->getLogMaxEntries());
+    }
+
+    public function testGetLogMaxEntriesMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['logMaxEntries' => 5]);
+        $this->assertSame(10, $instance->getLogMaxEntries());
+    }
+
+    // =========================================================================
+    // DATA RETENTION GETTERS
+    // =========================================================================
+
+    public function testGetCleanupDeliveryRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_DELIVERY_RETENTION_DAYS, $instance->getCleanupDeliveryRetentionDays());
+    }
+
+    public function testGetCleanupDeliveryRetentionDaysFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['cleanupDeliveryRetentionDays' => 60]);
+        $this->assertSame(60, $instance->getCleanupDeliveryRetentionDays());
+    }
+
+    public function testGetCleanupDlqRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_DLQ_RETENTION_DAYS, $instance->getCleanupDlqRetentionDays());
+    }
+
+    public function testGetCleanupHeldTxRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_HELD_TX_RETENTION_DAYS, $instance->getCleanupHeldTxRetentionDays());
+    }
+
+    public function testGetCleanupRp2pRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_RP2P_RETENTION_DAYS, $instance->getCleanupRp2pRetentionDays());
+    }
+
+    public function testGetCleanupMetricsRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_METRICS_RETENTION_DAYS, $instance->getCleanupMetricsRetentionDays());
+    }
+
+    public function testCleanupRetentionDaysMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'cleanupDeliveryRetentionDays' => 0,
+            'cleanupDlqRetentionDays' => -5,
+            'cleanupHeldTxRetentionDays' => 0,
+            'cleanupRp2pRetentionDays' => 0,
+            'cleanupMetricsRetentionDays' => 0,
+        ]);
+        $this->assertSame(1, $instance->getCleanupDeliveryRetentionDays());
+        $this->assertSame(1, $instance->getCleanupDlqRetentionDays());
+        $this->assertSame(1, $instance->getCleanupHeldTxRetentionDays());
+        $this->assertSame(1, $instance->getCleanupRp2pRetentionDays());
+        $this->assertSame(1, $instance->getCleanupMetricsRetentionDays());
+    }
 }
