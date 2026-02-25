@@ -207,11 +207,13 @@ $pendingContacts = $contactService->getPendingContactRequests();
 
 // Check if pending contacts have prior transaction history (wallet restore scenario)
 // Contacts created via auto-restore from ping will have synced transactions
+// Exclude contact transactions (tx_type='contact') since those are created as part of
+// the contact request itself — only real transactions indicate a prior relationship
 if (!empty($pendingContacts) && $user->has('public')) {
     $txRepo = $serviceContainer->getTransactionRepository();
     $myPubkey = $user->getPublicKey();
     foreach ($pendingContacts as &$pc) {
-        $history = $txRepo->getTransactionsBetweenPubkeys($myPubkey, $pc['pubkey'], 1);
+        $history = $txRepo->getNonContactTransactionsBetweenPubkeys($myPubkey, $pc['pubkey'], 1);
         $pc['has_prior_history'] = !empty($history);
     }
     unset($pc);
