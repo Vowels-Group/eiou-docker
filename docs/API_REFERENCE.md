@@ -1057,7 +1057,33 @@ Get system settings.
             "hostname": "http://alice",
             "hostname_secure": "https://alice",
             "auto_refresh_enabled": true,
-            "auto_backup_enabled": true
+            "auto_backup_enabled": true,
+            "contact_status_enabled": true,
+            "contact_status_sync_on_ping": true,
+            "auto_chain_drop_propose": true,
+            "auto_chain_drop_accept": false,
+            "api_enabled": true,
+            "api_cors_allowed_origins": "",
+            "rate_limit_enabled": true,
+            "backup_retention_count": 3,
+            "backup_cron_hour": 0,
+            "backup_cron_minute": 0,
+            "log_level": "INFO",
+            "log_max_entries": 100,
+            "cleanup_delivery_retention_days": 30,
+            "cleanup_dlq_retention_days": 90,
+            "cleanup_held_tx_retention_days": 7,
+            "cleanup_rp2p_retention_days": 30,
+            "cleanup_metrics_retention_days": 90,
+            "p2p_rate_limit_per_minute": 60,
+            "rate_limit_max_attempts": 10,
+            "rate_limit_window_seconds": 60,
+            "rate_limit_block_seconds": 300,
+            "http_transport_timeout_seconds": 15,
+            "tor_transport_timeout_seconds": 30,
+            "display_date_format": "Y-m-d H:i:s.u",
+            "display_currency_decimals": 2,
+            "display_recent_transactions_limit": 5
         }
     }
 }
@@ -1077,6 +1103,32 @@ Get system settings.
 - `hostname_secure`: HTTPS hostname of the node (e.g., "https://alice")
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
+- `contact_status_enabled`: Whether contact status tracking is enabled
+- `contact_status_sync_on_ping`: Whether to sync contact status during ping
+- `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
+- `auto_chain_drop_accept`: Whether to auto-accept chain-drop proposals
+- `api_enabled`: Whether the REST API endpoint is enabled
+- `api_cors_allowed_origins`: Allowed CORS origins for API (empty = none)
+- `rate_limit_enabled`: Whether rate limiting is active
+- `backup_retention_count`: Number of backup files to retain (min 1)
+- `backup_cron_hour`: Backup schedule hour in UTC (0-23)
+- `backup_cron_minute`: Backup schedule minute (0-59)
+- `log_level`: Minimum log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- `log_max_entries`: Maximum log entries to keep (min 10)
+- `cleanup_delivery_retention_days`: Days to retain delivery records (min 1)
+- `cleanup_dlq_retention_days`: Days to retain dead letter queue entries (min 1)
+- `cleanup_held_tx_retention_days`: Days to retain held transactions (min 1)
+- `cleanup_rp2p_retention_days`: Days to retain P2P routing records (min 1)
+- `cleanup_metrics_retention_days`: Days to retain metrics data (min 1)
+- `p2p_rate_limit_per_minute`: Maximum P2P requests per minute (min 1)
+- `rate_limit_max_attempts`: Max attempts before rate limit triggers (min 1)
+- `rate_limit_window_seconds`: Rate limit time window in seconds (min 1)
+- `rate_limit_block_seconds`: Block duration after limit exceeded in seconds (min 1)
+- `http_transport_timeout_seconds`: HTTP transport timeout (5-120 seconds)
+- `tor_transport_timeout_seconds`: Tor transport timeout (10-300 seconds)
+- `display_date_format`: PHP date format string for timestamps
+- `display_currency_decimals`: Decimal places for currency display (0-8)
+- `display_recent_transactions_limit`: Number of recent transactions on dashboard (min 1)
 
 ---
 
@@ -1111,6 +1163,32 @@ Update system settings.
 | `auto_backup_enabled` | boolean | Enable/disable automatic backups |
 | `hostname` | string | Node hostname (triggers SSL cert regeneration) |
 | `name` | string | Node display name |
+| `contact_status_enabled` | boolean | Enable/disable contact status tracking |
+| `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
+| `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |
+| `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
+| `api_enabled` | boolean | Enable/disable REST API endpoint |
+| `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
+| `rate_limit_enabled` | boolean | Enable/disable rate limiting |
+| `backup_retention_count` | int | Backup files to retain (min 1) |
+| `backup_cron_hour` | int | Backup schedule hour UTC (0-23) |
+| `backup_cron_minute` | int | Backup schedule minute (0-59) |
+| `log_level` | string | Min log level: DEBUG, INFO, WARNING, ERROR, CRITICAL |
+| `log_max_entries` | int | Max log entries to keep (min 10) |
+| `cleanup_delivery_retention_days` | int | Delivery record retention days (min 1) |
+| `cleanup_dlq_retention_days` | int | DLQ entry retention days (min 1) |
+| `cleanup_held_tx_retention_days` | int | Held transaction retention days (min 1) |
+| `cleanup_rp2p_retention_days` | int | P2P routing record retention days (min 1) |
+| `cleanup_metrics_retention_days` | int | Metrics data retention days (min 1) |
+| `p2p_rate_limit_per_minute` | int | Max P2P requests per minute (min 1) |
+| `rate_limit_max_attempts` | int | Attempts before rate limit triggers (min 1) |
+| `rate_limit_window_seconds` | int | Rate limit time window seconds (min 1) |
+| `rate_limit_block_seconds` | int | Block duration after limit exceeded (min 1) |
+| `http_transport_timeout_seconds` | int | HTTP timeout (5-120 seconds) |
+| `tor_transport_timeout_seconds` | int | Tor timeout (10-300 seconds) |
+| `display_date_format` | string | PHP date format string |
+| `display_currency_decimals` | int | Currency decimal places (0-8) |
+| `display_recent_transactions_limit` | int | Recent transactions on dashboard (min 1) |
 
 All fields are optional. Only provided fields will be updated. Unknown fields return warnings.
 
