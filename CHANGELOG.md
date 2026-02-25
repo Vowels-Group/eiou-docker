@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Changed
+- Group DatabaseSchema tables into 6 logical sections (Contacts & Network, Transactions & Chain Integrity, P2P Routing, Message Delivery, API, System & Security) with header comments; update matching order in DatabaseSetup and DatabaseSchemaTest
 - Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
 - Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
 - Archive old multi-node compose files to `tests/old/compose-files/`
