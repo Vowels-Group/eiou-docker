@@ -104,6 +104,9 @@ class Application {
         // Run migrations for existing databases to add new tables
         $this->runMigrations();
 
+        // Migrate default config to add any new configurable keys
+        $this->migrateDefaultConfig();
+
         // Setup user config
         if(file_exists('/etc/eiou/config/userconfig.json') && !$this->currentUserLoaded()){
             // Get UserContext instance
@@ -232,6 +235,36 @@ class Application {
                 ]);
             }
             // Don't throw - migrations failing shouldn't prevent app startup
+        }
+    }
+
+    /**
+     * Migrate default config to add new configurable keys.
+     * Adds any keys from getConfigurableDefaults() that are missing from
+     * defaultconfig.json without overwriting existing user values. Idempotent.
+     */
+    private function migrateDefaultConfig(): void {
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        if (!file_exists($configFile)) {
+            return;
+        }
+
+        $config = json_decode(file_get_contents($configFile), true);
+        if (!is_array($config)) {
+            return;
+        }
+
+        $defaults = UserContext::getConfigurableDefaults();
+        $changed = false;
+        foreach ($defaults as $key => $defaultValue) {
+            if (!array_key_exists($key, $config)) {
+                $config[$key] = $defaultValue;
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX);
         }
     }
 

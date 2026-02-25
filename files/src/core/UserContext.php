@@ -482,6 +482,152 @@ class UserContext {
         return (string) ($this->get('trustedProxies') ?? Constants::TRUSTED_PROXIES);
     }
 
+    // =========================================================================
+    // FEATURE TOGGLE GETTERS
+    // =========================================================================
+
+    /**
+     * Get contact status enabled setting
+     *
+     * @return bool
+     */
+    public function getContactStatusEnabled(): bool {
+        $envValue = getenv('EIOU_CONTACT_STATUS_ENABLED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('contactStatusEnabled') ?? Constants::CONTACT_STATUS_ENABLED);
+    }
+
+    /**
+     * Get contact status sync on ping setting
+     *
+     * @return bool
+     */
+    public function getContactStatusSyncOnPing(): bool {
+        return (bool) ($this->get('contactStatusSyncOnPing') ?? Constants::CONTACT_STATUS_SYNC_ON_PING);
+    }
+
+    /**
+     * Get auto chain drop propose setting
+     *
+     * @return bool
+     */
+    public function getAutoChainDropPropose(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_PROPOSE');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('autoChainDropPropose') ?? Constants::AUTO_CHAIN_DROP_PROPOSE);
+    }
+
+    /**
+     * Get auto chain drop accept setting
+     *
+     * @return bool
+     */
+    public function getAutoChainDropAccept(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('autoChainDropAccept') ?? Constants::AUTO_CHAIN_DROP_ACCEPT);
+    }
+
+    /**
+     * Get API enabled setting
+     *
+     * @return bool
+     */
+    public function getApiEnabled(): bool {
+        return (bool) ($this->get('apiEnabled') ?? Constants::API_ENABLED);
+    }
+
+    /**
+     * Get API CORS allowed origins
+     *
+     * @return string
+     */
+    public function getApiCorsAllowedOrigins(): string {
+        return (string) ($this->get('apiCorsAllowedOrigins') ?? Constants::API_CORS_ALLOWED_ORIGINS);
+    }
+
+    /**
+     * Get rate limit enabled setting
+     *
+     * @return bool
+     */
+    public function getRateLimitEnabled(): bool {
+        return (bool) ($this->get('rateLimitEnabled') ?? Constants::RATE_LIMIT_ENABLED);
+    }
+
+    // =========================================================================
+    // CONFIGURABLE DEFAULTS (canonical source of truth)
+    // =========================================================================
+
+    /**
+     * Get the canonical map of all configurable settings with their default values.
+     * This is the single source of truth for which settings are user-configurable
+     * and what their defaults are. Used by Wallet generation, config migration,
+     * and settings UI.
+     *
+     * @return array<string, mixed>
+     */
+    public static function getConfigurableDefaults(): array {
+        return [
+            // Transaction settings (original 11)
+            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
+            'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
+            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,
+            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,
+            'defaultCreditLimit' => Constants::CONTACT_DEFAULT_CREDIT_LIMIT,
+            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
+            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
+            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
+            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
+            'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
+            'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
+
+            // Feature toggles
+            'contactStatusEnabled' => Constants::CONTACT_STATUS_ENABLED,
+            'contactStatusSyncOnPing' => Constants::CONTACT_STATUS_SYNC_ON_PING,
+            'autoChainDropPropose' => Constants::AUTO_CHAIN_DROP_PROPOSE,
+            'autoChainDropAccept' => Constants::AUTO_CHAIN_DROP_ACCEPT,
+            'apiEnabled' => Constants::API_ENABLED,
+            'apiCorsAllowedOrigins' => Constants::API_CORS_ALLOWED_ORIGINS,
+            'rateLimitEnabled' => Constants::RATE_LIMIT_ENABLED,
+
+            // Backup & logging
+            'backupRetentionCount' => Constants::BACKUP_RETENTION_COUNT,
+            'backupCronHour' => Constants::BACKUP_CRON_HOUR,
+            'backupCronMinute' => Constants::BACKUP_CRON_MINUTE,
+            'logLevel' => Constants::LOG_LEVEL,
+            'logMaxEntries' => Constants::LOG_MAX_ENTRIES,
+
+            // Data retention
+            'cleanupDeliveryRetentionDays' => Constants::CLEANUP_DELIVERY_RETENTION_DAYS,
+            'cleanupDlqRetentionDays' => Constants::CLEANUP_DLQ_RETENTION_DAYS,
+            'cleanupHeldTxRetentionDays' => Constants::CLEANUP_HELD_TX_RETENTION_DAYS,
+            'cleanupRp2pRetentionDays' => Constants::CLEANUP_RP2P_RETENTION_DAYS,
+            'cleanupMetricsRetentionDays' => Constants::CLEANUP_METRICS_RETENTION_DAYS,
+
+            // Rate limiting
+            'p2pRateLimitPerMinute' => Constants::P2P_RATE_LIMIT_PER_MINUTE,
+            'rateLimitMaxAttempts' => Constants::RATE_LIMIT_MAX_ATTEMPTS,
+            'rateLimitWindowSeconds' => Constants::RATE_LIMIT_WINDOW_SECONDS,
+            'rateLimitBlockSeconds' => Constants::RATE_LIMIT_BLOCK_SECONDS,
+
+            // Network
+            'httpTransportTimeoutSeconds' => Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS,
+            'torTransportTimeoutSeconds' => Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
+
+            // Display
+            'displayDateFormat' => Constants::DISPLAY_DATE_FORMAT,
+            'displayCurrencyDecimals' => Constants::DISPLAY_CURRENCY_DECIMALS,
+            'displayRecentTransactionsLimit' => Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT,
+        ];
+    }
+
     /**
      * Get all user data as array
      *
