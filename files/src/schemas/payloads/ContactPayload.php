@@ -83,7 +83,7 @@ class ContactPayload extends BasePayload
      * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
      * @return string JSON-encoded contact updated payload
      */
-    public function buildUpdated(string $address, ?array $knownAddresses = null): string
+    public function buildUpdated(string $address, ?array $knownAddresses = null, ?string $txid = null, ?string $recipientSignature = null): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
@@ -98,6 +98,14 @@ class ContactPayload extends BasePayload
             $payload['senderAddresses'] = $this->filterAddresses($knownAddresses);
         }
 
+        // Include txid and recipient signature for dual-signature protocol (re-add scenario)
+        if ($txid !== null) {
+            $payload['txid'] = $txid;
+        }
+        if ($recipientSignature !== null) {
+            $payload['recipientSignature'] = $recipientSignature;
+        }
+
         return json_encode($payload);
     }
 
@@ -108,7 +116,7 @@ class ContactPayload extends BasePayload
      * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
      * @return string JSON-encoded contact already exists payload
      */
-    public function buildAlreadyExists(string $address, ?array $knownAddresses = null): string
+    public function buildAlreadyExists(string $address, ?array $knownAddresses = null, ?string $txid = null, ?string $recipientSignature = null): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
@@ -121,6 +129,14 @@ class ContactPayload extends BasePayload
         // Include all known addresses if available
         if ($knownAddresses !== null) {
             $payload['senderAddresses'] = $this->filterAddresses($knownAddresses);
+        }
+
+        // Include txid and recipient signature for dual-signature protocol (re-add scenario)
+        if ($txid !== null) {
+            $payload['txid'] = $txid;
+        }
+        if ($recipientSignature !== null) {
+            $payload['recipientSignature'] = $recipientSignature;
         }
 
         return json_encode($payload);

@@ -788,11 +788,18 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Insert initial balances - will be updated by full sync below
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
-                    if (!$this->contactTransactionExists($senderPublicKey)) {
-                        $txid = $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    // Only create a new contact TX if the remote doesn't have one (no txid in response)
+                    // AND we don't have one locally. When the remote provides a txid, syncReaddedContact()
+                    // will sync the original contact TX with correct signatures.
+                    $remoteTxid = $responseData['txid'] ?? null;
+                    if ($remoteTxid === null && !$this->contactTransactionExists($senderPublicKey)) {
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
 
                         // Store signature data for future sync verification
                         $signingData = $sendResult['signing_data'] ?? null;
+                        $txid = $this->transactionContactRepository->getContactTransactionByParties(
+                            $this->currentUser->getPublicKey(), $senderPublicKey
+                        )['txid'] ?? null;
                         if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
                             $this->transactionRepository->updateSignatureData(
                                 $txid,
@@ -809,6 +816,17 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
                     $syncService = $this->requireSyncTrigger();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
+
+                    // Safety net: if sync didn't bring in the recipient_signature, store it from the response
+                    $recipientSignature = $responseData['recipientSignature'] ?? null;
+                    if ($recipientSignature !== null) {
+                        $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
+                            $this->currentUser->getPublicKey(), $senderPublicKey
+                        );
+                        if ($contactTx && isset($contactTx['txid'])) {
+                            $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
+                        }
+                    }
 
                     if ($syncResult['success']) {
                         $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
@@ -841,13 +859,19 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Insert initial balances - will be updated by full sync below
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
-                    // Insert contact transaction only if one doesn't already exist
-                    // (contact may have been deleted but transaction still exists in history)
-                    if (!$this->contactTransactionExists($senderPublicKey)) {
-                        $txid = $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    // Only create a new contact TX if the remote doesn't have one (no txid in response)
+                    // AND we don't have one locally. When the remote provides a txid, it means the
+                    // original contact TX exists on their end — syncReaddedContact() will sync it
+                    // with the correct txid, nonce, and signatures from the original establishment.
+                    $remoteTxid = $responseData['txid'] ?? null;
+                    if ($remoteTxid === null && !$this->contactTransactionExists($senderPublicKey)) {
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
 
                         // Store signature data for future sync verification
                         $signingData = $sendResult['signing_data'] ?? null;
+                        $txid = $this->transactionContactRepository->getContactTransactionByParties(
+                            $this->currentUser->getPublicKey(), $senderPublicKey
+                        )['txid'] ?? null;
                         if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
                             $this->transactionRepository->updateSignatureData(
                                 $txid,
@@ -865,8 +889,20 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
                     // If contact still has transaction chain on their end, resync from original contact transaction
                     // through all known transactions (verifying signatures) and finally sync balances
+                    // This will bring in the original contact TX with its recipient_signature
                     $syncService = $this->requireSyncTrigger();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
+
+                    // Safety net: if sync didn't bring in the recipient_signature, store it from the response
+                    $recipientSignature = $responseData['recipientSignature'] ?? null;
+                    if ($recipientSignature !== null) {
+                        $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
+                            $this->currentUser->getPublicKey(), $senderPublicKey
+                        );
+                        if ($contactTx && isset($contactTx['txid'])) {
+                            $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
+                        }
+                    }
 
                     if ($syncResult['success']) {
                         $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
@@ -1027,8 +1063,17 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 if (!empty($senderAddresses) && is_array($senderAddresses)) {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                 }
+
+                // Generate recipient signature for dual-signature protocol (re-add scenario)
+                // The sender may have lost their database; include txid + signature so they can restore dual-sig
+                $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+                $txData = $this->transactionContactRepository->getContactTransactionByParties(
+                    $senderPublicKey, $this->currentUser->getPublicKey()
+                );
+                $txid = $txData['txid'] ?? null;
+
                 // Include all our known addresses so sender can store them (re-add scenario)
-                return $this->contactPayload->buildAlreadyExists($senderAddress, $myAddresses);
+                return $this->contactPayload->buildAlreadyExists($senderAddress, $myAddresses, $txid, $recipientSig);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
                 // Check contact status - if pending, treat as re-confirmation with new address
@@ -1091,9 +1136,17 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 if (!empty($senderAddresses) && is_array($senderAddresses)) {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                 }
+
+                // Generate recipient signature for dual-signature protocol (re-add scenario)
+                $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+                $txData = $this->transactionContactRepository->getContactTransactionByParties(
+                    $senderPublicKey, $this->currentUser->getPublicKey()
+                );
+                $txid = $txData['txid'] ?? null;
+
                 // Include all our known addresses so sender can store them (re-add scenario)
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                    return $this->contactPayload->buildUpdated($senderAddress, $myAddresses);
+                    return $this->contactPayload->buildUpdated($senderAddress, $myAddresses, $txid, $recipientSig);
                 } else{
                     // Unable to update contact
                     return $this->contactPayload->buildRejection($senderAddress);
