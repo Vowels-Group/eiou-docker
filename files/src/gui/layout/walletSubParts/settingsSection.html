@@ -148,6 +148,318 @@
             </div>
         </div>
 
+        <!-- Advanced Settings (Collapsible) -->
+        <div style="margin-top: 1.5rem; border-top: 1px solid #dee2e6; padding-top: 1rem;">
+            <h3 style="cursor: pointer; color: #0dcaf0; margin-bottom: 1rem;" onclick="toggleConfigSection('advanced-settings-content', 'advanced-settings-arrow')">
+                <i class="fas fa-sliders-h"></i> Advanced Settings
+                <i id="advanced-settings-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
+            </h3>
+            <div id="advanced-settings-content" style="display: none;">
+
+                <!-- Feature Toggles -->
+                <h4 style="color: #6c757d; margin: 1rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-toggle-on"></i> Feature Toggles
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="contactStatusEnabled">Contact Status:</label>
+                        <div class="toggle-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="contactStatusEnabled" name="contactStatusEnabled" value="1" <?php echo $user->getContactStatusEnabled() ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status <?php echo $user->getContactStatusEnabled() ? 'enabled' : ''; ?>">
+                                <?php echo $user->getContactStatusEnabled() ? 'Enabled' : 'Disabled'; ?>
+                            </span>
+                        </div>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Enable contact status tracking
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contactStatusSyncOnPing">Sync Status on Ping:</label>
+                        <div class="toggle-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="contactStatusSyncOnPing" name="contactStatusSyncOnPing" value="1" <?php echo $user->getContactStatusSyncOnPing() ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status <?php echo $user->getContactStatusSyncOnPing() ? 'enabled' : ''; ?>">
+                                <?php echo $user->getContactStatusSyncOnPing() ? 'Enabled' : 'Disabled'; ?>
+                            </span>
+                        </div>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Synchronize contact status during ping operations
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="autoChainDropPropose">Auto Chain-Drop Propose:</label>
+                        <div class="toggle-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoChainDropPropose" name="autoChainDropPropose" value="1" <?php echo $user->getAutoChainDropPropose() ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status <?php echo $user->getAutoChainDropPropose() ? 'enabled' : ''; ?>">
+                                <?php echo $user->getAutoChainDropPropose() ? 'Enabled' : 'Disabled'; ?>
+                            </span>
+                        </div>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Automatically propose chain-drop operations
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="autoChainDropAccept">Auto Chain-Drop Accept:</label>
+                        <div class="toggle-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoChainDropAccept" name="autoChainDropAccept" value="1" <?php echo $user->getAutoChainDropAccept() ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status <?php echo $user->getAutoChainDropAccept() ? 'enabled' : ''; ?>">
+                                <?php echo $user->getAutoChainDropAccept() ? 'Enabled' : 'Disabled'; ?>
+                            </span>
+                        </div>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Automatically accept incoming chain-drop proposals
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="apiEnabled">API Access:</label>
+                        <div class="toggle-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="apiEnabled" name="apiEnabled" value="1" <?php echo $user->getApiEnabled() ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
+                                <?php echo $user->getApiEnabled() ? 'Enabled' : 'Disabled'; ?>
+                            </span>
+                        </div>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Enable the REST API endpoint
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
+                        <input type="text" id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" value="<?php echo htmlspecialchars($user->getApiCorsAllowedOrigins()); ?>" class="default-value" placeholder="e.g., https://example.com">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Allowed CORS origins for API (empty = none)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rateLimitEnabled">Rate Limiting:</label>
+                        <div class="toggle-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="rateLimitEnabled" name="rateLimitEnabled" value="1" <?php echo $user->getRateLimitEnabled() ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status <?php echo $user->getRateLimitEnabled() ? 'enabled' : ''; ?>">
+                                <?php echo $user->getRateLimitEnabled() ? 'Enabled' : 'Disabled'; ?>
+                            </span>
+                        </div>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Enable rate limiting for API and P2P requests
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Backup & Logging -->
+                <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-archive"></i> Backup & Logging
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="backupRetentionCount">Backup Retention Count:</label>
+                        <input type="number" id="backupRetentionCount" name="backupRetentionCount" value="<?php echo htmlspecialchars($user->getBackupRetentionCount()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Number of backup files to keep (minimum 1)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="backupCronHour">Backup Hour (0-23):</label>
+                        <input type="number" id="backupCronHour" name="backupCronHour" value="<?php echo htmlspecialchars($user->getBackupCronHour()); ?>" min="0" max="23" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Hour of day for scheduled backup (UTC)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="backupCronMinute">Backup Minute (0-59):</label>
+                        <input type="number" id="backupCronMinute" name="backupCronMinute" value="<?php echo htmlspecialchars($user->getBackupCronMinute()); ?>" min="0" max="59" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Minute of hour for scheduled backup
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="logLevel">Log Level:</label>
+                        <select id="logLevel" name="logLevel" class="default-value">
+                            <?php
+                            $logLevels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
+                            $currentLogLevel = $user->getLogLevel();
+                            foreach ($logLevels as $level):
+                                $selected = ($currentLogLevel === $level) ? 'selected' : '';
+                            ?>
+                            <option value="<?php echo $level; ?>" <?php echo $selected; ?>><?php echo $level; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Minimum log level to record
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="logMaxEntries">Max Log Entries:</label>
+                        <input type="number" id="logMaxEntries" name="logMaxEntries" value="<?php echo htmlspecialchars($user->getLogMaxEntries()); ?>" min="10" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Maximum number of log entries to keep (minimum 10)
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Data Retention -->
+                <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-calendar-alt"></i> Data Retention (Days)
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="cleanupDeliveryRetentionDays">Delivery Retention:</label>
+                        <input type="number" id="cleanupDeliveryRetentionDays" name="cleanupDeliveryRetentionDays" value="<?php echo htmlspecialchars($user->getCleanupDeliveryRetentionDays()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Days to retain delivery records
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cleanupDlqRetentionDays">DLQ Retention:</label>
+                        <input type="number" id="cleanupDlqRetentionDays" name="cleanupDlqRetentionDays" value="<?php echo htmlspecialchars($user->getCleanupDlqRetentionDays()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Days to retain dead letter queue entries
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cleanupHeldTxRetentionDays">Held TX Retention:</label>
+                        <input type="number" id="cleanupHeldTxRetentionDays" name="cleanupHeldTxRetentionDays" value="<?php echo htmlspecialchars($user->getCleanupHeldTxRetentionDays()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Days to retain held transactions
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cleanupRp2pRetentionDays">RP2P Retention:</label>
+                        <input type="number" id="cleanupRp2pRetentionDays" name="cleanupRp2pRetentionDays" value="<?php echo htmlspecialchars($user->getCleanupRp2pRetentionDays()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Days to retain P2P routing records
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cleanupMetricsRetentionDays">Metrics Retention:</label>
+                        <input type="number" id="cleanupMetricsRetentionDays" name="cleanupMetricsRetentionDays" value="<?php echo htmlspecialchars($user->getCleanupMetricsRetentionDays()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Days to retain metrics data
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Rate Limiting -->
+                <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-tachometer-alt"></i> Rate Limiting
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="p2pRateLimitPerMinute">P2P Rate Limit (per min):</label>
+                        <input type="number" id="p2pRateLimitPerMinute" name="p2pRateLimitPerMinute" value="<?php echo htmlspecialchars($user->getP2pRateLimitPerMinute()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Maximum P2P requests per minute
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rateLimitMaxAttempts">Max Attempts:</label>
+                        <input type="number" id="rateLimitMaxAttempts" name="rateLimitMaxAttempts" value="<?php echo htmlspecialchars($user->getRateLimitMaxAttempts()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Maximum attempts before rate limit triggers
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rateLimitWindowSeconds">Window (seconds):</label>
+                        <input type="number" id="rateLimitWindowSeconds" name="rateLimitWindowSeconds" value="<?php echo htmlspecialchars($user->getRateLimitWindowSeconds()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Time window for rate limit counting
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rateLimitBlockSeconds">Block Duration (seconds):</label>
+                        <input type="number" id="rateLimitBlockSeconds" name="rateLimitBlockSeconds" value="<?php echo htmlspecialchars($user->getRateLimitBlockSeconds()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Duration to block after rate limit exceeded
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Network -->
+                <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-network-wired"></i> Network
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="httpTransportTimeoutSeconds">HTTP Timeout (seconds):</label>
+                        <input type="number" id="httpTransportTimeoutSeconds" name="httpTransportTimeoutSeconds" value="<?php echo htmlspecialchars($user->getHttpTransportTimeoutSeconds()); ?>" min="5" max="120" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> HTTP transport timeout (5-120 seconds)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="torTransportTimeoutSeconds">Tor Timeout (seconds):</label>
+                        <input type="number" id="torTransportTimeoutSeconds" name="torTransportTimeoutSeconds" value="<?php echo htmlspecialchars($user->getTorTransportTimeoutSeconds()); ?>" min="10" max="300" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Tor transport timeout (10-300 seconds)
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Display -->
+                <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-desktop"></i> Display
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="displayDateFormat">Date Format:</label>
+                        <input type="text" id="displayDateFormat" name="displayDateFormat" value="<?php echo htmlspecialchars($user->getDisplayDateFormat()); ?>" class="default-value" placeholder="Y-m-d H:i:s.u">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> PHP date format string (e.g., Y-m-d H:i:s)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="displayCurrencyDecimals">Currency Decimals:</label>
+                        <input type="number" id="displayCurrencyDecimals" name="displayCurrencyDecimals" value="<?php echo htmlspecialchars($user->getDisplayCurrencyDecimals()); ?>" min="0" max="8" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Decimal places for currency display (0-8)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="displayRecentTransactionsLimit">Recent Transactions Limit:</label>
+                        <input type="number" id="displayRecentTransactionsLimit" name="displayRecentTransactionsLimit" value="<?php echo htmlspecialchars($user->getDisplayRecentTransactionsLimit()); ?>" min="1" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Number of recent transactions to show on dashboard
+                        </small>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
         <div class="form-actions" style="margin-top: 1.5rem;">
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>
             <button type="reset" class="btn btn-secondary"><i class="fas fa-undo"></i> Reset</button>

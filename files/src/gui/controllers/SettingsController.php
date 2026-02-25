@@ -169,6 +169,106 @@ class SettingsController
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoBackupEnabled'] = isset($_POST['autoBackupEnabled']) && $_POST['autoBackupEnabled'] === '1';
 
+        // Feature toggles (boolean checkboxes)
+        $settings['contactStatusEnabled'] = isset($_POST['contactStatusEnabled']) && $_POST['contactStatusEnabled'] === '1';
+        $settings['contactStatusSyncOnPing'] = isset($_POST['contactStatusSyncOnPing']) && $_POST['contactStatusSyncOnPing'] === '1';
+        $settings['autoChainDropPropose'] = isset($_POST['autoChainDropPropose']) && $_POST['autoChainDropPropose'] === '1';
+        $settings['autoChainDropAccept'] = isset($_POST['autoChainDropAccept']) && $_POST['autoChainDropAccept'] === '1';
+        $settings['apiEnabled'] = isset($_POST['apiEnabled']) && $_POST['apiEnabled'] === '1';
+        $settings['rateLimitEnabled'] = isset($_POST['rateLimitEnabled']) && $_POST['rateLimitEnabled'] === '1';
+
+        // API CORS
+        if (isset($_POST['apiCorsAllowedOrigins'])) {
+            $settings['apiCorsAllowedOrigins'] = trim(Security::sanitizeInput($_POST['apiCorsAllowedOrigins']));
+        }
+
+        // Backup & logging
+        if (isset($_POST['backupRetentionCount'])) {
+            $validation = InputValidator::validatePositiveInteger($_POST['backupRetentionCount'], 1);
+            if ($validation['valid']) { $settings['backupRetentionCount'] = $validation['value']; }
+            else { $errors[] = 'Invalid backup retention count: ' . $validation['error']; }
+        }
+        if (isset($_POST['backupCronHour'])) {
+            $validation = InputValidator::validateIntRange($_POST['backupCronHour'], 0, 23, 'Backup hour');
+            if ($validation['valid']) { $settings['backupCronHour'] = $validation['value']; }
+            else { $errors[] = 'Invalid backup hour: ' . $validation['error']; }
+        }
+        if (isset($_POST['backupCronMinute'])) {
+            $validation = InputValidator::validateIntRange($_POST['backupCronMinute'], 0, 59, 'Backup minute');
+            if ($validation['valid']) { $settings['backupCronMinute'] = $validation['value']; }
+            else { $errors[] = 'Invalid backup minute: ' . $validation['error']; }
+        }
+        if (isset($_POST['logLevel'])) {
+            $validation = InputValidator::validateLogLevel($_POST['logLevel']);
+            if ($validation['valid']) { $settings['logLevel'] = $validation['value']; }
+            else { $errors[] = 'Invalid log level: ' . $validation['error']; }
+        }
+        if (isset($_POST['logMaxEntries'])) {
+            $validation = InputValidator::validatePositiveInteger($_POST['logMaxEntries'], 10);
+            if ($validation['valid']) { $settings['logMaxEntries'] = $validation['value']; }
+            else { $errors[] = 'Invalid log max entries: ' . $validation['error']; }
+        }
+
+        // Data retention
+        $retentionFields = [
+            'cleanupDeliveryRetentionDays' => 'delivery retention',
+            'cleanupDlqRetentionDays' => 'DLQ retention',
+            'cleanupHeldTxRetentionDays' => 'held TX retention',
+            'cleanupRp2pRetentionDays' => 'RP2P retention',
+            'cleanupMetricsRetentionDays' => 'metrics retention',
+        ];
+        foreach ($retentionFields as $field => $label) {
+            if (isset($_POST[$field])) {
+                $validation = InputValidator::validatePositiveInteger($_POST[$field], 1);
+                if ($validation['valid']) { $settings[$field] = $validation['value']; }
+                else { $errors[] = "Invalid $label: " . $validation['error']; }
+            }
+        }
+
+        // Rate limiting
+        $rateLimitFields = [
+            'p2pRateLimitPerMinute' => 'P2P rate limit',
+            'rateLimitMaxAttempts' => 'rate limit max attempts',
+            'rateLimitWindowSeconds' => 'rate limit window',
+            'rateLimitBlockSeconds' => 'rate limit block',
+        ];
+        foreach ($rateLimitFields as $field => $label) {
+            if (isset($_POST[$field])) {
+                $validation = InputValidator::validatePositiveInteger($_POST[$field], 1);
+                if ($validation['valid']) { $settings[$field] = $validation['value']; }
+                else { $errors[] = "Invalid $label: " . $validation['error']; }
+            }
+        }
+
+        // Network timeouts
+        if (isset($_POST['httpTransportTimeoutSeconds'])) {
+            $validation = InputValidator::validateIntRange($_POST['httpTransportTimeoutSeconds'], 5, 120, 'HTTP timeout');
+            if ($validation['valid']) { $settings['httpTransportTimeoutSeconds'] = $validation['value']; }
+            else { $errors[] = 'Invalid HTTP timeout: ' . $validation['error']; }
+        }
+        if (isset($_POST['torTransportTimeoutSeconds'])) {
+            $validation = InputValidator::validateIntRange($_POST['torTransportTimeoutSeconds'], 10, 300, 'Tor timeout');
+            if ($validation['valid']) { $settings['torTransportTimeoutSeconds'] = $validation['value']; }
+            else { $errors[] = 'Invalid Tor timeout: ' . $validation['error']; }
+        }
+
+        // Display settings
+        if (isset($_POST['displayDateFormat'])) {
+            $validation = InputValidator::validateDateFormat($_POST['displayDateFormat']);
+            if ($validation['valid']) { $settings['displayDateFormat'] = $validation['value']; }
+            else { $errors[] = 'Invalid date format: ' . $validation['error']; }
+        }
+        if (isset($_POST['displayCurrencyDecimals'])) {
+            $validation = InputValidator::validateIntRange($_POST['displayCurrencyDecimals'], 0, 8, 'Currency decimals');
+            if ($validation['valid']) { $settings['displayCurrencyDecimals'] = $validation['value']; }
+            else { $errors[] = 'Invalid currency decimals: ' . $validation['error']; }
+        }
+        if (isset($_POST['displayRecentTransactionsLimit'])) {
+            $validation = InputValidator::validatePositiveInteger($_POST['displayRecentTransactionsLimit'], 1);
+            if ($validation['valid']) { $settings['displayRecentTransactionsLimit'] = $validation['value']; }
+            else { $errors[] = 'Invalid recent transactions limit: ' . $validation['error']; }
+        }
+
         // Check for errors
         if (!empty($errors)) {
             MessageHelper::redirectMessage(implode('; ', $errors), 'error');

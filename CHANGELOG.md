@@ -15,6 +15,7 @@ The project is currently in **ALPHA** status.
 ### Added
 - Add persistent user-configurable settings infrastructure: `UserContext::getConfigurableDefaults()` provides canonical map of all 37 configurable settings with Constants defaults; `Application::migrateDefaultConfig()` adds missing keys to `defaultconfig.json` on boot without overwriting user values; `Wallet.php` uses canonical map instead of hardcoded arrays
 - Add 26 new user-configurable settings covering feature toggles, backup/logging, data retention, rate limiting, network timeouts, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
+- Expose all 26 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
 
 ### Changed
 - Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
