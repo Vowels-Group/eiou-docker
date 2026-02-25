@@ -3284,4 +3284,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     initToggleSwitch('autoRefreshEnabled', 'autoRefreshStatus');
     initToggleSwitch('autoBackupEnabled', 'autoBackupStatus');
+    initToggleSwitch('contactStatusEnabled', 'contactStatusEnabledStatus');
+    initToggleSwitch('contactStatusSyncOnPing', 'contactStatusSyncOnPingStatus');
+    initToggleSwitch('autoChainDropPropose', 'autoChainDropProposeStatus');
+    initToggleSwitch('autoChainDropAccept', 'autoChainDropAcceptStatus');
+    initToggleSwitch('apiEnabled', 'apiEnabledStatus');
+    initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
 });

@@ -168,7 +168,7 @@
                                 <input type="checkbox" id="contactStatusEnabled" name="contactStatusEnabled" value="1" <?php echo $user->getContactStatusEnabled() ? 'checked' : ''; ?>>
                                 <span class="toggle-slider"></span>
                             </label>
-                            <span class="toggle-status <?php echo $user->getContactStatusEnabled() ? 'enabled' : ''; ?>">
+                            <span id="contactStatusEnabledStatus" class="toggle-status <?php echo $user->getContactStatusEnabled() ? 'enabled' : ''; ?>">
                                 <?php echo $user->getContactStatusEnabled() ? 'Enabled' : 'Disabled'; ?>
                             </span>
                         </div>
@@ -184,7 +184,7 @@
                                 <input type="checkbox" id="contactStatusSyncOnPing" name="contactStatusSyncOnPing" value="1" <?php echo $user->getContactStatusSyncOnPing() ? 'checked' : ''; ?>>
                                 <span class="toggle-slider"></span>
                             </label>
-                            <span class="toggle-status <?php echo $user->getContactStatusSyncOnPing() ? 'enabled' : ''; ?>">
+                            <span id="contactStatusSyncOnPingStatus" class="toggle-status <?php echo $user->getContactStatusSyncOnPing() ? 'enabled' : ''; ?>">
                                 <?php echo $user->getContactStatusSyncOnPing() ? 'Enabled' : 'Disabled'; ?>
                             </span>
                         </div>
@@ -200,7 +200,7 @@
                                 <input type="checkbox" id="autoChainDropPropose" name="autoChainDropPropose" value="1" <?php echo $user->getAutoChainDropPropose() ? 'checked' : ''; ?>>
                                 <span class="toggle-slider"></span>
                             </label>
-                            <span class="toggle-status <?php echo $user->getAutoChainDropPropose() ? 'enabled' : ''; ?>">
+                            <span id="autoChainDropProposeStatus" class="toggle-status <?php echo $user->getAutoChainDropPropose() ? 'enabled' : ''; ?>">
                                 <?php echo $user->getAutoChainDropPropose() ? 'Enabled' : 'Disabled'; ?>
                             </span>
                         </div>
@@ -216,7 +216,7 @@
                                 <input type="checkbox" id="autoChainDropAccept" name="autoChainDropAccept" value="1" <?php echo $user->getAutoChainDropAccept() ? 'checked' : ''; ?>>
                                 <span class="toggle-slider"></span>
                             </label>
-                            <span class="toggle-status <?php echo $user->getAutoChainDropAccept() ? 'enabled' : ''; ?>">
+                            <span id="autoChainDropAcceptStatus" class="toggle-status <?php echo $user->getAutoChainDropAccept() ? 'enabled' : ''; ?>">
                                 <?php echo $user->getAutoChainDropAccept() ? 'Enabled' : 'Disabled'; ?>
                             </span>
                         </div>
@@ -232,7 +232,7 @@
                                 <input type="checkbox" id="apiEnabled" name="apiEnabled" value="1" <?php echo $user->getApiEnabled() ? 'checked' : ''; ?>>
                                 <span class="toggle-slider"></span>
                             </label>
-                            <span class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
+                            <span id="apiEnabledStatus" class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
                                 <?php echo $user->getApiEnabled() ? 'Enabled' : 'Disabled'; ?>
                             </span>
                         </div>
@@ -256,7 +256,7 @@
                                 <input type="checkbox" id="rateLimitEnabled" name="rateLimitEnabled" value="1" <?php echo $user->getRateLimitEnabled() ? 'checked' : ''; ?>>
                                 <span class="toggle-slider"></span>
                             </label>
-                            <span class="toggle-status <?php echo $user->getRateLimitEnabled() ? 'enabled' : ''; ?>">
+                            <span id="rateLimitEnabledStatus" class="toggle-status <?php echo $user->getRateLimitEnabled() ? 'enabled' : ''; ?>">
                                 <?php echo $user->getRateLimitEnabled() ? 'Enabled' : 'Disabled'; ?>
                             </span>
                         </div>
