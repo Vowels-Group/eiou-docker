@@ -1027,4 +1027,62 @@ class UserContextTest extends TestCase
         $instance->setUserData(['torTransportTimeoutSeconds' => 500]);
         $this->assertSame(300, $instance->getTorTransportTimeoutSeconds());
     }
+
+    // =========================================================================
+    // DISPLAY GETTERS
+    // =========================================================================
+
+    public function testGetDisplayDateFormatDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $instance->getDisplayDateFormat());
+    }
+
+    public function testGetDisplayDateFormatFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayDateFormat' => 'Y-m-d']);
+        $this->assertSame('Y-m-d', $instance->getDisplayDateFormat());
+    }
+
+    public function testGetDisplayCurrencyDecimalsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::DISPLAY_CURRENCY_DECIMALS, $instance->getDisplayCurrencyDecimals());
+    }
+
+    public function testGetDisplayCurrencyDecimalsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayCurrencyDecimals' => -1]);
+        $this->assertSame(0, $instance->getDisplayCurrencyDecimals());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayCurrencyDecimals' => 10]);
+        $this->assertSame(8, $instance->getDisplayCurrencyDecimals());
+    }
+
+    public function testGetDisplayRecentTransactionsLimitDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT, $instance->getDisplayRecentTransactionsLimit());
+    }
+
+    public function testGetDisplayRecentTransactionsLimitFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayRecentTransactionsLimit' => 10]);
+        $this->assertSame(10, $instance->getDisplayRecentTransactionsLimit());
+    }
+
+    public function testGetDisplayRecentTransactionsLimitMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayRecentTransactionsLimit' => 0]);
+        $this->assertSame(1, $instance->getDisplayRecentTransactionsLimit());
+    }
 }

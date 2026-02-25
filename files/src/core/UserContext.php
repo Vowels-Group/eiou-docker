@@ -726,6 +726,38 @@ class UserContext {
     }
 
     // =========================================================================
+    // DISPLAY GETTERS
+    // =========================================================================
+
+    /**
+     * Get display date format
+     *
+     * @return string
+     */
+    public function getDisplayDateFormat(): string {
+        return (string) ($this->get('displayDateFormat') ?? Constants::DISPLAY_DATE_FORMAT);
+    }
+
+    /**
+     * Get display currency decimals
+     *
+     * @return int
+     */
+    public function getDisplayCurrencyDecimals(): int {
+        $val = (int) ($this->get('displayCurrencyDecimals') ?? Constants::DISPLAY_CURRENCY_DECIMALS);
+        return max(0, min(8, $val));
+    }
+
+    /**
+     * Get display recent transactions limit
+     *
+     * @return int
+     */
+    public function getDisplayRecentTransactionsLimit(): int {
+        return max(1, (int) ($this->get('displayRecentTransactionsLimit') ?? Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT));
+    }
+
+    // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
 
