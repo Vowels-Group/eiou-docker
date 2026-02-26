@@ -548,6 +548,58 @@ eiou pending --json
 
 ---
 
+### p2p
+
+Manage P2P transactions awaiting manual approval. Used when `autoAcceptTransaction` is disabled.
+
+**Syntax:**
+```bash
+eiou p2p [subcommand] [args...]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none/list)* | `eiou p2p` | List all P2P transactions awaiting approval |
+| `candidates` | `eiou p2p candidates <hash>` | Show route candidates for a transaction |
+| `approve` | `eiou p2p approve <hash> [index]` | Approve and send a P2P transaction |
+| `reject` | `eiou p2p reject <hash>` | Reject and cancel a P2P transaction |
+
+**Examples:**
+```bash
+# List pending P2P transactions
+eiou p2p
+eiou p2p --json
+
+# View route candidates for a transaction
+eiou p2p candidates abc123def456
+
+# Approve a single-route P2P (fast mode)
+eiou p2p approve abc123def456
+
+# Approve using a specific candidate route (best-fee mode)
+eiou p2p approve abc123def456 2
+
+# Reject and cancel a P2P transaction
+eiou p2p reject abc123def456
+```
+
+**Output includes:**
+- Transaction hash, amount, currency
+- Route mode (fast or best-fee)
+- Number of route candidates
+- Total cost including relay fees
+
+**Approval behavior:**
+- **Fast mode** (single route): `eiou p2p approve <hash>` sends immediately
+- **Best-fee mode** (multiple candidates): Use `eiou p2p candidates <hash>` to view options, then `eiou p2p approve <hash> <index>` to select a route
+- If multiple candidates exist but no index is provided, an error is returned
+
+**Note:** P2P transactions enter `awaiting_approval` status when `autoAcceptTransaction` is set to `false` in settings. Without these CLI commands (or the GUI/API equivalents), such transactions would remain stuck.
+
+---
+
 ## Transaction Commands
 
 ### send

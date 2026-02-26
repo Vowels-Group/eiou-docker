@@ -18,6 +18,8 @@ The project is currently in **ALPHA** status.
 - Rewrite README.md to focus on the single compose file with comprehensive configuration reference
 
 ### Added
+- Add CLI and API support for P2P approval gate: `eiou p2p` commands (list, candidates, approve, reject) and REST API endpoints (`/api/v1/p2p/*`) allow users to manage P2P transactions awaiting approval when `autoAcceptTransaction` is disabled — previously only the GUI could do this
+- Add `getAwaitingApprovalList()` query to P2pRepository for retrieving originator P2P records in `awaiting_approval` status
 - Add P2P transaction approval gate: configurable toggle (`AUTO_ACCEPT_TRANSACTION`) that pauses P2P transactions at the RP2P response stage so the originator can review route fees before committing; relay nodes always auto-forward regardless of the setting (#663)
 - Add `awaiting_approval` P2P status and `rp2p_amount` column to store total route cost for the approval UI
 - Add approve/reject AJAX endpoints in GUI with fee breakdown (amount, route fee, total cost) and confirmation prompts

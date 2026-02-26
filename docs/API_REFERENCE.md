@@ -270,6 +270,12 @@ print(response.json())
 | `contact_add_failed` | Failed to add contact |
 | `chaindrop_failed` | Chain drop operation failed |
 | `chaindrop_error` | Error during chain drop operation |
+| `p2p_error` | P2P approval operation failed |
+| `candidate_not_found` | Selected route candidate not found |
+| `candidate_mismatch` | Candidate does not belong to this transaction |
+| `candidate_selection_required` | Multiple candidates exist, must specify candidate_id |
+| `not_originator` | Only the transaction originator can approve/reject |
+| `no_route` | No route available for this transaction |
 | `sync_error` | Sync operation failed |
 | `shutdown_error` | Shutdown operation failed |
 | `start_error` | Start operation failed |
@@ -1391,6 +1397,175 @@ Reject a pending chain drop proposal.
     }
 }
 ```
+
+---
+
+## P2P Approval Endpoints
+
+Manage P2P transactions awaiting manual approval. These endpoints are used when `autoAcceptTransaction` is disabled in wallet settings.
+
+### GET /api/v1/p2p
+
+List all P2P transactions awaiting approval.
+
+**Permission:** `wallet:read`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "transactions": [
+            {
+                "hash": "abc123def456",
+                "amount": 1000,
+                "currency": "USD",
+                "destination_address": "http://bob:8080",
+                "my_fee_amount": 10,
+                "rp2p_amount": 1010,
+                "fast": 1,
+                "candidate_count": 0,
+                "created_at": "2026-02-26 10:00:00"
+            }
+        ],
+        "count": 1
+    }
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hash` | string | P2P transaction hash |
+| `amount` | int | Original send amount (minor units) |
+| `currency` | string | Currency code |
+| `destination_address` | string | Recipient address |
+| `my_fee_amount` | int | This node's fee amount |
+| `rp2p_amount` | int\|null | Total cost from RP2P response (null if pending) |
+| `fast` | int | 1 = fast mode, 0 = best-fee mode |
+| `candidate_count` | int | Number of route candidates available |
+| `created_at` | string | Creation timestamp |
+
+---
+
+### GET /api/v1/p2p/candidates/{hash}
+
+Get route candidates for a specific P2P transaction.
+
+**Permission:** `wallet:read`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "hash": "abc123def456",
+        "amount": 1000,
+        "currency": "USD",
+        "fast": 0,
+        "candidates": [
+            {
+                "id": 1,
+                "hash": "abc123def456",
+                "sender_address": "http://relay1:8080",
+                "amount": 1020,
+                "currency": "USD",
+                "fee_amount": 20,
+                "sender_public_key": "...",
+                "sender_signature": "...",
+                "time": 123456,
+                "created_at": "2026-02-26 10:01:00"
+            }
+        ],
+        "rp2p": null
+    }
+}
+```
+
+**Notes:**
+- `candidates` contains best-fee mode route options (ordered by fee, lowest first)
+- `rp2p` contains the single RP2P response for fast mode (null if none)
+- Returns 404 if hash not found or not in `awaiting_approval` status
+
+---
+
+### POST /api/v1/p2p/approve
+
+Approve a P2P transaction and send it via the selected route.
+
+**Permission:** `wallet:send`
+
+**Request Body:**
+
+```json
+{
+    "hash": "abc123def456",
+    "candidate_id": 5
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hash` | string | Yes | P2P transaction hash |
+| `candidate_id` | int | No | ID of the candidate to use (from candidates endpoint) |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "P2P transaction approved and sent",
+        "hash": "abc123def456",
+        "candidate_id": 5
+    }
+}
+```
+
+**Behavior:**
+- With `candidate_id`: Uses the specified candidate route
+- Without `candidate_id` + single route: Auto-selects the available route (fast mode)
+- Without `candidate_id` + multiple candidates: Returns 400 error with code `candidate_selection_required`
+
+---
+
+### POST /api/v1/p2p/reject
+
+Reject a P2P transaction, cancel it, and propagate the cancellation upstream.
+
+**Permission:** `wallet:send`
+
+**Request Body:**
+
+```json
+{
+    "hash": "abc123def456"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hash` | string | Yes | P2P transaction hash |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "P2P transaction rejected and cancelled",
+        "hash": "abc123def456"
+    }
+}
+```
+
+**Notes:**
+- Sets the P2P status to `cancelled`
+- Sends cancel notification to upstream relay nodes
+- Cleans up any remaining route candidates
 
 ---
 

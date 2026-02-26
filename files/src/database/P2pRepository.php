@@ -764,6 +764,33 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Get all P2P records awaiting user approval (originator only)
+     *
+     * Returns P2Ps where this node is the originator (has destination_address set)
+     * and the status is 'awaiting_approval'.
+     *
+     * @return array Array of awaiting approval P2P records
+     */
+    public function getAwaitingApprovalList(): array {
+        $query = "SELECT hash, amount, currency, destination_address, my_fee_amount,
+                         rp2p_amount, fast, created_at
+                  FROM {$this->tableName}
+                  WHERE status = :status
+                    AND destination_address IS NOT NULL
+                  ORDER BY created_at ASC";
+
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':status', Constants::STATUS_AWAITING_APPROVAL, PDO::PARAM_STR);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve awaiting approval P2P list", $e);
+            return [];
+        }
+    }
+
+    /**
      * Delete expired P2P records older than specified days
      *
      * @param int $days Number of days to keep

@@ -1223,4 +1223,75 @@ class P2pRepositoryTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    // =========================================================================
+    // getAwaitingApprovalList() Tests
+    // =========================================================================
+
+    /**
+     * Test getAwaitingApprovalList returns originator records
+     */
+    public function testGetAwaitingApprovalListReturnsOriginatorRecords(): void
+    {
+        $expectedRows = [
+            [
+                'hash' => 'abc123',
+                'amount' => 1000,
+                'currency' => 'USD',
+                'destination_address' => 'http://bob:8080',
+                'my_fee_amount' => 10,
+                'rp2p_amount' => 1010,
+                'fast' => 1,
+                'created_at' => '2026-02-26 10:00:00',
+            ],
+        ];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->callback(function ($query) {
+                return strpos($query, 'status = :status') !== false
+                    && strpos($query, 'destination_address IS NOT NULL') !== false
+                    && strpos($query, 'ORDER BY created_at ASC') !== false;
+            }))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('bindValue')
+            ->with(':status', Constants::STATUS_AWAITING_APPROVAL, PDO::PARAM_STR);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($expectedRows);
+
+        $result = $this->repository->getAwaitingApprovalList();
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('abc123', $result[0]['hash']);
+        $this->assertEquals('http://bob:8080', $result[0]['destination_address']);
+    }
+
+    /**
+     * Test getAwaitingApprovalList returns empty array on failure
+     */
+    public function testGetAwaitingApprovalListReturnsEmptyOnFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willThrowException(new PDOException('Database error'));
+
+        $result = $this->repository->getAwaitingApprovalList();
+
+        $this->assertEmpty($result);
+    }
 }
