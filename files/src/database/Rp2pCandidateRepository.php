@@ -81,6 +81,27 @@ class Rp2pCandidateRepository extends AbstractRepository {
     }
 
     /**
+     * Get a specific candidate by its primary key ID
+     *
+     * @param int $id Candidate ID
+     * @return array|null Candidate record or null
+     */
+    public function getCandidateById(int $id): ?array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE id = :id
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [':id' => $id]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
      * Get the best (lowest amount) candidate for a hash
      *
      * @param string $hash P2P hash

@@ -925,6 +925,27 @@ class Rp2pService implements Rp2pServiceInterface {
 
         $p2p = $this->p2pRepository->getByHash($hash);
 
+        // Manual approval + best-fee mode: present all candidates to the user
+        // instead of auto-selecting the cheapest one.
+        if ($p2p && !empty($p2p['destination_address'])
+            && !$this->currentUser->getAutoAcceptTransaction()
+            && (int) ($p2p['fast'] ?? 1) === 0
+        ) {
+            // Set rp2p_amount to the best (lowest) candidate's amount for summary display
+            $bestAmount = (int) $candidates[0]['amount'];
+            $this->p2pRepository->setRp2pAmount($hash, $bestAmount);
+            $this->p2pRepository->updateStatus($hash, Constants::STATUS_AWAITING_APPROVAL);
+
+            Logger::getInstance()->info("Best-fee candidates awaiting user selection", [
+                'hash' => $hash,
+                'total_candidates' => $totalCandidates,
+                'best_amount' => $bestAmount,
+            ]);
+
+            // Do NOT delete candidates or insert into rp2p — user will choose
+            return;
+        }
+
         // Before forwarding upstream: ensure Phase 1 sent to relayed contacts.
         // Race condition: if a relayed contact's RP2P arrived before all inserted
         // contacts responded, Phase 2 triggers directly (skipping Phase 1).

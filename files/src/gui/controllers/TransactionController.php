@@ -8,6 +8,7 @@ use Eiou\Services\ContactService;
 use Eiou\Services\TransactionService;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
+use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Utils\InputValidator;
@@ -62,6 +63,11 @@ class TransactionController
     private ?P2pServiceInterface $p2pService = null;
 
     /**
+     * @var Rp2pCandidateRepository|null RP2P candidate repository for multi-candidate selection
+     */
+    private ?Rp2pCandidateRepository $rp2pCandidateRepository = null;
+
+    /**
      * Constructor
      *
      * @param Session $session
@@ -92,12 +98,14 @@ class TransactionController
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         P2pTransactionSenderInterface $sender,
-        P2pServiceInterface $p2pService
+        P2pServiceInterface $p2pService,
+        ?Rp2pCandidateRepository $rp2pCandidateRepository = null
     ): void {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->p2pTransactionSender = $sender;
         $this->p2pService = $p2pService;
+        $this->rp2pCandidateRepository = $rp2pCandidateRepository;
     }
 
     /**
@@ -305,7 +313,64 @@ class TransactionController
             return;
         }
 
-        // Get the stored RP2P response to build the request for sendP2pEiou
+        // Check for candidate_id (multi-candidate best-fee mode)
+        $candidateId = isset($_POST['candidate_id']) ? (int) $_POST['candidate_id'] : 0;
+
+        if ($candidateId > 0 && $this->rp2pCandidateRepository !== null) {
+            // Multi-candidate selection: user chose a specific candidate
+            $candidate = $this->rp2pCandidateRepository->getCandidateById($candidateId);
+            if (!$candidate) {
+                echo json_encode(['success' => false, 'error' => 'candidate_not_found', 'message' => 'Selected route candidate not found']);
+                return;
+            }
+
+            // Validate candidate belongs to this hash
+            if ($candidate['hash'] !== $hash) {
+                echo json_encode(['success' => false, 'error' => 'candidate_mismatch', 'message' => 'Candidate does not belong to this transaction']);
+                return;
+            }
+
+            // Build request from candidate data (same format as Rp2pService uses)
+            $request = [
+                'hash' => $candidate['hash'],
+                'time' => $candidate['time'],
+                'amount' => (int) $candidate['amount'],
+                'currency' => $candidate['currency'],
+                'senderPublicKey' => $candidate['sender_public_key'],
+                'senderAddress' => $candidate['sender_address'],
+                'signature' => $candidate['sender_signature'],
+            ];
+
+            // Subtract my_fee_amount (same as selectAndForwardBestRp2p does,
+            // because handleRp2pRequest / sendP2pEiou adds the fee again)
+            $request['amount'] -= (int) ($p2p['my_fee_amount'] ?? 0);
+
+            try {
+                $this->p2pRepository->updateStatus($hash, 'found');
+                $this->p2pTransactionSender->sendP2pEiou($request);
+
+                // Clean up all candidates for this hash
+                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
+
+                Logger::getInstance()->info("P2P transaction approved by user (candidate selected)", [
+                    'hash' => $hash,
+                    'candidate_id' => $candidateId,
+                    'sender_address' => $candidate['sender_address'],
+                ]);
+                echo json_encode(['success' => true]);
+            } catch (\Throwable $e) {
+                Logger::getInstance()->logException($e, [
+                    'controller' => 'TransactionController',
+                    'action' => 'handleApproveP2p',
+                    'hash' => $hash,
+                    'candidate_id' => $candidateId,
+                ]);
+                echo json_encode(['success' => false, 'error' => 'send_failed', 'message' => 'Failed to send transaction']);
+            }
+            return;
+        }
+
+        // Single rp2p path (fast mode / legacy)
         $rp2p = $this->rp2pRepository->getByHash($hash);
         if (!$rp2p) {
             echo json_encode(['success' => false, 'error' => 'rp2p_not_found', 'message' => 'Route response not found']);
@@ -381,6 +446,11 @@ class TransactionController
                 $this->p2pService->sendCancelNotificationForHash($hash);
             }
 
+            // Clean up any remaining candidates (best-fee mode)
+            if ($this->rp2pCandidateRepository !== null) {
+                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
+            }
+
             Logger::getInstance()->info("P2P transaction rejected by user", ['hash' => $hash]);
             echo json_encode(['success' => true]);
         } catch (\Throwable $e) {
@@ -391,6 +461,62 @@ class TransactionController
             ]);
             echo json_encode(['success' => false, 'error' => 'reject_failed', 'message' => 'Failed to reject transaction']);
         }
+    }
+
+    /**
+     * Handle fetching P2P candidates for multi-candidate approval (AJAX)
+     *
+     * @return void
+     */
+    public function handleGetP2pCandidates(): void
+    {
+        header('Content-Type: application/json');
+
+        $this->session->verifyCSRFToken();
+
+        if ($this->p2pRepository === null || $this->rp2pCandidateRepository === null) {
+            echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'Candidate lookup not configured']);
+            return;
+        }
+
+        $hash = Security::sanitizeInput($_POST['hash'] ?? '');
+        if (empty($hash)) {
+            echo json_encode(['success' => false, 'error' => 'missing_hash', 'message' => 'Transaction hash is required']);
+            return;
+        }
+
+        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
+        if (!$p2p) {
+            echo json_encode(['success' => false, 'error' => 'not_found', 'message' => 'Transaction not found or not awaiting approval']);
+            return;
+        }
+
+        if (empty($p2p['destination_address'])) {
+            echo json_encode(['success' => false, 'error' => 'not_originator', 'message' => 'Only the transaction originator can view candidates']);
+            return;
+        }
+
+        $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
+        $baseAmount = (int) $p2p['amount'];
+        $myFeeAmount = (int) ($p2p['my_fee_amount'] ?? 0);
+
+        $result = [];
+        for ($i = 0; $i < count($candidates); $i++) {
+            $c = $candidates[$i];
+            $result[] = [
+                'id' => (int) $c['id'],
+                'amount' => (int) $c['amount'],
+                'fee_amount' => (int) $c['fee_amount'],
+                'sender_address' => $c['sender_address'],
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'base_amount' => $baseAmount,
+            'my_fee_amount' => $myFeeAmount,
+            'candidates' => $result,
+        ]);
     }
 
     /**
@@ -421,6 +547,9 @@ class TransactionController
                 break;
             case 'rejectP2pTransaction':
                 $this->handleRejectP2p();
+                break;
+            case 'getP2pCandidates':
+                $this->handleGetP2pCandidates();
                 break;
         }
     }

@@ -69,6 +69,22 @@
                     <?php endif; ?>
                     <?php if (($ipTx['phase'] ?? '') === 'awaiting_approval'): ?>
                     <div class="tx-approval-actions" style="margin-top: 0.5rem;">
+                        <?php if (!empty($ipTx['candidate_count']) && (int) $ipTx['candidate_count'] > 0): ?>
+                        <!-- Multi-candidate best-fee mode: show candidate list -->
+                        <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
+                            <div>Amount: <?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
+                            <div><strong><?php echo (int) $ipTx['candidate_count']; ?> route(s) found — choose one:</strong></div>
+                        </div>
+                        <div id="p2p-candidates-<?php echo htmlspecialchars($ipTx['txid']); ?>" class="p2p-candidates-list" style="margin-bottom: 0.5rem;">
+                            <div style="color: #6c757d; font-size: 0.8rem;"><i class="fas fa-spinner fa-spin"></i> Loading routes...</div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); rejectP2pTransaction('<?php echo htmlspecialchars($ipTx['txid']); ?>')">
+                                <i class="fas fa-times"></i> Reject All
+                            </button>
+                        </div>
+                        <?php else: ?>
+                        <!-- Single rp2p (fast mode): existing approval UI -->
                         <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
                             <div>Amount: <?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
                             <?php if (!empty($ipTx['rp2p_amount'])): ?>
@@ -84,6 +100,7 @@
                                 <i class="fas fa-times"></i> Reject
                             </button>
                         </div>
+                        <?php endif; ?>
                     </div>
                     <?php endif; ?>
                     <?php if ($isHeld): ?>
@@ -277,32 +294,122 @@
     // Stop auto-refresh when leaving page
     window.addEventListener('beforeunload', window.stopAutoRefresh);
 
-    // P2P Transaction Approval/Rejection
-    function approveP2pTransaction(hash) {
-        if (!confirm('Are you sure you want to approve and send this transaction?')) return;
+    // P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
+    function approveP2pTransaction(hash, candidateId) {
+        var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
+        if (!confirm(msg)) return;
         var csrfToken = document.querySelector('input[name="csrf_token"]');
         if (!csrfToken) { alert('CSRF token not found'); return; }
-        fetch(window.location.pathname, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value)
-        }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.success) { window.location.reload(); }
-            else { alert('Error: ' + (data.message || 'Unknown error')); }
-        }).catch(function() { alert('Network error'); });
+        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        if (candidateId) {
+            body = body + '&candidate_id=' + encodeURIComponent(candidateId);
+        }
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success) { window.location.reload(); }
+                        else { alert('Error: ' + (data.message || 'Unknown error')); }
+                    } catch (e) {
+                        alert('Error parsing response');
+                    }
+                } else {
+                    alert('Network error');
+                }
+            }
+        };
+        xhr.ontimeout = function() { alert('Request timed out'); };
+        xhr.send(body);
     }
 
     function rejectP2pTransaction(hash) {
         if (!confirm('Are you sure you want to reject this transaction?')) return;
         var csrfToken = document.querySelector('input[name="csrf_token"]');
         if (!csrfToken) { alert('CSRF token not found'); return; }
-        fetch(window.location.pathname, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value)
-        }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.success) { window.location.reload(); }
-            else { alert('Error: ' + (data.message || 'Unknown error')); }
-        }).catch(function() { alert('Network error'); });
+        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success) { window.location.reload(); }
+                        else { alert('Error: ' + (data.message || 'Unknown error')); }
+                    } catch (e) {
+                        alert('Error parsing response');
+                    }
+                } else {
+                    alert('Network error');
+                }
+            }
+        };
+        xhr.ontimeout = function() { alert('Request timed out'); };
+        xhr.send(body);
     }
+
+    function loadP2pCandidates(hash, container) {
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { container.innerHTML = '<div style="color: #dc3545;">CSRF token not found</div>'; return; }
+        var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success && data.candidates && data.candidates.length > 0) {
+                            var html = '';
+                            var currency = 'USD';
+                            for (var i = 0; i < data.candidates.length; i++) {
+                                var c = data.candidates[i];
+                                var routeFee = (c.amount - data.base_amount) / 100;
+                                var totalCost = c.amount / 100;
+                                var addr = c.sender_address;
+                                var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
+                                html = html + '<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 0.3rem; font-size: 0.8rem;">';
+                                html = html + '<div style="flex: 1;">';
+                                html = html + '<div style="color: #adb5bd;">Route Fee: <strong style="color: #ffc107;">' + routeFee.toFixed(2) + ' ' + currency + '</strong></div>';
+                                html = html + '<div style="color: #6c757d;">Total: ' + totalCost.toFixed(2) + ' ' + currency + '</div>';
+                                html = html + '<div style="color: #6c757d;" class="monospace" title="' + addr + '">' + shortAddr + '</div>';
+                                html = html + '</div>';
+                                html = html + '<button class="btn btn-success btn-sm" style="margin-left: 0.5rem; white-space: nowrap;" onclick="event.stopPropagation(); approveP2pTransaction(\'' + hash + '\', ' + c.id + ')">';
+                                html = html + '<i class="fas fa-check"></i> Choose</button>';
+                                html = html + '</div>';
+                            }
+                            container.innerHTML = html;
+                        } else {
+                            container.innerHTML = '<div style="color: #6c757d; font-size: 0.8rem;">No candidates available</div>';
+                        }
+                    } catch (e) {
+                        container.innerHTML = '<div style="color: #dc3545; font-size: 0.8rem;">Error loading routes</div>';
+                    }
+                } else {
+                    container.innerHTML = '<div style="color: #dc3545; font-size: 0.8rem;">Failed to load routes</div>';
+                }
+            }
+        };
+        xhr.ontimeout = function() { container.innerHTML = '<div style="color: #dc3545; font-size: 0.8rem;">Request timed out</div>'; };
+        xhr.send(body);
+    }
+
+    // Load candidates for multi-candidate approval on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');
+        for (var i = 0; i < candidateContainers.length; i++) {
+            var el = candidateContainers[i];
+            var hash = el.id.replace('p2p-candidates-', '');
+            loadP2pCandidates(hash, el);
+        }
+    });
 </script>

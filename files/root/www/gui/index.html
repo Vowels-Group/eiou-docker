@@ -43,7 +43,8 @@ $transactionController->setP2pApprovalDependencies(
     $serviceContainer->getP2pRepository(),
     $serviceContainer->getRp2pRepository(),
     $serviceContainer->getSendOperationService(),
-    $serviceContainer->getP2pService()
+    $serviceContainer->getP2pService(),
+    $serviceContainer->getRp2pCandidateRepository()
 );
 $settingsController = new SettingsController($secureSession);
 
