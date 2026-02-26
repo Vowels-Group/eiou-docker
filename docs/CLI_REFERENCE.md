@@ -810,6 +810,14 @@ eiou changesettings [setting] [value]
 | `httpTransportTimeoutSeconds` | HTTP transport timeout (5-120) | `15` |
 | `torTransportTimeoutSeconds` | Tor transport timeout (10-300) | `30` |
 
+**Advanced Settings (Sync):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `syncChunkSize` | Transactions per sync chunk (10-500) | `50` |
+| `syncMaxChunks` | Max sync chunks per cycle (10-1000) | `100` |
+| `heldTxSyncTimeoutSeconds` | Held tx sync timeout in seconds (30-299) | `120` |
+
 **Advanced Settings (Display):**
 
 | Setting | Description | Example Value |

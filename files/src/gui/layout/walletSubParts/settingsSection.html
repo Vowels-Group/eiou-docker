@@ -427,6 +427,36 @@
                     </div>
                 </div>
 
+                <!-- Sync -->
+                <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
+                    <i class="fas fa-sync-alt"></i> Sync
+                </h4>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="syncChunkSize">Sync Chunk Size:</label>
+                        <input type="number" id="syncChunkSize" name="syncChunkSize" value="<?php echo htmlspecialchars($user->getSyncChunkSize()); ?>" min="10" max="500" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Max transactions per sync response (10-500)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="syncMaxChunks">Sync Max Chunks:</label>
+                        <input type="number" id="syncMaxChunks" name="syncMaxChunks" value="<?php echo htmlspecialchars($user->getSyncMaxChunks()); ?>" min="10" max="1000" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Max chunk requests per sync session (10-1000)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="heldTxSyncTimeoutSeconds">Held TX Sync Timeout (seconds):</label>
+                        <input type="number" id="heldTxSyncTimeoutSeconds" name="heldTxSyncTimeoutSeconds" value="<?php echo htmlspecialchars($user->getHeldTxSyncTimeoutSeconds()); ?>" min="30" max="299" step="1" class="default-value">
+                        <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <i class="fas fa-info-circle"></i> Max seconds before stale sync is failed (30-299, must be &lt; P2P expiration)
+                        </small>
+                    </div>
+                </div>
+
                 <!-- Display -->
                 <h4 style="color: #6c757d; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
                     <i class="fas fa-desktop"></i> Display

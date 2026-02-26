@@ -13,10 +13,10 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
-- Add persistent user-configurable settings infrastructure: `UserContext::getConfigurableDefaults()` provides canonical map of all 37 configurable settings with Constants defaults; `Application::migrateDefaultConfig()` adds missing keys to `defaultconfig.json` on boot without overwriting user values; `Wallet.php` uses canonical map instead of hardcoded arrays
-- Add 26 new user-configurable settings covering feature toggles, backup/logging, data retention, rate limiting, network timeouts, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
-- Expose all 26 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
-- Document all 26 new settings in CLI_REFERENCE.md and API_REFERENCE.md
+- Add persistent user-configurable settings infrastructure: `UserContext::getConfigurableDefaults()` provides canonical map of all 40 configurable settings with Constants defaults; `Application::migrateDefaultConfig()` adds missing keys to `defaultconfig.json` on boot without overwriting user values; `Wallet.php` uses canonical map instead of hardcoded arrays
+- Add 29 new user-configurable settings covering feature toggles, backup/logging, data retention, rate limiting, network timeouts, sync tuning, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
+- Expose all 29 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
+- Document all 29 new settings in CLI_REFERENCE.md, API_REFERENCE.md, and GUI_REFERENCE.md
 
 ### Fixed
 - Lower `HELD_TX_SYNC_TIMEOUT_SECONDS` from 600s (10 min) to 120s — must be shorter than `P2P_DEFAULT_EXPIRATION_SECONDS` (300s) since P2P hops expire independently on every relay node

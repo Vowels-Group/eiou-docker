@@ -90,6 +90,11 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertArrayHasKey('httpTransportTimeoutSeconds', $defaults);
         $this->assertArrayHasKey('torTransportTimeoutSeconds', $defaults);
 
+        // Sync
+        $this->assertArrayHasKey('syncChunkSize', $defaults);
+        $this->assertArrayHasKey('syncMaxChunks', $defaults);
+        $this->assertArrayHasKey('heldTxSyncTimeoutSeconds', $defaults);
+
         // Display
         $this->assertArrayHasKey('displayDateFormat', $defaults);
         $this->assertArrayHasKey('displayCurrencyDecimals', $defaults);
@@ -137,18 +142,21 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::RATE_LIMIT_BLOCK_SECONDS, $defaults['rateLimitBlockSeconds']);
         $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $defaults['httpTransportTimeoutSeconds']);
         $this->assertSame(Constants::TOR_TRANSPORT_TIMEOUT_SECONDS, $defaults['torTransportTimeoutSeconds']);
+        $this->assertSame(Constants::SYNC_CHUNK_SIZE, $defaults['syncChunkSize']);
+        $this->assertSame(Constants::SYNC_MAX_CHUNKS, $defaults['syncMaxChunks']);
+        $this->assertSame(Constants::HELD_TX_SYNC_TIMEOUT_SECONDS, $defaults['heldTxSyncTimeoutSeconds']);
         $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $defaults['displayDateFormat']);
         $this->assertSame(Constants::DISPLAY_CURRENCY_DECIMALS, $defaults['displayCurrencyDecimals']);
         $this->assertSame(Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT, $defaults['displayRecentTransactionsLimit']);
     }
 
     /**
-     * Test getConfigurableDefaults total count is 37 (11 original + 26 new)
+     * Test getConfigurableDefaults total count is 40 (11 original + 29 new)
      */
     public function testGetConfigurableDefaultsHasExpectedCount(): void
     {
         $defaults = UserContext::getConfigurableDefaults();
-        $this->assertCount(37, $defaults);
+        $this->assertCount(40, $defaults);
     }
 
     /**
@@ -236,8 +244,8 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $existingConfig['httpTransportTimeoutSeconds']);
         $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $existingConfig['displayDateFormat']);
 
-        // Total should be 37
-        $this->assertCount(37, $existingConfig);
+        // Total should be 40
+        $this->assertCount(40, $existingConfig);
     }
 
     /**

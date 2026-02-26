@@ -1029,6 +1029,88 @@ class UserContextTest extends TestCase
     }
 
     // =========================================================================
+    // SYNC GETTERS
+    // =========================================================================
+
+    public function testGetSyncChunkSizeDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::SYNC_CHUNK_SIZE, $instance->getSyncChunkSize());
+    }
+
+    public function testGetSyncChunkSizeFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncChunkSize' => 100]);
+        $this->assertSame(100, $instance->getSyncChunkSize());
+    }
+
+    public function testGetSyncChunkSizeClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncChunkSize' => 5]);
+        $this->assertSame(10, $instance->getSyncChunkSize());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncChunkSize' => 600]);
+        $this->assertSame(500, $instance->getSyncChunkSize());
+    }
+
+    public function testGetSyncMaxChunksDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::SYNC_MAX_CHUNKS, $instance->getSyncMaxChunks());
+    }
+
+    public function testGetSyncMaxChunksFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncMaxChunks' => 200]);
+        $this->assertSame(200, $instance->getSyncMaxChunks());
+    }
+
+    public function testGetSyncMaxChunksClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncMaxChunks' => 5]);
+        $this->assertSame(10, $instance->getSyncMaxChunks());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncMaxChunks' => 2000]);
+        $this->assertSame(1000, $instance->getSyncMaxChunks());
+    }
+
+    public function testGetHeldTxSyncTimeoutSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::HELD_TX_SYNC_TIMEOUT_SECONDS, $instance->getHeldTxSyncTimeoutSeconds());
+    }
+
+    public function testGetHeldTxSyncTimeoutSecondsFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['heldTxSyncTimeoutSeconds' => 60]);
+        $this->assertSame(60, $instance->getHeldTxSyncTimeoutSeconds());
+    }
+
+    public function testGetHeldTxSyncTimeoutSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['heldTxSyncTimeoutSeconds' => 10]);
+        $this->assertSame(30, $instance->getHeldTxSyncTimeoutSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['heldTxSyncTimeoutSeconds' => 500]);
+        $this->assertSame(Constants::P2P_DEFAULT_EXPIRATION_SECONDS - 1, $instance->getHeldTxSyncTimeoutSeconds());
+    }
+
+    // =========================================================================
     // DISPLAY GETTERS
     // =========================================================================
 

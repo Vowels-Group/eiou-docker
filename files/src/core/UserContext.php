@@ -726,6 +726,41 @@ class UserContext {
     }
 
     // =========================================================================
+    // SYNC GETTERS
+    // =========================================================================
+
+    /**
+     * Get sync chunk size (max transactions per sync response)
+     *
+     * @return int
+     */
+    public function getSyncChunkSize(): int {
+        return max(10, min(500, (int) ($this->get('syncChunkSize') ?? Constants::SYNC_CHUNK_SIZE)));
+    }
+
+    /**
+     * Get sync max chunks (max chunk requests per sync session)
+     *
+     * @return int
+     */
+    public function getSyncMaxChunks(): int {
+        return max(10, min(1000, (int) ($this->get('syncMaxChunks') ?? Constants::SYNC_MAX_CHUNKS)));
+    }
+
+    /**
+     * Get held transaction sync timeout seconds
+     *
+     * Must be less than P2P_DEFAULT_EXPIRATION_SECONDS since P2P hops expire
+     * independently on all relay nodes.
+     *
+     * @return int
+     */
+    public function getHeldTxSyncTimeoutSeconds(): int {
+        $val = (int) ($this->get('heldTxSyncTimeoutSeconds') ?? Constants::HELD_TX_SYNC_TIMEOUT_SECONDS);
+        return max(30, min(Constants::P2P_DEFAULT_EXPIRATION_SECONDS - 1, $val));
+    }
+
+    // =========================================================================
     // DISPLAY GETTERS
     // =========================================================================
 
@@ -816,6 +851,11 @@ class UserContext {
             // Network
             'httpTransportTimeoutSeconds' => Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS,
             'torTransportTimeoutSeconds' => Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
+
+            // Sync
+            'syncChunkSize' => Constants::SYNC_CHUNK_SIZE,
+            'syncMaxChunks' => Constants::SYNC_MAX_CHUNKS,
+            'heldTxSyncTimeoutSeconds' => Constants::HELD_TX_SYNC_TIMEOUT_SECONDS,
 
             // Display
             'displayDateFormat' => Constants::DISPLAY_DATE_FORMAT,

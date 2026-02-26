@@ -252,6 +252,23 @@ class SettingsController
             else { $errors[] = 'Invalid Tor timeout: ' . $validation['error']; }
         }
 
+        // Sync settings
+        if (isset($_POST['syncChunkSize'])) {
+            $validation = InputValidator::validateIntRange($_POST['syncChunkSize'], 10, 500, 'Sync chunk size');
+            if ($validation['valid']) { $settings['syncChunkSize'] = $validation['value']; }
+            else { $errors[] = 'Invalid sync chunk size: ' . $validation['error']; }
+        }
+        if (isset($_POST['syncMaxChunks'])) {
+            $validation = InputValidator::validateIntRange($_POST['syncMaxChunks'], 10, 1000, 'Sync max chunks');
+            if ($validation['valid']) { $settings['syncMaxChunks'] = $validation['value']; }
+            else { $errors[] = 'Invalid sync max chunks: ' . $validation['error']; }
+        }
+        if (isset($_POST['heldTxSyncTimeoutSeconds'])) {
+            $validation = InputValidator::validateIntRange($_POST['heldTxSyncTimeoutSeconds'], 30, 299, 'Held TX sync timeout');
+            if ($validation['valid']) { $settings['heldTxSyncTimeoutSeconds'] = $validation['value']; }
+            else { $errors[] = 'Invalid held TX sync timeout: ' . $validation['error']; }
+        }
+
         // Display settings
         if (isset($_POST['displayDateFormat'])) {
             $validation = InputValidator::validateDateFormat($_POST['displayDateFormat']);

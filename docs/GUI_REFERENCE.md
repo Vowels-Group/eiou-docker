@@ -199,6 +199,9 @@ Handles settings and debug operations.
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
+| `syncChunkSize` | int | Transactions per sync chunk (10-500) |
+| `syncMaxChunks` | int | Max sync chunks per cycle (10-1000) |
+| `heldTxSyncTimeoutSeconds` | int | Held tx sync timeout in seconds (30-299) |
 
 ---
 

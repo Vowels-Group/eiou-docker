@@ -1434,6 +1434,10 @@ class ApiController {
             // Network
             'http_transport_timeout_seconds' => ['key' => 'httpTransportTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [5, 120]],
             'tor_transport_timeout_seconds' => ['key' => 'torTransportTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 300]],
+            // Sync
+            'sync_chunk_size' => ['key' => 'syncChunkSize', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 500]],
+            'sync_max_chunks' => ['key' => 'syncMaxChunks', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 1000]],
+            'held_tx_sync_timeout_seconds' => ['key' => 'heldTxSyncTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [30, 299]],
             // Display
             'display_date_format' => ['key' => 'displayDateFormat', 'validate' => 'validateDateFormat', 'config' => 'defaultconfig.json'],
             'display_currency_decimals' => ['key' => 'displayCurrencyDecimals', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [0, 8]],
