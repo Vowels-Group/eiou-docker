@@ -9,6 +9,7 @@ use Eiou\Core\UserContext;
 use Eiou\Contracts\HeldTransactionServiceInterface;
 use Eiou\Database\HeldTransactionRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
@@ -64,6 +65,11 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
     private TransactionChainRepository $transactionChainRepository;
 
     /**
+     * @var P2pRepository|null P2P repository for checking P2P expiry before resuming held transactions
+     */
+    private ?P2pRepository $p2pRepository;
+
+    /**
      * Constructor
      *
      * @param HeldTransactionRepository $heldRepository Held transaction repository
@@ -71,19 +77,22 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
      * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param UtilityServiceContainer $utilityContainer Utility service container
      * @param UserContext $currentUser Current user data
+     * @param P2pRepository|null $p2pRepository P2P repository for expiry checks
      */
     public function __construct(
         $heldRepository,
         $transactionRepository,
         TransactionChainRepository $transactionChainRepository,
         $utilityContainer,
-        $currentUser
+        $currentUser,
+        ?P2pRepository $p2pRepository = null
     ) {
         $this->heldRepository = $heldRepository;
         $this->transactionRepository = $transactionRepository;
         $this->transactionChainRepository = $transactionChainRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currentUser = $currentUser;
+        $this->p2pRepository = $p2pRepository;
 
         $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
 
@@ -260,6 +269,17 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             foreach ($heldTransactions as $held) {
                 $txid = $held['txid'];
                 $expectedPreviousTxid = $held['expected_previous_txid'] ?? null;
+
+                // For P2P transactions, check if the associated P2P has expired or been cancelled
+                // while the transaction was held. Resuming would create a "zombie" direct leg.
+                if ($this->isP2pExpiredOrCancelled($txid, $held['transaction_type'] ?? 'standard')) {
+                    $this->heldRepository->markAsFailed($txid, 'p2p_expired_or_cancelled');
+                    $result['failed_count']++;
+                    Logger::getInstance()->info("Skipping held P2P transaction - P2P expired/cancelled during sync", [
+                        'txid' => $txid
+                    ]);
+                    continue;
+                }
 
                 // Update the previous_txid to the expected value from the rejection
                 $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
@@ -514,6 +534,50 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
     }
 
     /**
+     * Check if a held P2P transaction's associated P2P request has expired or been cancelled
+     *
+     * When a P2P relay transaction is held during sync, the P2P request itself may expire
+     * or be cancelled by the time sync completes. Resuming such a transaction would create
+     * a "zombie" — a direct transaction leg of a P2P that no longer exists.
+     *
+     * @param string $txid Transaction ID
+     * @param string $transactionType Transaction type from held record ('standard' or 'p2p')
+     * @return bool True if associated P2P is expired/cancelled (should NOT resume)
+     */
+    private function isP2pExpiredOrCancelled(string $txid, string $transactionType): bool {
+        if ($transactionType !== 'p2p' || $this->p2pRepository === null) {
+            return false;
+        }
+
+        try {
+            $transactionData = $this->transactionRepository->getByTxid($txid);
+            if (!$transactionData) {
+                return false;
+            }
+
+            $transaction = is_array($transactionData) && isset($transactionData[0]) ? $transactionData[0] : $transactionData;
+            $p2pHash = $transaction['memo'] ?? null;
+
+            if ($p2pHash === null || $p2pHash === 'standard') {
+                return false;
+            }
+
+            $p2p = $this->p2pRepository->getByHash($p2pHash);
+            if (!$p2p) {
+                return false;
+            }
+
+            return in_array($p2p['status'], [Constants::STATUS_EXPIRED, Constants::STATUS_CANCELLED]);
+        } catch (Exception $e) {
+            Logger::getInstance()->logException($e, [
+                'method' => 'isP2pExpiredOrCancelled',
+                'txid' => $txid
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Event handler for sync completion events (event-driven communication)
      *
      * This method is called via EventDispatcher when SyncEvents::SYNC_COMPLETED is dispatched.
@@ -629,11 +693,24 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 return $result;
             }
 
+            // Timeout stale in_progress records before processing
+            $this->heldRepository->timeoutStaleSyncs();
+
             foreach ($readyTransactions as $held) {
                 $result['processed_count']++;
                 $txid = $held['txid'];
                 $contactPubkeyHash = $held['contact_pubkey_hash'];
                 $expectedPreviousTxid = $held['expected_previous_txid'] ?? null;
+
+                // For P2P transactions, check if the associated P2P has expired or been cancelled
+                if ($this->isP2pExpiredOrCancelled($txid, $held['transaction_type'] ?? 'standard')) {
+                    $this->heldRepository->markAsFailed($txid, 'p2p_expired_or_cancelled');
+                    $result['failed_count']++;
+                    Logger::getInstance()->info("Skipping held P2P transaction - P2P expired/cancelled during sync", [
+                        'txid' => $txid
+                    ]);
+                    continue;
+                }
 
                 // Get contact pubkey from the transaction record
                 $transaction = $this->transactionRepository->getByTxid($txid);

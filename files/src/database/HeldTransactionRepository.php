@@ -467,6 +467,45 @@ class HeldTransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Timeout stale in_progress sync records
+     *
+     * Transitions held transactions stuck in 'in_progress' (or 'not_started') longer than
+     * the timeout to 'failed'. This prevents held transactions from being stuck forever
+     * if sync never completes (e.g., contact goes permanently offline).
+     *
+     * @param int $timeoutSeconds Seconds before an in_progress record is considered stale
+     * @return int Number of records timed out, -1 on error
+     */
+    public function timeoutStaleSyncs(int $timeoutSeconds = Constants::HELD_TX_SYNC_TIMEOUT_SECONDS): int {
+        $cutoffTime = date('Y-m-d H:i:s', time() - $timeoutSeconds);
+
+        $query = "UPDATE {$this->tableName}
+                  SET sync_status = 'failed',
+                      resolved_at = :resolved_at
+                  WHERE sync_status IN ('in_progress', 'not_started')
+                  AND held_at < :cutoff_time";
+
+        $stmt = $this->execute($query, [
+            ':resolved_at' => date('Y-m-d H:i:s'),
+            ':cutoff_time' => $cutoffTime
+        ]);
+
+        if (!$stmt) {
+            return -1;
+        }
+
+        $count = $stmt->rowCount();
+        if ($count > 0) {
+            Logger::getInstance()->warning("Timed out stale in_progress held transactions", [
+                'count' => $count,
+                'timeout_seconds' => $timeoutSeconds
+            ]);
+        }
+
+        return $count;
+    }
+
+    /**
      * Get all held transactions
      *
      * Used for statistics and monitoring.

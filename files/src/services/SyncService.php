@@ -123,6 +123,12 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
     private ?BackupServiceInterface $backupService = null;
 
     /**
+     * @var array Contact pubkey hashes currently being synced (re-entrant guard)
+     * Prevents the same process from running concurrent syncs for the same contact.
+     */
+    private array $activeSyncs = [];
+
+    /**
      * @var TransactionChainRepository Transaction chain repository instance
      */
     private TransactionChainRepository $transactionChainRepository;
@@ -533,6 +539,18 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             'conflicts_resolved' => 0
         ];
 
+        // Re-entrant guard: prevent concurrent syncs for the same contact within this process
+        $contactHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+        if (isset($this->activeSyncs[$contactHash])) {
+            Logger::getInstance()->info("Skipping sync - already in progress for this contact in current process", [
+                'contact' => $contactAddress
+            ]);
+            $result['error'] = 'sync_already_in_progress';
+            return $result;
+        }
+        $this->activeSyncs[$contactHash] = true;
+
+        try { // Re-entrant guard try/finally wrapper
         try {
             // Get our latest known txid with this contact
             $lastKnownTxid = $this->transactionRepository->getPreviousTxid(
@@ -587,242 +605,278 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 }
             }
 
-            // Build and send sync request
-            $syncRequest = $this->messagePayload->buildTransactionSyncRequest(
-                $contactAddress,
-                $contactPublicKey,
-                $lastKnownTxid
-            );
-
-            // Include remaining missing txids so the remote side can check its backups
-            if (!empty($remainingMissingTxids)) {
-                $syncRequest['missingTxids'] = $remainingMissingTxids;
-            }
-
-            output("Requesting transaction chain sync with {$contactAddress}", 'SILENT');
-
-            $syncResponse = json_decode(
-                $this->transportUtility->send($contactAddress, $syncRequest),
-                true
-            );
-
-            if (!$syncResponse || !isset($syncResponse['status'])) {
-                $result['error'] = 'Invalid sync response';
-                EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
-                    'contact_pubkey' => $contactPublicKey,
-                    'contact_address' => $contactAddress,
-                    'error' => 'Invalid sync response',
-                    'error_code' => 'invalid_response'
-                ]);
-                return $result;
-            }
-
-            if ($syncResponse['status'] === Constants::STATUS_REJECTED) {
-                $result['error'] = $syncResponse['reason'] ?? 'Sync rejected';
-                EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
-                    'contact_pubkey' => $contactPublicKey,
-                    'contact_address' => $contactAddress,
-                    'error' => $result['error'],
-                    'error_code' => 'sync_rejected'
-                ]);
-                return $result;
-            }
-
-            if ($syncResponse['status'] !== Constants::STATUS_ACCEPTED || !isset($syncResponse['transactions'])) {
-                $result['error'] = 'Unexpected sync response';
-                EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
-                    'contact_pubkey' => $contactPublicKey,
-                    'contact_address' => $contactAddress,
-                    'error' => 'Unexpected sync response',
-                    'error_code' => 'unexpected_response'
-                ]);
-                return $result;
-            }
-
-            // Process the received transactions
-            $transactions = $syncResponse['transactions'];
+            // Chunked sync: loop to fetch transactions in batches
             $syncedCount = 0;
             $conflictsResolved = 0;
+            $chunkCount = 0;
+            $hasMore = false;
 
-            // Get pubkey hashes for conflict detection
+            // Get pubkey hashes for conflict detection (used across all chunks)
             $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
-            foreach ($transactions as $tx) {
-                // Check if transaction already exists
-                if ($this->transactionRepository->transactionExistsTxid($tx['txid'])) {
-                    continue;
+            do {
+                $chunkCount++;
+
+                // Build and send sync request
+                $syncRequest = $this->messagePayload->buildTransactionSyncRequest(
+                    $contactAddress,
+                    $contactPublicKey,
+                    $lastKnownTxid
+                );
+
+                // Include remaining missing txids so the remote side can check its backups (first chunk only)
+                if ($chunkCount === 1 && !empty($remainingMissingTxids)) {
+                    $syncRequest['missingTxids'] = $remainingMissingTxids;
                 }
 
-                // Check for chain conflict: do we have a different transaction with the same previous_txid?
-                // When both parties create transactions simultaneously, they may reference the same
-                // previous_txid. We resolve this deterministically using lexicographic txid comparison.
-                $remotePreviousTxid = $tx['previous_txid'] ?? null;
-                $localLoserToResign = null;  // Track local transaction that needs re-signing
+                output("Requesting transaction chain sync with {$contactAddress}" . ($chunkCount > 1 ? " (chunk {$chunkCount})" : ""), 'SILENT');
 
-                if ($remotePreviousTxid !== null) {
-                    $localConflict = $this->transactionChainRepository->getLocalTransactionByPreviousTxid(
-                        $remotePreviousTxid,
-                        $userPubkeyHash,
-                        $contactPubkeyHash
-                    );
+                $syncResponse = json_decode(
+                    $this->transportUtility->send($contactAddress, $syncRequest),
+                    true
+                );
 
-                    if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
-                        // Chain conflict detected! Two transactions claim the same previous_txid
-                        $conflictResult = $this->resolveChainConflict($localConflict, $tx);
+                if (!$syncResponse || !isset($syncResponse['status'])) {
+                    $result['error'] = 'Invalid sync response';
+                    EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                        'contact_pubkey' => $contactPublicKey,
+                        'contact_address' => $contactAddress,
+                        'error' => 'Invalid sync response',
+                        'error_code' => 'invalid_response'
+                    ]);
+                    return $result;
+                }
 
-                        if ($conflictResult['resolved']) {
-                            $conflictsResolved++;
+                if ($syncResponse['status'] === Constants::STATUS_REJECTED) {
+                    $result['error'] = $syncResponse['reason'] ?? 'Sync rejected';
+                    EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                        'contact_pubkey' => $contactPublicKey,
+                        'contact_address' => $contactAddress,
+                        'error' => $result['error'],
+                        'error_code' => 'sync_rejected'
+                    ]);
+                    return $result;
+                }
 
-                            // Dispatch chain conflict resolved event
-                            EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_CONFLICT_RESOLVED, [
-                                'contact_pubkey' => $contactPublicKey,
-                                'local_txid' => $localConflict['txid'],
-                                'remote_txid' => $tx['txid'],
-                                'winner' => $conflictResult['winner'],
-                                'previous_txid' => $remotePreviousTxid
-                            ]);
+                if ($syncResponse['status'] !== Constants::STATUS_ACCEPTED || !isset($syncResponse['transactions'])) {
+                    $result['error'] = 'Unexpected sync response';
+                    EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                        'contact_pubkey' => $contactPublicKey,
+                        'contact_address' => $contactAddress,
+                        'error' => 'Unexpected sync response',
+                        'error_code' => 'unexpected_response'
+                    ]);
+                    return $result;
+                }
 
-                            if ($conflictResult['winner'] === 'remote') {
-                                // Remote transaction wins - we need to re-sign our local loser
-                                // First insert the remote winner, then update our local loser
-                                output("Chain conflict: remote wins. Will re-sign local transaction {$localConflict['txid']}", 'SILENT');
-                                $localLoserToResign = $localConflict;  // Save for re-signing after insert
-                            } else {
-                                // Local transaction wins - but we still insert the remote transaction
-                                // Both transactions have valid signatures with their original previous_txid.
-                                // Chain ordering is determined at query time using lexicographic txid comparison.
-                                // The remote sender will need to re-sign their transaction to point to ours,
-                                // but for now we accept it so the transactions are not lost.
-                                output("Chain conflict: local wins. Inserting remote transaction {$tx['txid']} with original previous_txid", 'SILENT');
+                // Process the received transactions
+                $transactions = $syncResponse['transactions'];
+                $lastInsertedTxid = null;
 
-                                Logger::getInstance()->info("Inserting remote transaction that lost chain conflict", [
+                if ($chunkCount > 1) {
+                    $totalRemaining = $syncResponse['totalTransactions'] ?? count($transactions);
+                    Logger::getInstance()->info("Processing sync chunk", [
+                        'chunk' => $chunkCount,
+                        'received' => count($transactions),
+                        'total_remaining' => $totalRemaining,
+                        'contact_address' => $contactAddress
+                    ]);
+                }
+
+                foreach ($transactions as $tx) {
+                    // Check if transaction already exists
+                    if ($this->transactionRepository->transactionExistsTxid($tx['txid'])) {
+                        continue;
+                    }
+
+                    // Check for chain conflict: do we have a different transaction with the same previous_txid?
+                    // When both parties create transactions simultaneously, they may reference the same
+                    // previous_txid. We resolve this deterministically using lexicographic txid comparison.
+                    $remotePreviousTxid = $tx['previous_txid'] ?? null;
+                    $localLoserToResign = null;  // Track local transaction that needs re-signing
+
+                    if ($remotePreviousTxid !== null) {
+                        $localConflict = $this->transactionChainRepository->getLocalTransactionByPreviousTxid(
+                            $remotePreviousTxid,
+                            $userPubkeyHash,
+                            $contactPubkeyHash
+                        );
+
+                        if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
+                            // Chain conflict detected! Two transactions claim the same previous_txid
+                            $conflictResult = $this->resolveChainConflict($localConflict, $tx);
+
+                            if ($conflictResult['resolved']) {
+                                $conflictsResolved++;
+
+                                // Dispatch chain conflict resolved event
+                                EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_CONFLICT_RESOLVED, [
+                                    'contact_pubkey' => $contactPublicKey,
+                                    'local_txid' => $localConflict['txid'],
                                     'remote_txid' => $tx['txid'],
-                                    'local_winner_txid' => $localConflict['txid'],
-                                    'shared_previous_txid' => $remotePreviousTxid,
-                                    'note' => 'Both transactions stored with original previous_txid, ordering by lexicographic txid'
+                                    'winner' => $conflictResult['winner'],
+                                    'previous_txid' => $remotePreviousTxid
                                 ]);
-                                // Don't skip - insert the transaction even though it lost the conflict
+
+                                if ($conflictResult['winner'] === 'remote') {
+                                    // Remote transaction wins - we need to re-sign our local loser
+                                    // First insert the remote winner, then update our local loser
+                                    output("Chain conflict: remote wins. Will re-sign local transaction {$localConflict['txid']}", 'SILENT');
+                                    $localLoserToResign = $localConflict;  // Save for re-signing after insert
+                                } else {
+                                    // Local transaction wins - but we still insert the remote transaction
+                                    // Both transactions have valid signatures with their original previous_txid.
+                                    // Chain ordering is determined at query time using lexicographic txid comparison.
+                                    // The remote sender will need to re-sign their transaction to point to ours,
+                                    // but for now we accept it so the transactions are not lost.
+                                    output("Chain conflict: local wins. Inserting remote transaction {$tx['txid']} with original previous_txid", 'SILENT');
+
+                                    Logger::getInstance()->info("Inserting remote transaction that lost chain conflict", [
+                                        'remote_txid' => $tx['txid'],
+                                        'local_winner_txid' => $localConflict['txid'],
+                                        'shared_previous_txid' => $remotePreviousTxid,
+                                        'note' => 'Both transactions stored with original previous_txid, ordering by lexicographic txid'
+                                    ]);
+                                    // Don't skip - insert the transaction even though it lost the conflict
+                                }
+                            } else {
+                                Logger::getInstance()->warning("Failed to resolve chain conflict", [
+                                    'local_txid' => $localConflict['txid'],
+                                    'remote_txid' => $tx['txid'],
+                                    'previous_txid' => $remotePreviousTxid
+                                ]);
                             }
+                        }
+                    }
+
+                    // Verify transaction signature before inserting
+                    // CRITICAL: Verify with ORIGINAL previous_txid since that's what was signed
+                    // NOTE: For sync recovery, we continue processing even if some transactions fail
+                    // verification. This allows partial recovery of valid transactions while
+                    // logging invalid ones for investigation.
+                    if (!$this->verifyTransactionSignature($tx)) {
+                        // Log the failure with full details for security audit
+                        Logger::getInstance()->warning("Sync: Transaction signature verification failed - skipping", [
+                            'txid' => $tx['txid'] ?? 'unknown',
+                            'sender_address' => $tx['sender_address'] ?? 'unknown',
+                            'sender_public_key_hash' => isset($tx['sender_public_key'])
+                                ? hash(Constants::HASH_ALGORITHM, $tx['sender_public_key'])
+                                : 'unknown',
+                            'receiver_address' => $tx['receiver_address'] ?? 'unknown',
+                            'amount' => $tx['amount'] ?? 'unknown',
+                            'currency' => $tx['currency'] ?? 'unknown',
+                            'has_signature' => !empty($tx['sender_signature']),
+                            'has_nonce' => !empty($tx['signature_nonce']),
+                            'synced_so_far' => $syncedCount,
+                            'contact_address' => $contactAddress
+                        ]);
+
+                        // Track signature failures but continue processing
+                        if (!isset($result['signature_failures'])) {
+                            $result['signature_failures'] = [];
+                        }
+                        $result['signature_failures'][] = [
+                            'txid' => $tx['txid'] ?? 'unknown',
+                            'sender' => $tx['sender_address'] ?? 'unknown'
+                        ];
+
+                        // Circuit breaker: abort sync if too many signature failures
+                        if (count($result['signature_failures']) >= 5) {
+                            Logger::getInstance()->warning("Sync circuit breaker triggered: too many signature failures", [
+                                'failure_count' => count($result['signature_failures']),
+                                'contact_address' => $contactAddress,
+                                'synced_so_far' => $syncedCount
+                            ]);
+                            $result['circuit_breaker'] = true;
+                            break 2; // Abort entire chunked sync
+                        }
+
+                        // CONTINUE processing - skip this transaction but process remaining ones
+                        // This allows partial sync recovery instead of complete failure
+                        continue;
+                    }
+
+                    // Verify recipient signature for accepted/completed transactions
+                    if (!$this->verifyRecipientSignature($tx)) {
+                        Logger::getInstance()->warning("Sync: Recipient signature verification failed - skipping", [
+                            'txid' => $tx['txid'] ?? 'unknown',
+                            'status' => $tx['status'] ?? 'unknown',
+                            'has_recipient_signature' => !empty($tx['recipient_signature'])
+                        ]);
+
+                        if (!isset($result['recipient_signature_failures'])) {
+                            $result['recipient_signature_failures'] = [];
+                        }
+                        $result['recipient_signature_failures'][] = [
+                            'txid' => $tx['txid'] ?? 'unknown',
+                            'status' => $tx['status'] ?? 'unknown'
+                        ];
+
+                        continue;
+                    }
+
+                    // Insert the missing transaction (only reached if signature is valid)
+                    // IMPORTANT: Always insert with ORIGINAL previous_txid to preserve signature validity.
+                    // When there's a chain conflict (two transactions with same previous_txid),
+                    // both are stored with their original values. Chain ordering is handled at query
+                    // time using lexicographic txid comparison - lower txid comes first in the chain.
+                    $insertData = [
+                        'senderAddress' => $tx['sender_address'],
+                        'senderPublicKey' => $tx['sender_public_key'],
+                        'receiverAddress' => $tx['receiver_address'],
+                        'receiverPublicKey' => $tx['receiver_public_key'],
+                        'amount' => $tx['amount'],
+                        'currency' => $tx['currency'],
+                        'txid' => $tx['txid'],
+                        'previousTxid' => $tx['previous_txid'] ?? null,  // Keep original for signature validity
+                        'memo' => $tx['memo'] ?? 'standard',
+                        'description' => $tx['description'] ?? null,
+                        'status' => Constants::STATUS_COMPLETED,
+                        // Include signature data for future verification
+                        'signature' => $tx['sender_signature'] ?? null,
+                        'nonce' => $tx['signature_nonce'] ?? null,
+                        'recipientSignature' => $tx['recipient_signature'] ?? null,
+                        'time' => $tx['time'] ?? null
+                    ];
+
+                    // Determine type based on sender
+                    $userAddresses = $this->currentUser->getUserAddresses();
+                    $type = in_array($tx['sender_address'], $userAddresses) ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED;
+
+                    $this->transactionRepository->insertTransaction($insertData, $type);
+                    $syncedCount++;
+                    $lastInsertedTxid = $tx['txid'];
+
+                    // If remote won a chain conflict, re-sign our local loser to point to the winner
+                    if ($localLoserToResign !== null) {
+                        $resigned = $this->resignLocalTransaction($localLoserToResign, $tx['txid']);
+                        if ($resigned) {
+                            output("Re-signed local transaction {$localLoserToResign['txid']} to chain after {$tx['txid']}", 'SILENT');
                         } else {
-                            Logger::getInstance()->warning("Failed to resolve chain conflict", [
-                                'local_txid' => $localConflict['txid'],
-                                'remote_txid' => $tx['txid'],
-                                'previous_txid' => $remotePreviousTxid
+                            Logger::getInstance()->warning("Failed to re-sign local transaction after conflict resolution", [
+                                'local_txid' => $localLoserToResign['txid'],
+                                'winner_txid' => $tx['txid']
                             ]);
                         }
                     }
                 }
 
-                // Verify transaction signature before inserting
-                // CRITICAL: Verify with ORIGINAL previous_txid since that's what was signed
-                // NOTE: For sync recovery, we continue processing even if some transactions fail
-                // verification. This allows partial recovery of valid transactions while
-                // logging invalid ones for investigation.
-                if (!$this->verifyTransactionSignature($tx)) {
-                    // Log the failure with full details for security audit
-                    Logger::getInstance()->warning("Sync: Transaction signature verification failed - skipping", [
-                        'txid' => $tx['txid'] ?? 'unknown',
-                        'sender_address' => $tx['sender_address'] ?? 'unknown',
-                        'sender_public_key_hash' => isset($tx['sender_public_key'])
-                            ? hash(Constants::HASH_ALGORITHM, $tx['sender_public_key'])
-                            : 'unknown',
-                        'receiver_address' => $tx['receiver_address'] ?? 'unknown',
-                        'amount' => $tx['amount'] ?? 'unknown',
-                        'currency' => $tx['currency'] ?? 'unknown',
-                        'has_signature' => !empty($tx['sender_signature']),
-                        'has_nonce' => !empty($tx['signature_nonce']),
-                        'synced_so_far' => $syncedCount,
-                        'contact_address' => $contactAddress
-                    ]);
-
-                    // Track signature failures but continue processing
-                    if (!isset($result['signature_failures'])) {
-                        $result['signature_failures'] = [];
-                    }
-                    $result['signature_failures'][] = [
-                        'txid' => $tx['txid'] ?? 'unknown',
-                        'sender' => $tx['sender_address'] ?? 'unknown'
-                    ];
-
-                    // Circuit breaker: abort sync if too many signature failures
-                    if (count($result['signature_failures']) >= 5) {
-                        Logger::getInstance()->warning("Sync circuit breaker triggered: too many signature failures", [
-                            'failure_count' => count($result['signature_failures']),
-                            'contact_address' => $contactAddress,
-                            'synced_so_far' => $syncedCount
-                        ]);
-                        $result['circuit_breaker'] = true;
-                        break; // Abort sync processing
-                    }
-
-                    // CONTINUE processing - skip this transaction but process remaining ones
-                    // This allows partial sync recovery instead of complete failure
-                    continue;
+                // Advance cursor for next chunk request
+                if ($lastInsertedTxid !== null) {
+                    $lastKnownTxid = $lastInsertedTxid;
                 }
 
-                // Verify recipient signature for accepted/completed transactions
-                if (!$this->verifyRecipientSignature($tx)) {
-                    Logger::getInstance()->warning("Sync: Recipient signature verification failed - skipping", [
-                        'txid' => $tx['txid'] ?? 'unknown',
-                        'status' => $tx['status'] ?? 'unknown',
-                        'has_recipient_signature' => !empty($tx['recipient_signature'])
-                    ]);
+                $hasMore = $syncResponse['hasMore'] ?? false;
 
-                    if (!isset($result['recipient_signature_failures'])) {
-                        $result['recipient_signature_failures'] = [];
-                    }
-                    $result['recipient_signature_failures'][] = [
-                        'txid' => $tx['txid'] ?? 'unknown',
-                        'status' => $tx['status'] ?? 'unknown'
-                    ];
+            } while ($hasMore && $chunkCount < Constants::SYNC_MAX_CHUNKS);
 
-                    continue;
-                }
-
-                // Insert the missing transaction (only reached if signature is valid)
-                // IMPORTANT: Always insert with ORIGINAL previous_txid to preserve signature validity.
-                // When there's a chain conflict (two transactions with same previous_txid),
-                // both are stored with their original values. Chain ordering is handled at query
-                // time using lexicographic txid comparison - lower txid comes first in the chain.
-                $insertData = [
-                    'senderAddress' => $tx['sender_address'],
-                    'senderPublicKey' => $tx['sender_public_key'],
-                    'receiverAddress' => $tx['receiver_address'],
-                    'receiverPublicKey' => $tx['receiver_public_key'],
-                    'amount' => $tx['amount'],
-                    'currency' => $tx['currency'],
-                    'txid' => $tx['txid'],
-                    'previousTxid' => $tx['previous_txid'] ?? null,  // Keep original for signature validity
-                    'memo' => $tx['memo'] ?? 'standard',
-                    'description' => $tx['description'] ?? null,
-                    'status' => Constants::STATUS_COMPLETED,
-                    // Include signature data for future verification
-                    'signature' => $tx['sender_signature'] ?? null,
-                    'nonce' => $tx['signature_nonce'] ?? null,
-                    'recipientSignature' => $tx['recipient_signature'] ?? null,
-                    'time' => $tx['time'] ?? null
-                ];
-
-                // Determine type based on sender
-                $userAddresses = $this->currentUser->getUserAddresses();
-                $type = in_array($tx['sender_address'], $userAddresses) ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED;
-
-                $this->transactionRepository->insertTransaction($insertData, $type);
-                $syncedCount++;
-
-                // If remote won a chain conflict, re-sign our local loser to point to the winner
-                if ($localLoserToResign !== null) {
-                    $resigned = $this->resignLocalTransaction($localLoserToResign, $tx['txid']);
-                    if ($resigned) {
-                        output("Re-signed local transaction {$localLoserToResign['txid']} to chain after {$tx['txid']}", 'SILENT');
-                    } else {
-                        Logger::getInstance()->warning("Failed to re-sign local transaction after conflict resolution", [
-                            'local_txid' => $localLoserToResign['txid'],
-                            'winner_txid' => $tx['txid']
-                        ]);
-                    }
-                }
+            if ($chunkCount > 1) {
+                Logger::getInstance()->info("Chunked sync completed", [
+                    'chunks' => $chunkCount,
+                    'total_synced' => $syncedCount,
+                    'contact_address' => $contactAddress
+                ]);
             }
 
             $result['success'] = true;
@@ -910,6 +964,10 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         }
 
         return $result;
+        } finally {
+            // Release re-entrant sync guard
+            unset($this->activeSyncs[$contactHash]);
+        }
     }
 
     // =========================================================================
@@ -1249,12 +1307,19 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
             // Reverse to chronological order (oldest first) so requester can insert
             // in correct chain order - each tx references the previous one
+            $totalTransactions = count($filteredTransactions);
             $filteredTransactions = array_reverse($filteredTransactions);
+            $hasMore = $totalTransactions > Constants::SYNC_CHUNK_SIZE;
+            if ($hasMore) {
+                $filteredTransactions = array_slice($filteredTransactions, 0, Constants::SYNC_CHUNK_SIZE);
+            }
 
             echo $this->messagePayload->buildTransactionSyncResponse(
                 $senderAddress,
                 $filteredTransactions,
-                $latestTxid
+                $latestTxid,
+                $hasMore,
+                $totalTransactions
             );
 
         } catch (Exception $e) {

@@ -242,6 +242,23 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             return 'continue';
         }
 
+        // Proactive hold: if sync is in progress for this contact, hold the transaction
+        // instead of sending it (would just get rejected with invalid_previous_txid)
+        $receiverPubkey = $message['receiver_public_key'] ?? null;
+        if ($receiverPubkey !== null && $this->heldTransactionService !== null
+            && $this->heldTransactionService->shouldHoldTransactions($receiverPubkey)) {
+            $holdResult = $this->heldTransactionService->holdTransactionForSync($message, $receiverPubkey);
+            if ($holdResult['held']) {
+                // Set back to pending so recovery doesn't interfere while we wait for sync
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                Logger::getInstance()->info("Proactively held direct transaction during sync", [
+                    'txid' => $txid,
+                    'receiver' => $message['receiver_address'] ?? 'unknown'
+                ]);
+                return 'continue';
+            }
+        }
+
         $payload = $this->transactionPayload->buildStandardFromDatabase($message);
         Logger::getInstance()->info("Sending standard transaction (claimed)", [
             'txid' => $txid,
@@ -308,6 +325,24 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         if (!$this->transactionRecoveryRepository->claimPendingTransaction($txid)) {
             Logger::getInstance()->info("P2P transaction already claimed, skipping", ['txid' => $txid, 'memo' => $memo]);
             return false;
+        }
+
+        // Proactive hold: if sync is in progress for the receiver contact, hold the
+        // transaction instead of sending it (would just get rejected with invalid_previous_txid)
+        $receiverPubkey = $message['receiver_public_key'] ?? null;
+        if ($receiverPubkey !== null && $this->heldTransactionService !== null
+            && $this->heldTransactionService->shouldHoldTransactions($receiverPubkey)) {
+            $holdResult = $this->heldTransactionService->holdTransactionForSync($message, $receiverPubkey);
+            if ($holdResult['held']) {
+                // Set back to pending so recovery doesn't interfere while we wait for sync
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                Logger::getInstance()->info("Proactively held P2P transaction during sync", [
+                    'txid' => $txid,
+                    'memo' => $memo,
+                    'receiver' => $message['receiver_address'] ?? 'unknown'
+                ]);
+                return true;
+            }
         }
 
         $rp2p = $this->rp2pRepository->getByHash($memo);
