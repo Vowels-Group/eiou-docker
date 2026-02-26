@@ -366,6 +366,13 @@ class CliServiceP2pApprovalTest extends TestCase
                 ],
             ]);
 
+        $this->rp2pRepository->expects($this->once())
+            ->method('insertRp2pRequest')
+            ->with($this->callback(function ($request) {
+                return $request['hash'] === 'abc123'
+                    && $request['amount'] === 1020;
+            }));
+
         $this->p2pRepository->expects($this->once())
             ->method('updateStatus')
             ->with('abc123', 'found');
@@ -374,7 +381,7 @@ class CliServiceP2pApprovalTest extends TestCase
             ->method('sendP2pEiou')
             ->with($this->callback(function ($request) {
                 return $request['hash'] === 'abc123'
-                    && $request['amount'] === 1010  // 1020 - 10 (my_fee_amount)
+                    && $request['amount'] === 1020  // candidate amount (fee already included)
                     && $request['senderAddress'] === 'http://relay1:8080';
             }));
 

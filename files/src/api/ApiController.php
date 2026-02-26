@@ -2263,8 +2263,8 @@ class ApiController {
                     'signature' => $candidate['sender_signature'],
                 ];
 
-                $request['amount'] -= (int) ($p2p['my_fee_amount'] ?? 0);
-
+                $rp2pRepo = $this->services->getRp2pRepository();
+                $rp2pRepo->insertRp2pRequest($request);
                 $p2pRepo->updateStatus($hash, 'found');
                 $sendService->sendP2pEiou($request);
                 $rp2pCandidateRepo->deleteCandidatesByHash($hash);
@@ -2300,8 +2300,8 @@ class ApiController {
                     'signature' => $candidate['sender_signature'],
                 ];
 
-                $request['amount'] -= (int) ($p2p['my_fee_amount'] ?? 0);
-
+                $rp2pRepo = $this->services->getRp2pRepository();
+                $rp2pRepo->insertRp2pRequest($request);
                 $p2pRepo->updateStatus($hash, 'found');
                 $sendService->sendP2pEiou($request);
                 $rp2pCandidateRepo->deleteCandidatesByHash($hash);

@@ -341,11 +341,12 @@ class TransactionController
                 'signature' => $candidate['sender_signature'],
             ];
 
-            // Subtract my_fee_amount (same as selectAndForwardBestRp2p does,
-            // because handleRp2pRequest / sendP2pEiou adds the fee again)
-            $request['amount'] -= (int) ($p2p['my_fee_amount'] ?? 0);
+            // Candidate amount already includes the originator's fee from handleRp2pCandidate.
+            // Insert the rp2p record (required by daemon's processOutgoingP2p for the 'time' field)
+            // then call sendP2pEiou — mirrors what handleRp2pRequest does in the auto-accept path.
 
             try {
+                $this->rp2pRepository->insertRp2pRequest($request);
                 $this->p2pRepository->updateStatus($hash, 'found');
                 $this->p2pTransactionSender->sendP2pEiou($request);
 

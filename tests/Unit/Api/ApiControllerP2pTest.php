@@ -263,6 +263,13 @@ class ApiControllerP2pTest extends TestCase
                 'sender_signature' => 'sig1',
             ]);
 
+        $this->mockRp2pRepo->expects($this->once())
+            ->method('insertRp2pRequest')
+            ->with($this->callback(function ($request) {
+                return $request['hash'] === 'abc123'
+                    && $request['amount'] === 1020;
+            }));
+
         $this->mockP2pRepo->expects($this->once())
             ->method('updateStatus')
             ->with('abc123', 'found');
@@ -271,7 +278,7 @@ class ApiControllerP2pTest extends TestCase
             ->method('sendP2pEiou')
             ->with($this->callback(function ($request) {
                 return $request['hash'] === 'abc123'
-                    && $request['amount'] === 1010;  // 1020 - 10
+                    && $request['amount'] === 1020;  // candidate amount (fee already included)
             }));
 
         $this->mockRp2pCandidateRepo->expects($this->once())

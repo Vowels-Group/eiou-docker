@@ -12,6 +12,10 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Fix P2P approval gate firing on every fast-mode RP2P response instead of only in best-fee mode — the gate now correctly waits for all routes to accumulate in best-fee mode before presenting choices, and fast mode always auto-sends immediately
+- Fix approved P2P transactions failing to send (daemon crash: "Required field 'time' is missing") — the rp2p record was not inserted before calling sendP2pEiou in the GUI/CLI/API approval flows, causing processOutgoingP2p to crash when looking up the route data
+
 ### Changed
 - Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
 - Archive old multi-node compose files to `tests/old/compose-files/`

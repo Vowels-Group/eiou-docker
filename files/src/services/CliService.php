@@ -2584,10 +2584,11 @@ extendedKeyUsage = serverAuth
                 'signature' => $candidate['sender_signature'],
             ];
 
-            // Subtract my_fee_amount (sendP2pEiou adds it again)
-            $request['amount'] -= (int) ($p2p['my_fee_amount'] ?? 0);
+            // Candidate amount already includes the originator's fee from handleRp2pCandidate.
+            // Insert rp2p record (required by daemon's processOutgoingP2p for the 'time' field).
 
             try {
+                $this->rp2pRepository->insertRp2pRequest($request);
                 $this->p2pRepository->updateStatus($hash, 'found');
                 $this->p2pTransactionSender->sendP2pEiou($request);
                 $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
@@ -2629,9 +2630,8 @@ extendedKeyUsage = serverAuth
                 'signature' => $candidate['sender_signature'],
             ];
 
-            $request['amount'] -= (int) ($p2p['my_fee_amount'] ?? 0);
-
             try {
+                $this->rp2pRepository->insertRp2pRequest($request);
                 $this->p2pRepository->updateStatus($hash, 'found');
                 $this->p2pTransactionSender->sendP2pEiou($request);
                 $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
