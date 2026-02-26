@@ -21,6 +21,7 @@ The project is currently in **ALPHA** status.
 ### Changed
 - Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
 - Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
+- Group DatabaseSchema tables into 6 logical sections (Contacts & Network, Transactions & Chain Integrity, P2P Routing, Message Delivery, API, System & Security) with header comments; update matching order in DatabaseSetup and DatabaseSchemaTest
 - Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
 - Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
 - Archive old multi-node compose files to `tests/old/compose-files/`
@@ -40,6 +41,8 @@ The project is currently in **ALPHA** status.
 - **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
 
 ### Fixed
+- Fix GUI "Prior Contact" badge showing on every pending contact request: the history check included the contact request transaction itself (`tx_type='contact'`), causing false positives; now only flags contacts with real (standard/p2p) transaction history
+- Fix missing dual-signature on contact transactions after wallet wipe + re-add: the "already exists" and "updated" response paths now include the original contact TX's txid and recipient signature, and the sender syncs the original TX instead of creating a divergent one
 - Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets
 - Fix all GUI POST actions (ping, send, chain drop, settings) returning 403: global CSRF check added in PR #644 consumed (rotated) the token before controllers could validate it, causing every authenticated POST to fail with "CSRF token validation failed"
 - Fix Tor hidden service GUI inaccessible: HTTP→HTTPS redirect (from PR #644) blocked .onion access because port 443 is not mapped through the hidden service; skip HTTPS redirect for .onion hosts since Tor already provides end-to-end encryption
