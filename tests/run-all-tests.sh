@@ -376,6 +376,7 @@ apiEndpointsTest
 securityTestSuite
 apiInputValidationTest
 syncTestSuite
+chunkedSyncTest
 chainDropTestSuite
 gracefulShutdownTest
 sigTermTest
@@ -444,6 +445,7 @@ addContactsTest
 sendMessageTest
 pingTestSuite
 syncTestSuite
+chunkedSyncTest
 chainDropTestSuite
 "
 
