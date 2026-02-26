@@ -62,6 +62,7 @@
                     <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
                     <div class="tx-in-progress-details" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
+                        <div><i class="fas fa-coins"></i> Amount: <strong><?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
                         <?php if (!empty($ipTx['fee_amount'])): ?>
                         <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
@@ -72,7 +73,6 @@
                         <?php if (!empty($ipTx['candidate_count']) && (int) $ipTx['candidate_count'] > 0): ?>
                         <!-- Multi-candidate best-fee mode: show candidate list -->
                         <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
-                            <div>Amount: <?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
                             <div><strong><?php echo (int) $ipTx['candidate_count']; ?> route(s) found — choose one:</strong></div>
                         </div>
                         <div id="p2p-candidates-<?php echo htmlspecialchars($ipTx['txid']); ?>" class="p2p-candidates-list" style="margin-bottom: 0.5rem;">
@@ -85,13 +85,12 @@
                         </div>
                         <?php else: ?>
                         <!-- Single rp2p (fast mode): existing approval UI -->
+                        <?php if (!empty($ipTx['rp2p_amount'])): ?>
                         <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
-                            <div>Amount: <?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
-                            <?php if (!empty($ipTx['rp2p_amount'])): ?>
                             <div>Route Fee: <?php echo number_format(($ipTx['rp2p_amount'] - $ipTx['amount']) / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
                             <div><strong>Total Cost: <?php echo number_format($ipTx['rp2p_amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
-                            <?php endif; ?>
                         </div>
+                        <?php endif; ?>
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); approveP2pTransaction('<?php echo htmlspecialchars($ipTx['txid']); ?>')">
                                 <i class="fas fa-check"></i> Approve &amp; Send
@@ -109,9 +108,11 @@
                     </div>
                     <?php endif; ?>
                 </div>
+                <?php if (($ipTx['phase'] ?? '') !== 'awaiting_approval'): ?>
                 <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
                     <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
                 </div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
         </div>
