@@ -540,6 +540,12 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
      * or be cancelled by the time sync completes. Resuming such a transaction would create
      * a "zombie" — a direct transaction leg of a P2P that no longer exists.
      *
+     * Checks both the P2P status AND the actual expiration timestamp, because the cleanup
+     * cycle may not have updated the status to 'expired' yet even though the P2P's
+     * expiration time has passed. On relay nodes, every other hop in the P2P chain has
+     * its own independent expiration — setting a local transaction back to pending does
+     * NOT extend the P2P lifetime on other nodes.
+     *
      * @param string $txid Transaction ID
      * @param string $transactionType Transaction type from held record ('standard' or 'p2p')
      * @return bool True if associated P2P is expired/cancelled (should NOT resume)
@@ -567,7 +573,28 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 return false;
             }
 
-            return in_array($p2p['status'], [Constants::STATUS_EXPIRED, Constants::STATUS_CANCELLED]);
+            // Check status first (already marked expired/cancelled by cleanup)
+            if (in_array($p2p['status'], [Constants::STATUS_EXPIRED, Constants::STATUS_CANCELLED])) {
+                return true;
+            }
+
+            // Check actual expiration timestamp — the P2P may have passed its expiration
+            // time but the cleanup cycle hasn't run yet to update the status. On relay
+            // nodes, every other hop has already expired independently.
+            $expiration = (int) ($p2p['expiration'] ?? 0);
+            if ($expiration > 0) {
+                $currentMicrotime = (int)(microtime(true) * Constants::TIME_MICROSECONDS_TO_INT);
+                if ($currentMicrotime > $expiration) {
+                    Logger::getInstance()->info("P2P expiration timestamp passed, treating as expired", [
+                        'txid' => $txid,
+                        'p2p_hash' => $p2pHash,
+                        'p2p_status' => $p2p['status'] ?? 'unknown'
+                    ]);
+                    return true;
+                }
+            }
+
+            return false;
         } catch (Exception $e) {
             Logger::getInstance()->logException($e, [
                 'method' => 'isP2pExpiredOrCancelled',

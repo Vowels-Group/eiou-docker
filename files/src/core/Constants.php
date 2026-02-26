@@ -309,7 +309,7 @@ class Constants {
     const DLQ_BATCH_SIZE = 50;                     // Max dead letter queue items fetched per query (default: 50)
     const HELD_TX_BATCH_SIZE = 10;                 // Max held transactions processed per cycle (default: 10)
     const HELD_TX_EXHAUSTED_BATCH_SIZE = 10;       // Max exhausted held transactions fetched per cycle (default: 10)
-    const HELD_TX_SYNC_TIMEOUT_SECONDS = 600;      // Max seconds a sync can be in_progress before considered stale (default: 10 min)
+    const HELD_TX_SYNC_TIMEOUT_SECONDS = 120;      // Max seconds a sync can be in_progress before considered stale (must be < P2P_DEFAULT_EXPIRATION_SECONDS since P2P hops expire on all relay nodes independently)
 
     // Display/Query limits
     const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 5;   // Max recent transactions shown in lists (default: 5)
