@@ -178,9 +178,10 @@ class Session
      * Validate CSRF token
      *
      * @param string $token
+     * @param bool $rotate Whether to rotate (invalidate) the token after validation
      * @return bool
      */
-    public function validateCSRFToken(string $token): bool
+    public function validateCSRFToken(string $token, bool $rotate = true): bool
     {
         // Check if token exists
         if (!isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time'])) {
@@ -197,8 +198,10 @@ class Session
 
         // Validate token using constant-time comparison
         if (hash_equals($_SESSION['csrf_token'], $token)) {
-            // Rotate token after successful validation to prevent reuse
-            unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+            if ($rotate) {
+                // Rotate token after successful validation to prevent reuse
+                unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+            }
             return true;
         }
 
@@ -208,15 +211,16 @@ class Session
     /**
      * Verify CSRF token for POST requests
      *
+     * @param bool $rotate Whether to rotate the token after validation (false for AJAX)
      * @return void
      * @throws \Exception
      */
-    public function verifyCSRFToken(): void
+    public function verifyCSRFToken(bool $rotate = true): void
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $token = $_POST['csrf_token'] ?? '';
 
-            if (!$this->validateCSRFToken($token)) {
+            if (!$this->validateCSRFToken($token, $rotate)) {
                 // CSRF token validation failed
                 http_response_code(ErrorCodes::HTTP_FORBIDDEN);
                 die('CSRF token validation failed. Please refresh the page and try again.');

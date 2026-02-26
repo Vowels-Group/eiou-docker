@@ -288,7 +288,7 @@ class TransactionController
     {
         header('Content-Type: application/json');
 
-        $this->session->verifyCSRFToken();
+        $this->session->verifyCSRFToken(false);
 
         if ($this->p2pRepository === null || $this->rp2pRepository === null || $this->p2pTransactionSender === null) {
             echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
@@ -413,7 +413,7 @@ class TransactionController
     {
         header('Content-Type: application/json');
 
-        $this->session->verifyCSRFToken();
+        $this->session->verifyCSRFToken(false);
 
         if ($this->p2pRepository === null) {
             echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
@@ -472,7 +472,7 @@ class TransactionController
     {
         header('Content-Type: application/json');
 
-        $this->session->verifyCSRFToken();
+        $this->session->verifyCSRFToken(false);
 
         if ($this->p2pRepository === null || $this->rp2pCandidateRepository === null) {
             echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'Candidate lookup not configured']);

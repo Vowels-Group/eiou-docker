@@ -559,6 +559,13 @@ class Rp2pService implements Rp2pServiceInterface {
      * @return void
      */
     public function handleRp2pCandidate(array $request, array $p2p): void {
+        // Don't accept late-arriving candidates if selection has already been made.
+        // This prevents the candidate count from changing after the user sees the route list.
+        $status = $p2p['status'] ?? '';
+        if (in_array($status, [Constants::STATUS_AWAITING_APPROVAL, 'found', 'paid', 'completed', Constants::STATUS_CANCELLED], true)) {
+            return;
+        }
+
         // Add user's fee to the rp2p amount (same as handleRp2pRequest)
         $feeAmount = $p2p['my_fee_amount'] ?? 0;
         $request['amount'] += $feeAmount;

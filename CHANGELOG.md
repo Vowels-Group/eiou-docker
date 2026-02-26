@@ -37,6 +37,8 @@ The project is currently in **ALPHA** status.
 - **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
 
 ### Fixed
+- Fix P2P approval gate GUI "Network error" when choosing a route: CSRF token was consumed by the candidate-loading AJAX call on page load, making subsequent approve/reject calls fail with 403; AJAX endpoints now use non-rotating CSRF validation
+- Fix P2P route count changing after selection: late-arriving RP2P candidates were still inserted into the database after route selection had completed, causing the displayed route count to increment on page refresh
 - Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets
 - Fix all GUI POST actions (ping, send, chain drop, settings) returning 403: global CSRF check added in PR #644 consumed (rotated) the token before controllers could validate it, causing every authenticated POST to fail with "CSRF token validation failed"
 - Fix Tor hidden service GUI inaccessible: HTTP→HTTPS redirect (from PR #644) blocked .onion access because port 443 is not mapped through the hidden service; skip HTTPS redirect for .onion hosts since Tor already provides end-to-end encryption
