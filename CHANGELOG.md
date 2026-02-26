@@ -18,6 +18,11 @@ The project is currently in **ALPHA** status.
 - Expose all 26 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
 - Document all 26 new settings in CLI_REFERENCE.md and API_REFERENCE.md
 
+### Fixed
+- Lower `HELD_TX_SYNC_TIMEOUT_SECONDS` from 600s (10 min) to 120s — must be shorter than `P2P_DEFAULT_EXPIRATION_SECONDS` (300s) since P2P hops expire independently on every relay node
+- Add P2P expiration timestamp check in `isP2pExpiredOrCancelled` — checks actual expiration time, not just status field (cleanup cycle may lag behind real expiry)
+- Skip proactive hold for P2P transactions with insufficient remaining lifetime — prevents holding transactions that will become zombies because the P2P expires on all other relay nodes before sync can complete
+
 ### Changed
 - Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
 - Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters

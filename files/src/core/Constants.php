@@ -192,6 +192,11 @@ class Constants {
     const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
     const TOR_TRANSPORT_TIMEOUT_SECONDS = 30;  // Max time for one TOR request between nodes
 
+    // Transaction sync chunking
+    // 50 txns * ~3KB = ~150KB per chunk — well within PHP post_max_size and transport timeouts
+    const SYNC_CHUNK_SIZE = 50;          // Max transactions per sync response
+    const SYNC_MAX_CHUNKS = 100;         // Max chunk requests per sync session (safety limit: 5000 txns total)
+
     // Minimum per-hop wait: based on a single HTTP round-trip (send P2P + receive RP2P).
     // Must be at least the transport timeout so a relay never expires before a
     // back-and-forth with its direct contact can complete.
@@ -305,6 +310,7 @@ class Constants {
     const DLQ_BATCH_SIZE = 50;                     // Max dead letter queue items fetched per query (default: 50)
     const HELD_TX_BATCH_SIZE = 10;                 // Max held transactions processed per cycle (default: 10)
     const HELD_TX_EXHAUSTED_BATCH_SIZE = 10;       // Max exhausted held transactions fetched per cycle (default: 10)
+    const HELD_TX_SYNC_TIMEOUT_SECONDS = 120;      // Max seconds a sync can be in_progress before considered stale (must be < P2P_DEFAULT_EXPIRATION_SECONDS since P2P hops expire on all relay nodes independently)
 
     // Display/Query limits
     const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 5;   // Max recent transactions shown in lists (default: 5)

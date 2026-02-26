@@ -144,7 +144,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | **DatabaseLockingServiceTest.php** | 40 | MySQL advisory locks (GET_LOCK/RELEASE_LOCK/IS_FREE_LOCK), lock acquisition/release, timeout handling, lock name sanitization, held locks tracking |
 | **ChainOperationsServiceTest.php** | 16 | Chain integrity verification, previous txid lookup, chain repair coordination, sync service injection, exception handling |
 | **ChainVerificationServiceTest.php** | 16 | Chain verification logic, gap detection, conflict resolution |
-| **HeldTransactionServiceTest.php** | 23 | Transaction hold/resume lifecycle, sync status tracking, previous txid updates, statistics, event handling, chain integrity checks |
+| **HeldTransactionServiceTest.php** | 35 | Transaction hold/resume lifecycle, sync status tracking, previous txid updates, statistics, event handling, chain integrity checks, P2P expiry-aware resume (status + timestamp), sync timeout vs P2P expiration invariant |
 | **TransactionRecoveryServiceTest.php** | 28 | Stuck transaction recovery, manual resolution (retry/cancel/complete), recovery statistics, exception handling |
 | **TransactionValidationServiceTest.php** | 35 | Transaction validation logic, required fields, amount validation |
 | **BackupServiceTest.php** | 22 | formatBytes utility, getNextScheduledBackup date logic, boundary conditions |

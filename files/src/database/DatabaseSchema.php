@@ -5,7 +5,7 @@ namespace Eiou\Database;
 
 // ============================================================================
 // CONTACTS & NETWORK
-// Tables related to contact management, network addresses, and credit limits
+// Tables related to contact management, network addresses, credit limits, and balances
 // ============================================================================
 
 // Contacts table
@@ -69,9 +69,21 @@ function getContactCreditTableSchema() {
     )";
 }
 
+// Balance table - per-contact sent/received totals, joined on pubkey_hash
+function getBalancesTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS balances (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey_hash TEXT NOT NULL,
+        received INT NOT NULL,
+        sent INT NOT NULL,
+        currency VARCHAR(10),
+        INDEX idx_balances_pubkey_hash (pubkey_hash)
+    )";
+}
+
 // ============================================================================
 // TRANSACTIONS & CHAIN INTEGRITY
-// Tables for transaction records, balances, held transactions, and chain repairs
+// Tables for transaction records, held transactions, and chain repairs
 // ============================================================================
 
 // Transactions table
@@ -133,18 +145,6 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_initial_sender (initial_sender_address),
         INDEX idx_transactions_end_recipient (end_recipient_address),
         INDEX idx_transactions_sending_recovery (status, sending_started_at)  /* For finding stuck transactions */
-    )";
-}
-
-// Balance table
-function getBalancesTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS balances (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash TEXT NOT NULL,
-        received INT NOT NULL,
-        sent INT NOT NULL,
-        currency VARCHAR(10),
-        INDEX idx_balances_pubkey_hash (pubkey_hash)
     )";
 }
 

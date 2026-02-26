@@ -775,7 +775,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getTransactionRepository(),
                 $this->getTransactionChainRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getP2pRepository()
             );
         }
         return $this->services['HeldTransactionService'];

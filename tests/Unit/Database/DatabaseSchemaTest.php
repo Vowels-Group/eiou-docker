@@ -18,10 +18,10 @@ require_once $filesRoot . '/src/database/DatabaseSchema.php';
 use function Eiou\Database\getContactsTableSchema;
 use function Eiou\Database\getAddressTableSchema;
 use function Eiou\Database\getContactCreditTableSchema;
+use function Eiou\Database\getBalancesTableSchema;
 
 // Transactions & Chain Integrity
 use function Eiou\Database\getTransactionsTableSchema;
-use function Eiou\Database\getBalancesTableSchema;
 use function Eiou\Database\getHeldTransactionsTableSchema;
 use function Eiou\Database\getChainDropProposalsTableSchema;
 
@@ -50,9 +50,9 @@ use function Eiou\Database\getRateLimitsTableSchema;
 #[CoversFunction('Eiou\Database\getContactsTableSchema')]
 #[CoversFunction('Eiou\Database\getAddressTableSchema')]
 #[CoversFunction('Eiou\Database\getContactCreditTableSchema')]
+#[CoversFunction('Eiou\Database\getBalancesTableSchema')]
 // Transactions & Chain Integrity
 #[CoversFunction('Eiou\Database\getTransactionsTableSchema')]
-#[CoversFunction('Eiou\Database\getBalancesTableSchema')]
 #[CoversFunction('Eiou\Database\getHeldTransactionsTableSchema')]
 #[CoversFunction('Eiou\Database\getChainDropProposalsTableSchema')]
 // P2P Routing
