@@ -76,10 +76,10 @@ function freshInstall(){
                 $dbConn->exec(getContactsTableSchema());
                 $dbConn->exec(getAddressTableSchema());
                 $dbConn->exec(getContactCreditTableSchema());
+                $dbConn->exec(getBalancesTableSchema());
 
                 // Transactions & Chain Integrity
                 $dbConn->exec(getTransactionsTableSchema());
-                $dbConn->exec(getBalancesTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
                 $dbConn->exec(getChainDropProposalsTableSchema());
 
