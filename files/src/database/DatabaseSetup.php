@@ -72,26 +72,37 @@ function freshInstall(){
 
             // Create tables (wrapped in try-catch for better error handling)
             try {
-                $dbConn->exec(getDebugTableSchema());
+                // Contacts & Network
                 $dbConn->exec(getContactsTableSchema());
                 $dbConn->exec(getAddressTableSchema());
+                $dbConn->exec(getContactCreditTableSchema());
                 $dbConn->exec(getBalancesTableSchema());
+
+                // Transactions & Chain Integrity
                 $dbConn->exec(getTransactionsTableSchema());
-                $dbConn->exec(getP2pTableSchema());
-                $dbConn->exec(getRp2pTableSchema());
-                $dbConn->exec(getApiKeysTableSchema());
-                $dbConn->exec(getApiRequestLogTableSchema());
-                $dbConn->exec(getApiNoncesTableSchema());
-                $dbConn->exec(getMessageDeliveryTableSchema());
-                $dbConn->exec(getDeadLetterQueueTableSchema());
-                $dbConn->exec(getDeliveryMetricsTableSchema());
-                $dbConn->exec(getRateLimitsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
                 $dbConn->exec(getChainDropProposalsTableSchema());
+
+                // P2P Routing
+                $dbConn->exec(getP2pTableSchema());
+                $dbConn->exec(getRp2pTableSchema());
                 $dbConn->exec(getRp2pCandidatesTableSchema());
                 $dbConn->exec(getP2pSendersTableSchema());
                 $dbConn->exec(getP2pRelayedContactsTableSchema());
-                $dbConn->exec(getContactCreditTableSchema());
+
+                // Message Delivery
+                $dbConn->exec(getMessageDeliveryTableSchema());
+                $dbConn->exec(getDeadLetterQueueTableSchema());
+                $dbConn->exec(getDeliveryMetricsTableSchema());
+
+                // API
+                $dbConn->exec(getApiKeysTableSchema());
+                $dbConn->exec(getApiRequestLogTableSchema());
+                $dbConn->exec(getApiNoncesTableSchema());
+
+                // System & Security
+                $dbConn->exec(getDebugTableSchema());
+                $dbConn->exec(getRateLimitsTableSchema());
             } catch (PDOException $tableError) {
                 Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()

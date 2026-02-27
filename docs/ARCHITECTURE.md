@@ -1721,6 +1721,24 @@ Incoming Transaction (prev_txid=unknown)
 +---------------------------+
 ```
 
+**P2P-aware lifecycle**: P2P transactions have a fixed expiration timestamp set at
+creation (`P2P_DEFAULT_EXPIRATION_SECONDS = 300`). Every relay node in the P2P chain
+holds an independent copy with the same expiration. Setting a local transaction back
+to "pending" does **not** extend the P2P lifetime on other nodes. Therefore:
+
+- **Proactive hold skips P2P if insufficient lifetime**: Before holding a P2P
+  transaction during sync, `processOutgoingP2p` checks the remaining P2P lifetime.
+  If less than `HELD_TX_SYNC_TIMEOUT_SECONDS` remains, the hold is skipped because
+  the P2P will expire on every other relay node before sync completes.
+- **Resume checks actual expiration timestamp**: `isP2pExpiredOrCancelled` checks
+  both the P2P status field AND the raw expiration timestamp (the cleanup cycle may
+  not have updated the status yet).
+- **Stale sync timeout < P2P expiration**: `HELD_TX_SYNC_TIMEOUT_SECONDS` (120s) is
+  intentionally shorter than `P2P_DEFAULT_EXPIRATION_SECONDS` (300s) so stale syncs
+  are failed before the P2P network-wide expiry window closes.
+- **Standard direct transactions** are the primary beneficiary of hold-and-resume
+  since there are no multi-hop expiration constraints.
+
 ### Receive Flow (Incoming Transaction)
 
 When a node receives a standard direct transaction from a contact, the request passes

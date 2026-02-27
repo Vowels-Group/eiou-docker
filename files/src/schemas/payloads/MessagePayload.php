@@ -304,7 +304,7 @@ class MessagePayload extends BasePayload
      * @param string|null $latestTxid The latest txid in the chain
      * @return string JSON-encoded sync response payload
      */
-    public function buildTransactionSyncResponse(string $address, array $transactions, ?string $latestTxid): string
+    public function buildTransactionSyncResponse(string $address, array $transactions, ?string $latestTxid, bool $hasMore = false, int $totalTransactions = 0): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
@@ -316,6 +316,8 @@ class MessagePayload extends BasePayload
             'transactions' => $transactions,
             'latestTxid' => $latestTxid,
             'transactionCount' => count($transactions),
+            'hasMore' => $hasMore,
+            'totalTransactions' => $totalTransactions,
             'message' => 'Transaction chain sync data provided',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),

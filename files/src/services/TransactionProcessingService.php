@@ -242,6 +242,23 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             return 'continue';
         }
 
+        // Proactive hold: if sync is in progress for this contact, hold the transaction
+        // instead of sending it (would just get rejected with invalid_previous_txid)
+        $receiverPubkey = $message['receiver_public_key'] ?? null;
+        if ($receiverPubkey !== null && $this->heldTransactionService !== null
+            && $this->heldTransactionService->shouldHoldTransactions($receiverPubkey)) {
+            $holdResult = $this->heldTransactionService->holdTransactionForSync($message, $receiverPubkey);
+            if ($holdResult['held']) {
+                // Set back to pending so recovery doesn't interfere while we wait for sync
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                Logger::getInstance()->info("Proactively held direct transaction during sync", [
+                    'txid' => $txid,
+                    'receiver' => $message['receiver_address'] ?? 'unknown'
+                ]);
+                return 'continue';
+            }
+        }
+
         $payload = $this->transactionPayload->buildStandardFromDatabase($message);
         Logger::getInstance()->info("Sending standard transaction (claimed)", [
             'txid' => $txid,
@@ -308,6 +325,48 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         if (!$this->transactionRecoveryRepository->claimPendingTransaction($txid)) {
             Logger::getInstance()->info("P2P transaction already claimed, skipping", ['txid' => $txid, 'memo' => $memo]);
             return false;
+        }
+
+        // Proactive hold: if sync is in progress for the receiver contact, hold the
+        // transaction instead of sending it (would just get rejected with invalid_previous_txid).
+        // For P2P transactions, check remaining P2P lifetime first — every relay node has its
+        // own independent expiration timer, so holding a P2P transaction while sync runs will
+        // likely result in a zombie (the P2P expires on all other hops in the meantime).
+        $receiverPubkey = $message['receiver_public_key'] ?? null;
+        if ($receiverPubkey !== null && $this->heldTransactionService !== null
+            && $this->heldTransactionService->shouldHoldTransactions($receiverPubkey)) {
+            // Check if the P2P has enough remaining lifetime for sync to complete
+            $p2pForHold = $this->p2pRepository->getByHash($memo);
+            $p2pExpiration = (int) ($p2pForHold['expiration'] ?? 0);
+            $currentMicrotime = (int)(microtime(true) * Constants::TIME_MICROSECONDS_TO_INT);
+
+            if ($p2pExpiration > 0 && $currentMicrotime >= $p2pExpiration) {
+                // P2P already expired — don't hold, let it fail naturally
+                Logger::getInstance()->info("Skipping proactive hold for P2P — already expired", [
+                    'txid' => $txid,
+                    'memo' => $memo
+                ]);
+            } else if ($p2pExpiration > 0
+                && ($p2pExpiration - $currentMicrotime) < (Constants::HELD_TX_SYNC_TIMEOUT_SECONDS * Constants::TIME_MICROSECONDS_TO_INT)) {
+                // P2P will expire before sync timeout — don't hold, the P2P would expire
+                // on every other relay node before we could resume
+                Logger::getInstance()->info("Skipping proactive hold for P2P — insufficient remaining lifetime for sync", [
+                    'txid' => $txid,
+                    'memo' => $memo,
+                    'remaining_seconds' => ($p2pExpiration - $currentMicrotime) / Constants::TIME_MICROSECONDS_TO_INT
+                ]);
+            } else {
+                $holdResult = $this->heldTransactionService->holdTransactionForSync($message, $receiverPubkey);
+                if ($holdResult['held']) {
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                    Logger::getInstance()->info("Proactively held P2P transaction during sync", [
+                        'txid' => $txid,
+                        'memo' => $memo,
+                        'receiver' => $message['receiver_address'] ?? 'unknown'
+                    ]);
+                    return true;
+                }
+            }
         }
 
         $rp2p = $this->rp2pRepository->getByHash($memo);

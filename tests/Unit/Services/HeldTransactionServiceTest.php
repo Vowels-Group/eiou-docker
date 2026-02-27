@@ -21,6 +21,7 @@ use Eiou\Services\HeldTransactionService;
 use Eiou\Database\HeldTransactionRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\P2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
@@ -33,6 +34,7 @@ class HeldTransactionServiceTest extends TestCase
     private MockObject|TransactionChainRepository $transactionChainRepository;
     private MockObject|UtilityServiceContainer $utilityContainer;
     private MockObject|UserContext $userContext;
+    private MockObject|P2pRepository $p2pRepository;
     private HeldTransactionService $service;
 
     /**
@@ -43,6 +45,7 @@ class HeldTransactionServiceTest extends TestCase
     private const TEST_TXID = 'abc123def456789012345678901234567890123456789012345678901234abcd';
     private const TEST_PREVIOUS_TXID = 'prev123def456789012345678901234567890123456789012345678901234prev';
     private const TEST_EXPECTED_TXID = 'expected123456789012345678901234567890123456789012345678901234exp';
+    private const TEST_P2P_HASH = 'p2phash123456789012345678901234567890123456789012345678901234p2p';
 
     protected function setUp(): void
     {
@@ -53,6 +56,7 @@ class HeldTransactionServiceTest extends TestCase
         $this->transactionChainRepository = $this->createMock(TransactionChainRepository::class);
         $this->utilityContainer = $this->createMock(UtilityServiceContainer::class);
         $this->userContext = $this->createMock(UserContext::class);
+        $this->p2pRepository = $this->createMock(P2pRepository::class);
 
         // Default UserContext mock behavior
         $this->userContext->method('getPublicKey')
@@ -65,7 +69,8 @@ class HeldTransactionServiceTest extends TestCase
             $this->transactionRepository,
             $this->transactionChainRepository,
             $this->utilityContainer,
-            $this->userContext
+            $this->userContext,
+            $this->p2pRepository
         );
     }
 
@@ -763,5 +768,328 @@ class HeldTransactionServiceTest extends TestCase
 
         $this->assertArrayHasKey('error', $stats);
         $this->assertEquals('Database error', $stats['error']);
+    }
+
+    // =========================================================================
+    // P2P Expiry-Aware Resume Tests
+    // =========================================================================
+
+    /**
+     * Test P2P transaction with expired status is skipped during processHeldTransactionsAfterSync
+     */
+    public function testProcessHeldTransactionsSkipsP2pWithExpiredStatus(): void
+    {
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true]);
+
+        $this->heldRepository->method('getHeldTransactionsForContact')
+            ->with($contactPubkeyHash, Constants::STATUS_COMPLETED)
+            ->willReturn([
+                [
+                    'txid' => self::TEST_TXID,
+                    'transaction_type' => 'p2p',
+                    'expected_previous_txid' => self::TEST_EXPECTED_TXID,
+                    'original_previous_txid' => self::TEST_PREVIOUS_TXID
+                ]
+            ]);
+
+        // Transaction has a P2P memo hash
+        $this->transactionRepository->method('getByTxid')
+            ->with(self::TEST_TXID)
+            ->willReturn([
+                'txid' => self::TEST_TXID,
+                'memo' => self::TEST_P2P_HASH,
+                'receiver_public_key' => self::TEST_CONTACT_PUBKEY
+            ]);
+
+        // P2P is already marked expired
+        $this->p2pRepository->expects($this->once())
+            ->method('getByHash')
+            ->with(self::TEST_P2P_HASH)
+            ->willReturn([
+                'hash' => self::TEST_P2P_HASH,
+                'status' => Constants::STATUS_EXPIRED,
+                'expiration' => 0
+            ]);
+
+        // Should be marked as failed, not resumed
+        $this->heldRepository->expects($this->once())
+            ->method('markAsFailed')
+            ->with(self::TEST_TXID, 'p2p_expired_or_cancelled');
+
+        $this->heldRepository->expects($this->never())
+            ->method('releaseTransaction');
+
+        $result = $this->service->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
+
+        $this->assertEquals(0, $result['resumed_count']);
+        $this->assertEquals(1, $result['failed_count']);
+    }
+
+    /**
+     * Test P2P transaction with cancelled status is skipped during processHeldTransactionsAfterSync
+     */
+    public function testProcessHeldTransactionsSkipsP2pWithCancelledStatus(): void
+    {
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true]);
+
+        $this->heldRepository->method('getHeldTransactionsForContact')
+            ->with($contactPubkeyHash, Constants::STATUS_COMPLETED)
+            ->willReturn([
+                [
+                    'txid' => self::TEST_TXID,
+                    'transaction_type' => 'p2p',
+                    'expected_previous_txid' => self::TEST_EXPECTED_TXID,
+                    'original_previous_txid' => self::TEST_PREVIOUS_TXID
+                ]
+            ]);
+
+        $this->transactionRepository->method('getByTxid')
+            ->with(self::TEST_TXID)
+            ->willReturn([
+                'txid' => self::TEST_TXID,
+                'memo' => self::TEST_P2P_HASH,
+                'receiver_public_key' => self::TEST_CONTACT_PUBKEY
+            ]);
+
+        // P2P is cancelled
+        $this->p2pRepository->expects($this->once())
+            ->method('getByHash')
+            ->with(self::TEST_P2P_HASH)
+            ->willReturn([
+                'hash' => self::TEST_P2P_HASH,
+                'status' => Constants::STATUS_CANCELLED,
+                'expiration' => 0
+            ]);
+
+        $this->heldRepository->expects($this->once())
+            ->method('markAsFailed')
+            ->with(self::TEST_TXID, 'p2p_expired_or_cancelled');
+
+        $result = $this->service->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
+
+        $this->assertEquals(0, $result['resumed_count']);
+        $this->assertEquals(1, $result['failed_count']);
+    }
+
+    /**
+     * Test P2P transaction with passed expiration timestamp (but status not yet updated)
+     * is detected and skipped — the cleanup cycle may not have run yet
+     */
+    public function testProcessHeldTransactionsSkipsP2pWithPassedExpirationTimestamp(): void
+    {
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true]);
+
+        $this->heldRepository->method('getHeldTransactionsForContact')
+            ->with($contactPubkeyHash, Constants::STATUS_COMPLETED)
+            ->willReturn([
+                [
+                    'txid' => self::TEST_TXID,
+                    'transaction_type' => 'p2p',
+                    'expected_previous_txid' => self::TEST_EXPECTED_TXID,
+                    'original_previous_txid' => self::TEST_PREVIOUS_TXID
+                ]
+            ]);
+
+        $this->transactionRepository->method('getByTxid')
+            ->with(self::TEST_TXID)
+            ->willReturn([
+                'txid' => self::TEST_TXID,
+                'memo' => self::TEST_P2P_HASH,
+                'receiver_public_key' => self::TEST_CONTACT_PUBKEY
+            ]);
+
+        // P2P status is still 'queued' (cleanup hasn't run), but expiration timestamp is in the past
+        $pastExpiration = (int)((microtime(true) - 600) * Constants::TIME_MICROSECONDS_TO_INT);
+        $this->p2pRepository->expects($this->once())
+            ->method('getByHash')
+            ->with(self::TEST_P2P_HASH)
+            ->willReturn([
+                'hash' => self::TEST_P2P_HASH,
+                'status' => Constants::STATUS_QUEUED,
+                'expiration' => $pastExpiration
+            ]);
+
+        // Should still be marked as failed due to timestamp check
+        $this->heldRepository->expects($this->once())
+            ->method('markAsFailed')
+            ->with(self::TEST_TXID, 'p2p_expired_or_cancelled');
+
+        $result = $this->service->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
+
+        $this->assertEquals(0, $result['resumed_count']);
+        $this->assertEquals(1, $result['failed_count']);
+    }
+
+    /**
+     * Test P2P transaction with valid (future) expiration is NOT skipped
+     */
+    public function testProcessHeldTransactionsDoesNotSkipP2pWithValidExpiration(): void
+    {
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true]);
+
+        $this->heldRepository->method('getHeldTransactionsForContact')
+            ->with($contactPubkeyHash, Constants::STATUS_COMPLETED)
+            ->willReturn([
+                [
+                    'txid' => self::TEST_TXID,
+                    'transaction_type' => 'p2p',
+                    'expected_previous_txid' => self::TEST_EXPECTED_TXID,
+                    'original_previous_txid' => self::TEST_PREVIOUS_TXID
+                ]
+            ]);
+
+        $this->transactionRepository->method('getByTxid')
+            ->with(self::TEST_TXID)
+            ->willReturn([
+                'txid' => self::TEST_TXID,
+                'memo' => self::TEST_P2P_HASH,
+                'receiver_public_key' => self::TEST_CONTACT_PUBKEY,
+                'previous_txid' => self::TEST_EXPECTED_TXID
+            ]);
+
+        // P2P is active with future expiration — should NOT be skipped
+        $futureExpiration = (int)((microtime(true) + 300) * Constants::TIME_MICROSECONDS_TO_INT);
+        $this->p2pRepository->expects($this->once())
+            ->method('getByHash')
+            ->with(self::TEST_P2P_HASH)
+            ->willReturn([
+                'hash' => self::TEST_P2P_HASH,
+                'status' => Constants::STATUS_QUEUED,
+                'expiration' => $futureExpiration
+            ]);
+
+        // Should NOT be marked as failed for p2p_expired_or_cancelled — proceeds to update previous_txid
+        // It will be called with 'update_previous_txid_failed' since we mock updatePreviousTxid to return false
+        $this->heldRepository->expects($this->once())
+            ->method('markAsFailed')
+            ->with(self::TEST_TXID, 'update_previous_txid_failed');
+
+        // Will attempt to update previous_txid (fails, but the key assertion is
+        // it was NOT failed for p2p_expired_or_cancelled — it got past the P2P check)
+        $this->transactionChainRepository->method('updatePreviousTxid')
+            ->willReturn(false);
+
+        $result = $this->service->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
+
+        // Transaction proceeded past P2P expiry check, failed at updatePreviousTxid instead
+        $this->assertEquals(1, $result['failed_count']);
+    }
+
+    /**
+     * Test standard (non-P2P) transactions are not affected by P2P expiry check
+     */
+    public function testProcessHeldTransactionsDoesNotCheckExpiryForStandardTransactions(): void
+    {
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true]);
+
+        $this->heldRepository->method('getHeldTransactionsForContact')
+            ->with($contactPubkeyHash, Constants::STATUS_COMPLETED)
+            ->willReturn([
+                [
+                    'txid' => self::TEST_TXID,
+                    'transaction_type' => 'standard',
+                    'expected_previous_txid' => self::TEST_EXPECTED_TXID,
+                    'original_previous_txid' => self::TEST_PREVIOUS_TXID
+                ]
+            ]);
+
+        // P2P repository should NOT be consulted for standard transactions
+        $this->p2pRepository->expects($this->never())
+            ->method('getByHash');
+
+        // Will proceed to update previous_txid
+        $this->transactionChainRepository->method('updatePreviousTxid')
+            ->willReturn(false);
+
+        $this->transactionRepository->method('getByTxid')
+            ->willReturn([
+                'txid' => self::TEST_TXID,
+                'memo' => 'standard',
+                'receiver_public_key' => self::TEST_CONTACT_PUBKEY
+            ]);
+
+        $result = $this->service->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
+
+        // Standard transaction was processed (not skipped), failed at updatePreviousTxid
+        $this->assertEquals(1, $result['failed_count']);
+    }
+
+    /**
+     * Test HELD_TX_SYNC_TIMEOUT_SECONDS is less than P2P_DEFAULT_EXPIRATION_SECONDS
+     */
+    public function testSyncTimeoutIsLessThanP2pExpiration(): void
+    {
+        $this->assertLessThan(
+            Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
+            Constants::HELD_TX_SYNC_TIMEOUT_SECONDS,
+            'Sync timeout must be shorter than P2P expiration — P2P hops expire independently on all relay nodes'
+        );
+    }
+
+    /**
+     * Test P2P with no P2pRepository falls through without checking expiry
+     */
+    public function testIsP2pExpiredReturnsFalseWithoutP2pRepository(): void
+    {
+        // Create service WITHOUT P2pRepository
+        $serviceWithoutP2p = new HeldTransactionService(
+            $this->heldRepository,
+            $this->transactionRepository,
+            $this->transactionChainRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            null  // No P2pRepository
+        );
+
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true]);
+
+        $this->heldRepository->method('getHeldTransactionsForContact')
+            ->with($contactPubkeyHash, Constants::STATUS_COMPLETED)
+            ->willReturn([
+                [
+                    'txid' => self::TEST_TXID,
+                    'transaction_type' => 'p2p',
+                    'expected_previous_txid' => self::TEST_EXPECTED_TXID,
+                    'original_previous_txid' => self::TEST_PREVIOUS_TXID
+                ]
+            ]);
+
+        // P2P repository should NOT be consulted since it's null
+        $this->p2pRepository->expects($this->never())
+            ->method('getByHash');
+
+        // Will proceed to update previous_txid (not blocked by P2P check)
+        $this->transactionChainRepository->method('updatePreviousTxid')
+            ->willReturn(false);
+
+        $this->transactionRepository->method('getByTxid')
+            ->willReturn([
+                'txid' => self::TEST_TXID,
+                'memo' => self::TEST_P2P_HASH,
+                'receiver_public_key' => self::TEST_CONTACT_PUBKEY
+            ]);
+
+        $result = $serviceWithoutP2p->processHeldTransactionsAfterSync(self::TEST_CONTACT_PUBKEY);
+
+        // Should not be failed as p2p_expired — falls through to updatePreviousTxid
+        $this->assertEquals(1, $result['failed_count']);
     }
 }
