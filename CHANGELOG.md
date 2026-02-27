@@ -13,6 +13,12 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Fix P2P approval gate missing in fast mode — originator now checks `autoAcceptTransaction` before auto-sending in fast mode, presenting the route for approval when the setting is off; previously only best-fee mode had the approval gate
+- Fix P2P expiration handler bypassing approval gate — `expireMessage()` called `selectAndForwardBestRp2p()` then unconditionally set status to `found`, auto-sending the transaction without user consent; now skips route selection when status is already `awaiting_approval`
+- Fix late-arriving RP2P candidates rejected during `awaiting_approval` — candidates that arrive after route selection was deferred are now accepted and stored so they appear in the user's route list on refresh
+- Fix cancel notifications re-triggering route selection during `awaiting_approval` — cancel count is tracked but `selectAndForwardBestRp2p` is no longer called when the user hasn't yet approved
+- Fix P2P approval gate firing on every fast-mode RP2P response instead of only in best-fee mode — the gate now correctly waits for all routes to accumulate in best-fee mode before presenting choices, and fast mode always auto-sends immediately
+- Fix approved P2P transactions failing to send (daemon crash: "Required field 'time' is missing") — the rp2p record was not inserted before calling sendP2pEiou in the GUI/CLI/API approval flows, causing processOutgoingP2p to crash when looking up the route data
 - Lower `HELD_TX_SYNC_TIMEOUT_SECONDS` from 600s (10 min) to 120s — must be shorter than `P2P_DEFAULT_EXPIRATION_SECONDS` (300s) since P2P hops expire independently on every relay node
 - Add P2P expiration timestamp check in `isP2pExpiredOrCancelled` — checks actual expiration time, not just status field (cleanup cycle may lag behind real expiry)
 - Skip proactive hold for P2P transactions with insufficient remaining lifetime — prevents holding transactions that will become zombies because the P2P expires on all other relay nodes before sync can complete
@@ -25,6 +31,13 @@ The project is currently in **ALPHA** status.
 - Rewrite README.md to focus on the single compose file with comprehensive configuration reference
 
 ### Added
+- Add dynamic route count update in GUI approval view — candidate count header refreshes via AJAX as late-arriving routes are received
+- Add CLI and API support for P2P approval gate: `eiou p2p` commands (list, candidates, approve, reject) and REST API endpoints (`/api/v1/p2p/*`) allow users to manage P2P transactions awaiting approval when `autoAcceptTransaction` is disabled — previously only the GUI could do this
+- Add `getAwaitingApprovalList()` query to P2pRepository for retrieving originator P2P records in `awaiting_approval` status
+- Add P2P transaction approval gate: configurable toggle (`AUTO_ACCEPT_TRANSACTION`) that pauses P2P transactions at the RP2P response stage so the originator can review route fees before committing; relay nodes always auto-forward regardless of the setting (#663)
+- Add `awaiting_approval` P2P status and `rp2p_amount` column to store total route cost for the approval UI
+- Add approve/reject AJAX endpoints in GUI with fee breakdown (amount, route fee, total cost) and confirmation prompts
+- Add `autoAcceptTransaction` to CLI changesettings (item 14), GUI settings toggle, and settings display
 - Show chain gap transaction details in GUI: displays the last valid txid before each gap, the missing txid, and the first valid txid after each gap (with full txid on hover) so users can identify exactly where chain breaks occur
 - Display chain gap count in GUI — badge shows "Chain Gap (N)" when multiple gaps exist, and chain drop section shows "Gap 1 of N" context with multi-gap info text
 - Add `AUTO_CHAIN_DROP_PROPOSE` and `AUTO_CHAIN_DROP_ACCEPT` toggles in Constants.php with env var overrides (`EIOU_AUTO_CHAIN_DROP_PROPOSE`, `EIOU_AUTO_CHAIN_DROP_ACCEPT`)
@@ -38,6 +51,8 @@ The project is currently in **ALPHA** status.
 - **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
 
 ### Fixed
+- Fix P2P approval gate GUI "Network error" when choosing a route: CSRF token was consumed by the candidate-loading AJAX call on page load, making subsequent approve/reject calls fail with 403; AJAX endpoints now use non-rotating CSRF validation
+- Fix P2P route count changing after selection: late-arriving RP2P candidates were still inserted into the database after route selection had completed, causing the displayed route count to increment on page refresh
 - Fix GUI "Prior Contact" badge showing on every pending contact request: the history check included the contact request transaction itself (`tx_type='contact'`), causing false positives; now only flags contacts with real (standard/p2p) transaction history
 - Fix missing dual-signature on contact transactions after wallet wipe + re-add: the "already exists" and "updated" response paths now include the original contact TX's txid and recipient signature, and the sender syncs the original TX instead of creating a divergent one
 - Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets

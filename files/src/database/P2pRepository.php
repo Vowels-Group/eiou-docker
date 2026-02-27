@@ -22,7 +22,7 @@ class P2pRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'hash', 'salt', 'time', 'expiration', 'currency', 'amount',
-        'my_fee_amount', 'destination_address', 'destination_pubkey',
+        'my_fee_amount', 'rp2p_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
         'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
@@ -728,6 +728,66 @@ class P2pRepository extends AbstractRepository {
 
         $stmt = $this->execute($query, [':hash' => $hash]);
         return $stmt !== false;
+    }
+
+    /**
+     * Set the RP2P total amount on a P2P record
+     *
+     * Used when auto-accept is disabled to store the total cost
+     * (including all relay fees) for the approval UI.
+     *
+     * @param string $hash P2P hash
+     * @param int $rp2pAmount Total amount from RP2P response
+     * @return bool Success status
+     */
+    public function setRp2pAmount(string $hash, int $rp2pAmount): bool {
+        $affectedRows = $this->update(['rp2p_amount' => $rp2pAmount], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Get a P2P record that is awaiting approval
+     *
+     * @param string $hash P2P hash
+     * @return array|null P2P data or null if not found or not in awaiting_approval status
+     */
+    public function getAwaitingApproval(string $hash): ?array {
+        $query = "SELECT * FROM {$this->tableName} WHERE hash = :hash AND status = :status";
+        $stmt = $this->execute($query, [':hash' => $hash, ':status' => Constants::STATUS_AWAITING_APPROVAL]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Get all P2P records awaiting user approval (originator only)
+     *
+     * Returns P2Ps where this node is the originator (has destination_address set)
+     * and the status is 'awaiting_approval'.
+     *
+     * @return array Array of awaiting approval P2P records
+     */
+    public function getAwaitingApprovalList(): array {
+        $query = "SELECT hash, amount, currency, destination_address, my_fee_amount,
+                         rp2p_amount, fast, created_at
+                  FROM {$this->tableName}
+                  WHERE status = :status
+                    AND destination_address IS NOT NULL
+                  ORDER BY created_at ASC";
+
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':status', Constants::STATUS_AWAITING_APPROVAL, PDO::PARAM_STR);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve awaiting approval P2P list", $e);
+            return [];
+        }
     }
 
     /**

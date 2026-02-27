@@ -229,6 +229,7 @@ function getP2pTableSchema() {
         currency VARCHAR(10) NOT NULL,
         amount INTEGER NOT NULL,
         my_fee_amount INTEGER,
+        rp2p_amount INTEGER,  /* Total amount from RP2P response (including all relay fees) - set when awaiting_approval */
         destination_address VARCHAR(255), /* only set if you are the original sender */
         destination_pubkey TEXT,
         destination_signature TEXT,
@@ -251,6 +252,7 @@ function getP2pTableSchema() {
             'sending',      /* Claimed by a worker process, prevents duplicate processing */
             'sent',         /* Request has been sent to contacts */
             'found',        /* Contact has been found and being reported back */
+            'awaiting_approval', /* Route found, waiting for user to approve the transaction */
             'paid',         /* Payment has been sent to the next peer */
             'completed',    /* Transaction successfully executed */
             'cancelled',    /* Transaction cancelled or failed */

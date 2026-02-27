@@ -487,6 +487,7 @@ docker exec alice eiou changesettings hostname http://alice
 | `maxOutput` | Maximum lines of output to display | Integer or `all` |
 | `defaultTransportMode` | Default transport type | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Enable auto-refresh for pending transactions | `true`, `false` |
+| `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (derives HTTPS automatically) | URL (e.g., `http://alice`) |
 
 ---

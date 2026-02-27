@@ -17,6 +17,7 @@
  *   viewbalances [contact]     - View balance(s)
  *   history [contact]          - View transaction history
  *   pending                    - View pending contact requests
+ *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
  *   overview [limit]           - View wallet overview dashboard
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
@@ -94,6 +95,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
         'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 chain drop operations per minute
+        'p2p' => ['max' => 30, 'window' => 60, 'block' => 300],       // 30 P2P approval operations per minute
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -225,6 +227,22 @@ elseif($request === "overview"){
   $debugService->output("Executing overview request", 'SILENT');
   $cliService = $app->services->getCliService();
   $cliService->displayOverview($cleanArgv, $output);
+}
+elseif($request === "p2p"){
+  // P2P approval management
+  $debugService->output("Executing P2P approval request", 'SILENT');
+  $cliService = $app->services->getCliService();
+  $subcommand = strtolower($cleanArgv[2] ?? 'list');
+  if ($subcommand === 'candidates') {
+    $cliService->displayP2pCandidates($cleanArgv, $output);
+  } elseif ($subcommand === 'approve') {
+    $cliService->approveP2p($cleanArgv, $output);
+  } elseif ($subcommand === 'reject') {
+    $cliService->rejectP2p($cleanArgv, $output);
+  } else {
+    // Default: list pending P2P transactions
+    $cliService->displayPendingP2p($cleanArgv, $output);
+  }
 }
 // Settings
 elseif($request === "help"){

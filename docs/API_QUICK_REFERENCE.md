@@ -59,6 +59,17 @@ All requests require HMAC-SHA256 authentication:
 | `POST` | `/api/v1/system/shutdown` | `admin` | Shutdown background processors |
 | `POST` | `/api/v1/system/start` | `admin` | Start background processors |
 
+### P2P Approval Endpoints
+
+Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mode lists all routes. Tor destinations use fast mode internally.
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/p2p` | `wallet:read` | List P2P transactions awaiting approval |
+| `GET` | `/api/v1/p2p/candidates/{hash}` | `wallet:read` | Get route candidates for a transaction |
+| `POST` | `/api/v1/p2p/approve` | `wallet:send` | Approve a P2P transaction |
+| `POST` | `/api/v1/p2p/reject` | `wallet:send` | Reject a P2P transaction |
+
 ### Chain Drop Endpoints
 
 | Method | Endpoint | Permission | Description |
@@ -197,6 +208,25 @@ All requests require HMAC-SHA256 authentication:
 ```json
 {
     "type": "contacts"
+}
+```
+
+### POST /api/v1/p2p/approve
+
+```json
+{
+    "hash": "abc123def456",
+    "candidate_id": 5
+}
+```
+
+> `candidate_id` is optional. Omit for fast mode (single route). Required when multiple candidates exist.
+
+### POST /api/v1/p2p/reject
+
+```json
+{
+    "hash": "abc123def456"
 }
 ```
 
