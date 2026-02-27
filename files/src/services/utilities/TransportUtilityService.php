@@ -466,6 +466,13 @@ class TransportUtilityService implements TransportServiceInterface
                     @file_put_contents($signalFile, (string)time());
                     Logger::getInstance()->warning("SOCKS5 proxy failure detected, signaling watchdog for immediate Tor restart");
                 }
+
+                // Write GUI-readable status so the wallet UI can display a notification
+                @file_put_contents('/tmp/tor-gui-status', json_encode([
+                    'status' => 'issue',
+                    'timestamp' => time(),
+                    'message' => 'Tor connectivity issue detected — automatic restart in progress'
+                ]));
             }
 
             // Return a structured error response that can be parsed

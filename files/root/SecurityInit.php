@@ -36,6 +36,7 @@ use Eiou\Utils\Security;
 use Eiou\Utils\Logger;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Services\RateLimiterService;
+use Eiou\Gui\Helpers\MessageHelper;
 
 // Initialize secure logging
 Logger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
@@ -96,6 +97,7 @@ if (php_sapi_name() !== 'cli') {
                     break;
                 case 'sendTransaction':
                 case 'createTransaction':
+                case 'sendEIOU':
                     $action = 'transaction';
                     break;
                 case 'addContact':
@@ -105,8 +107,18 @@ if (php_sapi_name() !== 'cli') {
             }
         }
 
-        // Enforce rate limit
-        $rateLimiterService->enforce($action, $rateLimits[$action]);
+        // Check rate limit and redirect with flash message if exceeded
+        $ip = RateLimiterService::getClientIp();
+        $limits = $rateLimits[$action];
+        $result = $rateLimiterService->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
+        if (!$result['allowed']) {
+            $retryAfter = $result['retry_after'] ?? 60;
+            MessageHelper::redirectMessage(
+                "Too many requests. Please wait $retryAfter seconds before trying again.",
+                'warning'
+            );
+            exit;
+        }
     }
 }
 

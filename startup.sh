@@ -1388,11 +1388,15 @@ watchdog() {
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully via signal (attempt $TOR_RESTART_COUNT/$TOR_MAX_RESTARTS) — verifying hidden service in ~90s"
                         # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
                         TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
+                        # Update GUI status to indicate Tor is restarting
+                        echo "{\"status\":\"restarting\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor service restarted — verifying connectivity\"}" > /tmp/tor-gui-status 2>/dev/null || true
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
+                        echo "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}" > /tmp/tor-gui-status 2>/dev/null || true
                     fi
                 else
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal — start command failed"
+                    echo "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}" > /tmp/tor-gui-status 2>/dev/null || true
                 fi
             elif [ $TOR_RESTART_COUNT -ge $TOR_MAX_RESTARTS ]; then
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: SOCKS5 signal received but max restarts exceeded — waiting for cooldown reset"
@@ -1506,6 +1510,8 @@ watchdog() {
                 if [ $TOR_RESTART_COUNT -gt 0 ]; then
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor self-check passed — hidden service reachable again, resetting restart counter"
                     TOR_RESTART_COUNT=0
+                    # Update GUI status to indicate Tor has recovered
+                    echo "{\"status\":\"recovered\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor connectivity restored\"}" > /tmp/tor-gui-status 2>/dev/null || true
                 fi
             fi
         fi
