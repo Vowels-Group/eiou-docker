@@ -246,6 +246,7 @@ class Constants {
     const STATUS_REJECTED = 'rejected';
     const STATUS_EXPIRED = 'expired';
     const STATUS_PAID = 'paid';
+    const STATUS_AWAITING_APPROVAL = 'awaiting_approval';
     const STATUS_FAILED = 'failed';
     const STATUS_INITIAL = 'initial';
     const STATUS_QUEUED = 'queued';
@@ -320,6 +321,7 @@ class Constants {
     const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
     const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
     const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals (with balance guard) - default OFF for safety
+    const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

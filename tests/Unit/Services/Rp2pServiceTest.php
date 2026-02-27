@@ -190,6 +190,10 @@ class Rp2pServiceTest extends TestCase
         // Fee is 1% of 10000 = 100, which is <= 5% max
         $this->service->setP2pTransactionSender($this->p2pTransactionSender);
 
+        // Auto-accept enabled: should auto-send without approval gate
+        $this->userContext->method('getAutoAcceptTransaction')
+            ->willReturn(true);
+
         $this->p2pTransactionSender->expects($this->once())
             ->method('sendP2pEiou');
 
@@ -667,6 +671,10 @@ class Rp2pServiceTest extends TestCase
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
 
+        // Auto-accept enabled so it reaches getP2pTransactionSender()
+        $this->userContext->method('getAutoAcceptTransaction')
+            ->willReturn(true);
+
         // Don't set P2P transaction sender
 
         $this->expectException(RuntimeException::class);
@@ -704,6 +712,10 @@ class Rp2pServiceTest extends TestCase
             ->willReturn('test-rp2p-id');
 
         $this->service->setP2pTransactionSender($this->p2pTransactionSender);
+
+        // Auto-accept enabled: should auto-send
+        $this->userContext->method('getAutoAcceptTransaction')
+            ->willReturn(true);
 
         // 0% fee is <= 5% max, so should call sendP2pEiou
         $this->p2pTransactionSender->expects($this->once())
@@ -2453,6 +2465,10 @@ class Rp2pServiceTest extends TestCase
 
         $sender = $this->createMock(P2pTransactionSenderInterface::class);
         $service->setP2pTransactionSender($sender);
+
+        // Auto-accept enabled: should auto-send best candidate
+        $this->userContext->method('getAutoAcceptTransaction')
+            ->willReturn(true);
 
         $this->rp2pRepository->method('rp2pExists')
             ->willReturn(false);

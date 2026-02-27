@@ -63,6 +63,8 @@ All POST actions require CSRF token.
 | Action | Required Fields | Response |
 |--------|-----------------|----------|
 | `sendEIOU` | `recipient` OR `manual_recipient`, `amount`, `currency` | Redirect with message |
+| `approveP2pTransaction` | `hash` | JSON (AJAX) |
+| `rejectP2pTransaction` | `hash` | JSON (AJAX) |
 
 Optional: `address_type` (when contact selected), `description`, `best_fee` (experimental best-fee routing)
 
@@ -70,7 +72,7 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 
 | Action | Required Fields | Response |
 |--------|-----------------|----------|
-| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled` | Redirect with message |
+| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled`, `autoAcceptTransaction` | Redirect with message |
 | `clearDebugLogs` | (none) | Redirect with message |
 | `sendDebugReport` | `description` (optional) | Redirect with message |
 | `getDebugReportJson` | `description` (optional), `report_mode` (full/limited) | JSON (AJAX) |

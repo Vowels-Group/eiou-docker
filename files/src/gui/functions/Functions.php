@@ -86,6 +86,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit;
     }
+
+    // AJAX-only P2P approval actions (returns JSON, exits immediately)
+    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates'])) {
+        try {
+            $transactionController->routeAction();
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 }
 
 // Handle GET requests for update checking
@@ -153,6 +164,28 @@ $knownCurrencies = array_keys($knownCurrencies);
 
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
+
+// Check Tor/SOCKS5 GUI status (written by TransportUtilityService and startup.sh watchdog)
+$torGuiStatus = null;
+$torGuiStatusFile = '/tmp/tor-gui-status';
+if (file_exists($torGuiStatusFile)) {
+    $torGuiRaw = @file_get_contents($torGuiStatusFile);
+    if ($torGuiRaw !== false) {
+        $torGuiData = json_decode($torGuiRaw, true);
+        if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+            $torGuiAge = time() - (int)$torGuiData['timestamp'];
+            if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                // Recovery older than 5 minutes — clean up
+                @unlink($torGuiStatusFile);
+            } elseif ($torGuiAge > 600) {
+                // Any status older than 10 minutes — stale, clean up
+                @unlink($torGuiStatusFile);
+            } else {
+                $torGuiStatus = $torGuiData;
+            }
+        }
+    }
+}
 
 // Track completed transactions for notifications (sent transactions)
 // Get previously known in-progress txids from session

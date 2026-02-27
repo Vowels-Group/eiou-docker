@@ -548,6 +548,71 @@ eiou pending --json
 
 ---
 
+### p2p
+
+Manage P2P transactions awaiting manual approval. Used when `autoAcceptTransaction` is disabled.
+
+**Syntax:**
+```bash
+eiou p2p [subcommand] [args...]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none/list)* | `eiou p2p` | List all P2P transactions awaiting approval |
+| `candidates` | `eiou p2p candidates <hash>` | Show route candidates for a transaction |
+| `approve` | `eiou p2p approve <hash> [index]` | Approve and send a P2P transaction |
+| `reject` | `eiou p2p reject <hash>` | Reject and cancel a P2P transaction |
+
+**Examples:**
+```bash
+# List pending P2P transactions
+eiou p2p
+eiou p2p --json
+
+# View route candidates for a transaction
+eiou p2p candidates abc123def456
+
+# Approve a single-route P2P (fast mode)
+eiou p2p approve abc123def456
+
+# Approve using a specific candidate route (best-fee mode)
+eiou p2p approve abc123def456 2
+
+# Reject and cancel a P2P transaction
+eiou p2p reject abc123def456
+```
+
+**Output includes:**
+- Transaction hash, amount, currency
+- Route mode (fast or best-fee)
+- Number of route candidates
+- Total cost including relay fees
+
+**Approval behavior:**
+- **Fast mode** (single route): `eiou p2p approve <hash>` sends immediately
+- **Best-fee mode** (multiple candidates): Use `eiou p2p candidates <hash>` to view options, then `eiou p2p approve <hash> <index>` to select a route
+- If multiple candidates exist but no index is provided, an error is returned
+
+**Routing mode scenarios:**
+
+| Routing Mode | `autoAcceptTransaction` | What Happens |
+|-------------|------------------------|--------------|
+| Fast (default) | ON (default) | Route is auto-sent — no approval needed |
+| Fast | OFF | 1 route shown, use `eiou p2p approve <hash>` |
+| Best-fee (`--best`) | ON | Cheapest route is auto-sent — no approval needed |
+| Best-fee | OFF | All routes listed, use `eiou p2p candidates <hash>` then `eiou p2p approve <hash> <index>` |
+| Best-fee + Tor dest | OFF | Internally fast mode — 1 route shown, use `eiou p2p approve <hash>` |
+
+**Notes:**
+- P2P transactions enter `awaiting_approval` status when `autoAcceptTransaction` is `false`. Without these commands (or GUI/API equivalents), such transactions expire through normal cleanup.
+- Late-arriving route candidates are still accepted while a transaction is awaiting approval and will appear in the candidate list.
+- Tor destinations force fast mode internally because Tor hidden services use single-hop routing.
+
+---
+
 ## Transaction Commands
 
 ### send
@@ -759,6 +824,7 @@ eiou changesettings [setting] [value]
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
+| `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 | `trustedProxies` | Trusted proxy IPs for header forwarding | `10.0.0.1,172.16.0.0/12` |
 
@@ -837,6 +903,7 @@ eiou changesettings maxP2pLevel 5
 eiou changesettings maxOutput 0           # Unlimited output
 eiou changesettings autoRefreshEnabled true
 eiou changesettings autoBackupEnabled false
+eiou changesettings autoAcceptTransaction false  # Require approval before sending P2P
 eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"
 eiou changesettings trustedProxies ""       # Clear (trust no proxies)
 

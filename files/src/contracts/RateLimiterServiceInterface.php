@@ -35,15 +35,4 @@ interface RateLimiterServiceInterface
      */
     public function reset(string $identifier, string $action): void;
 
-    /**
-     * Apply rate limit and return appropriate HTTP response if blocked.
-     *
-     * @param string $action Action being performed
-     * @param array $limits Rate limit configuration
-     * @return bool True if allowed
-     */
-    public function enforce(
-        string $action,
-        array $limits = ['max' => 10, 'window' => 60, 'block' => 300]
-    ): bool;
 }

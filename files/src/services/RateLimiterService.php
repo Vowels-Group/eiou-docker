@@ -3,7 +3,6 @@
 
 namespace Eiou\Services;
 
-use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\RateLimiterServiceInterface;
@@ -156,42 +155,4 @@ class RateLimiterService implements RateLimiterServiceInterface {
         return Security::getClientIp();
     }
 
-    /**
-     * Apply rate limit and return appropriate HTTP response if blocked
-     *
-     * @param string $action Action being performed
-     * @param array $limits Rate limit configuration
-     * @return bool True if allowed, sends HTTP 429 and returns false if blocked
-     */
-    public function enforce(string $action, array $limits = ['max' => 10, 'window' => 60, 'block' => 300]): bool {
-        // If rate limiting is disabled or in test mode, skip all rate limit checks
-        $rateLimitEnabled = $this->userContext ? $this->userContext->getRateLimitEnabled() : Constants::RATE_LIMIT_ENABLED;
-        if (!$rateLimitEnabled || getenv('EIOU_TEST_MODE') === 'true') {
-            return true;
-        }
-
-        $ip = self::getClientIp();
-        $result = $this->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
-
-        if (!$result['allowed']) {
-            http_response_code(ErrorCodes::HTTP_TOO_MANY_REQUESTS);
-            header('Retry-After: ' . $result['retry_after']);
-            header('X-RateLimit-Limit: ' . $limits['max']);
-            header('X-RateLimit-Remaining: 0');
-            header('X-RateLimit-Reset: ' . $result['reset_at']);
-
-            echo json_encode([
-                'error' => 'Too many requests',
-                'retry_after' => $result['retry_after']
-            ]);
-            exit;
-        }
-
-        // Add rate limit headers
-        header('X-RateLimit-Limit: ' . $limits['max']);
-        header('X-RateLimit-Remaining: ' . $result['remaining']);
-        header('X-RateLimit-Reset: ' . $result['reset_at']);
-
-        return true;
-    }
 }

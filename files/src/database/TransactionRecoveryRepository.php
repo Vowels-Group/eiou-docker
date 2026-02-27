@@ -333,13 +333,15 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     CASE WHEN tx_type = 'p2p' THEN 'p2p_request' ELSE 'transaction' END as source_type,
                     NULL as destination_address,
                     NULL as fee_amount,
+                    NULL as rp2p_amount,
                     CASE
                         WHEN status = 'pending' THEN 'pending'
                         WHEN status = 'sent' THEN 'sending'
                         WHEN status = 'accepted' THEN 'sending'
                         ELSE 'pending'
                     END as phase,
-                    0 as is_held
+                    0 as is_held,
+                    0 as candidate_count
                   FROM {$this->tableName}
                   WHERE status IN ('pending', 'sent', 'accepted')
                     AND sender_address IN ($placeholders)
@@ -365,8 +367,10 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     CASE WHEN t.tx_type = 'p2p' THEN 'p2p_request' ELSE 'transaction' END as source_type,
                     NULL as destination_address,
                     NULL as fee_amount,
+                    NULL as rp2p_amount,
                     'syncing' as phase,
-                    1 as is_held
+                    1 as is_held,
+                    0 as candidate_count
                   FROM {$this->tableName} t
                   INNER JOIN held_transactions ht ON t.txid = ht.txid
                   WHERE t.sender_address IN ($placeholders)
@@ -391,13 +395,16 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     'p2p_request' as source_type,
                     destination_address,
                     my_fee_amount as fee_amount,
+                    rp2p_amount,
                     CASE
                         WHEN status IN ('initial', 'queued') THEN 'pending'
                         WHEN status = 'sent' THEN 'route_search'
                         WHEN status = 'found' THEN 'route_found'
+                        WHEN status = 'awaiting_approval' THEN 'awaiting_approval'
                         ELSE 'pending'
                     END as phase,
-                    0 as is_held
+                    0 as is_held,
+                    (SELECT COUNT(*) FROM rp2p_candidates rc WHERE rc.hash = p2p.hash) as candidate_count
                   FROM p2p
                   WHERE destination_address IS NOT NULL
                     AND status NOT IN ('completed', 'expired', 'cancelled', 'paid')

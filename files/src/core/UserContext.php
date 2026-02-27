@@ -474,6 +474,15 @@ class UserContext {
     }
 
     /**
+     * Get auto-accept transaction setting for P2P transactions
+     *
+     * @return bool
+     */
+    public function getAutoAcceptTransaction(): bool {
+        return (bool) ($this->get('autoAcceptTransaction') ?? Constants::AUTO_ACCEPT_TRANSACTION);
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string
@@ -818,6 +827,7 @@ class UserContext {
             'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
+            'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
 
             // Feature toggles
             'contactStatusEnabled' => Constants::CONTACT_STATUS_ENABLED,

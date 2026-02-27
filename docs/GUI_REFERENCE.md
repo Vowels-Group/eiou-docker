@@ -199,6 +199,7 @@ Handles settings and debug operations.
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
+| `autoAcceptTransaction` | bool | Auto-accept P2P transactions when route found (when OFF, transactions pause at `awaiting_approval` for user review in both fast and best-fee modes) |
 | `syncChunkSize` | int | Transactions per sync chunk (10-500) |
 | `syncMaxChunks` | int | Max sync chunks per cycle (10-1000) |
 | `heldTxSyncTimeoutSeconds` | int | Held tx sync timeout in seconds (30-299) |
@@ -365,6 +366,10 @@ All three dashboard cards display per-currency rows. When a card has no data for
 - Phase indicators (pending, route_search, route_found, sending, syncing)
 - P2P vs Direct badges
 - Held transaction notices
+- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` with route selection UI
+  - Fast mode: shows 1 route with fee breakdown, accept/reject buttons
+  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one
+  - Route count updates dynamically as late-arriving candidates are received
 
 **Transaction List:**
 - Status badges (pending, sent, accepted, completed, rejected, cancelled)

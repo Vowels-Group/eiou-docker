@@ -284,6 +284,17 @@ class CleanupService implements CleanupServiceInterface {
                 $staleOriginators = $this->p2pRepository->getExpiredOriginatorP2psWithCandidates($currentMicrotime);
                 foreach ($staleOriginators as $p2p) {
                     $this->rp2pService->selectAndForwardBestRp2p($p2p['hash']);
+
+                    // Respect the approval gate: don't override awaiting_approval with 'found'
+                    $updatedP2p = $this->p2pRepository->getByHash($p2p['hash']);
+                    if ($updatedP2p && ($updatedP2p['status'] ?? '') === Constants::STATUS_AWAITING_APPROVAL) {
+                        Logger::getInstance()->info("Originator fallback: deferred to user approval", [
+                            'hash' => $p2p['hash'],
+                        ]);
+                        $processed++;
+                        continue;
+                    }
+
                     $this->p2pRepository->updateStatus($p2p['hash'], 'found');
                     Logger::getInstance()->info("Originator fallback: best-fee selection for stale P2P", [
                         'hash' => $p2p['hash'],
@@ -348,7 +359,12 @@ class CleanupService implements CleanupServiceInterface {
         // exist. This avoids the originator waiting an extra grace period when one contact's
         // cascade is slow/dead. Double-selection is safe: selectAndForwardBestRp2p() has
         // an rp2pExists() guard that prevents duplicate processing.
-        if (!((int)($message['fast'] ?? 1))
+        //
+        // Skip if already awaiting_approval — the user must consent first. Let it expire
+        // normally so the approval UI shows it as expired and candidates are cleaned up.
+        $currentStatus = $message['status'] ?? '';
+        if ($currentStatus !== Constants::STATUS_AWAITING_APPROVAL
+            && !((int)($message['fast'] ?? 1))
             && $this->rp2pCandidateRepository !== null
             && $this->rp2pService !== null
         ) {
@@ -356,6 +372,19 @@ class CleanupService implements CleanupServiceInterface {
             if ($candidateCount > 0) {
                 // Select and forward best route before expiring
                 $this->rp2pService->selectAndForwardBestRp2p($hash);
+
+                // Respect the approval gate: if selectAndForwardBestRp2p set
+                // awaiting_approval (originator with auto-accept off), don't
+                // override with 'found' — the user must approve first.
+                $updatedP2p = $this->p2pRepository->getByHash($hash);
+                if ($updatedP2p && ($updatedP2p['status'] ?? '') === Constants::STATUS_AWAITING_APPROVAL) {
+                    Logger::getInstance()->info("Best-fee selection deferred to user approval on expiration", [
+                        'hash' => $hash,
+                        'candidate_count' => $candidateCount,
+                    ]);
+                    return;
+                }
+
                 // Mark as 'found' to prevent re-processing by subsequent cleanup cycles
                 $this->p2pRepository->updateStatus($hash, 'found');
                 if (function_exists('output')) {

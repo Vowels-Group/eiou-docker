@@ -229,6 +229,7 @@ function getP2pTableSchema() {
         currency VARCHAR(10) NOT NULL,
         amount INTEGER NOT NULL,
         my_fee_amount INTEGER,
+        rp2p_amount INTEGER,  /* Total amount from RP2P response (including all relay fees) - set when awaiting_approval */
         destination_address VARCHAR(255), /* only set if you are the original sender */
         destination_pubkey TEXT,
         destination_signature TEXT,
@@ -251,6 +252,7 @@ function getP2pTableSchema() {
             'sending',      /* Claimed by a worker process, prevents duplicate processing */
             'sent',         /* Request has been sent to contacts */
             'found',        /* Contact has been found and being reported back */
+            'awaiting_approval', /* Route found, waiting for user to approve the transaction */
             'paid',         /* Payment has been sent to the next peer */
             'completed',    /* Transaction successfully executed */
             'cancelled',    /* Transaction cancelled or failed */
@@ -273,6 +275,33 @@ function getP2pTableSchema() {
         INDEX idx_p2p_outgoing_txid (outgoing_txid),
         INDEX idx_p2p_status_expiration (status, expiration),
         INDEX idx_p2p_sending_recovery (status, sending_started_at)
+    )";
+}
+
+// P2P Senders table - tracks all upstream senders per P2P hash for multi-path RP2P delivery
+function getP2pSendersTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS p2p_senders (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        sender_address VARCHAR(255) NOT NULL,
+        sender_public_key TEXT NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address),
+        INDEX idx_p2p_senders_hash (hash),
+        INDEX idx_p2p_senders_created_at (created_at)
+    )";
+}
+
+// P2P Relayed Contacts table - tracks contacts that returned already_relayed during broadcast (two-phase selection)
+function getP2pRelayedContactsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS p2p_relayed_contacts (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        contact_address VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_p2p_relayed_hash_addr (hash, contact_address),
+        INDEX idx_p2p_relayed_hash (hash),
+        INDEX idx_p2p_relayed_created_at (created_at)
     )";
 }
 
@@ -310,33 +339,6 @@ function getRp2pCandidatesTableSchema() {
         INDEX idx_rp2p_cand_hash (hash),
         INDEX idx_rp2p_cand_hash_amount (hash, amount ASC),
         INDEX idx_rp2p_cand_created_at (created_at)
-    )";
-}
-
-// P2P Senders table - tracks all upstream senders per P2P hash for multi-path RP2P delivery
-function getP2pSendersTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS p2p_senders (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL,
-        sender_address VARCHAR(255) NOT NULL,
-        sender_public_key TEXT NOT NULL,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address),
-        INDEX idx_p2p_senders_hash (hash),
-        INDEX idx_p2p_senders_created_at (created_at)
-    )";
-}
-
-// P2P Relayed Contacts table - tracks contacts that returned already_relayed during broadcast (two-phase selection)
-function getP2pRelayedContactsTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS p2p_relayed_contacts (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL,
-        contact_address VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE INDEX idx_p2p_relayed_hash_addr (hash, contact_address),
-        INDEX idx_p2p_relayed_hash (hash),
-        INDEX idx_p2p_relayed_created_at (created_at)
     )";
 }
 

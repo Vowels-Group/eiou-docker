@@ -1336,13 +1336,20 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ChainDropService']->setBalanceRepository($this->getBalanceRepository());
         }
 
-        // Wire CliService -> ContactCreditRepository, P2pRepository
-        // Reason: CliService displays total available credit and fee earnings in user info
+        // Wire CliService -> ContactCreditRepository, P2pRepository, P2P approval dependencies
+        // Reason: CliService displays total available credit and fee earnings in user info,
+        // and provides CLI commands for P2P transaction approval/rejection
         // IMPORTANT: CliService must be initialized in wireAllServices() before this runs,
         // otherwise these setter injections are silently skipped (isset check fails)
         if (isset($this->services['CliService'])) {
             $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
             $this->services['CliService']->setP2pRepository($this->getP2pRepository());
+            $this->services['CliService']->setP2pApprovalDependencies(
+                $this->getRp2pRepository(),
+                $this->getRp2pCandidateRepository(),
+                $this->getSendOperationService(),
+                $this->getP2pService()
+            );
         }
 
         // =========================================================================

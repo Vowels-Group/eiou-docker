@@ -298,8 +298,19 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Check if original p2p was sent by user
         if(isset($p2p['destination_address'])) {
+            // Manual approval gate: present route for user approval instead of auto-sending.
+            // Applies to fast mode and best-fee auto-selection (called from selectAndForwardBestRp2p).
+            // Best-fee manual approval is handled earlier in selectAndForwardBestRp2p() and never reaches here.
+            if (!$this->currentUser->getAutoAcceptTransaction()) {
+                $this->p2pRepository->setRp2pAmount($request['hash'], $request['amount']);
+                $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_AWAITING_APPROVAL);
+                Logger::getInstance()->info("P2P route awaiting user approval", [
+                    'hash' => $request['hash'],
+                    'amount' => $request['amount'],
+                ]);
+                return true;
+            }
             $this->p2pRepository->updateStatus($request['hash'], 'found');
-            // Send transaction through rp2p chain using P2pTransactionSenderInterface
             $this->getP2pTransactionSender()->sendP2pEiou($request);
         } else{
                 // Send rp2p back to ALL upstream senders (multi-path support)
@@ -546,6 +557,14 @@ class Rp2pService implements Rp2pServiceInterface {
      * @return void
      */
     public function handleRp2pCandidate(array $request, array $p2p): void {
+        // Don't accept candidates if selection has already been made or P2P is terminal.
+        // Allow candidates during awaiting_approval so late-arriving routes still appear
+        // in the user's candidate list (the GUI fetches candidates via AJAX on each load).
+        $status = $p2p['status'] ?? '';
+        if (in_array($status, ['found', 'paid', 'completed', Constants::STATUS_CANCELLED], true)) {
+            return;
+        }
+
         // Add user's fee to the rp2p amount (same as handleRp2pRequest)
         $feeAmount = $p2p['my_fee_amount'] ?? 0;
         $request['amount'] += $feeAmount;
@@ -584,6 +603,12 @@ class Rp2pService implements Rp2pServiceInterface {
         // Store the candidate and count the response, but defer selection to the daemon's
         // checkBestFeeSelection call after it processes and forwards the queued P2P.
         if ($p2p['status'] === Constants::STATUS_QUEUED) {
+            return;
+        }
+
+        // Don't re-trigger selection if already awaiting user approval.
+        // The candidate was stored above and will appear when the GUI refreshes.
+        if ($status === Constants::STATUS_AWAITING_APPROVAL) {
             return;
         }
 
@@ -684,6 +709,12 @@ class Rp2pService implements Rp2pServiceInterface {
         // see sentCount=0 and prematurely trigger cancellation. The daemon's
         // checkBestFeeSelection call after processing handles deferred responses.
         if ($status === Constants::STATUS_QUEUED) {
+            return;
+        }
+
+        // Don't re-trigger selection if already awaiting user approval.
+        // The cancel was counted above; no further action needed.
+        if ($status === Constants::STATUS_AWAITING_APPROVAL) {
             return;
         }
 
@@ -911,6 +942,27 @@ class Rp2pService implements Rp2pServiceInterface {
         ]);
 
         $p2p = $this->p2pRepository->getByHash($hash);
+
+        // Manual approval + best-fee mode: present all candidates to the user
+        // instead of auto-selecting the cheapest one.
+        if ($p2p && !empty($p2p['destination_address'])
+            && !$this->currentUser->getAutoAcceptTransaction()
+            && (int) ($p2p['fast'] ?? 1) === 0
+        ) {
+            // Set rp2p_amount to the best (lowest) candidate's amount for summary display
+            $bestAmount = (int) $candidates[0]['amount'];
+            $this->p2pRepository->setRp2pAmount($hash, $bestAmount);
+            $this->p2pRepository->updateStatus($hash, Constants::STATUS_AWAITING_APPROVAL);
+
+            Logger::getInstance()->info("Best-fee candidates awaiting user selection", [
+                'hash' => $hash,
+                'total_candidates' => $totalCandidates,
+                'best_amount' => $bestAmount,
+            ]);
+
+            // Do NOT delete candidates or insert into rp2p — user will choose
+            return;
+        }
 
         // Before forwarding upstream: ensure Phase 1 sent to relayed contacts.
         // Race condition: if a relayed contact's RP2P arrived before all inserted

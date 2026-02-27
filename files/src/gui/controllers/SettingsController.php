@@ -169,6 +169,9 @@ class SettingsController
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoBackupEnabled'] = isset($_POST['autoBackupEnabled']) && $_POST['autoBackupEnabled'] === '1';
 
+        // Auto-Accept Transaction (boolean toggle, default: true/on)
+        $settings['autoAcceptTransaction'] = isset($_POST['autoAcceptTransaction']) && $_POST['autoAcceptTransaction'] === '1';
+
         // Feature toggles (boolean checkboxes)
         $settings['contactStatusEnabled'] = isset($_POST['contactStatusEnabled']) && $_POST['contactStatusEnabled'] === '1';
         $settings['contactStatusSyncOnPing'] = isset($_POST['contactStatusSyncOnPing']) && $_POST['contactStatusSyncOnPing'] === '1';

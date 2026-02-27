@@ -56,6 +56,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertArrayHasKey('defaultTransportMode', $defaults);
         $this->assertArrayHasKey('autoRefreshEnabled', $defaults);
         $this->assertArrayHasKey('autoBackupEnabled', $defaults);
+        $this->assertArrayHasKey('autoAcceptTransaction', $defaults);
 
         // Feature toggles
         $this->assertArrayHasKey('contactStatusEnabled', $defaults);
@@ -119,6 +120,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::DEFAULT_TRANSPORT_MODE, $defaults['defaultTransportMode']);
         $this->assertSame(Constants::AUTO_REFRESH_ENABLED, $defaults['autoRefreshEnabled']);
         $this->assertSame(Constants::BACKUP_AUTO_ENABLED, $defaults['autoBackupEnabled']);
+        $this->assertSame(Constants::AUTO_ACCEPT_TRANSACTION, $defaults['autoAcceptTransaction']);
         $this->assertSame(Constants::CONTACT_STATUS_ENABLED, $defaults['contactStatusEnabled']);
         $this->assertSame(Constants::CONTACT_STATUS_SYNC_ON_PING, $defaults['contactStatusSyncOnPing']);
         $this->assertSame(Constants::AUTO_CHAIN_DROP_PROPOSE, $defaults['autoChainDropPropose']);
@@ -151,12 +153,12 @@ class UserContextConfigMigrationTest extends TestCase
     }
 
     /**
-     * Test getConfigurableDefaults total count is 40 (11 original + 29 new)
+     * Test getConfigurableDefaults total count is 41 (11 original + 30 new)
      */
     public function testGetConfigurableDefaultsHasExpectedCount(): void
     {
         $defaults = UserContext::getConfigurableDefaults();
-        $this->assertCount(40, $defaults);
+        $this->assertCount(41, $defaults);
     }
 
     /**
@@ -174,6 +176,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::API_ENABLED, $context->getApiEnabled());
         $this->assertSame(Constants::API_CORS_ALLOWED_ORIGINS, $context->getApiCorsAllowedOrigins());
         $this->assertSame(Constants::RATE_LIMIT_ENABLED, $context->getRateLimitEnabled());
+        $this->assertSame(Constants::AUTO_ACCEPT_TRANSACTION, $context->getAutoAcceptTransaction());
     }
 
     /**
@@ -190,6 +193,7 @@ class UserContextConfigMigrationTest extends TestCase
             'apiEnabled' => false,
             'apiCorsAllowedOrigins' => 'https://example.com',
             'rateLimitEnabled' => false,
+            'autoAcceptTransaction' => false,
         ]);
 
         $this->assertFalse($context->getContactStatusEnabled());
@@ -199,6 +203,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertFalse($context->getApiEnabled());
         $this->assertSame('https://example.com', $context->getApiCorsAllowedOrigins());
         $this->assertFalse($context->getRateLimitEnabled());
+        $this->assertFalse($context->getAutoAcceptTransaction());
     }
 
     /**
@@ -244,8 +249,8 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $existingConfig['httpTransportTimeoutSeconds']);
         $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $existingConfig['displayDateFormat']);
 
-        // Total should be 40
-        $this->assertCount(40, $existingConfig);
+        // Total should be 41
+        $this->assertCount(41, $existingConfig);
     }
 
     /**

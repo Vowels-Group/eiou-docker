@@ -50,6 +50,11 @@ use Eiou\Utils\InputValidator;
  * - POST /api/v1/chaindrop/reject            - Reject chain drop proposal
  * - GET  /api/v1/chaindrop                   - List chain drop proposals
  *
+ * - GET  /api/v1/p2p                         - List P2P transactions awaiting approval
+ * - GET  /api/v1/p2p/candidates/:hash       - Get route candidates for a P2P transaction
+ * - POST /api/v1/p2p/approve                - Approve a P2P transaction
+ * - POST /api/v1/p2p/reject                 - Reject a P2P transaction
+ *
  * - POST /api/v1/keys/enable/:key_id        - Enable an API key
  * - POST /api/v1/keys/disable/:key_id       - Disable an API key
  *
@@ -145,6 +150,7 @@ class ApiController {
                 'system' => $this->handleSystem($method, $action, $params, $body),
                 'keys' => $this->handleKeys($method, $action, $id, $params, $body),
                 'chaindrop' => $this->handleChainDrop($method, $action, $params, $body),
+                'p2p' => $this->handleP2p($method, $action, $id, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
@@ -1340,6 +1346,7 @@ class ApiController {
                 'hostname_secure' => $currentUser->getHttpsAddress(),
                 'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled(),
                 'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
+                'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
                 // Feature toggles
                 'contact_status_enabled' => $currentUser->getContactStatusEnabled(),
                 'contact_status_sync_on_ping' => $currentUser->getContactStatusSyncOnPing(),
@@ -1404,6 +1411,7 @@ class ApiController {
             'default_transport_mode' => ['key' => 'defaultTransportMode', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_refresh_enabled' => ['key' => 'autoRefreshEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_backup_enabled' => ['key' => 'autoBackupEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'auto_accept_transaction' => ['key' => 'autoAcceptTransaction', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'hostname' => ['key' => 'hostname', 'validate' => 'validateHostname', 'config' => 'userconfig.json'],
             'name' => ['key' => 'name', 'validate' => null, 'config' => 'userconfig.json'],
             // Feature toggles
@@ -2194,6 +2202,269 @@ class ApiController {
             }
         } catch (Exception $e) {
             return $this->errorResponse('Failed to reject chain drop: ' . $e->getMessage(), 500, 'chaindrop_error');
+        }
+    }
+
+    // ==================== P2P Approval Endpoints ====================
+
+    /**
+     * Handle P2P approval endpoints
+     */
+    private function handleP2p(string $method, ?string $action, ?string $id, array $params, string $body): array {
+        return match (true) {
+            $method === 'GET' && !$action => $this->listPendingP2p($params),
+            $method === 'GET' && $action === 'candidates' && $id !== null => $this->getP2pCandidates($id),
+            $method === 'POST' && $action === 'approve' => $this->approveP2pApi($body),
+            $method === 'POST' && $action === 'reject' => $this->rejectP2pApi($body),
+            default => $this->errorResponse('Unknown P2P action', 404, 'unknown_action')
+        };
+    }
+
+    /**
+     * GET /api/v1/p2p
+     */
+    private function listPendingP2p(array $params): array {
+        if (!$this->hasPermission('wallet:read')) {
+            return $this->permissionDenied('wallet:read');
+        }
+
+        try {
+            $p2pRepo = $this->services->getP2pRepository();
+            $awaitingList = $p2pRepo->getAwaitingApprovalList();
+
+            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+
+            $transactions = [];
+            foreach ($awaitingList as $p2p) {
+                $candidateCount = $rp2pCandidateRepo->getCandidateCount($p2p['hash']);
+                $transactions[] = [
+                    'hash' => $p2p['hash'],
+                    'amount' => (int) $p2p['amount'],
+                    'currency' => $p2p['currency'],
+                    'destination_address' => $p2p['destination_address'],
+                    'my_fee_amount' => (int) ($p2p['my_fee_amount'] ?? 0),
+                    'rp2p_amount' => $p2p['rp2p_amount'] !== null ? (int) $p2p['rp2p_amount'] : null,
+                    'fast' => (int) $p2p['fast'],
+                    'candidate_count' => $candidateCount,
+                    'created_at' => $p2p['created_at'],
+                ];
+            }
+
+            return $this->successResponse([
+                'transactions' => $transactions,
+                'count' => count($transactions),
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to list pending P2P transactions: ' . $e->getMessage(), 500, 'p2p_error');
+        }
+    }
+
+    /**
+     * GET /api/v1/p2p/candidates/{hash}
+     */
+    private function getP2pCandidates(string $hash): array {
+        if (!$this->hasPermission('wallet:read')) {
+            return $this->permissionDenied('wallet:read');
+        }
+
+        try {
+            $p2pRepo = $this->services->getP2pRepository();
+            $p2p = $p2pRepo->getAwaitingApproval($hash);
+            if (!$p2p) {
+                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
+            }
+
+            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $candidates = $rp2pCandidateRepo->getCandidatesByHash($hash);
+
+            $rp2pRepo = $this->services->getRp2pRepository();
+            $rp2p = $rp2pRepo->getByHash($hash);
+
+            return $this->successResponse([
+                'hash' => $hash,
+                'amount' => (int) $p2p['amount'],
+                'currency' => $p2p['currency'],
+                'fast' => (int) $p2p['fast'],
+                'candidates' => $candidates,
+                'rp2p' => $rp2p,
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to get P2P candidates: ' . $e->getMessage(), 500, 'p2p_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/p2p/approve
+     */
+    private function approveP2pApi(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data || empty($data['hash'])) {
+            return $this->errorResponse('Missing required field: hash', 400, 'missing_field');
+        }
+
+        $hash = $data['hash'];
+        $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : 0;
+
+        try {
+            $p2pRepo = $this->services->getP2pRepository();
+            $p2p = $p2pRepo->getAwaitingApproval($hash);
+            if (!$p2p) {
+                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
+            }
+
+            if (empty($p2p['destination_address'])) {
+                return $this->errorResponse('Only the transaction originator can approve', 403, 'not_originator');
+            }
+
+            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $sendService = $this->services->getSendOperationService();
+
+            if ($candidateId > 0) {
+                // Candidate selected by ID
+                $candidate = $rp2pCandidateRepo->getCandidateById($candidateId);
+                if (!$candidate) {
+                    return $this->errorResponse('Selected route candidate not found', 404, 'candidate_not_found');
+                }
+
+                if ($candidate['hash'] !== $hash) {
+                    return $this->errorResponse('Candidate does not belong to this transaction', 400, 'candidate_mismatch');
+                }
+
+                $request = [
+                    'hash' => $candidate['hash'],
+                    'time' => $candidate['time'],
+                    'amount' => (int) $candidate['amount'],
+                    'currency' => $candidate['currency'],
+                    'senderPublicKey' => $candidate['sender_public_key'],
+                    'senderAddress' => $candidate['sender_address'],
+                    'signature' => $candidate['sender_signature'],
+                ];
+
+                $rp2pRepo = $this->services->getRp2pRepository();
+                $rp2pRepo->insertRp2pRequest($request);
+                $p2pRepo->updateStatus($hash, 'found');
+                $sendService->sendP2pEiou($request);
+                $rp2pCandidateRepo->deleteCandidatesByHash($hash);
+
+                return $this->successResponse([
+                    'message' => 'P2P transaction approved and sent',
+                    'hash' => $hash,
+                    'candidate_id' => $candidateId,
+                ]);
+            }
+
+            // No candidate_id - try fast mode (single rp2p)
+            $candidates = $rp2pCandidateRepo->getCandidatesByHash($hash);
+
+            if (!empty($candidates) && count($candidates) > 1) {
+                // Multiple candidates - caller must pick
+                return $this->errorResponse(
+                    'Multiple route candidates available. Provide candidate_id to select one.',
+                    400,
+                    'candidate_selection_required',
+                );
+            }
+
+            if (!empty($candidates) && count($candidates) === 1) {
+                $candidate = $candidates[0];
+                $request = [
+                    'hash' => $candidate['hash'],
+                    'time' => $candidate['time'],
+                    'amount' => (int) $candidate['amount'],
+                    'currency' => $candidate['currency'],
+                    'senderPublicKey' => $candidate['sender_public_key'],
+                    'senderAddress' => $candidate['sender_address'],
+                    'signature' => $candidate['sender_signature'],
+                ];
+
+                $rp2pRepo = $this->services->getRp2pRepository();
+                $rp2pRepo->insertRp2pRequest($request);
+                $p2pRepo->updateStatus($hash, 'found');
+                $sendService->sendP2pEiou($request);
+                $rp2pCandidateRepo->deleteCandidatesByHash($hash);
+
+                return $this->successResponse([
+                    'message' => 'P2P transaction approved and sent',
+                    'hash' => $hash,
+                ]);
+            }
+
+            // No candidates - check for single rp2p (fast mode)
+            $rp2pRepo = $this->services->getRp2pRepository();
+            $rp2p = $rp2pRepo->getByHash($hash);
+
+            if ($rp2p) {
+                $request = [
+                    'hash' => $rp2p['hash'],
+                    'time' => $rp2p['time'],
+                    'amount' => (int) $rp2p['amount'],
+                    'currency' => $rp2p['currency'],
+                    'senderPublicKey' => $rp2p['sender_public_key'],
+                    'senderAddress' => $rp2p['sender_address'],
+                    'signature' => $rp2p['sender_signature'],
+                ];
+
+                $p2pRepo->updateStatus($hash, 'found');
+                $sendService->sendP2pEiou($request);
+
+                return $this->successResponse([
+                    'message' => 'P2P transaction approved and sent (fast mode)',
+                    'hash' => $hash,
+                ]);
+            }
+
+            return $this->errorResponse('No route available for this transaction', 404, 'no_route');
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to approve P2P transaction: ' . $e->getMessage(), 500, 'p2p_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/p2p/reject
+     */
+    private function rejectP2pApi(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data || empty($data['hash'])) {
+            return $this->errorResponse('Missing required field: hash', 400, 'missing_field');
+        }
+
+        $hash = $data['hash'];
+
+        try {
+            $p2pRepo = $this->services->getP2pRepository();
+            $p2p = $p2pRepo->getAwaitingApproval($hash);
+            if (!$p2p) {
+                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
+            }
+
+            if (empty($p2p['destination_address'])) {
+                return $this->errorResponse('Only the transaction originator can reject', 403, 'not_originator');
+            }
+
+            $p2pRepo->updateStatus($hash, Constants::STATUS_CANCELLED);
+
+            // Propagate cancel upstream
+            $p2pService = $this->services->getP2pService();
+            $p2pService->sendCancelNotificationForHash($hash);
+
+            // Clean up any remaining candidates
+            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $rp2pCandidateRepo->deleteCandidatesByHash($hash);
+
+            return $this->successResponse([
+                'message' => 'P2P transaction rejected and cancelled',
+                'hash' => $hash,
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to reject P2P transaction: ' . $e->getMessage(), 500, 'p2p_error');
         }
     }
 

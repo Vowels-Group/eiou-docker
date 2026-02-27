@@ -629,6 +629,17 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getAutoAcceptTransaction returns default when not set
+     */
+    public function testGetAutoAcceptTransactionReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+
+        $this->assertEquals(Constants::AUTO_ACCEPT_TRANSACTION, $instance->getAutoAcceptTransaction());
+    }
+
+    /**
      * Test toArray returns same as getAll
      */
     public function testToArrayReturnsSameAsGetAll(): void
