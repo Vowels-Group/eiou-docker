@@ -165,6 +165,28 @@ $knownCurrencies = array_keys($knownCurrencies);
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
+// Check Tor/SOCKS5 GUI status (written by TransportUtilityService and startup.sh watchdog)
+$torGuiStatus = null;
+$torGuiStatusFile = '/tmp/tor-gui-status';
+if (file_exists($torGuiStatusFile)) {
+    $torGuiRaw = @file_get_contents($torGuiStatusFile);
+    if ($torGuiRaw !== false) {
+        $torGuiData = json_decode($torGuiRaw, true);
+        if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+            $torGuiAge = time() - (int)$torGuiData['timestamp'];
+            if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                // Recovery older than 5 minutes — clean up
+                @unlink($torGuiStatusFile);
+            } elseif ($torGuiAge > 600) {
+                // Any status older than 10 minutes — stale, clean up
+                @unlink($torGuiStatusFile);
+            } else {
+                $torGuiStatus = $torGuiData;
+            }
+        }
+    }
+}
+
 // Track completed transactions for notifications (sent transactions)
 // Get previously known in-progress txids from session
 $prevInProgressTxids = $_SESSION['in_progress_txids'] ?? [];

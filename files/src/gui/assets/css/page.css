@@ -1523,6 +1523,13 @@ html {
     color: #000;
 }
 
+.modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
+    min-height: 0;
+}
+
 .modal-content form {
     padding: 1.5rem;
 }

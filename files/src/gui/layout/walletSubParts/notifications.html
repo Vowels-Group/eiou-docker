@@ -43,6 +43,43 @@
     </script>
 <?php endif; ?>
 
+<!-- Tor Connectivity Status Notification -->
+<?php if (!empty($torGuiStatus)): ?>
+<?php
+    $torStatusType = $torGuiStatus['status'] ?? '';
+    $torStatusMsg = htmlspecialchars($torGuiStatus['message'] ?? 'Tor connectivity issue detected');
+    $torStatusAge = time() - (int)($torGuiStatus['timestamp'] ?? 0);
+?>
+<?php if ($torStatusType === 'issue' || $torStatusType === 'restarting'): ?>
+<div class="alert alert-warning fade-in-up" style="margin-bottom: 1rem; border-left: 4px solid #ffc107;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <?php if ($torStatusType === 'restarting'): ?>
+            <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; color: #ffc107;"></i>
+        <?php else: ?>
+            <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem; color: #ffc107;"></i>
+        <?php endif; ?>
+        <div style="flex: 1;">
+            <h4 style="margin: 0; color: #664d03;">
+                <i class="fas fa-shield-alt"></i> Tor Connectivity Issue
+            </h4>
+            <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                <?php echo $torStatusMsg; ?>.
+                Transactions and messages may be delayed until connectivity is restored.
+            </p>
+        </div>
+    </div>
+</div>
+<?php elseif ($torStatusType === 'recovered' && $torStatusAge <= 300): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof showToast === 'function') {
+        showToast('Tor Restored', 'Tor connectivity has been restored. Transactions should resume normally.', 'success');
+    }
+});
+</script>
+<?php endif; ?>
+<?php endif; ?>
+
 <!-- In-Progress Transactions Notification -->
 <?php if (!empty($inProgressTransactions)): ?>
 <div id="in-progress-banner" class="alert alert-warning fade-in-up" style="margin-bottom: 1rem;">
