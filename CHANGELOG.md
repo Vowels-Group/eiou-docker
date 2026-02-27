@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Fix transaction details modal on mobile clipping P2P section off-screen — add `overflow-y: auto` to `.modal-body` so the full content scrolls within the viewport
 - Fix P2P approval gate missing in fast mode — originator now checks `autoAcceptTransaction` before auto-sending in fast mode, presenting the route for approval when the setting is off; previously only best-fee mode had the approval gate
 - Fix P2P expiration handler bypassing approval gate — `expireMessage()` called `selectAndForwardBestRp2p()` then unconditionally set status to `found`, auto-sending the transaction without user consent; now skips route selection when status is already `awaiting_approval`
 - Fix late-arriving RP2P candidates rejected during `awaiting_approval` — candidates that arrive after route selection was deferred are now accepted and stored so they appear in the user's route list on refresh
@@ -32,6 +33,7 @@ The project is currently in **ALPHA** status.
 - Rewrite README.md to focus on the single compose file with comprehensive configuration reference
 
 ### Added
+- Add Tor connectivity notification in wallet GUI — warning banner when SOCKS5 proxy failure is detected, spinner during restart, success toast on recovery; status communicated via `/tmp/tor-gui-status` between TransportUtilityService, watchdog, and the GUI
 - Add dynamic route count update in GUI approval view — candidate count header refreshes via AJAX as late-arriving routes are received
 - Add CLI and API support for P2P approval gate: `eiou p2p` commands (list, candidates, approve, reject) and REST API endpoints (`/api/v1/p2p/*`) allow users to manage P2P transactions awaiting approval when `autoAcceptTransaction` is disabled — previously only the GUI could do this
 - Add `getAwaitingApprovalList()` query to P2pRepository for retrieving originator P2P records in `awaiting_approval` status
