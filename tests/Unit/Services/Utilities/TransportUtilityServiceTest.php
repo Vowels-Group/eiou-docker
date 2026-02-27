@@ -761,6 +761,48 @@ class TransportUtilityServiceTest extends TestCase
     }
 
     /**
+     * Test sendByTor writes tor-gui-status file on SOCKS5 failure
+     *
+     * sendByTor() calls curl against 127.0.0.1:9050 SOCKS5 proxy. When the
+     * connection fails with errno 7 or a "SOCKS5" error string, it writes
+     * a JSON status file to /tmp/tor-gui-status so the GUI can display a
+     * notification to the user.
+     *
+     * This test invokes sendByTor() against an unreachable .onion address,
+     * which triggers the SOCKS5 failure path (no Tor daemon running in test).
+     */
+    public function testSendByTorWritesGuiStatusFileOnSocks5Failure(): void
+    {
+        $statusFile = '/tmp/tor-gui-status';
+        // Clean up any pre-existing status file
+        @unlink($statusFile);
+
+        // Use reflection to call the private sendByTor method
+        $reflection = new \ReflectionMethod($this->service, 'sendByTor');
+        $reflection->setAccessible(true);
+
+        // Call sendByTor with unreachable .onion address — will fail at SOCKS5
+        $result = $reflection->invoke($this->service, 'unreachable-test.onion', '{"test":"data"}');
+
+        // The method should return a JSON error response
+        $decoded = json_decode($result, true);
+        $this->assertIsArray($decoded);
+        $this->assertEquals('error', $decoded['status']);
+
+        // Verify the GUI status file was written
+        $this->assertFileExists($statusFile);
+
+        $statusData = json_decode(file_get_contents($statusFile), true);
+        $this->assertIsArray($statusData);
+        $this->assertEquals('issue', $statusData['status']);
+        $this->assertArrayHasKey('timestamp', $statusData);
+        $this->assertArrayHasKey('message', $statusData);
+
+        // Clean up
+        @unlink($statusFile);
+    }
+
+    /**
      * Test attemptFallbackDelivery returns null when no pubkey hash found
      */
     public function testAttemptFallbackDeliveryReturnsNullWhenNoPubkeyHash(): void

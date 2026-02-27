@@ -742,6 +742,28 @@ class MessageHelperTest extends TestCase
     }
 
     /**
+     * Test getGuiFriendlyMessage returns friendly message for RATE_LIMIT_EXCEEDED
+     */
+    public function testGetGuiFriendlyMessageForRateLimitExceeded(): void
+    {
+        $this->assertEquals(
+            'Too many requests. Please wait a moment before trying again.',
+            MessageHelper::getGuiFriendlyMessage('RATE_LIMIT_EXCEEDED', '')
+        );
+    }
+
+    /**
+     * Test getGuiFriendlyMessage returns friendly message for TRANSACTION_IN_PROGRESS
+     */
+    public function testGetGuiFriendlyMessageForTransactionInProgress(): void
+    {
+        $this->assertEquals(
+            'Another transaction to this contact is already in progress. Please wait for it to complete.',
+            MessageHelper::getGuiFriendlyMessage('TRANSACTION_IN_PROGRESS', '')
+        );
+    }
+
+    /**
      * Test getGuiFriendlyMessage covers all documented error codes
      */
     public function testGetGuiFriendlyMessageCoversAllDocumentedErrorCodes(): void
@@ -777,6 +799,8 @@ class MessageHelperTest extends TestCase
             'MISSING_ADDRESS',
             'MISSING_PARAMS',
             'NO_ADDRESS',
+            'RATE_LIMIT_EXCEEDED',
+            'TRANSACTION_IN_PROGRESS',
             'GENERAL_ERROR',
             'VALIDATION_ERROR',
         ];

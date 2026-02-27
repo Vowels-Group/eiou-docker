@@ -366,6 +366,209 @@ class FunctionsTest extends TestCase
     }
 
     // =========================================================================
+    // Tor/SOCKS5 GUI Status Tests
+    // =========================================================================
+
+    /**
+     * Test Tor GUI status file with 'issue' within 10 minutes is valid
+     */
+    public function testTorGuiStatusIssueWithinTenMinutesIsValid(): void
+    {
+        $torGuiStatusFile = tempnam(sys_get_temp_dir(), 'tor-gui-test-');
+        file_put_contents($torGuiStatusFile, json_encode([
+            'status' => 'issue',
+            'timestamp' => time() - 300, // 5 minutes ago
+            'message' => 'Tor connectivity issue detected'
+        ]));
+
+        $torGuiStatus = null;
+        if (file_exists($torGuiStatusFile)) {
+            $torGuiRaw = @file_get_contents($torGuiStatusFile);
+            if ($torGuiRaw !== false) {
+                $torGuiData = json_decode($torGuiRaw, true);
+                if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+                    $torGuiAge = time() - (int)$torGuiData['timestamp'];
+                    if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                        @unlink($torGuiStatusFile);
+                    } elseif ($torGuiAge > 600) {
+                        @unlink($torGuiStatusFile);
+                    } else {
+                        $torGuiStatus = $torGuiData;
+                    }
+                }
+            }
+        }
+
+        $this->assertNotNull($torGuiStatus);
+        $this->assertEquals('issue', $torGuiStatus['status']);
+
+        @unlink($torGuiStatusFile);
+    }
+
+    /**
+     * Test Tor GUI status file with 'recovered' within 5 minutes is valid
+     */
+    public function testTorGuiStatusRecoveredWithinFiveMinutesIsValid(): void
+    {
+        $torGuiStatusFile = tempnam(sys_get_temp_dir(), 'tor-gui-test-');
+        file_put_contents($torGuiStatusFile, json_encode([
+            'status' => 'recovered',
+            'timestamp' => time() - 120, // 2 minutes ago
+            'message' => 'Tor connectivity restored'
+        ]));
+
+        $torGuiStatus = null;
+        if (file_exists($torGuiStatusFile)) {
+            $torGuiRaw = @file_get_contents($torGuiStatusFile);
+            if ($torGuiRaw !== false) {
+                $torGuiData = json_decode($torGuiRaw, true);
+                if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+                    $torGuiAge = time() - (int)$torGuiData['timestamp'];
+                    if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                        @unlink($torGuiStatusFile);
+                    } elseif ($torGuiAge > 600) {
+                        @unlink($torGuiStatusFile);
+                    } else {
+                        $torGuiStatus = $torGuiData;
+                    }
+                }
+            }
+        }
+
+        $this->assertNotNull($torGuiStatus);
+        $this->assertEquals('recovered', $torGuiStatus['status']);
+
+        @unlink($torGuiStatusFile);
+    }
+
+    /**
+     * Test Tor GUI status file with 'recovered' older than 5 minutes is cleaned up
+     */
+    public function testTorGuiStatusRecoveredOlderThanFiveMinutesIsCleanedUp(): void
+    {
+        $torGuiStatusFile = tempnam(sys_get_temp_dir(), 'tor-gui-test-');
+        file_put_contents($torGuiStatusFile, json_encode([
+            'status' => 'recovered',
+            'timestamp' => time() - 360, // 6 minutes ago
+            'message' => 'Tor connectivity restored'
+        ]));
+
+        $torGuiStatus = null;
+        if (file_exists($torGuiStatusFile)) {
+            $torGuiRaw = @file_get_contents($torGuiStatusFile);
+            if ($torGuiRaw !== false) {
+                $torGuiData = json_decode($torGuiRaw, true);
+                if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+                    $torGuiAge = time() - (int)$torGuiData['timestamp'];
+                    if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                        @unlink($torGuiStatusFile);
+                    } elseif ($torGuiAge > 600) {
+                        @unlink($torGuiStatusFile);
+                    } else {
+                        $torGuiStatus = $torGuiData;
+                    }
+                }
+            }
+        }
+
+        $this->assertNull($torGuiStatus);
+        $this->assertFileDoesNotExist($torGuiStatusFile);
+    }
+
+    /**
+     * Test Tor GUI status file with any status older than 10 minutes is cleaned up
+     */
+    public function testTorGuiStatusOlderThanTenMinutesIsCleanedUp(): void
+    {
+        $torGuiStatusFile = tempnam(sys_get_temp_dir(), 'tor-gui-test-');
+        file_put_contents($torGuiStatusFile, json_encode([
+            'status' => 'issue',
+            'timestamp' => time() - 700, // ~11.7 minutes ago
+            'message' => 'Tor connectivity issue detected'
+        ]));
+
+        $torGuiStatus = null;
+        if (file_exists($torGuiStatusFile)) {
+            $torGuiRaw = @file_get_contents($torGuiStatusFile);
+            if ($torGuiRaw !== false) {
+                $torGuiData = json_decode($torGuiRaw, true);
+                if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+                    $torGuiAge = time() - (int)$torGuiData['timestamp'];
+                    if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                        @unlink($torGuiStatusFile);
+                    } elseif ($torGuiAge > 600) {
+                        @unlink($torGuiStatusFile);
+                    } else {
+                        $torGuiStatus = $torGuiData;
+                    }
+                }
+            }
+        }
+
+        $this->assertNull($torGuiStatus);
+        $this->assertFileDoesNotExist($torGuiStatusFile);
+    }
+
+    /**
+     * Test Tor GUI status with missing file returns null
+     */
+    public function testTorGuiStatusMissingFileReturnsNull(): void
+    {
+        $torGuiStatusFile = '/tmp/tor-gui-test-nonexistent-' . uniqid();
+
+        $torGuiStatus = null;
+        if (file_exists($torGuiStatusFile)) {
+            $torGuiRaw = @file_get_contents($torGuiStatusFile);
+            if ($torGuiRaw !== false) {
+                $torGuiData = json_decode($torGuiRaw, true);
+                if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+                    $torGuiAge = time() - (int)$torGuiData['timestamp'];
+                    if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                        @unlink($torGuiStatusFile);
+                    } elseif ($torGuiAge > 600) {
+                        @unlink($torGuiStatusFile);
+                    } else {
+                        $torGuiStatus = $torGuiData;
+                    }
+                }
+            }
+        }
+
+        $this->assertNull($torGuiStatus);
+    }
+
+    /**
+     * Test Tor GUI status with invalid JSON returns null
+     */
+    public function testTorGuiStatusInvalidJsonReturnsNull(): void
+    {
+        $torGuiStatusFile = tempnam(sys_get_temp_dir(), 'tor-gui-test-');
+        file_put_contents($torGuiStatusFile, 'not valid json');
+
+        $torGuiStatus = null;
+        if (file_exists($torGuiStatusFile)) {
+            $torGuiRaw = @file_get_contents($torGuiStatusFile);
+            if ($torGuiRaw !== false) {
+                $torGuiData = json_decode($torGuiRaw, true);
+                if (is_array($torGuiData) && isset($torGuiData['status'], $torGuiData['timestamp'])) {
+                    $torGuiAge = time() - (int)$torGuiData['timestamp'];
+                    if ($torGuiData['status'] === 'recovered' && $torGuiAge > 300) {
+                        @unlink($torGuiStatusFile);
+                    } elseif ($torGuiAge > 600) {
+                        @unlink($torGuiStatusFile);
+                    } else {
+                        $torGuiStatus = $torGuiData;
+                    }
+                }
+            }
+        }
+
+        $this->assertNull($torGuiStatus);
+
+        @unlink($torGuiStatusFile);
+    }
+
+    // =========================================================================
     // JSON Response Tests
     // =========================================================================
 

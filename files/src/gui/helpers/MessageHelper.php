@@ -386,6 +386,12 @@ class MessageHelper
             'MISSING_PARAMS' => 'Required information is missing. Please fill in all fields.',
             'NO_ADDRESS' => 'No valid address found for this contact.',
 
+            // Rate limiting
+            'RATE_LIMIT_EXCEEDED' => 'Too many requests. Please wait a moment before trying again.',
+
+            // Transaction state
+            'TRANSACTION_IN_PROGRESS' => 'Another transaction to this contact is already in progress. Please wait for it to complete.',
+
             // General errors
             'GENERAL_ERROR' => 'An error occurred. Please try again.',
             'VALIDATION_ERROR' => 'Please check your input and try again.',

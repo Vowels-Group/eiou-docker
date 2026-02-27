@@ -13,6 +13,9 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Fix rate limit errors showing raw JSON instead of user-friendly flash message in the GUI — replace `enforce()` (which called `exit` with JSON) with `checkLimit()` + `MessageHelper::redirectMessage()` so the user sees a proper warning banner
+- Fix GUI transaction rate limit bucket not applied to `sendEIOU` action — add `sendEIOU` to the `transaction` case in SecurityInit.php action mapping
+- Remove dead `enforce()` method from `RateLimiterService` and its interface — replaced by `checkLimit()` + GUI flash redirect in SecurityInit.php
 - Fix transaction details modal on mobile clipping P2P section off-screen — add `overflow-y: auto` to `.modal-body` so the full content scrolls within the viewport
 - Fix P2P approval gate missing in fast mode — originator now checks `autoAcceptTransaction` before auto-sending in fast mode, presenting the route for approval when the setting is off; previously only best-fee mode had the approval gate
 - Fix P2P expiration handler bypassing approval gate — `expireMessage()` called `selectAndForwardBestRp2p()` then unconditionally set status to `found`, auto-sending the transaction without user consent; now skips route selection when status is already `awaiting_approval`
