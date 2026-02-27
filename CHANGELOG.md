@@ -24,6 +24,7 @@ The project is currently in **ALPHA** status.
 - Skip proactive hold for P2P transactions with insufficient remaining lifetime — prevents holding transactions that will become zombies because the P2P expires on all other relay nodes before sync can complete
 
 ### Changed
+- Make integration tests manual-only — no longer auto-runs on every PR; trigger via `workflow_dispatch` from the Actions tab or by adding the `run-integration` label to a PR
 - Group DatabaseSchema tables into 6 logical sections (Contacts & Network, Transactions & Chain Integrity, P2P Routing, Message Delivery, API, System & Security) with header comments; update matching order in DatabaseSetup and DatabaseSchemaTest
 - Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
 - Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
