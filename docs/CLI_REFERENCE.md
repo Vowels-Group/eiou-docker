@@ -596,7 +596,20 @@ eiou p2p reject abc123def456
 - **Best-fee mode** (multiple candidates): Use `eiou p2p candidates <hash>` to view options, then `eiou p2p approve <hash> <index>` to select a route
 - If multiple candidates exist but no index is provided, an error is returned
 
-**Note:** P2P transactions enter `awaiting_approval` status when `autoAcceptTransaction` is set to `false` in settings. Without these CLI commands (or the GUI/API equivalents), such transactions would remain stuck.
+**Routing mode scenarios:**
+
+| Routing Mode | `autoAcceptTransaction` | What Happens |
+|-------------|------------------------|--------------|
+| Fast (default) | ON (default) | Route is auto-sent — no approval needed |
+| Fast | OFF | 1 route shown, use `eiou p2p approve <hash>` |
+| Best-fee (`--best`) | ON | Cheapest route is auto-sent — no approval needed |
+| Best-fee | OFF | All routes listed, use `eiou p2p candidates <hash>` then `eiou p2p approve <hash> <index>` |
+| Best-fee + Tor dest | OFF | Internally fast mode — 1 route shown, use `eiou p2p approve <hash>` |
+
+**Notes:**
+- P2P transactions enter `awaiting_approval` status when `autoAcceptTransaction` is `false`. Without these commands (or GUI/API equivalents), such transactions expire through normal cleanup.
+- Late-arriving route candidates are still accepted while a transaction is awaiting approval and will appear in the candidate list.
+- Tor destinations force fast mode internally because Tor hidden services use single-hop routing.
 
 ---
 

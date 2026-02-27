@@ -61,6 +61,8 @@ All requests require HMAC-SHA256 authentication:
 
 ### P2P Approval Endpoints
 
+Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mode lists all routes. Tor destinations use fast mode internally.
+
 | Method | Endpoint | Permission | Description |
 |--------|----------|------------|-------------|
 | `GET` | `/api/v1/p2p` | `wallet:read` | List P2P transactions awaiting approval |

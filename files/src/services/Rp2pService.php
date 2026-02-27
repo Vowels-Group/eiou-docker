@@ -298,9 +298,18 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Check if original p2p was sent by user
         if(isset($p2p['destination_address'])) {
-            // Always auto-send when handleRp2pRequest is called (fast mode first-response-wins,
-            // or auto-accept best-fee selection from selectAndForwardBestRp2p).
-            // Manual approval gate for best-fee mode lives in selectAndForwardBestRp2p().
+            // Manual approval gate: present route for user approval instead of auto-sending.
+            // Applies to fast mode and best-fee auto-selection (called from selectAndForwardBestRp2p).
+            // Best-fee manual approval is handled earlier in selectAndForwardBestRp2p() and never reaches here.
+            if (!$this->currentUser->getAutoAcceptTransaction()) {
+                $this->p2pRepository->setRp2pAmount($request['hash'], $request['amount']);
+                $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_AWAITING_APPROVAL);
+                Logger::getInstance()->info("P2P route awaiting user approval", [
+                    'hash' => $request['hash'],
+                    'amount' => $request['amount'],
+                ]);
+                return true;
+            }
             $this->p2pRepository->updateStatus($request['hash'], 'found');
             $this->getP2pTransactionSender()->sendP2pEiou($request);
         } else{
@@ -548,10 +557,11 @@ class Rp2pService implements Rp2pServiceInterface {
      * @return void
      */
     public function handleRp2pCandidate(array $request, array $p2p): void {
-        // Don't accept late-arriving candidates if selection has already been made.
-        // This prevents the candidate count from changing after the user sees the route list.
+        // Don't accept candidates if selection has already been made or P2P is terminal.
+        // Allow candidates during awaiting_approval so late-arriving routes still appear
+        // in the user's candidate list (the GUI fetches candidates via AJAX on each load).
         $status = $p2p['status'] ?? '';
-        if (in_array($status, [Constants::STATUS_AWAITING_APPROVAL, 'found', 'paid', 'completed', Constants::STATUS_CANCELLED], true)) {
+        if (in_array($status, ['found', 'paid', 'completed', Constants::STATUS_CANCELLED], true)) {
             return;
         }
 
@@ -593,6 +603,12 @@ class Rp2pService implements Rp2pServiceInterface {
         // Store the candidate and count the response, but defer selection to the daemon's
         // checkBestFeeSelection call after it processes and forwards the queued P2P.
         if ($p2p['status'] === Constants::STATUS_QUEUED) {
+            return;
+        }
+
+        // Don't re-trigger selection if already awaiting user approval.
+        // The candidate was stored above and will appear when the GUI refreshes.
+        if ($status === Constants::STATUS_AWAITING_APPROVAL) {
             return;
         }
 
@@ -693,6 +709,12 @@ class Rp2pService implements Rp2pServiceInterface {
         // see sentCount=0 and prematurely trigger cancellation. The daemon's
         // checkBestFeeSelection call after processing handles deferred responses.
         if ($status === Constants::STATUS_QUEUED) {
+            return;
+        }
+
+        // Don't re-trigger selection if already awaiting user approval.
+        // The cancel was counted above; no further action needed.
+        if ($status === Constants::STATUS_AWAITING_APPROVAL) {
             return;
         }
 

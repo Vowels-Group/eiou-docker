@@ -1404,6 +1404,23 @@ Reject a pending chain drop proposal.
 
 Manage P2P transactions awaiting manual approval. These endpoints are used when `autoAcceptTransaction` is disabled in wallet settings.
 
+### Routing Mode Behavior
+
+How P2P transactions behave depends on the routing mode and `autoAcceptTransaction` setting:
+
+| Routing Mode | `autoAcceptTransaction` | Behavior |
+|-------------|------------------------|----------|
+| Fast (`--fast` / default) | ON (default) | First route response is auto-sent immediately |
+| Fast | OFF | First route response is held for approval — user sees 1 route to accept or reject |
+| Best-fee (`--best`) | ON | All route responses are collected, cheapest is auto-sent |
+| Best-fee | OFF | All route responses are collected and listed — user picks which route to use |
+| Best-fee + Tor destination | OFF | Internally uses fast mode (Tor requires single-hop); user sees 1 route to accept or reject |
+
+When a transaction enters `awaiting_approval` status:
+- Late-arriving route candidates are still accepted and added to the candidate list
+- The transaction will eventually expire through normal cleanup if not acted upon
+- Cancel notifications from relay nodes are tracked but do not auto-trigger route selection
+
 ### GET /api/v1/p2p
 
 List all P2P transactions awaiting approval.

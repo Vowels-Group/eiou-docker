@@ -13,6 +13,10 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Fix P2P approval gate missing in fast mode — originator now checks `autoAcceptTransaction` before auto-sending in fast mode, presenting the route for approval when the setting is off; previously only best-fee mode had the approval gate
+- Fix P2P expiration handler bypassing approval gate — `expireMessage()` called `selectAndForwardBestRp2p()` then unconditionally set status to `found`, auto-sending the transaction without user consent; now skips route selection when status is already `awaiting_approval`
+- Fix late-arriving RP2P candidates rejected during `awaiting_approval` — candidates that arrive after route selection was deferred are now accepted and stored so they appear in the user's route list on refresh
+- Fix cancel notifications re-triggering route selection during `awaiting_approval` — cancel count is tracked but `selectAndForwardBestRp2p` is no longer called when the user hasn't yet approved
 - Fix P2P approval gate firing on every fast-mode RP2P response instead of only in best-fee mode — the gate now correctly waits for all routes to accumulate in best-fee mode before presenting choices, and fast mode always auto-sends immediately
 - Fix approved P2P transactions failing to send (daemon crash: "Required field 'time' is missing") — the rp2p record was not inserted before calling sendP2pEiou in the GUI/CLI/API approval flows, causing processOutgoingP2p to crash when looking up the route data
 
@@ -22,6 +26,7 @@ The project is currently in **ALPHA** status.
 - Rewrite README.md to focus on the single compose file with comprehensive configuration reference
 
 ### Added
+- Add dynamic route count update in GUI approval view — candidate count header refreshes via AJAX as late-arriving routes are received
 - Add CLI and API support for P2P approval gate: `eiou p2p` commands (list, candidates, approve, reject) and REST API endpoints (`/api/v1/p2p/*`) allow users to manage P2P transactions awaiting approval when `autoAcceptTransaction` is disabled — previously only the GUI could do this
 - Add `getAwaitingApprovalList()` query to P2pRepository for retrieving originator P2P records in `awaiting_approval` status
 - Add P2P transaction approval gate: configurable toggle (`AUTO_ACCEPT_TRANSACTION`) that pauses P2P transactions at the RP2P response stage so the originator can review route fees before committing; relay nodes always auto-forward regardless of the setting (#663)
