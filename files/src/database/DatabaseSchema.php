@@ -278,6 +278,33 @@ function getP2pTableSchema() {
     )";
 }
 
+// P2P Senders table - tracks all upstream senders per P2P hash for multi-path RP2P delivery
+function getP2pSendersTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS p2p_senders (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        sender_address VARCHAR(255) NOT NULL,
+        sender_public_key TEXT NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address),
+        INDEX idx_p2p_senders_hash (hash),
+        INDEX idx_p2p_senders_created_at (created_at)
+    )";
+}
+
+// P2P Relayed Contacts table - tracks contacts that returned already_relayed during broadcast (two-phase selection)
+function getP2pRelayedContactsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS p2p_relayed_contacts (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        contact_address VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_p2p_relayed_hash_addr (hash, contact_address),
+        INDEX idx_p2p_relayed_hash (hash),
+        INDEX idx_p2p_relayed_created_at (created_at)
+    )";
+}
+
 // Response to peer to peer request table
 function getRp2pTableSchema() {
     return "CREATE TABLE IF NOT EXISTS rp2p (
@@ -312,33 +339,6 @@ function getRp2pCandidatesTableSchema() {
         INDEX idx_rp2p_cand_hash (hash),
         INDEX idx_rp2p_cand_hash_amount (hash, amount ASC),
         INDEX idx_rp2p_cand_created_at (created_at)
-    )";
-}
-
-// P2P Senders table - tracks all upstream senders per P2P hash for multi-path RP2P delivery
-function getP2pSendersTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS p2p_senders (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL,
-        sender_address VARCHAR(255) NOT NULL,
-        sender_public_key TEXT NOT NULL,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address),
-        INDEX idx_p2p_senders_hash (hash),
-        INDEX idx_p2p_senders_created_at (created_at)
-    )";
-}
-
-// P2P Relayed Contacts table - tracks contacts that returned already_relayed during broadcast (two-phase selection)
-function getP2pRelayedContactsTableSchema() {
-    return "CREATE TABLE IF NOT EXISTS p2p_relayed_contacts (
-        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL,
-        contact_address VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE INDEX idx_p2p_relayed_hash_addr (hash, contact_address),
-        INDEX idx_p2p_relayed_hash (hash),
-        INDEX idx_p2p_relayed_created_at (created_at)
     )";
 }
 
