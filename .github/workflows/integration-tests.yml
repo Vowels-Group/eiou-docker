@@ -1,7 +1,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Runs Docker integration tests on pull requests. Builds the eiou image,
-# deploys a 4-node HTTP topology, and runs the quick test subset.
+# Runs Docker integration tests. NOT automatic — triggered by:
+#   1. Manual dispatch from the Actions tab (choose topology + subset)
+#   2. Adding the "run-integration" label to a PR (runs http4/quick)
 #
 # GitHub Actions runners: 2 vCPUs, 7GB RAM, Docker pre-installed.
 # The http4 topology (~1.1GB RAM) fits comfortably. Larger topologies
@@ -12,14 +13,7 @@ name: Integration Tests
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'files/src/**'
-      - 'files/composer.json'
-      - 'tests/**'
-      - 'eiou.dockerfile'
-      - 'startup.sh'
-      - 'baseconfig/**'
-      - 'scripts/**'
+    types: [labeled]
   workflow_dispatch:
     inputs:
       topology:
@@ -57,6 +51,9 @@ jobs:
     name: Docker Integration (${{ github.event.inputs.topology || 'http4' }} / ${{ github.event.inputs.subset || 'quick' }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-integration')
 
     steps:
       - name: "Checkout repository"
