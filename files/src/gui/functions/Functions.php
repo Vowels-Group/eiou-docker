@@ -386,8 +386,20 @@ try {
 
     $dlqStats        = $dlqRepo->getStatistics();
     $dlqPendingCount = $dlqRepo->getPendingCount();
+
+    // Collect message_ids for active (pending/retrying) transaction DLQ entries so
+    // the transaction history can show a DLQ indicator on affected transactions.
+    $dlqActiveTxMessageIds = [];
+    $activeTxDlq = array_merge(
+        $dlqRepo->getByMessageType('transaction', 'pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE),
+        $dlqRepo->getByMessageType('transaction', 'retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE)
+    );
+    foreach ($activeTxDlq as $dlqEntry) {
+        $dlqActiveTxMessageIds[] = $dlqEntry['message_id'];
+    }
 } catch (Exception $e) {
     // Silently fail - DLQ section is non-critical
+    $dlqActiveTxMessageIds = [];
 }
 
 // Fetch available credit per contact and merge into contact arrays

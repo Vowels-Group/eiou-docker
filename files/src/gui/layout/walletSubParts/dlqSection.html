@@ -155,7 +155,8 @@
                         <?php echo ucfirst(htmlspecialchars($status)); ?>
                     </span>
                 </td>
-                <td data-label="" class="dlq-actions-cell">
+                <td data-label="">
+                    <div class="dlq-actions-cell">
                     <?php if ($canRetry): ?>
                     <button type="button"
                             class="btn btn-sm btn-success dlq-retry-btn"
@@ -182,6 +183,7 @@
                         <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
                     </span>
                     <?php endif; ?>
+                    </div>
                 </td>
             </tr>
             <?php endforeach; ?>

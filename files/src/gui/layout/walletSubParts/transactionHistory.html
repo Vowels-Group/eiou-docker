@@ -58,6 +58,20 @@
                         <?php else: ?>
                             <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                         <?php endif; ?>
+                        <?php
+                        $ipTxidInDlq = false;
+                        if (!empty($ipTx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                            foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                                if (strpos($dlqMsgId, $ipTx['txid']) !== false) {
+                                    $ipTxidInDlq = true;
+                                    break;
+                                }
+                            }
+                        }
+                        ?>
+                        <?php if ($ipTxidInDlq): ?>
+                            <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon"><i class="fas fa-inbox"></i> DLQ</a>
+                        <?php endif; ?>
                     </div>
                     <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
                     <div class="tx-in-progress-details" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;">
@@ -164,6 +178,20 @@
                                 <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                             <?php else: ?>
                                 <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
+                            <?php endif; ?>
+                            <?php
+                            $txidInDlq = false;
+                            if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                                foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                                    if (strpos($dlqMsgId, $tx['txid']) !== false) {
+                                        $txidInDlq = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            ?>
+                            <?php if ($txidInDlq): ?>
+                                <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon"><i class="fas fa-inbox"></i> DLQ</a>
                             <?php endif; ?>
                         </div>
                     </div>

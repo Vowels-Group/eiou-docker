@@ -2778,12 +2778,20 @@ html {
     word-break: break-all;
 }
 
-/* Action buttons cell */
+/* Action buttons cell (inner div inside <td>) */
 .dlq-actions-cell {
     white-space: nowrap;
     display: flex;
     gap: 0.4rem;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+/* DLQ indicator badge shown on transactions that are in the Dead Letter Queue */
+.dlq-tx-indicator {
+    background: #dc3545;
+    color: #fff;
+    cursor: pointer;
 }
 
 /* Non-retryable label for time-sensitive relay messages */
