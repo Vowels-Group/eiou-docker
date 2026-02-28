@@ -13,6 +13,15 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Add Dead Letter Queue (DLQ) management UI (`dlqSection.html`): filterable table (Pending & Retrying / Pending Only / Resolved / Abandoned / All), per-item Retry and Abandon actions, stats bar with per-status counts, mobile card layout at ≤640px using `data-label` attributes, and a "Failed Messages (N)" quick-action card in the dashboard header that links to the DLQ when pending items exist
+- Add DLQ indicator badge (red **DLQ** pill) to Recent Transactions and In-Progress Transactions lists — shown when a transaction has a pending or retrying DLQ entry; clicking navigates to `#dlq` for retry or abandon
+- Add CLI DLQ management commands: `dlq list [status]` (lists DLQ entries), `dlq retry <id>` (retry a pending entry), `dlq abandon <id>` (abandon a pending entry), `dlq stats` (summary counts)
+- Add `DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 60` constant — maximum time allowed for direct (non-P2P) transaction delivery (one Tor round-trip: 2 × `TOR_TRANSPORT_TIMEOUT_SECONDS`); used as the post-expiry delivery window granted to P2P transactions
+- Add `expires_at DATETIME(6)` column and index to the `transactions` table — `NULL` means no expiry (direct tx default); P2P transactions set `expires_at` to P2P expiry + 60s; direct transactions set `expires_at` only when `directTxExpiration > 0`
+- Add `directTxExpiration` user setting (default `0` = no expiry) — configurable via GUI Settings, `changesettings directtxexpiration <seconds>` CLI command, and REST API; when set, direct transactions are cancelled after this many seconds if still undelivered
+- Add `CleanupService::expireStaleTransactions()` — independently cancels transactions past their `expires_at` deadline; runs each cleanup cycle after P2P expiry processing, keeping P2P and transaction lifecycles decoupled
+- Add `TransactionRepository::cancelPendingByMemo()` — cancels only `pending` transactions for a given memo hash, leaving in-flight (`sending`/`sent`/`accepted`) transactions to complete naturally or expire via their own `expires_at`
+- Add `TransactionRepository::getExpiredTransactions()` and `setExpiresAt()` helper methods
 - Add persistent user-configurable settings infrastructure: `UserContext::getConfigurableDefaults()` provides canonical map of all 41 configurable settings with Constants defaults; `Application::migrateDefaultConfig()` adds missing keys to `defaultconfig.json` on boot without overwriting user values; `Wallet.php` uses canonical map instead of hardcoded arrays
 - Add 30 new user-configurable settings covering feature toggles (including `autoAcceptTransaction` from #663), backup/logging, data retention, rate limiting, network timeouts, sync tuning, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
 - Expose all 30 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
@@ -21,6 +30,9 @@ The project is currently in **ALPHA** status.
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
+- Fix `CleanupService::expireMessage()` cancelling all transactions (including in-flight `sending`/`sent`/`accepted` ones) when their parent P2P request expires — now uses `cancelPendingByMemo()` so only `pending` transactions are cancelled; in-flight transactions are allowed to complete and are independently expired via `expires_at` if they miss their delivery deadline
+- Fix actions cell alignment in DLQ table — `display: flex` was applied directly to the `<td>`, causing the row bottom border to misalign for rows with short action content (e.g. abandoned rows); flex layout moved to an inner `<div class="dlq-actions-cell">` inside the `<td>`
+- Fix type badge wrapping to two lines in DLQ table — add `white-space: nowrap; display: inline-flex; align-items: center; gap: 0.25rem` to `.tx-type-badge`
 - Fix API CORS Origins setting saved to `defaultconfig.json` but never applied at runtime — `Api.php` was reading from `Constants::API_CORS_ALLOWED_ORIGINS` instead of `UserContext`; now reads from `UserContext::getInstance()->getApiCorsAllowedOrigins()`
 - Fix `apiEnabled` setting having no enforcement gate — API always responded regardless of the toggle; now returns HTTP 403 with `api_disabled` error when the setting is off
 - Fix `contactStatusEnabled` read from `Constants::CONTACT_STATUS_ENABLED` in `ContactStatusService::handleStatus()` — incoming contact status requests were never actually gated by user config; now uses `$this->currentUser->getContactStatusEnabled()`

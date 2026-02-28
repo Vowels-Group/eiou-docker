@@ -196,7 +196,8 @@ Handles settings and debug operations.
 | `maxFee` | float | Maximum fee percentage |
 | `defaultCreditLimit` | float | Default credit limit |
 | `maxP2pLevel` | int | Maximum P2P routing hops |
-| `p2pExpiration` | int | P2P request timeout (seconds) |
+| `p2pExpiration` | int | P2P routing request timeout (seconds); P2P transactions get an extra 60s delivery window after this expires |
+| `directTxExpiration` | int | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: 60s (one Tor round-trip) |
 | `maxOutput` | int | Max display lines |
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
@@ -444,7 +445,13 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 > `p2p` and `rp2p` items show an **"Expired"** label instead of a Retry button. Use **Abandon** to clear them.
 
 **Quick Action Card:**
-A **"Failed Messages (N)"** warning card appears in the Quick Actions bar whenever pending DLQ items exist, linking directly to `#dlq`.
+A **"Failed Messages (N)"** warning card appears in the Quick Actions bar (before the Settings card) whenever pending DLQ items exist, linking directly to `#dlq`.
+
+**DLQ Indicator in Transaction History:**
+Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery.
+
+**Mobile Layout:**
+At ≤640px the table collapses to a stacked card layout — each cell shows its column label as a prefix.
 
 **Notifications:**
 A warning toast appears when new items are added to the DLQ (tracked per session — each item fires once per browser session).

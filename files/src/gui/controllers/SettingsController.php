@@ -159,6 +159,16 @@ class SettingsController
             }
         }
 
+        // Direct Transaction Delivery Expiration (seconds, 0 = no expiry)
+        if (isset($_POST['directTxExpiration'])) {
+            $value = $_POST['directTxExpiration'];
+            if (is_numeric($value) && intval($value) >= 0) {
+                $settings['directTxExpiration'] = intval($value);
+            } else {
+                $errors[] = 'Invalid direct transaction expiration: must be a non-negative integer (0 = no expiry)';
+            }
+        }
+
         // Max Output
         if (isset($_POST['maxOutput'])) {
             $value = $_POST['maxOutput'];

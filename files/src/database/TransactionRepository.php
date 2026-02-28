@@ -37,7 +37,7 @@ class TransactionRepository extends AbstractRepository {
         'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
-        'sending_started_at', 'recovery_count', 'needs_manual_review'
+        'sending_started_at', 'recovery_count', 'needs_manual_review', 'expires_at'
     ];
 
     /**
@@ -735,6 +735,68 @@ class TransactionRepository extends AbstractRepository {
             output(outputTransactionStatusUpdated($status, $typeTransaction, $identifier), 'SILENT');
         }
 
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Cancel only 'pending' transactions matching a memo/hash.
+     *
+     * Used by CleanupService when a P2P expires: transactions already in-flight
+     * (sending/sent/accepted) are left alone — they have their own expires_at
+     * deadline and should be allowed to complete naturally.
+     *
+     * @param string $memo P2P hash / transaction memo
+     * @return bool True on success
+     */
+    public function cancelPendingByMemo(string $memo): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET status = :cancelled
+                  WHERE memo = :memo
+                  AND status = :pending";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':cancelled', Constants::STATUS_CANCELLED);
+        $stmt->bindValue(':memo', $memo);
+        $stmt->bindValue(':pending', Constants::STATUS_PENDING);
+        try {
+            $stmt->execute();
+            return true;
+        } catch (PDOException $e) {
+            $this->logError("Failed to cancel pending transactions by memo", $e);
+            return false;
+        }
+    }
+
+    /**
+     * Get transactions that have passed their expires_at deadline and are still in
+     * a non-final state (pending/sending/sent).
+     *
+     * @return array Array of expired transaction records
+     */
+    public function getExpiredTransactions(): array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE expires_at IS NOT NULL
+                  AND expires_at < NOW()
+                  AND status NOT IN ('completed', 'rejected', 'cancelled', 'failed')
+                  ORDER BY expires_at ASC";
+        $stmt = $this->pdo->prepare($query);
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve expired transactions", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Set the expires_at delivery deadline for a transaction.
+     *
+     * @param string $txid Transaction ID
+     * @param string $expiresAt DATETIME(6) string (e.g. date('Y-m-d H:i:s', ...))
+     * @return bool Success status
+     */
+    public function setExpiresAt(string $txid, string $expiresAt): bool {
+        $affectedRows = $this->update(['expires_at' => $expiresAt], 'txid', $txid);
         return $affectedRows >= 0;
     }
 

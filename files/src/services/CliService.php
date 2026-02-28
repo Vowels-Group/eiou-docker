@@ -253,6 +253,13 @@ class CliService implements CliServiceInterface {
                     return;
                 }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'directtxexpiration'){
+                $key = 'directTxExpiration';
+                if (!is_numeric($argv[3]) || intval($argv[3]) < 0) {
+                    $output->validationError('directTxExpiration', 'Must be a non-negative integer (0 = no expiry)');
+                    return;
+                }
+                $value = intval($argv[3]);
             } elseif(strtolower($argv[2]) === 'maxoutput'){
                 $key = 'maxOutput';
                 if (!is_numeric($argv[3]) || intval($argv[3]) < 0) {
@@ -472,6 +479,7 @@ class CliService implements CliServiceInterface {
             echo "\t12. Auto-backup database\n";
             echo "\t13. Trusted proxy IPs\n";
             echo "\t14. Auto-accept P2P transactions\n";
+            echo "\t15. Direct transaction delivery expiration\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -636,6 +644,17 @@ class CliService implements CliServiceInterface {
                         echo "Error: Please enter yes or no\n";
                         return;
                     }
+                    break;
+
+                case '15':
+                    echo "Enter direct transaction delivery expiration in seconds (0 = no expiry, e.g., 3600): ";
+                    $key = 'directTxExpiration';
+                    $rawInput = trim(fgets(STDIN));
+                    if (!is_numeric($rawInput) || intval($rawInput) < 0) {
+                        echo "Error: Must be a non-negative integer (0 = no expiry)\n";
+                        return;
+                    }
+                    $value = intval($rawInput);
                     break;
 
                 case '0':
@@ -1077,6 +1096,7 @@ class CliService implements CliServiceInterface {
                     'maxFee' => 'Maximum fee percentage (e.g., 5.0)',
                     'maxP2pLevel' => 'Maximum peer-to-peer routing hops (e.g., 3)',
                     'p2pExpiration' => 'Peer-to-peer request expiration time in seconds (e.g., 300)',
+                    'directTxExpiration' => 'Direct transaction delivery expiry in seconds; 0 = no expiry (default). P2P transactions use p2pExpiration + ' . Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS . 's automatically.',
                     'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
                     'defaultTransportMode' => 'Default transport type: http, https, or tor',
                     'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',

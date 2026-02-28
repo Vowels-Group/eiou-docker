@@ -248,6 +248,17 @@ class CleanupService implements CleanupServiceInterface {
             Logger::getInstance()->error("Error processing retry queue", ['error' => $e->getMessage()]);
         }
 
+        // Expire transactions that have passed their per-type delivery deadline.
+        // P2P transactions: expires_at = p2p_expiry + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS
+        // Direct transactions: expires_at set only when directTxExpiration > 0 (user setting)
+        // This runs independently of P2P expiry so the two lifecycles stay decoupled.
+        try {
+            $expiredTxCount = $this->expireStaleTransactions();
+            $processed += $expiredTxCount;
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error expiring stale transactions", ['error' => $e->getMessage()]);
+        }
+
         // Expire stale chain drop proposals (7-day timeout)
         try {
             if ($this->chainDropService !== null) {
@@ -429,13 +440,43 @@ class CleanupService implements CleanupServiceInterface {
             $this->p2pService->sendCancelNotificationForHash($hash);
         }
 
-        // Cancel associated transactions if they exist
+        // Cancel only 'pending' transactions for this P2P hash.
+        // Transactions already in-flight (sending/sent/accepted) are allowed to
+        // complete naturally — they have an expires_at deadline of
+        // p2p_expiry + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS set at send time,
+        // so expireStaleTransactions() will clean them up if they don't complete.
         if ($transactions) {
-            $this->transactionRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
+            $this->transactionRepository->cancelPendingByMemo($hash);
             if (function_exists('output') && function_exists('outputTransactionExpired')) {
                 output(outputTransactionExpired($message), 'SILENT');
             }
         }
+    }
+
+    /**
+     * Expire transactions that have passed their expires_at delivery deadline.
+     *
+     * P2P transactions have expires_at = p2p_expiry + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS,
+     * giving them a delivery window even after the parent P2P request expires.
+     * Direct transactions have expires_at set only when the user configures
+     * directTxExpiration > 0 (default: no expiry).
+     *
+     * @return int Number of transactions expired
+     */
+    public function expireStaleTransactions(): int {
+        $expired = $this->transactionRepository->getExpiredTransactions();
+
+        foreach ($expired as $tx) {
+            $this->transactionRepository->updateStatus($tx['txid'], Constants::STATUS_CANCELLED, true);
+            Logger::getInstance()->info("Transaction expired past delivery deadline", [
+                'txid'       => $tx['txid'],
+                'tx_type'    => $tx['tx_type'] ?? 'unknown',
+                'status'     => $tx['status'],
+                'expires_at' => $tx['expires_at'],
+            ]);
+        }
+
+        return count($expired);
     }
 
     /**

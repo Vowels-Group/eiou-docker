@@ -76,7 +76,17 @@
                 <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
+                    How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds). P2P transactions automatically get an extra <?php echo \Eiou\Core\Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS; ?>s delivery window after the P2P request expires.
+                </small>
+            </div>
+
+            <!-- Direct Transaction Delivery Expiration -->
+            <div class="form-group">
+                <label for="directTxExpiration">Direct Transaction Delivery Expiration (seconds):</label>
+                <input type="number" id="directTxExpiration" name="directTxExpiration" value="<?php echo htmlspecialchars($user->getDirectTxExpirationTime()); ?>" step="1" min="0" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry (default). Recommended: <?php echo \Eiou\Core\Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS; ?>s (one Tor round-trip). Failed deliveries appear in <a href="#dlq">Failed Messages</a>.
                 </small>
             </div>
 
