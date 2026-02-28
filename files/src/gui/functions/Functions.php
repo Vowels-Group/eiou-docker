@@ -97,6 +97,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit;
     }
+
+    // AJAX-only DLQ actions (returns JSON, exits immediately)
+    if (in_array($action, ['dlqRetry', 'dlqAbandon'])) {
+        try {
+            $dlqController->routeAction();
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 }
 
 // Handle GET requests for update checking
@@ -352,6 +363,31 @@ try {
 } catch (Exception $e) {
     // Silently fail - DLQ notification is non-critical
     $newlyAddedToDlq = [];
+}
+
+// Dead Letter Queue - load items for the DLQ management section
+$dlqItems = [];
+$dlqStats = [];
+$dlqPendingCount = 0;
+try {
+    $dlqRepo = $serviceContainer->getDeadLetterQueueRepository();
+    $dlqActiveFilter = $_GET['dlq_filter'] ?? 'active';
+
+    if ($dlqActiveFilter === 'active') {
+        // Combine pending + retrying, newest first
+        $pendingItems  = $dlqRepo->getItems('pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE);
+        $retryingItems = $dlqRepo->getItems('retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE);
+        $dlqItems = array_merge($pendingItems, $retryingItems);
+    } elseif (in_array($dlqActiveFilter, ['pending', 'retrying', 'resolved', 'abandoned'], true)) {
+        $dlqItems = $dlqRepo->getItems($dlqActiveFilter, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
+    } else {
+        $dlqItems = $dlqRepo->getItems(null, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
+    }
+
+    $dlqStats        = $dlqRepo->getStatistics();
+    $dlqPendingCount = $dlqRepo->getPendingCount();
+} catch (Exception $e) {
+    // Silently fail - DLQ section is non-critical
 }
 
 // Fetch available credit per contact and merge into contact arrays

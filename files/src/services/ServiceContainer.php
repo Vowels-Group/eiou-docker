@@ -1350,6 +1350,7 @@ class ServiceContainer implements ContainerInterface {
                 $this->getSendOperationService(),
                 $this->getP2pService()
             );
+            $this->services['CliService']->setDeadLetterQueueRepository($this->getDeadLetterQueueRepository());
         }
 
         // =========================================================================

@@ -13,6 +13,7 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
@@ -116,6 +117,11 @@ class CliService implements CliServiceInterface {
     private ?P2pServiceInterface $p2pService = null;
 
     /**
+     * @var DeadLetterQueueRepository|null DLQ repository (optional, setter-injected)
+     */
+    private ?DeadLetterQueueRepository $dlqRepository = null;
+
+    /**
      * Constructor
      * 
      * @param ContactRepository $contactRepository Contact Repository
@@ -167,6 +173,13 @@ class CliService implements CliServiceInterface {
         $this->rp2pCandidateRepository = $rp2pCandidateRepository;
         $this->p2pTransactionSender = $p2pTransactionSender;
         $this->p2pService = $p2pService;
+    }
+
+    /**
+     * Set the DLQ repository (optional, for CLI dlq commands)
+     */
+    public function setDeadLetterQueueRepository(DeadLetterQueueRepository $dlqRepository): void {
+        $this->dlqRepository = $dlqRepository;
     }
 
     // =========================================================================
@@ -1390,6 +1403,23 @@ class CliService implements CliServiceInterface {
                     'backup enable' => 'Enable automatic daily backups'
                 ],
                 'note' => 'Backups are AES-256-CBC encrypted using the node\'s master key. Automatic backups run daily at midnight when enabled. Cleanup keeps the 3 most recent backups.'
+            ],
+            'dlq' => [
+                'description' => 'Manage the dead letter queue — messages that failed delivery after all automatic retries',
+                'usage' => 'dlq [list|retry|abandon] [id] [--status=pending|retrying|resolved|abandoned|all]',
+                'arguments' => [
+                    'subcommand' => ['type' => 'optional', 'description' => 'list (default), retry, or abandon'],
+                    'id' => ['type' => 'optional', 'description' => 'DLQ item ID (required for retry and abandon)'],
+                    '--status' => ['type' => 'optional', 'description' => 'Filter list by status (default: all active items)'],
+                ],
+                'examples' => [
+                    'dlq' => 'List all pending and retrying DLQ items',
+                    'dlq list --status=all' => 'List all items regardless of status',
+                    'dlq retry 42' => 'Retry DLQ item #42 immediately',
+                    'dlq abandon 42' => 'Abandon DLQ item #42 (no further retries)',
+                    'dlq --json' => 'JSON output with statistics',
+                ],
+                'note' => 'The DLQ captures messages that could not be delivered after ' . Constants::DELIVERY_MAX_RETRIES . ' automatic attempts. All items originated from this node. Retry re-sends the original signed payload directly to the recipient.'
             ],
             'global_options' => [
                 'description' => 'Global options available for all commands',
@@ -2927,6 +2957,214 @@ extendedKeyUsage = serverAuth
             ], "P2P transaction {$hash} rejected and cancelled");
         } catch (\Throwable $e) {
             $output->error('Failed to reject transaction: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
+        }
+    }
+
+    // =========================================================================
+    // DEAD LETTER QUEUE (DLQ) MANAGEMENT
+    // =========================================================================
+
+    /**
+     * List DLQ items
+     *
+     * Usage: eiou dlq [list] [--status=pending|retrying|resolved|abandoned|all]
+     *
+     * @param array $argv CLI arguments
+     * @param CliOutputManager|null $output Output manager
+     */
+    public function displayDlqItems(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($this->dlqRepository === null) {
+            $output->error('DLQ repository not available', ErrorCodes::GENERAL_ERROR);
+            return;
+        }
+
+        // Parse optional --status flag
+        $statusFilter = null;
+        foreach ($argv as $arg) {
+            if (str_starts_with($arg, '--status=')) {
+                $statusFilter = substr($arg, 9);
+            }
+        }
+
+        $allowedStatuses = ['pending', 'retrying', 'resolved', 'abandoned'];
+        if ($statusFilter !== null && $statusFilter !== 'all' && !in_array($statusFilter, $allowedStatuses, true)) {
+            $output->error("Invalid status filter. Use: pending, retrying, resolved, abandoned, or all", ErrorCodes::VALIDATION_ERROR);
+            return;
+        }
+
+        $items = $this->dlqRepository->getItems(
+            ($statusFilter === 'all' || $statusFilter === null) ? null : $statusFilter,
+            Constants::DLQ_BATCH_SIZE
+        );
+
+        $stats = $this->dlqRepository->getStatistics();
+
+        if ($output->isJsonMode()) {
+            $output->success('DLQ items', [
+                'items'      => $items,
+                'statistics' => $stats,
+                'filter'     => $statusFilter ?? 'all',
+            ]);
+            return;
+        }
+
+        echo "Dead Letter Queue\n";
+        echo str_repeat("=", 60) . "\n";
+        echo sprintf(
+            "Pending: %d  Retrying: %d  Resolved: %d  Abandoned: %d\n\n",
+            $stats['pending'] ?? 0,
+            $stats['retrying'] ?? 0,
+            $stats['resolved'] ?? 0,
+            $stats['abandoned'] ?? 0
+        );
+
+        if (empty($items)) {
+            echo "No items" . ($statusFilter ? " with status '{$statusFilter}'" : "") . ".\n";
+            return;
+        }
+
+        echo sprintf("%-5s %-12s %-10s %-6s %-16s %s\n", "ID", "Type", "Status", "Tries", "Added", "Recipient");
+        echo str_repeat("-", 80) . "\n";
+        foreach ($items as $item) {
+            $ts = strtotime($item['created_at'] ?? '');
+            $date = $ts ? date('m-d H:i', $ts) : '—';
+            $recipient = $item['recipient_address'] ?? '';
+            if (strlen($recipient) > 38) { $recipient = substr($recipient, 0, 35) . '...'; }
+            echo sprintf(
+                "%-5d %-12s %-10s %-6d %-16s %s\n",
+                $item['id'],
+                $item['message_type'] ?? '?',
+                $item['status'] ?? '?',
+                $item['retry_count'] ?? 0,
+                $date,
+                $recipient
+            );
+            if (!empty($item['failure_reason'])) {
+                $reason = $item['failure_reason'];
+                if (strlen($reason) > 70) { $reason = substr($reason, 0, 67) . '...'; }
+                echo "      Reason: {$reason}\n";
+            }
+        }
+        echo "\nUse 'eiou dlq retry <id>' to retry or 'eiou dlq abandon <id>' to abandon.\n";
+    }
+
+    /**
+     * Retry a DLQ item by ID
+     *
+     * Usage: eiou dlq retry <id>
+     *
+     * @param array $argv CLI arguments
+     * @param CliOutputManager|null $output Output manager
+     */
+    public function retryDlqItem(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($this->dlqRepository === null) {
+            $output->error('DLQ repository not available', ErrorCodes::GENERAL_ERROR);
+            return;
+        }
+
+        $id = isset($argv[3]) ? (int)$argv[3] : 0;
+        if ($id <= 0) {
+            $output->error('DLQ item ID is required. Usage: eiou dlq retry <id>', ErrorCodes::MISSING_ARGUMENT);
+            return;
+        }
+
+        $item = $this->dlqRepository->getById($id);
+        if (!$item) {
+            $output->error("DLQ item #{$id} not found", ErrorCodes::NOT_FOUND, 404);
+            return;
+        }
+
+        if (!in_array($item['status'], ['pending', 'retrying'], true)) {
+            $output->error("Item #{$id} has status '{$item['status']}' and cannot be retried", ErrorCodes::VALIDATION_ERROR);
+            return;
+        }
+
+        if (in_array($item['message_type'], ['p2p', 'rp2p'], true)) {
+            $output->error(
+                "P2P and relay messages (type '{$item['message_type']}') cannot be retried — they are time-sensitive routing messages that expire in " . Constants::P2P_DEFAULT_EXPIRATION_SECONDS . "s and are stale by the time they reach the DLQ. Use 'eiou dlq abandon {$id}' instead.",
+                ErrorCodes::VALIDATION_ERROR
+            );
+            return;
+        }
+
+        $this->dlqRepository->markRetrying($id);
+
+        $successStatuses = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'];
+        $recipient = $item['recipient_address'];
+        $payload   = $item['payload'];
+
+        try {
+            $sendResult = $this->transportUtility->send($recipient, $payload, true);
+            $response   = is_array($sendResult) ? ($sendResult['response'] ?? '') : $sendResult;
+            $decoded    = json_decode($response, true);
+            $status     = $decoded['status'] ?? null;
+
+            if ($status && in_array($status, $successStatuses, true)) {
+                $this->dlqRepository->markResolved($id);
+                $output->success("DLQ item #{$id} successfully re-sent", [
+                    'id'             => $id,
+                    'message_type'   => $item['message_type'],
+                    'recipient'      => $recipient,
+                    'response_status' => $status,
+                ], "Message delivered to {$recipient}");
+            } else {
+                $this->dlqRepository->returnToPending($id);
+                $errDetail = $status ? "Recipient returned: {$status}" : 'No response from recipient';
+                $output->error("Retry failed — item returned to pending. {$errDetail}", ErrorCodes::GENERAL_ERROR);
+            }
+        } catch (\Throwable $e) {
+            $this->dlqRepository->returnToPending($id);
+            $output->error('Retry failed: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
+        }
+    }
+
+    /**
+     * Abandon a DLQ item by ID
+     *
+     * Usage: eiou dlq abandon <id>
+     *
+     * @param array $argv CLI arguments
+     * @param CliOutputManager|null $output Output manager
+     */
+    public function abandonDlqItem(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($this->dlqRepository === null) {
+            $output->error('DLQ repository not available', ErrorCodes::GENERAL_ERROR);
+            return;
+        }
+
+        $id = isset($argv[3]) ? (int)$argv[3] : 0;
+        if ($id <= 0) {
+            $output->error('DLQ item ID is required. Usage: eiou dlq abandon <id>', ErrorCodes::MISSING_ARGUMENT);
+            return;
+        }
+
+        $item = $this->dlqRepository->getById($id);
+        if (!$item) {
+            $output->error("DLQ item #{$id} not found", ErrorCodes::NOT_FOUND, 404);
+            return;
+        }
+
+        if ($item['status'] === 'abandoned') {
+            $output->error("Item #{$id} is already abandoned", ErrorCodes::VALIDATION_ERROR);
+            return;
+        }
+
+        $success = $this->dlqRepository->markAbandoned($id, 'Manually abandoned via CLI');
+
+        if ($success) {
+            $output->success("DLQ item #{$id} abandoned", [
+                'id'           => $id,
+                'message_type' => $item['message_type'],
+                'recipient'    => $item['recipient_address'],
+            ], "Item #{$id} marked as abandoned");
+        } else {
+            $output->error("Failed to abandon item #{$id}", ErrorCodes::GENERAL_ERROR);
         }
     }
 }

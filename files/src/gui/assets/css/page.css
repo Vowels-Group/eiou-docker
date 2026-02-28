@@ -2646,3 +2646,159 @@ html {
 .monospace {
     font-family: 'Consolas', 'Monaco', monospace;
 }
+
+/* ============================================================
+   Dead Letter Queue (DLQ) Section
+   ============================================================ */
+
+.dlq-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Pending count badge in section header and action card */
+.dlq-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #dc3545;
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+/* Stats bar with chip-style counts per status */
+.dlq-stats-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.dlq-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    border: 1.5px solid currentColor;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* Filter tabs */
+.dlq-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+}
+
+.dlq-filter-tab {
+    padding: 0.3rem 0.85rem;
+    border-radius: 20px;
+    border: 1px solid #dee2e6;
+    background: #f8f9fa;
+    color: #495057;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+}
+
+.dlq-filter-tab:hover {
+    background: #e9ecef;
+    color: #212529;
+}
+
+.dlq-filter-tab.active {
+    background: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+/* Table wrapper — horizontal scroll on small screens */
+.dlq-table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 0.5rem;
+}
+
+.dlq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.dlq-table th {
+    background: #f8f9fa;
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+}
+
+.dlq-table td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+.dlq-row:hover {
+    background: #f8f9fa;
+}
+
+/* Inline status badge for DLQ rows */
+.dlq-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Address cell — monospace, truncated */
+.dlq-address {
+    font-size: 0.82rem;
+    word-break: break-all;
+}
+
+/* Action buttons cell */
+.dlq-actions-cell {
+    white-space: nowrap;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+/* Non-retryable label for time-sensitive relay messages */
+.dlq-no-retry-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    color: #856404;
+    font-style: italic;
+    cursor: help;
+}
+
+/* Warning variant of action-card for the DLQ quick-action tile */
+.action-card.action-card-warning {
+    border: 2px solid #ffc107;
+}
+
+.action-card.action-card-warning:hover {
+    background: #fff3cd;
+    border-color: #e0a800;
+}

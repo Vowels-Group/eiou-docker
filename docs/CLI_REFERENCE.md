@@ -9,14 +9,15 @@ Complete command-line interface documentation for the EIOU Docker node.
 3. [Wallet Commands](#wallet-commands)
 4. [Contact Commands](#contact-commands)
 5. [Transaction Commands](#transaction-commands)
-6. [Settings Commands](#settings-commands)
-7. [System Commands](#system-commands)
-8. [API Key Management](#api-key-management)
-9. [Chain Drop Commands](#chain-drop-commands)
-10. [Backup Commands](#backup-commands)
-11. [Test Mode Commands](#test-mode-commands)
-12. [Exit Codes](#exit-codes)
-13. [Rate Limiting](#rate-limiting)
+6. [Dead Letter Queue](#dead-letter-queue)
+7. [Settings Commands](#settings-commands)
+8. [System Commands](#system-commands)
+9. [API Key Management](#api-key-management)
+10. [Chain Drop Commands](#chain-drop-commands)
+11. [Backup Commands](#backup-commands)
+12. [Test Mode Commands](#test-mode-commands)
+13. [Exit Codes](#exit-codes)
+14. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -610,6 +611,96 @@ eiou p2p reject abc123def456
 - P2P transactions enter `awaiting_approval` status when `autoAcceptTransaction` is `false`. Without these commands (or GUI/API equivalents), such transactions expire through normal cleanup.
 - Late-arriving route candidates are still accepted while a transaction is awaiting approval and will appear in the candidate list.
 - Tor destinations force fast mode internally because Tor hidden services use single-hop routing.
+
+---
+
+## Dead Letter Queue
+
+### dlq
+
+Manage the dead letter queue (DLQ) — messages that could not be delivered after all automatic retry attempts.
+
+**Syntax:**
+```bash
+eiou dlq [subcommand] [id] [--status=<filter>]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none/list)* | `eiou dlq` | List active (pending + retrying) DLQ items |
+| `list` | `eiou dlq list [--status=all]` | List items with optional status filter |
+| `retry` | `eiou dlq retry <id>` | Retry delivering a failed message |
+| `abandon` | `eiou dlq abandon <id>` | Mark an item as abandoned (no further retries) |
+
+**Status filter values for `--status`:**
+
+| Value | Description |
+|-------|-------------|
+| *(omitted)* | Active items: pending + retrying (default) |
+| `pending` | Awaiting manual action |
+| `retrying` | Currently being retried |
+| `resolved` | Successfully re-delivered |
+| `abandoned` | Manually discarded |
+| `all` | All items regardless of status |
+
+**Examples:**
+```bash
+# List active DLQ items (pending + retrying)
+eiou dlq
+
+# List all items including resolved and abandoned
+eiou dlq list --status=all
+
+# List only pending items
+eiou dlq list --status=pending
+
+# Retry a specific item (transaction or contact only)
+eiou dlq retry 42
+
+# Abandon an item (cannot be undone)
+eiou dlq abandon 42
+
+# JSON output with statistics
+eiou dlq --json
+```
+
+**Output includes:**
+- Item ID, message type, status, retry count
+- Recipient address
+- Failure reason
+- Timestamp when added
+
+---
+
+### DLQ Message Types and Retry Eligibility
+
+> **Important:** Not all message types can be meaningfully retried. The DLQ captures
+> messages from this node only — all items represent outbound messages that this
+> node tried to send.
+
+| Type | Description | Can Retry? | Reason |
+|------|-------------|:----------:|--------|
+| `transaction` | Direct eIOU payment to a contact | ✅ Yes | User-initiated; signed payload remains valid |
+| `contact` | Contact request sent to a peer | ✅ Yes | User-initiated; contact request remains valid |
+| `p2p` | P2P routing request forwarded to a peer | ❌ No | Time-sensitive; expires in ≤300s — stale by the time retries are exhausted |
+| `rp2p` | Relay response/cancel forwarded through this node | ❌ No | Relay message on behalf of others; underlying P2P transaction has expired or been resolved elsewhere |
+
+**Why `p2p` and `rp2p` cannot be retried:**
+
+P2P and relay messages carry an `expiration` timestamp. Automatic retries use exponential backoff (2s, 4s, 8s, 16s, 32s = ~62s minimum). The default P2P expiration is **300 seconds**. By the time automatic retries are exhausted and the message reaches the DLQ, the P2P handshake on all other nodes has already timed out or been resolved through a different route.
+
+Retrying a stale `rp2p` relay message could deliver a response for a transaction the originating node has already cancelled or completed — causing confusion or double-processing on the recipient.
+
+**Recommended action for `p2p`/`rp2p` DLQ items:** Use `eiou dlq abandon <id>` to clear them. The original sender's P2P transaction will have already triggered its own timeout and cleanup.
+
+---
+
+**Automatic lifecycle:**
+- Messages enter the DLQ after `DELIVERY_MAX_RETRIES` (5) failed delivery attempts
+- Resolved and abandoned records are automatically deleted after `cleanupDlqRetentionDays` (default: 90 days)
+- The GUI shows a warning toast and a **Failed Messages** badge in Quick Actions whenever pending items exist
 
 ---
 

@@ -18,6 +18,7 @@
  *   history [contact]          - View transaction history
  *   pending                    - View pending contact requests
  *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
+ *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
  *   overview [limit]           - View wallet overview dashboard
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
@@ -242,6 +243,20 @@ elseif($request === "p2p"){
   } else {
     // Default: list pending P2P transactions
     $cliService->displayPendingP2p($cleanArgv, $output);
+  }
+}
+elseif($request === "dlq"){
+  // Dead letter queue management
+  $debugService->output("Executing DLQ request", 'SILENT');
+  $cliService = $app->services->getCliService();
+  $subcommand = strtolower($cleanArgv[2] ?? 'list');
+  if ($subcommand === 'retry') {
+    $cliService->retryDlqItem($cleanArgv, $output);
+  } elseif ($subcommand === 'abandon') {
+    $cliService->abandonDlqItem($cleanArgv, $output);
+  } else {
+    // Default: list DLQ items
+    $cliService->displayDlqItems($cleanArgv, $output);
   }
 }
 // Settings

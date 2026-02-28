@@ -1,0 +1,198 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!-- Dead Letter Queue Section -->
+<div id="dlq" class="dlq-section fade-in-up">
+    <div class="section-header">
+        <h2>
+            <i class="fas fa-inbox"></i> Failed Messages
+            <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
+            <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span>
+            <?php endif; ?>
+        </h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="window.location.href = window.location.pathname + '#dlq'; window.location.reload();">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <p style="color: #6c757d; margin-bottom: 0.5rem; font-size: 0.9rem;">
+        <i class="fas fa-info-circle"></i>
+        Messages that could not be delivered after <?php echo \Eiou\Core\Constants::DELIVERY_MAX_RETRIES; ?> automatic attempts.
+        <strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid.
+        <strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (<?php echo \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS; ?>s expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.
+    </p>
+
+    <?php if (!empty($dlqStats)): ?>
+    <div class="dlq-stats-bar">
+        <?php foreach ([
+            'pending'   => ['label' => 'Pending',   'color' => '#ffc107', 'icon' => 'fa-hourglass-half'],
+            'retrying'  => ['label' => 'Retrying',  'color' => '#17a2b8', 'icon' => 'fa-sync-alt'],
+            'resolved'  => ['label' => 'Resolved',  'color' => '#28a745', 'icon' => 'fa-check'],
+            'abandoned' => ['label' => 'Abandoned', 'color' => '#6c757d', 'icon' => 'fa-ban'],
+        ] as $statusKey => $meta): ?>
+        <?php if (($dlqStats[$statusKey] ?? 0) > 0): ?>
+        <span class="dlq-stat-chip" style="border-color: <?php echo $meta['color']; ?>; color: <?php echo $meta['color']; ?>;">
+            <i class="fas <?php echo $meta['icon']; ?>"></i>
+            <?php echo (int)$dlqStats[$statusKey]; ?> <?php echo $meta['label']; ?>
+        </span>
+        <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Filter tabs -->
+    <?php
+    $activeFilter = $_GET['dlq_filter'] ?? 'active';
+    $filters = [
+        'active'    => 'Pending & Retrying',
+        'pending'   => 'Pending Only',
+        'resolved'  => 'Resolved',
+        'abandoned' => 'Abandoned',
+        'all'       => 'All',
+    ];
+    ?>
+    <div class="dlq-filter-tabs">
+        <?php foreach ($filters as $key => $label): ?>
+        <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?dlq_filter=<?php echo $key; ?>#dlq"
+           class="dlq-filter-tab<?php echo $activeFilter === $key ? ' active' : ''; ?>">
+            <?php echo htmlspecialchars($label); ?>
+        </a>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if (empty($dlqItems)): ?>
+    <div class="empty-state">
+        <i class="fas fa-check-circle" style="color: #28a745;"></i>
+        <h3>No Failed Messages</h3>
+        <p>All messages delivered successfully — nothing in the queue<?php echo $activeFilter !== 'all' ? ' for this filter' : ''; ?>.</p>
+    </div>
+    <?php else: ?>
+
+    <!-- DLQ table: visible on desktop, card-stack on mobile -->
+    <div class="dlq-table-wrapper">
+        <table class="dlq-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Recipient</th>
+                    <th>Failure Reason</th>
+                    <th>Retries</th>
+                    <th>Added</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($dlqItems as $item): ?>
+            <?php
+                $status    = $item['status'] ?? 'pending';
+                $msgType   = $item['message_type'] ?? 'unknown';
+                $recipient = $item['recipient_address'] ?? '';
+                $reason    = $item['failure_reason'] ?? '';
+                $retries   = (int)($item['retry_count'] ?? 0);
+                $createdAt = $item['created_at'] ?? '';
+                $dlqId     = (int)$item['id'];
+
+                $typeIcons = [
+                    'transaction' => ['icon' => 'fa-exchange-alt',   'label' => 'Transaction', 'class' => 'tx-type-direct'],
+                    'p2p'         => ['icon' => 'fa-network-wired',  'label' => 'P2P',         'class' => 'tx-type-p2p'],
+                    'rp2p'        => ['icon' => 'fa-random',         'label' => 'Relay P2P',   'class' => 'tx-type-p2p'],
+                    'contact'     => ['icon' => 'fa-user-plus',      'label' => 'Contact',     'class' => 'tx-type-contact'],
+                ];
+                $typeInfo = $typeIcons[$msgType] ?? ['icon' => 'fa-envelope', 'label' => ucfirst($msgType), 'class' => ''];
+
+                $statusColors = [
+                    'pending'   => ['bg' => '#fff3cd', 'color' => '#856404', 'icon' => 'fa-hourglass-half'],
+                    'retrying'  => ['bg' => '#cff4fc', 'color' => '#055160', 'icon' => 'fa-sync-alt fa-spin'],
+                    'resolved'  => ['bg' => '#d1e7dd', 'color' => '#0a3622', 'icon' => 'fa-check'],
+                    'abandoned' => ['bg' => '#e2e3e5', 'color' => '#383d41', 'icon' => 'fa-ban'],
+                ];
+                $statusStyle = $statusColors[$status] ?? $statusColors['pending'];
+
+                $canAct      = in_array($status, ['pending', 'retrying'], true);
+                // p2p/rp2p are time-sensitive relay messages — expired by the time they
+                // reach the DLQ. Only transaction and contact messages are safe to retry.
+                $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact'], true);
+                $shortRecipient = strlen($recipient) > 38 ? substr($recipient, 0, 35) . '...' : $recipient;
+                $shortReason    = strlen($reason) > 60 ? substr($reason, 0, 57) . '...' : $reason;
+
+                // Format date
+                $dateDisplay = '';
+                if ($createdAt) {
+                    $ts = strtotime($createdAt);
+                    $dateDisplay = $ts ? date('Y-m-d H:i', $ts) : $createdAt;
+                }
+            ?>
+            <tr class="dlq-row" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>">
+                <td>
+                    <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
+                        <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>
+                        <?php echo htmlspecialchars($typeInfo['label']); ?>
+                    </span>
+                </td>
+                <td>
+                    <span class="monospace dlq-address" title="<?php echo htmlspecialchars($recipient); ?>">
+                        <?php echo htmlspecialchars($shortRecipient); ?>
+                    </span>
+                </td>
+                <td>
+                    <span title="<?php echo htmlspecialchars($reason); ?>" style="font-size: 0.85rem; color: #495057;">
+                        <?php echo htmlspecialchars($shortReason ?: '—'); ?>
+                    </span>
+                </td>
+                <td style="text-align: center;">
+                    <span style="font-weight: 600; color: <?php echo $retries >= 5 ? '#dc3545' : '#6c757d'; ?>;">
+                        <?php echo $retries; ?>
+                    </span>
+                </td>
+                <td style="font-size: 0.85rem; color: #6c757d; white-space: nowrap;">
+                    <?php echo htmlspecialchars($dateDisplay); ?>
+                </td>
+                <td>
+                    <span class="dlq-status-badge" style="background:<?php echo $statusStyle['bg']; ?>; color:<?php echo $statusStyle['color']; ?>;">
+                        <i class="fas <?php echo $statusStyle['icon']; ?>"></i>
+                        <?php echo ucfirst(htmlspecialchars($status)); ?>
+                    </span>
+                </td>
+                <td class="dlq-actions-cell">
+                    <?php if ($canRetry): ?>
+                    <button type="button"
+                            class="btn btn-sm btn-success dlq-retry-btn"
+                            id="dlq-retry-<?php echo $dlqId; ?>"
+                            onclick="retryDlqItem(<?php echo $dlqId; ?>, this)"
+                            title="Retry sending this message">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                    <?php elseif ($canAct && !$canRetry): ?>
+                    <span class="dlq-no-retry-note" title="P2P and relay messages are time-sensitive and expire quickly — retry is not meaningful after automatic attempts are exhausted">
+                        <i class="fas fa-clock"></i> Expired
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($canAct): ?>
+                    <button type="button"
+                            class="btn btn-sm btn-secondary dlq-abandon-btn"
+                            id="dlq-abandon-<?php echo $dlqId; ?>"
+                            onclick="abandonDlqItem(<?php echo $dlqId; ?>, this)"
+                            title="Abandon this message (cannot be undone)">
+                        <i class="fas fa-ban"></i> Abandon
+                    </button>
+                    <?php elseif (!$canAct): ?>
+                    <span style="color: #6c757d; font-size: 0.85rem; font-style: italic;">
+                        <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
+                    </span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;">
+        Showing <?php echo count($dlqItems); ?> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
+        Resolved and abandoned items are automatically cleaned up after <?php echo \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS; ?> days.
+    </p>
+
+    <?php endif; ?>
+</div>

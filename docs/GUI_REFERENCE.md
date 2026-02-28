@@ -79,7 +79,8 @@ files/src/gui/
 ├── controllers/                    # Request handlers
 │   ├── ContactController.php       # Contact CRUD operations
 │   ├── TransactionController.php   # Transaction processing
-│   └── SettingsController.php      # Settings and debug operations
+│   ├── SettingsController.php      # Settings and debug operations
+│   └── DlqController.php           # Dead letter queue retry/abandon (AJAX)
 │
 ├── functions/
 │   └── Functions.php               # Central router and view data initializer
@@ -104,6 +105,7 @@ files/src/gui/
 │       ├── contactForm.html        # Add contact form
 │       ├── contactSection.html     # Contact list and modal
 │       ├── transactionHistory.html # Transaction list and modal
+│       ├── dlqSection.html         # Dead letter queue management
 │       ├── settingsSection.html    # Settings form and debug panel
 │       └── floatingButtons.html    # Back-to-top and refresh buttons
 │
@@ -206,6 +208,24 @@ Handles settings and debug operations.
 
 ---
 
+### DlqController
+
+Handles dead letter queue management actions (AJAX only — all responses are JSON).
+
+| Method | Action Value | Description | Parameters |
+|--------|-------------|-------------|------------|
+| `handleRetry()` | `dlqRetry` | Re-send a failed message to its original recipient | `dlq_id`, `csrf_token` |
+| `handleAbandon()` | `dlqAbandon` | Mark a DLQ item as abandoned | `dlq_id`, `csrf_token` |
+
+**Retry constraints:**
+- Only `transaction` and `contact` message types can be retried
+- `p2p` and `rp2p` items are rejected with an explanatory error — they are time-sensitive relay messages that expire in ≤300s and are stale by the time they reach the DLQ
+
+**Retry mechanism:**
+The controller re-sends the original signed payload (stored verbatim in the DLQ) directly to the recipient address using `TransportUtilityService::send()`. If the recipient returns a success status, the item is marked `resolved`. On failure it returns to `pending`.
+
+---
+
 ## Layout Components
 
 ### authenticationForm.html
@@ -273,6 +293,7 @@ Quick navigation cards linking to main sections:
 | Add Contact | `#add-contact` |
 | View Contacts | `#contacts` |
 | Transaction History | `#transactions` |
+| Failed Messages (N) | `#dlq` — only shown when DLQ has pending items |
 | Settings | `#settings` |
 
 ---
@@ -383,6 +404,50 @@ All three dashboard cards display per-currency rows. When a card has no data for
 **Auto-Refresh:**
 - Polls every 15 seconds when transactions pending
 - Controlled by `autoRefreshEnabled` setting
+
+---
+
+#### dlqSection.html
+
+The Dead Letter Queue section displays messages that could not be delivered after all automatic retry attempts.
+
+**Filter Tabs:**
+
+| Tab | Shows |
+|-----|-------|
+| Pending & Retrying *(default)* | All actionable items |
+| Pending Only | Items awaiting action |
+| Resolved | Successfully re-delivered items |
+| Abandoned | Manually discarded items |
+| All | Every DLQ record |
+
+**Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
+
+**Table Columns:** Type, Recipient, Failure Reason, Retries, Added, Status, Actions.
+
+**Actions per row:**
+
+| Action | Available For | Description |
+|--------|--------------|-------------|
+| **Retry** | `transaction`, `contact` types only, pending/retrying status | Re-sends the original signed payload directly to the recipient |
+| **Abandon** | Any pending/retrying item | Marks as abandoned — no further retries |
+
+> **Important — retry eligibility by message type:**
+>
+> | Type | Retryable | Reason |
+> |------|:---------:|--------|
+> | `transaction` | ✅ | User-initiated payment; payload remains valid |
+> | `contact` | ✅ | User-initiated contact request; payload remains valid |
+> | `p2p` | ❌ | P2P routing request; expires in ≤300s — stale by retry time |
+> | `rp2p` | ❌ | Relay message forwarded on behalf of another node; underlying P2P has expired or resolved elsewhere |
+>
+> `p2p` and `rp2p` items show an **"Expired"** label instead of a Retry button. Use **Abandon** to clear them.
+
+**Quick Action Card:**
+A **"Failed Messages (N)"** warning card appears in the Quick Actions bar whenever pending DLQ items exist, linking directly to `#dlq`.
+
+**Notifications:**
+A warning toast appears when new items are added to the DLQ (tracked per session — each item fires once per browser session).
 
 ---
 

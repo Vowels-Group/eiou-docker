@@ -3300,6 +3300,143 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
+ * Retry a DLQ item by ID.
+ *
+ * Sends an AJAX POST to the current page with action=dlqRetry.
+ * Disables the button during the request and shows a toast on completion.
+ * On success the row is visually marked resolved; on failure the status
+ * label is updated and the row remains actionable for another attempt.
+ *
+ * @param {number} dlqId - The DLQ record ID
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function retryDlqItem(dlqId, btn) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
+    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
+    if (retryBtn)  { retryBtn.disabled  = true; retryBtn.innerHTML  = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+    if (abandonBtn) { abandonBtn.disabled = true; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqRetry');
+    formData.append('dlq_id',     dlqId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 90000; // 90s — Tor connections can be slow
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
+        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+        if (abandonBtn) { abandonBtn.disabled = false; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+        if (abandonBtn) { abandonBtn.disabled = false; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                showToast('Delivered', 'Message successfully re-sent', 'success');
+                var row = document.getElementById('dlq-row-' + dlqId);
+                if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+            } else {
+                var errMsg = response.error || 'Retry failed — try again later';
+                showToast('Retry Failed', errMsg, 'error');
+                if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+                if (abandonBtn) { abandonBtn.disabled = false; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+            if (abandonBtn) { abandonBtn.disabled = false; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
+ * Abandon a DLQ item by ID (marks it as abandoned — cannot be undone).
+ *
+ * Prompts for confirmation before sending the AJAX request.
+ * Hides the row on success.
+ *
+ * @param {number} dlqId - The DLQ record ID
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function abandonDlqItem(dlqId, btn) {
+    if (!confirm('Abandon this message? It will no longer be retried and this cannot be undone.')) {
+        return;
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
+    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
+    if (retryBtn)  { retryBtn.disabled  = true; }
+    if (abandonBtn) { abandonBtn.disabled = true; abandonBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqAbandon');
+    formData.append('dlq_id',     dlqId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 30000; // 30s — enough for a simple DB update even over Tor
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Request timed out — please try again', 'warning');
+        if (retryBtn)  { retryBtn.disabled  = false; }
+        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (retryBtn)  { retryBtn.disabled  = false; }
+        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                showToast('Abandoned', 'Message marked as abandoned', 'info');
+                var row = document.getElementById('dlq-row-' + dlqId);
+                if (row) { row.style.display = 'none'; }
+            } else {
+                showToast('Error', response.error || 'Failed to abandon item', 'error');
+                if (retryBtn)  { retryBtn.disabled  = false; }
+                if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (retryBtn)  { retryBtn.disabled  = false; }
+            if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
  * Initialize a toggle switch with status text.
  *
  * Binds a change listener to the checkbox input that updates the adjacent

@@ -31,6 +31,13 @@
             <h3>Settings</h3>
             <p>Configure wallet settings</p>
         </a>
+        <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
+        <a href="#dlq" class="action-card action-card-warning">
+            <i class="fas fa-inbox"></i>
+            <h3>Failed Messages <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span></h3>
+            <p>Review and retry undelivered messages</p>
+        </a>
+        <?php endif; ?>
     </div>
     <button type="button" id="quick-actions-scroll-right" class="quick-actions-scroll-btn quick-actions-scroll-right" onclick="scrollQuickActions(1)" title="Scroll right">
         <i class="fas fa-chevron-right"></i>

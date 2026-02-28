@@ -10,6 +10,7 @@ use Eiou\Gui\Includes\Session;
 use Eiou\Gui\Helpers\MessageHelper;
 use Eiou\Gui\Helpers\ViewHelper;
 use Eiou\Gui\Controllers\ContactController;
+use Eiou\Gui\Controllers\DlqController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
 
@@ -47,6 +48,12 @@ $transactionController->setP2pApprovalDependencies(
     $serviceContainer->getRp2pCandidateRepository()
 );
 $settingsController = new SettingsController($secureSession);
+$dlqController = new DlqController(
+    $secureSession,
+    $serviceContainer->getDeadLetterQueueRepository(),
+    $serviceContainer->getMessageDeliveryService(),
+    $app->utilityServices->getTransportUtility()
+);
 
 // Handle logout request
 if (isset($_GET['logout'])) {
