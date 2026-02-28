@@ -1118,7 +1118,7 @@ Get system settings.
 - `auto_chain_drop_accept`: Whether to auto-accept chain-drop proposals
 - `api_enabled`: Whether the REST API endpoint is enabled
 - `api_cors_allowed_origins`: Allowed CORS origins for API (empty = none)
-- `rate_limit_enabled`: Whether rate limiting is active
+- `rate_limit_enabled`: Whether rate limiting is active (configurable via CLI/API only — not exposed in GUI)
 - `backup_retention_count`: Number of backup files to retain (min 1)
 - `backup_cron_hour`: Backup schedule hour in UTC (0-23)
 - `backup_cron_minute`: Backup schedule minute (0-59)
@@ -1181,7 +1181,7 @@ Update system settings.
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
-| `rate_limit_enabled` | boolean | Enable/disable rate limiting |
+| `rate_limit_enabled` | boolean | Enable/disable rate limiting (CLI/API only — not exposed in GUI) |
 | `backup_retention_count` | int | Backup files to retain (min 1) |
 | `backup_cron_hour` | int | Backup schedule hour UTC (0-23) |
 | `backup_cron_minute` | int | Backup schedule minute (0-59) |

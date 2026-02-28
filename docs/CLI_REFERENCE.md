@@ -838,7 +838,7 @@ eiou changesettings [setting] [value]
 | `autoChainDropAccept` | Auto-accept chain-drop proposals | `true`, `false` |
 | `apiEnabled` | Enable REST API endpoint | `true`, `false` |
 | `apiCorsAllowedOrigins` | Allowed CORS origins for API | `https://example.com` |
-| `rateLimitEnabled` | Enable rate limiting | `true`, `false` |
+| `rateLimitEnabled` | Enable rate limiting (CLI/API only — not exposed in GUI) | `true`, `false` |
 
 **Advanced Settings (Backup & Logging):**
 
