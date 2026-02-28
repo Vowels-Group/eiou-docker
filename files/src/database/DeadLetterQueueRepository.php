@@ -59,6 +59,19 @@ class DeadLetterQueueRepository extends AbstractRepository {
         int $retryCount,
         string $failureReason
     ) {
+        // Guard against duplicate active entries (e.g. two concurrent retry workers
+        // both exhausting retries for the same message_id at the same time).
+        $query = "SELECT id FROM {$this->tableName}
+                  WHERE message_id = :id AND status IN ('pending', 'retrying')
+                  LIMIT 1";
+        $stmt = $this->execute($query, [':id' => $messageId]);
+        if ($stmt) {
+            $existing = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if ($existing) {
+                return $existing['id'];
+            }
+        }
+
         // Use DateTime for proper microsecond support (date() doesn't support .u)
         $now = DateTime::createFromFormat('U.u', sprintf('%.6F', microtime(true)));
         $timestamp = $now ? $now->format('Y-m-d H:i:s.u') : date('Y-m-d H:i:s') . '.000000';

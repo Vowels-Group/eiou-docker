@@ -1129,6 +1129,15 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $recipient = $delivery['recipient_address'];
             $retryCount = (int) $delivery['retry_count'];
 
+            // Atomically claim this message — skip if another worker beat us to it
+            if (!$this->deliveryRepository->claimForRetry($messageType, $messageId)) {
+                $this->log('info', "Skipping message already claimed by another worker", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+                continue;
+            }
+
             // Get stored payload
             $payload = null;
             if (!empty($delivery['payload'])) {
