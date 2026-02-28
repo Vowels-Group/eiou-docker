@@ -133,7 +133,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
      */
     protected function processMessages(): int {
         // Check if feature is enabled (supports env var override for testing)
-        if (!Constants::isContactStatusEnabled()) {
+        if (!$this->currentUser->getContactStatusEnabled()) {
             // Reset all contacts to unknown status and exit processor
             $this->resetAllContactsToUnknown();
             $this->shouldStop = true;
@@ -187,7 +187,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
                 'prevTxid' => $prevTxid,
-                'requestSync' => Constants::CONTACT_STATUS_SYNC_ON_PING
+                'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
             // Send ping
@@ -213,7 +213,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                         $this->updateContactChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled
-                        if (Constants::CONTACT_STATUS_SYNC_ON_PING) {
+                        if ($this->currentUser->getContactStatusSyncOnPing()) {
                             $this->triggerSync($contactAddress, $contact['pubkey']);
                         }
                     } else {

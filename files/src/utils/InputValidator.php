@@ -598,4 +598,88 @@ class InputValidator {
             'sanitized' => empty($errors) ? $sanitized : null
         ];
     }
+
+    /**
+     * Validate log level
+     *
+     * @param string $level Log level to validate
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
+     */
+    public static function validateLogLevel($level): array {
+        $valid = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
+        $level = strtoupper(trim((string)$level));
+
+        if (!in_array($level, $valid, true)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Log level must be one of: ' . implode(', ', $valid)];
+        }
+
+        return ['valid' => true, 'value' => $level, 'error' => null];
+    }
+
+    /**
+     * Validate integer within a range
+     *
+     * @param mixed $value Value to validate
+     * @param int $min Minimum allowed value
+     * @param int $max Maximum allowed value
+     * @param string $label Label for error messages
+     * @return array ['valid' => bool, 'value' => int|null, 'error' => string|null]
+     */
+    public static function validateIntRange($value, int $min, int $max, string $label = 'Value'): array {
+        if (!is_numeric($value)) {
+            return ['valid' => false, 'value' => null, 'error' => "$label must be numeric"];
+        }
+
+        $intValue = intval($value);
+
+        if ($intValue < $min || $intValue > $max) {
+            return ['valid' => false, 'value' => null, 'error' => "$label must be between $min and $max"];
+        }
+
+        return ['valid' => true, 'value' => $intValue, 'error' => null];
+    }
+
+    /**
+     * Validate a PHP date format string
+     *
+     * @param string $format Date format to validate
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
+     */
+    public static function validateDateFormat($format): array {
+        if (!is_string($format) || empty(trim($format))) {
+            return ['valid' => false, 'value' => null, 'error' => 'Date format cannot be empty'];
+        }
+
+        $format = trim($format);
+
+        // Validate by attempting to format the current date
+        $result = date($format);
+        if ($result === false) {
+            return ['valid' => false, 'value' => null, 'error' => 'Invalid PHP date format string'];
+        }
+
+        return ['valid' => true, 'value' => $format, 'error' => null];
+    }
+
+    /**
+     * Validate a boolean-like input value
+     *
+     * @param mixed $value Value to validate
+     * @return array ['valid' => bool, 'value' => bool|null, 'error' => string|null]
+     */
+    public static function validateBoolean($value): array {
+        if (is_bool($value)) {
+            return ['valid' => true, 'value' => $value, 'error' => null];
+        }
+
+        $strValue = strtolower(trim((string)$value));
+        if (in_array($strValue, ['true', '1', 'on', 'yes'], true)) {
+            return ['valid' => true, 'value' => true, 'error' => null];
+        }
+        if (in_array($strValue, ['false', '0', 'off', 'no'], true)) {
+            return ['valid' => true, 'value' => false, 'error' => null];
+        }
+
+        return ['valid' => false, 'value' => null, 'error' => 'Value must be true/false, on/off, yes/no, or 1/0'];
+    }
 }

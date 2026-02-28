@@ -73,20 +73,8 @@ class Wallet{
             return;
         }
 
-        // Add default user values in defaultconfig.json
-        $defaultConfig = json_encode([
-            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,           // Default currency
-            'minFee' => Constants::TRANSACTION_MINIMUM_FEE,                         // Mimum transaction fee amount
-            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,                 // Default transaction fee in percent
-            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,                 // Maximum total fee for a transaction in percent
-            'defaultCreditLimit' => Constants::CONTACT_DEFAULT_CREDIT_LIMIT,        // Default credit limit
-            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,              // Default maximum level for Peer to Peer propagation
-            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,           // Default expiration time for Peer to Peer requests in seconds
-            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,             // Maximum lines of output for multi-line output
-            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,            // Default way to send messages (fallback in case uncertain)
-            'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,                // Auto-refresh for pending transactions (default: off)
-            'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED                   // Auto-backup for daily database backups (default: on)
-        ]);
+        // Add default user values in defaultconfig.json (canonical source of truth)
+        $defaultConfig = json_encode(UserContext::getConfigurableDefaults());
         file_put_contents('/etc/eiou/config/defaultconfig.json', $defaultConfig, LOCK_EX);
         chown('/etc/eiou/config/defaultconfig.json', 'www-data');
         chmod('/etc/eiou/config/defaultconfig.json', 0600);
@@ -260,20 +248,8 @@ class Wallet{
             exit(1);
         }
 
-        // Add default user values in defaultconfig.json
-        $defaultConfig = json_encode([
-            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
-            'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
-            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,
-            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,
-            'defaultCreditLimit' => Constants::CONTACT_DEFAULT_CREDIT_LIMIT,
-            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
-            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
-            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
-            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
-            'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
-            'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED
-        ]);
+        // Add default user values in defaultconfig.json (canonical source of truth)
+        $defaultConfig = json_encode(UserContext::getConfigurableDefaults());
         file_put_contents('/etc/eiou/config/defaultconfig.json', $defaultConfig, LOCK_EX);
         chown('/etc/eiou/config/defaultconfig.json', 'www-data');
         chmod('/etc/eiou/config/defaultconfig.json', 0600);

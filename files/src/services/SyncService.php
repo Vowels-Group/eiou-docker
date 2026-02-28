@@ -869,7 +869,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 $hasMore = $syncResponse['hasMore'] ?? false;
 
-            } while ($hasMore && $chunkCount < Constants::SYNC_MAX_CHUNKS);
+            } while ($hasMore && $chunkCount < $this->currentUser->getSyncMaxChunks());
 
             if ($chunkCount > 1) {
                 Logger::getInstance()->info("Chunked sync completed", [
@@ -1309,9 +1309,9 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             // in correct chain order - each tx references the previous one
             $totalTransactions = count($filteredTransactions);
             $filteredTransactions = array_reverse($filteredTransactions);
-            $hasMore = $totalTransactions > Constants::SYNC_CHUNK_SIZE;
+            $hasMore = $totalTransactions > $this->currentUser->getSyncChunkSize();
             if ($hasMore) {
-                $filteredTransactions = array_slice($filteredTransactions, 0, Constants::SYNC_CHUNK_SIZE);
+                $filteredTransactions = array_slice($filteredTransactions, 0, $this->currentUser->getSyncChunkSize());
             }
 
             echo $this->messagePayload->buildTransactionSyncResponse(

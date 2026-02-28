@@ -184,6 +184,158 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# Test: viewsettings includes advanced settings sections (regular output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'viewsettings' includes advanced settings sections"
+if [[ "$settingsOutput" =~ "Feature Toggles:" ]] && [[ "$settingsOutput" =~ "Backup & Logging:" ]] && [[ "$settingsOutput" =~ "Data Retention:" ]] && [[ "$settingsOutput" =~ "Rate Limiting:" ]]; then
+    printf "\t   viewsettings advanced sections present ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   viewsettings advanced sections present ${RED}FAILED${NC}\n"
+    printf "\t   Missing one or more of: Feature Toggles, Backup & Logging, Data Retention, Rate Limiting\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: viewsettings JSON includes new settings keys
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'viewsettings' JSON includes new settings keys"
+settingsJsonHasNew=true
+for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format display_currency_decimals; do
+    if ! echo "$settingsJsonOutput" | grep -q "\"${key}\""; then
+        settingsJsonHasNew=false
+        printf "\t   Missing key: ${key}\n"
+    fi
+done
+if [ "$settingsJsonHasNew" = "true" ]; then
+    printf "\t   viewsettings JSON new keys present ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   viewsettings JSON new keys present ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ CHANGESETTINGS COMMAND ############################
+
+echo -e "\n[ChangeSettings Command Test]"
+
+# Test: changesettings logLevel with valid value
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings logLevel WARNING'"
+changeLogLevelOutput=$(docker exec ${testContainer} eiou changesettings logLevel WARNING --json 2>&1)
+if [[ "$changeLogLevelOutput" =~ '"success"' ]] && [[ "$changeLogLevelOutput" =~ '"logLevel"' ]]; then
+    printf "\t   changesettings logLevel valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings logLevel valid ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeLogLevelOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: changesettings logLevel with invalid value
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings logLevel INVALID' is rejected"
+changeLogLevelInvalidOutput=$(docker exec ${testContainer} eiou changesettings logLevel INVALID --json 2>&1)
+if [[ "$changeLogLevelInvalidOutput" =~ '"error"' ]] || [[ "$changeLogLevelInvalidOutput" =~ '"success":false' ]] || [[ "$changeLogLevelInvalidOutput" =~ 'VALIDATION_ERROR' ]]; then
+    printf "\t   changesettings logLevel invalid rejected ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings logLevel invalid rejected ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeLogLevelInvalidOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: changesettings backupRetentionCount with valid value
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings backupRetentionCount 5'"
+changeRetentionOutput=$(docker exec ${testContainer} eiou changesettings backupRetentionCount 5 --json 2>&1)
+if [[ "$changeRetentionOutput" =~ '"success"' ]] && [[ "$changeRetentionOutput" =~ '"backupRetentionCount"' ]]; then
+    printf "\t   changesettings backupRetentionCount valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings backupRetentionCount valid ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeRetentionOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: changesettings contactStatusEnabled toggle
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings contactStatusEnabled false'"
+changeToggleOutput=$(docker exec ${testContainer} eiou changesettings contactStatusEnabled false --json 2>&1)
+if [[ "$changeToggleOutput" =~ '"success"' ]] && [[ "$changeToggleOutput" =~ '"contactStatusEnabled"' ]]; then
+    printf "\t   changesettings contactStatusEnabled toggle ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings contactStatusEnabled toggle ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeToggleOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+# Restore default
+docker exec ${testContainer} eiou changesettings contactStatusEnabled true >/dev/null 2>&1
+
+# Test: changesettings httpTransportTimeoutSeconds with valid range value
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings httpTransportTimeoutSeconds 30'"
+changeTimeoutOutput=$(docker exec ${testContainer} eiou changesettings httpTransportTimeoutSeconds 30 --json 2>&1)
+if [[ "$changeTimeoutOutput" =~ '"success"' ]] && [[ "$changeTimeoutOutput" =~ '"httpTransportTimeoutSeconds"' ]]; then
+    printf "\t   changesettings httpTransportTimeoutSeconds valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings httpTransportTimeoutSeconds valid ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeTimeoutOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+# Restore default
+docker exec ${testContainer} eiou changesettings httpTransportTimeoutSeconds 15 >/dev/null 2>&1
+
+# Test: changesettings httpTransportTimeoutSeconds out of range rejected
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings httpTransportTimeoutSeconds 999' is rejected"
+changeTimeoutInvalidOutput=$(docker exec ${testContainer} eiou changesettings httpTransportTimeoutSeconds 999 --json 2>&1)
+if [[ "$changeTimeoutInvalidOutput" =~ '"error"' ]] || [[ "$changeTimeoutInvalidOutput" =~ '"success":false' ]] || [[ "$changeTimeoutInvalidOutput" =~ 'VALIDATION_ERROR' ]]; then
+    printf "\t   changesettings httpTransportTimeoutSeconds out-of-range rejected ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings httpTransportTimeoutSeconds out-of-range rejected ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeTimeoutInvalidOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: changesettings displayCurrencyDecimals with valid value
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'changesettings displayCurrencyDecimals 4'"
+changeDecimalsOutput=$(docker exec ${testContainer} eiou changesettings displayCurrencyDecimals 4 --json 2>&1)
+if [[ "$changeDecimalsOutput" =~ '"success"' ]] && [[ "$changeDecimalsOutput" =~ '"displayCurrencyDecimals"' ]]; then
+    printf "\t   changesettings displayCurrencyDecimals valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings displayCurrencyDecimals valid ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${changeDecimalsOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+# Restore default
+docker exec ${testContainer} eiou changesettings displayCurrencyDecimals 2 >/dev/null 2>&1
+
+# Test: changesettings persists to config file
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing changesettings value persists to defaultconfig.json"
+docker exec ${testContainer} eiou changesettings cleanupDeliveryRetentionDays 45 >/dev/null 2>&1
+persistedValue=$(docker exec ${testContainer} php -r '
+    $json = json_decode(file_get_contents("/etc/eiou/config/defaultconfig.json"), true);
+    echo $json["cleanupDeliveryRetentionDays"] ?? "NOT_SET";
+' 2>&1)
+if [ "$persistedValue" = "45" ]; then
+    printf "\t   changesettings value persisted ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   changesettings value persisted ${RED}FAILED${NC} (got: %s)\n" "$persistedValue"
+    failure=$(( failure + 1 ))
+fi
+# Restore default
+docker exec ${testContainer} eiou changesettings cleanupDeliveryRetentionDays 30 >/dev/null 2>&1
+
+# Restore logLevel to default
+docker exec ${testContainer} eiou changesettings logLevel INFO >/dev/null 2>&1
+
 ############################ VIEWBALANCES COMMAND ############################
 
 echo -e "\n[ViewBalances Command Test]"

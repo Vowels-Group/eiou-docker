@@ -617,4 +617,114 @@ class InputValidatorTest extends TestCase
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('4 parameters', $result['error']);
     }
+
+    // =========================================================================
+    // validateLogLevel Tests
+    // =========================================================================
+
+    public function testValidateLogLevelValid(): void
+    {
+        foreach (['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] as $level) {
+            $result = InputValidator::validateLogLevel($level);
+            $this->assertTrue($result['valid'], "Level $level should be valid");
+            $this->assertSame($level, $result['value']);
+        }
+    }
+
+    public function testValidateLogLevelCaseInsensitive(): void
+    {
+        $result = InputValidator::validateLogLevel('debug');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('DEBUG', $result['value']);
+    }
+
+    public function testValidateLogLevelInvalid(): void
+    {
+        $result = InputValidator::validateLogLevel('TRACE');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('must be one of', $result['error']);
+    }
+
+    // =========================================================================
+    // validateIntRange Tests
+    // =========================================================================
+
+    public function testValidateIntRangeValid(): void
+    {
+        $result = InputValidator::validateIntRange(5, 0, 10);
+        $this->assertTrue($result['valid']);
+        $this->assertSame(5, $result['value']);
+    }
+
+    public function testValidateIntRangeBelowMin(): void
+    {
+        $result = InputValidator::validateIntRange(-1, 0, 10, 'TestVal');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('between 0 and 10', $result['error']);
+    }
+
+    public function testValidateIntRangeAboveMax(): void
+    {
+        $result = InputValidator::validateIntRange(11, 0, 10, 'TestVal');
+        $this->assertFalse($result['valid']);
+    }
+
+    public function testValidateIntRangeNonNumeric(): void
+    {
+        $result = InputValidator::validateIntRange('abc', 0, 10);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('numeric', $result['error']);
+    }
+
+    // =========================================================================
+    // validateDateFormat Tests
+    // =========================================================================
+
+    public function testValidateDateFormatValid(): void
+    {
+        $result = InputValidator::validateDateFormat('Y-m-d H:i:s');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('Y-m-d H:i:s', $result['value']);
+    }
+
+    public function testValidateDateFormatEmpty(): void
+    {
+        $result = InputValidator::validateDateFormat('');
+        $this->assertFalse($result['valid']);
+    }
+
+    // =========================================================================
+    // validateBoolean Tests
+    // =========================================================================
+
+    public function testValidateBooleanTrue(): void
+    {
+        foreach (['true', '1', 'on', 'yes', 'TRUE', 'Yes'] as $val) {
+            $result = InputValidator::validateBoolean($val);
+            $this->assertTrue($result['valid'], "Value '$val' should be valid");
+            $this->assertTrue($result['value'], "Value '$val' should be true");
+        }
+    }
+
+    public function testValidateBooleanFalse(): void
+    {
+        foreach (['false', '0', 'off', 'no', 'FALSE', 'No'] as $val) {
+            $result = InputValidator::validateBoolean($val);
+            $this->assertTrue($result['valid'], "Value '$val' should be valid");
+            $this->assertFalse($result['value'], "Value '$val' should be false");
+        }
+    }
+
+    public function testValidateBooleanInvalid(): void
+    {
+        $result = InputValidator::validateBoolean('maybe');
+        $this->assertFalse($result['valid']);
+    }
+
+    public function testValidateBooleanNativeBool(): void
+    {
+        $result = InputValidator::validateBoolean(true);
+        $this->assertTrue($result['valid']);
+        $this->assertTrue($result['value']);
+    }
 }

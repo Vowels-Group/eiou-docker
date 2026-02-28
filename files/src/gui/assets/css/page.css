@@ -756,7 +756,7 @@ body {
     color: #212529;
 }
 
-.form-group input, .form-group select {
+.form-group input, .form-group select, .form-group textarea {
     width: 100%;
     padding: 0.8rem;
     border: 1px solid #ced4da;
@@ -765,18 +765,24 @@ body {
     transition: border-color 0.3s ease;
 }
 
-.form-group input:focus, .form-group select:focus {
+.form-group textarea {
+    font-family: monospace;
+    resize: vertical;
+    min-height: 4.5rem;
+}
+
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
     outline: none;
     border-color: #0d6efd;
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
-.form-group input.default-value {
+.form-group input.default-value, .form-group textarea.default-value {
     background-color: #f8f9fa;
     border-color: #adb5bd;
 }
 
-.form-group input.default-value:focus {
+.form-group input.default-value:focus, .form-group textarea.default-value:focus {
     background-color: white;
     border-color: #0d6efd;
 }
@@ -871,6 +877,64 @@ body {
     .settings-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* Advanced Settings category nav (dropdown selector row) */
+.adv-section-nav {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+        -ms-flex-align: center;
+            align-items: center;
+    gap: 0.75rem;
+    -ms-flex-wrap: wrap;
+        flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.adv-section-nav label {
+    font-weight: 600;
+    color: #495057;
+    white-space: nowrap;
+    margin-bottom: 0;
+}
+
+.adv-section-nav select {
+    min-width: 220px;
+    width: auto;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    background-color: #fff;
+    color: #212529;
+    cursor: pointer;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23495057' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    padding-right: 2rem;
+}
+
+.adv-section-nav select:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Inline warning/notice inside a settings section */
+.settings-section-warning {
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    color: #664d03;
+    border-radius: 4px;
+    padding: 0.6rem 0.85rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
 }
 
 /* Debug Section Styles */

@@ -225,7 +225,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         // Check if contact status feature is enabled
-        if (!Constants::CONTACT_STATUS_ENABLED) {
+        if (!$this->currentUser->getContactStatusEnabled()) {
             echo $this->contactStatusPayload->buildRejection($request, 'disabled');
             return;
         }
@@ -482,7 +482,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
                 'prevTxid' => $prevTxid,
-                'requestSync' => Constants::CONTACT_STATUS_SYNC_ON_PING
+                'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
             // Send ping
@@ -534,12 +534,12 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                         // Trigger sync if enabled
                         $syncResult = null;
-                        if (Constants::CONTACT_STATUS_SYNC_ON_PING) {
+                        if ($this->currentUser->getContactStatusSyncOnPing()) {
                             $syncResult = $this->triggerSync($contactAddress, $contact['pubkey']);
                         }
 
                         // Auto-propose chain drop if sync completed but mutual gaps remain
-                        if ($syncResult && !($syncResult['chain_valid'] ?? true) && !empty($syncResult['chain_gaps'] ?? []) && $this->chainDropService && Constants::isAutoChainDropProposeEnabled()) {
+                        if ($syncResult && !($syncResult['chain_valid'] ?? true) && !empty($syncResult['chain_gaps'] ?? []) && $this->chainDropService && $this->currentUser->getAutoChainDropPropose()) {
                             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                             try {
                                 $proposeResult = $this->chainDropService->proposeChainDrop($contactPubkeyHash);

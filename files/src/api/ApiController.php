@@ -1345,7 +1345,40 @@ class ApiController {
                 'hostname' => $currentUser->getHttpAddress(),
                 'hostname_secure' => $currentUser->getHttpsAddress(),
                 'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled(),
-                'auto_backup_enabled' => $currentUser->getAutoBackupEnabled()
+                'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
+                'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
+                // Feature toggles
+                'contact_status_enabled' => $currentUser->getContactStatusEnabled(),
+                'contact_status_sync_on_ping' => $currentUser->getContactStatusSyncOnPing(),
+                'auto_chain_drop_propose' => $currentUser->getAutoChainDropPropose(),
+                'auto_chain_drop_accept' => $currentUser->getAutoChainDropAccept(),
+                'api_enabled' => $currentUser->getApiEnabled(),
+                'api_cors_allowed_origins' => $currentUser->getApiCorsAllowedOrigins(),
+                'rate_limit_enabled' => $currentUser->getRateLimitEnabled(),
+                // Backup & logging
+                'backup_retention_count' => $currentUser->getBackupRetentionCount(),
+                'backup_cron_hour' => $currentUser->getBackupCronHour(),
+                'backup_cron_minute' => $currentUser->getBackupCronMinute(),
+                'log_level' => $currentUser->getLogLevel(),
+                'log_max_entries' => $currentUser->getLogMaxEntries(),
+                // Data retention
+                'cleanup_delivery_retention_days' => $currentUser->getCleanupDeliveryRetentionDays(),
+                'cleanup_dlq_retention_days' => $currentUser->getCleanupDlqRetentionDays(),
+                'cleanup_held_tx_retention_days' => $currentUser->getCleanupHeldTxRetentionDays(),
+                'cleanup_rp2p_retention_days' => $currentUser->getCleanupRp2pRetentionDays(),
+                'cleanup_metrics_retention_days' => $currentUser->getCleanupMetricsRetentionDays(),
+                // Rate limiting
+                'p2p_rate_limit_per_minute' => $currentUser->getP2pRateLimitPerMinute(),
+                'rate_limit_max_attempts' => $currentUser->getRateLimitMaxAttempts(),
+                'rate_limit_window_seconds' => $currentUser->getRateLimitWindowSeconds(),
+                'rate_limit_block_seconds' => $currentUser->getRateLimitBlockSeconds(),
+                // Network
+                'http_transport_timeout_seconds' => $currentUser->getHttpTransportTimeoutSeconds(),
+                'tor_transport_timeout_seconds' => $currentUser->getTorTransportTimeoutSeconds(),
+                // Display
+                'display_date_format' => $currentUser->getDisplayDateFormat(),
+                'display_currency_decimals' => $currentUser->getDisplayCurrencyDecimals(),
+                'display_recent_transactions_limit' => $currentUser->getDisplayRecentTransactionsLimit(),
             ]
         ]);
     }
@@ -1378,8 +1411,45 @@ class ApiController {
             'default_transport_mode' => ['key' => 'defaultTransportMode', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_refresh_enabled' => ['key' => 'autoRefreshEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_backup_enabled' => ['key' => 'autoBackupEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'auto_accept_transaction' => ['key' => 'autoAcceptTransaction', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'hostname' => ['key' => 'hostname', 'validate' => 'validateHostname', 'config' => 'userconfig.json'],
             'name' => ['key' => 'name', 'validate' => null, 'config' => 'userconfig.json'],
+            // Feature toggles
+            'contact_status_enabled' => ['key' => 'contactStatusEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'contact_status_sync_on_ping' => ['key' => 'contactStatusSyncOnPing', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'auto_chain_drop_propose' => ['key' => 'autoChainDropPropose', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'auto_chain_drop_accept' => ['key' => 'autoChainDropAccept', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'api_enabled' => ['key' => 'apiEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            // Backup & logging
+            'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'backup_cron_hour' => ['key' => 'backupCronHour', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [0, 23]],
+            'backup_cron_minute' => ['key' => 'backupCronMinute', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [0, 59]],
+            'log_level' => ['key' => 'logLevel', 'validate' => 'validateLogLevel', 'config' => 'defaultconfig.json'],
+            'log_max_entries' => ['key' => 'logMaxEntries', 'validate' => null, 'config' => 'defaultconfig.json', 'intMin' => 10],
+            // Data retention
+            'cleanup_delivery_retention_days' => ['key' => 'cleanupDeliveryRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'cleanup_dlq_retention_days' => ['key' => 'cleanupDlqRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'cleanup_held_tx_retention_days' => ['key' => 'cleanupHeldTxRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'cleanup_rp2p_retention_days' => ['key' => 'cleanupRp2pRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'cleanup_metrics_retention_days' => ['key' => 'cleanupMetricsRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            // Rate limiting
+            'p2p_rate_limit_per_minute' => ['key' => 'p2pRateLimitPerMinute', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'rate_limit_max_attempts' => ['key' => 'rateLimitMaxAttempts', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'rate_limit_window_seconds' => ['key' => 'rateLimitWindowSeconds', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'rate_limit_block_seconds' => ['key' => 'rateLimitBlockSeconds', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            // Network
+            'http_transport_timeout_seconds' => ['key' => 'httpTransportTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [5, 120]],
+            'tor_transport_timeout_seconds' => ['key' => 'torTransportTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 300]],
+            // Sync
+            'sync_chunk_size' => ['key' => 'syncChunkSize', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 500]],
+            'sync_max_chunks' => ['key' => 'syncMaxChunks', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 1000]],
+            'held_tx_sync_timeout_seconds' => ['key' => 'heldTxSyncTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [30, 299]],
+            // Display
+            'display_date_format' => ['key' => 'displayDateFormat', 'validate' => 'validateDateFormat', 'config' => 'defaultconfig.json'],
+            'display_currency_decimals' => ['key' => 'displayCurrencyDecimals', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [0, 8]],
+            'display_recent_transactions_limit' => ['key' => 'displayRecentTransactionsLimit', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
         ];
 
         $updated = [];
@@ -1399,10 +1469,28 @@ class ApiController {
             // Validate the value
             if ($validateMethod) {
                 if ($validateMethod === 'validatePositiveInteger') {
-                    $validation = InputValidator::$validateMethod($rawValue, Constants::P2P_MIN_EXPIRATION_SECONDS);
+                    // Use p2pExpiration-specific minimum for that key, 1 for everything else
+                    $minVal = ($configKey === 'p2pExpiration') ? Constants::P2P_MIN_EXPIRATION_SECONDS : 1;
+                    $validation = InputValidator::$validateMethod($rawValue, $minVal);
                 } else {
                     $validation = InputValidator::$validateMethod($rawValue);
                 }
+                if (!$validation['valid']) {
+                    $errors[] = "$apiKey: " . $validation['error'];
+                    continue;
+                }
+                $value = $validation['value'];
+            } elseif (isset($mapping['intRange'])) {
+                // Integer range validation shortcut
+                $validation = InputValidator::validateIntRange($rawValue, $mapping['intRange'][0], $mapping['intRange'][1], $apiKey);
+                if (!$validation['valid']) {
+                    $errors[] = "$apiKey: " . $validation['error'];
+                    continue;
+                }
+                $value = $validation['value'];
+            } elseif (isset($mapping['intMin'])) {
+                // Positive integer with custom minimum
+                $validation = InputValidator::validatePositiveInteger($rawValue, $mapping['intMin']);
                 if (!$validation['valid']) {
                     $errors[] = "$apiKey: " . $validation['error'];
                     continue;
@@ -1419,21 +1507,14 @@ class ApiController {
                 } elseif ($configKey === 'defaultTransportMode') {
                     $value = strtolower((string) $rawValue);
                 } elseif ($configKey === 'autoRefreshEnabled' || $configKey === 'autoBackupEnabled') {
-                    if (is_bool($rawValue)) {
-                        $value = $rawValue;
-                    } elseif (is_string($rawValue)) {
-                        $lower = strtolower($rawValue);
-                        if (in_array($lower, ['true', '1', 'on', 'yes'])) {
-                            $value = true;
-                        } elseif (in_array($lower, ['false', '0', 'off', 'no'])) {
-                            $value = false;
-                        } else {
-                            $errors[] = "$apiKey: Value must be true/false";
-                            continue;
-                        }
-                    } else {
-                        $value = (bool) $rawValue;
+                    $validation = InputValidator::validateBoolean($rawValue);
+                    if (!$validation['valid']) {
+                        $errors[] = "$apiKey: " . $validation['error'];
+                        continue;
                     }
+                    $value = $validation['value'];
+                } elseif ($configKey === 'apiCorsAllowedOrigins') {
+                    $value = trim((string) $rawValue);
                 } elseif ($configKey === 'name') {
                     if (empty(trim((string) $rawValue))) {
                         $errors[] = "name: Display name cannot be empty";

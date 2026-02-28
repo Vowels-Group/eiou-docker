@@ -491,6 +491,389 @@ class UserContext {
         return (string) ($this->get('trustedProxies') ?? Constants::TRUSTED_PROXIES);
     }
 
+    // =========================================================================
+    // FEATURE TOGGLE GETTERS
+    // =========================================================================
+
+    /**
+     * Get contact status enabled setting
+     *
+     * @return bool
+     */
+    public function getContactStatusEnabled(): bool {
+        $envValue = getenv('EIOU_CONTACT_STATUS_ENABLED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('contactStatusEnabled') ?? Constants::CONTACT_STATUS_ENABLED);
+    }
+
+    /**
+     * Get contact status sync on ping setting
+     *
+     * @return bool
+     */
+    public function getContactStatusSyncOnPing(): bool {
+        return (bool) ($this->get('contactStatusSyncOnPing') ?? Constants::CONTACT_STATUS_SYNC_ON_PING);
+    }
+
+    /**
+     * Get auto chain drop propose setting
+     *
+     * @return bool
+     */
+    public function getAutoChainDropPropose(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_PROPOSE');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('autoChainDropPropose') ?? Constants::AUTO_CHAIN_DROP_PROPOSE);
+    }
+
+    /**
+     * Get auto chain drop accept setting
+     *
+     * @return bool
+     */
+    public function getAutoChainDropAccept(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('autoChainDropAccept') ?? Constants::AUTO_CHAIN_DROP_ACCEPT);
+    }
+
+    /**
+     * Get API enabled setting
+     *
+     * @return bool
+     */
+    public function getApiEnabled(): bool {
+        return (bool) ($this->get('apiEnabled') ?? Constants::API_ENABLED);
+    }
+
+    /**
+     * Get API CORS allowed origins
+     *
+     * @return string
+     */
+    public function getApiCorsAllowedOrigins(): string {
+        return (string) ($this->get('apiCorsAllowedOrigins') ?? Constants::API_CORS_ALLOWED_ORIGINS);
+    }
+
+    /**
+     * Get rate limit enabled setting
+     *
+     * @return bool
+     */
+    public function getRateLimitEnabled(): bool {
+        return (bool) ($this->get('rateLimitEnabled') ?? Constants::RATE_LIMIT_ENABLED);
+    }
+
+    // =========================================================================
+    // BACKUP & LOGGING GETTERS
+    // =========================================================================
+
+    /**
+     * Get backup retention count
+     *
+     * @return int
+     */
+    public function getBackupRetentionCount(): int {
+        return max(1, (int) ($this->get('backupRetentionCount') ?? Constants::BACKUP_RETENTION_COUNT));
+    }
+
+    /**
+     * Get backup cron hour (0-23)
+     *
+     * @return int
+     */
+    public function getBackupCronHour(): int {
+        $val = (int) ($this->get('backupCronHour') ?? Constants::BACKUP_CRON_HOUR);
+        return max(0, min(23, $val));
+    }
+
+    /**
+     * Get backup cron minute (0-59)
+     *
+     * @return int
+     */
+    public function getBackupCronMinute(): int {
+        $val = (int) ($this->get('backupCronMinute') ?? Constants::BACKUP_CRON_MINUTE);
+        return max(0, min(59, $val));
+    }
+
+    /**
+     * Get log level
+     *
+     * @return string
+     */
+    public function getLogLevel(): string {
+        return (string) ($this->get('logLevel') ?? Constants::LOG_LEVEL);
+    }
+
+    /**
+     * Get log max entries
+     *
+     * @return int
+     */
+    public function getLogMaxEntries(): int {
+        return max(10, (int) ($this->get('logMaxEntries') ?? Constants::LOG_MAX_ENTRIES));
+    }
+
+    // =========================================================================
+    // DATA RETENTION GETTERS
+    // =========================================================================
+
+    /**
+     * Get delivery retention days
+     *
+     * @return int
+     */
+    public function getCleanupDeliveryRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupDeliveryRetentionDays') ?? Constants::CLEANUP_DELIVERY_RETENTION_DAYS));
+    }
+
+    /**
+     * Get DLQ retention days
+     *
+     * @return int
+     */
+    public function getCleanupDlqRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupDlqRetentionDays') ?? Constants::CLEANUP_DLQ_RETENTION_DAYS));
+    }
+
+    /**
+     * Get held transaction retention days
+     *
+     * @return int
+     */
+    public function getCleanupHeldTxRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupHeldTxRetentionDays') ?? Constants::CLEANUP_HELD_TX_RETENTION_DAYS));
+    }
+
+    /**
+     * Get RP2P retention days
+     *
+     * @return int
+     */
+    public function getCleanupRp2pRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupRp2pRetentionDays') ?? Constants::CLEANUP_RP2P_RETENTION_DAYS));
+    }
+
+    /**
+     * Get metrics retention days
+     *
+     * @return int
+     */
+    public function getCleanupMetricsRetentionDays(): int {
+        return max(1, (int) ($this->get('cleanupMetricsRetentionDays') ?? Constants::CLEANUP_METRICS_RETENTION_DAYS));
+    }
+
+    // =========================================================================
+    // RATE LIMITING GETTERS
+    // =========================================================================
+
+    /**
+     * Get P2P rate limit per minute
+     *
+     * @return int
+     */
+    public function getP2pRateLimitPerMinute(): int {
+        return max(1, (int) ($this->get('p2pRateLimitPerMinute') ?? Constants::P2P_RATE_LIMIT_PER_MINUTE));
+    }
+
+    /**
+     * Get rate limit max attempts
+     *
+     * @return int
+     */
+    public function getRateLimitMaxAttempts(): int {
+        return max(1, (int) ($this->get('rateLimitMaxAttempts') ?? Constants::RATE_LIMIT_MAX_ATTEMPTS));
+    }
+
+    /**
+     * Get rate limit window seconds
+     *
+     * @return int
+     */
+    public function getRateLimitWindowSeconds(): int {
+        return max(1, (int) ($this->get('rateLimitWindowSeconds') ?? Constants::RATE_LIMIT_WINDOW_SECONDS));
+    }
+
+    /**
+     * Get rate limit block seconds
+     *
+     * @return int
+     */
+    public function getRateLimitBlockSeconds(): int {
+        return max(1, (int) ($this->get('rateLimitBlockSeconds') ?? Constants::RATE_LIMIT_BLOCK_SECONDS));
+    }
+
+    // =========================================================================
+    // NETWORK GETTERS
+    // =========================================================================
+
+    /**
+     * Get HTTP transport timeout seconds
+     *
+     * @return int
+     */
+    public function getHttpTransportTimeoutSeconds(): int {
+        $val = (int) ($this->get('httpTransportTimeoutSeconds') ?? Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
+        return max(5, min(120, $val));
+    }
+
+    /**
+     * Get Tor transport timeout seconds
+     *
+     * @return int
+     */
+    public function getTorTransportTimeoutSeconds(): int {
+        $val = (int) ($this->get('torTransportTimeoutSeconds') ?? Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
+        return max(10, min(300, $val));
+    }
+
+    // =========================================================================
+    // SYNC GETTERS
+    // =========================================================================
+
+    /**
+     * Get sync chunk size (max transactions per sync response)
+     *
+     * @return int
+     */
+    public function getSyncChunkSize(): int {
+        return max(10, min(500, (int) ($this->get('syncChunkSize') ?? Constants::SYNC_CHUNK_SIZE)));
+    }
+
+    /**
+     * Get sync max chunks (max chunk requests per sync session)
+     *
+     * @return int
+     */
+    public function getSyncMaxChunks(): int {
+        return max(10, min(1000, (int) ($this->get('syncMaxChunks') ?? Constants::SYNC_MAX_CHUNKS)));
+    }
+
+    /**
+     * Get held transaction sync timeout seconds
+     *
+     * Must be less than P2P_DEFAULT_EXPIRATION_SECONDS since P2P hops expire
+     * independently on all relay nodes.
+     *
+     * @return int
+     */
+    public function getHeldTxSyncTimeoutSeconds(): int {
+        $val = (int) ($this->get('heldTxSyncTimeoutSeconds') ?? Constants::HELD_TX_SYNC_TIMEOUT_SECONDS);
+        return max(30, min(Constants::P2P_DEFAULT_EXPIRATION_SECONDS - 1, $val));
+    }
+
+    // =========================================================================
+    // DISPLAY GETTERS
+    // =========================================================================
+
+    /**
+     * Get display date format
+     *
+     * @return string
+     */
+    public function getDisplayDateFormat(): string {
+        return (string) ($this->get('displayDateFormat') ?? Constants::DISPLAY_DATE_FORMAT);
+    }
+
+    /**
+     * Get display currency decimals
+     *
+     * @return int
+     */
+    public function getDisplayCurrencyDecimals(): int {
+        $val = (int) ($this->get('displayCurrencyDecimals') ?? Constants::DISPLAY_CURRENCY_DECIMALS);
+        return max(0, min(8, $val));
+    }
+
+    /**
+     * Get display recent transactions limit
+     *
+     * @return int
+     */
+    public function getDisplayRecentTransactionsLimit(): int {
+        return max(1, (int) ($this->get('displayRecentTransactionsLimit') ?? Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT));
+    }
+
+    // =========================================================================
+    // CONFIGURABLE DEFAULTS (canonical source of truth)
+    // =========================================================================
+
+    /**
+     * Get the canonical map of all configurable settings with their default values.
+     * This is the single source of truth for which settings are user-configurable
+     * and what their defaults are. Used by Wallet generation, config migration,
+     * and settings UI.
+     *
+     * @return array<string, mixed>
+     */
+    public static function getConfigurableDefaults(): array {
+        return [
+            // Transaction settings (original 11)
+            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
+            'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
+            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,
+            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,
+            'defaultCreditLimit' => Constants::CONTACT_DEFAULT_CREDIT_LIMIT,
+            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
+            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
+            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
+            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
+            'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
+            'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
+            'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
+
+            // Feature toggles
+            'contactStatusEnabled' => Constants::CONTACT_STATUS_ENABLED,
+            'contactStatusSyncOnPing' => Constants::CONTACT_STATUS_SYNC_ON_PING,
+            'autoChainDropPropose' => Constants::AUTO_CHAIN_DROP_PROPOSE,
+            'autoChainDropAccept' => Constants::AUTO_CHAIN_DROP_ACCEPT,
+            'apiEnabled' => Constants::API_ENABLED,
+            'apiCorsAllowedOrigins' => Constants::API_CORS_ALLOWED_ORIGINS,
+            'rateLimitEnabled' => Constants::RATE_LIMIT_ENABLED,
+
+            // Backup & logging
+            'backupRetentionCount' => Constants::BACKUP_RETENTION_COUNT,
+            'backupCronHour' => Constants::BACKUP_CRON_HOUR,
+            'backupCronMinute' => Constants::BACKUP_CRON_MINUTE,
+            'logLevel' => Constants::LOG_LEVEL,
+            'logMaxEntries' => Constants::LOG_MAX_ENTRIES,
+
+            // Data retention
+            'cleanupDeliveryRetentionDays' => Constants::CLEANUP_DELIVERY_RETENTION_DAYS,
+            'cleanupDlqRetentionDays' => Constants::CLEANUP_DLQ_RETENTION_DAYS,
+            'cleanupHeldTxRetentionDays' => Constants::CLEANUP_HELD_TX_RETENTION_DAYS,
+            'cleanupRp2pRetentionDays' => Constants::CLEANUP_RP2P_RETENTION_DAYS,
+            'cleanupMetricsRetentionDays' => Constants::CLEANUP_METRICS_RETENTION_DAYS,
+
+            // Rate limiting
+            'p2pRateLimitPerMinute' => Constants::P2P_RATE_LIMIT_PER_MINUTE,
+            'rateLimitMaxAttempts' => Constants::RATE_LIMIT_MAX_ATTEMPTS,
+            'rateLimitWindowSeconds' => Constants::RATE_LIMIT_WINDOW_SECONDS,
+            'rateLimitBlockSeconds' => Constants::RATE_LIMIT_BLOCK_SECONDS,
+
+            // Network
+            'httpTransportTimeoutSeconds' => Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS,
+            'torTransportTimeoutSeconds' => Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
+
+            // Sync
+            'syncChunkSize' => Constants::SYNC_CHUNK_SIZE,
+            'syncMaxChunks' => Constants::SYNC_MAX_CHUNKS,
+            'heldTxSyncTimeoutSeconds' => Constants::HELD_TX_SYNC_TIMEOUT_SECONDS,
+
+            // Display
+            'displayDateFormat' => Constants::DISPLAY_DATE_FORMAT,
+            'displayCurrencyDecimals' => Constants::DISPLAY_CURRENCY_DECIMALS,
+            'displayRecentTransactionsLimit' => Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT,
+        ];
+    }
+
     /**
      * Get all user data as array
      *

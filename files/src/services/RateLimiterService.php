@@ -4,6 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use Eiou\Contracts\RateLimiterServiceInterface;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Utils\Logger;
@@ -17,6 +18,7 @@ use Eiou\Utils\Security;
  */
 class RateLimiterService implements RateLimiterServiceInterface {
     private RateLimiterRepository $repository;
+    private ?UserContext $userContext = null;
 
     /**
      * Initialize rate limiter with repository
@@ -25,6 +27,15 @@ class RateLimiterService implements RateLimiterServiceInterface {
      */
     public function __construct(RateLimiterRepository $repository) {
         $this->repository = $repository;
+    }
+
+    /**
+     * Set user context for configurable rate limit values
+     *
+     * @param UserContext $userContext
+     */
+    public function setUserContext(UserContext $userContext): void {
+        $this->userContext = $userContext;
     }
 
     /**
@@ -38,9 +49,23 @@ class RateLimiterService implements RateLimiterServiceInterface {
      * @return array ['allowed' => bool, 'remaining' => int, 'reset_at' => timestamp]
      */
     public function checkLimit(string $identifier, string $action, int $maxAttempts = Constants::RATE_LIMIT_MAX_ATTEMPTS, int $windowSeconds = Constants::RATE_LIMIT_WINDOW_SECONDS, int $blockSeconds = Constants::RATE_LIMIT_BLOCK_SECONDS): array {
+        // Use UserContext values when defaults haven't been explicitly overridden
+        if ($this->userContext) {
+            if ($maxAttempts === Constants::RATE_LIMIT_MAX_ATTEMPTS) {
+                $maxAttempts = $this->userContext->getRateLimitMaxAttempts();
+            }
+            if ($windowSeconds === Constants::RATE_LIMIT_WINDOW_SECONDS) {
+                $windowSeconds = $this->userContext->getRateLimitWindowSeconds();
+            }
+            if ($blockSeconds === Constants::RATE_LIMIT_BLOCK_SECONDS) {
+                $blockSeconds = $this->userContext->getRateLimitBlockSeconds();
+            }
+        }
+
         // If rate limiting is disabled or in test mode, always allow
+        $rateLimitEnabled = $this->userContext ? $this->userContext->getRateLimitEnabled() : Constants::RATE_LIMIT_ENABLED;
         $testMode = getenv('EIOU_TEST_MODE') === 'true';
-        if (!Constants::RATE_LIMIT_ENABLED || $testMode) {
+        if (!$rateLimitEnabled || $testMode) {
             if ($testMode) {
                 static $testModeWarned = false;
                 if (!$testModeWarned) {

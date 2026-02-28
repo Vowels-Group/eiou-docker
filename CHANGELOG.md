@@ -12,7 +12,21 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Add persistent user-configurable settings infrastructure: `UserContext::getConfigurableDefaults()` provides canonical map of all 41 configurable settings with Constants defaults; `Application::migrateDefaultConfig()` adds missing keys to `defaultconfig.json` on boot without overwriting user values; `Wallet.php` uses canonical map instead of hardcoded arrays
+- Add 30 new user-configurable settings covering feature toggles (including `autoAcceptTransaction` from #663), backup/logging, data retention, rate limiting, network timeouts, sync tuning, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
+- Expose all 30 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
+- Document all 30 new settings in CLI_REFERENCE.md, API_REFERENCE.md, and GUI_REFERENCE.md
+- Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Display, Backup & Logging, Data Retention, Sync, Network, and Rate Limiting panels (ordered simple→advanced); all fields remain in the DOM so changes across multiple categories are saved in a single click
+- Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
+
 ### Fixed
+- Fix API CORS Origins setting saved to `defaultconfig.json` but never applied at runtime — `Api.php` was reading from `Constants::API_CORS_ALLOWED_ORIGINS` instead of `UserContext`; now reads from `UserContext::getInstance()->getApiCorsAllowedOrigins()`
+- Fix `apiEnabled` setting having no enforcement gate — API always responded regardless of the toggle; now returns HTTP 403 with `api_disabled` error when the setting is off
+- Fix `contactStatusEnabled` read from `Constants::CONTACT_STATUS_ENABLED` in `ContactStatusService::handleStatus()` — incoming contact status requests were never actually gated by user config; now uses `$this->currentUser->getContactStatusEnabled()`
+- Fix `contactStatusSyncOnPing` read from `Constants::CONTACT_STATUS_SYNC_ON_PING` in `ContactStatusService` and `ContactStatusProcessor` — ping payload and sync gate always used the hardcoded constant; now uses `$this->currentUser->getContactStatusSyncOnPing()`
+- Fix `syncChunkSize` and `syncMaxChunks` read from Constants in `SyncService` — chunk pagination and requester loop limit always used hardcoded values; now uses `$this->currentUser->getSyncChunkSize()` and `getSyncMaxChunks()`
+- Fix `heldTxSyncTimeoutSeconds` read from `Constants::HELD_TX_SYNC_TIMEOUT_SECONDS` in `TransactionProcessingService` — proactive hold guard always used hardcoded timeout; now uses `$this->currentUser->getHeldTxSyncTimeoutSeconds()`
 - Fix rate limit errors showing raw JSON instead of user-friendly flash message in the GUI — replace `enforce()` (which called `exit` with JSON) with `checkLimit()` + `MessageHelper::redirectMessage()` so the user sees a proper warning banner
 - Fix GUI transaction rate limit bucket not applied to `sendEIOU` action — add `sendEIOU` to the `transaction` case in SecurityInit.php action mapping
 - Remove dead `enforce()` method from `RateLimiterService` and its interface — replaced by `checkLimit()` + GUI flash redirect in SecurityInit.php
@@ -28,12 +42,27 @@ The project is currently in **ALPHA** status.
 - Skip proactive hold for P2P transactions with insufficient remaining lifetime — prevents holding transactions that will become zombies because the P2P expires on all other relay nodes before sync can complete
 
 ### Changed
+- Replace separate Backup Hour / Backup Minute number inputs with a single `<input type="time">` (`HH:MM`); `SettingsController` parses the combined value and stores the individual `backupCronHour` / `backupCronMinute` keys unchanged
+- Replace API CORS Origins single-line text input with a resizable monospace textarea (one origin per line); controller normalises newline/comma-separated input to comma-separated storage and PHP renders it back as newline-separated on display
+- Make Held TX Sync Timeout upper bound dynamic: PHP renders the initial `max` as `p2pExpiration − 1` and a JS listener on the P2P Request Expiration field keeps it current, auto-clamping the timeout value if needed; server-side validation also uses the submitted/saved `p2pExpiration` value rather than a hardcoded 299
+- Rename "Max Display Lines" setting label to "GUI/CLI Max Output Lines" (setting affects both the GUI dashboard and CLI commands); update description to reference correct CLI commands (`viewbalances`, `history`); update "Recent Transactions Limit" note to reference the renamed label
+- Move API CORS Origins field from Feature Toggles to Network section — it is a text configuration input, not a feature toggle
+- Reorder Backup & Logging fields: Backup Time (UTC) → Backup Retention Count → Max Log Entries → Log Level (backup schedule before retention count; log capacity before log level)
+- Style the Advanced Settings category `<select>` to match other form inputs — adds padding, border, border-radius, custom chevron arrow, and focus ring consistent with `.form-group select`
+- Add expert warning to Network timeout section; add data-loss warning to Data Retention section
+- Clarify Rate Limiting section: describe the two independent mechanisms (P2P throughput cap vs attempt-counting brute-force blocker) so the separate fields are not confused as controlling the same thing; rename fields to reflect their actual function ("P2P Throughput Limit", "Max Attempts per Window", "Attempt Window")
+- Remove `rateLimitEnabled` toggle from GUI Feature Toggles — rate limiting is a security-critical feature that should not be easily disabled from the UI; toggle remains available via CLI and API; remove corresponding POST handler in `SettingsController` to prevent saving settings from silently writing `false` for a missing checkbox; document as CLI/API-only in API_REFERENCE.md and CLI_REFERENCE.md
+- Remove incorrect "(HH:MM, 24-hour)" qualifier from Backup Time field description — the browser native time picker renders in 12h or 24h based on OS locale
+- Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
+- Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
 - Make integration tests manual-only — no longer auto-runs on every PR; trigger via `workflow_dispatch` from the Actions tab or by adding the `run-integration` label to a PR
 - Group DatabaseSchema tables into 6 logical sections (Contacts & Network, Transactions & Chain Integrity, P2P Routing, Message Delivery, API, System & Security) with header comments; update matching order in DatabaseSetup and DatabaseSchemaTest
 - Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
 - Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
 - Archive old multi-node compose files to `tests/old/compose-files/`
 - Rewrite README.md to focus on the single compose file with comprehensive configuration reference
+
+## 2026-02-19 -- 2026-02-27
 
 ### Added
 - Add Tor connectivity notification in wallet GUI — warning banner when SOCKS5 proxy failure is detected, spinner during restart, success toast on recovery; status communicated via `/tmp/tor-gui-status` between TransportUtilityService, watchdog, and the GUI
@@ -54,47 +83,6 @@ The project is currently in **ALPHA** status.
 - `scripts/check-base-image.sh` for local verification of base image digest
 
 ### Security
-- **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
-
-### Fixed
-- Fix P2P approval gate GUI "Network error" when choosing a route: CSRF token was consumed by the candidate-loading AJAX call on page load, making subsequent approve/reject calls fail with 403; AJAX endpoints now use non-rotating CSRF validation
-- Fix P2P route count changing after selection: late-arriving RP2P candidates were still inserted into the database after route selection had completed, causing the displayed route count to increment on page refresh
-- Fix GUI "Prior Contact" badge showing on every pending contact request: the history check included the contact request transaction itself (`tx_type='contact'`), causing false positives; now only flags contacts with real (standard/p2p) transaction history
-- Fix missing dual-signature on contact transactions after wallet wipe + re-add: the "already exists" and "updated" response paths now include the original contact TX's txid and recipient signature, and the sender syncs the original TX instead of creating a divergent one
-- Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets
-- Fix all GUI POST actions (ping, send, chain drop, settings) returning 403: global CSRF check added in PR #644 consumed (rotated) the token before controllers could validate it, causing every authenticated POST to fail with "CSRF token validation failed"
-- Fix Tor hidden service GUI inaccessible: HTTP→HTTPS redirect (from PR #644) blocked .onion access because port 443 is not mapped through the hidden service; skip HTTPS redirect for .onion hosts since Tor already provides end-to-end encryption
-- Fix simultaneous chain drop proposals causing both sides stuck in "Awaiting Acceptance": when both contacts propose the same gap, the node with the lower pubkey hash auto-accepts using a deterministic tiebreaker
-- Fix `bestFeeRoutingTest` Test 11 and `cascadeCancelTest` Tests 5-7 failing on http4 topology: dead-end cancel tests used hardcoded `containerAddresses[A12]` which only exists in collisions/http13 topologies; now dynamically finds an isolated node (0 expected contacts) via `expectedContacts`, falling back to a MODE-appropriate generated address
-- Fix 79 unit test failures across 26 files: ErrorHandler tearDown removing PHPUnit's handlers (45 failures), repository tests expecting false from AbstractRepository::execute() (5), SyncService chain conflict tests failing due to private signature verification methods and missing test data fields (8), DebugRepository random pruneOldEntries breaking strict mock expectations (8), tor address validation with wrong length (2), namespace-unqualified dynamic function calls in DatabaseSetup migrations (1), AbstractMessageProcessor flushing PHPUnit output buffers (1), UtilPayload null senderAddress handling (1), and various mock return type mismatches
-- Implement 24 previously-skipped unit tests: ChainOperationsService chain verification/repair tests (16), SendOperationService validation and dependency injection tests (7), TransactionProcessingService missing fields test (1)
-- Fix API test suite failures caused by HTTP→HTTPS redirect (PR #644): always use `https://localhost` with `-k` for API endpoint tests; add `X-API-Nonce` header and nonce in HMAC signature to all authenticated API test requests; fix `curlErrorHandlingTest` tests 2, 4, 5, 17 to resolve timeout constants via PHP and use correct function boundaries; pipe large API responses via stdin instead of command-line args to avoid `Argument list too long` errors in response format validation tests (apiEndpointsTest and cliCommandsTest); clarify curlErrorHandlingTest Test 13 output message
-- Fix `contactNameTest` Test 4 (Duplicate Name Detection) skipping on all topologies: dynamically find a container with 2+ accepted contacts instead of hardcoding `containers[2]` which may not be a contact of the sender in line topologies
-- Fix `bestFeeRoutingTest` Test 11 (Dead-end cascade cancel) querying wrong P2P record: record last P2P id before send and filter by `id > lastId` to avoid picking up Test 9's paid record
-- Fix `maxLevelCancelTest` Test 5 (Destination at boundary): use `resolveUserAddressForTransport()` to get the same address that `handleP2pRequest` uses, so the hash matches correctly
-- Fix `parallelBroadcastTest` Test 8: handle empty string curl responses as errors in `TransportUtilityService::sendBatch()` and `sendMultiBatch()`
-- Fix `chainDropTestSuite` Sections 1-8 failing at proposal delivery: add `cleanup_backups` to `clean_chain()` so backup recovery doesn't short-circuit `proposeChainDrop()` before sending the proposal message
-- Fix `performanceBaseline` batch transaction test: increase inter-send delay from 100ms to 250ms and timeout from 30s to 45s to prevent rate-limiting failures
-- Improve `pingTestSuite` Tests 6.1/6.3 diagnostic output with pubkey hash comparison
-- Fix Docker build failure: use Debian PHP conf path (`/etc/php/*/conf.d/`) instead of Docker-official-image path (`/usr/local/etc/php/conf.d/`) for `expose_php` setting; fix `|| true` operator precedence in security config step
-- Fix KeyEncryption::encrypt() clearing IV before base64-encoding it, causing all encrypted data to have empty IVs and fail on decrypt
-- Tor hidden service address mismatch on container restart: HS key regeneration check compared file existence but Tor had already started and generated random keys — now compares actual .onion address against userconfig to detect mismatches and regenerate correct keys from seed
-- Tor watchdog initial boot: first self-check now waits 120s (descriptor propagation grace period) instead of firing immediately on the first watchdog loop — prevents restart doom loop on fresh container start while avoiding a 5-minute blind spot
-- Tor watchdog recovery: increase post-restart verification window from 30s to 90s to match descriptor propagation time, allow follow-up restart after 90s instead of waiting full 5-minute cooldown, increase self-check timeout for slow Tor circuits
-- Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
-- Wire up dead-code `buildMutuallyAccepted()` payload in `ContactPayload.php` with `$txid` parameter for transaction synchronization
-- Fix sync inquiry misidentifying mutual pending contacts as "unknown" — `hasPendingContactInserted()` now checked for the case where both sides initiated requests
-- Fix stale `$status` variable in `syncSingleContact()` re-send path — response was never decoded and status check always used the original rejected value, causing sync to report failure even after successful mutual acceptance
-
-### Changed
-- Trusted proxies now configurable via CLI (`changesettings trustedProxies`) instead of requiring container rebuild
-- Rename `Security::sanitizeInput()` to `stripNullBytes()` for accuracy; deprecated alias retained
-- P2P transport payload moved from URL query parameter to POST body for privacy (backward-compatible receiver fallback)
-- P2P nonce changed from `time()` to `bin2hex(random_bytes(16))` for cryptographic uniqueness
-- Exception detail display gated behind `Constants::isDebug()` instead of `APP_ENV !== 'production'`
-- API authentication error messages normalized to prevent key state enumeration
-
-### Security
 - **M-1**: Validate SQL pattern before executing backup restore statements
 - **M-2**: Fix session cookie `secure` flag to properly detect HTTPS (handles proxy/edge cases)
 - **M-3**: Rotate CSRF tokens after successful validation to prevent reuse
@@ -107,6 +95,7 @@ The project is currently in **ALPHA** status.
 - **M-10**: Gate exception message exposure behind debug mode, not environment name
 - **M-11**: Add `htmlspecialchars()` to unencoded date and currency output in transaction history
 - **M-12**: Remove raw API key secret echo to prevent Docker log exposure
+- **M-13**: Pin base Docker image (`debian:12-slim`) to SHA256 digest to prevent supply chain attacks and ensure reproducible builds (#523)
 - **M-14**: Remove legacy plaintext private key check from `hasKeys()`
 - **M-15**: Use RAM-backed `/dev/shm` for decrypted backup temp files with guaranteed cleanup
 - **M-16**: Add in-memory P2P rate limiting by sender public key (60 req/min)
@@ -160,6 +149,44 @@ The project is currently in **ALPHA** status.
 - **L-29**: Suppress Apache `ServerTokens`/`ServerSignature` and PHP `expose_php` in Docker image
 - **L-34**: Replace predictable `microtime()` with `random_bytes()` in chain drop proposal ID generation
 - **L-35**: Hash long lock names instead of truncating to prevent collisions in `DatabaseLockingService`
+
+### Fixed
+- Fix P2P approval gate GUI "Network error" when choosing a route: CSRF token was consumed by the candidate-loading AJAX call on page load, making subsequent approve/reject calls fail with 403; AJAX endpoints now use non-rotating CSRF validation
+- Fix P2P route count changing after selection: late-arriving RP2P candidates were still inserted into the database after route selection had completed, causing the displayed route count to increment on page refresh
+- Fix GUI "Prior Contact" badge showing on every pending contact request: the history check included the contact request transaction itself (`tx_type='contact'`), causing false positives; now only flags contacts with real (standard/p2p) transaction history
+- Fix missing dual-signature on contact transactions after wallet wipe + re-add: the "already exists" and "updated" response paths now include the original contact TX's txid and recipient signature, and the sender syncs the original TX instead of creating a divergent one
+- Fix false chain gap reports during in-flight transactions: `verifyChainIntegrity()` now only checks `previous_txid` links on settled transactions (completed, accepted, paid) while keeping all active txids in the lookup set, so in-flight transactions don't report false gaps from unsynced references but their txids remain available as valid chain targets
+- Fix all GUI POST actions (ping, send, chain drop, settings) returning 403: global CSRF check added in PR #644 consumed (rotated) the token before controllers could validate it, causing every authenticated POST to fail with "CSRF token validation failed"
+- Fix Tor hidden service GUI inaccessible: HTTP→HTTPS redirect (from PR #644) blocked .onion access because port 443 is not mapped through the hidden service; skip HTTPS redirect for .onion hosts since Tor already provides end-to-end encryption
+- Fix simultaneous chain drop proposals causing both sides stuck in "Awaiting Acceptance": when both contacts propose the same gap, the node with the lower pubkey hash auto-accepts using a deterministic tiebreaker
+- Fix `bestFeeRoutingTest` Test 11 and `cascadeCancelTest` Tests 5-7 failing on http4 topology: dead-end cancel tests used hardcoded `containerAddresses[A12]` which only exists in collisions/http13 topologies; now dynamically finds an isolated node (0 expected contacts) via `expectedContacts`, falling back to a MODE-appropriate generated address
+- Fix 79 unit test failures across 26 files: ErrorHandler tearDown removing PHPUnit's handlers (45 failures), repository tests expecting false from AbstractRepository::execute() (5), SyncService chain conflict tests failing due to private signature verification methods and missing test data fields (8), DebugRepository random pruneOldEntries breaking strict mock expectations (8), tor address validation with wrong length (2), namespace-unqualified dynamic function calls in DatabaseSetup migrations (1), AbstractMessageProcessor flushing PHPUnit output buffers (1), UtilPayload null senderAddress handling (1), and various mock return type mismatches
+- Implement 24 previously-skipped unit tests: ChainOperationsService chain verification/repair tests (16), SendOperationService validation and dependency injection tests (7), TransactionProcessingService missing fields test (1)
+- Fix API test suite failures caused by HTTP→HTTPS redirect (PR #644): always use `https://localhost` with `-k` for API endpoint tests; add `X-API-Nonce` header and nonce in HMAC signature to all authenticated API test requests; fix `curlErrorHandlingTest` tests 2, 4, 5, 17 to resolve timeout constants via PHP and use correct function boundaries; pipe large API responses via stdin instead of command-line args to avoid `Argument list too long` errors in response format validation tests (apiEndpointsTest and cliCommandsTest); clarify curlErrorHandlingTest Test 13 output message
+- Fix `contactNameTest` Test 4 (Duplicate Name Detection) skipping on all topologies: dynamically find a container with 2+ accepted contacts instead of hardcoding `containers[2]` which may not be a contact of the sender in line topologies
+- Fix `bestFeeRoutingTest` Test 11 (Dead-end cascade cancel) querying wrong P2P record: record last P2P id before send and filter by `id > lastId` to avoid picking up Test 9's paid record
+- Fix `maxLevelCancelTest` Test 5 (Destination at boundary): use `resolveUserAddressForTransport()` to get the same address that `handleP2pRequest` uses, so the hash matches correctly
+- Fix `parallelBroadcastTest` Test 8: handle empty string curl responses as errors in `TransportUtilityService::sendBatch()` and `sendMultiBatch()`
+- Fix `chainDropTestSuite` Sections 1-8 failing at proposal delivery: add `cleanup_backups` to `clean_chain()` so backup recovery doesn't short-circuit `proposeChainDrop()` before sending the proposal message
+- Fix `performanceBaseline` batch transaction test: increase inter-send delay from 100ms to 250ms and timeout from 30s to 45s to prevent rate-limiting failures
+- Improve `pingTestSuite` Tests 6.1/6.3 diagnostic output with pubkey hash comparison
+- Fix Docker build failure: use Debian PHP conf path (`/etc/php/*/conf.d/`) instead of Docker-official-image path (`/usr/local/etc/php/conf.d/`) for `expose_php` setting; fix `|| true` operator precedence in security config step
+- Fix KeyEncryption::encrypt() clearing IV before base64-encoding it, causing all encrypted data to have empty IVs and fail on decrypt
+- Tor hidden service address mismatch on container restart: HS key regeneration check compared file existence but Tor had already started and generated random keys — now compares actual .onion address against userconfig to detect mismatches and regenerate correct keys from seed
+- Tor watchdog initial boot: first self-check now waits 120s (descriptor propagation grace period) instead of firing immediately on the first watchdog loop — prevents restart doom loop on fresh container start while avoiding a 5-minute blind spot
+- Tor watchdog recovery: increase post-restart verification window from 30s to 90s to match descriptor propagation time, allow follow-up restart after 90s instead of waiting full 5-minute cooldown, increase self-check timeout for slow Tor circuits
+- Mutual contact request recognition: when both users send contact requests to each other, the second request to arrive now auto-accepts on both sides instead of leaving both stuck at "Pending Response"
+- Wire up dead-code `buildMutuallyAccepted()` payload in `ContactPayload.php` with `$txid` parameter for transaction synchronization
+- Fix sync inquiry misidentifying mutual pending contacts as "unknown" — `hasPendingContactInserted()` now checked for the case where both sides initiated requests
+- Fix stale `$status` variable in `syncSingleContact()` re-send path — response was never decoded and status check always used the original rejected value, causing sync to report failure even after successful mutual acceptance
+
+### Changed
+- Trusted proxies now configurable via CLI (`changesettings trustedProxies`) instead of requiring container rebuild
+- Rename `Security::sanitizeInput()` to `stripNullBytes()` for accuracy; deprecated alias retained
+- P2P transport payload moved from URL query parameter to POST body for privacy (backward-compatible receiver fallback)
+- P2P nonce changed from `time()` to `bin2hex(random_bytes(16))` for cryptographic uniqueness
+- Exception detail display gated behind `Constants::isDebug()` instead of `APP_ENV !== 'production'`
+- API authentication error messages normalized to prevent key state enumeration
 
 ### Docs
 - Document container security hardening and log rotation in `DOCKER_CONFIGURATION.md`
@@ -263,6 +290,9 @@ The project is currently in **ALPHA** status.
 - `checkRp2pPossible()` fast-mode path now sends rejection response (not "inserted") when `handleRp2pRequest()` returns false — sender correctly records failed delivery instead of false positive acceptance
 - Rejected RP2Ps in fast mode now increment `contacts_responded_count` — when all contacts have responded (all rejected or cancelled), the relay cancels immediately and propagates cancel upstream instead of waiting for expiration timeout
 - P2P best-fee mode forced to fast for Tor recipients (`.onion` addresses) on both sender and receiver side — Tor latency (~5s/hop) makes best-fee relay overhead prohibitive; receiver-side override prevents remote nodes from forcing best-fee mode over Tor
+- Wallet dashboard balance and earnings cards now display per-currency rows — future-proofed for multi-currency support, matching the existing Total Available Credit pattern
+- Dollar sign (`$`) prefix removed from all transaction amount displays — amounts now show as `83.32 USD` instead of `$83.32 USD` across recent transactions, transaction detail modals, contact modal transactions, in-progress transactions, P2P details, and toast notifications
+- `getUserTotalEarningsByCurrency()` method added to `P2pRepository` and `P2pService` — returns fee earnings grouped by currency
 
 ### Fixed
 - CA-signed SSL certificate generation in `startup.sh` — openssl errors were silently discarded (`2>/dev/null`), so if `/ssl-ca/` mount had permission issues or corrupt keys, Apache got an invalid cert and the container crashed with no explanation; now logs errors and falls back to self-signed
@@ -273,14 +303,7 @@ The project is currently in **ALPHA** status.
 - API `GET /api/v1/system/settings` now includes `auto_backup_enabled` field
 - Idempotency guards on P2P and transaction balance updates — `MessageService::handleTransactionMessageRequest` and `CleanupService::syncAndCompleteP2p` now check whether a P2P/transaction is already completed before calling `updateBalanceGivenTransactions`, preventing double balance increments when both the normal completion flow and cleanup recovery fire for the same hash
 - Benchmark `benchmark-routing.sh` no longer filters P2P lookup by `fast` flag — the Tor fast-mode override stores `fast=1` even when the user requested best-fee (`fast=0`), causing the benchmark to find nothing and report N/A; `id > max_id` scoping is sufficient since the benchmark is sequential
-
-### Fixed
 - Ping/pong fatal error — `ContactStatusService::handlePingRequest()` called `protected` method `findByColumn()` on `AbstractRepository`; replaced with public `getContactByPubkey()`
-
-### Changed
-- Wallet dashboard balance and earnings cards now display per-currency rows — future-proofed for multi-currency support, matching the existing Total Available Credit pattern
-- Dollar sign (`$`) prefix removed from all transaction amount displays — amounts now show as `83.32 USD` instead of `$83.32 USD` across recent transactions, transaction detail modals, contact modal transactions, in-progress transactions, P2P details, and toast notifications
-- `getUserTotalEarningsByCurrency()` method added to `P2pRepository` and `P2pService` — returns fee earnings grouped by currency
 
 ### Docs
 - Updated API Reference with `total_available_credit` in wallet overview response and `my_available_credit`/`their_available_credit` in contact endpoints

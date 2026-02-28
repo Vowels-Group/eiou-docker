@@ -114,6 +114,7 @@ class Constants {
      * Supports runtime override via EIOU_CONTACT_STATUS_ENABLED env variable
      * Used during testing to disable pings that interfere with sync tests
      *
+     * @deprecated Use UserContext::getContactStatusEnabled() instead
      * @return bool Whether contact status polling is enabled
      */
     public static function isContactStatusEnabled(): bool {
@@ -360,6 +361,7 @@ class Constants {
      * Check if automatic backups are enabled
      * Supports runtime override via EIOU_BACKUP_AUTO_ENABLED env variable
      *
+     * @deprecated Use UserContext::getAutoBackupEnabled() instead
      * @return bool Whether automatic backups are enabled
      */
     public static function isAutoBackupEnabled(): bool {
@@ -374,6 +376,7 @@ class Constants {
      * Check if automatic chain drop proposals are enabled
      * Supports runtime override via EIOU_AUTO_CHAIN_DROP_PROPOSE env variable
      *
+     * @deprecated Use UserContext::getAutoChainDropPropose() instead
      * @return bool Whether automatic chain drop proposals are enabled
      */
     public static function isAutoChainDropProposeEnabled(): bool {
@@ -388,6 +391,7 @@ class Constants {
      * Check if automatic chain drop acceptance is enabled
      * Supports runtime override via EIOU_AUTO_CHAIN_DROP_ACCEPT env variable
      *
+     * @deprecated Use UserContext::getAutoChainDropAccept() instead
      * @return bool Whether automatic chain drop acceptance is enabled
      */
     public static function isAutoChainDropAcceptEnabled(): bool {

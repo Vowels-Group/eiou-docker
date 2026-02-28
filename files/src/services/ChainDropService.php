@@ -415,7 +415,7 @@ class ChainDropService implements ChainDropServiceInterface
                 ]);
 
                 // Auto-accept with balance guard
-                if (Constants::isAutoChainDropAcceptEnabled()) {
+                if ($this->currentUser->getAutoChainDropAccept()) {
                     if ($this->isAutoAcceptSafe($contactPubkeyHash, $senderPubkey)) {
                         try {
                             $acceptResult = $this->acceptProposal($proposalId);

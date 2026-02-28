@@ -295,6 +295,140 @@ class CliService implements CliServiceInterface {
                     return;
                 }
                 $value = trim($argv[3]);
+            // Feature toggles
+            } elseif(strtolower($argv[2]) === 'contactstatusenabled'){
+                $key = 'contactStatusEnabled';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'contactstatussynconping'){
+                $key = 'contactStatusSyncOnPing';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autochaindroppropose'){
+                $key = 'autoChainDropPropose';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autochaindropaccept'){
+                $key = 'autoChainDropAccept';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'apienabled'){
+                $key = 'apiEnabled';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'apicorsallowedorigins'){
+                $key = 'apiCorsAllowedOrigins';
+                $value = trim($argv[3] ?? '');
+            } elseif(strtolower($argv[2]) === 'ratelimitenabled'){
+                $key = 'rateLimitEnabled';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            // Backup & logging
+            } elseif(strtolower($argv[2]) === 'backupretentioncount'){
+                $key = 'backupRetentionCount';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'backupcronhour'){
+                $key = 'backupCronHour';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 0, 23, 'Backup hour');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'backupcronminute'){
+                $key = 'backupCronMinute';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 0, 59, 'Backup minute');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'loglevel'){
+                $key = 'logLevel';
+                $validation = InputValidator::validateLogLevel($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'logmaxentries'){
+                $key = 'logMaxEntries';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 10);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            // Data retention
+            } elseif(strtolower($argv[2]) === 'cleanupdeliveryretentiondays'){
+                $key = 'cleanupDeliveryRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'cleanupdlqretentiondays'){
+                $key = 'cleanupDlqRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'cleanupheldtxretentiondays'){
+                $key = 'cleanupHeldTxRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'cleanuprp2pretentiondays'){
+                $key = 'cleanupRp2pRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'cleanupmetricsretentiondays'){
+                $key = 'cleanupMetricsRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            // Rate limiting
+            } elseif(strtolower($argv[2]) === 'p2pratelimitperminute'){
+                $key = 'p2pRateLimitPerMinute';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'ratelimitmaxattempts'){
+                $key = 'rateLimitMaxAttempts';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'ratelimitwindowseconds'){
+                $key = 'rateLimitWindowSeconds';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'ratelimitblockseconds'){
+                $key = 'rateLimitBlockSeconds';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            // Network
+            } elseif(strtolower($argv[2]) === 'httptransporttimeoutseconds'){
+                $key = 'httpTransportTimeoutSeconds';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 5, 120, 'HTTP timeout');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'tortransporttimeoutseconds'){
+                $key = 'torTransportTimeoutSeconds';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 10, 300, 'Tor timeout');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            // Display
+            } elseif(strtolower($argv[2]) === 'displaydateformat'){
+                $key = 'displayDateFormat';
+                $validation = InputValidator::validateDateFormat($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'displaycurrencydecimals'){
+                $key = 'displayCurrencyDecimals';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 0, 8, 'Currency decimals');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'displayrecenttransactionslimit'){
+                $key = 'displayRecentTransactionsLimit';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } else{
                 $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
@@ -574,28 +708,94 @@ class CliService implements CliServiceInterface {
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
             'auto_accept_transaction' => $this->currentUser->getAutoAcceptTransaction(),
-            'trusted_proxies' => $this->currentUser->getTrustedProxies()
+            'trusted_proxies' => $this->currentUser->getTrustedProxies(),
+            // Feature toggles
+            'contact_status_enabled' => $this->currentUser->getContactStatusEnabled(),
+            'contact_status_sync_on_ping' => $this->currentUser->getContactStatusSyncOnPing(),
+            'auto_chain_drop_propose' => $this->currentUser->getAutoChainDropPropose(),
+            'auto_chain_drop_accept' => $this->currentUser->getAutoChainDropAccept(),
+            'api_enabled' => $this->currentUser->getApiEnabled(),
+            'api_cors_allowed_origins' => $this->currentUser->getApiCorsAllowedOrigins(),
+            'rate_limit_enabled' => $this->currentUser->getRateLimitEnabled(),
+            // Backup & logging
+            'backup_retention_count' => $this->currentUser->getBackupRetentionCount(),
+            'backup_cron_hour' => $this->currentUser->getBackupCronHour(),
+            'backup_cron_minute' => $this->currentUser->getBackupCronMinute(),
+            'log_level' => $this->currentUser->getLogLevel(),
+            'log_max_entries' => $this->currentUser->getLogMaxEntries(),
+            // Data retention
+            'cleanup_delivery_retention_days' => $this->currentUser->getCleanupDeliveryRetentionDays(),
+            'cleanup_dlq_retention_days' => $this->currentUser->getCleanupDlqRetentionDays(),
+            'cleanup_held_tx_retention_days' => $this->currentUser->getCleanupHeldTxRetentionDays(),
+            'cleanup_rp2p_retention_days' => $this->currentUser->getCleanupRp2pRetentionDays(),
+            'cleanup_metrics_retention_days' => $this->currentUser->getCleanupMetricsRetentionDays(),
+            // Rate limiting
+            'p2p_rate_limit_per_minute' => $this->currentUser->getP2pRateLimitPerMinute(),
+            'rate_limit_max_attempts' => $this->currentUser->getRateLimitMaxAttempts(),
+            'rate_limit_window_seconds' => $this->currentUser->getRateLimitWindowSeconds(),
+            'rate_limit_block_seconds' => $this->currentUser->getRateLimitBlockSeconds(),
+            // Network
+            'http_transport_timeout_seconds' => $this->currentUser->getHttpTransportTimeoutSeconds(),
+            'tor_transport_timeout_seconds' => $this->currentUser->getTorTransportTimeoutSeconds(),
+            // Display
+            'display_date_format' => $this->currentUser->getDisplayDateFormat(),
+            'display_currency_decimals' => $this->currentUser->getDisplayCurrencyDecimals(),
+            'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
         ];
 
         if ($output->isJsonMode()) {
             $output->settings($settings);
         } else {
             echo "Current Settings:\n";
+            echo "\n  Transaction Settings:\n";
             echo "\tDefault currency: " . $settings['default_currency'] . "\n";
             echo "\tMinimum fee amount: " . $settings['minimum_fee_amount'] . " " . $settings['minimum_fee_currency'] ."\n";
             echo "\tDefault fee percent: " . $settings['default_fee_percent'] ."%\n";
             echo "\tMaximum fee percent: " . $settings['maximum_fee_percent'] . "%\n";
             echo "\tDefault credit limit: " . $settings['default_credit_limit'] ."\n";
+            echo "\n  P2P & Network:\n";
             echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
-            echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
+            echo "\tHTTP transport timeout: " . $settings['http_transport_timeout_seconds'] . "s\n";
+            echo "\tTor transport timeout: " . $settings['tor_transport_timeout_seconds'] . "s\n";
             if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto-accept P2P transactions: " . ($settings['auto_accept_transaction'] ? 'enabled' : 'disabled') . "\n";
             echo "\tTrusted proxies: " . ($settings['trusted_proxies'] ?: '(none)') . "\n";
+            echo "\n  Feature Toggles:\n";
+            echo "\tContact status pinging: " . ($settings['contact_status_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tContact status sync on ping: " . ($settings['contact_status_sync_on_ping'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto chain drop propose: " . ($settings['auto_chain_drop_propose'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto chain drop accept: " . ($settings['auto_chain_drop_accept'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAPI enabled: " . ($settings['api_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAPI CORS origins: " . ($settings['api_cors_allowed_origins'] ?: '(none)') . "\n";
+            echo "\tRate limiting: " . ($settings['rate_limit_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\n  Backup & Logging:\n";
+            echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tBackup retention count: " . $settings['backup_retention_count'] . "\n";
+            echo "\tBackup schedule: " . sprintf("%02d:%02d", $settings['backup_cron_hour'], $settings['backup_cron_minute']) . "\n";
+            echo "\tLog level: " . $settings['log_level'] . "\n";
+            echo "\tLog max entries: " . $settings['log_max_entries'] . "\n";
+            echo "\n  Data Retention:\n";
+            echo "\tDelivery retention: " . $settings['cleanup_delivery_retention_days'] . " days\n";
+            echo "\tDLQ retention: " . $settings['cleanup_dlq_retention_days'] . " days\n";
+            echo "\tHeld TX retention: " . $settings['cleanup_held_tx_retention_days'] . " days\n";
+            echo "\tRP2P retention: " . $settings['cleanup_rp2p_retention_days'] . " days\n";
+            echo "\tMetrics retention: " . $settings['cleanup_metrics_retention_days'] . " days\n";
+            echo "\n  Rate Limiting:\n";
+            echo "\tP2P rate limit: " . $settings['p2p_rate_limit_per_minute'] . "/min\n";
+            echo "\tMax attempts: " . $settings['rate_limit_max_attempts'] . "\n";
+            echo "\tWindow: " . $settings['rate_limit_window_seconds'] . "s\n";
+            echo "\tBlock duration: " . $settings['rate_limit_block_seconds'] . "s\n";
+            echo "\n  Display:\n";
+            echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
+            echo "\tDate format: " . $settings['display_date_format'] . "\n";
+            echo "\tCurrency decimals: " . $settings['display_currency_decimals'] . "\n";
+            echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
         }
     }
 

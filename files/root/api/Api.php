@@ -22,8 +22,12 @@ use Eiou\Services\ApiAuthService;
 // Set JSON content type
 header('Content-Type: application/json; charset=utf-8');
 
-// Set CORS headers for API access (configurable via Constants)
-$corsOrigins = Constants::API_CORS_ALLOWED_ORIGINS;
+// Set CORS headers for API access (configurable per user via defaultconfig.json)
+try {
+    $corsOrigins = \Eiou\Core\UserContext::getInstance()->getApiCorsAllowedOrigins();
+} catch (\Exception $e) {
+    $corsOrigins = Constants::API_CORS_ALLOWED_ORIGINS;
+}
 if (!empty($corsOrigins)) {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     if ($corsOrigins === '*') {
@@ -49,6 +53,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Initialize application
 try {
     $app = Application::getInstance();
+
+    // Check if API access is enabled (user-configurable)
+    if (!\Eiou\Core\UserContext::getInstance()->getApiEnabled()) {
+        http_response_code(403);
+        echo json_encode([
+            'success' => false,
+            'error' => ['message' => 'API access is disabled', 'code' => 'api_disabled'],
+            'timestamp' => date('c')
+        ]);
+        exit;
+    }
 
     // Set security headers for API responses
     \Eiou\Utils\Security::setSecurityHeaders();

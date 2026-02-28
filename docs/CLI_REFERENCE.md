@@ -828,6 +828,70 @@ eiou changesettings [setting] [value]
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 | `trustedProxies` | Trusted proxy IPs for header forwarding | `10.0.0.1,172.16.0.0/12` |
 
+**Advanced Settings (Feature Toggles):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `contactStatusEnabled` | Enable contact status tracking | `true`, `false` |
+| `contactStatusSyncOnPing` | Sync status during ping operations | `true`, `false` |
+| `autoChainDropPropose` | Auto-propose chain-drop operations | `true`, `false` |
+| `autoChainDropAccept` | Auto-accept chain-drop proposals | `true`, `false` |
+| `apiEnabled` | Enable REST API endpoint | `true`, `false` |
+| `apiCorsAllowedOrigins` | Allowed CORS origins for API | `https://example.com` |
+| `rateLimitEnabled` | Enable rate limiting (CLI/API only — not exposed in GUI) | `true`, `false` |
+
+**Advanced Settings (Backup & Logging):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `backupRetentionCount` | Number of backup files to keep (min 1) | `3` |
+| `backupCronHour` | Backup schedule hour UTC (0-23) | `0` |
+| `backupCronMinute` | Backup schedule minute (0-59) | `0` |
+| `logLevel` | Minimum log level | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `logMaxEntries` | Max log entries to keep (min 10) | `100` |
+
+**Advanced Settings (Data Retention):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `cleanupDeliveryRetentionDays` | Days to retain delivery records (min 1) | `30` |
+| `cleanupDlqRetentionDays` | Days to retain dead letter queue entries (min 1) | `90` |
+| `cleanupHeldTxRetentionDays` | Days to retain held transactions (min 1) | `7` |
+| `cleanupRp2pRetentionDays` | Days to retain P2P routing records (min 1) | `30` |
+| `cleanupMetricsRetentionDays` | Days to retain metrics data (min 1) | `90` |
+
+**Advanced Settings (Rate Limiting):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `p2pRateLimitPerMinute` | Max P2P requests per minute (min 1) | `60` |
+| `rateLimitMaxAttempts` | Max attempts before rate limit triggers (min 1) | `10` |
+| `rateLimitWindowSeconds` | Rate limit time window in seconds (min 1) | `60` |
+| `rateLimitBlockSeconds` | Block duration after limit exceeded (min 1) | `300` |
+
+**Advanced Settings (Network):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `httpTransportTimeoutSeconds` | HTTP transport timeout (5-120) | `15` |
+| `torTransportTimeoutSeconds` | Tor transport timeout (10-300) | `30` |
+
+**Advanced Settings (Sync):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `syncChunkSize` | Transactions per sync chunk (10-500) | `50` |
+| `syncMaxChunks` | Max sync chunks per cycle (10-1000) | `100` |
+| `heldTxSyncTimeoutSeconds` | Held tx sync timeout in seconds (30-299) | `120` |
+
+**Advanced Settings (Display):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `displayDateFormat` | PHP date format string | `Y-m-d H:i:s.u` |
+| `displayCurrencyDecimals` | Currency decimal places (0-8) | `2` |
+| `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
+
 **Examples:**
 ```bash
 # Interactive mode
@@ -842,6 +906,15 @@ eiou changesettings autoBackupEnabled false
 eiou changesettings autoAcceptTransaction false  # Require approval before sending P2P
 eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"
 eiou changesettings trustedProxies ""       # Clear (trust no proxies)
+
+# Advanced settings
+eiou changesettings logLevel WARNING
+eiou changesettings backupRetentionCount 5
+eiou changesettings cleanupDeliveryRetentionDays 60
+eiou changesettings httpTransportTimeoutSeconds 30
+eiou changesettings displayCurrencyDecimals 4
+eiou changesettings rateLimitEnabled false
+eiou changesettings contactStatusEnabled false
 
 # JSON output
 eiou changesettings defaultFee 1.5 --json

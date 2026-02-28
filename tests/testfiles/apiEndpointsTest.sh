@@ -1124,6 +1124,24 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# Test: system/settings includes new configurable settings keys
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing GET /api/v1/system/settings includes new settings keys"
+settingsApiHasNew=true
+for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format display_currency_decimals display_recent_transactions_limit; do
+    if ! echo "$settingsApiResponse" | grep -q "\"${key}\""; then
+        settingsApiHasNew=false
+        printf "\t   Missing API key: ${key}\n"
+    fi
+done
+if [ "$settingsApiHasNew" = "true" ]; then
+    printf "\t   GET /api/v1/system/settings new keys present ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/system/settings new keys present ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ CONTACT PING API TEST ############################
 
 echo -e "\n[Contact Ping API Test]"

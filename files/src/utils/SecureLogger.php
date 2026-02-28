@@ -10,6 +10,7 @@ namespace Eiou\Utils;
 
 use DateTime;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 
 class SecureLogger {
     private static $sensitivePatterns = [
@@ -98,7 +99,16 @@ class SecureLogger {
 
             // Prune old entries occasionally (1 in 10 chance to avoid performance overhead)
             if (rand(1, 10) === 1) {
-                self::pruneLogFile(Constants::LOG_MAX_ENTRIES);
+                $maxEntries = Constants::LOG_MAX_ENTRIES;
+                try {
+                    $uc = UserContext::getInstance();
+                    if ($uc->isInitialized()) {
+                        $maxEntries = $uc->getLogMaxEntries();
+                    }
+                } catch (\Throwable $e) {
+                    // UserContext not yet available, use Constants default
+                }
+                self::pruneLogFile($maxEntries);
             }
         }
 

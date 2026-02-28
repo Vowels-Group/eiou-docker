@@ -367,7 +367,7 @@ class TransportUtilityService implements TransportServiceInterface
         $url = $protocol . $recipient . "/eiou/";
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getHttpTransportTimeoutSeconds());
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Prevent payload leakage on redirects
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
@@ -435,7 +435,7 @@ class TransportUtilityService implements TransportServiceInterface
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
         curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
@@ -503,7 +503,7 @@ class TransportUtilityService implements TransportServiceInterface
 
         if ($this->isTorAddress($recipient)) {
             curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
-            curl_setopt($ch, CURLOPT_TIMEOUT, Constants::TOR_TRANSPORT_TIMEOUT_SECONDS);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
             curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
@@ -511,7 +511,7 @@ class TransportUtilityService implements TransportServiceInterface
             $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
             $url = $protocol . $recipient . "/eiou/";
             curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_TIMEOUT, Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getHttpTransportTimeoutSeconds());
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 
             // SSL options for HTTPS connections (see sendByHttp for full documentation)

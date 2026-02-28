@@ -26,6 +26,7 @@ use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\GeneralUtilityService;
 use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
 use Eiou\Cli\CliOutputManager;
 
 #[CoversClass(CliService::class)]
@@ -107,6 +108,65 @@ class CliServiceTest extends TestCase
             ->willReturn(true);
         $this->userContext->method('getAutoBackupEnabled')
             ->willReturn(false);
+        // New settings getters
+        $this->userContext->method('getHttpAddress')
+            ->willReturn('http://alice');
+        $this->userContext->method('getHttpsAddress')
+            ->willReturn('https://alice');
+        $this->userContext->method('getTrustedProxies')
+            ->willReturn('');
+        $this->userContext->method('getContactStatusEnabled')
+            ->willReturn(true);
+        $this->userContext->method('getContactStatusSyncOnPing')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropPropose')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropAccept')
+            ->willReturn(false);
+        $this->userContext->method('getApiEnabled')
+            ->willReturn(true);
+        $this->userContext->method('getApiCorsAllowedOrigins')
+            ->willReturn('');
+        $this->userContext->method('getRateLimitEnabled')
+            ->willReturn(true);
+        $this->userContext->method('getBackupRetentionCount')
+            ->willReturn(3);
+        $this->userContext->method('getBackupCronHour')
+            ->willReturn(0);
+        $this->userContext->method('getBackupCronMinute')
+            ->willReturn(0);
+        $this->userContext->method('getLogLevel')
+            ->willReturn('INFO');
+        $this->userContext->method('getLogMaxEntries')
+            ->willReturn(100);
+        $this->userContext->method('getCleanupDeliveryRetentionDays')
+            ->willReturn(30);
+        $this->userContext->method('getCleanupDlqRetentionDays')
+            ->willReturn(90);
+        $this->userContext->method('getCleanupHeldTxRetentionDays')
+            ->willReturn(7);
+        $this->userContext->method('getCleanupRp2pRetentionDays')
+            ->willReturn(30);
+        $this->userContext->method('getCleanupMetricsRetentionDays')
+            ->willReturn(90);
+        $this->userContext->method('getP2pRateLimitPerMinute')
+            ->willReturn(60);
+        $this->userContext->method('getRateLimitMaxAttempts')
+            ->willReturn(10);
+        $this->userContext->method('getRateLimitWindowSeconds')
+            ->willReturn(60);
+        $this->userContext->method('getRateLimitBlockSeconds')
+            ->willReturn(300);
+        $this->userContext->method('getHttpTransportTimeoutSeconds')
+            ->willReturn(15);
+        $this->userContext->method('getTorTransportTimeoutSeconds')
+            ->willReturn(30);
+        $this->userContext->method('getDisplayDateFormat')
+            ->willReturn('Y-m-d H:i:s.u');
+        $this->userContext->method('getDisplayCurrencyDecimals')
+            ->willReturn(2);
+        $this->userContext->method('getDisplayRecentTransactionsLimit')
+            ->willReturn(5);
 
         $this->outputManager->expects($this->once())
             ->method('settings')
@@ -121,7 +181,34 @@ class CliServiceTest extends TestCase
                     && $settings['max_output_lines'] === 50
                     && $settings['default_transport_mode'] === 'http'
                     && $settings['auto_refresh_enabled'] === true
-                    && $settings['auto_backup_enabled'] === false;
+                    && $settings['auto_backup_enabled'] === false
+                    // New settings assertions
+                    && $settings['contact_status_enabled'] === true
+                    && $settings['contact_status_sync_on_ping'] === true
+                    && $settings['auto_chain_drop_propose'] === true
+                    && $settings['auto_chain_drop_accept'] === false
+                    && $settings['api_enabled'] === true
+                    && $settings['api_cors_allowed_origins'] === ''
+                    && $settings['rate_limit_enabled'] === true
+                    && $settings['backup_retention_count'] === 3
+                    && $settings['backup_cron_hour'] === 0
+                    && $settings['backup_cron_minute'] === 0
+                    && $settings['log_level'] === 'INFO'
+                    && $settings['log_max_entries'] === 100
+                    && $settings['cleanup_delivery_retention_days'] === 30
+                    && $settings['cleanup_dlq_retention_days'] === 90
+                    && $settings['cleanup_held_tx_retention_days'] === 7
+                    && $settings['cleanup_rp2p_retention_days'] === 30
+                    && $settings['cleanup_metrics_retention_days'] === 90
+                    && $settings['p2p_rate_limit_per_minute'] === 60
+                    && $settings['rate_limit_max_attempts'] === 10
+                    && $settings['rate_limit_window_seconds'] === 60
+                    && $settings['rate_limit_block_seconds'] === 300
+                    && $settings['http_transport_timeout_seconds'] === 15
+                    && $settings['tor_transport_timeout_seconds'] === 30
+                    && $settings['display_date_format'] === 'Y-m-d H:i:s.u'
+                    && $settings['display_currency_decimals'] === 2
+                    && $settings['display_recent_transactions_limit'] === 5;
             }));
 
         $this->service->displayCurrentSettings($this->outputManager);
@@ -157,6 +244,65 @@ class CliServiceTest extends TestCase
             ->willReturn(true);
         $this->userContext->method('getAutoBackupEnabled')
             ->willReturn(false);
+        // New settings getters
+        $this->userContext->method('getHttpAddress')
+            ->willReturn('http://alice');
+        $this->userContext->method('getHttpsAddress')
+            ->willReturn('https://alice');
+        $this->userContext->method('getTrustedProxies')
+            ->willReturn('');
+        $this->userContext->method('getContactStatusEnabled')
+            ->willReturn(true);
+        $this->userContext->method('getContactStatusSyncOnPing')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropPropose')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropAccept')
+            ->willReturn(false);
+        $this->userContext->method('getApiEnabled')
+            ->willReturn(true);
+        $this->userContext->method('getApiCorsAllowedOrigins')
+            ->willReturn('');
+        $this->userContext->method('getRateLimitEnabled')
+            ->willReturn(true);
+        $this->userContext->method('getBackupRetentionCount')
+            ->willReturn(3);
+        $this->userContext->method('getBackupCronHour')
+            ->willReturn(0);
+        $this->userContext->method('getBackupCronMinute')
+            ->willReturn(0);
+        $this->userContext->method('getLogLevel')
+            ->willReturn('INFO');
+        $this->userContext->method('getLogMaxEntries')
+            ->willReturn(100);
+        $this->userContext->method('getCleanupDeliveryRetentionDays')
+            ->willReturn(30);
+        $this->userContext->method('getCleanupDlqRetentionDays')
+            ->willReturn(90);
+        $this->userContext->method('getCleanupHeldTxRetentionDays')
+            ->willReturn(7);
+        $this->userContext->method('getCleanupRp2pRetentionDays')
+            ->willReturn(30);
+        $this->userContext->method('getCleanupMetricsRetentionDays')
+            ->willReturn(90);
+        $this->userContext->method('getP2pRateLimitPerMinute')
+            ->willReturn(60);
+        $this->userContext->method('getRateLimitMaxAttempts')
+            ->willReturn(10);
+        $this->userContext->method('getRateLimitWindowSeconds')
+            ->willReturn(60);
+        $this->userContext->method('getRateLimitBlockSeconds')
+            ->willReturn(300);
+        $this->userContext->method('getHttpTransportTimeoutSeconds')
+            ->willReturn(15);
+        $this->userContext->method('getTorTransportTimeoutSeconds')
+            ->willReturn(30);
+        $this->userContext->method('getDisplayDateFormat')
+            ->willReturn('Y-m-d H:i:s.u');
+        $this->userContext->method('getDisplayCurrencyDecimals')
+            ->willReturn(2);
+        $this->userContext->method('getDisplayRecentTransactionsLimit')
+            ->willReturn(5);
 
         // Should not call settings() in text mode
         $this->outputManager->expects($this->never())
@@ -168,6 +314,12 @@ class CliServiceTest extends TestCase
 
         $this->assertStringContainsString('Current Settings:', $output);
         $this->assertStringContainsString('USD', $output);
+        // Verify new settings sections appear in text output
+        $this->assertStringContainsString('Feature Toggles:', $output);
+        $this->assertStringContainsString('Backup & Logging:', $output);
+        $this->assertStringContainsString('Data Retention:', $output);
+        $this->assertStringContainsString('Rate Limiting:', $output);
+        $this->assertStringContainsString('Display:', $output);
     }
 
     // =========================================================================
@@ -729,6 +881,397 @@ class CliServiceTest extends TestCase
             );
 
         $this->service->changeSettings(['eiou', 'changesettings'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid boolean feature toggle
+     */
+    public function testChangeSettingsAcceptsValidBooleanToggle(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'contactStatusEnabled'
+                        && $data['value'] === false;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'contactStatusEnabled', 'false'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid integer setting
+     */
+    public function testChangeSettingsAcceptsValidIntegerSetting(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'backupRetentionCount'
+                        && $data['value'] === 5;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'backupRetentionCount', '5'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects invalid log level
+     */
+    public function testChangeSettingsRejectsInvalidLogLevel(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('logLevel', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'logLevel', 'INVALID'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid log level (case insensitive)
+     */
+    public function testChangeSettingsAcceptsValidLogLevel(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'logLevel'
+                        && $data['value'] === 'WARNING';
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'logLevel', 'warning'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects out-of-range integer (backupCronHour > 23)
+     */
+    public function testChangeSettingsRejectsOutOfRangeInteger(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('backupCronHour', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'backupCronHour', '25'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid backup cron hour
+     */
+    public function testChangeSettingsAcceptsValidBackupCronHour(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'backupCronHour'
+                        && $data['value'] === 14;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'backupCronHour', '14'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid HTTP timeout within range
+     */
+    public function testChangeSettingsAcceptsValidHttpTimeout(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'httpTransportTimeoutSeconds'
+                        && $data['value'] === 30;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'httpTransportTimeoutSeconds', '30'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects HTTP timeout below minimum
+     */
+    public function testChangeSettingsRejectsHttpTimeoutBelowMinimum(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('httpTransportTimeoutSeconds', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'httpTransportTimeoutSeconds', '2'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects HTTP timeout above maximum
+     */
+    public function testChangeSettingsRejectsHttpTimeoutAboveMaximum(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('httpTransportTimeoutSeconds', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'httpTransportTimeoutSeconds', '200'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid date format
+     */
+    public function testChangeSettingsAcceptsValidDateFormat(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'displayDateFormat'
+                        && $data['value'] === 'Y-m-d H:i';
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'displayDateFormat', 'Y-m-d H:i'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects empty date format
+     */
+    public function testChangeSettingsRejectsEmptyDateFormat(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('displayDateFormat', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'displayDateFormat', ''], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid currency decimals
+     */
+    public function testChangeSettingsAcceptsValidCurrencyDecimals(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'displayCurrencyDecimals'
+                        && $data['value'] === 4;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'displayCurrencyDecimals', '4'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects currency decimals above maximum (8)
+     */
+    public function testChangeSettingsRejectsCurrencyDecimalsAboveMax(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('displayCurrencyDecimals', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'displayCurrencyDecimals', '10'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid data retention days
+     */
+    public function testChangeSettingsAcceptsValidRetentionDays(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'cleanupDeliveryRetentionDays'
+                        && $data['value'] === 60;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'cleanupDeliveryRetentionDays', '60'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects zero retention days
+     */
+    public function testChangeSettingsRejectsZeroRetentionDays(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('cleanupDlqRetentionDays', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'cleanupDlqRetentionDays', '0'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid rate limit setting
+     */
+    public function testChangeSettingsAcceptsValidRateLimit(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'p2pRateLimitPerMinute'
+                        && $data['value'] === 120;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'p2pRateLimitPerMinute', '120'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid Tor timeout
+     */
+    public function testChangeSettingsAcceptsValidTorTimeout(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'torTransportTimeoutSeconds'
+                        && $data['value'] === 60;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'torTransportTimeoutSeconds', '60'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts CORS origins string
+     */
+    public function testChangeSettingsAcceptsCorsOrigins(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'apiCorsAllowedOrigins'
+                        && $data['value'] === 'https://example.com';
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'apiCorsAllowedOrigins', 'https://example.com'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid recent transactions limit
+     */
+    public function testChangeSettingsAcceptsRecentTransactionsLimit(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'displayRecentTransactionsLimit'
+                        && $data['value'] === 10;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'displayRecentTransactionsLimit', '10'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings setting names are case-insensitive
+     */
+    public function testChangeSettingsIsCaseInsensitive(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'rateLimitEnabled'
+                        && $data['value'] === false;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'RATELIMITENABLED', 'false'], $this->outputManager);
     }
 
     // =========================================================================

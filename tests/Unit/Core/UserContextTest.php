@@ -629,6 +629,17 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getAutoAcceptTransaction returns default when not set
+     */
+    public function testGetAutoAcceptTransactionReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+
+        $this->assertEquals(Constants::AUTO_ACCEPT_TRANSACTION, $instance->getAutoAcceptTransaction());
+    }
+
+    /**
      * Test toArray returns same as getAll
      */
     public function testToArrayReturnsSameAsGetAll(): void
@@ -765,5 +776,406 @@ class UserContextTest extends TestCase
         $instance->setUserData([]);
 
         $this->assertNull($instance->getAuthCode());
+    }
+
+    // =========================================================================
+    // BACKUP & LOGGING GETTERS
+    // =========================================================================
+
+    public function testGetBackupRetentionCountDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::BACKUP_RETENTION_COUNT, $instance->getBackupRetentionCount());
+    }
+
+    public function testGetBackupRetentionCountFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupRetentionCount' => 7]);
+        $this->assertSame(7, $instance->getBackupRetentionCount());
+    }
+
+    public function testGetBackupRetentionCountMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupRetentionCount' => 0]);
+        $this->assertSame(1, $instance->getBackupRetentionCount());
+    }
+
+    public function testGetBackupCronHourDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::BACKUP_CRON_HOUR, $instance->getBackupCronHour());
+    }
+
+    public function testGetBackupCronHourFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupCronHour' => 14]);
+        $this->assertSame(14, $instance->getBackupCronHour());
+    }
+
+    public function testGetBackupCronHourClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupCronHour' => 25]);
+        $this->assertSame(23, $instance->getBackupCronHour());
+    }
+
+    public function testGetBackupCronMinuteDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::BACKUP_CRON_MINUTE, $instance->getBackupCronMinute());
+    }
+
+    public function testGetBackupCronMinuteFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['backupCronMinute' => 30]);
+        $this->assertSame(30, $instance->getBackupCronMinute());
+    }
+
+    public function testGetLogLevelDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LOG_LEVEL, $instance->getLogLevel());
+    }
+
+    public function testGetLogLevelFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['logLevel' => 'DEBUG']);
+        $this->assertSame('DEBUG', $instance->getLogLevel());
+    }
+
+    public function testGetLogMaxEntriesDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LOG_MAX_ENTRIES, $instance->getLogMaxEntries());
+    }
+
+    public function testGetLogMaxEntriesFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['logMaxEntries' => 500]);
+        $this->assertSame(500, $instance->getLogMaxEntries());
+    }
+
+    public function testGetLogMaxEntriesMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['logMaxEntries' => 5]);
+        $this->assertSame(10, $instance->getLogMaxEntries());
+    }
+
+    // =========================================================================
+    // DATA RETENTION GETTERS
+    // =========================================================================
+
+    public function testGetCleanupDeliveryRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_DELIVERY_RETENTION_DAYS, $instance->getCleanupDeliveryRetentionDays());
+    }
+
+    public function testGetCleanupDeliveryRetentionDaysFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['cleanupDeliveryRetentionDays' => 60]);
+        $this->assertSame(60, $instance->getCleanupDeliveryRetentionDays());
+    }
+
+    public function testGetCleanupDlqRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_DLQ_RETENTION_DAYS, $instance->getCleanupDlqRetentionDays());
+    }
+
+    public function testGetCleanupHeldTxRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_HELD_TX_RETENTION_DAYS, $instance->getCleanupHeldTxRetentionDays());
+    }
+
+    public function testGetCleanupRp2pRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_RP2P_RETENTION_DAYS, $instance->getCleanupRp2pRetentionDays());
+    }
+
+    public function testGetCleanupMetricsRetentionDaysDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::CLEANUP_METRICS_RETENTION_DAYS, $instance->getCleanupMetricsRetentionDays());
+    }
+
+    public function testCleanupRetentionDaysMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'cleanupDeliveryRetentionDays' => 0,
+            'cleanupDlqRetentionDays' => -5,
+            'cleanupHeldTxRetentionDays' => 0,
+            'cleanupRp2pRetentionDays' => 0,
+            'cleanupMetricsRetentionDays' => 0,
+        ]);
+        $this->assertSame(1, $instance->getCleanupDeliveryRetentionDays());
+        $this->assertSame(1, $instance->getCleanupDlqRetentionDays());
+        $this->assertSame(1, $instance->getCleanupHeldTxRetentionDays());
+        $this->assertSame(1, $instance->getCleanupRp2pRetentionDays());
+        $this->assertSame(1, $instance->getCleanupMetricsRetentionDays());
+    }
+
+    // =========================================================================
+    // RATE LIMITING GETTERS
+    // =========================================================================
+
+    public function testGetP2pRateLimitPerMinuteDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::P2P_RATE_LIMIT_PER_MINUTE, $instance->getP2pRateLimitPerMinute());
+    }
+
+    public function testGetP2pRateLimitPerMinuteFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['p2pRateLimitPerMinute' => 120]);
+        $this->assertSame(120, $instance->getP2pRateLimitPerMinute());
+    }
+
+    public function testGetRateLimitMaxAttemptsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::RATE_LIMIT_MAX_ATTEMPTS, $instance->getRateLimitMaxAttempts());
+    }
+
+    public function testGetRateLimitWindowSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::RATE_LIMIT_WINDOW_SECONDS, $instance->getRateLimitWindowSeconds());
+    }
+
+    public function testGetRateLimitBlockSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::RATE_LIMIT_BLOCK_SECONDS, $instance->getRateLimitBlockSeconds());
+    }
+
+    public function testRateLimitMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'p2pRateLimitPerMinute' => 0,
+            'rateLimitMaxAttempts' => 0,
+            'rateLimitWindowSeconds' => 0,
+            'rateLimitBlockSeconds' => -1,
+        ]);
+        $this->assertSame(1, $instance->getP2pRateLimitPerMinute());
+        $this->assertSame(1, $instance->getRateLimitMaxAttempts());
+        $this->assertSame(1, $instance->getRateLimitWindowSeconds());
+        $this->assertSame(1, $instance->getRateLimitBlockSeconds());
+    }
+
+    // =========================================================================
+    // NETWORK GETTERS
+    // =========================================================================
+
+    public function testGetHttpTransportTimeoutSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $instance->getHttpTransportTimeoutSeconds());
+    }
+
+    public function testGetHttpTransportTimeoutSecondsFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['httpTransportTimeoutSeconds' => 30]);
+        $this->assertSame(30, $instance->getHttpTransportTimeoutSeconds());
+    }
+
+    public function testGetHttpTransportTimeoutSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['httpTransportTimeoutSeconds' => 2]);
+        $this->assertSame(5, $instance->getHttpTransportTimeoutSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['httpTransportTimeoutSeconds' => 200]);
+        $this->assertSame(120, $instance->getHttpTransportTimeoutSeconds());
+    }
+
+    public function testGetTorTransportTimeoutSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::TOR_TRANSPORT_TIMEOUT_SECONDS, $instance->getTorTransportTimeoutSeconds());
+    }
+
+    public function testGetTorTransportTimeoutSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torTransportTimeoutSeconds' => 5]);
+        $this->assertSame(10, $instance->getTorTransportTimeoutSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torTransportTimeoutSeconds' => 500]);
+        $this->assertSame(300, $instance->getTorTransportTimeoutSeconds());
+    }
+
+    // =========================================================================
+    // SYNC GETTERS
+    // =========================================================================
+
+    public function testGetSyncChunkSizeDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::SYNC_CHUNK_SIZE, $instance->getSyncChunkSize());
+    }
+
+    public function testGetSyncChunkSizeFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncChunkSize' => 100]);
+        $this->assertSame(100, $instance->getSyncChunkSize());
+    }
+
+    public function testGetSyncChunkSizeClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncChunkSize' => 5]);
+        $this->assertSame(10, $instance->getSyncChunkSize());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncChunkSize' => 600]);
+        $this->assertSame(500, $instance->getSyncChunkSize());
+    }
+
+    public function testGetSyncMaxChunksDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::SYNC_MAX_CHUNKS, $instance->getSyncMaxChunks());
+    }
+
+    public function testGetSyncMaxChunksFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncMaxChunks' => 200]);
+        $this->assertSame(200, $instance->getSyncMaxChunks());
+    }
+
+    public function testGetSyncMaxChunksClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncMaxChunks' => 5]);
+        $this->assertSame(10, $instance->getSyncMaxChunks());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['syncMaxChunks' => 2000]);
+        $this->assertSame(1000, $instance->getSyncMaxChunks());
+    }
+
+    public function testGetHeldTxSyncTimeoutSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::HELD_TX_SYNC_TIMEOUT_SECONDS, $instance->getHeldTxSyncTimeoutSeconds());
+    }
+
+    public function testGetHeldTxSyncTimeoutSecondsFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['heldTxSyncTimeoutSeconds' => 60]);
+        $this->assertSame(60, $instance->getHeldTxSyncTimeoutSeconds());
+    }
+
+    public function testGetHeldTxSyncTimeoutSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['heldTxSyncTimeoutSeconds' => 10]);
+        $this->assertSame(30, $instance->getHeldTxSyncTimeoutSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['heldTxSyncTimeoutSeconds' => 500]);
+        $this->assertSame(Constants::P2P_DEFAULT_EXPIRATION_SECONDS - 1, $instance->getHeldTxSyncTimeoutSeconds());
+    }
+
+    // =========================================================================
+    // DISPLAY GETTERS
+    // =========================================================================
+
+    public function testGetDisplayDateFormatDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $instance->getDisplayDateFormat());
+    }
+
+    public function testGetDisplayDateFormatFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayDateFormat' => 'Y-m-d']);
+        $this->assertSame('Y-m-d', $instance->getDisplayDateFormat());
+    }
+
+    public function testGetDisplayCurrencyDecimalsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::DISPLAY_CURRENCY_DECIMALS, $instance->getDisplayCurrencyDecimals());
+    }
+
+    public function testGetDisplayCurrencyDecimalsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayCurrencyDecimals' => -1]);
+        $this->assertSame(0, $instance->getDisplayCurrencyDecimals());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayCurrencyDecimals' => 10]);
+        $this->assertSame(8, $instance->getDisplayCurrencyDecimals());
+    }
+
+    public function testGetDisplayRecentTransactionsLimitDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT, $instance->getDisplayRecentTransactionsLimit());
+    }
+
+    public function testGetDisplayRecentTransactionsLimitFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayRecentTransactionsLimit' => 10]);
+        $this->assertSame(10, $instance->getDisplayRecentTransactionsLimit());
+    }
+
+    public function testGetDisplayRecentTransactionsLimitMinClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['displayRecentTransactionsLimit' => 0]);
+        $this->assertSame(1, $instance->getDisplayRecentTransactionsLimit());
     }
 }

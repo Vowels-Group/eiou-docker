@@ -347,7 +347,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
                     'memo' => $memo
                 ]);
             } else if ($p2pExpiration > 0
-                && ($p2pExpiration - $currentMicrotime) < (Constants::HELD_TX_SYNC_TIMEOUT_SECONDS * Constants::TIME_MICROSECONDS_TO_INT)) {
+                && ($p2pExpiration - $currentMicrotime) < ($this->currentUser->getHeldTxSyncTimeoutSeconds() * Constants::TIME_MICROSECONDS_TO_INT)) {
                 // P2P will expire before sync timeout — don't hold, the P2P would expire
                 // on every other relay node before we could resume
                 Logger::getInstance()->info("Skipping proactive hold for P2P — insufficient remaining lifetime for sync", [

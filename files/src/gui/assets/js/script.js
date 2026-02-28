@@ -2790,6 +2790,60 @@ function showDebugTab(tabId, button) {
  *     <i id="section-arrow">▼</i> Section Title
  * </div>
  */
+/**
+ * Switches the visible panel inside the Advanced Settings section.
+ *
+ * All .adv-section divs are hidden and the one matching the given sectionId
+ * is shown. Because every section's fields are always present in the DOM,
+ * all values are submitted regardless of which panel is currently visible.
+ *
+ * @param {string} sectionId - Value attribute of the selected dropdown option
+ *     (e.g. 'feature-toggles', 'backup-logging')
+ * @returns {void}
+ */
+function switchAdvancedSection(sectionId) {
+    var sections = document.querySelectorAll('.adv-section');
+    for (var i = 0; i < sections.length; i++) {
+        sections[i].style.display = 'none';
+    }
+    var target = document.getElementById('adv-section-' + sectionId);
+    if (target) {
+        target.style.display = 'block';
+    }
+}
+
+/**
+ * Keeps the Held TX Sync Timeout max in sync with the P2P Expiration field.
+ *
+ * Reads the current value of #p2pExpiration and sets the max attribute of
+ * #heldTxSyncTimeoutSeconds to (p2pExpiration - 1), clamped to a minimum
+ * of 30. If the current timeout value exceeds the new max it is clamped down.
+ * Called once on page load and on every input/change event on #p2pExpiration.
+ *
+ * @returns {void}
+ */
+function initSyncTimeoutDynamicMax() {
+    var p2pInput = document.getElementById('p2pExpiration');
+    var syncInput = document.getElementById('heldTxSyncTimeoutSeconds');
+    if (!p2pInput || !syncInput) {
+        return;
+    }
+    function updateMax() {
+        var p2pVal = parseInt(p2pInput.value, 10);
+        if (!isNaN(p2pVal) && p2pVal > 1) {
+            var newMax = Math.max(30, p2pVal - 1);
+            syncInput.max = newMax;
+            var current = parseInt(syncInput.value, 10);
+            if (!isNaN(current) && current > newMax) {
+                syncInput.value = newMax;
+            }
+        }
+    }
+    p2pInput.addEventListener('input', updateMax);
+    p2pInput.addEventListener('change', updateMax);
+    updateMax();
+}
+
 function toggleConfigSection(contentId, arrowId) {
     var content = document.getElementById(contentId);
     var arrow = document.getElementById(arrowId);
@@ -3284,4 +3338,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     initToggleSwitch('autoRefreshEnabled', 'autoRefreshStatus');
     initToggleSwitch('autoBackupEnabled', 'autoBackupStatus');
+    initToggleSwitch('contactStatusEnabled', 'contactStatusEnabledStatus');
+    initToggleSwitch('contactStatusSyncOnPing', 'contactStatusSyncOnPingStatus');
+    initToggleSwitch('autoChainDropPropose', 'autoChainDropProposeStatus');
+    initToggleSwitch('autoChainDropAccept', 'autoChainDropAcceptStatus');
+    initToggleSwitch('apiEnabled', 'apiEnabledStatus');
+    initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
+    initSyncTimeoutDynamicMax();
 });

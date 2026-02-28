@@ -294,7 +294,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
                 $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey']);
                 if (!$chainVerification['success']) {
                     // Auto-propose chain drop if sync couldn't repair the gap
-                    if ($chainVerification['synced'] && $this->chainDropService !== null && Constants::isAutoChainDropProposeEnabled()) {
+                    if ($chainVerification['synced'] && $this->chainDropService !== null && $this->currentUser->getAutoChainDropPropose()) {
                         $proposalResult = $this->chainDropService->proposeChainDrop($contactPubkeyHash);
                         if ($proposalResult['success']) {
                             $output->error("Cannot send: chain gap detected. A chain drop proposal has been sent to your contact.",

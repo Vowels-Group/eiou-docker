@@ -200,6 +200,9 @@ Handles settings and debug operations.
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
 | `autoAcceptTransaction` | bool | Auto-accept P2P transactions when route found (when OFF, transactions pause at `awaiting_approval` for user review in both fast and best-fee modes) |
+| `syncChunkSize` | int | Transactions per sync chunk (10-500) |
+| `syncMaxChunks` | int | Max sync chunks per cycle (10-1000) |
+| `heldTxSyncTimeoutSeconds` | int | Held tx sync timeout in seconds (30-299) |
 
 ---
 
