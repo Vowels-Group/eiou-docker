@@ -390,7 +390,13 @@ function initializeSendForm() {
             }
             if (index >= 0 && index < visible.length) {
                 visible[index].style.background = '#e9ecef';
-                visible[index].scrollIntoView(false);
+                // Scroll within the dropdown only — never scroll the page
+                var el = visible[index];
+                if (el.offsetTop < recipientDropdown.scrollTop) {
+                    recipientDropdown.scrollTop = el.offsetTop;
+                } else if (el.offsetTop + el.offsetHeight > recipientDropdown.scrollTop + recipientDropdown.clientHeight) {
+                    recipientDropdown.scrollTop = el.offsetTop + el.offsetHeight - recipientDropdown.clientHeight;
+                }
             }
         }
 
