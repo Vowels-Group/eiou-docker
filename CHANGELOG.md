@@ -21,6 +21,12 @@ The project is currently in **ALPHA** status.
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
+- Fix API CORS Origins setting saved to `defaultconfig.json` but never applied at runtime — `Api.php` was reading from `Constants::API_CORS_ALLOWED_ORIGINS` instead of `UserContext`; now reads from `UserContext::getInstance()->getApiCorsAllowedOrigins()`
+- Fix `apiEnabled` setting having no enforcement gate — API always responded regardless of the toggle; now returns HTTP 403 with `api_disabled` error when the setting is off
+- Fix `contactStatusEnabled` read from `Constants::CONTACT_STATUS_ENABLED` in `ContactStatusService::handleStatus()` — incoming contact status requests were never actually gated by user config; now uses `$this->currentUser->getContactStatusEnabled()`
+- Fix `contactStatusSyncOnPing` read from `Constants::CONTACT_STATUS_SYNC_ON_PING` in `ContactStatusService` and `ContactStatusProcessor` — ping payload and sync gate always used the hardcoded constant; now uses `$this->currentUser->getContactStatusSyncOnPing()`
+- Fix `syncChunkSize` and `syncMaxChunks` read from Constants in `SyncService` — chunk pagination and requester loop limit always used hardcoded values; now uses `$this->currentUser->getSyncChunkSize()` and `getSyncMaxChunks()`
+- Fix `heldTxSyncTimeoutSeconds` read from `Constants::HELD_TX_SYNC_TIMEOUT_SECONDS` in `TransactionProcessingService` — proactive hold guard always used hardcoded timeout; now uses `$this->currentUser->getHeldTxSyncTimeoutSeconds()`
 - Fix rate limit errors showing raw JSON instead of user-friendly flash message in the GUI — replace `enforce()` (which called `exit` with JSON) with `checkLimit()` + `MessageHelper::redirectMessage()` so the user sees a proper warning banner
 - Fix GUI transaction rate limit bucket not applied to `sendEIOU` action — add `sendEIOU` to the `transaction` case in SecurityInit.php action mapping
 - Remove dead `enforce()` method from `RateLimiterService` and its interface — replaced by `checkLimit()` + GUI flash redirect in SecurityInit.php
@@ -39,7 +45,10 @@ The project is currently in **ALPHA** status.
 - Replace separate Backup Hour / Backup Minute number inputs with a single `<input type="time">` (`HH:MM`); `SettingsController` parses the combined value and stores the individual `backupCronHour` / `backupCronMinute` keys unchanged
 - Replace API CORS Origins single-line text input with a resizable monospace textarea (one origin per line); controller normalises newline/comma-separated input to comma-separated storage and PHP renders it back as newline-separated on display
 - Make Held TX Sync Timeout upper bound dynamic: PHP renders the initial `max` as `p2pExpiration − 1` and a JS listener on the P2P Request Expiration field keeps it current, auto-clamping the timeout value if needed; server-side validation also uses the submitted/saved `p2pExpiration` value rather than a hardcoded 299
-- Rename "Max Display Lines" setting label to "CLI Max Output Lines" and clarify it controls CLI command output rows (not the GUI dashboard); add note to "Recent Transactions Limit" that it is GUI-only
+- Rename "Max Display Lines" setting label to "GUI/CLI Max Output Lines" (setting affects both the GUI dashboard and CLI commands); update description to reference correct CLI commands (`viewbalances`, `history`); update "Recent Transactions Limit" note to reference the renamed label
+- Move API CORS Origins field from Feature Toggles to Network section — it is a text configuration input, not a feature toggle
+- Reorder Backup & Logging fields: Backup Time (UTC) → Backup Retention Count → Max Log Entries → Log Level (backup schedule before retention count; log capacity before log level)
+- Style the Advanced Settings category `<select>` to match other form inputs — adds padding, border, border-radius, custom chevron arrow, and focus ring consistent with `.form-group select`
 - Add expert warning to Network timeout section; add data-loss warning to Data Retention section; add note to Rate Limiting section that these are P2P-specific limits toggled via Feature Toggles
 - Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
 - Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
