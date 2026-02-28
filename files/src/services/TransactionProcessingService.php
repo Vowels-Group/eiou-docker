@@ -531,8 +531,27 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
             output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Syncing balances...', 'SILENT');
             $this->getSyncTrigger()->syncContactBalance($message['receiver_public_key']);
-            output('Balances synced. Retrying transaction...', 'SILENT');
-            return true;
+
+            $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']);
+            if ($correctPrevTxid !== null && $this->updateAndResignTransaction($txid, $correctPrevTxid, true)) {
+                output('Transaction re-signed after sync. Retrying transaction...', 'SILENT');
+
+                $updatedMessage = $this->fetchUpdatedTransaction($txid);
+                if ($updatedMessage) {
+                    $syncRetryPayload = $this->transactionPayload->buildStandardFromDatabase($updatedMessage);
+                    $syncRetrySendResult = $this->sendTransactionMessage($updatedMessage['receiver_address'], $syncRetryPayload, $txid);
+                    $syncRetryResponse = $syncRetrySendResult['response'];
+
+                    if ($syncRetryResponse && $syncRetryResponse['status'] === Constants::STATUS_ACCEPTED) {
+                        output('Sync retry: Transaction accepted!', 'SILENT');
+                        $this->handleAcceptedTransaction($txid, $syncRetrySendResult, $syncRetryResponse);
+                        return true;
+                    }
+                }
+                output('Sync retry failed, resetting to pending for next cycle.', 'SILENT');
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                return true;
+            }
         }
 
         output(outputSyncFallbackP2p(), 'SILENT');

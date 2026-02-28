@@ -32,6 +32,7 @@ The project is currently in **ALPHA** status.
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
+- Fix `handleInvalidPreviousTxidDirect()` Step 3 — after a successful chain sync, the method logged "Retrying transaction..." but returned `true` without re-signing or re-sending; transaction was left stuck in `STATUS_SENT` with the wrong `previousTxid` and never retried; fix mirrors `attemptP2pRetryAndSync()`: get the synced `previousTxid` via `getPreviousTxid()`, call `updateAndResignTransaction()`, immediately re-send, and reset to `STATUS_PENDING` on failure so the next processing cycle picks it up
 - Fix DLQ retry/abandon "Invalid CSRF token" error after first action — `DlqController` now passes `rotate: false` to `validateCSRFToken` so the token is not consumed on each AJAX call; users can retry or abandon multiple items without a page reload
 - Fix auto-refresh using `fetch()`/`AbortController` (unsupported in Tor Browser strict mode) — replaced with `XMLHttpRequest` and `xhr.timeout` to match the rest of the codebase's Tor Browser compatibility requirement
 - Fix recipient search dropdown ignoring arrow keys — add `keydown` handler to navigate options with ArrowDown/ArrowUp, select with Enter, and dismiss with Escape; mouse hover and keyboard focus stay in sync; extracted shared `selectRecipientOption()` function
