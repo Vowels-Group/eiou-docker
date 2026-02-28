@@ -10,6 +10,20 @@
             <?php endif; ?>
         </h2>
         <div class="dlq-section-header-actions">
+            <?php if (!empty($dlqItems)): ?>
+            <?php $hasRetryable = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying']) && in_array($_i['message_type'] ?? '', ['transaction','contact'])) { $hasRetryable = true; break; } } ?>
+            <?php $hasActive = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying'])) { $hasActive = true; break; } } ?>
+            <?php if ($hasRetryable): ?>
+            <button type="button" class="btn btn-success btn-sm" onclick="retryAllDlqItems(this)" title="Retry all pending transaction and contact messages">
+                <i class="fas fa-redo"></i> Retry All
+            </button>
+            <?php endif; ?>
+            <?php if ($hasActive): ?>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="abandonAllDlqItems(this)" title="Abandon all pending messages">
+                <i class="fas fa-ban"></i> Abandon All
+            </button>
+            <?php endif; ?>
+            <?php endif; ?>
             <button type="button" class="btn btn-primary btn-sm" onclick="window.location.href = window.location.pathname + '#dlq'; window.location.reload();">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
@@ -70,7 +84,7 @@
     <?php else: ?>
 
     <!-- DLQ table: visible on desktop, card-stack on mobile -->
-    <div class="dlq-table-wrapper">
+    <div class="dlq-table-wrapper<?php echo count($dlqItems) > 5 ? ' dlq-table-scrollable' : ''; ?>">
         <table class="dlq-table">
             <thead>
                 <tr>
@@ -114,8 +128,6 @@
                 // p2p/rp2p are time-sensitive relay messages — expired by the time they
                 // reach the DLQ. Only transaction and contact messages are safe to retry.
                 $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact'], true);
-                $shortRecipient = strlen($recipient) > 38 ? substr($recipient, 0, 35) . '...' : $recipient;
-                $shortReason    = strlen($reason) > 60 ? substr($reason, 0, 57) . '...' : $reason;
 
                 // Format date
                 $dateDisplay = '';
@@ -131,14 +143,14 @@
                         <?php echo htmlspecialchars($typeInfo['label']); ?>
                     </span>
                 </td>
-                <td data-label="Recipient">
-                    <span class="monospace dlq-address" title="<?php echo htmlspecialchars($recipient); ?>">
-                        <?php echo htmlspecialchars($shortRecipient); ?>
+                <td data-label="Recipient" class="dlq-cell-center">
+                    <span class="monospace dlq-address dlq-truncate" title="<?php echo htmlspecialchars($recipient); ?>">
+                        <?php echo htmlspecialchars($recipient); ?>
                     </span>
                 </td>
-                <td data-label="Reason">
-                    <span class="dlq-reason-text" title="<?php echo htmlspecialchars($reason); ?>">
-                        <?php echo htmlspecialchars($shortReason ?: '—'); ?>
+                <td data-label="Reason" class="dlq-cell-center">
+                    <span class="dlq-reason-text dlq-truncate" title="<?php echo htmlspecialchars($reason); ?>">
+                        <?php echo htmlspecialchars($reason ?: '—'); ?>
                     </span>
                 </td>
                 <td data-label="Retries" class="dlq-cell-center">

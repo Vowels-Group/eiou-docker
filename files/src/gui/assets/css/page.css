@@ -2772,10 +2772,18 @@ html {
     font-weight: 600;
 }
 
-/* Address cell — monospace, truncated */
+/* Address cell — monospace */
 .dlq-address {
     font-size: 0.82rem;
-    word-break: break-all;
+}
+
+/* Single-line truncation with ellipsis — applied to recipient and reason spans */
+.dlq-truncate {
+    display: block;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Action buttons cell (inner div inside <td>) */
@@ -2891,7 +2899,7 @@ html {
     color: #495057;
 }
 
-/* Retries cell — centred */
+/* Retries / Recipient / Reason cell — centred */
 .dlq-cell-center {
     text-align: center;
 }
@@ -2915,4 +2923,16 @@ html {
     color: #6c757d;
     font-size: 0.85rem;
     margin-top: 0.75rem;
+}
+
+/* Scrollable DLQ table wrapper — applied when >5 items */
+.dlq-table-scrollable {
+    max-height: 420px; /* ~5 rows + header */
+    overflow-y: auto;
+}
+
+/* Centre-align th for recipient and reason columns */
+.dlq-table th:nth-child(2),
+.dlq-table th:nth-child(3) {
+    text-align: center;
 }

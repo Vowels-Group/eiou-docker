@@ -70,7 +70,7 @@
                         }
                         ?>
                         <?php if ($ipTxidInDlq): ?>
-                            <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon"><i class="fas fa-inbox"></i> DLQ</a>
+                            <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon" onclick="event.stopPropagation()"><i class="fas fa-inbox"></i> DLQ</a>
                         <?php endif; ?>
                     </div>
                     <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
@@ -191,7 +191,7 @@
                             }
                             ?>
                             <?php if ($txidInDlq): ?>
-                                <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon"><i class="fas fa-inbox"></i> DLQ</a>
+                                <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon" onclick="event.stopPropagation()"><i class="fas fa-inbox"></i> DLQ</a>
                             <?php endif; ?>
                         </div>
                     </div>

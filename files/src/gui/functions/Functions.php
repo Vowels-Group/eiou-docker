@@ -99,10 +99,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // AJAX-only DLQ actions (returns JSON, exits immediately)
-    if (in_array($action, ['dlqRetry', 'dlqAbandon'])) {
+    if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {
             $dlqController->routeAction();
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
         }

@@ -3437,6 +3437,116 @@ function abandonDlqItem(dlqId, btn) {
 }
 
 /**
+ * Retry all pending/retrying transaction and contact DLQ items.
+ *
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function retryAllDlqItems(btn) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqRetryAll');
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 120000; // 2 min — bulk retries can be slow over Tor
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Bulk retry timed out — some messages may still be queued', 'warning');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                var count = response.queued || 0;
+                showToast('Retry All', count + ' message' + (count !== 1 ? 's' : '') + ' queued for retry', 'success');
+                setTimeout(function() { window.location.reload(); }, 1500);
+            } else {
+                showToast('Error', response.error || 'Bulk retry failed', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
+ * Abandon all pending/retrying DLQ items (all types).
+ *
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function abandonAllDlqItems(btn) {
+    if (!confirm('Abandon all pending messages? This cannot be undone.')) {
+        return;
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqAbandonAll');
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 30000;
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Request timed out — please try again', 'warning');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                var count = response.abandoned || 0;
+                showToast('Abandoned', count + ' message' + (count !== 1 ? 's' : '') + ' abandoned', 'info');
+                setTimeout(function() { window.location.reload(); }, 1000);
+            } else {
+                showToast('Error', response.error || 'Bulk abandon failed', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
  * Initialize a toggle switch with status text.
  *
  * Binds a change listener to the checkbox input that updates the adjacent

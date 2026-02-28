@@ -52,6 +52,10 @@ class DlqController
             $this->handleRetry();
         } elseif ($action === 'dlqAbandon') {
             $this->handleAbandon();
+        } elseif ($action === 'dlqRetryAll') {
+            $this->handleRetryAll();
+        } elseif ($action === 'dlqAbandonAll') {
+            $this->handleAbandonAll();
         }
     }
 
@@ -87,15 +91,20 @@ class DlqController
         // For transaction type: refresh expires_at and reset cancelled status before retrying.
         // The rp2p route persists in relay nodes until their retention period (independent of P2P expiry),
         // so re-sending the signed payload to the first hop can still succeed.
+        // Wrapped in try-catch: failure here is non-fatal (expiry will be handled by next cleanup cycle).
         if ($item['message_type'] === 'transaction') {
             $txid = $this->extractTxidFromMessageId($item['message_id']);
             if ($txid !== null) {
-                $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
-                $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
-                // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry
-                $tx = $this->transactionRepository->getByTxid($txid);
-                if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
-                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
+                try {
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
+                    $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
+                    // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry
+                    $tx = $this->transactionRepository->getByTxid($txid);
+                    if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                        $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
+                    }
+                } catch (\Throwable $e) {
+                    // Non-fatal: proceed with retry even if expires_at update fails
                 }
             }
         }
@@ -168,6 +177,94 @@ class DlqController
             'success' => $success,
             'error' => $success ? null : 'Failed to abandon item'
         ]);
+        exit;
+    }
+
+    private function handleRetryAll(): void
+    {
+        header('Content-Type: application/json');
+
+        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+            exit;
+        }
+
+        // Only retry transaction and contact types — p2p/rp2p are time-sensitive and should not be bulk-retried
+        $retryable = array_merge(
+            $this->dlqRepository->getByMessageType('transaction', 'pending'),
+            $this->dlqRepository->getByMessageType('transaction', 'retrying'),
+            $this->dlqRepository->getByMessageType('contact',     'pending'),
+            $this->dlqRepository->getByMessageType('contact',     'retrying')
+        );
+
+        $queued = 0;
+        $transportUtility = $this->transportUtility;
+        $successStatuses  = self::SUCCESS_STATUSES;
+
+        foreach ($retryable as $item) {
+            $dlqId = (int)$item['id'];
+
+            // Refresh expires_at for transaction items
+            if ($item['message_type'] === 'transaction') {
+                $txid = $this->extractTxidFromMessageId($item['message_id']);
+                if ($txid !== null) {
+                    try {
+                        $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
+                        $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
+                        $tx = $this->transactionRepository->getByTxid($txid);
+                        if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                            $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
+                        }
+                    } catch (\Throwable $e) {
+                        // Non-fatal: proceed with retry
+                    }
+                }
+            }
+
+            $this->messageDeliveryService->retryFromDlq(
+                $dlqId,
+                function (array $payload, string $recipient) use ($transportUtility, $successStatuses): array {
+                    try {
+                        $sendResult = $transportUtility->send($recipient, $payload, true);
+                        $response = is_array($sendResult) ? ($sendResult['response'] ?? '') : $sendResult;
+                        $decoded = json_decode($response, true);
+                        $status = $decoded['status'] ?? null;
+                        if ($status && in_array($status, $successStatuses, true)) {
+                            return ['success' => true];
+                        }
+                        return ['success' => false, 'error' => 'Recipient returned: ' . ($status ?? 'no response')];
+                    } catch (\Exception $e) {
+                        return ['success' => false, 'error' => $e->getMessage()];
+                    }
+                }
+            );
+            $queued++;
+        }
+
+        echo json_encode(['success' => true, 'queued' => $queued]);
+        exit;
+    }
+
+    private function handleAbandonAll(): void
+    {
+        header('Content-Type: application/json');
+
+        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+            exit;
+        }
+
+        $items = $this->dlqRepository->getItems('pending');
+        $items = array_merge($items, $this->dlqRepository->getItems('retrying'));
+
+        $abandoned = 0;
+        foreach ($items as $item) {
+            if ($this->dlqRepository->markAbandoned((int)$item['id'], 'Bulk abandoned via GUI')) {
+                $abandoned++;
+            }
+        }
+
+        echo json_encode(['success' => true, 'abandoned' => $abandoned]);
         exit;
     }
 }
