@@ -1868,6 +1868,10 @@ html {
     border-radius: 4px;
     font-size: 0.7rem;
     font-weight: 600;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .tx-type-p2p {
@@ -2801,4 +2805,55 @@ html {
 .action-card.action-card-warning:hover {
     background: #fff3cd;
     border-color: #e0a800;
+}
+
+/* DLQ mobile: convert table rows to stacked cards */
+@media (max-width: 640px) {
+    .dlq-table thead {
+        display: none;
+    }
+
+    .dlq-table,
+    .dlq-table tbody,
+    .dlq-table tr,
+    .dlq-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .dlq-table tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        background: #fff;
+    }
+
+    .dlq-table td {
+        padding: 0.3rem 0;
+        border: none;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .dlq-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.8rem;
+        min-width: 90px;
+        flex-shrink: 0;
+    }
+
+    .dlq-table td[data-label=""]::before {
+        display: none;
+    }
+
+    .dlq-actions-cell {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding-top: 0.5rem;
+    }
 }

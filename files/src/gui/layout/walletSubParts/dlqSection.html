@@ -125,37 +125,37 @@
                 }
             ?>
             <tr class="dlq-row" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>">
-                <td>
+                <td data-label="Type">
                     <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
                         <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>
                         <?php echo htmlspecialchars($typeInfo['label']); ?>
                     </span>
                 </td>
-                <td>
+                <td data-label="Recipient">
                     <span class="monospace dlq-address" title="<?php echo htmlspecialchars($recipient); ?>">
                         <?php echo htmlspecialchars($shortRecipient); ?>
                     </span>
                 </td>
-                <td>
+                <td data-label="Reason">
                     <span title="<?php echo htmlspecialchars($reason); ?>" style="font-size: 0.85rem; color: #495057;">
                         <?php echo htmlspecialchars($shortReason ?: '—'); ?>
                     </span>
                 </td>
-                <td style="text-align: center;">
+                <td data-label="Retries" style="text-align: center;">
                     <span style="font-weight: 600; color: <?php echo $retries >= 5 ? '#dc3545' : '#6c757d'; ?>;">
                         <?php echo $retries; ?>
                     </span>
                 </td>
-                <td style="font-size: 0.85rem; color: #6c757d; white-space: nowrap;">
+                <td data-label="Added" style="font-size: 0.85rem; color: #6c757d; white-space: nowrap;">
                     <?php echo htmlspecialchars($dateDisplay); ?>
                 </td>
-                <td>
+                <td data-label="Status">
                     <span class="dlq-status-badge" style="background:<?php echo $statusStyle['bg']; ?>; color:<?php echo $statusStyle['color']; ?>;">
                         <i class="fas <?php echo $statusStyle['icon']; ?>"></i>
                         <?php echo ucfirst(htmlspecialchars($status)); ?>
                     </span>
                 </td>
-                <td class="dlq-actions-cell">
+                <td data-label="" class="dlq-actions-cell">
                     <?php if ($canRetry): ?>
                     <button type="button"
                             class="btn btn-sm btn-success dlq-retry-btn"
