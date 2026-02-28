@@ -299,72 +299,137 @@ function initializeSendForm() {
             }
         });
 
+        // Shared selection logic — called from both mouse click and keyboard Enter
+        function selectRecipientOption(optionEl) {
+            var name = optionEl.getAttribute('data-name');
+            recipientSearch.value = name;
+            if (recipientHidden) recipientHidden.value = name;
+            recipientDropdown.style.display = 'none';
+            focusedOptionIndex = -1;
+
+            // Hide manual address, show address type selector
+            manualAddressGroup.style.display = 'none';
+            if (manualAddressInput) {
+                manualAddressInput.required = false;
+                manualAddressInput.value = '';
+            }
+
+            // Populate address type dropdown
+            var addressesJson = optionEl.getAttribute('data-addresses');
+            var addresses = {};
+            try {
+                addresses = addressesJson ? JSON.parse(addressesJson) : {};
+            } catch (err) {
+                addresses = {};
+            }
+
+            addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
+            var addressTypes = Object.keys(addresses);
+
+            for (var j = 0; j < addressTypes.length; j++) {
+                var type = addressTypes[j];
+                var addr = addresses[type];
+                var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
+                var displayType = type.toUpperCase();
+                addressTypeSelect.innerHTML += '<option value="' + escapeHtml(type) + '">' + escapeHtml(displayType) + ' (' + escapeHtml(truncatedAddr) + ')</option>';
+            }
+
+            if (addressTypes.length > 0) {
+                addressTypeGroup.style.display = 'block';
+                addressTypeSelect.required = true;
+                if (addressTypes.length === 1) {
+                    addressTypeSelect.value = addressTypes[0];
+                }
+            } else {
+                addressTypeGroup.style.display = 'none';
+                addressTypeSelect.required = false;
+            }
+
+            transactionTypeIndicator.style.display = 'block';
+            transactionTypeText.textContent = 'Direct Transaction (to contact)';
+            transactionTypeText.style.color = '#28a745';
+        }
+
         // Handle option click
         for (var i = 0; i < allOptions.length; i++) {
             allOptions[i].addEventListener('mousedown', function(e) {
                 e.preventDefault(); // Prevent blur from hiding dropdown before click registers
-                var name = this.getAttribute('data-name');
-                recipientSearch.value = name;
-                if (recipientHidden) recipientHidden.value = name;
-                recipientDropdown.style.display = 'none';
-
-                // Hide manual address, show address type selector
-                manualAddressGroup.style.display = 'none';
-                if (manualAddressInput) {
-                    manualAddressInput.required = false;
-                    manualAddressInput.value = '';
-                }
-
-                // Populate address type dropdown
-                var addressesJson = this.getAttribute('data-addresses');
-                var addresses = {};
-                try {
-                    addresses = addressesJson ? JSON.parse(addressesJson) : {};
-                } catch (err) {
-                    addresses = {};
-                }
-
-                addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
-                var addressTypes = Object.keys(addresses);
-
-                for (var j = 0; j < addressTypes.length; j++) {
-                    var type = addressTypes[j];
-                    var addr = addresses[type];
-                    var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
-                    var displayType = type.toUpperCase();
-                    addressTypeSelect.innerHTML += '<option value="' + escapeHtml(type) + '">' + escapeHtml(displayType) + ' (' + escapeHtml(truncatedAddr) + ')</option>';
-                }
-
-                if (addressTypes.length > 0) {
-                    addressTypeGroup.style.display = 'block';
-                    addressTypeSelect.required = true;
-                    if (addressTypes.length === 1) {
-                        addressTypeSelect.value = addressTypes[0];
-                    }
-                } else {
-                    addressTypeGroup.style.display = 'none';
-                    addressTypeSelect.required = false;
-                }
-
-                transactionTypeIndicator.style.display = 'block';
-                transactionTypeText.textContent = 'Direct Transaction (to contact)';
-                transactionTypeText.style.color = '#28a745';
+                selectRecipientOption(this);
             });
 
             // Hover highlight
             allOptions[i].addEventListener('mouseenter', function() {
                 this.style.background = '#e9ecef';
+                // Sync keyboard index to mouse position
+                var visible = getVisibleRecipientOptions();
+                for (var k = 0; k < visible.length; k++) {
+                    if (visible[k] === this) { focusedOptionIndex = k; break; }
+                }
             });
             allOptions[i].addEventListener('mouseleave', function() {
                 this.style.background = '';
             });
         }
 
+        // Keyboard navigation — ArrowDown/Up to highlight, Enter to select, Escape to close
+        var focusedOptionIndex = -1;
+
+        function getVisibleRecipientOptions() {
+            var visible = [];
+            for (var i = 0; i < allOptions.length; i++) {
+                if (allOptions[i].style.display !== 'none') {
+                    visible.push(allOptions[i]);
+                }
+            }
+            return visible;
+        }
+
+        function highlightRecipientOption(visible, index) {
+            for (var i = 0; i < visible.length; i++) {
+                visible[i].style.background = '';
+            }
+            if (index >= 0 && index < visible.length) {
+                visible[index].style.background = '#e9ecef';
+                visible[index].scrollIntoView(false);
+            }
+        }
+
+        recipientSearch.addEventListener('keydown', function(e) {
+            var key = e.key;
+            if (recipientDropdown.style.display === 'none') { return; }
+            var visible = getVisibleRecipientOptions();
+            if (!visible.length) { return; }
+
+            if (key === 'ArrowDown') {
+                e.preventDefault();
+                focusedOptionIndex = focusedOptionIndex < visible.length - 1 ? focusedOptionIndex + 1 : 0;
+                highlightRecipientOption(visible, focusedOptionIndex);
+            } else if (key === 'ArrowUp') {
+                e.preventDefault();
+                focusedOptionIndex = focusedOptionIndex > 0 ? focusedOptionIndex - 1 : visible.length - 1;
+                highlightRecipientOption(visible, focusedOptionIndex);
+            } else if (key === 'Enter') {
+                if (focusedOptionIndex >= 0 && focusedOptionIndex < visible.length) {
+                    e.preventDefault();
+                    selectRecipientOption(visible[focusedOptionIndex]);
+                }
+            } else if (key === 'Escape') {
+                recipientDropdown.style.display = 'none';
+                focusedOptionIndex = -1;
+            }
+        });
+
+        // Reset focus index when search text changes
+        recipientSearch.addEventListener('input', function() {
+            focusedOptionIndex = -1;
+        }, true); // capture phase so it runs after the existing input handler
+
         // Hide dropdown on blur
         recipientSearch.addEventListener('blur', function() {
             // Small delay to allow option click to register
             setTimeout(function() {
                 recipientDropdown.style.display = 'none';
+                focusedOptionIndex = -1;
             }, 150);
         });
     }

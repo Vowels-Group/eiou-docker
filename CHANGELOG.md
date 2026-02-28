@@ -32,6 +32,10 @@ The project is currently in **ALPHA** status.
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
+- Fix DLQ retry/abandon "Invalid CSRF token" error after first action — `DlqController` now passes `rotate: false` to `validateCSRFToken` so the token is not consumed on each AJAX call; users can retry or abandon multiple items without a page reload
+- Fix auto-refresh using `fetch()`/`AbortController` (unsupported in Tor Browser strict mode) — replaced with `XMLHttpRequest` and `xhr.timeout` to match the rest of the codebase's Tor Browser compatibility requirement
+- Fix recipient search dropdown ignoring arrow keys — add `keydown` handler to navigate options with ArrowDown/ArrowUp, select with Enter, and dismiss with Escape; mouse hover and keyboard focus stay in sync; extracted shared `selectRecipientOption()` function
+- Shorten "Direct Transaction Delivery Expiration (seconds):" settings label to "Tx Delivery Expiry (seconds):" to prevent the label from wrapping and breaking the settings grid layout
 - Fix DLQ badge link in Recent Transactions / In-Progress Transactions opening the transaction detail modal simultaneously — add `event.stopPropagation()` to the badge anchor so clicking navigates to `#dlq` without triggering the parent row's modal
 - Fix DLQ retry producing "Unexpected server response" toast — wrap `setExpiresAt`/`updateStatus` pre-retry calls in `try-catch(\Throwable)` so a missing `expires_at` column (pre-migration container) does not abort the response; update `Functions.php` DLQ handler to catch `\Throwable` instead of `Exception` to handle PHP `Error` subclasses
 - Fix Recipient and Failure Reason columns wrapping to multiple lines — replace PHP truncation with CSS `text-overflow: ellipsis; white-space: nowrap` via `.dlq-truncate` class; full values remain accessible via `title` tooltip

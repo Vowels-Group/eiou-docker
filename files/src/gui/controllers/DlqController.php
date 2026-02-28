@@ -63,7 +63,7 @@ class DlqController
     {
         header('Content-Type: application/json');
 
-        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
             echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
             exit;
         }
@@ -160,7 +160,7 @@ class DlqController
     {
         header('Content-Type: application/json');
 
-        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
             echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
             exit;
         }
@@ -184,7 +184,7 @@ class DlqController
     {
         header('Content-Type: application/json');
 
-        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
             echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
             exit;
         }
@@ -249,7 +249,7 @@ class DlqController
     {
         header('Content-Type: application/json');
 
-        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
             echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
             exit;
         }

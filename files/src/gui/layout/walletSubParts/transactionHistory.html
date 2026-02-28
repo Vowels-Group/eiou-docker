@@ -270,30 +270,28 @@
             if (indicator) indicator.classList.add('active');
 
             autoRefreshInterval = setInterval(function() {
-                // Check if manual refresh is in progress
-                if (window.isRefreshing) {
-                    return;
-                }
+                // Skip if manual refresh is already in progress
+                if (window.isRefreshing) { return; }
 
-                // Use existing check_updates mechanism with AbortController timeout for Tor compatibility
-                var controller = new AbortController();
-                var timeoutId = setTimeout(function() { controller.abort(); }, 30000); // 30 seconds for Tor
-                fetch(window.location.pathname + '?check_updates=1&_=' + Date.now(), { signal: controller.signal })
-                    .then(function(response) {
-                        clearTimeout(timeoutId);
-                        // Double-check flag before reload (in case manual refresh started during fetch)
-                        if (window.isRefreshing) {
-                            return;
-                        }
-                        if (response.ok) {
-                            // Reload page to get updated transaction status
-                            window.location.reload();
-                        }
-                    })
-                    .catch(function(err) {
-                        clearTimeout(timeoutId);
-                        // Error logged silently - auto-refresh will retry
-                    });
+                // XMLHttpRequest — Tor Browser compatible (no fetch/AbortController)
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', window.location.pathname + '?check_updates=1&_=' + Date.now(), true);
+                xhr.timeout = 30000; // 30s for Tor
+
+                xhr.ontimeout = function() {
+                    // Silently ignore timeout — will retry on next interval
+                };
+                xhr.onerror = function() {
+                    // Silently ignore network errors — will retry on next interval
+                };
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4) { return; }
+                    if (window.isRefreshing) { return; }
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        window.location.reload();
+                    }
+                };
+                xhr.send();
             }, AUTO_REFRESH_DELAY);
         }
     }
