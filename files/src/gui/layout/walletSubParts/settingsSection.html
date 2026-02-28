@@ -175,9 +175,9 @@
             <div id="advanced-settings-content" style="display: none;">
 
                 <!-- Category selector -->
-                <div style="margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <label for="advancedSectionSelect" style="font-weight: 600; color: #495057; white-space: nowrap; margin-bottom: 0;">Category:</label>
-                    <select id="advancedSectionSelect" onchange="switchAdvancedSection(this.value)" style="min-width: 220px;">
+                <div class="adv-section-nav">
+                    <label for="advancedSectionSelect">Category:</label>
+                    <select id="advancedSectionSelect" onchange="switchAdvancedSection(this.value)">
                         <option value="feature-toggles">Feature Toggles</option>
                         <option value="backup-logging">Backup &amp; Logging</option>
                         <option value="data-retention">Data Retention</option>
@@ -276,7 +276,7 @@
 
                         <div class="form-group">
                             <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
-                            <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com" style="width: 100%; padding: 0.5rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem; font-family: monospace; resize: vertical;"><?php
+                            <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
                                 $corsOrigins = array_filter(array_map('trim', explode(',', $user->getApiCorsAllowedOrigins())));
                                 echo htmlspecialchars(implode("\n", $corsOrigins));
                             ?></textarea>
@@ -357,7 +357,7 @@
                     <h4 style="color: #6c757d; margin: 0 0 0.75rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
                         <i class="fas fa-calendar-alt"></i> Data Retention (Days)
                     </h4>
-                    <p style="color: #856404; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; font-size: 0.875rem;">
+                    <p class="settings-section-warning">
                         <i class="fas fa-exclamation-triangle"></i> Lowering retention values will permanently delete older records on next cleanup. Changes take effect at next scheduled cleanup run.
                     </p>
                     <div class="settings-grid">
@@ -451,7 +451,7 @@
                     <h4 style="color: #6c757d; margin: 0 0 0.75rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.25rem;">
                         <i class="fas fa-network-wired"></i> Network
                     </h4>
-                    <p style="color: #664d03; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; font-size: 0.875rem;">
+                    <p class="settings-section-warning">
                         <i class="fas fa-exclamation-triangle"></i> <strong>Expert setting.</strong> Incorrect timeout values can cause connectivity issues. Only change these if you know what you are doing.
                     </p>
                     <div class="settings-grid">
