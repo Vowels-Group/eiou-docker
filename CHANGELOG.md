@@ -17,6 +17,8 @@ The project is currently in **ALPHA** status.
 - Add 30 new user-configurable settings covering feature toggles (including `autoAcceptTransaction` from #663), backup/logging, data retention, rate limiting, network timeouts, sync tuning, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
 - Expose all 30 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
 - Document all 30 new settings in CLI_REFERENCE.md, API_REFERENCE.md, and GUI_REFERENCE.md
+- Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Network, Sync, and Display panels; all fields remain in the DOM so changes across multiple categories are saved in a single click
+- Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
 - Fix rate limit errors showing raw JSON instead of user-friendly flash message in the GUI — replace `enforce()` (which called `exit` with JSON) with `checkLimit()` + `MessageHelper::redirectMessage()` so the user sees a proper warning banner
@@ -34,6 +36,11 @@ The project is currently in **ALPHA** status.
 - Skip proactive hold for P2P transactions with insufficient remaining lifetime — prevents holding transactions that will become zombies because the P2P expires on all other relay nodes before sync can complete
 
 ### Changed
+- Replace separate Backup Hour / Backup Minute number inputs with a single `<input type="time">` (`HH:MM`); `SettingsController` parses the combined value and stores the individual `backupCronHour` / `backupCronMinute` keys unchanged
+- Replace API CORS Origins single-line text input with a resizable monospace textarea (one origin per line); controller normalises newline/comma-separated input to comma-separated storage and PHP renders it back as newline-separated on display
+- Make Held TX Sync Timeout upper bound dynamic: PHP renders the initial `max` as `p2pExpiration − 1` and a JS listener on the P2P Request Expiration field keeps it current, auto-clamping the timeout value if needed; server-side validation also uses the submitted/saved `p2pExpiration` value rather than a hardcoded 299
+- Rename "Max Display Lines" setting label to "CLI Max Output Lines" and clarify it controls CLI command output rows (not the GUI dashboard); add note to "Recent Transactions Limit" that it is GUI-only
+- Add expert warning to Network timeout section; add data-loss warning to Data Retention section; add note to Rate Limiting section that these are P2P-specific limits toggled via Feature Toggles
 - Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
 - Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
 - Make integration tests manual-only — no longer auto-runs on every PR; trigger via `workflow_dispatch` from the Actions tab or by adding the `run-integration` label to a PR
