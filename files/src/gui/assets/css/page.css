@@ -2865,3 +2865,54 @@ html {
         padding-top: 0.5rem;
     }
 }
+
+/* DLQ section header actions bar (Refresh button container) */
+.dlq-section-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* DLQ description / info paragraph */
+.dlq-description {
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Empty-state success icon */
+.dlq-empty-icon {
+    color: #28a745;
+}
+
+/* Failure Reason cell text */
+.dlq-reason-text {
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+/* Retries cell — centred */
+.dlq-cell-center {
+    text-align: center;
+}
+
+/* Added date cell */
+.dlq-date-cell {
+    font-size: 0.85rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* Final-state label for resolved/abandoned rows */
+.dlq-final-state {
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* Footer item count note */
+.dlq-footer-count {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+}

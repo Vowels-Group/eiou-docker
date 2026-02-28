@@ -9,14 +9,14 @@
             <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span>
             <?php endif; ?>
         </h2>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button type="button" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="window.location.href = window.location.pathname + '#dlq'; window.location.reload();">
+        <div class="dlq-section-header-actions">
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.location.href = window.location.pathname + '#dlq'; window.location.reload();">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
         </div>
     </div>
 
-    <p style="color: #6c757d; margin-bottom: 0.5rem; font-size: 0.9rem;">
+    <p class="dlq-description">
         <i class="fas fa-info-circle"></i>
         Messages that could not be delivered after <?php echo \Eiou\Core\Constants::DELIVERY_MAX_RETRIES; ?> automatic attempts.
         <strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid.
@@ -63,7 +63,7 @@
 
     <?php if (empty($dlqItems)): ?>
     <div class="empty-state">
-        <i class="fas fa-check-circle" style="color: #28a745;"></i>
+        <i class="fas fa-check-circle dlq-empty-icon"></i>
         <h3>No Failed Messages</h3>
         <p>All messages delivered successfully — nothing in the queue<?php echo $activeFilter !== 'all' ? ' for this filter' : ''; ?>.</p>
     </div>
@@ -137,16 +137,16 @@
                     </span>
                 </td>
                 <td data-label="Reason">
-                    <span title="<?php echo htmlspecialchars($reason); ?>" style="font-size: 0.85rem; color: #495057;">
+                    <span class="dlq-reason-text" title="<?php echo htmlspecialchars($reason); ?>">
                         <?php echo htmlspecialchars($shortReason ?: '—'); ?>
                     </span>
                 </td>
-                <td data-label="Retries" style="text-align: center;">
+                <td data-label="Retries" class="dlq-cell-center">
                     <span style="font-weight: 600; color: <?php echo $retries >= 5 ? '#dc3545' : '#6c757d'; ?>;">
                         <?php echo $retries; ?>
                     </span>
                 </td>
-                <td data-label="Added" style="font-size: 0.85rem; color: #6c757d; white-space: nowrap;">
+                <td data-label="Added" class="dlq-date-cell">
                     <?php echo htmlspecialchars($dateDisplay); ?>
                 </td>
                 <td data-label="Status">
@@ -179,7 +179,7 @@
                         <i class="fas fa-ban"></i> Abandon
                     </button>
                     <?php elseif (!$canAct): ?>
-                    <span style="color: #6c757d; font-size: 0.85rem; font-style: italic;">
+                    <span class="dlq-final-state">
                         <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
                     </span>
                     <?php endif; ?>
@@ -191,7 +191,7 @@
         </table>
     </div>
 
-    <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;">
+    <p class="dlq-footer-count">
         Showing <?php echo count($dlqItems); ?> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
         Resolved and abandoned items are automatically cleaned up after <?php echo \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS; ?> days.
     </p>
