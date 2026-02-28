@@ -3365,9 +3365,56 @@ function showDlqToasts() {
     }
 }
 
+/**
+ * Client-side DLQ tab filter — show/hide rows without a page reload.
+ *
+ * filter values: 'active' (pending+retrying), 'pending', 'resolved',
+ *                'abandoned', 'all'
+ *
+ * @param {string} filter
+ */
+function setDlqFilter(filter) {
+    // Update active tab
+    var tabs = document.querySelectorAll('.dlq-filter-tab');
+    for (var i = 0; i < tabs.length; i++) {
+        var isActive = tabs[i].getAttribute('data-filter') === filter;
+        if (isActive) {
+            tabs[i].classList.add('active');
+        } else {
+            tabs[i].classList.remove('active');
+        }
+    }
+
+    // Show/hide rows
+    var rows = document.querySelectorAll('.dlq-row');
+    var visibleCount = 0;
+    for (var j = 0; j < rows.length; j++) {
+        var status = rows[j].getAttribute('data-status');
+        var show = filter === 'all'
+            || (filter === 'active' && (status === 'pending' || status === 'retrying'))
+            || (filter !== 'all' && filter !== 'active' && status === filter);
+        rows[j].style.display = show ? '' : 'none';
+        if (show) { visibleCount++; }
+    }
+
+    // Toggle filter-empty message vs table
+    var filterEmpty  = document.getElementById('dlq-filter-empty');
+    var tableWrapper = document.querySelector('#dlq .dlq-table-wrapper');
+    if (filterEmpty)  { filterEmpty.style.display  = visibleCount === 0 ? '' : 'none'; }
+    if (tableWrapper) { tableWrapper.style.display = visibleCount === 0 ? 'none' : ''; }
+
+    // Update footer count
+    var countEl = document.getElementById('dlq-visible-count');
+    if (countEl) { countEl.textContent = visibleCount; }
+}
+
 // Initialize DLQ toasts on page load (Tor Browser compatible)
 document.addEventListener('DOMContentLoaded', function() {
     showDlqToasts();
+    // Apply default filter (pending & retrying) on load
+    if (document.querySelector('.dlq-filter-tab')) {
+        setDlqFilter('active');
+    }
 });
 
 /**

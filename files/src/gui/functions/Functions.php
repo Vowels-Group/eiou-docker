@@ -371,18 +371,8 @@ $dlqStats = [];
 $dlqPendingCount = 0;
 try {
     $dlqRepo = $serviceContainer->getDeadLetterQueueRepository();
-    $dlqActiveFilter = $_GET['dlq_filter'] ?? 'active';
-
-    if ($dlqActiveFilter === 'active') {
-        // Combine pending + retrying, newest first
-        $pendingItems  = $dlqRepo->getItems('pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE);
-        $retryingItems = $dlqRepo->getItems('retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE);
-        $dlqItems = array_merge($pendingItems, $retryingItems);
-    } elseif (in_array($dlqActiveFilter, ['pending', 'retrying', 'resolved', 'abandoned'], true)) {
-        $dlqItems = $dlqRepo->getItems($dlqActiveFilter, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
-    } else {
-        $dlqItems = $dlqRepo->getItems(null, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
-    }
+    // Always load all items — client-side JS handles tab filtering with no page reload
+    $dlqItems = $dlqRepo->getItems(null, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
 
     $dlqStats        = $dlqRepo->getStatistics();
     $dlqPendingCount = $dlqRepo->getPendingCount();
