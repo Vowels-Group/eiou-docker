@@ -17,7 +17,7 @@ The project is currently in **ALPHA** status.
 - Add 30 new user-configurable settings covering feature toggles (including `autoAcceptTransaction` from #663), backup/logging, data retention, rate limiting, network timeouts, sync tuning, and display preferences — all persisted to `defaultconfig.json` and surviving container updates
 - Expose all 30 new settings through REST API (GET/PUT `/system/settings`) and GUI Settings page (collapsible "Advanced Settings" section with grouped fields)
 - Document all 30 new settings in CLI_REFERENCE.md, API_REFERENCE.md, and GUI_REFERENCE.md
-- Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Network, Sync, and Display panels; all fields remain in the DOM so changes across multiple categories are saved in a single click
+- Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Display, Backup & Logging, Data Retention, Sync, Network, and Rate Limiting panels (ordered simple→advanced); all fields remain in the DOM so changes across multiple categories are saved in a single click
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
@@ -49,7 +49,10 @@ The project is currently in **ALPHA** status.
 - Move API CORS Origins field from Feature Toggles to Network section — it is a text configuration input, not a feature toggle
 - Reorder Backup & Logging fields: Backup Time (UTC) → Backup Retention Count → Max Log Entries → Log Level (backup schedule before retention count; log capacity before log level)
 - Style the Advanced Settings category `<select>` to match other form inputs — adds padding, border, border-radius, custom chevron arrow, and focus ring consistent with `.form-group select`
-- Add expert warning to Network timeout section; add data-loss warning to Data Retention section; add note to Rate Limiting section that these are P2P-specific limits toggled via Feature Toggles
+- Add expert warning to Network timeout section; add data-loss warning to Data Retention section
+- Clarify Rate Limiting section: describe the two independent mechanisms (P2P throughput cap vs attempt-counting brute-force blocker) so the separate fields are not confused as controlling the same thing; rename fields to reflect their actual function ("P2P Throughput Limit", "Max Attempts per Window", "Attempt Window")
+- Remove `rateLimitEnabled` toggle from GUI Feature Toggles — rate limiting is a security-critical feature that should not be easily disabled from the UI; toggle remains available via CLI and API; remove corresponding POST handler in `SettingsController` to prevent saving settings from silently writing `false` for a missing checkbox; document as CLI/API-only in API_REFERENCE.md and CLI_REFERENCE.md
+- Remove incorrect "(HH:MM, 24-hour)" qualifier from Backup Time field description — the browser native time picker renders in 12h or 24h based on OS locale
 - Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
 - Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
 - Make integration tests manual-only — no longer auto-runs on every PR; trigger via `workflow_dispatch` from the Actions tab or by adding the `run-integration` label to a PR
