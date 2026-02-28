@@ -3420,8 +3420,7 @@ function retryDlqItem(dlqId, btn) {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Delivered', 'Message successfully re-sent', 'success');
-                var row = document.getElementById('dlq-row-' + dlqId);
-                if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+                setTimeout(function() { window.location.reload(); }, 1500);
             } else {
                 var errMsg = response.error || 'Retry failed — try again later';
                 showToast('Retry Failed', errMsg, 'error');
@@ -3490,8 +3489,7 @@ function abandonDlqItem(dlqId, btn) {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Abandoned', 'Message marked as abandoned', 'info');
-                var row = document.getElementById('dlq-row-' + dlqId);
-                if (row) { row.style.display = 'none'; }
+                setTimeout(function() { window.location.reload(); }, 1000);
             } else {
                 showToast('Error', response.error || 'Failed to abandon item', 'error');
                 if (retryBtn)  { retryBtn.disabled  = false; }
