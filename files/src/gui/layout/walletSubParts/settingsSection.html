@@ -179,12 +179,12 @@
                     <label for="advancedSectionSelect">Category:</label>
                     <select id="advancedSectionSelect" onchange="switchAdvancedSection(this.value)">
                         <option value="feature-toggles">Feature Toggles</option>
+                        <option value="display">Display</option>
                         <option value="backup-logging">Backup &amp; Logging</option>
                         <option value="data-retention">Data Retention</option>
-                        <option value="rate-limiting">Rate Limiting</option>
-                        <option value="network">Network</option>
                         <option value="sync">Sync</option>
-                        <option value="display">Display</option>
+                        <option value="network">Network</option>
+                        <option value="rate-limiting">Rate Limiting</option>
                     </select>
                 </div>
 
@@ -286,7 +286,7 @@
                                 </span>
                             </div>
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Enable rate limiting for API and P2P requests (configure limits under Rate Limiting)
+                                <i class="fas fa-info-circle"></i> Enable rate limiting for all requests (configure limits under Rate Limiting)
                             </small>
                         </div>
                     </div>
@@ -398,30 +398,30 @@
                         <i class="fas fa-tachometer-alt"></i> Rate Limiting
                     </h4>
                     <p style="color: #6c757d; font-size: 0.875rem; margin-bottom: 0.75rem;">
-                        <i class="fas fa-info-circle"></i> These settings control P2P request rate limiting. Enable/disable via Feature Toggles &rarr; Rate Limiting.
+                        <i class="fas fa-info-circle"></i> Two independent mechanisms: a P2P throughput cap (requests per minute), and an attempt-counting blocker (blocks IPs that exceed max attempts in a window). Enable/disable via Feature Toggles &rarr; Rate Limiting.
                     </p>
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="p2pRateLimitPerMinute">P2P Rate Limit (per min):</label>
+                            <label for="p2pRateLimitPerMinute">P2P Throughput Limit (per min):</label>
                             <input type="number" id="p2pRateLimitPerMinute" name="p2pRateLimitPerMinute" value="<?php echo htmlspecialchars($user->getP2pRateLimitPerMinute()); ?>" min="1" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Maximum P2P requests per minute
+                                <i class="fas fa-info-circle"></i> Maximum P2P requests allowed per minute (throughput cap)
                             </small>
                         </div>
 
                         <div class="form-group">
-                            <label for="rateLimitMaxAttempts">Max Attempts:</label>
+                            <label for="rateLimitMaxAttempts">Max Attempts per Window:</label>
                             <input type="number" id="rateLimitMaxAttempts" name="rateLimitMaxAttempts" value="<?php echo htmlspecialchars($user->getRateLimitMaxAttempts()); ?>" min="1" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Maximum attempts before rate limit triggers
+                                <i class="fas fa-info-circle"></i> Maximum requests per IP in the window below before blocking (brute-force protection)
                             </small>
                         </div>
 
                         <div class="form-group">
-                            <label for="rateLimitWindowSeconds">Window (seconds):</label>
+                            <label for="rateLimitWindowSeconds">Attempt Window (seconds):</label>
                             <input type="number" id="rateLimitWindowSeconds" name="rateLimitWindowSeconds" value="<?php echo htmlspecialchars($user->getRateLimitWindowSeconds()); ?>" min="1" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Time window for rate limit counting
+                                <i class="fas fa-info-circle"></i> Time window over which attempts are counted
                             </small>
                         </div>
 
@@ -429,7 +429,7 @@
                             <label for="rateLimitBlockSeconds">Block Duration (seconds):</label>
                             <input type="number" id="rateLimitBlockSeconds" name="rateLimitBlockSeconds" value="<?php echo htmlspecialchars($user->getRateLimitBlockSeconds()); ?>" min="1" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Duration to block after rate limit exceeded
+                                <i class="fas fa-info-circle"></i> How long an IP is blocked after exceeding max attempts
                             </small>
                         </div>
                     </div>
