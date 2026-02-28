@@ -37,6 +37,21 @@
             <div class="loading-text" id="loadingText">Loading...</div>
         </div>
     </div>
+    <script>
+        // Clear all wallet state from localStorage to prevent information leakage
+        // on the unauthenticated login page (e.g. "Background Processing" toasts).
+        try {
+            var keysToRemove = [
+                'eiou_pending_operation',
+                'eiou_timeout_message',
+                'eiou_reopen_contact_id',
+                'eiou_reopen_contact_tab'
+            ];
+            for (var i = 0; i < keysToRemove.length; i++) {
+                localStorage.removeItem(keysToRemove[i]);
+            }
+        } catch (e) {}
+    </script>
     <script><?php require_once("/etc/eiou/src/gui/assets/js/script.js");?></script>
 </body>
 </html>

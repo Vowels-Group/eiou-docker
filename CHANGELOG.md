@@ -32,6 +32,7 @@ The project is currently in **ALPHA** status.
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
 ### Fixed
+- Fix wallet state toasts (e.g. "Background Processing") leaking onto the unauthenticated login screen — `authenticationForm.html` now clears all `eiou_*` localStorage keys (`eiou_pending_operation`, `eiou_timeout_message`, `eiou_reopen_contact_id`, `eiou_reopen_contact_tab`) before `script.js` loads, so `checkForTimeoutToast()` finds nothing and no wallet activity is revealed to unauthenticated users
 - Fix DLQ filter tabs causing a full page reload on every click — tabs are now client-side buttons; PHP always loads all items and `setDlqFilter()` shows/hides rows by `data-status`, updates the footer count, and toggles a "no items for this filter" message; default view on load is Pending & Retrying
 - Fix transactions in transient `sending` status not appearing in the In-Progress Transactions panel — `sending` added to `getInProgressTransactions()` status list and phase mapping so transactions are visible in the banner during the HTTP send window
 - Fix DLQ Retry and Abandon buttons leaving the page stale after success — both now reload the page after a short delay (1.5 s / 1.0 s) matching the Retry All and Abandon All behaviour; previously the row was only faded/hidden in place
