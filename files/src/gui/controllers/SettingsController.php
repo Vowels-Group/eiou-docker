@@ -56,6 +56,24 @@ class SettingsController
     }
 
     /**
+     * Read the current p2pExpiration value from the saved config file.
+     * Falls back to the Constants default if the file or key is absent.
+     *
+     * @return int Current P2P expiration in seconds
+     */
+    private function getP2pExpirationFromConfig(): int
+    {
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true);
+            if (is_array($config) && isset($config['p2pExpiration'])) {
+                return (int) $config['p2pExpiration'];
+            }
+        }
+        return Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
+    }
+
+    /**
      * Handle settings update form submission
      *
      * @return void
@@ -180,9 +198,17 @@ class SettingsController
         $settings['apiEnabled'] = isset($_POST['apiEnabled']) && $_POST['apiEnabled'] === '1';
         $settings['rateLimitEnabled'] = isset($_POST['rateLimitEnabled']) && $_POST['rateLimitEnabled'] === '1';
 
-        // API CORS
+        // API CORS — textarea value (newline-separated), normalize to comma-separated
         if (isset($_POST['apiCorsAllowedOrigins'])) {
-            $settings['apiCorsAllowedOrigins'] = trim(Security::sanitizeInput($_POST['apiCorsAllowedOrigins']));
+            $rawOrigins = preg_split('/[\r\n,]+/', $_POST['apiCorsAllowedOrigins'], -1, PREG_SPLIT_NO_EMPTY);
+            $sanitizedOrigins = [];
+            foreach ($rawOrigins as $origin) {
+                $sanitized = trim(Security::sanitizeInput($origin));
+                if ($sanitized !== '') {
+                    $sanitizedOrigins[] = $sanitized;
+                }
+            }
+            $settings['apiCorsAllowedOrigins'] = implode(',', $sanitizedOrigins);
         }
 
         // Backup & logging
@@ -191,15 +217,16 @@ class SettingsController
             if ($validation['valid']) { $settings['backupRetentionCount'] = $validation['value']; }
             else { $errors[] = 'Invalid backup retention count: ' . $validation['error']; }
         }
-        if (isset($_POST['backupCronHour'])) {
-            $validation = InputValidator::validateIntRange($_POST['backupCronHour'], 0, 23, 'Backup hour');
-            if ($validation['valid']) { $settings['backupCronHour'] = $validation['value']; }
-            else { $errors[] = 'Invalid backup hour: ' . $validation['error']; }
-        }
-        if (isset($_POST['backupCronMinute'])) {
-            $validation = InputValidator::validateIntRange($_POST['backupCronMinute'], 0, 59, 'Backup minute');
-            if ($validation['valid']) { $settings['backupCronMinute'] = $validation['value']; }
-            else { $errors[] = 'Invalid backup minute: ' . $validation['error']; }
+        // Backup time — single HH:MM input replaces separate hour/minute fields
+        if (isset($_POST['backupCronTime']) && preg_match('/^(\d{1,2}):(\d{2})$/', trim($_POST['backupCronTime']), $m)) {
+            $hour = (int) $m[1];
+            $minute = (int) $m[2];
+            if ($hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
+                $settings['backupCronHour'] = $hour;
+                $settings['backupCronMinute'] = $minute;
+            } else {
+                $errors[] = 'Invalid backup time: hour must be 0-23 and minute must be 0-59';
+            }
         }
         if (isset($_POST['logLevel'])) {
             $validation = InputValidator::validateLogLevel($_POST['logLevel']);
@@ -267,7 +294,10 @@ class SettingsController
             else { $errors[] = 'Invalid sync max chunks: ' . $validation['error']; }
         }
         if (isset($_POST['heldTxSyncTimeoutSeconds'])) {
-            $validation = InputValidator::validateIntRange($_POST['heldTxSyncTimeoutSeconds'], 30, 299, 'Held TX sync timeout');
+            // Max is p2pExpiration - 1 (use submitted value if valid, else saved value)
+            $p2pExpForMax = isset($settings['p2pExpiration']) ? (int) $settings['p2pExpiration'] : $this->getP2pExpirationFromConfig();
+            $syncTimeoutMax = max(30, $p2pExpForMax - 1);
+            $validation = InputValidator::validateIntRange($_POST['heldTxSyncTimeoutSeconds'], 30, $syncTimeoutMax, 'Held TX sync timeout');
             if ($validation['valid']) { $settings['heldTxSyncTimeoutSeconds'] = $validation['value']; }
             else { $errors[] = 'Invalid held TX sync timeout: ' . $validation['error']; }
         }
