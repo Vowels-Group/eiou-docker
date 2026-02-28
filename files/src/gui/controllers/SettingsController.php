@@ -196,7 +196,6 @@ class SettingsController
         $settings['autoChainDropPropose'] = isset($_POST['autoChainDropPropose']) && $_POST['autoChainDropPropose'] === '1';
         $settings['autoChainDropAccept'] = isset($_POST['autoChainDropAccept']) && $_POST['autoChainDropAccept'] === '1';
         $settings['apiEnabled'] = isset($_POST['apiEnabled']) && $_POST['apiEnabled'] === '1';
-        $settings['rateLimitEnabled'] = isset($_POST['rateLimitEnabled']) && $_POST['rateLimitEnabled'] === '1';
 
         // API CORS — textarea value (newline-separated), normalize to comma-separated
         if (isset($_POST['apiCorsAllowedOrigins'])) {

@@ -274,21 +274,6 @@
                             </small>
                         </div>
 
-                        <div class="form-group">
-                            <label for="rateLimitEnabled">Rate Limiting:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="rateLimitEnabled" name="rateLimitEnabled" value="1" <?php echo $user->getRateLimitEnabled() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="rateLimitEnabledStatus" class="toggle-status <?php echo $user->getRateLimitEnabled() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getRateLimitEnabled() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Enable rate limiting for all requests (configure limits under Rate Limiting)
-                            </small>
-                        </div>
                     </div>
                 </div>
 
@@ -398,7 +383,7 @@
                         <i class="fas fa-tachometer-alt"></i> Rate Limiting
                     </h4>
                     <p style="color: #6c757d; font-size: 0.875rem; margin-bottom: 0.75rem;">
-                        <i class="fas fa-info-circle"></i> Two independent mechanisms: a P2P throughput cap (requests per minute), and an attempt-counting blocker (blocks IPs that exceed max attempts in a window). Enable/disable via Feature Toggles &rarr; Rate Limiting.
+                        <i class="fas fa-info-circle"></i> Two independent mechanisms: a P2P throughput cap (requests per minute), and an attempt-counting blocker (blocks IPs that exceed max attempts in a window). Rate limiting can only be disabled via CLI or API.
                     </p>
                     <div class="settings-grid">
                         <div class="form-group">
