@@ -3111,6 +3111,21 @@ extendedKeyUsage = serverAuth
             return;
         }
 
+        // For transaction type: refresh expires_at and reset cancelled status before retrying.
+        // The rp2p route persists in relay nodes until their retention period (independent of P2P expiry),
+        // so re-sending the signed payload to the first hop can still succeed.
+        if ($item['message_type'] === 'transaction') {
+            $txid = $this->extractTxidFromDlqMessageId($item['message_id']);
+            if ($txid !== null) {
+                $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
+                $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
+                $tx = $this->transactionRepository->getByTxid($txid);
+                if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
+                }
+            }
+        }
+
         $this->dlqRepository->markRetrying($id);
 
         $successStatuses = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'];
@@ -3140,6 +3155,25 @@ extendedKeyUsage = serverAuth
             $this->dlqRepository->returnToPending($id);
             $output->error('Retry failed: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
         }
+    }
+
+    /**
+     * Extract the txid from a transaction DLQ message_id.
+     * Format: "send-{txid}-{microtime}" or "relay-{txid}-{microtime}"
+     *
+     * @param string $messageId DLQ message identifier
+     * @return string|null Extracted txid, or null if not parseable
+     */
+    private function extractTxidFromDlqMessageId(string $messageId): ?string
+    {
+        foreach (['send-', 'relay-'] as $prefix) {
+            if (strncmp($messageId, $prefix, strlen($prefix)) === 0) {
+                $withoutPrefix = substr($messageId, strlen($prefix));
+                $txid = preg_replace('/-\d+$/', '', $withoutPrefix);
+                return ($txid !== '' && $txid !== $withoutPrefix) ? $txid : null;
+            }
+        }
+        return null;
     }
 
     /**

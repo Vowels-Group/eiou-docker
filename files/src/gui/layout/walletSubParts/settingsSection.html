@@ -86,7 +86,7 @@
                 <input type="number" id="directTxExpiration" name="directTxExpiration" value="<?php echo htmlspecialchars($user->getDirectTxExpirationTime()); ?>" step="1" min="0" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry (default). Recommended: <?php echo \Eiou\Core\Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS; ?>s (one Tor round-trip). Failed deliveries appear in <a href="#dlq">Failed Messages</a>.
+                    How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry. Default: <?php echo \Eiou\Core\Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS; ?>s (one Tor round-trip). Failed deliveries appear in <a href="#dlq">Failed Messages</a> and can be retried.
                 </small>
             </div>
 

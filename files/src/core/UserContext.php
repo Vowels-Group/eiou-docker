@@ -837,7 +837,7 @@ class UserContext {
             'defaultCreditLimit' => Constants::CONTACT_DEFAULT_CREDIT_LIMIT,
             'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
-            'directTxExpiration' => 0, // 0 = no expiry; set to positive seconds for time-limited direct delivery
+            'directTxExpiration' => Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS, // Default: one Tor round-trip (60s); 0 = no expiry
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
             'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,

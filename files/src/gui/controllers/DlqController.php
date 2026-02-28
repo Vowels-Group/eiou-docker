@@ -5,8 +5,10 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Database\DeadLetterQueueRepository;
+use Eiou\Database\TransactionRepository;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Core\Constants;
 
 /**
  * Dead Letter Queue Controller
@@ -26,17 +28,20 @@ class DlqController
     private DeadLetterQueueRepository $dlqRepository;
     private MessageDeliveryServiceInterface $messageDeliveryService;
     private TransportUtilityService $transportUtility;
+    private TransactionRepository $transactionRepository;
 
     public function __construct(
         Session $session,
         DeadLetterQueueRepository $dlqRepository,
         MessageDeliveryServiceInterface $messageDeliveryService,
-        TransportUtilityService $transportUtility
+        TransportUtilityService $transportUtility,
+        TransactionRepository $transactionRepository
     ) {
         $this->session = $session;
         $this->dlqRepository = $dlqRepository;
         $this->messageDeliveryService = $messageDeliveryService;
         $this->transportUtility = $transportUtility;
+        $this->transactionRepository = $transactionRepository;
     }
 
     public function routeAction(): void
@@ -79,6 +84,22 @@ class DlqController
             exit;
         }
 
+        // For transaction type: refresh expires_at and reset cancelled status before retrying.
+        // The rp2p route persists in relay nodes until their retention period (independent of P2P expiry),
+        // so re-sending the signed payload to the first hop can still succeed.
+        if ($item['message_type'] === 'transaction') {
+            $txid = $this->extractTxidFromMessageId($item['message_id']);
+            if ($txid !== null) {
+                $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
+                $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
+                // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry
+                $tx = $this->transactionRepository->getByTxid($txid);
+                if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
+                }
+            }
+        }
+
         $successStatuses = self::SUCCESS_STATUSES;
         $transportUtility = $this->transportUtility;
 
@@ -104,6 +125,26 @@ class DlqController
 
         echo json_encode($result);
         exit;
+    }
+
+    /**
+     * Extract the txid from a transaction DLQ message_id.
+     * Format: "send-{txid}-{microtime}" or "relay-{txid}-{microtime}"
+     *
+     * @param string $messageId DLQ message identifier
+     * @return string|null Extracted txid, or null if not parseable
+     */
+    private function extractTxidFromMessageId(string $messageId): ?string
+    {
+        foreach (['send-', 'relay-'] as $prefix) {
+            if (strncmp($messageId, $prefix, strlen($prefix)) === 0) {
+                $withoutPrefix = substr($messageId, strlen($prefix));
+                // Strip trailing -microtime (last numeric segment after final dash)
+                $txid = preg_replace('/-\d+$/', '', $withoutPrefix);
+                return ($txid !== '' && $txid !== $withoutPrefix) ? $txid : null;
+            }
+        }
+        return null;
     }
 
     private function handleAbandon(): void
