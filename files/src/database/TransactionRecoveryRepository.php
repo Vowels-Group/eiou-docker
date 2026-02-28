@@ -336,6 +336,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     NULL as rp2p_amount,
                     CASE
                         WHEN status = 'pending' THEN 'pending'
+                        WHEN status = 'sending' THEN 'sending'
                         WHEN status = 'sent' THEN 'sending'
                         WHEN status = 'accepted' THEN 'sending'
                         ELSE 'pending'
@@ -343,7 +344,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     0 as is_held,
                     0 as candidate_count
                   FROM {$this->tableName}
-                  WHERE status IN ('pending', 'sent', 'accepted')
+                  WHERE status IN ('pending', 'sending', 'sent', 'accepted')
                     AND sender_address IN ($placeholders)
                     AND tx_type != 'contact'
                     $heldExclusion";
