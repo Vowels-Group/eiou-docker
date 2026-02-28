@@ -187,7 +187,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
                 'prevTxid' => $prevTxid,
-                'requestSync' => Constants::CONTACT_STATUS_SYNC_ON_PING
+                'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
             // Send ping
@@ -213,7 +213,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                         $this->updateContactChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled
-                        if (Constants::CONTACT_STATUS_SYNC_ON_PING) {
+                        if ($this->currentUser->getContactStatusSyncOnPing()) {
                             $this->triggerSync($contactAddress, $contact['pubkey']);
                         }
                     } else {

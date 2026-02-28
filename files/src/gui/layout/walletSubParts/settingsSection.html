@@ -80,13 +80,13 @@
                 </small>
             </div>
 
-            <!-- Max Output Lines (CLI) -->
+            <!-- Max Output Lines (GUI/CLI) -->
             <div class="form-group">
-                <label for="maxOutput">CLI Max Output Lines:</label>
+                <label for="maxOutput">GUI/CLI Max Output Lines:</label>
                 <input type="number" id="maxOutput" name="maxOutput" value="<?php echo htmlspecialchars($user->getMaxOutput()); ?>" step="1" min="1" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    Maximum rows shown in CLI command output (e.g. listbalances, listtransactions)
+                    Maximum rows shown in command output — applies to both the GUI dashboard and CLI commands (e.g. viewbalances, history)
                 </small>
             </div>
 
@@ -275,17 +275,6 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
-                            <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
-                                $corsOrigins = array_filter(array_map('trim', explode(',', $user->getApiCorsAllowedOrigins())));
-                                echo htmlspecialchars(implode("\n", $corsOrigins));
-                            ?></textarea>
-                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
-                            </small>
-                        </div>
-
-                        <div class="form-group">
                             <label for="rateLimitEnabled">Rate Limiting:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
@@ -310,6 +299,14 @@
                     </h4>
                     <div class="settings-grid">
                         <div class="form-group">
+                            <label for="backupCronTime">Backup Time (UTC):</label>
+                            <input type="time" id="backupCronTime" name="backupCronTime" value="<?php echo sprintf('%02d:%02d', $user->getBackupCronHour(), $user->getBackupCronMinute()); ?>" class="default-value">
+                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                                <i class="fas fa-info-circle"></i> Time of day for scheduled backup in UTC (HH:MM, 24-hour)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="backupRetentionCount">Backup Retention Count:</label>
                             <input type="number" id="backupRetentionCount" name="backupRetentionCount" value="<?php echo htmlspecialchars($user->getBackupRetentionCount()); ?>" min="1" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
@@ -318,10 +315,10 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="backupCronTime">Backup Time (UTC):</label>
-                            <input type="time" id="backupCronTime" name="backupCronTime" value="<?php echo sprintf('%02d:%02d', $user->getBackupCronHour(), $user->getBackupCronMinute()); ?>" class="default-value">
+                            <label for="logMaxEntries">Max Log Entries:</label>
+                            <input type="number" id="logMaxEntries" name="logMaxEntries" value="<?php echo htmlspecialchars($user->getLogMaxEntries()); ?>" min="10" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Time of day for scheduled backup in UTC (HH:MM, 24-hour)
+                                <i class="fas fa-info-circle"></i> Maximum number of log entries to keep (minimum 10)
                             </small>
                         </div>
 
@@ -339,14 +336,6 @@
                             </select>
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                                 <i class="fas fa-info-circle"></i> Minimum log level to record
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="logMaxEntries">Max Log Entries:</label>
-                            <input type="number" id="logMaxEntries" name="logMaxEntries" value="<?php echo htmlspecialchars($user->getLogMaxEntries()); ?>" min="10" step="1" class="default-value">
-                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Maximum number of log entries to keep (minimum 10)
                             </small>
                         </div>
                     </div>
@@ -470,6 +459,17 @@
                                 <i class="fas fa-info-circle"></i> Tor transport timeout (10-300 seconds)
                             </small>
                         </div>
+
+                        <div class="form-group">
+                            <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
+                            <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
+                                $corsOrigins = array_filter(array_map('trim', explode(',', $user->getApiCorsAllowedOrigins())));
+                                echo htmlspecialchars(implode("\n", $corsOrigins));
+                            ?></textarea>
+                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                                <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
+                            </small>
+                        </div>
                     </div>
                 </div>
 
@@ -532,7 +532,7 @@
                             <label for="displayRecentTransactionsLimit">Recent Transactions Limit:</label>
                             <input type="number" id="displayRecentTransactionsLimit" name="displayRecentTransactionsLimit" value="<?php echo htmlspecialchars($user->getDisplayRecentTransactionsLimit()); ?>" min="1" step="1" class="default-value">
                             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i> Number of recent transactions shown on the GUI dashboard (separate from CLI Max Output Lines above)
+                                <i class="fas fa-info-circle"></i> Number of recent transactions shown on the GUI dashboard (separate from GUI/CLI Max Output Lines in main settings)
                             </small>
                         </div>
                     </div>

@@ -225,7 +225,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         // Check if contact status feature is enabled
-        if (!Constants::CONTACT_STATUS_ENABLED) {
+        if (!$this->currentUser->getContactStatusEnabled()) {
             echo $this->contactStatusPayload->buildRejection($request, 'disabled');
             return;
         }
@@ -482,7 +482,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
                 'prevTxid' => $prevTxid,
-                'requestSync' => Constants::CONTACT_STATUS_SYNC_ON_PING
+                'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
             // Send ping
