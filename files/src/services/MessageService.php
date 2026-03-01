@@ -271,11 +271,10 @@ class MessageService implements MessageServiceInterface {
 
             if($p2p){
                 // Check if source is original sender for any messages related to transactions
-                // Defense-in-depth: try new hash (with sender public key, M-18) then legacy
+                // Hash includes sender public key for stronger binding (M-18)
                 $resolvedAddress = $this->transportUtility->resolveUserAddressForTransport($senderAddress);
-                $newHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $resolvedAddress . $p2p['salt'] . $p2p['time']);
-                $legacyHash = hash(Constants::HASH_ALGORITHM, $resolvedAddress . $p2p['salt'] . $p2p['time']);
-                if($hash === $newHash || $hash === $legacyHash){
+                $expectedHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $resolvedAddress . $p2p['salt'] . $p2p['time']);
+                if($hash === $expectedHash){
                     return true;
                 }
                 return false;

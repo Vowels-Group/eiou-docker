@@ -783,12 +783,14 @@ class P2pServiceTest extends TestCase
         $address = self::TEST_ADDRESS;
         $salt = 'test-salt';
         $time = '1234567890';
-        $hash = hash(Constants::HASH_ALGORITHM, $address . $salt . $time);
+        $senderPubKey = 'sender-pk-primary';
+        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $address . $salt . $time);
 
         $request = [
             'hash' => $hash,
             'salt' => $salt,
-            'time' => $time
+            'time' => $time,
+            'senderPublicKey' => $senderPubKey
         ];
 
         $result = $this->service->matchYourselfP2P($request, $address);
@@ -805,12 +807,14 @@ class P2pServiceTest extends TestCase
         $alternateAddress = 'http://alternate.test';
         $salt = 'test-salt';
         $time = '1234567890';
-        $hash = hash(Constants::HASH_ALGORITHM, $alternateAddress . $salt . $time);
+        $senderPubKey = 'sender-pk-alternate';
+        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $alternateAddress . $salt . $time);
 
         $request = [
             'hash' => $hash,
             'salt' => $salt,
-            'time' => $time
+            'time' => $time,
+            'senderPublicKey' => $senderPubKey
         ];
 
         $this->userContext->method('getUserLocaters')
@@ -841,30 +845,6 @@ class P2pServiceTest extends TestCase
         $result = $this->service->matchYourselfP2P($request, 'http://other.test');
 
         $this->assertFalse($result);
-    }
-
-    /**
-     * Test matchYourselfP2P returns true for new hash format with sender public key (M-18)
-     */
-    public function testMatchYourselfP2pReturnsTrueForNewHashFormat(): void
-    {
-        $address = self::TEST_ADDRESS;
-        $salt = 'test-salt';
-        $time = '1234567890';
-        $senderPubKey = 'sender-public-key-abc';
-        // New format: hash(senderPublicKey + address + salt + time)
-        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $address . $salt . $time);
-
-        $request = [
-            'hash' => $hash,
-            'salt' => $salt,
-            'time' => $time,
-            'senderPublicKey' => $senderPubKey
-        ];
-
-        $result = $this->service->matchYourselfP2P($request, $address);
-
-        $this->assertTrue($result);
     }
 
     // =========================================================================
@@ -903,13 +883,15 @@ class P2pServiceTest extends TestCase
         $contactAddress = 'http://contact.test';
         $salt = 'test-salt';
         $time = '1234567890';
-        $hash = hash(Constants::HASH_ALGORITHM, $contactAddress . $salt . $time);
+        $senderPubKey = 'sender-pk-contact';
+        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $contactAddress . $salt . $time);
 
         $request = [
             'sender_address' => self::TEST_ADDRESS,
             'hash' => $hash,
             'salt' => $salt,
-            'time' => $time
+            'time' => $time,
+            'senderPublicKey' => $senderPubKey
         ];
 
         $contact = [
@@ -929,45 +911,6 @@ class P2pServiceTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertEquals('Test Contact', $result['name']);
-    }
-
-    /**
-     * Test matchContact returns contact when new hash format matches (M-18)
-     */
-    public function testMatchContactReturnsContactForNewHashFormat(): void
-    {
-        $contactAddress = 'http://contact.test';
-        $salt = 'test-salt';
-        $time = '1234567890';
-        $senderPubKey = 'sender-public-key-xyz';
-        // New format: hash(senderPublicKey + contactAddress + salt + time)
-        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $contactAddress . $salt . $time);
-
-        $request = [
-            'sender_address' => self::TEST_ADDRESS,
-            'hash' => $hash,
-            'salt' => $salt,
-            'time' => $time,
-            'senderPublicKey' => $senderPubKey
-        ];
-
-        $contact = [
-            'name' => 'New Format Contact',
-            'http' => $contactAddress,
-            'pubkey' => self::TEST_PUBLIC_KEY
-        ];
-
-        $this->contactService->method('getAllContacts')
-            ->willReturn([$contact]);
-        $this->transportUtility->method('determineTransportType')
-            ->willReturn('http');
-        $this->transportUtility->method('getAllAddressTypes')
-            ->willReturn(['http', 'https', 'tor']);
-
-        $result = $this->service->matchContact($request);
-
-        $this->assertIsArray($result);
-        $this->assertEquals('New Format Contact', $result['name']);
     }
 
     // =========================================================================

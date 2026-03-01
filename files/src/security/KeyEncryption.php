@@ -143,15 +143,20 @@ class KeyEncryption {
     /**
      * Decrypt private key
      *
-     * Supports both v1 (no AAD) and v2 (AAD context) formats for backward compatibility.
+     * Requires v2 format with AAD context field.
      *
      * @param array $encrypted Encrypted data from encrypt()
      * @return string Decrypted plaintext
      * @throws RuntimeException If decryption fails
+     * @throws InvalidArgumentException If format is invalid or missing version/aad
      */
     public static function decrypt(array $encrypted): string {
         if (!isset($encrypted['ciphertext'], $encrypted['iv'], $encrypted['tag'])) {
             throw new InvalidArgumentException('Invalid encrypted data format');
+        }
+
+        if (!isset($encrypted['version']) || $encrypted['version'] < 2) {
+            throw new InvalidArgumentException('Unsupported encryption format: v2+ required');
         }
 
         // Get master encryption key
@@ -166,11 +171,7 @@ class KeyEncryption {
             throw new RuntimeException('Invalid base64 encoding');
         }
 
-        // Determine AAD: v2+ stores context in 'aad' field; v1 (no version key) used empty string
-        $aad = '';
-        if (isset($encrypted['version']) && $encrypted['version'] >= 2) {
-            $aad = $encrypted['aad'] ?? '';
-        }
+        $aad = $encrypted['aad'] ?? '';
 
         // Decrypt with AES-256-GCM
         $plaintext = openssl_decrypt(

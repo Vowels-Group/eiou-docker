@@ -179,34 +179,26 @@ class KeyEncryptionTest extends TestCase
     }
 
     /**
-     * Test decrypt handles v1 format (no version field) without errors
+     * Test decrypt rejects v1 format (no version field)
      */
-    public function testDecryptHandlesV1FormatWithoutVersion(): void
+    public function testDecryptRejectsV1Format(): void
     {
-        // v1 format: only ciphertext, iv, tag — no version or aad keys.
-        // Without the master key file this will throw RuntimeException
-        // from getMasterKey(), not InvalidArgumentException — proving
-        // the format check passed.
         $encrypted = [
             'ciphertext' => base64_encode('dummy'),
             'iv' => base64_encode(str_repeat("\0", 12)),
             'tag' => base64_encode(str_repeat("\0", 16))
         ];
 
-        // Should NOT throw InvalidArgumentException (format is valid)
-        try {
-            KeyEncryption::decrypt($encrypted);
-            $this->fail('Expected RuntimeException from missing master key');
-        } catch (\RuntimeException $e) {
-            // Expected: master key file doesn't exist outside Docker
-            $this->assertTrue(true);
-        }
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported encryption format: v2+ required');
+
+        KeyEncryption::decrypt($encrypted);
     }
 
     /**
-     * Test decrypt handles v2 format (with version and aad fields) without errors
+     * Test decrypt accepts v2 format (with version and aad fields)
      */
-    public function testDecryptHandlesV2FormatWithVersionAndAad(): void
+    public function testDecryptAcceptsV2Format(): void
     {
         $encrypted = [
             'ciphertext' => base64_encode('dummy'),
@@ -217,11 +209,11 @@ class KeyEncryptionTest extends TestCase
         ];
 
         // Should NOT throw InvalidArgumentException (format is valid)
+        // Will throw RuntimeException from missing master key outside Docker
         try {
             KeyEncryption::decrypt($encrypted);
             $this->fail('Expected RuntimeException from missing master key');
         } catch (\RuntimeException $e) {
-            // Expected: master key file doesn't exist outside Docker
             $this->assertTrue(true);
         }
     }
