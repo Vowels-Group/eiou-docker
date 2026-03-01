@@ -294,6 +294,15 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             $this->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
         } elseif (!$sendResult['success']) {
             $this->logDeliveryFailure($txid, $sendResult, 'Transaction');
+
+            // If delivery was exhausted and moved to the DLQ, cancel the transaction immediately
+            // so it is removed from the In-Progress panel and stops triggering auto-refresh.
+            // Without this it would stay in 'sent' status until expireStaleTransactions runs
+            // (up to directTxExpiration seconds later). The DLQ retry path resets the status
+            // back to 'sending' when the user retries, so cancelling here is safe.
+            if (!empty($sendResult['tracking']['dlq'])) {
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_CANCELLED, true);
+            }
         }
 
         return 'continue';
