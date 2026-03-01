@@ -178,7 +178,7 @@
 
         <!-- Advanced Settings (Collapsible) -->
         <div style="margin-top: 1.5rem; border-top: 1px solid #dee2e6; padding-top: 1rem;">
-            <h3 style="cursor: pointer; color: #0dcaf0; margin-bottom: 1rem;" onclick="toggleConfigSection('advanced-settings-content', 'advanced-settings-arrow')">
+            <h3 style="cursor: pointer; color: #0dcaf0; margin-bottom: 1rem;" data-action="toggleConfigSection" data-section="advanced-settings-content" data-arrow="advanced-settings-arrow">
                 <i class="fas fa-sliders-h"></i> Advanced Settings
                 <i id="advanced-settings-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
             </h3>
@@ -187,7 +187,7 @@
                 <!-- Category selector -->
                 <div class="adv-section-nav">
                     <label for="advancedSectionSelect">Category:</label>
-                    <select id="advancedSectionSelect" onchange="switchAdvancedSection(this.value)">
+                    <select id="advancedSectionSelect" data-action-change="switchAdvancedSection">
                         <option value="feature-toggles">Feature Toggles</option>
                         <option value="display">Display</option>
                         <option value="backup-logging">Backup &amp; Logging</option>
@@ -552,19 +552,19 @@
 
     <!-- Debug Tabs -->
     <div class="debug-tabs">
-        <button type="button" class="debug-tab active" onclick="showDebugTab('app-logs', this)">
+        <button type="button" class="debug-tab active" data-action="showDebugTab" data-tab="app-logs">
             <i class="fas fa-database"></i> App Logs
         </button>
-        <button type="button" class="debug-tab" onclick="showDebugTab('eiou-log', this)">
+        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="eiou-log">
             <i class="fas fa-file-alt"></i> EIOU Log
         </button>
-        <button type="button" class="debug-tab" onclick="showDebugTab('php-logs', this)">
+        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="php-logs">
             <i class="fab fa-php"></i> PHP Logs
         </button>
-        <button type="button" class="debug-tab" onclick="showDebugTab('apache-logs', this)">
+        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="apache-logs">
             <i class="fas fa-server"></i> Apache Logs
         </button>
-        <button type="button" class="debug-tab" onclick="showDebugTab('system-info', this)">
+        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="system-info">
             <i class="fas fa-info-circle"></i> System Info
         </button>
     </div>
@@ -583,13 +583,13 @@
             <form method="POST" style="display: inline;">
                 <input type="hidden" name="action" value="clearDebugLogs">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Clear all debug entries?');">
+                <button type="submit" class="btn btn-sm btn-warning" data-confirm="Clear all debug entries?">
                     <i class="fas fa-trash"></i> Clear Logs
                 </button>
             </form>
         </div>
         <div class="debug-search-container">
-            <input type="text" id="app-logs-search" class="debug-search-input" placeholder="Search app logs..." oninput="filterDebugLogs(this, 'app-logs-entries')">
+            <input type="text" id="app-logs-search" class="debug-search-input" placeholder="Search app logs..." data-action-input="filterDebugLogs" data-target="app-logs-entries">
         </div>
         <div id="app-logs-entries" class="debug-log-container">
             <?php if (empty($debugEntries)): ?>
@@ -640,7 +640,7 @@
             </span>
         </div>
         <div class="debug-search-container">
-            <input type="text" id="eiou-log-search" class="debug-search-input" placeholder="Search EIOU log..." oninput="filterDebugLogs(this, 'eiou-log-entries')">
+            <input type="text" id="eiou-log-search" class="debug-search-input" placeholder="Search EIOU log..." data-action-input="filterDebugLogs" data-target="eiou-log-entries">
         </div>
         <div id="eiou-log-entries" class="debug-log-container">
             <?php if (empty(trim($eiouLogContent))): ?>
@@ -659,7 +659,7 @@
             <span class="debug-count">PHP Error Log</span>
         </div>
         <div class="debug-search-container">
-            <input type="text" id="php-logs-search" class="debug-search-input" placeholder="Search PHP logs..." oninput="filterDebugLogs(this, 'php-logs-entries')">
+            <input type="text" id="php-logs-search" class="debug-search-input" placeholder="Search PHP logs..." data-action-input="filterDebugLogs" data-target="php-logs-entries">
         </div>
         <div id="php-logs-entries" class="debug-log-container">
             <?php
@@ -687,7 +687,7 @@
             <span class="debug-count">Apache Error Log</span>
         </div>
         <div class="debug-search-container">
-            <input type="text" id="apache-logs-search" class="debug-search-input" placeholder="Search Apache logs..." oninput="filterDebugLogs(this, 'apache-logs-entries')">
+            <input type="text" id="apache-logs-search" class="debug-search-input" placeholder="Search Apache logs..." data-action-input="filterDebugLogs" data-target="apache-logs-entries">
         </div>
         <div id="apache-logs-entries" class="debug-log-container">
             <?php
@@ -782,7 +782,7 @@
 
             <!-- PHP Extensions (Collapsible) -->
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('phpext-content', 'phpext-arrow')">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" data-action="toggleConfigSection" data-section="phpext-content" data-arrow="phpext-arrow">
                     <i class="fas fa-puzzle-piece"></i> PHP Extensions
                     <i id="phpext-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
                 </h4>
@@ -791,7 +791,7 @@
 
             <!-- php.ini Contents (Collapsible) -->
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('phpini-content', 'phpini-arrow')">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" data-action="toggleConfigSection" data-section="phpini-content" data-arrow="phpini-arrow">
                     <i class="fab fa-php"></i> php.ini Contents
                     <i id="phpini-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
                 </h4>
@@ -800,7 +800,7 @@
 
             <!-- apache2.conf Contents (Collapsible) -->
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('apache-content', 'apache-arrow')">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" data-action="toggleConfigSection" data-section="apache-content" data-arrow="apache-arrow">
                     <i class="fas fa-server"></i> apache2.conf Contents
                     <i id="apache-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
                 </h4>
@@ -817,7 +817,7 @@
             }
             ?>
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('constants-content', 'constants-arrow')">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" data-action="toggleConfigSection" data-section="constants-content" data-arrow="constants-arrow">
                     <i class="fas fa-cogs"></i> Application Constants
                     <i id="constants-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
                 </h4>
@@ -844,7 +844,7 @@
             }
             ?>
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('defaultconfig-content', 'defaultconfig-arrow')">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" data-action="toggleConfigSection" data-section="defaultconfig-content" data-arrow="defaultconfig-arrow">
                     <i class="fas fa-sliders-h"></i> User Configuration (defaultconfig.json)
                     <i id="defaultconfig-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
                 </h4>
@@ -865,10 +865,10 @@
         </div>
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary" onclick="downloadLimitedDebugReport()" title="Quick download - same data shown in GUI above">
+            <button type="button" class="btn btn-secondary" data-action="downloadLimitedDebugReport" title="Quick download - same data shown in GUI above">
                 <i class="fas fa-download"></i> Limited Report
             </button>
-            <button type="button" class="btn btn-info" onclick="downloadFullDebugReport()" title="Complete logs - may take longer over Tor">
+            <button type="button" class="btn btn-info" data-action="downloadFullDebugReport" title="Complete logs - may take longer over Tor">
                 <i class="fas fa-file-archive"></i> Full Report
             </button>
         </div>
@@ -876,7 +876,7 @@
             <i class="fas fa-info-circle"></i> <strong>Limited:</strong> Quick download with recent logs (same as displayed above).<br>
             <i class="fas fa-info-circle"></i> <strong>Full:</strong> Complete log history for thorough debugging (larger file, slower over Tor).<br>
             Please email the report to
-            <span style="font-family: monospace; background: #17a2b8; color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer;" onclick="copyToClipboard('dockersupport@eiou.org')" title="Click to copy">dockersupport@eiou.org <i class="fas fa-copy" style="font-size: 0.75rem; margin-left: 0.25rem;"></i></span>
+            <span style="font-family: monospace; background: #17a2b8; color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer;" data-action="copyToClipboard" data-copy-text="dockersupport@eiou.org" title="Click to copy">dockersupport@eiou.org <i class="fas fa-copy" style="font-size: 0.75rem; margin-left: 0.25rem;"></i></span>
         </p>
     </div>
 </div>

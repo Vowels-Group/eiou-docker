@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Security
+- Replace CSP `unsafe-inline` with per-request nonce for `script-src` (L-32) — `Security::generateCspNonce()` creates a cryptographic 128-bit nonce per request; all `<script>` tags (external and inline) receive `nonce="..."` attribute; every inline `onclick`/`onchange`/`oninput`/`onkeyup` handler across 12 template files migrated to `data-action` attributes with a single delegated event dispatcher in `script.js`; wallet and authentication pages load `script.js` via external `<script src>` instead of PHP `require_once` inlining; `style-src 'unsafe-inline'` kept (out of scope)
 - Run PHP message processors and backup cron as `www-data` instead of root (M-22) — uses `runuser -u www-data --` for all processor launches and watchdog restarts; `chown` config directory to `www-data` before processor start; guard root-only `chown()`/`chgrp()` calls in `BackupService` and `Application` with `posix_getuid()` check
 
 ### Added

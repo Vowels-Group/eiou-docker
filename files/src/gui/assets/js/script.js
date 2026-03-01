@@ -775,7 +775,7 @@ function showToast(title, message, type) {
         '<div class="toast-title">' + escapeHtml(title) + '</div>' +
         '<div class="toast-message">' + escapeHtml(message) + '</div>' +
         '</div>' +
-        '<button class="toast-close" onclick="this.parentElement.parentNode.removeChild(this.parentElement)">&times;</button>';
+        '<button class="toast-close" data-action="dismissToast">&times;</button>';
 
     container.appendChild(toast);
 
@@ -1929,7 +1929,7 @@ function openContactModal(contact, openTab) {
             var typeLabel = tx.type === 'sent' ? 'Sent' : 'Received';
             var amountPrefix = tx.type === 'sent' ? '-' : '+';
 
-            html += '<div class="transaction-item ' + typeClass + '" style="cursor: pointer;" onclick="showContactTxDetail(' + i + ')" title="Click for details">';
+            html += '<div class="transaction-item ' + typeClass + '" style="cursor: pointer;" data-action="showContactTxDetail" data-index="' + i + '" title="Click for details">';
             html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
             html += '<div class="tx-details">';
             html += '<div class="tx-type">' + typeLabel + '</div>';
@@ -3712,3 +3712,209 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initSyncTimeoutDynamicMax();
 });
+
+// ============================================================================
+// CSP nonce-compatible event delegation (L-32)
+// Replaces all inline on* handlers with data-action attributes
+// ============================================================================
+
+(function() {
+    // Map of action names to handler functions
+    var clickActions = {
+        // Navigation & reload
+        'reloadWithHash': function(el) {
+            var hash = el.getAttribute('data-hash');
+            window.location.href = window.location.pathname + '#' + hash;
+            window.location.reload();
+        },
+
+        // Transaction history
+        'openTransactionModal': function(el) {
+            var index = parseInt(el.getAttribute('data-index'), 10);
+            openTransactionModal(index);
+        },
+        'closeTransactionModal': function() { closeTransactionModal(); },
+
+        // P2P transaction approval
+        'approveP2pTransaction': function(el) {
+            var txid = el.getAttribute('data-txid');
+            var candidateId = el.getAttribute('data-candidate-id');
+            approveP2pTransaction(txid, candidateId ? parseInt(candidateId, 10) : undefined);
+        },
+        'rejectP2pTransaction': function(el) {
+            var txid = el.getAttribute('data-txid');
+            rejectP2pTransaction(txid);
+        },
+
+        // Contact modal
+        'openContactModal': function(el) {
+            var data = el.getAttribute('data-contact');
+            try { openContactModal(JSON.parse(data)); } catch (e) {}
+        },
+        'openContactByContactId': function(el) {
+            var cid = el.getAttribute('data-contact-id');
+            openContactByContactId(cid);
+        },
+        'closeContactModal': function() { closeContactModal(); },
+
+        // Contact modal tabs
+        'showModalTab': function(el) {
+            var tab = el.getAttribute('data-tab');
+            showModalTab(tab, el);
+        },
+
+        // Contact actions
+        'pingContact': function() { pingContact(); },
+        'proposeChainDrop': function() { proposeChainDrop(); },
+        'acceptChainDrop': function() { acceptChainDrop(); },
+        'rejectChainDrop': function() { rejectChainDrop(); },
+        'refreshContactModalTransactions': function() { refreshContactModalTransactions(); },
+        'hideContactTxDetail': function() { hideContactTxDetail(); },
+
+        // Contact list
+        'scrollContacts': function(el) {
+            var dir = parseInt(el.getAttribute('data-direction'), 10);
+            scrollContacts(dir);
+        },
+        'toggleShowAllContacts': function() { toggleShowAllContacts(); },
+
+        // Quick actions
+        'scrollQuickActions': function(el) {
+            var dir = parseInt(el.getAttribute('data-direction'), 10);
+            scrollQuickActions(dir);
+        },
+
+        // Clipboard
+        'copyToClipboard': function(el) {
+            var text = el.getAttribute('data-copy-text');
+            var msg = el.getAttribute('data-copy-message');
+            copyToClipboard(text, msg);
+        },
+        'copyFromElement': function(el) {
+            var sourceId = el.getAttribute('data-copy-source');
+            var msg = el.getAttribute('data-copy-message');
+            var sourceEl = document.getElementById(sourceId);
+            if (sourceEl) {
+                var val = sourceEl.textContent;
+                if (val && val !== 'Not Available') {
+                    copyToClipboard(val, msg);
+                }
+            }
+        },
+
+        // Wallet
+        'refreshWalletData': function() { refreshWalletData(); },
+        'toggleP2pInfo': function() { toggleP2pInfo(); },
+
+        // DLQ
+        'setDlqFilter': function(el) {
+            var filter = el.getAttribute('data-filter');
+            setDlqFilter(filter);
+        },
+        'retryDlqItem': function(el) {
+            var id = parseInt(el.getAttribute('data-dlq-id'), 10);
+            retryDlqItem(id, el);
+        },
+        'abandonDlqItem': function(el) {
+            var id = parseInt(el.getAttribute('data-dlq-id'), 10);
+            abandonDlqItem(id, el);
+        },
+        'retryAllDlqItems': function(el) { retryAllDlqItems(el); },
+        'abandonAllDlqItems': function(el) { abandonAllDlqItems(el); },
+
+        // Settings
+        'toggleConfigSection': function(el) {
+            var section = el.getAttribute('data-section');
+            var arrow = el.getAttribute('data-arrow');
+            toggleConfigSection(section, arrow);
+        },
+        'showDebugTab': function(el) {
+            var tab = el.getAttribute('data-tab');
+            showDebugTab(tab, el);
+        },
+        'downloadLimitedDebugReport': function() { downloadLimitedDebugReport(); },
+        'downloadFullDebugReport': function() { downloadFullDebugReport(); },
+
+        // Toast close
+        'dismissToast': function(el) {
+            var toast = el.parentElement;
+            if (toast && toast.parentNode) { toast.parentNode.removeChild(toast); }
+        },
+
+        // Contact modal transaction detail
+        'showContactTxDetail': function(el) {
+            var index = parseInt(el.getAttribute('data-index'), 10);
+            showContactTxDetail(index);
+        }
+    };
+
+    // Delegated click handler
+    document.addEventListener('click', function(event) {
+        // Walk up from target to find closest element with data-action or data-confirm or data-stop-propagation
+        var el = event.target;
+        while (el && el !== document) {
+            // data-stop-propagation: stop propagation (for DLQ links inside clickable rows)
+            if (el.getAttribute('data-stop-propagation') === 'true' && !el.getAttribute('data-action')) {
+                event.stopPropagation();
+                return; // let the default action (e.g. href) proceed
+            }
+
+            // data-confirm: confirmation dialog for form submit buttons
+            if (el.getAttribute('data-confirm')) {
+                if (!confirm(el.getAttribute('data-confirm'))) {
+                    event.preventDefault();
+                }
+                return;
+            }
+
+            // data-action: dispatch to handler
+            var action = el.getAttribute('data-action');
+            if (action) {
+                // Handle stop propagation
+                if (el.getAttribute('data-stop-propagation') === 'true') {
+                    event.stopPropagation();
+                }
+
+                var handler = clickActions[action];
+                if (typeof handler === 'function') {
+                    handler(el, event);
+                }
+                return;
+            }
+
+            el = el.parentElement;
+        }
+    }, false);
+
+    // Delegated change handler
+    document.addEventListener('change', function(event) {
+        var el = event.target;
+        var action = el.getAttribute('data-action-change');
+        if (!action) return;
+
+        if (action === 'showSelectedContactAddress') { showSelectedContactAddress(); }
+        else if (action === 'showSelectedUserAddress') { showSelectedUserAddress(); }
+        else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
+    }, false);
+
+    // Delegated input handler
+    document.addEventListener('input', function(event) {
+        var el = event.target;
+        var action = el.getAttribute('data-action-input');
+        if (!action) return;
+
+        if (action === 'filterDebugLogs') {
+            var target = el.getAttribute('data-target');
+            filterDebugLogs(el, target);
+        }
+    }, false);
+
+    // Delegated keyup handler
+    document.addEventListener('keyup', function(event) {
+        var el = event.target;
+        var action = el.getAttribute('data-action-keyup');
+        if (!action) return;
+
+        if (action === 'filterContacts') { filterContacts(); }
+    }, false);
+})();

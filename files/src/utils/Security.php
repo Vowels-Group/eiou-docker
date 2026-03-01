@@ -14,6 +14,30 @@ use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 
 class Security {
+    /** @var string|null Per-request CSP nonce (base64, 128-bit) */
+    private static $cspNonce = null;
+
+    /**
+     * Generate and cache a per-request CSP nonce.
+     *
+     * @return string Base64-encoded 128-bit random nonce
+     */
+    public static function generateCspNonce(): string {
+        if (self::$cspNonce === null) {
+            self::$cspNonce = base64_encode(random_bytes(16));
+        }
+        return self::$cspNonce;
+    }
+
+    /**
+     * Get the current request's CSP nonce (generates if not yet created).
+     *
+     * @return string Base64-encoded nonce for use in script tags
+     */
+    public static function getCspNonce(): string {
+        return self::generateCspNonce();
+    }
+
     /**
      * Encode output for safe HTML display (prevents XSS)
      *
@@ -83,9 +107,9 @@ class Security {
         // Referrer policy
         header('Referrer-Policy: strict-origin-when-cross-origin');
 
-        // Content Security Policy
-        // TODO (L-32): Replace 'unsafe-inline' with nonce-based CSP (requires refactoring all inline scripts to external files)
-        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
+        // Content Security Policy — nonce-based script-src (L-32)
+        $nonce = self::getCspNonce();
+        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
 
         // HSTS (HTTP Strict Transport Security) - only for HTTPS
         if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {

@@ -2,7 +2,7 @@
 
  <!-- Quick Actions -->
 <div class="quick-actions-slider">
-    <button type="button" id="quick-actions-scroll-left" class="quick-actions-scroll-btn quick-actions-scroll-left hidden" onclick="scrollQuickActions(-1)" title="Scroll left">
+    <button type="button" id="quick-actions-scroll-left" class="quick-actions-scroll-btn quick-actions-scroll-left hidden" data-action="scrollQuickActions" data-direction="-1" title="Scroll left">
         <i class="fas fa-chevron-left"></i>
     </button>
     <div class="quick-actions" id="quick-actions-grid">
@@ -37,7 +37,7 @@
             <p>Configure wallet settings</p>
         </a>
     </div>
-    <button type="button" id="quick-actions-scroll-right" class="quick-actions-scroll-btn quick-actions-scroll-right" onclick="scrollQuickActions(1)" title="Scroll right">
+    <button type="button" id="quick-actions-scroll-right" class="quick-actions-scroll-btn quick-actions-scroll-right" data-action="scrollQuickActions" data-direction="1" title="Scroll right">
         <i class="fas fa-chevron-right"></i>
     </button>
 </div>
