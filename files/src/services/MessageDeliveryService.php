@@ -665,6 +665,13 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
         }
 
+        // Lock the delivery record against processRetryQueue for the entire sync retry process.
+        // createDelivery() leaves next_retry_at = NULL, which processRetryQueue immediately
+        // treats as eligible — causing a parallel retry chain alongside this sync loop.
+        // This lock covers the initial NULL window; incrementRetry() inside the loop
+        // maintains the lock with per-attempt delay + a delivery-time buffer.
+        $this->deliveryRepository->lockForProcessing($messageType, $messageId);
+
         // Perform synchronous delivery with retries
         return $this->attemptDeliveryWithRetries(
             $messageType,
@@ -780,15 +787,16 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                 ]);
             }
 
-            // Calculate delay before updating the DB so next_retry_at is set to a future
-            // time that covers the sleep window. Setting delay=0 would set next_retry_at=now,
-            // allowing processRetryQueue to steal this message while we're sleeping and create
-            // a parallel duplicate retry chain.
+            // Calculate delay before updating the DB.
             $delay = ($attempt < $this->maxRetries) ? $this->calculateRetryDelay($attempt) : 0;
 
-            // Update retry count in database — next_retry_at is pushed forward by $delay so
-            // processRetryQueue sees it as locked and will not claim it until after we wake up.
-            $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay, $lastError);
+            // Set next_retry_at = now + delay + delivery buffer so the lock covers BOTH the
+            // sleep window AND the following delivery attempt window (i.e. the time between
+            // waking up and calling incrementRetry again on the next iteration).
+            // Without the buffer, next_retry_at would expire during the delivery attempt,
+            // allowing processRetryQueue to claim and duplicate the retry chain.
+            $deliveryBuffer = Constants::TOR_TRANSPORT_TIMEOUT_SECONDS * 2; // 60s worst-case delivery
+            $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay + $deliveryBuffer, $lastError);
 
             // If we haven't exhausted retries, wait and try again
             if ($attempt < $this->maxRetries) {

@@ -201,6 +201,34 @@ class MessageDeliveryRepository extends AbstractRepository {
     }
 
     /**
+     * Lock a message against processRetryQueue for the entire sync retry process.
+     *
+     * Sets next_retry_at unconditionally so the message is invisible to
+     * processRetryQueue's eligible-message query for $seconds seconds.
+     * Called by sendWithTracking() before entering attemptDeliveryWithRetries()
+     * to cover the initial next_retry_at = NULL window that exists right after
+     * createDelivery(). The incrementRetry() calls inside the retry loop then
+     * refresh the lock with per-attempt delays + a delivery buffer.
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @param int $seconds Lock duration in seconds
+     * @return bool Success
+     */
+    public function lockForProcessing(string $messageType, string $messageId, int $seconds = 300): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET next_retry_at = DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL :seconds SECOND)
+                  WHERE message_type = :type AND message_id = :id";
+
+        $stmt = $this->execute($query, [
+            ':seconds' => $seconds,
+            ':type' => $messageType,
+            ':id' => $messageId
+        ]);
+        return $stmt !== false;
+    }
+
+    /**
      * Atomically claim a message for retry processing.
      *
      * Uses a conditional UPDATE so only one concurrent worker can claim a given
