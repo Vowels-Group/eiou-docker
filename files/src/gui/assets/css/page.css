@@ -253,6 +253,13 @@ body {
 .quick-actions {
     display: flex;
     gap: 1rem;
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE */
+}
+
+.quick-actions::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
 }
 
 .quick-actions-scroll-btn {
@@ -293,19 +300,6 @@ body {
     right: -14px;
 }
 
-/* Hide descriptions at medium widths to keep cards compact on one line */
-@media (max-width: 992px) {
-    .action-card p {
-        display: none;
-    }
-    .action-card {
-        padding: 1rem 0.5rem;
-    }
-    .action-card h3 {
-        font-size: 0.85rem;
-    }
-}
-
 .action-card {
     background: white;
     padding: 1.5rem;
@@ -316,8 +310,8 @@ body {
     text-decoration: none;
     color: inherit;
     display: block;
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 190px;
+    min-width: 190px;
 }
 
 .action-card:hover {
@@ -1254,21 +1248,13 @@ body {
         grid-template-columns: 1fr;
     }
 
-    /* Horizontal slider for quick actions at tablet/small widths */
     .quick-actions {
-        overflow-x: auto;
         gap: 0.75rem;
-        padding-bottom: 0.5rem;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE */
-    }
-
-    .quick-actions::-webkit-scrollbar {
-        display: none; /* Chrome/Safari */
     }
 
     .action-card {
-        flex: 0 0 100px;
+        flex: 0 0 130px;
+        min-width: 130px;
         padding: 0.75rem 0.5rem;
     }
 
@@ -1278,7 +1264,7 @@ body {
     }
 
     .action-card h3 {
-        font-size: 0.75rem;
+        font-size: 0.85rem;
         margin-bottom: 0;
     }
 
