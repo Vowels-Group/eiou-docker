@@ -159,4 +159,62 @@ class KeyEncryptionTest extends TestCase
             'iv' => base64_encode('test')
         ]);
     }
+
+    // =========================================================================
+    // Encryption Format v2 (AAD context) Tests
+    // =========================================================================
+
+    /**
+     * Test encrypt accepts optional context parameter
+     */
+    public function testEncryptAcceptsContextParameter(): void
+    {
+        // Verify the method signature accepts context — actual encryption
+        // requires the master key file (Docker-only), so we test the
+        // empty-data guard path with context param to confirm the signature.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot encrypt empty data');
+
+        KeyEncryption::encrypt('', 'private_key');
+    }
+
+    /**
+     * Test decrypt rejects v1 format (no version field)
+     */
+    public function testDecryptRejectsV1Format(): void
+    {
+        $encrypted = [
+            'ciphertext' => base64_encode('dummy'),
+            'iv' => base64_encode(str_repeat("\0", 12)),
+            'tag' => base64_encode(str_repeat("\0", 16))
+        ];
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported encryption format: v2+ required');
+
+        KeyEncryption::decrypt($encrypted);
+    }
+
+    /**
+     * Test decrypt accepts v2 format (with version and aad fields)
+     */
+    public function testDecryptAcceptsV2Format(): void
+    {
+        $encrypted = [
+            'ciphertext' => base64_encode('dummy'),
+            'iv' => base64_encode(str_repeat("\0", 12)),
+            'tag' => base64_encode(str_repeat("\0", 16)),
+            'version' => 2,
+            'aad' => 'private_key'
+        ];
+
+        // Should NOT throw InvalidArgumentException (format is valid)
+        // Will throw RuntimeException from missing master key outside Docker
+        try {
+            KeyEncryption::decrypt($encrypted);
+            $this->fail('Expected RuntimeException from missing master key');
+        } catch (\RuntimeException $e) {
+            $this->assertTrue(true);
+        }
+    }
 }

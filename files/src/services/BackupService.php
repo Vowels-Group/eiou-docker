@@ -123,8 +123,8 @@ class BackupService implements BackupServiceInterface
             );
         }
 
-        // Encrypt the SQL dump
-        $encrypted = KeyEncryption::encrypt($sqlDump);
+        // Encrypt the SQL dump with context AAD (L-28)
+        $encrypted = KeyEncryption::encrypt($sqlDump, 'backup');
 
         // Clear sensitive data
         KeyEncryption::secureClear($sqlDump);

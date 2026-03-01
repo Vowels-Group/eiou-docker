@@ -13,6 +13,7 @@ use Eiou\Utils\Logger;
 use Eiou\Exceptions\ServiceException;
 use Eiou\Processors\AbstractMessageProcessor;
 use Eiou\Utils\InputValidator;
+use Eiou\Services\ApiKeyService;
 
 /**
  * API Controller
@@ -1965,6 +1966,24 @@ class ApiController {
         $permissions = $data['permissions'] ?? ['wallet:read', 'contacts:read'];
         $rateLimit = $data['rate_limit_per_minute'] ?? 100;
         $expiresAt = $data['expires_at'] ?? null;
+
+        // Validate permissions against whitelist (H-5)
+        $permValidation = ApiKeyService::validatePermissions($permissions);
+        if (!$permValidation['valid']) {
+            return $this->errorResponse(
+                'Invalid permission: ' . $permValidation['invalid_permission'] .
+                '. Valid permissions: ' . implode(', ', ApiKeyService::PERMISSIONS),
+                400,
+                'invalid_permission'
+            );
+        }
+
+        // Validate rate limit (H-5)
+        $rateValidation = ApiKeyService::validateRateLimit($rateLimit);
+        if (!$rateValidation['valid']) {
+            return $this->errorResponse($rateValidation['error'], 400, 'invalid_rate_limit');
+        }
+        $rateLimit = $rateValidation['value'];
 
         $key = $this->apiKeyRepository->createKey($data['name'], $permissions, $rateLimit, $expiresAt);
 

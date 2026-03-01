@@ -46,7 +46,8 @@ class ApiKeyRepository extends AbstractRepository {
         $secret = bin2hex(random_bytes(32));
 
         // Encrypt the secret for secure storage (allows retrieval for HMAC verification)
-        $encryptedSecret = KeyEncryption::encrypt($secret);
+        // Context AAD binds ciphertext to API secret use case (L-28)
+        $encryptedSecret = KeyEncryption::encrypt($secret, 'api_secret');
 
         $sql = "INSERT INTO api_keys (key_id, encrypted_secret, name, permissions, rate_limit_per_minute, expires_at)
                 VALUES (:key_id, :encrypted_secret, :name, :permissions, :rate_limit, :expires_at)";

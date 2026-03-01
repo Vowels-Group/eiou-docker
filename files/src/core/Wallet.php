@@ -101,9 +101,10 @@ class Wallet{
         BIP39::secureClear($seed);
 
         // SECURITY: Encrypt private key, auth code, and mnemonic before storage
-        $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
-        $encryptedAuthCode = KeyEncryption::encrypt($authCode);
-        $encryptedMnemonic = KeyEncryption::encrypt($mnemonic);
+        // Context AAD binds ciphertext to its intended use (L-28)
+        $encryptedPrivateKey = KeyEncryption::encrypt($privateKey, 'private_key');
+        $encryptedAuthCode = KeyEncryption::encrypt($authCode, 'auth_code');
+        $encryptedMnemonic = KeyEncryption::encrypt($mnemonic, 'mnemonic');
 
         // Clear plaintext private key from memory
         KeyEncryption::secureClear($privateKey);
@@ -273,9 +274,10 @@ class Wallet{
         BIP39::secureClear($seed);
 
         // SECURITY: Encrypt private key, auth code, and mnemonic before storage
-        $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
-        $encryptedAuthCode = KeyEncryption::encrypt($authCode);
-        $encryptedMnemonic = KeyEncryption::encrypt($mnemonic);
+        // Context AAD binds ciphertext to its intended use (L-28)
+        $encryptedPrivateKey = KeyEncryption::encrypt($privateKey, 'private_key');
+        $encryptedAuthCode = KeyEncryption::encrypt($authCode, 'auth_code');
+        $encryptedMnemonic = KeyEncryption::encrypt($mnemonic, 'mnemonic');
 
         // Clear plaintext private key from memory
         KeyEncryption::secureClear($privateKey);
