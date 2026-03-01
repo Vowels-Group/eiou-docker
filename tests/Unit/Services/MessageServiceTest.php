@@ -198,6 +198,43 @@ class MessageServiceTest extends TestCase
     }
 
     /**
+     * Test checkMessageValidity returns true for new hash format with sender public key (M-18)
+     */
+    public function testCheckMessageValidityReturnsTrueForNewHashFormat(): void
+    {
+        $senderPubKey = 'sender-pubkey-m18';
+        $p2pData = [
+            'salt' => 'test-salt',
+            'time' => '1234567890'
+        ];
+
+        // Setup transport utility to return the proper address
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn(self::TEST_ADDRESS);
+
+        // Create new-format hash: hash(senderPublicKey + address + salt + time)
+        $expectedHash = hash(Constants::HASH_ALGORITHM, $senderPubKey . self::TEST_ADDRESS . $p2pData['salt'] . $p2pData['time']);
+
+        $message = [
+            'senderPublicKey' => $senderPubKey,
+            'senderAddress' => self::TEST_ADDRESS,
+            'typeMessage' => 'transaction',
+            'hash' => $expectedHash
+        ];
+
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(false);
+
+        $this->p2pRepository->method('getByHash')
+            ->with($expectedHash)
+            ->willReturn($p2pData);
+
+        $result = $this->service->checkMessageValidity($message);
+
+        $this->assertTrue($result);
+    }
+
+    /**
      * Test checkMessageValidity returns false for unknown sender without hash
      */
     public function testCheckMessageValidityReturnsFalseForUnknownSender(): void

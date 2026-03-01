@@ -630,13 +630,23 @@ class P2pService implements P2pServiceInterface {
             $addressTypes = array_merge([$transportIndex], array_diff($addressTypes, [$transportIndex]));
         }
 
+        // Extract sender public key for new hash format (M-18)
+        $senderPublicKey = $request['senderPublicKey'] ?? '';
+
         foreach ($contacts as $contact) {
             // Check all address types for this contact
             foreach ($addressTypes as $addrType) {
                 if (!empty($contact[$addrType])) {
-                    $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time']);
-                    if ($contactHash === $request['hash']) {
-                        output(outputContactMatched($contactHash), 'SILENT');
+                    // Try new hash format first (with sender public key, M-18)
+                    $newHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $contact[$addrType] . $request['salt'] . $request['time']);
+                    if ($newHash === $request['hash']) {
+                        output(outputContactMatched($newHash), 'SILENT');
+                        return $contact;
+                    }
+                    // Fall back to legacy hash format (without sender public key)
+                    $legacyHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time']);
+                    if ($legacyHash === $request['hash']) {
+                        output(outputContactMatched($legacyHash), 'SILENT');
                         return $contact;
                     }
                 }
@@ -653,8 +663,15 @@ class P2pService implements P2pServiceInterface {
      * @return bool True if user corresponds, false otherwise
      */
     public function matchYourselfP2P(array $request, string $address): bool {
+        // Extract sender public key for new hash format (M-18)
+        $senderPublicKey = $request['senderPublicKey'] ?? '';
+
         // Check if p2p end recipient is user
         // First check the provided address (most likely match)
+        // Try new hash format first (with sender public key, M-18), then legacy
+        if (hash(Constants::HASH_ALGORITHM, $senderPublicKey . $address . $request['salt'] . $request['time']) === $request['hash']) {
+            return true;
+        }
         if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']) {
             return true;
         }
@@ -668,6 +685,10 @@ class P2pService implements P2pServiceInterface {
             // Skip if this is the same address we already checked
             if ($userAddress === $address) {
                 continue;
+            }
+            // Try new hash format first (M-18), then legacy
+            if (hash(Constants::HASH_ALGORITHM, $senderPublicKey . $userAddress . $request['salt'] . $request['time']) === $request['hash']) {
+                return true;
             }
             if (hash(Constants::HASH_ALGORITHM, $userAddress . $request['salt'] . $request['time']) === $request['hash']) {
                 return true;
@@ -722,7 +743,9 @@ class P2pService implements P2pServiceInterface {
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
+        // Include sender's public key in hash for stronger binding (M-18 defense-in-depth)
+        $senderPublicKey = $this->currentUser->getPublicKey();
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $data['receiverAddress'] . $data['salt'] . $data['time']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
@@ -772,7 +795,9 @@ class P2pService implements P2pServiceInterface {
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
+        // Include sender's public key in hash for stronger binding (M-18 defense-in-depth)
+        $senderPublicKey = $this->currentUser->getPublicKey();
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $data['receiverAddress'] . $data['salt'] . $data['time']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
