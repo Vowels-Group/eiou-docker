@@ -33,8 +33,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8443:443"
     environment:
       - QUICKSTART=alice
       # Node Identity (optional - override QUICKSTART for production use):
@@ -89,8 +89,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8081:80"
-      - "8444:443"
+      - "127.0.0.1:8081:80"
+      - "127.0.0.1:8444:443"
     environment:
       - QUICKSTART=bob
     volumes:
@@ -129,8 +129,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8082:80"
-      - "8445:443"
+      - "127.0.0.1:8082:80"
+      - "127.0.0.1:8445:443"
     environment:
       - QUICKSTART=carol
     volumes:
@@ -169,8 +169,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8083:80"
-      - "8446:443"
+      - "127.0.0.1:8083:80"
+      - "127.0.0.1:8446:443"
     environment:
       - QUICKSTART=daniel
     volumes:

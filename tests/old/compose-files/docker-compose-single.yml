@@ -29,8 +29,10 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "80:80"
-      - "443:443"
+      # Bound to localhost — development/testing only.
+      # For production, use docker-compose.yml (binds to all interfaces).
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
     # =========================================================================
     # ENVIRONMENT VARIABLES
     # =========================================================================
