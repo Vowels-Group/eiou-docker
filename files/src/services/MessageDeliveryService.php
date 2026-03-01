@@ -780,13 +780,18 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                 ]);
             }
 
-            // Update retry count in database
-            $this->deliveryRepository->incrementRetry($messageType, $messageId, 0, $lastError);
+            // Calculate delay before updating the DB so next_retry_at is set to a future
+            // time that covers the sleep window. Setting delay=0 would set next_retry_at=now,
+            // allowing processRetryQueue to steal this message while we're sleeping and create
+            // a parallel duplicate retry chain.
+            $delay = ($attempt < $this->maxRetries) ? $this->calculateRetryDelay($attempt) : 0;
+
+            // Update retry count in database — next_retry_at is pushed forward by $delay so
+            // processRetryQueue sees it as locked and will not claim it until after we wake up.
+            $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay, $lastError);
 
             // If we haven't exhausted retries, wait and try again
             if ($attempt < $this->maxRetries) {
-                $delay = $this->calculateRetryDelay($attempt);
-
                 $this->emitDebugEvent('outputMessageDeliveryRetry', [
                     $messageType,
                     $messageId,
