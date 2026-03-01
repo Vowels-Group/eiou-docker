@@ -152,8 +152,19 @@ COPY files/root/ /etc/eiou/
 # Create config directory for wallet configuration files
 RUN mkdir -p /etc/eiou/config
 
-# Create CLI wrapper in PATH
-RUN echo '#!/bin/bash\nphp /etc/eiou/cli/Eiou.php "$@"' > /usr/local/bin/eiou && \
+# Create CLI wrapper in PATH (waits for MariaDB before running commands)
+RUN printf '#!/bin/bash\n\
+# Wait for MariaDB to be ready before accepting CLI commands\n\
+timeout=30\n\
+while ! mysqladmin ping -h localhost --silent 2>/dev/null; do\n\
+    timeout=$((timeout - 1))\n\
+    if [ "$timeout" -le 0 ]; then\n\
+        echo "Error: MariaDB is not ready. The node may still be starting up." >&2\n\
+        exit 1\n\
+    fi\n\
+    sleep 1\n\
+done\n\
+php /etc/eiou/cli/Eiou.php "$@"\n' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou
 
 # Copy src folder to /etc/eiou/src
