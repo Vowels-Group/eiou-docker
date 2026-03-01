@@ -50,8 +50,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8443:443"
     environment:
       - QUICKSTART=cluster-a0
       # Node Identity (optional - override QUICKSTART for production use):
@@ -90,8 +90,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8081:80"
-      - "8444:443"
+      - "127.0.0.1:8081:80"
+      - "127.0.0.1:8444:443"
     environment:
       - QUICKSTART=cluster-a1
     volumes:
@@ -122,8 +122,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8082:80"
-      - "8445:443"
+      - "127.0.0.1:8082:80"
+      - "127.0.0.1:8445:443"
     environment:
       - QUICKSTART=cluster-a2
     volumes:
@@ -154,8 +154,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8083:80"
-      - "8446:443"
+      - "127.0.0.1:8083:80"
+      - "127.0.0.1:8446:443"
     environment:
       - QUICKSTART=cluster-a3
     volumes:
@@ -186,8 +186,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8084:80"
-      - "8447:443"
+      - "127.0.0.1:8084:80"
+      - "127.0.0.1:8447:443"
     environment:
       - QUICKSTART=cluster-a4
     volumes:
@@ -219,8 +219,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8085:80"
-      - "8448:443"
+      - "127.0.0.1:8085:80"
+      - "127.0.0.1:8448:443"
     environment:
       - QUICKSTART=cluster-a11
     volumes:
@@ -251,8 +251,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8086:80"
-      - "8449:443"
+      - "127.0.0.1:8086:80"
+      - "127.0.0.1:8449:443"
     environment:
       - QUICKSTART=cluster-a12
     volumes:
@@ -283,8 +283,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8087:80"
-      - "8450:443"
+      - "127.0.0.1:8087:80"
+      - "127.0.0.1:8450:443"
     environment:
       - QUICKSTART=cluster-a21
     volumes:
@@ -315,8 +315,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8088:80"
-      - "8451:443"
+      - "127.0.0.1:8088:80"
+      - "127.0.0.1:8451:443"
     environment:
       - QUICKSTART=cluster-a22
     volumes:
@@ -347,8 +347,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8089:80"
-      - "8452:443"
+      - "127.0.0.1:8089:80"
+      - "127.0.0.1:8452:443"
     environment:
       - QUICKSTART=cluster-a31
     volumes:
@@ -379,8 +379,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8090:80"
-      - "8453:443"
+      - "127.0.0.1:8090:80"
+      - "127.0.0.1:8453:443"
     environment:
       - QUICKSTART=cluster-a32
     volumes:
@@ -411,8 +411,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8091:80"
-      - "8454:443"
+      - "127.0.0.1:8091:80"
+      - "127.0.0.1:8454:443"
     environment:
       - QUICKSTART=cluster-a41
     volumes:
@@ -443,8 +443,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "8092:80"
-      - "8455:443"
+      - "127.0.0.1:8092:80"
+      - "127.0.0.1:8455:443"
     environment:
       - QUICKSTART=cluster-a42
     volumes:
