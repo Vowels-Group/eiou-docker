@@ -175,8 +175,8 @@ class MessageServiceTest extends TestCase
         $this->transportUtility->method('resolveUserAddressForTransport')
             ->willReturn(self::TEST_ADDRESS);
 
-        // Hash includes sender public key (M-18)
-        $expectedHash = hash(Constants::HASH_ALGORITHM, self::TEST_PUBLIC_KEY . self::TEST_ADDRESS . $p2pData['salt'] . $p2pData['time']);
+        // Create the expected hash that will match
+        $expectedHash = hash(Constants::HASH_ALGORITHM, self::TEST_ADDRESS . $p2pData['salt'] . $p2pData['time']);
 
         $message = [
             'senderPublicKey' => self::TEST_PUBLIC_KEY,

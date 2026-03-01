@@ -783,14 +783,12 @@ class P2pServiceTest extends TestCase
         $address = self::TEST_ADDRESS;
         $salt = 'test-salt';
         $time = '1234567890';
-        $senderPubKey = 'sender-pk-primary';
-        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $address . $salt . $time);
+        $hash = hash(Constants::HASH_ALGORITHM, $address . $salt . $time);
 
         $request = [
             'hash' => $hash,
             'salt' => $salt,
-            'time' => $time,
-            'senderPublicKey' => $senderPubKey
+            'time' => $time
         ];
 
         $result = $this->service->matchYourselfP2P($request, $address);
@@ -807,14 +805,12 @@ class P2pServiceTest extends TestCase
         $alternateAddress = 'http://alternate.test';
         $salt = 'test-salt';
         $time = '1234567890';
-        $senderPubKey = 'sender-pk-alternate';
-        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $alternateAddress . $salt . $time);
+        $hash = hash(Constants::HASH_ALGORITHM, $alternateAddress . $salt . $time);
 
         $request = [
             'hash' => $hash,
             'salt' => $salt,
-            'time' => $time,
-            'senderPublicKey' => $senderPubKey
+            'time' => $time
         ];
 
         $this->userContext->method('getUserLocaters')
@@ -883,15 +879,13 @@ class P2pServiceTest extends TestCase
         $contactAddress = 'http://contact.test';
         $salt = 'test-salt';
         $time = '1234567890';
-        $senderPubKey = 'sender-pk-contact';
-        $hash = hash(Constants::HASH_ALGORITHM, $senderPubKey . $contactAddress . $salt . $time);
+        $hash = hash(Constants::HASH_ALGORITHM, $contactAddress . $salt . $time);
 
         $request = [
             'sender_address' => self::TEST_ADDRESS,
             'hash' => $hash,
             'salt' => $salt,
-            'time' => $time,
-            'senderPublicKey' => $senderPubKey
+            'time' => $time
         ];
 
         $contact = [
