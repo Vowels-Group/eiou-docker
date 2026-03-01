@@ -38,6 +38,11 @@ class KeyEncryption {
     private const IV_LENGTH = 12;
 
     /**
+     * Encryption format version (v2 adds AAD context binding)
+     */
+    private const ENCRYPTION_VERSION = 2;
+
+    /**
      * Master key file location
      */
     private const MASTER_KEY_FILE = '/etc/eiou/config/.master.key';
@@ -85,10 +90,11 @@ class KeyEncryption {
      * Encrypt private key
      *
      * @param string $plaintext Private key in plaintext
-     * @return array Encrypted data with format: ['ciphertext' => base64, 'iv' => base64, 'tag' => base64]
+     * @param string $context AAD context string for domain binding (e.g. 'private_key', 'backup')
+     * @return array Encrypted data with version, AAD, ciphertext, iv, tag
      * @throws RuntimeException If encryption fails
      */
-    public static function encrypt(string $plaintext): array {
+    public static function encrypt(string $plaintext, string $context = ''): array {
         if (empty($plaintext)) {
             throw new InvalidArgumentException('Cannot encrypt empty data');
         }
@@ -100,7 +106,7 @@ class KeyEncryption {
         // Note: random_bytes() throws Exception on failure in PHP 7+, never returns false
         $iv = random_bytes(self::IV_LENGTH);
 
-        // Encrypt with AES-256-GCM
+        // Encrypt with AES-256-GCM using context as AAD (L-28)
         $tag = '';
         $ciphertext = openssl_encrypt(
             $plaintext,
@@ -109,7 +115,7 @@ class KeyEncryption {
             OPENSSL_RAW_DATA,
             $iv,
             $tag,
-            '',  // TODO (L-28): Add AAD for context binding (requires encrypted data format migration)
+            $context,
             self::TAG_LENGTH
         );
 
@@ -121,7 +127,9 @@ class KeyEncryption {
         $result = [
             'ciphertext' => base64_encode($ciphertext),
             'iv' => base64_encode($iv),
-            'tag' => base64_encode($tag)
+            'tag' => base64_encode($tag),
+            'version' => self::ENCRYPTION_VERSION,
+            'aad' => $context
         ];
 
         // Clear sensitive data from memory
@@ -134,6 +142,8 @@ class KeyEncryption {
 
     /**
      * Decrypt private key
+     *
+     * Supports both v1 (no AAD) and v2 (AAD context) formats for backward compatibility.
      *
      * @param array $encrypted Encrypted data from encrypt()
      * @return string Decrypted plaintext
@@ -156,6 +166,12 @@ class KeyEncryption {
             throw new RuntimeException('Invalid base64 encoding');
         }
 
+        // Determine AAD: v2+ stores context in 'aad' field; v1 (no version key) used empty string
+        $aad = '';
+        if (isset($encrypted['version']) && $encrypted['version'] >= 2) {
+            $aad = $encrypted['aad'] ?? '';
+        }
+
         // Decrypt with AES-256-GCM
         $plaintext = openssl_decrypt(
             $ciphertext,
@@ -163,7 +179,8 @@ class KeyEncryption {
             $key,
             OPENSSL_RAW_DATA,
             $iv,
-            $tag
+            $tag,
+            $aad
         );
 
         if ($plaintext === false) {
