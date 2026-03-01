@@ -26,13 +26,11 @@
             <h3>Transaction History</h3>
             <p>View past transactions</p>
         </a>
-        <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
-        <a href="#dlq" class="action-card action-card-warning">
+        <a href="#dlq" class="action-card<?php echo (!empty($dlqPendingCount) && $dlqPendingCount > 0) ? ' action-card-warning' : ''; ?>">
             <i class="fas fa-inbox"></i>
-            <h3>Failed Messages <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span></h3>
+            <h3>Failed Messages<?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?> <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span><?php endif; ?></h3>
             <p>Review and retry undelivered messages</p>
         </a>
-        <?php endif; ?>
         <a href="#settings" class="action-card">
             <i class="fas fa-cog"></i>
             <h3>Settings</h3>

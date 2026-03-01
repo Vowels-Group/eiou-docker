@@ -243,10 +243,15 @@ class ChainDropService implements ChainDropServiceInterface
                 'broken_txid' => $brokenTxid
             ]);
 
+            // Mark the contact's chain as invalid so the GUI displays gap details
+            // immediately without requiring a manual "Check Status" ping first.
+            $this->contactRepository->updateContactFields($contactPubkey, ['valid_chain' => 0]);
+
             $result['success'] = true;
             $result['proposal_id'] = $proposalId;
             $result['missing_txid'] = $missingTxid;
             $result['broken_txid'] = $brokenTxid;
+            $result['gap_context'] = $chainStatus['gap_context'] ?? null;
 
         } catch (Exception $e) {
             $result['error'] = 'Failed to propose chain drop: ' . $e->getMessage();
