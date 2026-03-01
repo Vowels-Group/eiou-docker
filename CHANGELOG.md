@@ -31,6 +31,9 @@ The project is currently in **ALPHA** status.
 - Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Display, Backup & Logging, Data Retention, Sync, Network, and Rate Limiting panels (ordered simple→advanced); all fields remain in the DOM so changes across multiple categories are saved in a single click
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
 
+### Docs
+- Document transport selection behavior in `CLI_REFERENCE.md` `send` command — clarifies that passing an explicit address scheme (e.g. `http://Bob`) uses that scheme directly, while passing a contact name falls back to the `defaultTransportMode` setting (default: `tor`); both forms address the same contact but differ in delivery mechanism by design
+
 ### Fixed
 - Fix chain gap details not shown on initial page load after a chain drop proposal is created — `proposeChainDrop()` now sets `valid_chain = 0` on the contact immediately so the page render computes gap context without a prior "Check Status" ping; `Functions.php` also gains a safety net that computes gap details whenever an active proposal (pending/awaiting_acceptance/rejected) exists, covering any remaining window before `valid_chain` is written
 - Fix "Failed Messages" quick-action card missing from the dashboard when the DLQ is empty — card is now always shown between Transaction History and Settings; the warning style and pending-count badge are still applied only when there are pending/retrying items

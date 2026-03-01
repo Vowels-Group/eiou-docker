@@ -758,6 +758,19 @@ eiou send Alice 25.50 USD --json
 - Chain integrity is verified locally before every send; if a gap is detected, sync is attempted and then a chain drop is auto-proposed if the gap persists
 - Rate limited: 30 transactions per minute
 
+**Transport selection:**
+
+The transport used to deliver the transaction is determined by how the recipient is specified:
+
+| Recipient form | Example | Transport used |
+|----------------|---------|----------------|
+| Explicit address with scheme | `eiou send http://Bob 100 USD` | HTTP (scheme taken from address) |
+| Explicit address with scheme | `eiou send https://Bob 100 USD` | HTTPS |
+| Explicit address with scheme | `eiou send Bob.onion 100 USD` | Tor |
+| Contact name (no scheme) | `eiou send Bob 100 USD` | `defaultTransportMode` setting (default: `tor`) |
+
+When you pass a full address like `http://Bob`, the scheme is extracted and used directly. When you pass a contact name, no transport is implied so the wallet falls back to the `defaultTransportMode` setting (configurable via `eiou changesettings defaultTransportMode`). This is intentional: the two forms are equivalent in *who* receives the transaction, but differ in *how* it is delivered.
+
 **On Failure (JSON):**
 
 Contact not found:
