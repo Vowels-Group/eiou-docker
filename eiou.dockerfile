@@ -156,7 +156,7 @@ RUN mkdir -p /etc/eiou/config
 RUN printf '#!/bin/bash\n\
 # Wait for MariaDB to be ready before accepting CLI commands\n\
 timeout=30\n\
-while ! mysqladmin ping -h localhost --silent 2>/dev/null; do\n\
+while ! mysqladmin ping -h localhost --silent >/dev/null 2>&1; do\n\
     timeout=$((timeout - 1))\n\
     if [ "$timeout" -le 0 ]; then\n\
         echo "Error: MariaDB is not ready. The node may still be starting up." >&2\n\
