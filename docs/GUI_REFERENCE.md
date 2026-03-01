@@ -196,8 +196,8 @@ Handles settings and debug operations.
 | `maxFee` | float | Maximum fee percentage |
 | `defaultCreditLimit` | float | Default credit limit |
 | `maxP2pLevel` | int | Maximum P2P routing hops |
-| `p2pExpiration` | int | P2P routing request timeout (seconds); P2P transactions get an extra 60s delivery window after this expires |
-| `directTxExpiration` | int | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: 60s (one Tor round-trip) |
+| `p2pExpiration` | int | P2P routing request timeout (seconds); P2P transactions get an extra 120s delivery window after this expires |
+| `directTxExpiration` | int | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: 120s (two Tor round-trips) |
 | `maxOutput` | int | Max display lines |
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |

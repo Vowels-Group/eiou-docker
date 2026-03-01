@@ -137,12 +137,12 @@ class Constants {
     const RECOVERY_LOCK_TIMEOUT_SECONDS = 300; // Lock timeout for processor exclusive access
 
     // Transaction delivery expiry
-    // Direct transaction: one Tor round-trip (2 × TOR_TRANSPORT_TIMEOUT_SECONDS = 60s).
+    // Direct transaction: two Tor round-trips (4 × TOR_TRANSPORT_TIMEOUT_SECONDS = 120s).
     // P2P transaction: P2P_DEFAULT_EXPIRATION_SECONDS + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS
     //   (gives the in-flight transaction a delivery window after the P2P routing request itself expires).
     // The P2P and transaction expiries are decoupled so a transaction being propagated when its
     // parent P2P expires is not cancelled mid-flight; it gets the extra delivery window to complete.
-    const DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 60; // Max time for one direct Tor send+response (2× TOR_TRANSPORT_TIMEOUT_SECONDS)
+    const DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 120; // Max time for a direct Tor delivery (4× TOR_TRANSPORT_TIMEOUT_SECONDS; two round-trips)
 
     // Crypto/Security
     const HASH_ALGORITHM = 'sha256'; // Do not change

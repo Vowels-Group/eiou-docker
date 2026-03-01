@@ -16,9 +16,9 @@ The project is currently in **ALPHA** status.
 - Add Dead Letter Queue (DLQ) management UI (`dlqSection.html`): filterable table (Pending & Retrying / Pending Only / Resolved / Abandoned / All), per-item Retry and Abandon actions, stats bar with per-status counts, mobile card layout at ≤640px using `data-label` attributes, and a "Failed Messages (N)" quick-action card in the dashboard header that links to the DLQ when pending items exist
 - Add DLQ indicator badge (red **DLQ** pill) to Recent Transactions and In-Progress Transactions lists — shown when a transaction has a pending or retrying DLQ entry; clicking navigates to `#dlq` for retry or abandon
 - Add CLI DLQ management commands: `dlq list [status]` (lists DLQ entries), `dlq retry <id>` (retry a pending entry), `dlq abandon <id>` (abandon a pending entry), `dlq stats` (summary counts)
-- Add `DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 60` constant — maximum time allowed for direct (non-P2P) transaction delivery (one Tor round-trip: 2 × `TOR_TRANSPORT_TIMEOUT_SECONDS`); used as the post-expiry delivery window granted to P2P transactions
-- Add `expires_at DATETIME(6)` column and index to the `transactions` table — `NULL` means no expiry (direct tx default); P2P transactions set `expires_at` to P2P expiry + 60s; direct transactions set `expires_at` only when `directTxExpiration > 0`
-- Add `directTxExpiration` user setting (default `60`s = one Tor round-trip) — configurable via GUI Settings, `changesettings directtxexpiration <seconds>` CLI command, and REST API; direct transactions are cancelled after this many seconds if still undelivered; set to `0` to disable expiry
+- Add `DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 120` constant — maximum time allowed for direct (non-P2P) transaction delivery (two Tor round-trips: 4 × `TOR_TRANSPORT_TIMEOUT_SECONDS`); used as the post-expiry delivery window granted to P2P transactions
+- Add `expires_at DATETIME(6)` column and index to the `transactions` table — `NULL` means no expiry (direct tx default); P2P transactions set `expires_at` to P2P expiry + 120s; direct transactions set `expires_at` only when `directTxExpiration > 0`
+- Add `directTxExpiration` user setting (default `120`s = two Tor round-trips) — configurable via GUI Settings, `changesettings directtxexpiration <seconds>` CLI command, and REST API; direct transactions are cancelled after this many seconds if still undelivered; set to `0` to disable expiry
 - Add `CleanupService::expireStaleTransactions()` — independently cancels transactions past their `expires_at` deadline; runs each cleanup cycle after P2P expiry processing, keeping P2P and transaction lifecycles decoupled
 - Add `TransactionRepository::cancelPendingByMemo()` — cancels only `pending` transactions for a given memo hash, leaving in-flight (`sending`/`sent`/`accepted`) transactions to complete naturally or expire via their own `expires_at`
 - Add `TransactionRepository::getExpiredTransactions()` and `setExpiresAt()` helper methods
@@ -30,6 +30,9 @@ The project is currently in **ALPHA** status.
 - Document all 30 new settings in CLI_REFERENCE.md, API_REFERENCE.md, and GUI_REFERENCE.md
 - Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Display, Backup & Logging, Data Retention, Sync, Network, and Rate Limiting panels (ordered simple→advanced); all fields remain in the DOM so changes across multiple categories are saved in a single click
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
+
+### Changed
+- Increase `DIRECT_TX_DELIVERY_EXPIRATION_SECONDS` from 60s to 120s (two Tor round-trips instead of one) — gives Tor delivery enough time to complete under normal network conditions; P2P post-expiry delivery window and DLQ retry window increase accordingly
 
 ### Docs
 - Document transport selection behavior in `CLI_REFERENCE.md` `send` command — clarifies that passing an explicit address scheme (e.g. `http://Bob`) uses that scheme directly, while passing a contact name falls back to the `defaultTransportMode` setting (default: `tor`); both forms address the same contact but differ in delivery mechanism by design

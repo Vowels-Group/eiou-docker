@@ -923,8 +923,8 @@ eiou changesettings [setting] [value]
 | `minFee` | Minimum fee amount | `0.01` |
 | `maxFee` | Maximum fee percentage | `5.0` |
 | `maxP2pLevel` | Maximum P2P routing hops | `3` |
-| `p2pExpiration` | P2P routing request timeout (seconds); P2P transactions get an extra 60s delivery window after this expires | `300` |
-| `directTxExpiration` | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: `60` (one Tor round-trip) | `0` |
+| `p2pExpiration` | P2P routing request timeout (seconds); P2P transactions get an extra 120s delivery window after this expires | `300` |
+| `directTxExpiration` | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: `120` (two Tor round-trips) | `0` |
 | `maxOutput` | Max display lines (0 = unlimited) | `50` |
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
