@@ -294,7 +294,7 @@ Quick navigation cards linking to main sections:
 | Add Contact | `#add-contact` |
 | View Contacts | `#contacts` |
 | Transaction History | `#transactions` |
-| Failed Messages (N) | `#dlq` — only shown when DLQ has pending items |
+| Failed Messages | `#dlq` — always shown; displays a pending count badge and warning style when DLQ has pending items |
 | Settings | `#settings` |
 
 ---
@@ -445,10 +445,10 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 > `p2p` and `rp2p` items show an **"Expired"** label instead of a Retry button. Use **Abandon** to clear them.
 
 **Quick Action Card:**
-A **"Failed Messages (N)"** warning card appears in the Quick Actions bar (before the Settings card) whenever pending DLQ items exist, linking directly to `#dlq`.
+A **"Failed Messages"** card is always present in the Quick Actions bar between Transaction History and Settings, linking directly to `#dlq`. When pending DLQ items exist the card gains an orange warning style and a count badge. The Quick Actions bar is a horizontal slider at all viewport widths — each card is a fixed 218px wide and the bar scrolls when cards overflow the container.
 
 **DLQ Indicator in Transaction History:**
-Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery.
+Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
 
 **Mobile Layout:**
 At ≤640px the table collapses to a stacked card layout — each cell shows its column label as a prefix.
