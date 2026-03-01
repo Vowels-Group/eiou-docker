@@ -163,7 +163,7 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | CPU limit | 1.0 core | Prevents resource exhaustion |
 | Memory limit | 512MB | Prevents unbounded memory consumption |
 | Memory reservation | 256MB | Guarantees minimum available memory |
-| Privilege dropping | Apache as `www-data`, MariaDB as `mysql`, Tor as `debian-tor` | Limits blast radius of service compromise |
+| Privilege dropping | Apache as `www-data`, MariaDB as `mysql`, Tor as `debian-tor`, PHP processors as `www-data` | Limits blast radius of service compromise |
 
 **Recommendations:**
 
@@ -277,9 +277,8 @@ The following are known security limitations of the current alpha release.
 |------------|---------|
 | No formal audit | The codebase has not undergone a third-party security audit |
 | Alpha status | Software may contain undiscovered vulnerabilities; do not use for real financial transactions |
-| PHP processors run as root | Background message processors (P2P, Transaction, Cleanup, ContactStatus) run as the root user inside the container |
 | Self-signed certificates by default | Default TLS configuration uses self-signed certificates, which do not provide server identity verification. Let's Encrypt support is available for browser-trusted certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section) |
-| Single-container architecture | Each node runs all services (web server, database, Tor, processors) in a single container, limiting isolation between components |
+| Single-container architecture | Each node runs all services (web server, database, Tor, processors) in a single container; while each service drops to its own user, there is no inter-service network isolation |
 | No HSM support | Private keys are stored encrypted on disk rather than in a hardware security module |
 | No multi-factor authentication | API access relies on HMAC-SHA256 key-based authentication without a second factor |
 | Seed phrase is the single root of trust | Compromise of the 24-word seed phrase grants full control over the wallet, Tor identity, and backup decryption |

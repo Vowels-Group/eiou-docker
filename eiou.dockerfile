@@ -1,10 +1,11 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
-# SECURITY NOTE: This container runs as root to manage multiple services (Apache, MariaDB, Tor, cron).
+# SECURITY NOTE: This container starts as root to manage multiple services (Apache, MariaDB, Tor, cron).
 # Each service drops privileges to its appropriate user after startup:
 #   - Apache: runs as www-data
 #   - MariaDB: runs as mysql
 #   - Tor: runs as debian-tor
+#   - PHP message processors: run as www-data (via runuser)
 
 # =============================================================================
 # EIOU Node Docker Image
