@@ -4,11 +4,11 @@
 <div id="transactions" class="transactions-section fade-in-up">
     <div class="section-header">
         <h2><i class="fas fa-history"></i> Recent Transactions</h2>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div class="section-header-actions">
             <span id="tx-auto-refresh-status" class="tx-refresh-indicator" title="Auto-refresh active when transactions are in progress">
                 <i class="fas fa-sync-alt"></i>
             </span>
-            <button type="button" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;" data-action="reloadWithHash" data-hash="transactions">
+            <button type="button" class="btn btn-primary btn-compact font-sm" data-action="reloadWithHash" data-hash="transactions">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
         </div>
@@ -48,7 +48,7 @@
                         $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['pending'];
                         $isHeld = !empty($ipTx['is_held']);
                         ?>
-                        <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white;">
+                        <span class="tx-phase-badge tx-phase-<?php echo htmlspecialchars($phase); ?>">
                             <i class="fas <?php echo $phaseInfo['icon']; ?>"></i>
                             <span class="phase-label-full"><?php echo htmlspecialchars($phaseInfo['label']); ?></span>
                             <span class="phase-label-short"><?php echo htmlspecialchars($phaseInfo['short']); ?></span>
@@ -74,7 +74,7 @@
                         <?php endif; ?>
                     </div>
                     <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
-                    <div class="tx-in-progress-details" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;">
+                    <div class="tx-in-progress-details tx-ip-details">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
                         <?php if (!empty($ipTx['fee_amount'])): ?>
                         <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
@@ -82,16 +82,16 @@
                     </div>
                     <?php endif; ?>
                     <?php if (($ipTx['phase'] ?? '') === 'awaiting_approval'): ?>
-                    <div class="tx-approval-actions" style="margin-top: 0.5rem;">
+                    <div class="tx-approval-actions tx-approval-section">
                         <?php if (!empty($ipTx['candidate_count']) && (int) $ipTx['candidate_count'] > 0): ?>
                         <!-- Multi-candidate best-fee mode: show candidate list -->
-                        <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
+                        <div class="p2p-approval-callout">
                             <div><strong id="p2p-count-<?php echo htmlspecialchars($ipTx['txid']); ?>"><?php echo (int) $ipTx['candidate_count']; ?> route(s) found — choose one:</strong></div>
                         </div>
-                        <div id="p2p-candidates-<?php echo htmlspecialchars($ipTx['txid']); ?>" class="p2p-candidates-list" style="margin-bottom: 0.5rem;">
-                            <div style="color: #6c757d; font-size: 0.8rem;"><i class="fas fa-spinner fa-spin"></i> Loading routes...</div>
+                        <div id="p2p-candidates-<?php echo htmlspecialchars($ipTx['txid']); ?>" class="p2p-candidates-list mb-sm">
+                            <div class="status-msg-muted"><i class="fas fa-spinner fa-spin"></i> Loading routes...</div>
                         </div>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div class="d-flex gap-sm">
                             <button class="btn btn-danger btn-sm" data-action="rejectP2pTransaction" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-stop-propagation="true">
                                 <i class="fas fa-times"></i> Reject All
                             </button>
@@ -99,12 +99,12 @@
                         <?php else: ?>
                         <!-- Single rp2p (fast mode): existing approval UI -->
                         <?php if (!empty($ipTx['rp2p_amount'])): ?>
-                        <div style="font-size: 0.85rem; color: #adb5bd; padding: 0.4rem 0.6rem; background: rgba(232, 62, 140, 0.1); border-radius: 4px; margin-bottom: 0.5rem;">
+                        <div class="p2p-approval-callout">
                             <div>Route Fee: <?php echo number_format(($ipTx['rp2p_amount'] - $ipTx['amount']) / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
                             <div><strong>Total Cost: <?php echo number_format($ipTx['rp2p_amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
                         </div>
                         <?php endif; ?>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div class="d-flex gap-sm">
                             <button class="btn btn-success btn-sm" data-action="approveP2pTransaction" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-stop-propagation="true">
                                 <i class="fas fa-check"></i> Approve &amp; Send
                             </button>
@@ -133,8 +133,8 @@
     <?php endif; ?>
 
     <?php if (!empty($transactions)): ?>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
+    <div class="d-flex justify-between align-center mb-lg">
+        <p class="tx-meta-info">
             <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong>
         </p>
     </div>
@@ -149,12 +149,12 @@
             </div>
         <?php else: ?>
             <?php foreach ($transactions as $index => $tx): ?>
-                <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?>" style="cursor: pointer;" data-action="openTransactionModal" data-index="<?php echo $index; ?>" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>">
+                <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?> cursor-pointer" data-action="openTransactionModal" data-index="<?php echo $index; ?>" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>">
                     <div class="transaction-info">
                         <div>
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'Unknown'); ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>
                         </div>
-                        <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <div class="tx-meta-row">
                             <?php echo htmlspecialchars($tx['date']); ?>
                             <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
                                 <?php if ($tx['status'] === 'pending'): ?>
@@ -197,7 +197,7 @@
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
                         <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], 2); ?> <?php echo htmlspecialchars($tx['currency']); ?>
-                        <i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i>
+                        <i class="fas fa-chevron-right chevron-indicator"></i>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -206,13 +206,13 @@
 </div>
 
 <!-- Transaction Detail Modal -->
-<div id="transactionModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 600px;">
+<div id="transactionModal" class="modal d-none">
+    <div class="modal-content modal-content-md">
         <div class="modal-header">
             <h3><i class="fas fa-receipt"></i> Transaction Details</h3>
             <span class="close" data-action="closeTransactionModal">&times;</span>
         </div>
-        <div class="modal-body" style="padding: 1.5rem;">
+        <div class="modal-body modal-body-padded">
             <div id="tx-modal-content">
                 <!-- Content populated by JavaScript -->
             </div>
@@ -383,7 +383,7 @@
 
     function loadP2pCandidates(hash, container) {
         var csrfToken = document.querySelector('input[name="csrf_token"]');
-        if (!csrfToken) { container.innerHTML = '<div style="color: #dc3545;">CSRF token not found</div>'; return; }
+        if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
         var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
         var xhr = new XMLHttpRequest();
         xhr.open('POST', window.location.pathname, true);
@@ -406,29 +406,29 @@
                                 var totalCost = c.amount / 100;
                                 var addr = c.sender_address;
                                 var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
-                                html = html + '<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 0.3rem; font-size: 0.8rem;">';
-                                html = html + '<div style="flex: 1;">';
-                                html = html + '<div style="color: #adb5bd;">Route Fee: <strong style="color: #ffc107;">' + routeFee.toFixed(2) + ' ' + currency + '</strong></div>';
-                                html = html + '<div style="color: #6c757d;">Total: ' + totalCost.toFixed(2) + ' ' + currency + '</div>';
-                                html = html + '<div style="color: #6c757d;" class="monospace" title="' + addr + '">' + shortAddr + '</div>';
+                                html = html + '<div class="p2p-candidate-row">';
+                                html = html + '<div class="p2p-candidate-info">';
+                                html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(2) + ' ' + currency + '</strong></div>';
+                                html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(2) + ' ' + currency + '</div>';
+                                html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
                                 html = html + '</div>';
-                                html = html + '<button class="btn btn-success btn-sm" style="margin-left: 0.5rem; white-space: nowrap;" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';
+                                html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';
                                 html = html + '<i class="fas fa-check"></i> Choose</button>';
                                 html = html + '</div>';
                             }
                             container.innerHTML = html;
                         } else {
-                            container.innerHTML = '<div style="color: #6c757d; font-size: 0.8rem;">No candidates available</div>';
+                            container.innerHTML = '<div class="status-msg-muted">No candidates available</div>';
                         }
                     } catch (e) {
-                        container.innerHTML = '<div style="color: #dc3545; font-size: 0.8rem;">Error loading routes</div>';
+                        container.innerHTML = '<div class="status-msg-danger">Error loading routes</div>';
                     }
                 } else {
-                    container.innerHTML = '<div style="color: #dc3545; font-size: 0.8rem;">Failed to load routes</div>';
+                    container.innerHTML = '<div class="status-msg-danger">Failed to load routes</div>';
                 }
             }
         };
-        xhr.ontimeout = function() { container.innerHTML = '<div style="color: #dc3545; font-size: 0.8rem;">Request timed out</div>'; };
+        xhr.ontimeout = function() { container.innerHTML = '<div class="status-msg-danger">Request timed out</div>'; };
         xhr.send(body);
     }
 

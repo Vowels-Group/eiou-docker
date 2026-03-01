@@ -46,7 +46,7 @@
             'abandoned' => ['label' => 'Abandoned', 'color' => '#6c757d', 'icon' => 'fa-ban'],
         ] as $statusKey => $meta): ?>
         <?php if (($dlqStats[$statusKey] ?? 0) > 0): ?>
-        <span class="dlq-stat-chip" style="border-color: <?php echo $meta['color']; ?>; color: <?php echo $meta['color']; ?>;">
+        <span class="dlq-stat-chip dlq-chip-<?php echo htmlspecialchars($statusKey); ?>">
             <i class="fas <?php echo $meta['icon']; ?>"></i>
             <?php echo (int)$dlqStats[$statusKey]; ?> <?php echo $meta['label']; ?>
         </span>
@@ -71,7 +71,7 @@
         <p>All messages delivered successfully — nothing in the queue.</p>
     </div>
     <?php else: ?>
-    <div class="empty-state" id="dlq-filter-empty" style="display:none;">
+    <div class="empty-state d-none" id="dlq-filter-empty">
         <i class="fas fa-filter dlq-empty-icon"></i>
         <h3>Nothing here</h3>
         <p>No items match the selected filter.</p>
@@ -148,7 +148,7 @@
                     </span>
                 </td>
                 <td data-label="Retries" class="dlq-cell-center">
-                    <span style="font-weight: 600; color: <?php echo $retries >= 5 ? '#dc3545' : '#6c757d'; ?>;">
+                    <span class="<?php echo $retries >= 5 ? 'dlq-retry-count-high' : 'dlq-retry-count'; ?>">
                         <?php echo $retries; ?>
                     </span>
                 </td>
@@ -156,7 +156,7 @@
                     <?php echo htmlspecialchars($dateDisplay); ?>
                 </td>
                 <td data-label="Status">
-                    <span class="dlq-status-badge" style="background:<?php echo $statusStyle['bg']; ?>; color:<?php echo $statusStyle['color']; ?>;">
+                    <span class="dlq-status-badge dlq-badge-<?php echo htmlspecialchars($status); ?>">
                         <i class="fas <?php echo $statusStyle['icon']; ?>"></i>
                         <?php echo ucfirst(htmlspecialchars($status)); ?>
                     </span>

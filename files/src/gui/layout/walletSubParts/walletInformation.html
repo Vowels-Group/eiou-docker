@@ -7,10 +7,10 @@
         <h2><i class="fas fa-info-circle"></i> Wallet Information</h2>
         
         <!-- Last Updated Status -->
-        <div style="text-align: center; margin-bottom: 1rem; padding: 0.5rem; background: #e9ecef; border-radius: 4px; font-size: 0.9rem; color: #6c757d;">
+        <div class="wallet-status-bar">
             <i class="fas fa-clock"></i> Last updated: <?php echo date('M j, Y g:i:s A'); ?>
             <br>
-            <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" style="color: #0d6efd;">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" style="color: #dc3545;">Logout</a></small>
+            <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="link-refresh">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" class="link-logout">Logout</a></small>
         </div>
         
         <div class="wallet-stats-row">
@@ -80,9 +80,9 @@
                 <div>Not available</div>
             <?php elseif ($addressCount === 1): ?>
                 <!-- Single address - show directly -->
-                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                    <span style="flex: 1; word-break: break-all;">
-                        <strong style="text-transform: uppercase;"><?php echo htmlspecialchars($firstAddressType); ?>:</strong>
+                <div class="address-display-row">
+                    <span class="address-value">
+                        <strong class="text-uppercase"><?php echo htmlspecialchars($firstAddressType); ?>:</strong>
                         <?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?>
                     </span>
                     <button class="btn btn-sm btn-outline" data-action="copyToClipboard" data-copy-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-copy-message="Address copied to clipboard!" title="Copy address">
@@ -91,8 +91,8 @@
                 </div>
             <?php else: ?>
                 <!-- Multiple addresses - show dropdown -->
-                <div style="margin-bottom: 0.5rem;">
-                    <select id="user-address-selector" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ced4da;" data-action-change="showSelectedUserAddress">
+                <div class="mb-sm">
+                    <select id="user-address-selector" class="address-selector" data-action-change="showSelectedUserAddress">
                         <?php foreach ($userAddresses as $type => $address): ?>
                             <option value="<?php echo htmlspecialchars($type); ?>" data-address="<?php echo htmlspecialchars($address); ?>">
                                 <?php echo strtoupper(htmlspecialchars($type)); ?>
@@ -100,8 +100,8 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div id="user-address-display" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                    <span id="user-address-value" style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></span>
+                <div id="user-address-display" class="address-display-row">
+                    <span id="user-address-value" class="address-value-mono"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></span>
                     <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="user-address-value" data-copy-message="Address copied to clipboard!" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
@@ -110,8 +110,8 @@
         </div>
         <div class="info-item">
             <div class="info-label">Public Key:</div>
-            <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                <span id="public-key-value" style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo $user->has('public') ? htmlspecialchars($user->getPublicKey()) : 'Not available'; ?></span>
+            <div class="address-display-row-start">
+                <span id="public-key-value" class="address-value-mono"><?php echo $user->has('public') ? htmlspecialchars($user->getPublicKey()) : 'Not available'; ?></span>
                 <?php if ($user->has('public')): ?>
                     <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="public-key-value" data-copy-message="Public key copied to clipboard!" title="Copy public key">
                         <i class="fas fa-copy"></i> Copy
@@ -121,7 +121,7 @@
         </div>
         <div class="info-item">
             <div class="info-label">Status:</div>
-            <div style="color: #198754;">Active</div>
+            <div class="status-active">Active</div>
         </div>
     </div>
 </div>

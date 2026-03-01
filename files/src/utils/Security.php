@@ -107,9 +107,9 @@ class Security {
         // Referrer policy
         header('Referrer-Policy: strict-origin-when-cross-origin');
 
-        // Content Security Policy — nonce-based script-src (L-32)
+        // Content Security Policy — nonce-based script-src & style-src (L-32)
         $nonce = self::getCspNonce();
-        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
+        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}'; style-src 'self' 'nonce-{$nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
 
         // HSTS (HTTP Strict Transport Security) - only for HTTPS
         if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {

@@ -8,7 +8,7 @@
     <title>₳ Wallet</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₳</text></svg>">
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
-    <style><?php require_once("/etc/eiou/src/gui/assets/css/page.css");?></style>
+    <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/etc/eiou/src/gui/assets/css/page.css");?></style>
     <script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>" src="/gui/assets/js/script.js"></script>
 </head>
 <body>
