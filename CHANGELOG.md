@@ -12,7 +12,11 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
+
 ### Security
+- Harden Tor hidden service key file creation (L-31) — set umask to 0077 before `file_put_contents()` to eliminate race window where files are briefly world-readable; add explicit error handling if `debian-tor` user is missing or `chown()`/`chgrp()` fails; restore umask in `finally` block
 - Add permission whitelist and rate limit validation to API key creation endpoint (H-5) — `ApiKeyService::validatePermissions()` and `validateRateLimit()` static methods shared by CLI and API paths; `ApiController::createApiKey()` returns 400 for invalid permissions or rate limits exceeding 1000/min
 - Add AAD context to AES-256-GCM encryption (L-28) — `KeyEncryption::encrypt()` accepts `$context` param used as Additional Authenticated Data; output includes `version` and `aad` fields; `decrypt()` requires v2 format; callers pass context strings (`private_key`, `auth_code`, `mnemonic`, `api_secret`, `backup`); **breaking: v1 encrypted data must be re-encrypted**
 - M-18 (P2P hash strengthening) investigated and determined incompatible with multi-hop relay design — sender public key changes at each relay hop, making hash unverifiable at destination; finding remains acknowledged with Ed25519 signatures as primary defense
