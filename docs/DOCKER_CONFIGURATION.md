@@ -812,7 +812,7 @@ EIOU containers run as root during initialization, then services drop privileges
 | Apache | `www-data` | Web server and API |
 | MariaDB | `mysql` | Database operations |
 | Tor | `debian-tor` | Tor hidden service |
-| PHP processors | `root` | Background message processing |
+| PHP processors | `www-data` | Background message processing (via `runuser`) |
 
 ### Critical File Permissions
 
