@@ -40,7 +40,10 @@ class BackupService implements BackupServiceInterface
     {
         if (!is_dir($this->backupDirectory)) {
             mkdir($this->backupDirectory, 0700, true);
-            chown($this->backupDirectory, 'www-data');
+            // chown requires root; skip when already running as www-data
+            if (posix_getuid() === 0) {
+                chown($this->backupDirectory, 'www-data');
+            }
         }
     }
 

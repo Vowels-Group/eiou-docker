@@ -190,7 +190,10 @@ class Application {
             file_put_contents($configPath, json_encode($config), LOCK_EX);
             umask($oldUmask);
             chmod($configPath, 0640);
-            chgrp($configPath, 'www-data');
+            // chgrp requires root; skip when already running as www-data
+            if (posix_getuid() === 0) {
+                chgrp($configPath, 'www-data');
+            }
 
             // Reload DatabaseContext so subsequent reads use encrypted version
             DatabaseContext::getInstance()->setdatabaseData($config);

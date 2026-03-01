@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Security
+- Run PHP message processors and backup cron as `www-data` instead of root (M-22) — uses `runuser -u www-data --` for all processor launches and watchdog restarts; `chown` config directory to `www-data` before processor start; guard root-only `chown()`/`chgrp()` calls in `BackupService` and `Application` with `posix_getuid()` check
+
 ### Added
 - Add Dead Letter Queue (DLQ) management UI (`dlqSection.html`): filterable table (Pending & Retrying / Pending Only / Resolved / Abandoned / All), per-item Retry and Abandon actions, stats bar with per-status counts, mobile card layout at ≤640px using `data-label` attributes, and a "Failed Messages (N)" quick-action card in the dashboard header that links to the DLQ when pending items exist
 - Add DLQ indicator badge (red **DLQ** pill) to Recent Transactions and In-Progress Transactions lists — shown when a transaction has a pending or retrying DLQ entry; clicking navigates to `#dlq` for retry or abandon
