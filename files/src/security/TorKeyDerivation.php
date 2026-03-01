@@ -172,26 +172,48 @@ class TorKeyDerivation
             'hostname' => $hostnameFile
         ];
 
-        foreach ($files as $filename => $content) {
-            $filepath = $directory . '/' . $filename;
+        // L-31: Set restrictive umask before file creation to eliminate the race
+        // window between file_put_contents() and chmod(). Without this, files
+        // are briefly world-readable under the default umask (typically 0022).
+        $oldUmask = umask(0077);
 
-            // Write file
-            $result = file_put_contents($filepath, $content, LOCK_EX);
-            if ($result === false) {
-                throw new RuntimeException("Failed to write $filepath");
-            }
+        try {
+            foreach ($files as $filename => $content) {
+                $filepath = $directory . '/' . $filename;
 
-            // Set proper permissions (owner read/write only)
-            chmod($filepath, 0600);
+                // Write file — created with mode 0600 due to umask(0077)
+                $result = file_put_contents($filepath, $content, LOCK_EX);
+                if ($result === false) {
+                    throw new RuntimeException("Failed to write $filepath");
+                }
 
-            // Set proper ownership (debian-tor user)
-            if (function_exists('posix_getpwnam')) {
-                $torUser = posix_getpwnam('debian-tor');
-                if ($torUser) {
-                    chown($filepath, $torUser['uid']);
-                    chgrp($filepath, $torUser['gid']);
+                // Explicitly set permissions as defense-in-depth
+                chmod($filepath, 0600);
+
+                // Set proper ownership to debian-tor user
+                // Only attempt chown/chgrp when running as root (uid 0)
+                if (function_exists('posix_getuid') && posix_getuid() === 0) {
+                    if (!function_exists('posix_getpwnam')) {
+                        throw new RuntimeException(
+                            'posix extension required for Tor key file ownership management'
+                        );
+                    }
+                    $torUser = posix_getpwnam('debian-tor');
+                    if (!$torUser) {
+                        throw new RuntimeException(
+                            'debian-tor user not found — Tor hidden service files will remain root-owned'
+                        );
+                    }
+                    if (!chown($filepath, $torUser['uid'])) {
+                        throw new RuntimeException("Failed to chown $filepath to debian-tor");
+                    }
+                    if (!chgrp($filepath, $torUser['gid'])) {
+                        throw new RuntimeException("Failed to chgrp $filepath to debian-tor");
+                    }
                 }
             }
+        } finally {
+            umask($oldUmask);
         }
 
         // Clear sensitive data from memory

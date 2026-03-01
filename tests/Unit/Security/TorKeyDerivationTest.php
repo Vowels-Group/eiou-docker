@@ -171,4 +171,124 @@ class TorKeyDerivationTest extends TestCase
 
         $this->assertFalse($result);
     }
+
+    /**
+     * Test generateHiddenServiceFiles creates files with restrictive permissions (L-31)
+     *
+     * Verifies that umask is set to 0077 during file creation so files are
+     * never world-readable, even briefly between file_put_contents() and chmod().
+     */
+    public function testGenerateHiddenServiceFilesCreatesRestrictivePermissions(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/tor_test_' . bin2hex(random_bytes(4));
+        mkdir($tmpDir, 0700);
+
+        try {
+            TorKeyDerivation::generateHiddenServiceFiles($this->testSeed, $tmpDir);
+
+            // Verify all three files exist
+            $this->assertFileExists($tmpDir . '/hs_ed25519_secret_key');
+            $this->assertFileExists($tmpDir . '/hs_ed25519_public_key');
+            $this->assertFileExists($tmpDir . '/hostname');
+
+            // Verify permissions are 0600 (owner read/write only)
+            foreach (['hs_ed25519_secret_key', 'hs_ed25519_public_key', 'hostname'] as $file) {
+                $perms = fileperms($tmpDir . '/' . $file) & 0777;
+                $this->assertEquals(0600, $perms, "$file should have 0600 permissions, got " . decoct($perms));
+            }
+        } finally {
+            // Clean up
+            foreach (['hs_ed25519_secret_key', 'hs_ed25519_public_key', 'hostname'] as $file) {
+                @unlink($tmpDir . '/' . $file);
+            }
+            @rmdir($tmpDir);
+        }
+    }
+
+    /**
+     * Test generateHiddenServiceFiles restores umask after completion (L-31)
+     */
+    public function testGenerateHiddenServiceFilesRestoresUmask(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/tor_test_' . bin2hex(random_bytes(4));
+        mkdir($tmpDir, 0700);
+
+        $originalUmask = umask();
+
+        try {
+            TorKeyDerivation::generateHiddenServiceFiles($this->testSeed, $tmpDir);
+
+            $afterUmask = umask();
+            $this->assertEquals($originalUmask, $afterUmask, 'umask should be restored after generateHiddenServiceFiles');
+        } finally {
+            umask($originalUmask);
+            foreach (['hs_ed25519_secret_key', 'hs_ed25519_public_key', 'hostname'] as $file) {
+                @unlink($tmpDir . '/' . $file);
+            }
+            @rmdir($tmpDir);
+        }
+    }
+
+    /**
+     * Test generateHiddenServiceFiles restores umask even on failure (L-31)
+     */
+    public function testGenerateHiddenServiceFilesRestoresUmaskOnFailure(): void
+    {
+        $originalUmask = umask();
+
+        try {
+            TorKeyDerivation::generateHiddenServiceFiles($this->testSeed, '/nonexistent/path');
+        } catch (\RuntimeException $e) {
+            // Expected
+        }
+
+        $afterUmask = umask();
+        umask($originalUmask);
+        $this->assertEquals($originalUmask, $afterUmask, 'umask should be restored even when generateHiddenServiceFiles fails');
+    }
+
+    /**
+     * Test generateHiddenServiceFiles writes correct file contents
+     */
+    public function testGenerateHiddenServiceFilesWritesCorrectContents(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/tor_test_' . bin2hex(random_bytes(4));
+        mkdir($tmpDir, 0700);
+
+        try {
+            $hostname = TorKeyDerivation::generateHiddenServiceFiles($this->testSeed, $tmpDir);
+
+            // Hostname should be a valid .onion address
+            $this->assertStringEndsWith('.onion', $hostname);
+            $this->assertEquals(62, strlen($hostname));
+
+            // hostname file should match returned hostname
+            $fileHostname = trim(file_get_contents($tmpDir . '/hostname'));
+            $this->assertEquals($hostname, $fileHostname);
+
+            // Secret key file should have 32-byte header + 64-byte key = 96 bytes
+            $secretKey = file_get_contents($tmpDir . '/hs_ed25519_secret_key');
+            $this->assertEquals(96, strlen($secretKey));
+
+            // Public key file should have 32-byte header + 32-byte key = 64 bytes
+            $publicKey = file_get_contents($tmpDir . '/hs_ed25519_public_key');
+            $this->assertEquals(64, strlen($publicKey));
+        } finally {
+            foreach (['hs_ed25519_secret_key', 'hs_ed25519_public_key', 'hostname'] as $file) {
+                @unlink($tmpDir . '/' . $file);
+            }
+            @rmdir($tmpDir);
+        }
+    }
+
+    /**
+     * Test generateHiddenServiceFiles throws when directory doesn't exist
+     */
+    public function testGenerateHiddenServiceFilesThrowsForNonexistentDirectory(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('does not exist');
+
+        TorKeyDerivation::generateHiddenServiceFiles($this->testSeed, '/nonexistent/path');
+    }
 }
