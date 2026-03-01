@@ -27,7 +27,7 @@ class ApiKeyService implements ApiKeyServiceInterface {
     /**
      * Available permissions
      */
-    private const PERMISSIONS = [
+    public const PERMISSIONS = [
         'wallet:read',
         'wallet:send',
         'contacts:read',
@@ -40,6 +40,11 @@ class ApiKeyService implements ApiKeyServiceInterface {
     ];
 
     /**
+     * Maximum allowed rate limit per minute
+     */
+    public const MAX_RATE_LIMIT = 1000;
+
+    /**
      * Constructor
      *
      * @param ApiKeyRepository $repository
@@ -48,6 +53,45 @@ class ApiKeyService implements ApiKeyServiceInterface {
     public function __construct($repository, $output) {
         $this->repository = $repository;
         $this->output = $output;
+    }
+
+    /**
+     * Validate permissions against the whitelist
+     *
+     * @param array $permissions List of permissions to validate
+     * @return array ['valid' => bool, 'invalid_permission' => string|null]
+     */
+    public static function validatePermissions(array $permissions): array {
+        foreach ($permissions as $perm) {
+            if (!in_array($perm, self::PERMISSIONS) && !preg_match('/^[a-z]+:\*$/', $perm)) {
+                return ['valid' => false, 'invalid_permission' => $perm];
+            }
+        }
+        return ['valid' => true, 'invalid_permission' => null];
+    }
+
+    /**
+     * Validate rate limit value
+     *
+     * @param mixed $rateLimit Rate limit to validate
+     * @return array ['valid' => bool, 'value' => int|null, 'error' => string|null]
+     */
+    public static function validateRateLimit($rateLimit): array {
+        if (!is_numeric($rateLimit)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Rate limit must be numeric'];
+        }
+
+        $value = (int)$rateLimit;
+
+        if ($value <= 0) {
+            return ['valid' => false, 'value' => null, 'error' => 'Rate limit must be greater than zero'];
+        }
+
+        if ($value > self::MAX_RATE_LIMIT) {
+            return ['valid' => false, 'value' => null, 'error' => 'Rate limit exceeds maximum of ' . self::MAX_RATE_LIMIT];
+        }
+
+        return ['valid' => true, 'value' => $value, 'error' => null];
     }
 
     /**
@@ -101,12 +145,11 @@ class ApiKeyService implements ApiKeyServiceInterface {
         $permissions = array_map('trim', explode(',', $permissionsArg));
 
         // Validate permissions
-        foreach ($permissions as $perm) {
-            if (!in_array($perm, self::PERMISSIONS) && !preg_match('/^[a-z]+:\*$/', $perm)) {
-                $this->output->error("Invalid permission: $perm", ErrorCodes::INVALID_PERMISSION, 400);
-                $this->output->info("\nValid permissions: " . implode(', ', self::PERMISSIONS) . "\n");
-                return;
-            }
+        $validation = self::validatePermissions($permissions);
+        if (!$validation['valid']) {
+            $this->output->error("Invalid permission: {$validation['invalid_permission']}", ErrorCodes::INVALID_PERMISSION, 400);
+            $this->output->info("\nValid permissions: " . implode(', ', self::PERMISSIONS) . "\n");
+            return;
         }
 
         try {

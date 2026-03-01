@@ -816,4 +816,127 @@ class ApiKeyServiceTest extends TestCase
         $this->assertStringContainsString('X-API-Signature', $output);
         $this->assertStringContainsString('HMAC-SHA256', $output);
     }
+
+    // =========================================================================
+    // validatePermissions() Static Method Tests
+    // =========================================================================
+
+    /**
+     * Test validatePermissions accepts a single valid permission
+     */
+    public function testValidatePermissionsAcceptsSingleValid(): void
+    {
+        $result = ApiKeyService::validatePermissions(['wallet:read']);
+
+        $this->assertTrue($result['valid']);
+        $this->assertNull($result['invalid_permission']);
+    }
+
+    /**
+     * Test validatePermissions accepts multiple valid permissions
+     */
+    public function testValidatePermissionsAcceptsMultipleValid(): void
+    {
+        $result = ApiKeyService::validatePermissions(['wallet:read', 'contacts:write', 'admin']);
+
+        $this->assertTrue($result['valid']);
+        $this->assertNull($result['invalid_permission']);
+    }
+
+    /**
+     * Test validatePermissions rejects invalid permission
+     */
+    public function testValidatePermissionsRejectsInvalid(): void
+    {
+        $result = ApiKeyService::validatePermissions(['wallet:read', 'evil:hack']);
+
+        $this->assertFalse($result['valid']);
+        $this->assertEquals('evil:hack', $result['invalid_permission']);
+    }
+
+    /**
+     * Test validatePermissions accepts wildcard format
+     */
+    public function testValidatePermissionsAcceptsWildcard(): void
+    {
+        $result = ApiKeyService::validatePermissions(['wallet:*']);
+
+        $this->assertTrue($result['valid']);
+        $this->assertNull($result['invalid_permission']);
+    }
+
+    /**
+     * Test validatePermissions rejects invalid wildcard format
+     */
+    public function testValidatePermissionsRejectsInvalidWildcard(): void
+    {
+        $result = ApiKeyService::validatePermissions(['*:*']);
+
+        $this->assertFalse($result['valid']);
+        $this->assertEquals('*:*', $result['invalid_permission']);
+    }
+
+    // =========================================================================
+    // validateRateLimit() Static Method Tests
+    // =========================================================================
+
+    /**
+     * Test validateRateLimit accepts valid rate limit
+     */
+    public function testValidateRateLimitAcceptsValid(): void
+    {
+        $result = ApiKeyService::validateRateLimit(100);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(100, $result['value']);
+        $this->assertNull($result['error']);
+    }
+
+    /**
+     * Test validateRateLimit rejects zero
+     */
+    public function testValidateRateLimitRejectsZero(): void
+    {
+        $result = ApiKeyService::validateRateLimit(0);
+
+        $this->assertFalse($result['valid']);
+        $this->assertNull($result['value']);
+        $this->assertStringContainsString('greater than zero', $result['error']);
+    }
+
+    /**
+     * Test validateRateLimit rejects negative
+     */
+    public function testValidateRateLimitRejectsNegative(): void
+    {
+        $result = ApiKeyService::validateRateLimit(-5);
+
+        $this->assertFalse($result['valid']);
+        $this->assertNull($result['value']);
+        $this->assertStringContainsString('greater than zero', $result['error']);
+    }
+
+    /**
+     * Test validateRateLimit rejects over max
+     */
+    public function testValidateRateLimitRejectsOverMax(): void
+    {
+        $result = ApiKeyService::validateRateLimit(ApiKeyService::MAX_RATE_LIMIT + 1);
+
+        $this->assertFalse($result['valid']);
+        $this->assertNull($result['value']);
+        $this->assertStringContainsString('exceeds maximum', $result['error']);
+    }
+
+    /**
+     * Test validateRateLimit rejects non-numeric
+     */
+    public function testValidateRateLimitRejectsNonNumeric(): void
+    {
+        $result = ApiKeyService::validateRateLimit('abc');
+
+        $this->assertFalse($result['valid']);
+        $this->assertNull($result['value']);
+        $this->assertStringContainsString('numeric', $result['error']);
+    }
 }
