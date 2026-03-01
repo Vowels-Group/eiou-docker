@@ -2,7 +2,7 @@
 
 <!-- Toast notifications for operation results -->
 <?php if (!empty($messageForDisplay)): ?>
-    <script>
+    <script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
     document.addEventListener('DOMContentLoaded', function() {
         var msgType = <?php echo json_encode($messageTypeForDisplay, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
         var msg = <?php echo json_encode($messageForDisplay, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
@@ -51,18 +51,18 @@
     $torStatusAge = time() - (int)($torGuiStatus['timestamp'] ?? 0);
 ?>
 <?php if ($torStatusType === 'issue' || $torStatusType === 'restarting'): ?>
-<div class="alert alert-warning fade-in-up" style="margin-bottom: 1rem; border-left: 4px solid #ffc107;">
-    <div style="display: flex; align-items: center; gap: 1rem;">
+<div class="alert alert-warning fade-in-up mb-lg alert-border-warning">
+    <div class="d-flex align-center gap-lg">
         <?php if ($torStatusType === 'restarting'): ?>
-            <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; color: #ffc107;"></i>
+            <i class="fas fa-spinner fa-spin alert-icon-warning"></i>
         <?php else: ?>
-            <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem; color: #ffc107;"></i>
+            <i class="fas fa-exclamation-triangle alert-icon-warning"></i>
         <?php endif; ?>
-        <div style="flex: 1;">
-            <h4 style="margin: 0; color: #664d03;">
+        <div class="flex-1">
+            <h4 class="alert-title-warning">
                 <i class="fas fa-shield-alt"></i> Tor Connectivity Issue
             </h4>
-            <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+            <p class="alert-body-text">
                 <?php echo $torStatusMsg; ?>.
                 Transactions and messages may be delayed until connectivity is restored.
             </p>
@@ -70,7 +70,7 @@
     </div>
 </div>
 <?php elseif ($torStatusType === 'recovered' && $torStatusAge <= 300): ?>
-<script>
+<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof showToast === 'function') {
         showToast('Tor Restored', 'Tor connectivity has been restored. Transactions should resume normally.', 'success');
@@ -82,16 +82,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- In-Progress Transactions Notification -->
 <?php if (!empty($inProgressTransactions)): ?>
-<div id="in-progress-banner" class="alert alert-warning fade-in-up" style="margin-bottom: 1rem;">
-    <div style="display: flex; align-items: center; gap: 1rem;">
+<div id="in-progress-banner" class="alert alert-warning fade-in-up mb-lg">
+    <div class="d-flex align-center gap-lg">
         <div class="tx-in-progress-spinner">
-            <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; color: #ffc107;"></i>
+            <i class="fas fa-spinner fa-spin alert-icon-warning"></i>
         </div>
-        <div style="flex: 1;">
-            <h4 style="margin: 0; color: #664d03;">
+        <div class="flex-1">
+            <h4 class="alert-title-warning">
                 <i class="fas fa-clock"></i> <?php echo count($inProgressTransactions); ?> Transaction<?php echo count($inProgressTransactions) > 1 ? 's' : ''; ?> In Progress
             </h4>
-            <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+            <p class="alert-body-text">
                 <?php
                 $pending = 0; $sent = 0; $accepted = 0;
                 foreach ($inProgressTransactions as $tx) {
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ?>
             </p>
         </div>
-        <a href="#transactions" class="btn btn-warning" style="padding: 0.5rem 1rem;">
+        <a href="#transactions" class="btn btn-warning btn-compact">
             <i class="fas fa-eye"></i> View
         </a>
     </div>
@@ -116,11 +116,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Pending Contact Requests Notification -->
 <?php if (!empty($pendingContacts)): ?>
-<div class="alert alert-info fade-in-up" style="margin-bottom: 2rem;">
-    <div style="display: flex; align-items: center; gap: 1rem;">
-        <i class="fas fa-user-clock" style="font-size: 1.5rem; color: #0d6efd;"></i>
-        <div style="flex: 1;">
-            <h4 style="margin: 0; color: #0d6efd;">
+<div class="alert alert-info fade-in-up mb-2xl">
+    <div class="d-flex align-center gap-lg">
+        <i class="fas fa-user-clock alert-icon-primary"></i>
+        <div class="flex-1">
+            <h4 class="alert-title-primary">
                 <?php echo count($pendingContacts); ?> Pending Contact Request<?php echo count($pendingContacts) > 1 ? 's' : ''; ?>
             </h4>
             <?php
@@ -129,13 +129,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!empty($pc['has_prior_history'])) $priorCount++;
                 }
             ?>
-            <p style="margin: 0.5rem 0 0 0; color: #6c757d;">
+            <p class="alert-body-text-sm">
                 You have contact requests waiting for your approval.<?php if ($priorCount > 0): ?>
                 <br><strong><?php echo $priorCount; ?></strong> of these <?php echo $priorCount === 1 ? 'is a' : 'are'; ?> prior contact<?php echo $priorCount > 1 ? 's' : ''; ?> with existing transaction history.
                 <?php endif; ?>
             </p>
         </div>
-        <a href="#pending-contacts" class="btn btn-primary" style="padding: 0.5rem 1rem;">
+        <a href="#pending-contacts" class="btn btn-primary btn-compact">
             <i class="fas fa-eye"></i> View Requests
         </a>
     </div>
@@ -153,14 +153,14 @@ foreach ($acceptedContacts as $c) {
 }
 ?>
 <?php if (!empty($incomingChainDropContacts)): ?>
-<div class="alert alert-error fade-in-up" style="margin-bottom: 2rem; border-left: 4px solid #dc3545;">
-    <div style="display: flex; align-items: center; gap: 1rem;">
-        <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem; color: #dc3545;"></i>
-        <div style="flex: 1;">
-            <h4 style="margin: 0; color: #842029;">
+<div class="alert alert-error fade-in-up mb-2xl alert-border-danger">
+    <div class="d-flex align-center gap-lg">
+        <i class="fas fa-exclamation-triangle alert-icon-danger"></i>
+        <div class="flex-1">
+            <h4 class="alert-title-danger">
                 <?php echo count($incomingChainDropContacts); ?> Chain Gap Resolution<?php echo count($incomingChainDropContacts) > 1 ? 's' : ''; ?> — Action Required
             </h4>
-            <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+            <p class="alert-body-text">
                 <?php foreach ($incomingChainDropContacts as $i => $c): ?>
                     <strong><?php echo htmlspecialchars($c['name']); ?></strong> has proposed dropping missing transaction(s) to repair the chain.
                     Sending is blocked until resolved. Accepting will remove the dropped transaction and its funds from both balances.<?php echo $i < count($incomingChainDropContacts) - 1 ? '<br>' : ''; ?>
@@ -168,11 +168,11 @@ foreach ($acceptedContacts as $c) {
             </p>
         </div>
         <?php if (count($incomingChainDropContacts) === 1): ?>
-        <button type="button" class="btn btn-danger" style="padding: 0.5rem 1rem; white-space: nowrap;" onclick="openContactByContactId('<?php echo htmlspecialchars($incomingChainDropContacts[0]['contact_id'] ?? '', ENT_QUOTES); ?>')">
+        <button type="button" class="btn btn-danger btn-compact btn-nowrap" data-action="openContactByContactId" data-contact-id="<?php echo htmlspecialchars($incomingChainDropContacts[0]['contact_id'] ?? '', ENT_QUOTES); ?>">
             <i class="fas fa-eye"></i> View
         </button>
         <?php else: ?>
-        <a href="#contacts" class="btn btn-danger" style="padding: 0.5rem 1rem; white-space: nowrap;">
+        <a href="#contacts" class="btn btn-danger btn-compact btn-nowrap">
             <i class="fas fa-eye"></i> View Contacts
         </a>
         <?php endif; ?>
@@ -182,7 +182,7 @@ foreach ($acceptedContacts as $c) {
 
 <!-- Toast notifications for newly completed transactions (sent by user) -->
 <?php if (!empty($newlyCompletedTransactions)): ?>
-<script>
+<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
     <?php foreach ($newlyCompletedTransactions as $tx): ?>
     if (typeof showToast === 'function') {
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Toast notifications for newly received transactions -->
 <?php if (!empty($newlyReceivedTransactions)): ?>
-<script>
+<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
     <?php foreach ($newlyReceivedTransactions as $tx): ?>
     if (typeof showToast === 'function') {
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Dead Letter Queue notification data (consumed by showDlqToasts in script.js) -->
 <?php if (!empty($newlyAddedToDlq)): ?>
-<script>
+<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
 var dlqNotifications = [
 <?php
     $dlqNotificationItems = [];

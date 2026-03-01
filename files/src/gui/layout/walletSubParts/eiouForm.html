@@ -5,7 +5,7 @@
     <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
     
     <!-- P2P Information Alert (collapsible) -->
-    <div class="p2p-info-alert" onclick="toggleP2pInfo()">
+    <div class="p2p-info-alert" data-action="toggleP2pInfo">
         <div class="p2p-info-header">
             <i class="fas fa-info-circle"></i>
             <strong>Peer-to-Peer Routing Available</strong>
@@ -20,12 +20,12 @@
         <input type="hidden" name="action" value="sendEIOU">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
         
-        <div class="form-group" style="position: relative;">
+        <div class="form-group position-relative">
             <label for="recipient-search">Recipient:</label>
             <input type="hidden" id="recipient" name="recipient" value="">
             <input type="text" id="recipient-search" placeholder="Search contacts by name or address..." autocomplete="off"
                    data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
-            <div id="recipient-dropdown" style="display:none; position:absolute; left:0; right:0; z-index:100; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #ced4da; border-top:none; border-radius:0 0 4px 4px; box-shadow:0 4px 8px rgba(0,0,0,0.1);">
+            <div id="recipient-dropdown" class="recipient-dropdown">
                 <?php foreach ($acceptedContacts as $contact): ?>
                     <?php
                     $addressData = [];
@@ -35,25 +35,25 @@
                         }
                     }
                     ?>
-                    <div class="recipient-option" style="padding:0.5rem 0.75rem; cursor:pointer;"
+                    <div class="recipient-option"
                          data-name="<?php echo htmlspecialchars($contact['name']); ?>"
                          data-addresses='<?php echo htmlspecialchars(json_encode($addressData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'
-                         ><?php echo htmlspecialchars($contact['name']); ?> <span style="color:#6c757d; font-size:0.85em;">(Contact)</span></div>
+                         ><?php echo htmlspecialchars($contact['name']); ?> <span class="recipient-tag">(Contact)</span></div>
                 <?php endforeach; ?>
             </div>
-            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+            <small class="form-hint">
                 <i class="fas fa-lightbulb"></i>
                 <strong>Tip:</strong> Search contacts by name or address, or enter an address directly below for P2P routing.
             </small>
         </div>
 
         <!-- Address Type Selector (shown when contact selected) -->
-        <div class="form-group" id="address-type-group" style="display: none;">
+        <div class="form-group d-none" id="address-type-group">
             <label for="address-type">Address Type:</label>
             <select id="address-type" name="address_type">
                 <option value="">Select address type</option>
             </select>
-            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+            <small class="form-hint">
                 <i class="fas fa-network-wired"></i>
                 Choose which address to use for this contact
             </small>
@@ -62,9 +62,9 @@
         <!-- Manual Address Input (visible by default) -->
         <div class="form-group" id="manual-address-group">
             <label for="manual-address">Recipient Address:</label>
-            <input type="text" id="manual-address" name="manual_recipient" placeholder="Enter .onion address or HTTP(S) address" style="font-family: 'Courier New', monospace;">
-            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                <i class="fas fa-shield-alt"></i> 
+            <input type="text" id="manual-address" name="manual_recipient" placeholder="Enter .onion address or HTTP(S) address" class="input-monospace">
+            <small class="form-hint">
+                <i class="fas fa-shield-alt"></i>
                 <strong>Security:</strong> P2P transactions are routed through your trusted contacts for security.
             </small>
         </div>
@@ -85,7 +85,7 @@
         <div class="form-group">
             <label for="description">Description (Optional):</label>
             <input type="text" id="description" name="description" placeholder="e.g., Payment for services, Gift, Refund..." maxlength="255">
-            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+            <small class="form-hint">
                 <i class="fas fa-eye-slash"></i>
                 <strong>Privacy:</strong> Only the final recipient will see this description. It is not shared with relay nodes.
             </small>
@@ -109,10 +109,10 @@
         </div>
 
         <!-- Transaction Type Indicator -->
-        <div id="transaction-type-indicator" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; display: none;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <i class="fas fa-exchange-alt" style="color: #28a745;"></i>
-                <span id="transaction-type-text" style="font-weight: 600; color: #28a745;"></span>
+        <div id="transaction-type-indicator" class="tx-type-indicator d-none">
+            <div class="d-flex align-center gap-sm">
+                <i class="fas fa-exchange-alt text-success"></i>
+                <span id="transaction-type-text" class="tx-type-indicator-text"></span>
             </div>
         </div>
         

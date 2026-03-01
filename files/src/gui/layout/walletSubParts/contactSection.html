@@ -4,21 +4,21 @@
 <div id="contacts" class="contacts-section fade-in-up">
     <div class="section-header">
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-        <a href="#add-contact" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem;"><i class="fas fa-user-plus"></i> New Contact</a>
+        <a href="#add-contact" class="btn btn-success btn-compact font-sm"><i class="fas fa-user-plus"></i> New Contact</a>
     </div>
     <?php if (!empty($allContacts)): ?>
-    <div class="contacts-search-bar" style="margin-bottom: 1rem;">
-        <div style="position: relative;">
-            <i class="fas fa-search" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: #6c757d;"></i>
-            <input type="text" id="contact-search-input" placeholder="Search by name or address..." onkeyup="filterContacts()" style="width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem;">
+    <div class="contacts-search-bar mb-lg">
+        <div class="search-icon-wrapper">
+            <i class="fas fa-search search-icon-positioned"></i>
+            <input type="text" id="contact-search-input" class="search-input-with-icon" placeholder="Search by name or address..." data-action-keyup="filterContacts">
         </div>
-        <div id="contact-search-status" style="margin-top: 0.5rem; font-size: 0.85rem; color: #6c757d; display: none;">
+        <div id="contact-search-status" class="search-status">
             <span id="contact-search-count">0</span> contacts found
         </div>
     </div>
     <?php endif; ?>
     <div class="contacts-slider">
-        <button type="button" id="contacts-scroll-left" class="contacts-scroll-btn contacts-scroll-left hidden" onclick="scrollContacts(-1)" title="Scroll left">
+        <button type="button" id="contacts-scroll-left" class="contacts-scroll-btn contacts-scroll-left hidden" data-action="scrollContacts" data-direction="-1" title="Scroll left">
             <i class="fas fa-chevron-left"></i>
         </button>
         <div class="contacts-grid" id="contacts-grid">
@@ -36,10 +36,10 @@
                     $onlineStatus = $contact['online_status'] ?? 'unknown';
                     $validChain = $contact['valid_chain'] ?? null;
                 ?>
-                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer; position: relative;">
+                <div class="contact-card cursor-pointer position-relative" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <!-- Online Status Indicator -->
                     <span class="contact-status-indicator status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?><?php echo $validChain !== null ? ($validChain ? ' - Chain Valid' : ' - Chain Invalid') : ''; ?>"></span>
-                    <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
+                    <div class="contact-avatar contact-avatar-accepted">
                         <?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?>
                     </div>
                     <div class="contact-info">
@@ -104,8 +104,8 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'pending');
                 ?>
-                <div class="contact-card pending" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
-                    <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
+                <div class="contact-card pending cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                    <div class="contact-avatar contact-avatar-pending">
                         <?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?>
                     </div>
                     <div class="contact-info">
@@ -143,8 +143,8 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'blocked');
                 ?>
-                <div class="contact-card blocked" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
-                    <div class="contact-avatar" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                <div class="contact-card blocked cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                    <div class="contact-avatar contact-avatar-blocked">
                         <?php echo htmlspecialchars($contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "X"); ?>
                     </div>
                     <div class="contact-info">
@@ -180,13 +180,13 @@
 
         <?php endif; ?>
     </div>
-        <button type="button" id="contacts-scroll-right" class="contacts-scroll-btn contacts-scroll-right" onclick="scrollContacts(1)" title="Scroll right">
+        <button type="button" id="contacts-scroll-right" class="contacts-scroll-btn contacts-scroll-right" data-action="scrollContacts" data-direction="1" title="Scroll right">
             <i class="fas fa-chevron-right"></i>
         </button>
     </div>
     <?php if (count($allContacts) > 16): ?>
-    <div id="contacts-show-more" style="text-align: center; margin-top: 0.5rem;">
-        <button type="button" class="btn btn-outline" onclick="toggleShowAllContacts()" id="show-more-btn">
+    <div id="contacts-show-more" class="contacts-show-more">
+        <button type="button" class="btn btn-outline" data-action="toggleShowAllContacts" id="show-more-btn">
             <i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
         </button>
     </div>
@@ -194,25 +194,25 @@
 </div>
 
 <!-- Contact Modal (Tabbed Interface) -->
-<div id="contactModal" class="modal" style="display: none;">
+<div id="contactModal" class="modal d-none">
     <div class="modal-content modal-lg">
         <div class="modal-header">
             <div class="modal-header-content">
                 <h3><i class="fas fa-user"></i> <span id="modal_contact_name">Contact</span></h3>
                 <span id="modal_status_badge" class="badge badge-accepted">Accepted</span>
             </div>
-            <span class="close" onclick="closeContactModal()">&times;</span>
+            <span class="close" data-action="closeContactModal">&times;</span>
         </div>
 
         <!-- Modal Tabs -->
         <div class="modal-tabs">
-            <button type="button" class="modal-tab active" onclick="showModalTab('info-tab', this)">
+            <button type="button" class="modal-tab active" data-action="showModalTab" data-tab="info-tab">
                 <i class="fas fa-info-circle"></i> Info
             </button>
-            <button type="button" class="modal-tab" onclick="showModalTab('transactions-tab', this)">
+            <button type="button" class="modal-tab" data-action="showModalTab" data-tab="transactions-tab">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
-            <button type="button" class="modal-tab" onclick="showModalTab('settings-tab', this)">
+            <button type="button" class="modal-tab" data-action="showModalTab" data-tab="settings-tab">
                 <i class="fas fa-cog"></i> Settings
             </button>
         </div>
@@ -265,7 +265,7 @@
                     </div>
                 </div>
                 <div class="ping-controls">
-                    <button id="ping_contact_btn" class="btn btn-sm btn-outline" onclick="pingContact()" title="Check contact's online status">
+                    <button id="ping_contact_btn" class="btn btn-sm btn-outline" data-action="pingContact" title="Check contact's online status">
                         <i class="fas fa-wifi" id="ping_icon"></i> <span id="ping_btn_text">Check Status</span>
                     </button>
                     <span id="ping_result_message" class="ping-result-message"></span>
@@ -273,62 +273,62 @@
             </div>
 
             <!-- Chain Gap Resolution — drop missing transaction(s) -->
-            <div id="chain_drop_section" class="contact-info-section" style="display: none;">
+            <div id="chain_drop_section" class="contact-info-section d-none">
                 <h4><i class="fas fa-unlink"></i> Chain Gap Resolution</h4>
 
                 <!-- Chain gap details — shows which txids are valid before/after each gap -->
-                <div id="chain_gap_details" style="display: none; margin-bottom: 0.75rem;">
+                <div id="chain_gap_details" class="d-none mb-md">
                 </div>
 
                 <!-- No active proposal - show propose button -->
-                <div id="chain_drop_propose" style="display: none;">
-                    <p style="color: #dc3545; font-size: 0.9rem; margin-bottom: 0.75rem;">
+                <div id="chain_drop_propose" class="d-none">
+                    <p class="chain-drop-warning">
                         <i class="fas fa-exclamation-triangle"></i>
                         A chain gap was detected that cannot be resolved by sync.
                         Both you and this contact are missing the same transaction.
                     </p>
-                    <p style="color: #664d03; font-size: 0.85rem; margin-bottom: 0.75rem; background: #fff3cd; padding: 0.5rem; border-radius: 4px;">
+                    <p class="chain-drop-note">
                         <i class="fas fa-coins"></i>
                         <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                     </p>
-                    <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" onclick="proposeChainDrop()" title="Propose dropping the missing transaction(s) to repair the chain">
+                    <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose dropping the missing transaction(s) to repair the chain">
                         <i class="fas fa-handshake" id="chain_drop_propose_icon"></i> <span id="chain_drop_propose_text">Propose Dropping Missing Transaction(s)</span>
                     </button>
                     <span id="chain_drop_propose_result" class="ping-result-message"></span>
                 </div>
 
                 <!-- Outgoing proposal pending -->
-                <div id="chain_drop_awaiting" style="display: none;">
-                    <div class="alert alert-info" style="padding: 0.75rem; font-size: 0.9rem;">
+                <div id="chain_drop_awaiting" class="d-none">
+                    <div class="alert alert-info chain-drop-alert">
                         <i class="fas fa-clock"></i>
                         <strong>Awaiting Acceptance</strong>
-                        <p style="margin: 0.5rem 0; font-size: 0.85rem;">
+                        <p class="chain-drop-alert-body">
                             A proposal to drop the missing transaction(s) has been sent to this contact.
                             <strong>Sending transactions is blocked</strong> until they accept or reject the proposal.
                         </p>
-                        <div id="chain_drop_awaiting_id" style="font-family: monospace; font-size: 0.8rem; margin-top: 0.5rem; word-break: break-all;"></div>
+                        <div id="chain_drop_awaiting_id" class="chain-drop-awaiting-id"></div>
                     </div>
                 </div>
 
                 <!-- Incoming proposal - show accept/reject -->
-                <div id="chain_drop_incoming" style="display: none;">
-                    <div class="alert alert-warning" style="padding: 0.75rem; font-size: 0.9rem; border-left: 4px solid #dc3545;">
-                        <i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i>
+                <div id="chain_drop_incoming" class="d-none">
+                    <div class="alert alert-warning chain-drop-alert alert-border-danger">
+                        <i class="fas fa-exclamation-triangle text-danger"></i>
                         <strong>Drop Missing Transaction(s) — Action Required</strong>
-                        <p style="margin: 0.5rem 0; font-size: 0.85rem;">
+                        <p class="chain-drop-alert-body">
                             This contact has proposed dropping the missing transaction(s) to repair the chain.
                             <strong>Sending transactions is blocked</strong> until this proposal is accepted or rejected.
                         </p>
-                        <p style="color: #664d03; font-size: 0.85rem; margin: 0.5rem 0; background: #fff3cd; padding: 0.5rem; border-radius: 4px;">
+                        <p class="chain-drop-note">
                             <i class="fas fa-coins"></i>
                             <strong>Note:</strong> Accepting will remove the dropped transaction and the funds it transferred from both balances.
                         </p>
-                        <div id="chain_drop_incoming_id" style="font-family: monospace; font-size: 0.8rem; margin-bottom: 0.75rem; word-break: break-all;"></div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button id="chain_drop_accept_btn" class="btn btn-success btn-sm" onclick="acceptChainDrop()">
+                        <div id="chain_drop_incoming_id" class="chain-drop-incoming-id"></div>
+                        <div class="d-flex gap-sm">
+                            <button id="chain_drop_accept_btn" class="btn btn-success btn-sm" data-action="acceptChainDrop">
                                 <i class="fas fa-check" id="chain_drop_accept_icon"></i> <span id="chain_drop_accept_text">Accept</span>
                             </button>
-                            <button id="chain_drop_reject_btn" class="btn btn-danger btn-sm" onclick="rejectChainDrop()">
+                            <button id="chain_drop_reject_btn" class="btn btn-danger btn-sm" data-action="rejectChainDrop">
                                 <i class="fas fa-times" id="chain_drop_reject_icon"></i> <span id="chain_drop_reject_text">Reject</span>
                             </button>
                         </div>
@@ -337,20 +337,20 @@
                 </div>
 
                 <!-- Proposal was rejected - chain gap still unresolved -->
-                <div id="chain_drop_rejected" style="display: none;">
-                    <div class="alert alert-warning" style="padding: 0.75rem; font-size: 0.9rem; border-left: 4px solid #ffc107;">
-                        <i class="fas fa-ban" style="color: #664d03;"></i>
+                <div id="chain_drop_rejected" class="d-none">
+                    <div class="alert alert-warning chain-drop-alert alert-border-warning">
+                        <i class="fas fa-ban text-warning-dark"></i>
                         <strong>Proposal Rejected — Chain Gap Unresolved</strong>
-                        <p style="margin: 0.5rem 0; font-size: 0.85rem;">
+                        <p class="chain-drop-alert-body">
                             The previous proposal to drop missing transaction(s) was rejected.
                             The chain gap still exists and <strong>sending transactions remains blocked</strong>.
                             A new proposal can be submitted to try again.
                         </p>
-                        <p style="color: #664d03; font-size: 0.85rem; margin: 0.5rem 0; background: #fff3cd; padding: 0.5rem; border-radius: 4px;">
+                        <p class="chain-drop-note">
                             <i class="fas fa-coins"></i>
                             <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                         </p>
-                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" onclick="proposeChainDrop()" title="Propose dropping the missing transaction(s) to repair the chain">
+                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose dropping the missing transaction(s) to repair the chain">
                             <i class="fas fa-handshake"></i> Propose Dropping Missing Transaction(s)
                         </button>
                         <span id="chain_drop_repropose_result" class="ping-result-message"></span>
@@ -360,9 +360,9 @@
 
             <div class="contact-info-section">
                 <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
-                <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                    <span id="modal_contact_id" class="info-value monospace" style="flex: 1; word-break: break-all;">Not Available</span>
-                    <button class="btn btn-sm btn-outline" onclick="var cid = document.getElementById('modal_contact_id').textContent; if (cid && cid !== 'Not Available') { copyToClipboard(cid, 'Contact ID copied to clipboard!'); }" title="Copy contact ID">
+                <div class="address-display-row-start">
+                    <span id="modal_contact_id" class="info-value monospace address-value">Not Available</span>
+                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_contact_id" data-copy-message="Contact ID copied to clipboard!" title="Copy contact ID">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
@@ -371,11 +371,11 @@
             <div class="contact-info-section">
                 <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
                 <div id="modal_address_container">
-                    <select id="modal_address_selector" class="info-value" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ced4da; margin-bottom: 0.5rem; display: none;" onchange="showSelectedContactAddress()">
+                    <select id="modal_address_selector" class="info-value modal-address-selector" data-action-change="showSelectedContactAddress">
                     </select>
-                    <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                        <span id="modal_address_display" class="info-value monospace" style="flex: 1; word-break: break-all;">Not Available</span>
-                        <button class="btn btn-sm btn-outline" onclick="var addr = document.getElementById('modal_address_display').textContent; if (addr && addr !== 'Not Available') { copyToClipboard(addr, 'Address copied to clipboard!'); }" title="Copy address">
+                    <div class="address-display-row-start">
+                        <span id="modal_address_display" class="info-value monospace address-value">Not Available</span>
+                        <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_address_display" data-copy-message="Address copied to clipboard!" title="Copy address">
                             <i class="fas fa-copy"></i> Copy
                         </button>
                     </div>
@@ -384,9 +384,9 @@
 
             <div class="contact-info-section">
                 <h4><i class="fas fa-key"></i> Public Key</h4>
-                <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                    <span id="modal_pubkey" class="info-value monospace pubkey-display" style="flex: 1; word-break: break-all;">Not Available</span>
-                    <button class="btn btn-sm btn-outline" onclick="var pk = document.getElementById('modal_pubkey').textContent; if (pk && pk !== 'Not Available') { copyToClipboard(pk, 'Public key copied to clipboard!'); }" title="Copy public key">
+                <div class="address-display-row-start">
+                    <span id="modal_pubkey" class="info-value monospace pubkey-display address-value">Not Available</span>
+                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_pubkey" data-copy-message="Public key copied to clipboard!" title="Copy public key">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
@@ -402,7 +402,7 @@
                         <p>
                             <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
                         </p>
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="refreshContactModalTransactions();">
+                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
                     </div>
@@ -411,9 +411,9 @@
                     </div>
                 </div>
                 <!-- Transaction Detail View -->
-                <div id="tx-detail-view" style="display: none;">
-                    <div style="text-align: right; margin-bottom: 0.5rem;">
-                        <span class="close" onclick="hideContactTxDetail()" title="Back to transactions" style="position: static; cursor: pointer;">&times;</span>
+                <div id="tx-detail-view" class="d-none">
+                    <div class="text-right mb-sm">
+                        <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
                     </div>
                     <div id="contact-tx-detail-content"></div>
                 </div>
@@ -457,15 +457,15 @@
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="blockContact">
                         <input type="hidden" name="contact_address" id="block_contact_address">
-                        <button type="submit" id="blockBtn" class="btn btn-warning" onclick="return confirm('Are you sure you want to block this contact?')">
+                        <button type="submit" id="blockBtn" class="btn btn-warning" data-confirm="Are you sure you want to block this contact?">
                             <i class="fas fa-ban"></i> Block
                         </button>
                     </form>
-                    <form method="POST" id="unblockForm" style="display: none;">
+                    <form method="POST" id="unblockForm" class="d-none">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="unblockContact">
                         <input type="hidden" name="contact_address" id="unblock_contact_address">
-                        <button type="submit" class="btn btn-success" onclick="return confirm('Are you sure you want to unblock this contact?')">
+                        <button type="submit" class="btn btn-success" data-confirm="Are you sure you want to unblock this contact?">
                             <i class="fas fa-check"></i> Unblock
                         </button>
                     </form>
@@ -473,7 +473,7 @@
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="deleteContact">
                         <input type="hidden" name="contact_address" id="delete_contact_address">
-                        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this contact? This cannot be undone.')">
+                        <button type="submit" class="btn btn-danger" data-confirm="Are you sure you want to delete this contact? This cannot be undone.">
                             <i class="fas fa-trash"></i> Delete
                         </button>
                     </form>
@@ -490,13 +490,13 @@
 <?php if (!empty($pendingContacts)): ?>
 <div id="pending-contacts" class="contacts-section fade-in-up">
     <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
-    <p style="color: #6c757d; margin-bottom: 1rem;">The following contacts have requested to connect with you:</p>
+    <p class="text-muted mb-lg">The following contacts have requested to connect with you:</p>
 
     <?php foreach ($pendingContacts as $index => $contact): ?>
-        <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #0d6efd;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
+        <div class="pending-contact-card">
+            <div class="pending-contact-header">
+                <div class="d-flex align-center gap-sm">
+                    <strong class="text-primary">Contact Request #<?php echo $index + 1; ?></strong>
                     <?php if (!empty($contact['has_prior_history'])): ?>
                     <span class="badge badge-prior-contact" title="This contact has prior transaction history — likely a previously known contact">
                         <i class="fas fa-history"></i> Prior Contact
@@ -527,17 +527,17 @@
                 <?php endif; ?>
             </div>
 
-            <div style="margin-bottom: 1rem;">
+            <div class="mb-lg">
                 <div class="info-label">Public Key:</div>
                 <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
             </div>
 
             <!-- Accept Contact Form -->
-            <div style="margin-top: 1rem; padding: 1rem; background: white; border-radius: 4px; border: 1px solid #dee2e6;">
-                <h4 style="color: #0d6efd; margin-bottom: 1rem;">
+            <div class="pending-contact-accept-form">
+                <h4 class="pending-contact-accept-title">
                     <i class="fas fa-user-check"></i> Accept this contact request
                 </h4>
-                <form method="POST" style="margin-bottom: 1rem;">
+                <form method="POST" class="mb-lg">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="acceptContact">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
@@ -566,8 +566,8 @@
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button type="submit" class="btn btn-success" style="flex: 1; min-width: 120px;">
+                    <div class="d-flex gap-sm flex-wrap">
+                        <button type="submit" class="btn btn-success pending-contact-action-col">
                             <i class="fas fa-check"></i> Accept Contact
                         </button>
                     </div>
@@ -575,21 +575,21 @@
             </div>
 
             <!-- Action Buttons -->
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
-                <form method="POST" style="flex: 1; min-width: 120px;">
+            <div class="pending-contact-actions">
+                <form method="POST" class="pending-contact-action-col">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="deleteContact">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                    <button type="submit" class="btn btn-secondary" style="width: 100%;" onclick="return confirm('Are you sure you want to delete this contact request?')">
+                    <button type="submit" class="btn btn-secondary w-100" data-confirm="Are you sure you want to delete this contact request?">
                         <i class="fas fa-trash"></i> Delete Request
                     </button>
                 </form>
 
-                <form method="POST" style="flex: 1; min-width: 120px;">
+                <form method="POST" class="pending-contact-action-col">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="blockContact">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                    <button type="submit" class="btn btn-danger" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact?')">
+                    <button type="submit" class="btn btn-danger w-100" data-confirm="Are you sure you want to block this contact?">
                         <i class="fas fa-ban"></i> Block Contact
                     </button>
                 </form>

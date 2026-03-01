@@ -548,31 +548,30 @@ function openTransactionModal(index) {
     var txTypeBadge = '';
     var roleBadge = '';
 
-    // Determine role icon and label
+    // Determine role icon, label, and badge class
     var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
     var roleLabel = tx.type === 'sent' ? 'Sent' : 'Received';
-    var roleColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
+    var roleBadgeClass = tx.type === 'sent' ? 'tx-modal-badge-sent' : 'tx-modal-badge-received';
 
     // Check for relay transactions
     if (tx.direction === 'relay') {
         roleIcon = 'fa-random';
         roleLabel = 'Relay';
-        roleColor = '#17a2b8';
+        roleBadgeClass = 'tx-modal-badge-relay';
     }
 
     if (tx.tx_type === 'contact') {
-        txTypeBadge = '<span style="background: #17a2b8; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-user-plus"></i> Contact Request</span>';
-        roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-contact"><i class="fas fa-user-plus"></i> Contact Request</span>';
+        roleBadge = '<span class="tx-modal-badge ' + roleBadgeClass + '"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
     } else if (tx.tx_type === 'p2p') {
-        txTypeBadge = '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P Routed</span>';
-        roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P Routed</span>';
+        roleBadge = '<span class="tx-modal-badge ' + roleBadgeClass + '"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
     } else {
-        txTypeBadge = '<span style="background: #6c757d; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-exchange-alt"></i> Direct</span>';
-        roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-direct"><i class="fas fa-exchange-alt"></i> Direct</span>';
+        roleBadge = '<span class="tx-modal-badge ' + roleBadgeClass + '"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
     }
 
     // Build direction badge for header
-    var directionColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
     var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
     var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
 
@@ -592,13 +591,14 @@ function openTransactionModal(index) {
     var html = '';
 
     // Header with amount
-    html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + (tx.type === 'sent' ? '#ff6b6b' : '#20c997') + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
-    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
-    html += '<div style="color: white; margin-top: 0.5rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    var headerClass = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
+    html += '<div class="tx-modal-header ' + headerClass + '">';
+    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
     // Status, type, and role badges
-    html += '<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">';
+    html += '<div class="tx-modal-badges">';
     html += statusBadge;
     html += txTypeBadge;
     html += roleBadge;
@@ -610,7 +610,7 @@ function openTransactionModal(index) {
     // Counterparty (To/From)
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>' : '') + '<span style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + escapeHtml(tx.counterparty_address) + '</span></div>';
+    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>' : '') + '<span class="tx-modal-mono">' + escapeHtml(tx.counterparty_address) + '</span></div>';
     html += '</div>';
 
     // Description (moved up, right after To/From)
@@ -631,7 +631,7 @@ function openTransactionModal(index) {
     if (tx.txid) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Transaction ID</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(tx.txid) + '</div>';
+        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.txid) + '</div>';
         html += '</div>';
     }
 
@@ -639,7 +639,7 @@ function openTransactionModal(index) {
     if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(truncate(tx.memo, 64)) + '</div>';
+        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(truncate(tx.memo, 64)) + '</div>';
         html += '</div>';
     }
 
@@ -647,15 +647,15 @@ function openTransactionModal(index) {
 
     // P2P Transaction Details (end recipient, amount, fee) - displayed below main details
     if (tx.tx_type === 'p2p' && tx.p2p_destination) {
-        html += '<div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">';
-        html += '<div style="font-weight: bold; margin-bottom: 0.75rem; color: #856404;">';
+        html += '<div class="tx-modal-p2p-details">';
+        html += '<div class="tx-modal-p2p-title">';
         html += '<i class="fas fa-network-wired"></i> P2P Transaction Details';
         html += '</div>';
 
         // End Recipient
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">End Recipient</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + escapeHtml(tx.p2p_destination) + '</div>';
+        html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</div>';
         html += '</div>';
 
         // Amount to Recipient
@@ -775,7 +775,7 @@ function showToast(title, message, type) {
         '<div class="toast-title">' + escapeHtml(title) + '</div>' +
         '<div class="toast-message">' + escapeHtml(message) + '</div>' +
         '</div>' +
-        '<button class="toast-close" onclick="this.parentElement.parentNode.removeChild(this.parentElement)">&times;</button>';
+        '<button class="toast-close" data-action="dismissToast">&times;</button>';
 
     container.appendChild(toast);
 
@@ -1286,16 +1286,16 @@ function showManualCopyModal(text, successMessage) {
     // Create overlay
     var overlay = document.createElement('div');
     overlay.id = 'manual-copy-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    overlay.className = 'manual-copy-overlay';
 
     // Create modal
     var modal = document.createElement('div');
-    modal.style.cssText = 'background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-    modal.innerHTML = '<h4 style="margin:0 0 10px 0;color:#333;">Copy to Clipboard</h4>' +
-        '<p style="margin:0 0 10px 0;color:#666;font-size:14px;">Select the text below and press <strong>Ctrl+C</strong> (or <strong>Cmd+C</strong> on Mac) to copy:</p>' +
-        '<textarea id="manual-copy-text" readonly style="width:100%;height:80px;padding:10px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px;resize:none;box-sizing:border-box;"></textarea>' +
-        '<div style="margin-top:15px;text-align:right;">' +
-        '<button id="manual-copy-close" style="padding:8px 16px;background:#6c757d;color:#fff;border:none;border-radius:4px;cursor:pointer;">Close</button>' +
+    modal.className = 'manual-copy-modal';
+    modal.innerHTML = '<h4 class="manual-copy-title">Copy to Clipboard</h4>' +
+        '<p class="manual-copy-desc">Select the text below and press <strong>Ctrl+C</strong> (or <strong>Cmd+C</strong> on Mac) to copy:</p>' +
+        '<textarea id="manual-copy-text" readonly class="manual-copy-textarea"></textarea>' +
+        '<div class="manual-copy-actions">' +
+        '<button id="manual-copy-close" class="manual-copy-close">Close</button>' +
         '</div>';
 
     overlay.appendChild(modal);
@@ -1851,19 +1851,19 @@ function openContactModal(contact, openTab) {
             gapDetailsEl.style.display = 'none';
             if (contact.chain_gap_details && contact.chain_gap_details.length > 0) {
                 gapDetailsEl.style.display = 'block';
-                var html = '<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.75rem; font-size: 0.85rem;">';
-                html += '<div style="font-weight: 600; margin-bottom: 0.5rem; color: #495057;"><i class="fas fa-search"></i> Gap Details (' + contact.chain_gap_details.length + ' gap' + (contact.chain_gap_details.length > 1 ? 's' : '') + ')</div>';
+                var html = '<div class="chain-gap-container">';
+                html += '<div class="chain-gap-title"><i class="fas fa-search"></i> Gap Details (' + contact.chain_gap_details.length + ' gap' + (contact.chain_gap_details.length > 1 ? 's' : '') + ')</div>';
                 for (var i = 0; i < contact.chain_gap_details.length; i++) {
                     var gap = contact.chain_gap_details[i];
                     var shortMissing = gap.missing_txid ? gap.missing_txid.substring(0, 12) + '...' : '?';
                     var shortBefore = gap.before_txid ? gap.before_txid.substring(0, 12) + '...' : '(start)';
                     var shortAfter = gap.after_txid ? gap.after_txid.substring(0, 12) + '...' : '(end)';
-                    html += '<div style="font-family: monospace; padding: 0.25rem 0; border-top: ' + (i > 0 ? '1px solid #dee2e6' : 'none') + '; margin-top: ' + (i > 0 ? '0.25rem' : '0') + '; padding-top: ' + (i > 0 ? '0.25rem' : '0') + ';">';
-                    html += '<span style="color: #28a745;" title="' + (gap.before_txid || 'chain start') + '">' + shortBefore + '</span>';
-                    html += ' <i class="fas fa-arrow-right" style="color: #6c757d; font-size: 0.75rem;"></i> ';
-                    html += '<span style="color: #dc3545; text-decoration: line-through;" title="Missing: ' + (gap.missing_txid || '?') + '">' + shortMissing + '</span>';
-                    html += ' <i class="fas fa-arrow-right" style="color: #6c757d; font-size: 0.75rem;"></i> ';
-                    html += '<span style="color: #28a745;" title="' + (gap.after_txid || 'chain end') + '">' + shortAfter + '</span>';
+                    html += '<div class="' + (i > 0 ? 'chain-gap-row chain-gap-row-separator' : 'chain-gap-row') + '">';
+                    html += '<span class="chain-gap-valid" title="' + (gap.before_txid || 'chain start') + '">' + shortBefore + '</span>';
+                    html += ' <i class="fas fa-arrow-right chain-gap-arrow"></i> ';
+                    html += '<span class="chain-gap-missing" title="Missing: ' + (gap.missing_txid || '?') + '">' + shortMissing + '</span>';
+                    html += ' <i class="fas fa-arrow-right chain-gap-arrow"></i> ';
+                    html += '<span class="chain-gap-valid" title="' + (gap.after_txid || 'chain end') + '">' + shortAfter + '</span>';
                     html += '</div>';
                 }
                 html += '</div>';
@@ -1929,13 +1929,13 @@ function openContactModal(contact, openTab) {
             var typeLabel = tx.type === 'sent' ? 'Sent' : 'Received';
             var amountPrefix = tx.type === 'sent' ? '-' : '+';
 
-            html += '<div class="transaction-item ' + typeClass + '" style="cursor: pointer;" onclick="showContactTxDetail(' + i + ')" title="Click for details">';
+            html += '<div class="transaction-item ' + typeClass + ' cursor-pointer" data-action="showContactTxDetail" data-index="' + i + '" title="Click for details">';
             html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
             html += '<div class="tx-details">';
             html += '<div class="tx-type">' + typeLabel + '</div>';
             html += '<div class="tx-date">' + escapeHtml(tx.date || 'Unknown date') + '</div>';
             html += '</div>';
-            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i></div>';
+            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right chevron-indicator"></i></div>';
             html += '</div>';
         }
         transactionsEl.innerHTML = html;
@@ -2348,10 +2348,8 @@ function showContactTxDetail(index) {
     var content = document.getElementById('contact-tx-detail-content');
 
     // Build direction info
-    var directionColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
     var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
     var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
-    var gradientEnd = tx.type === 'sent' ? '#ff6b6b' : '#20c997';
 
     // Build status badge (escapeHtml for defense-in-depth)
     var status = tx.status || 'completed';
@@ -2360,31 +2358,32 @@ function showContactTxDetail(index) {
     // Build transaction type badge (both yellow for consistency)
     var txType = tx.tx_type || 'standard';
     var txTypeBadge = txType === 'p2p'
-        ? '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P</span>'
-        : '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-exchange-alt"></i> Direct</span>';
+        ? '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>'
+        : '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-exchange-alt"></i> Direct</span>';
 
     // Build role badge (Sent/Received/Relay)
     var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
     var roleLabel = tx.type === 'sent' ? 'Sent' : 'Received';
-    var roleColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
+    var roleBadgeClass = tx.type === 'sent' ? 'tx-modal-badge-sent' : 'tx-modal-badge-received';
     if (tx.direction === 'relay') {
         roleIcon = 'fa-random';
         roleLabel = 'Relay';
-        roleColor = '#17a2b8';
+        roleBadgeClass = 'tx-modal-badge-relay';
     }
-    var roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
+    var roleBadge = '<span class="tx-modal-badge ' + roleBadgeClass + '"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
 
     // Build HTML content
     var html = '';
 
     // Header with amount
-    html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + gradientEnd + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
-    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
-    html += '<div style="color: white; margin-top: 0.5rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    var headerClass2 = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
+    html += '<div class="tx-modal-header ' + headerClass2 + '">';
+    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
+    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
     // Status, type, and role badges
-    html += '<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">';
+    html += '<div class="tx-modal-badges">';
     html += statusBadge;
     html += txTypeBadge;
     html += roleBadge;
@@ -2398,7 +2397,7 @@ function showContactTxDetail(index) {
     if (counterpartyAddress) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + escapeHtml(counterpartyAddress) + '</div>';
+        html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(counterpartyAddress) + '</div>';
         html += '</div>';
     }
 
@@ -2420,7 +2419,7 @@ function showContactTxDetail(index) {
     if (tx.txid) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Transaction ID</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(tx.txid) + '</div>';
+        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.txid) + '</div>';
         html += '</div>';
     }
 
@@ -2428,7 +2427,7 @@ function showContactTxDetail(index) {
     if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(tx.memo) + '</div>';
+        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.memo) + '</div>';
         html += '</div>';
     }
 
@@ -3712,3 +3711,209 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initSyncTimeoutDynamicMax();
 });
+
+// ============================================================================
+// CSP nonce-compatible event delegation (L-32)
+// Replaces all inline on* handlers with data-action attributes
+// ============================================================================
+
+(function() {
+    // Map of action names to handler functions
+    var clickActions = {
+        // Navigation & reload
+        'reloadWithHash': function(el) {
+            var hash = el.getAttribute('data-hash');
+            window.location.href = window.location.pathname + '#' + hash;
+            window.location.reload();
+        },
+
+        // Transaction history
+        'openTransactionModal': function(el) {
+            var index = parseInt(el.getAttribute('data-index'), 10);
+            openTransactionModal(index);
+        },
+        'closeTransactionModal': function() { closeTransactionModal(); },
+
+        // P2P transaction approval
+        'approveP2pTransaction': function(el) {
+            var txid = el.getAttribute('data-txid');
+            var candidateId = el.getAttribute('data-candidate-id');
+            approveP2pTransaction(txid, candidateId ? parseInt(candidateId, 10) : undefined);
+        },
+        'rejectP2pTransaction': function(el) {
+            var txid = el.getAttribute('data-txid');
+            rejectP2pTransaction(txid);
+        },
+
+        // Contact modal
+        'openContactModal': function(el) {
+            var data = el.getAttribute('data-contact');
+            try { openContactModal(JSON.parse(data)); } catch (e) {}
+        },
+        'openContactByContactId': function(el) {
+            var cid = el.getAttribute('data-contact-id');
+            openContactByContactId(cid);
+        },
+        'closeContactModal': function() { closeContactModal(); },
+
+        // Contact modal tabs
+        'showModalTab': function(el) {
+            var tab = el.getAttribute('data-tab');
+            showModalTab(tab, el);
+        },
+
+        // Contact actions
+        'pingContact': function() { pingContact(); },
+        'proposeChainDrop': function() { proposeChainDrop(); },
+        'acceptChainDrop': function() { acceptChainDrop(); },
+        'rejectChainDrop': function() { rejectChainDrop(); },
+        'refreshContactModalTransactions': function() { refreshContactModalTransactions(); },
+        'hideContactTxDetail': function() { hideContactTxDetail(); },
+
+        // Contact list
+        'scrollContacts': function(el) {
+            var dir = parseInt(el.getAttribute('data-direction'), 10);
+            scrollContacts(dir);
+        },
+        'toggleShowAllContacts': function() { toggleShowAllContacts(); },
+
+        // Quick actions
+        'scrollQuickActions': function(el) {
+            var dir = parseInt(el.getAttribute('data-direction'), 10);
+            scrollQuickActions(dir);
+        },
+
+        // Clipboard
+        'copyToClipboard': function(el) {
+            var text = el.getAttribute('data-copy-text');
+            var msg = el.getAttribute('data-copy-message');
+            copyToClipboard(text, msg);
+        },
+        'copyFromElement': function(el) {
+            var sourceId = el.getAttribute('data-copy-source');
+            var msg = el.getAttribute('data-copy-message');
+            var sourceEl = document.getElementById(sourceId);
+            if (sourceEl) {
+                var val = sourceEl.textContent;
+                if (val && val !== 'Not Available') {
+                    copyToClipboard(val, msg);
+                }
+            }
+        },
+
+        // Wallet
+        'refreshWalletData': function() { refreshWalletData(); },
+        'toggleP2pInfo': function() { toggleP2pInfo(); },
+
+        // DLQ
+        'setDlqFilter': function(el) {
+            var filter = el.getAttribute('data-filter');
+            setDlqFilter(filter);
+        },
+        'retryDlqItem': function(el) {
+            var id = parseInt(el.getAttribute('data-dlq-id'), 10);
+            retryDlqItem(id, el);
+        },
+        'abandonDlqItem': function(el) {
+            var id = parseInt(el.getAttribute('data-dlq-id'), 10);
+            abandonDlqItem(id, el);
+        },
+        'retryAllDlqItems': function(el) { retryAllDlqItems(el); },
+        'abandonAllDlqItems': function(el) { abandonAllDlqItems(el); },
+
+        // Settings
+        'toggleConfigSection': function(el) {
+            var section = el.getAttribute('data-section');
+            var arrow = el.getAttribute('data-arrow');
+            toggleConfigSection(section, arrow);
+        },
+        'showDebugTab': function(el) {
+            var tab = el.getAttribute('data-tab');
+            showDebugTab(tab, el);
+        },
+        'downloadLimitedDebugReport': function() { downloadLimitedDebugReport(); },
+        'downloadFullDebugReport': function() { downloadFullDebugReport(); },
+
+        // Toast close
+        'dismissToast': function(el) {
+            var toast = el.parentElement;
+            if (toast && toast.parentNode) { toast.parentNode.removeChild(toast); }
+        },
+
+        // Contact modal transaction detail
+        'showContactTxDetail': function(el) {
+            var index = parseInt(el.getAttribute('data-index'), 10);
+            showContactTxDetail(index);
+        }
+    };
+
+    // Delegated click handler
+    document.addEventListener('click', function(event) {
+        // Walk up from target to find closest element with data-action or data-confirm or data-stop-propagation
+        var el = event.target;
+        while (el && el !== document) {
+            // data-stop-propagation: stop propagation (for DLQ links inside clickable rows)
+            if (el.getAttribute('data-stop-propagation') === 'true' && !el.getAttribute('data-action')) {
+                event.stopPropagation();
+                return; // let the default action (e.g. href) proceed
+            }
+
+            // data-confirm: confirmation dialog for form submit buttons
+            if (el.getAttribute('data-confirm')) {
+                if (!confirm(el.getAttribute('data-confirm'))) {
+                    event.preventDefault();
+                }
+                return;
+            }
+
+            // data-action: dispatch to handler
+            var action = el.getAttribute('data-action');
+            if (action) {
+                // Handle stop propagation
+                if (el.getAttribute('data-stop-propagation') === 'true') {
+                    event.stopPropagation();
+                }
+
+                var handler = clickActions[action];
+                if (typeof handler === 'function') {
+                    handler(el, event);
+                }
+                return;
+            }
+
+            el = el.parentElement;
+        }
+    }, false);
+
+    // Delegated change handler
+    document.addEventListener('change', function(event) {
+        var el = event.target;
+        var action = el.getAttribute('data-action-change');
+        if (!action) return;
+
+        if (action === 'showSelectedContactAddress') { showSelectedContactAddress(); }
+        else if (action === 'showSelectedUserAddress') { showSelectedUserAddress(); }
+        else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
+    }, false);
+
+    // Delegated input handler
+    document.addEventListener('input', function(event) {
+        var el = event.target;
+        var action = el.getAttribute('data-action-input');
+        if (!action) return;
+
+        if (action === 'filterDebugLogs') {
+            var target = el.getAttribute('data-target');
+            filterDebugLogs(el, target);
+        }
+    }, false);
+
+    // Delegated keyup handler
+    document.addEventListener('keyup', function(event) {
+        var el = event.target;
+        var action = el.getAttribute('data-action-keyup');
+        if (!action) return;
+
+        if (action === 'filterContacts') { filterContacts(); }
+    }, false);
+})();

@@ -14,17 +14,17 @@
             <?php $hasRetryable = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying']) && in_array($_i['message_type'] ?? '', ['transaction','contact'])) { $hasRetryable = true; break; } } ?>
             <?php $hasActive = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying'])) { $hasActive = true; break; } } ?>
             <?php if ($hasRetryable): ?>
-            <button type="button" class="btn btn-success btn-sm" onclick="retryAllDlqItems(this)" title="Retry all pending transaction and contact messages">
+            <button type="button" class="btn btn-success btn-sm" data-action="retryAllDlqItems" title="Retry all pending transaction and contact messages">
                 <i class="fas fa-redo"></i> Retry All
             </button>
             <?php endif; ?>
             <?php if ($hasActive): ?>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="abandonAllDlqItems(this)" title="Abandon all pending messages">
+            <button type="button" class="btn btn-secondary btn-sm" data-action="abandonAllDlqItems" title="Abandon all pending messages">
                 <i class="fas fa-ban"></i> Abandon All
             </button>
             <?php endif; ?>
             <?php endif; ?>
-            <button type="button" class="btn btn-primary btn-sm" onclick="window.location.href = window.location.pathname + '#dlq'; window.location.reload();">
+            <button type="button" class="btn btn-primary btn-sm" data-action="reloadWithHash" data-hash="dlq">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
         </div>
@@ -46,7 +46,7 @@
             'abandoned' => ['label' => 'Abandoned', 'color' => '#6c757d', 'icon' => 'fa-ban'],
         ] as $statusKey => $meta): ?>
         <?php if (($dlqStats[$statusKey] ?? 0) > 0): ?>
-        <span class="dlq-stat-chip" style="border-color: <?php echo $meta['color']; ?>; color: <?php echo $meta['color']; ?>;">
+        <span class="dlq-stat-chip dlq-chip-<?php echo htmlspecialchars($statusKey); ?>">
             <i class="fas <?php echo $meta['icon']; ?>"></i>
             <?php echo (int)$dlqStats[$statusKey]; ?> <?php echo $meta['label']; ?>
         </span>
@@ -57,11 +57,11 @@
 
     <!-- Filter tabs — client-side, no page reload -->
     <div class="dlq-filter-tabs">
-        <button class="dlq-filter-tab active" data-filter="active"    onclick="setDlqFilter('active')">Pending &amp; Retrying</button>
-        <button class="dlq-filter-tab"        data-filter="pending"   onclick="setDlqFilter('pending')">Pending Only</button>
-        <button class="dlq-filter-tab"        data-filter="resolved"  onclick="setDlqFilter('resolved')">Resolved</button>
-        <button class="dlq-filter-tab"        data-filter="abandoned" onclick="setDlqFilter('abandoned')">Abandoned</button>
-        <button class="dlq-filter-tab"        data-filter="all"       onclick="setDlqFilter('all')">All</button>
+        <button class="dlq-filter-tab active" data-filter="active"    data-action="setDlqFilter">Pending &amp; Retrying</button>
+        <button class="dlq-filter-tab"        data-filter="pending"   data-action="setDlqFilter">Pending Only</button>
+        <button class="dlq-filter-tab"        data-filter="resolved"  data-action="setDlqFilter">Resolved</button>
+        <button class="dlq-filter-tab"        data-filter="abandoned" data-action="setDlqFilter">Abandoned</button>
+        <button class="dlq-filter-tab"        data-filter="all"       data-action="setDlqFilter">All</button>
     </div>
 
     <?php if (empty($dlqItems)): ?>
@@ -71,7 +71,7 @@
         <p>All messages delivered successfully — nothing in the queue.</p>
     </div>
     <?php else: ?>
-    <div class="empty-state" id="dlq-filter-empty" style="display:none;">
+    <div class="empty-state d-none" id="dlq-filter-empty">
         <i class="fas fa-filter dlq-empty-icon"></i>
         <h3>Nothing here</h3>
         <p>No items match the selected filter.</p>
@@ -148,7 +148,7 @@
                     </span>
                 </td>
                 <td data-label="Retries" class="dlq-cell-center">
-                    <span style="font-weight: 600; color: <?php echo $retries >= 5 ? '#dc3545' : '#6c757d'; ?>;">
+                    <span class="<?php echo $retries >= 5 ? 'dlq-retry-count-high' : 'dlq-retry-count'; ?>">
                         <?php echo $retries; ?>
                     </span>
                 </td>
@@ -156,7 +156,7 @@
                     <?php echo htmlspecialchars($dateDisplay); ?>
                 </td>
                 <td data-label="Status">
-                    <span class="dlq-status-badge" style="background:<?php echo $statusStyle['bg']; ?>; color:<?php echo $statusStyle['color']; ?>;">
+                    <span class="dlq-status-badge dlq-badge-<?php echo htmlspecialchars($status); ?>">
                         <i class="fas <?php echo $statusStyle['icon']; ?>"></i>
                         <?php echo ucfirst(htmlspecialchars($status)); ?>
                     </span>
@@ -167,7 +167,7 @@
                     <button type="button"
                             class="btn btn-sm btn-success dlq-retry-btn"
                             id="dlq-retry-<?php echo $dlqId; ?>"
-                            onclick="retryDlqItem(<?php echo $dlqId; ?>, this)"
+                            data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>"
                             title="Retry sending this message">
                         <i class="fas fa-redo"></i> Retry
                     </button>
@@ -180,7 +180,7 @@
                     <button type="button"
                             class="btn btn-sm btn-secondary dlq-abandon-btn"
                             id="dlq-abandon-<?php echo $dlqId; ?>"
-                            onclick="abandonDlqItem(<?php echo $dlqId; ?>, this)"
+                            data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>"
                             title="Abandon this message (cannot be undone)">
                         <i class="fas fa-ban"></i> Abandon
                     </button>
