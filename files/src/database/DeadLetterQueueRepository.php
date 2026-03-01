@@ -59,6 +59,19 @@ class DeadLetterQueueRepository extends AbstractRepository {
         int $retryCount,
         string $failureReason
     ) {
+        // Guard against duplicate active entries (e.g. two concurrent retry workers
+        // both exhausting retries for the same message_id at the same time).
+        $query = "SELECT id FROM {$this->tableName}
+                  WHERE message_id = :id AND status IN ('pending', 'retrying')
+                  LIMIT 1";
+        $stmt = $this->execute($query, [':id' => $messageId]);
+        if ($stmt) {
+            $existing = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if ($existing) {
+                return $existing['id'];
+            }
+        }
+
         // Use DateTime for proper microsecond support (date() doesn't support .u)
         $now = DateTime::createFromFormat('U.u', sprintf('%.6F', microtime(true)));
         $timestamp = $now ? $now->format('Y-m-d H:i:s.u') : date('Y-m-d H:i:s') . '.000000';
@@ -173,6 +186,40 @@ class DeadLetterQueueRepository extends AbstractRepository {
             return $this->decodeJsonFields($results, 'payload');
         } catch (PDOException $e) {
             $this->logError("Failed to get DLQ items by type", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Get items filtered by status (all message types)
+     *
+     * @param string|null $status Status filter, or null for all statuses
+     * @param int $limit Maximum number of items
+     * @return array Array of DLQ records ordered newest first
+     */
+    public function getItems(?string $status = null, int $limit = Constants::DLQ_BATCH_SIZE): array {
+        $query = "SELECT * FROM {$this->tableName}";
+        $params = [];
+
+        if ($status !== null) {
+            $query .= " WHERE status = :status";
+            $params[':status'] = $status;
+        }
+
+        $query .= " ORDER BY created_at DESC LIMIT :limit";
+
+        $stmt = $this->pdo->prepare($query);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->decodeJsonFields($results, 'payload');
+        } catch (PDOException $e) {
+            $this->logError("Failed to get DLQ items", $e);
             return [];
         }
     }

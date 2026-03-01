@@ -201,6 +201,59 @@ class MessageDeliveryRepository extends AbstractRepository {
     }
 
     /**
+     * Lock a message against processRetryQueue for the entire sync retry process.
+     *
+     * Sets next_retry_at unconditionally so the message is invisible to
+     * processRetryQueue's eligible-message query for $seconds seconds.
+     * Called by sendWithTracking() before entering attemptDeliveryWithRetries()
+     * to cover the initial next_retry_at = NULL window that exists right after
+     * createDelivery(). The incrementRetry() calls inside the retry loop then
+     * refresh the lock with per-attempt delays + a delivery buffer.
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @param int $seconds Lock duration in seconds
+     * @return bool Success
+     */
+    public function lockForProcessing(string $messageType, string $messageId, int $seconds = 300): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET next_retry_at = DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL :seconds SECOND)
+                  WHERE message_type = :type AND message_id = :id";
+
+        $stmt = $this->execute($query, [
+            ':seconds' => $seconds,
+            ':type' => $messageType,
+            ':id' => $messageId
+        ]);
+        return $stmt !== false;
+    }
+
+    /**
+     * Atomically claim a message for retry processing.
+     *
+     * Uses a conditional UPDATE so only one concurrent worker can claim a given
+     * message. Returns true only when this caller wins the race (rowCount = 1).
+     * The next_retry_at is pushed 300 s forward as a processing lock; normal
+     * incrementRetry() calls will overwrite it as each attempt completes.
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @return bool True if this caller successfully claimed the message
+     */
+    public function claimForRetry(string $messageType, string $messageId): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET next_retry_at = DATE_ADD(CURRENT_TIMESTAMP(6), INTERVAL 300 SECOND)
+                  WHERE message_type = :type
+                    AND message_id = :id
+                    AND delivery_stage IN ('pending', 'sent')
+                    AND retry_count < max_retries
+                    AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP(6))";
+
+        $stmt = $this->execute($query, [':type' => $messageType, ':id' => $messageId]);
+        return $stmt !== false && $stmt->rowCount() > 0;
+    }
+
+    /**
      * Get messages ready for retry
      *
      * @param int $limit Maximum number of messages to return

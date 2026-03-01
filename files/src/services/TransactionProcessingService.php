@@ -259,6 +259,15 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             }
         }
 
+        // Set expires_at if the user has configured a direct transaction delivery timeout.
+        // Default is 0 (no expiry) — direct transactions stay retryable indefinitely unless
+        // the user opts into a time-bounded delivery window via the directTxExpiration setting.
+        $directExpiry = $this->currentUser->getDirectTxExpirationTime();
+        if ($directExpiry > 0) {
+            $expiresAt = date('Y-m-d H:i:s', time() + $directExpiry);
+            $this->transactionRepository->setExpiresAt($txid, $expiresAt);
+        }
+
         $payload = $this->transactionPayload->buildStandardFromDatabase($message);
         Logger::getInstance()->info("Sending standard transaction (claimed)", [
             'txid' => $txid,
@@ -285,6 +294,15 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             $this->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
         } elseif (!$sendResult['success']) {
             $this->logDeliveryFailure($txid, $sendResult, 'Transaction');
+
+            // If delivery was exhausted and moved to the DLQ, cancel the transaction immediately
+            // so it is removed from the In-Progress panel and stops triggering auto-refresh.
+            // Without this it would stay in 'sent' status until expireStaleTransactions runs
+            // (up to directTxExpiration seconds later). The DLQ retry path resets the status
+            // back to 'sending' when the user retries, so cancelling here is safe.
+            if (!empty($sendResult['tracking']['dlq'])) {
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_CANCELLED, true);
+            }
         }
 
         return 'continue';
@@ -378,6 +396,16 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         if (!$isRelay && isset($p2p['destination_address'])) {
             $message['end_recipient_address'] = $p2p['destination_address'];
             $message['initial_sender_address'] = $this->transportUtility->resolveUserAddressForTransport($message['sender_address']);
+        }
+
+        // Set expires_at = p2p_expiry + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS so the
+        // transaction gets a delivery window after the P2P routing request itself expires.
+        // This decouples the two lifecycles: CleanupService::expireMessage() only cancels
+        // 'pending' transactions on P2P expiry; in-flight ones are cleaned up here instead.
+        if (!empty($p2p['expiration']) && (int)$p2p['expiration'] > 0) {
+            $p2pExpirySeconds = intval((int)$p2p['expiration'] / Constants::TIME_MICROSECONDS_TO_INT);
+            $expiresAt = date('Y-m-d H:i:s', $p2pExpirySeconds + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
+            $this->transactionRepository->setExpiresAt($txid, $expiresAt);
         }
 
         $payload = $this->transactionPayload->buildFromDatabase($message);
@@ -512,8 +540,27 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
             output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Syncing balances...', 'SILENT');
             $this->getSyncTrigger()->syncContactBalance($message['receiver_public_key']);
-            output('Balances synced. Retrying transaction...', 'SILENT');
-            return true;
+
+            $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']);
+            if ($correctPrevTxid !== null && $this->updateAndResignTransaction($txid, $correctPrevTxid, true)) {
+                output('Transaction re-signed after sync. Retrying transaction...', 'SILENT');
+
+                $updatedMessage = $this->fetchUpdatedTransaction($txid);
+                if ($updatedMessage) {
+                    $syncRetryPayload = $this->transactionPayload->buildStandardFromDatabase($updatedMessage);
+                    $syncRetrySendResult = $this->sendTransactionMessage($updatedMessage['receiver_address'], $syncRetryPayload, $txid);
+                    $syncRetryResponse = $syncRetrySendResult['response'];
+
+                    if ($syncRetryResponse && $syncRetryResponse['status'] === Constants::STATUS_ACCEPTED) {
+                        output('Sync retry: Transaction accepted!', 'SILENT');
+                        $this->handleAcceptedTransaction($txid, $syncRetrySendResult, $syncRetryResponse);
+                        return true;
+                    }
+                }
+                output('Sync retry failed, resetting to pending for next cycle.', 'SILENT');
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                return true;
+            }
         }
 
         output(outputSyncFallbackP2p(), 'SILENT');

@@ -665,6 +665,13 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
         }
 
+        // Lock the delivery record against processRetryQueue for the entire sync retry process.
+        // createDelivery() leaves next_retry_at = NULL, which processRetryQueue immediately
+        // treats as eligible — causing a parallel retry chain alongside this sync loop.
+        // This lock covers the initial NULL window; incrementRetry() inside the loop
+        // maintains the lock with per-attempt delay + a delivery-time buffer.
+        $this->deliveryRepository->lockForProcessing($messageType, $messageId);
+
         // Perform synchronous delivery with retries
         return $this->attemptDeliveryWithRetries(
             $messageType,
@@ -780,13 +787,19 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                 ]);
             }
 
-            // Update retry count in database
-            $this->deliveryRepository->incrementRetry($messageType, $messageId, 0, $lastError);
+            // Calculate delay before updating the DB.
+            $delay = ($attempt < $this->maxRetries) ? $this->calculateRetryDelay($attempt) : 0;
+
+            // Set next_retry_at = now + delay + delivery buffer so the lock covers BOTH the
+            // sleep window AND the following delivery attempt window (i.e. the time between
+            // waking up and calling incrementRetry again on the next iteration).
+            // Without the buffer, next_retry_at would expire during the delivery attempt,
+            // allowing processRetryQueue to claim and duplicate the retry chain.
+            $deliveryBuffer = Constants::TOR_TRANSPORT_TIMEOUT_SECONDS * 2; // 60s worst-case delivery
+            $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay + $deliveryBuffer, $lastError);
 
             // If we haven't exhausted retries, wait and try again
             if ($attempt < $this->maxRetries) {
-                $delay = $this->calculateRetryDelay($attempt);
-
                 $this->emitDebugEvent('outputMessageDeliveryRetry', [
                     $messageType,
                     $messageId,
@@ -1128,6 +1141,15 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $messageId = $delivery['message_id'];
             $recipient = $delivery['recipient_address'];
             $retryCount = (int) $delivery['retry_count'];
+
+            // Atomically claim this message — skip if another worker beat us to it
+            if (!$this->deliveryRepository->claimForRetry($messageType, $messageId)) {
+                $this->log('info', "Skipping message already claimed by another worker", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+                continue;
+            }
 
             // Get stored payload
             $payload = null;

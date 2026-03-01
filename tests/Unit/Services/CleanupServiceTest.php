@@ -412,10 +412,16 @@ class CleanupServiceTest extends TestCase
             ->method('updateStatus')
             ->with(self::TEST_HASH, Constants::STATUS_EXPIRED);
 
-        // Should cancel the pending transaction
+        // Should cancel only pending transactions via cancelPendingByMemo, NOT the broad updateStatus.
+        // In-flight transactions (sending/sent/accepted) are left to complete or expire via expires_at.
         $this->transactionRepository->expects($this->once())
-            ->method('updateStatus')
-            ->with(self::TEST_HASH, Constants::STATUS_CANCELLED);
+            ->method('cancelPendingByMemo')
+            ->with(self::TEST_HASH);
+
+        // updateStatus should NOT be called with cancelled on the transaction — that is now
+        // handled by cancelPendingByMemo which only targets 'pending' rows.
+        $this->transactionRepository->expects($this->never())
+            ->method('updateStatus');
 
         $this->service->expireMessage($message);
     }

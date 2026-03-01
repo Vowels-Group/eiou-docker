@@ -79,7 +79,8 @@ files/src/gui/
 ├── controllers/                    # Request handlers
 │   ├── ContactController.php       # Contact CRUD operations
 │   ├── TransactionController.php   # Transaction processing
-│   └── SettingsController.php      # Settings and debug operations
+│   ├── SettingsController.php      # Settings and debug operations
+│   └── DlqController.php           # Dead letter queue retry/abandon (AJAX)
 │
 ├── functions/
 │   └── Functions.php               # Central router and view data initializer
@@ -104,6 +105,7 @@ files/src/gui/
 │       ├── contactForm.html        # Add contact form
 │       ├── contactSection.html     # Contact list and modal
 │       ├── transactionHistory.html # Transaction list and modal
+│       ├── dlqSection.html         # Dead letter queue management
 │       ├── settingsSection.html    # Settings form and debug panel
 │       └── floatingButtons.html    # Back-to-top and refresh buttons
 │
@@ -194,7 +196,8 @@ Handles settings and debug operations.
 | `maxFee` | float | Maximum fee percentage |
 | `defaultCreditLimit` | float | Default credit limit |
 | `maxP2pLevel` | int | Maximum P2P routing hops |
-| `p2pExpiration` | int | P2P request timeout (seconds) |
+| `p2pExpiration` | int | P2P routing request timeout (seconds); P2P transactions get an extra 120s delivery window after this expires |
+| `directTxExpiration` | int | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: 120s (two Tor round-trips) |
 | `maxOutput` | int | Max display lines |
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
@@ -203,6 +206,24 @@ Handles settings and debug operations.
 | `syncChunkSize` | int | Transactions per sync chunk (10-500) |
 | `syncMaxChunks` | int | Max sync chunks per cycle (10-1000) |
 | `heldTxSyncTimeoutSeconds` | int | Held tx sync timeout in seconds (30-299) |
+
+---
+
+### DlqController
+
+Handles dead letter queue management actions (AJAX only — all responses are JSON).
+
+| Method | Action Value | Description | Parameters |
+|--------|-------------|-------------|------------|
+| `handleRetry()` | `dlqRetry` | Re-send a failed message to its original recipient | `dlq_id`, `csrf_token` |
+| `handleAbandon()` | `dlqAbandon` | Mark a DLQ item as abandoned | `dlq_id`, `csrf_token` |
+
+**Retry constraints:**
+- Only `transaction` and `contact` message types can be retried
+- `p2p` and `rp2p` items are rejected with an explanatory error — they are time-sensitive relay messages that expire in ≤300s and are stale by the time they reach the DLQ
+
+**Retry mechanism:**
+The controller re-sends the original signed payload (stored verbatim in the DLQ) directly to the recipient address using `TransportUtilityService::send()`. If the recipient returns a success status, the item is marked `resolved`. On failure it returns to `pending`.
 
 ---
 
@@ -273,6 +294,7 @@ Quick navigation cards linking to main sections:
 | Add Contact | `#add-contact` |
 | View Contacts | `#contacts` |
 | Transaction History | `#transactions` |
+| Failed Messages | `#dlq` — always shown; displays a pending count badge and warning style when DLQ has pending items |
 | Settings | `#settings` |
 
 ---
@@ -383,6 +405,56 @@ All three dashboard cards display per-currency rows. When a card has no data for
 **Auto-Refresh:**
 - Polls every 15 seconds when transactions pending
 - Controlled by `autoRefreshEnabled` setting
+
+---
+
+#### dlqSection.html
+
+The Dead Letter Queue section displays messages that could not be delivered after all automatic retry attempts.
+
+**Filter Tabs:**
+
+| Tab | Shows |
+|-----|-------|
+| Pending & Retrying *(default)* | All actionable items |
+| Pending Only | Items awaiting action |
+| Resolved | Successfully re-delivered items |
+| Abandoned | Manually discarded items |
+| All | Every DLQ record |
+
+**Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
+
+**Table Columns:** Type, Recipient, Failure Reason, Retries, Added, Status, Actions.
+
+**Actions per row:**
+
+| Action | Available For | Description |
+|--------|--------------|-------------|
+| **Retry** | `transaction`, `contact` types only, pending/retrying status | Re-sends the original signed payload directly to the recipient |
+| **Abandon** | Any pending/retrying item | Marks as abandoned — no further retries |
+
+> **Important — retry eligibility by message type:**
+>
+> | Type | Retryable | Reason |
+> |------|:---------:|--------|
+> | `transaction` | ✅ | User-initiated payment; payload remains valid |
+> | `contact` | ✅ | User-initiated contact request; payload remains valid |
+> | `p2p` | ❌ | P2P routing request; expires in ≤300s — stale by retry time |
+> | `rp2p` | ❌ | Relay message forwarded on behalf of another node; underlying P2P has expired or resolved elsewhere |
+>
+> `p2p` and `rp2p` items show an **"Expired"** label instead of a Retry button. Use **Abandon** to clear them.
+
+**Quick Action Card:**
+A **"Failed Messages"** card is always present in the Quick Actions bar between Transaction History and Settings, linking directly to `#dlq`. When pending DLQ items exist the card gains an orange warning style and a count badge. The Quick Actions bar is a horizontal slider at all viewport widths — each card is a fixed 218px wide and the bar scrolls when cards overflow the container.
+
+**DLQ Indicator in Transaction History:**
+Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
+
+**Mobile Layout:**
+At ≤640px the table collapses to a stacked card layout — each cell shows its column label as a prefix.
+
+**Notifications:**
+A warning toast appears when new items are added to the DLQ (tracked per session — each item fires once per browser session).
 
 ---
 

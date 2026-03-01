@@ -299,72 +299,143 @@ function initializeSendForm() {
             }
         });
 
+        // Shared selection logic — called from both mouse click and keyboard Enter
+        function selectRecipientOption(optionEl) {
+            var name = optionEl.getAttribute('data-name');
+            recipientSearch.value = name;
+            if (recipientHidden) recipientHidden.value = name;
+            recipientDropdown.style.display = 'none';
+            focusedOptionIndex = -1;
+
+            // Hide manual address, show address type selector
+            manualAddressGroup.style.display = 'none';
+            if (manualAddressInput) {
+                manualAddressInput.required = false;
+                manualAddressInput.value = '';
+            }
+
+            // Populate address type dropdown
+            var addressesJson = optionEl.getAttribute('data-addresses');
+            var addresses = {};
+            try {
+                addresses = addressesJson ? JSON.parse(addressesJson) : {};
+            } catch (err) {
+                addresses = {};
+            }
+
+            addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
+            var addressTypes = Object.keys(addresses);
+
+            for (var j = 0; j < addressTypes.length; j++) {
+                var type = addressTypes[j];
+                var addr = addresses[type];
+                var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
+                var displayType = type.toUpperCase();
+                addressTypeSelect.innerHTML += '<option value="' + escapeHtml(type) + '">' + escapeHtml(displayType) + ' (' + escapeHtml(truncatedAddr) + ')</option>';
+            }
+
+            if (addressTypes.length > 0) {
+                addressTypeGroup.style.display = 'block';
+                addressTypeSelect.required = true;
+                if (addressTypes.length === 1) {
+                    addressTypeSelect.value = addressTypes[0];
+                }
+            } else {
+                addressTypeGroup.style.display = 'none';
+                addressTypeSelect.required = false;
+            }
+
+            transactionTypeIndicator.style.display = 'block';
+            transactionTypeText.textContent = 'Direct Transaction (to contact)';
+            transactionTypeText.style.color = '#28a745';
+        }
+
         // Handle option click
         for (var i = 0; i < allOptions.length; i++) {
             allOptions[i].addEventListener('mousedown', function(e) {
                 e.preventDefault(); // Prevent blur from hiding dropdown before click registers
-                var name = this.getAttribute('data-name');
-                recipientSearch.value = name;
-                if (recipientHidden) recipientHidden.value = name;
-                recipientDropdown.style.display = 'none';
-
-                // Hide manual address, show address type selector
-                manualAddressGroup.style.display = 'none';
-                if (manualAddressInput) {
-                    manualAddressInput.required = false;
-                    manualAddressInput.value = '';
-                }
-
-                // Populate address type dropdown
-                var addressesJson = this.getAttribute('data-addresses');
-                var addresses = {};
-                try {
-                    addresses = addressesJson ? JSON.parse(addressesJson) : {};
-                } catch (err) {
-                    addresses = {};
-                }
-
-                addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
-                var addressTypes = Object.keys(addresses);
-
-                for (var j = 0; j < addressTypes.length; j++) {
-                    var type = addressTypes[j];
-                    var addr = addresses[type];
-                    var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
-                    var displayType = type.toUpperCase();
-                    addressTypeSelect.innerHTML += '<option value="' + escapeHtml(type) + '">' + escapeHtml(displayType) + ' (' + escapeHtml(truncatedAddr) + ')</option>';
-                }
-
-                if (addressTypes.length > 0) {
-                    addressTypeGroup.style.display = 'block';
-                    addressTypeSelect.required = true;
-                    if (addressTypes.length === 1) {
-                        addressTypeSelect.value = addressTypes[0];
-                    }
-                } else {
-                    addressTypeGroup.style.display = 'none';
-                    addressTypeSelect.required = false;
-                }
-
-                transactionTypeIndicator.style.display = 'block';
-                transactionTypeText.textContent = 'Direct Transaction (to contact)';
-                transactionTypeText.style.color = '#28a745';
+                selectRecipientOption(this);
             });
 
             // Hover highlight
             allOptions[i].addEventListener('mouseenter', function() {
                 this.style.background = '#e9ecef';
+                // Sync keyboard index to mouse position
+                var visible = getVisibleRecipientOptions();
+                for (var k = 0; k < visible.length; k++) {
+                    if (visible[k] === this) { focusedOptionIndex = k; break; }
+                }
             });
             allOptions[i].addEventListener('mouseleave', function() {
                 this.style.background = '';
             });
         }
 
+        // Keyboard navigation — ArrowDown/Up to highlight, Enter to select, Escape to close
+        var focusedOptionIndex = -1;
+
+        function getVisibleRecipientOptions() {
+            var visible = [];
+            for (var i = 0; i < allOptions.length; i++) {
+                if (allOptions[i].style.display !== 'none') {
+                    visible.push(allOptions[i]);
+                }
+            }
+            return visible;
+        }
+
+        function highlightRecipientOption(visible, index) {
+            for (var i = 0; i < visible.length; i++) {
+                visible[i].style.background = '';
+            }
+            if (index >= 0 && index < visible.length) {
+                visible[index].style.background = '#e9ecef';
+                // Scroll within the dropdown only — never scroll the page
+                var el = visible[index];
+                if (el.offsetTop < recipientDropdown.scrollTop) {
+                    recipientDropdown.scrollTop = el.offsetTop;
+                } else if (el.offsetTop + el.offsetHeight > recipientDropdown.scrollTop + recipientDropdown.clientHeight) {
+                    recipientDropdown.scrollTop = el.offsetTop + el.offsetHeight - recipientDropdown.clientHeight;
+                }
+            }
+        }
+
+        recipientSearch.addEventListener('keydown', function(e) {
+            var key = e.key;
+            if (recipientDropdown.style.display === 'none') { return; }
+            var visible = getVisibleRecipientOptions();
+            if (!visible.length) { return; }
+
+            if (key === 'ArrowDown') {
+                e.preventDefault();
+                focusedOptionIndex = focusedOptionIndex < visible.length - 1 ? focusedOptionIndex + 1 : 0;
+                highlightRecipientOption(visible, focusedOptionIndex);
+            } else if (key === 'ArrowUp') {
+                e.preventDefault();
+                focusedOptionIndex = focusedOptionIndex > 0 ? focusedOptionIndex - 1 : visible.length - 1;
+                highlightRecipientOption(visible, focusedOptionIndex);
+            } else if (key === 'Enter') {
+                if (focusedOptionIndex >= 0 && focusedOptionIndex < visible.length) {
+                    e.preventDefault();
+                    selectRecipientOption(visible[focusedOptionIndex]);
+                }
+            } else if (key === 'Escape') {
+                recipientDropdown.style.display = 'none';
+                focusedOptionIndex = -1;
+            }
+        });
+
+        // Reset focus index when search text changes
+        recipientSearch.addEventListener('input', function() {
+            focusedOptionIndex = -1;
+        }, true); // capture phase so it runs after the existing input handler
+
         // Hide dropdown on blur
         recipientSearch.addEventListener('blur', function() {
             // Small delay to allow option click to register
             setTimeout(function() {
                 recipientDropdown.style.display = 'none';
+                focusedOptionIndex = -1;
             }, 150);
         });
     }
@@ -1371,7 +1442,10 @@ function updateQuickActionsScrollButtons() {
 function scrollQuickActions(direction) {
     var grid = document.getElementById('quick-actions-grid');
     if (!grid) return;
-    var scrollAmount = 130 * direction;
+    var firstCard = grid.querySelector('.action-card');
+    var cardWidth = firstCard ? firstCard.offsetWidth : 218;
+    var gap = parseInt(getComputedStyle(grid).gap) || 16;
+    var scrollAmount = (cardWidth + gap) * direction;
     grid.scrollLeft = grid.scrollLeft + scrollAmount;
     setTimeout(updateQuickActionsScrollButtons, 50);
 }
@@ -3294,10 +3368,302 @@ function showDlqToasts() {
     }
 }
 
+/**
+ * Client-side DLQ tab filter — show/hide rows without a page reload.
+ *
+ * filter values: 'active' (pending+retrying), 'pending', 'resolved',
+ *                'abandoned', 'all'
+ *
+ * @param {string} filter
+ */
+function setDlqFilter(filter) {
+    // Update active tab
+    var tabs = document.querySelectorAll('.dlq-filter-tab');
+    for (var i = 0; i < tabs.length; i++) {
+        var isActive = tabs[i].getAttribute('data-filter') === filter;
+        if (isActive) {
+            tabs[i].classList.add('active');
+        } else {
+            tabs[i].classList.remove('active');
+        }
+    }
+
+    // Show/hide rows
+    var rows = document.querySelectorAll('.dlq-row');
+    var visibleCount = 0;
+    for (var j = 0; j < rows.length; j++) {
+        var status = rows[j].getAttribute('data-status');
+        var show = filter === 'all'
+            || (filter === 'active' && (status === 'pending' || status === 'retrying'))
+            || (filter !== 'all' && filter !== 'active' && status === filter);
+        rows[j].style.display = show ? '' : 'none';
+        if (show) { visibleCount++; }
+    }
+
+    // Toggle filter-empty message vs table
+    var filterEmpty  = document.getElementById('dlq-filter-empty');
+    var tableWrapper = document.querySelector('#dlq .dlq-table-wrapper');
+    if (filterEmpty)  { filterEmpty.style.display  = visibleCount === 0 ? '' : 'none'; }
+    if (tableWrapper) { tableWrapper.style.display = visibleCount === 0 ? 'none' : ''; }
+
+    // Update footer count
+    var countEl = document.getElementById('dlq-visible-count');
+    if (countEl) { countEl.textContent = visibleCount; }
+}
+
 // Initialize DLQ toasts on page load (Tor Browser compatible)
 document.addEventListener('DOMContentLoaded', function() {
     showDlqToasts();
+    // Apply default filter (pending & retrying) on load
+    if (document.querySelector('.dlq-filter-tab')) {
+        setDlqFilter('active');
+    }
 });
+
+/**
+ * Retry a DLQ item by ID.
+ *
+ * Sends an AJAX POST to the current page with action=dlqRetry.
+ * Disables the button during the request and shows a toast on completion.
+ * On success the row is visually marked resolved; on failure the status
+ * label is updated and the row remains actionable for another attempt.
+ *
+ * @param {number} dlqId - The DLQ record ID
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function retryDlqItem(dlqId, btn) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
+    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
+    if (retryBtn)  { retryBtn.disabled  = true; retryBtn.innerHTML  = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+    if (abandonBtn) { abandonBtn.disabled = true; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqRetry');
+    formData.append('dlq_id',     dlqId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 90000; // 90s — Tor connections can be slow
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
+        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+        if (abandonBtn) { abandonBtn.disabled = false; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+        if (abandonBtn) { abandonBtn.disabled = false; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                showToast('Delivered', 'Message successfully re-sent', 'success');
+                setTimeout(function() { window.location.reload(); }, 1500);
+            } else {
+                var errMsg = response.error || 'Retry failed — try again later';
+                showToast('Retry Failed', errMsg, 'error');
+                if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+                if (abandonBtn) { abandonBtn.disabled = false; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
+            if (abandonBtn) { abandonBtn.disabled = false; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
+ * Abandon a DLQ item by ID (marks it as abandoned — cannot be undone).
+ *
+ * Prompts for confirmation before sending the AJAX request.
+ * Hides the row on success.
+ *
+ * @param {number} dlqId - The DLQ record ID
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function abandonDlqItem(dlqId, btn) {
+    if (!confirm('Abandon this message? It will no longer be retried and this cannot be undone.')) {
+        return;
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
+    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
+    if (retryBtn)  { retryBtn.disabled  = true; }
+    if (abandonBtn) { abandonBtn.disabled = true; abandonBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqAbandon');
+    formData.append('dlq_id',     dlqId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 30000; // 30s — enough for a simple DB update even over Tor
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Request timed out — please try again', 'warning');
+        if (retryBtn)  { retryBtn.disabled  = false; }
+        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (retryBtn)  { retryBtn.disabled  = false; }
+        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                showToast('Abandoned', 'Message marked as abandoned', 'info');
+                setTimeout(function() { window.location.reload(); }, 1000);
+            } else {
+                showToast('Error', response.error || 'Failed to abandon item', 'error');
+                if (retryBtn)  { retryBtn.disabled  = false; }
+                if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (retryBtn)  { retryBtn.disabled  = false; }
+            if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
+ * Retry all pending/retrying transaction and contact DLQ items.
+ *
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function retryAllDlqItems(btn) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqRetryAll');
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 120000; // 2 min — bulk retries can be slow over Tor
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Bulk retry timed out — some messages may still be queued', 'warning');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                var count = response.queued || 0;
+                showToast('Retry All', count + ' message' + (count !== 1 ? 's' : '') + ' queued for retry', 'success');
+                setTimeout(function() { window.location.reload(); }, 1500);
+            } else {
+                showToast('Error', response.error || 'Bulk retry failed', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+        }
+    };
+
+    xhr.send(formData);
+}
+
+/**
+ * Abandon all pending/retrying DLQ items (all types).
+ *
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function abandonAllDlqItems(btn) {
+    if (!confirm('Abandon all pending messages? This cannot be undone.')) {
+        return;
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+
+    var formData = new FormData();
+    formData.append('action',     'dlqAbandonAll');
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 30000;
+
+    xhr.ontimeout = function() {
+        showToast('Timeout', 'Request timed out — please try again', 'warning');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error — please try again', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                var count = response.abandoned || 0;
+                showToast('Abandoned', count + ' message' + (count !== 1 ? 's' : '') + ' abandoned', 'info');
+                setTimeout(function() { window.location.reload(); }, 1000);
+            } else {
+                showToast('Error', response.error || 'Bulk abandon failed', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
+        }
+    };
+
+    xhr.send(formData);
+}
 
 /**
  * Initialize a toggle switch with status text.

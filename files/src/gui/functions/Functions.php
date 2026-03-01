@@ -97,6 +97,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit;
     }
+
+    // AJAX-only DLQ actions (returns JSON, exits immediately)
+    if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
+        try {
+            $dlqController->routeAction();
+        } catch (\Throwable $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 }
 
 // Handle GET requests for update checking
@@ -316,7 +327,17 @@ try {
 if ($tcRepo && $user->has('public')) {
     $myPubkey = $user->getPublicKey();
     foreach ($acceptedContacts as &$contact) {
-        if (($contact['valid_chain'] ?? null) === 0 && !empty($contact['pubkey'])) {
+        // Compute gap details when the chain is known-invalid OR when there is an
+        // active chain-drop proposal (covers the window between proposal creation and
+        // the first "Check Status" ping that would set valid_chain = 0 in the DB).
+        $hasInvalidChain = (int)($contact['valid_chain'] ?? -1) === 0;
+        $hasActiveProposal = !empty($contact['chain_drop_proposal'])
+            && in_array(
+                $contact['chain_drop_proposal']['status'] ?? '',
+                ['pending', 'awaiting_acceptance', 'rejected'],
+                true
+            );
+        if (($hasInvalidChain || $hasActiveProposal) && !empty($contact['pubkey'])) {
             try {
                 $integrity = $tcRepo->verifyChainIntegrity($myPubkey, $contact['pubkey']);
                 if (!$integrity['valid'] && !empty($integrity['gap_context'])) {
@@ -352,6 +373,33 @@ try {
 } catch (Exception $e) {
     // Silently fail - DLQ notification is non-critical
     $newlyAddedToDlq = [];
+}
+
+// Dead Letter Queue - load items for the DLQ management section
+$dlqItems = [];
+$dlqStats = [];
+$dlqPendingCount = 0;
+try {
+    $dlqRepo = $serviceContainer->getDeadLetterQueueRepository();
+    // Always load all items — client-side JS handles tab filtering with no page reload
+    $dlqItems = $dlqRepo->getItems(null, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
+
+    $dlqStats        = $dlqRepo->getStatistics();
+    $dlqPendingCount = $dlqRepo->getPendingCount();
+
+    // Collect message_ids for active (pending/retrying) transaction DLQ entries so
+    // the transaction history can show a DLQ indicator on affected transactions.
+    $dlqActiveTxMessageIds = [];
+    $activeTxDlq = array_merge(
+        $dlqRepo->getByMessageType('transaction', 'pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE),
+        $dlqRepo->getByMessageType('transaction', 'retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE)
+    );
+    foreach ($activeTxDlq as $dlqEntry) {
+        $dlqActiveTxMessageIds[] = $dlqEntry['message_id'];
+    }
+} catch (Exception $e) {
+    // Silently fail - DLQ section is non-critical
+    $dlqActiveTxMessageIds = [];
 }
 
 // Fetch available credit per contact and merge into contact arrays

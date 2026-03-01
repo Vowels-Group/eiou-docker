@@ -132,6 +132,10 @@ function getTransactionsTableSchema() {
         sending_started_at DATETIME(6) DEFAULT NULL,  /* When processing started, for recovery timeout detection */
         recovery_count INT DEFAULT 0,                  /* Number of times this transaction has been recovered */
         needs_manual_review TINYINT(1) DEFAULT 0,      /* Flag for transactions needing manual intervention */
+        expires_at DATETIME(6) DEFAULT NULL,           /* Absolute delivery deadline: NULL = no expiry (direct tx default).
+                                                          P2P transactions set to p2p_expiry + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS.
+                                                          Direct transactions set only if user configures directTxExpiration > 0.
+                                                          CleanupService cancels transactions past this time that are still pending/sending. */
         INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
@@ -144,7 +148,8 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_memo (memo(255)),
         INDEX idx_transactions_initial_sender (initial_sender_address),
         INDEX idx_transactions_end_recipient (end_recipient_address),
-        INDEX idx_transactions_sending_recovery (status, sending_started_at)  /* For finding stuck transactions */
+        INDEX idx_transactions_sending_recovery (status, sending_started_at),  /* For finding stuck transactions */
+        INDEX idx_transactions_expires_at (expires_at)  /* For efficient expired-transaction cleanup queries */
     )";
 }
 

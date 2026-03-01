@@ -58,6 +58,20 @@
                         <?php else: ?>
                             <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                         <?php endif; ?>
+                        <?php
+                        $ipTxidInDlq = false;
+                        if (!empty($ipTx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                            foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                                if (strpos($dlqMsgId, $ipTx['txid']) !== false) {
+                                    $ipTxidInDlq = true;
+                                    break;
+                                }
+                            }
+                        }
+                        ?>
+                        <?php if ($ipTxidInDlq): ?>
+                            <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon" onclick="event.stopPropagation()"><i class="fas fa-inbox"></i> DLQ</a>
+                        <?php endif; ?>
                     </div>
                     <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
                     <div class="tx-in-progress-details" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;">
@@ -165,6 +179,20 @@
                             <?php else: ?>
                                 <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                             <?php endif; ?>
+                            <?php
+                            $txidInDlq = false;
+                            if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                                foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                                    if (strpos($dlqMsgId, $tx['txid']) !== false) {
+                                        $txidInDlq = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            ?>
+                            <?php if ($txidInDlq): ?>
+                                <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon" onclick="event.stopPropagation()"><i class="fas fa-inbox"></i> DLQ</a>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
@@ -242,30 +270,28 @@
             if (indicator) indicator.classList.add('active');
 
             autoRefreshInterval = setInterval(function() {
-                // Check if manual refresh is in progress
-                if (window.isRefreshing) {
-                    return;
-                }
+                // Skip if manual refresh is already in progress
+                if (window.isRefreshing) { return; }
 
-                // Use existing check_updates mechanism with AbortController timeout for Tor compatibility
-                var controller = new AbortController();
-                var timeoutId = setTimeout(function() { controller.abort(); }, 30000); // 30 seconds for Tor
-                fetch(window.location.pathname + '?check_updates=1&_=' + Date.now(), { signal: controller.signal })
-                    .then(function(response) {
-                        clearTimeout(timeoutId);
-                        // Double-check flag before reload (in case manual refresh started during fetch)
-                        if (window.isRefreshing) {
-                            return;
-                        }
-                        if (response.ok) {
-                            // Reload page to get updated transaction status
-                            window.location.reload();
-                        }
-                    })
-                    .catch(function(err) {
-                        clearTimeout(timeoutId);
-                        // Error logged silently - auto-refresh will retry
-                    });
+                // XMLHttpRequest — Tor Browser compatible (no fetch/AbortController)
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', window.location.pathname + '?check_updates=1&_=' + Date.now(), true);
+                xhr.timeout = 30000; // 30s for Tor
+
+                xhr.ontimeout = function() {
+                    // Silently ignore timeout — will retry on next interval
+                };
+                xhr.onerror = function() {
+                    // Silently ignore network errors — will retry on next interval
+                };
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4) { return; }
+                    if (window.isRefreshing) { return; }
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        window.location.reload();
+                    }
+                };
+                xhr.send();
             }, AUTO_REFRESH_DELAY);
         }
     }

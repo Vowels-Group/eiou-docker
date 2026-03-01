@@ -253,6 +253,13 @@ body {
 .quick-actions {
     display: flex;
     gap: 1rem;
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE */
+}
+
+.quick-actions::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
 }
 
 .quick-actions-scroll-btn {
@@ -293,19 +300,6 @@ body {
     right: -14px;
 }
 
-/* Hide descriptions at medium widths to keep cards compact on one line */
-@media (max-width: 992px) {
-    .action-card p {
-        display: none;
-    }
-    .action-card {
-        padding: 1rem 0.5rem;
-    }
-    .action-card h3 {
-        font-size: 0.85rem;
-    }
-}
-
 .action-card {
     background: white;
     padding: 1.5rem;
@@ -316,8 +310,8 @@ body {
     text-decoration: none;
     color: inherit;
     display: block;
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 218px;
+    min-width: 218px;
 }
 
 .action-card:hover {
@@ -1254,21 +1248,13 @@ body {
         grid-template-columns: 1fr;
     }
 
-    /* Horizontal slider for quick actions at tablet/small widths */
     .quick-actions {
-        overflow-x: auto;
         gap: 0.75rem;
-        padding-bottom: 0.5rem;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE */
-    }
-
-    .quick-actions::-webkit-scrollbar {
-        display: none; /* Chrome/Safari */
     }
 
     .action-card {
-        flex: 0 0 100px;
+        flex: 0 0 130px;
+        min-width: 130px;
         padding: 0.75rem 0.5rem;
     }
 
@@ -1278,7 +1264,7 @@ body {
     }
 
     .action-card h3 {
-        font-size: 0.75rem;
+        font-size: 0.85rem;
         margin-bottom: 0;
     }
 
@@ -1655,6 +1641,11 @@ html {
     color: #000;
 }
 
+.tx-status-sending {
+    background: #fd7e14;
+    color: #fff;
+}
+
 .tx-status-sent {
     background: #17a2b8;
     color: #fff;
@@ -1868,6 +1859,10 @@ html {
     border-radius: 4px;
     font-size: 0.7rem;
     font-weight: 600;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .tx-type-p2p {
@@ -2645,4 +2640,291 @@ html {
 
 .monospace {
     font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* ============================================================
+   Dead Letter Queue (DLQ) Section
+   ============================================================ */
+
+.dlq-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Pending count badge in section header and action card */
+.dlq-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #dc3545;
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+/* Stats bar with chip-style counts per status */
+.dlq-stats-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.dlq-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    border: 1.5px solid currentColor;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* Filter tabs */
+.dlq-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+}
+
+.dlq-filter-tab {
+    padding: 0.3rem 0.85rem;
+    border-radius: 20px;
+    border: 1px solid #dee2e6;
+    background: #f8f9fa;
+    color: #495057;
+    font-size: 0.85rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.dlq-filter-tab:hover {
+    background: #e9ecef;
+    color: #212529;
+}
+
+.dlq-filter-tab.active {
+    background: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+/* Table wrapper — horizontal scroll on small screens */
+.dlq-table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 0.5rem;
+}
+
+.dlq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.dlq-table th {
+    background: #f8f9fa;
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+}
+
+.dlq-table td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+.dlq-row:hover {
+    background: #f8f9fa;
+}
+
+/* Inline status badge for DLQ rows */
+.dlq-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Address cell — monospace */
+.dlq-address {
+    font-size: 0.82rem;
+}
+
+/* Single-line truncation with ellipsis — applied to recipient and reason spans */
+.dlq-truncate {
+    display: block;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Action buttons cell (inner div inside <td>) */
+.dlq-actions-cell {
+    white-space: nowrap;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* DLQ indicator badge shown on transactions that are in the Dead Letter Queue */
+.dlq-tx-indicator {
+    background: #dc3545;
+    color: #fff;
+    cursor: pointer;
+}
+
+/* Non-retryable label for time-sensitive relay messages */
+.dlq-no-retry-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    color: #856404;
+    font-style: italic;
+    cursor: help;
+}
+
+/* Warning variant of action-card for the DLQ quick-action tile */
+.action-card.action-card-warning {
+    border: 2px solid #ffc107;
+}
+
+.action-card.action-card-warning:hover {
+    background: #fff3cd;
+    border-color: #e0a800;
+}
+
+/* DLQ mobile: convert table rows to stacked cards */
+@media (max-width: 640px) {
+    .dlq-table thead {
+        display: none;
+    }
+
+    .dlq-table,
+    .dlq-table tbody,
+    .dlq-table tr,
+    .dlq-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .dlq-table tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        background: #fff;
+    }
+
+    .dlq-table td {
+        padding: 0.3rem 0;
+        border: none;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .dlq-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.8rem;
+        min-width: 90px;
+        flex-shrink: 0;
+    }
+
+    .dlq-table td[data-label=""]::before {
+        display: none;
+    }
+
+    .dlq-actions-cell {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding-top: 0.5rem;
+    }
+}
+
+/* DLQ section header actions bar (Refresh button container) */
+.dlq-section-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* DLQ description / info paragraph */
+.dlq-description {
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Empty-state success icon */
+.dlq-empty-icon {
+    color: #28a745;
+}
+
+/* Failure Reason cell text */
+.dlq-reason-text {
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+/* Retries / Recipient / Reason cell — centred */
+.dlq-cell-center {
+    text-align: center;
+}
+
+/* Added date cell */
+.dlq-date-cell {
+    font-size: 0.85rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* Final-state label for resolved/abandoned rows */
+.dlq-final-state {
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* Footer item count note */
+.dlq-footer-count {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+}
+
+/* Scrollable DLQ table wrapper — applied when >5 items */
+.dlq-table-scrollable {
+    max-height: 420px; /* ~5 rows + header */
+    overflow-y: auto;
+}
+
+/* Centre-align th for recipient and reason columns */
+.dlq-table th:nth-child(2),
+.dlq-table th:nth-child(3) {
+    text-align: center;
 }
