@@ -1442,7 +1442,10 @@ function updateQuickActionsScrollButtons() {
 function scrollQuickActions(direction) {
     var grid = document.getElementById('quick-actions-grid');
     if (!grid) return;
-    var scrollAmount = 130 * direction;
+    var firstCard = grid.querySelector('.action-card');
+    var cardWidth = firstCard ? firstCard.offsetWidth : 218;
+    var gap = parseInt(getComputedStyle(grid).gap) || 16;
+    var scrollAmount = (cardWidth + gap) * direction;
     grid.scrollLeft = grid.scrollLeft + scrollAmount;
     setTimeout(updateQuickActionsScrollButtons, 50);
 }
