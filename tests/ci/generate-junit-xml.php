@@ -48,17 +48,13 @@ if (file_exists($testListFile) && filesize($testListFile) > 0) {
 $totalFromList = count($testNames);
 fprintf(STDOUT, "Loaded %d test names from list\n", $totalFromList);
 
-// --- Extract progress characters ---
-// PHPUnit outputs lines of dots like: ...S..F..E....
-// These are lines consisting only of progress characters (and possibly trailing whitespace)
-$progressChars = '';
-if (preg_match_all('/^[.FEWIRSD]+/m', $clean, $dotMatches)) {
-    $progressChars = implode('', $dotMatches[0]);
-}
-$dotCount = strlen($progressChars);
-fprintf(STDOUT, "Captured %d progress characters out of %d tests\n", $dotCount, $totalFromList);
-
-// --- Map each non-passing character to its test name ---
+// --- Extract progress characters using counter anchors ---
+// PHPUnit progress lines: "...S..F..  183 / 3600 (  5%)"
+// The counter at the end tells us the LAST test number on that line.
+// We use this to map characters to exact test positions, even when
+// log messages interleave and split progress across multiple lines.
+// Only lines ending with "N / TOTAL (XX%)" are trusted — this avoids
+// false positives from log output that happens to start with F, R, etc.
 $mappedSkipped = [];
 $mappedFailed = [];
 $mappedErrors = [];
@@ -66,39 +62,53 @@ $mappedWarnings = [];
 $mappedIncomplete = [];
 $mappedRisky = [];
 $mappedDeprecations = [];
+$dotCount = 0;
 
-for ($i = 0; $i < $dotCount; $i++) {
-    $char = $progressChars[$i];
-    if ($char === '.') {
-        continue; // passed
+if (preg_match_all('/^([.FEWIRSD]+)\s+(\d+)\s*\/\s*(\d+)\s*\(/m', $clean, $counterMatches, PREG_SET_ORDER)) {
+    foreach ($counterMatches as $match) {
+        $chars = $match[1];
+        $endPos = (int) $match[2];  // e.g. 366 = this line ends at test 366
+        $charCount = strlen($chars);
+
+        // The characters on this line represent tests (endPos - charCount + 1) through endPos
+        // Use 0-indexed: tests[endPos - charCount] through tests[endPos - 1]
+        $startIdx = $endPos - $charCount; // 0-indexed start
+
+        for ($j = 0; $j < $charCount; $j++) {
+            $char = $chars[$j];
+            $testIdx = $startIdx + $j; // 0-indexed position in test list
+            $dotCount++;
+
+            if ($char === '.') {
+                continue;
+            }
+
+            $testName = ($testIdx < $totalFromList) ? $testNames[$testIdx] : "Unknown test #" . ($testIdx + 1);
+
+            switch ($char) {
+                case 'S': $mappedSkipped[] = $testName; break;
+                case 'F': $mappedFailed[] = $testName; break;
+                case 'E': $mappedErrors[] = $testName; break;
+                case 'W': $mappedWarnings[] = $testName; break;
+                case 'I': $mappedIncomplete[] = $testName; break;
+                case 'R': $mappedRisky[] = $testName; break;
+                case 'D': $mappedDeprecations[] = $testName; break;
+            }
+        }
     }
+}
+fprintf(STDOUT, "Captured %d progress characters out of %d tests\n", $dotCount, $totalFromList);
 
-    // Look up test name by position (0-indexed)
-    $testName = ($i < $totalFromList) ? $testNames[$i] : "Unknown test #" . ($i + 1);
-
-    switch ($char) {
-        case 'S':
-            $mappedSkipped[] = $testName;
-            break;
-        case 'F':
-            $mappedFailed[] = $testName;
-            break;
-        case 'E':
-            $mappedErrors[] = $testName;
-            break;
-        case 'W':
-            $mappedWarnings[] = $testName;
-            break;
-        case 'I':
-            $mappedIncomplete[] = $testName;
-            break;
-        case 'R':
-            $mappedRisky[] = $testName;
-            break;
-        case 'D':
-            $mappedDeprecations[] = $testName;
-            break;
-    }
+// --- Cross-reference with PHPUnit exit code ---
+// PHPUnit exit 0 = all tests passed. Any F/E characters in the progress output
+// are false positives from interleaved log messages (test code that writes to stdout
+// can produce lines starting with F, R, etc. that look like progress characters).
+// Only trust F/E from dots when the exit code confirms actual failures.
+if ($exitCode === 0 && (!empty($mappedFailed) || !empty($mappedErrors))) {
+    fprintf(STDOUT, "Note: PHPUnit exit code 0 (all passed) — %d apparent F/E chars are from interleaved output, ignoring\n",
+        count($mappedFailed) + count($mappedErrors));
+    $mappedFailed = [];
+    $mappedErrors = [];
 }
 
 // --- Print identified tests to CI log ---
