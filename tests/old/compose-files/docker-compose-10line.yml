@@ -52,6 +52,16 @@ services:
       - node-a-mysql-data:/var/lib/mysql
       - node-a-files:/etc/eiou/
       - node-a-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -92,6 +102,16 @@ services:
       - node-b-mysql-data:/var/lib/mysql
       - node-b-files:/etc/eiou/
       - node-b-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -132,6 +152,16 @@ services:
       - node-c-mysql-data:/var/lib/mysql
       - node-c-files:/etc/eiou/
       - node-c-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -172,6 +202,16 @@ services:
       - node-d-mysql-data:/var/lib/mysql
       - node-d-files:/etc/eiou/
       - node-d-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -212,6 +252,16 @@ services:
       - node-e-mysql-data:/var/lib/mysql
       - node-e-files:/etc/eiou/
       - node-e-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -252,6 +302,16 @@ services:
       - node-f-mysql-data:/var/lib/mysql
       - node-f-files:/etc/eiou/
       - node-f-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -292,6 +352,16 @@ services:
       - node-g-mysql-data:/var/lib/mysql
       - node-g-files:/etc/eiou/
       - node-g-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -332,6 +402,16 @@ services:
       - node-h-mysql-data:/var/lib/mysql
       - node-h-files:/etc/eiou/
       - node-h-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -372,6 +452,16 @@ services:
       - node-i-mysql-data:/var/lib/mysql
       - node-i-files:/etc/eiou/
       - node-i-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
@@ -412,6 +502,16 @@ services:
       - node-j-mysql-data:/var/lib/mysql
       - node-j-files:/etc/eiou/
       - node-j-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 200
