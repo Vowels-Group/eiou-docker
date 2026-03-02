@@ -58,36 +58,52 @@ jobs:
           cp tests/phpunit.xml.dist tests/phpunit.xml
           mkdir -p test-results
 
+      - name: "List tests in execution order"
+        working-directory: files
+        run: |
+          # Get the ordered test list so we can map progress dot positions
+          # to actual test names (e.g. dot #154 = test #154 in this list).
+          vendor/bin/phpunit --configuration ../tests/phpunit.xml \
+            --list-tests 2>/dev/null | grep '^ - ' > /tmp/phpunit-test-list.txt
+          echo "Total tests listed: $(wc -l < /tmp/phpunit-test-list.txt)"
+
       - name: "Run PHPUnit"
         id: phpunit
         working-directory: files
         run: |
-          # Run PHPUnit directly to stdout (same as main branch).
-          # --no-progress avoids truncated progress dots in CI.
-          # --colors=always ensures output is visible in CI logs.
-          vendor/bin/phpunit --configuration ../tests/phpunit.xml --no-progress --colors=always
+          # Run WITH progress dots enabled so we can see S/F/E positions.
+          # Each character in the progress output maps 1:1 to the test list.
+          # --display-skipped and --display-incomplete print detail sections
+          # at the end for any non-passing tests.
+          set +e
+          vendor/bin/phpunit \
+            --configuration ../tests/phpunit.xml \
+            --display-skipped --display-incomplete \
+            --colors=never 2>&1 | tee /tmp/phpunit-output.txt
+          PHPUNIT_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "PHPUNIT_EXIT=${PHPUNIT_EXIT}" >> "$GITHUB_ENV"
+          exit ${PHPUNIT_EXIT}
 
       - name: "Generate test report"
         if: always()
-        working-directory: files
         run: |
           JUNIT_OUT="${GITHUB_WORKSPACE}/test-results/phpunit.xml"
+          PHPUNIT_EXIT="${PHPUNIT_EXIT:-0}"
 
-          # PHPUnit 11's --log-junit and stdout both produce incomplete output
-          # in CI. Generate a minimal JUnit XML from the step outcome instead.
-          # When tests fail, individual failure details are visible in the
-          # "Run PHPUnit" step logs above.
-          STEP_OUTCOME="${{ steps.phpunit.outcome }}"
-          if [ "$STEP_OUTCOME" = "success" ]; then
-            cat > "${JUNIT_OUT}" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <testsuites><testsuite name="PHPUnit" tests="1" failures="0" errors="0" skipped="0"><testcase name="All tests passed" classname="PHPUnit" time="0"/></testsuite></testsuites>
-          EOF
+          if [ -s /tmp/phpunit-output.txt ]; then
+            php "${GITHUB_WORKSPACE}/tests/ci/generate-junit-xml.php" \
+              /tmp/phpunit-output.txt \
+              /tmp/phpunit-test-list.txt \
+              "${JUNIT_OUT}" \
+              "${PHPUNIT_EXIT}"
           else
-            cat > "${JUNIT_OUT}" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <testsuites><testsuite name="PHPUnit" tests="1" failures="1" errors="0" skipped="0"><testcase name="PHPUnit test suite" classname="PHPUnit" time="0"><failure message="Tests failed - check Run PHPUnit step logs for details"/></testcase></testsuite></testsuites>
-          EOF
+            # Fallback: generate minimal JUnit XML from exit code
+            if [ "${PHPUNIT_EXIT}" = "0" ]; then
+              printf '<?xml version="1.0"?>\n<testsuites><testsuite name="PHPUnit" tests="1" failures="0" errors="0" skipped="0"><testcase name="All tests passed" classname="PHPUnit"/></testsuite></testsuites>\n' > "${JUNIT_OUT}"
+            else
+              printf '<?xml version="1.0"?>\n<testsuites><testsuite name="PHPUnit" tests="1" failures="1" errors="0" skipped="0"><testcase name="PHPUnit test suite" classname="PHPUnit"><failure message="Tests failed"/></testcase></testsuite></testsuites>\n' > "${JUNIT_OUT}"
+            fi
           fi
           ls -la "${JUNIT_OUT}"
 
