@@ -30,6 +30,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   phpunit:
@@ -52,20 +53,74 @@ jobs:
         working-directory: files
         run: composer install --no-interaction --prefer-dist
 
-      - name: "Prepare PHPUnit config"
-        run: cp tests/phpunit.xml.dist tests/phpunit.xml
+      - name: "Prepare test environment"
+        run: |
+          cp tests/phpunit.xml.dist tests/phpunit.xml
+          mkdir -p test-results
+
+      - name: "List tests in execution order"
+        working-directory: files
+        run: |
+          # Get the ordered test list so we can map progress dot positions
+          # to actual test names (e.g. dot #154 = test #154 in this list).
+          vendor/bin/phpunit --configuration ../tests/phpunit.xml \
+            --list-tests 2>/dev/null | grep '^ - ' > /tmp/phpunit-test-list.txt
+          echo "Total tests listed: $(wc -l < /tmp/phpunit-test-list.txt)"
 
       - name: "Run PHPUnit"
+        id: phpunit
         working-directory: files
-        run: vendor/bin/phpunit --configuration ../tests/phpunit.xml --no-progress --colors=always
+        run: |
+          # Run WITH progress dots enabled so we can see S/F/E positions.
+          # Each character in the progress output maps 1:1 to the test list.
+          # --display-skipped and --display-incomplete print detail sections
+          # at the end for any non-passing tests.
+          set +e
+          vendor/bin/phpunit \
+            --configuration ../tests/phpunit.xml \
+            --display-skipped --display-incomplete \
+            --colors=never 2>&1 | tee /tmp/phpunit-output.txt
+          PHPUNIT_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "PHPUNIT_EXIT=${PHPUNIT_EXIT}" >> "$GITHUB_ENV"
+          exit ${PHPUNIT_EXIT}
 
-      - name: "Test summary"
+      - name: "Generate test report"
         if: always()
         run: |
-          echo "### PHPUnit Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "All tests passed." >> "$GITHUB_STEP_SUMMARY"
+          JUNIT_OUT="${GITHUB_WORKSPACE}/test-results/phpunit.xml"
+          PHPUNIT_EXIT="${PHPUNIT_EXIT:-0}"
+
+          if [ -s /tmp/phpunit-output.txt ]; then
+            php "${GITHUB_WORKSPACE}/tests/ci/generate-junit-xml.php" \
+              /tmp/phpunit-output.txt \
+              /tmp/phpunit-test-list.txt \
+              "${JUNIT_OUT}" \
+              "${PHPUNIT_EXIT}"
           else
-            echo "One or more tests failed. Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+            # Fallback: generate minimal JUnit XML from exit code
+            if [ "${PHPUNIT_EXIT}" = "0" ]; then
+              printf '<?xml version="1.0"?>\n<testsuites><testsuite name="PHPUnit" tests="1" failures="0" errors="0" skipped="0"><testcase name="All tests passed" classname="PHPUnit"/></testsuite></testsuites>\n' > "${JUNIT_OUT}"
+            else
+              printf '<?xml version="1.0"?>\n<testsuites><testsuite name="PHPUnit" tests="1" failures="1" errors="0" skipped="0"><testcase name="PHPUnit test suite" classname="PHPUnit"><failure message="Tests failed"/></testcase></testsuite></testsuites>\n' > "${JUNIT_OUT}"
+            fi
           fi
+          ls -la "${JUNIT_OUT}"
+
+      - name: "Publish test report"
+        if: always() && hashFiles('test-results/phpunit.xml') != ''
+        uses: dorny/test-reporter@v1
+        with:
+          name: PHPUnit Results
+          path: test-results/phpunit.xml
+          reporter: java-junit
+          fail-on-empty: 'false'
+
+      - name: "Upload JUnit XML"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-junit-xml
+          path: test-results/phpunit.xml
+          retention-days: 30
+          if-no-files-found: warn

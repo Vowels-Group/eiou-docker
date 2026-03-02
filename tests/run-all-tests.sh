@@ -118,6 +118,54 @@ TOTAL_TESTS_PASSED=0
 TOTAL_TESTS_FAILED=0
 FAILED_TESTS=""
 
+# JUnit XML report generation
+# Set JUNIT_REPORT_PATH to enable JUnit XML output (e.g., JUNIT_REPORT_PATH=./test-results/integration.xml)
+JUNIT_TESTCASES=""
+JUNIT_SUITE_TIME=0
+
+# Initialize JUnit XML report file (creates parent directory if needed)
+# Resolves to absolute path so cd in build files doesn't break writes
+junit_init() {
+    if [ -n "$JUNIT_REPORT_PATH" ]; then
+        mkdir -p "$(dirname "$JUNIT_REPORT_PATH")"
+        JUNIT_REPORT_PATH="$(cd "$(dirname "$JUNIT_REPORT_PATH")" && pwd)/$(basename "$JUNIT_REPORT_PATH")"
+    fi
+}
+
+# Append a testcase result to the JUnit buffer
+# Usage: junit_add_testcase test_name passed failed duration_seconds
+junit_add_testcase() {
+    [ -z "$JUNIT_REPORT_PATH" ] && return
+    local name="$1"
+    local tc_passed="$2"
+    local tc_failed="$3"
+    local duration="${4:-0}"
+    JUNIT_SUITE_TIME=$(awk "BEGIN {printf \"%.3f\", $JUNIT_SUITE_TIME + $duration}")
+
+    if [ "$tc_failed" -eq 0 ]; then
+        JUNIT_TESTCASES="${JUNIT_TESTCASES}    <testcase name=\"${name}\" classname=\"integration.${SUBSET}\" time=\"${duration}\" assertions=\"${tc_passed}\"/>\n"
+    else
+        JUNIT_TESTCASES="${JUNIT_TESTCASES}    <testcase name=\"${name}\" classname=\"integration.${SUBSET}\" time=\"${duration}\" assertions=\"$((tc_passed + tc_failed))\">\n      <failure message=\"${tc_failed} of $((tc_passed + tc_failed)) checks failed\">${name}: ${tc_failed} failures</failure>\n    </testcase>\n"
+    fi
+}
+
+# Write the final JUnit XML report to disk
+junit_finalize() {
+    [ -z "$JUNIT_REPORT_PATH" ] && return
+    local test_count="$TOTAL_TESTS_RUN"
+    local fail_count="$TOTAL_TESTS_FAILED"
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n' > "$JUNIT_REPORT_PATH"
+    printf '<testsuites>\n' >> "$JUNIT_REPORT_PATH"
+    printf '  <testsuite name="integration-%s-%s" tests="%s" failures="%s" time="%s">\n' \
+        "$BUILD_NAME" "$SUBSET" "$test_count" "$fail_count" "$JUNIT_SUITE_TIME" >> "$JUNIT_REPORT_PATH"
+    printf "$JUNIT_TESTCASES" >> "$JUNIT_REPORT_PATH"
+    printf '  </testsuite>\n' >> "$JUNIT_REPORT_PATH"
+    printf '</testsuites>\n' >> "$JUNIT_REPORT_PATH"
+    printf "JUnit XML report written to: ${JUNIT_REPORT_PATH}\n"
+}
+
+junit_init
+
 # Function to run a test and track results
 run_test() {
     local test_name="$1"
@@ -134,17 +182,26 @@ run_test() {
     printf "Running: ${test_name}\n"
     printf "================================================================\n"
 
+    # Track test duration
+    local start_time=$(date +%s)
+
     # Run the test and capture its exit status
     set +e  # Temporarily allow errors
     . "$test_file"
     local test_exit_code=$?
     set -e
 
+    local end_time=$(date +%s)
+    local duration=$(( end_time - start_time ))
+
     # Track results (tests should set passed/failure variables)
     if [ -n "$totaltests" ]; then
         TOTAL_TESTS_RUN=$(( TOTAL_TESTS_RUN + totaltests ))
         TOTAL_TESTS_PASSED=$(( TOTAL_TESTS_PASSED + passed ))
         TOTAL_TESTS_FAILED=$(( TOTAL_TESTS_FAILED + failure ))
+
+        # Record in JUnit XML
+        junit_add_testcase "$test_name" "$passed" "$failure" "$duration"
 
         if [ "$failure" -gt 0 ]; then
             FAILED_TESTS="${FAILED_TESTS}${test_name} (${failure} failures), "
@@ -153,6 +210,7 @@ run_test() {
             if [ "$is_prerequisite" = "true" ] && [ "$failure" -eq "$totaltests" ]; then
                 printf "\n${RED}${CROSS} Critical prerequisite test '${test_name}' failed completely${NC}\n"
                 printf "${RED}Cannot continue with remaining tests${NC}\n"
+                junit_finalize
                 exit 1
             fi
         fi
@@ -554,6 +612,9 @@ else
     remove_container_if_exists "httpRestoreQuickstartTest"
     remove_container_if_exists "httpRestoreFileQsTest"
 fi
+
+# Write JUnit XML report (if JUNIT_REPORT_PATH is set)
+junit_finalize
 
 # Final summary
 printf "\n"

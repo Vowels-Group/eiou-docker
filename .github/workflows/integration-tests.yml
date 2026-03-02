@@ -45,6 +45,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   integration:
@@ -70,10 +71,19 @@ jobs:
         env:
           EIOU_INIT_TIMEOUT: '180'
           TEST_TIMEOUT: '60'
+          JUNIT_REPORT_PATH: './test-results/integration.xml'
         run: |
           TOPOLOGY="${{ github.event.inputs.topology || 'http4' }}"
           SUBSET="${{ github.event.inputs.subset || 'quick' }}"
           ./run-all-tests.sh "$TOPOLOGY" http "$SUBSET"
+
+      - name: "Publish test report"
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Integration Test Results
+          path: tests/test-results/integration.xml
+          reporter: java-junit
 
       - name: "Capture container logs"
         if: failure()
@@ -94,6 +104,15 @@ jobs:
           name: integration-test-logs
           path: test-artifacts/
           retention-days: 7
+
+      - name: "Upload JUnit XML"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-junit-xml
+          path: tests/test-results/integration.xml
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: "Cleanup containers"
         if: always()

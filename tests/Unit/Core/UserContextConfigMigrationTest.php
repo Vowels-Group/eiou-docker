@@ -52,6 +52,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertArrayHasKey('defaultCreditLimit', $defaults);
         $this->assertArrayHasKey('maxP2pLevel', $defaults);
         $this->assertArrayHasKey('p2pExpiration', $defaults);
+        $this->assertArrayHasKey('directTxExpiration', $defaults);
         $this->assertArrayHasKey('maxOutput', $defaults);
         $this->assertArrayHasKey('defaultTransportMode', $defaults);
         $this->assertArrayHasKey('autoRefreshEnabled', $defaults);
@@ -116,6 +117,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::CONTACT_DEFAULT_CREDIT_LIMIT, $defaults['defaultCreditLimit']);
         $this->assertSame(Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL, $defaults['maxP2pLevel']);
         $this->assertSame(Constants::P2P_DEFAULT_EXPIRATION_SECONDS, $defaults['p2pExpiration']);
+        $this->assertSame(Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS, $defaults['directTxExpiration']);
         $this->assertSame(Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX, $defaults['maxOutput']);
         $this->assertSame(Constants::DEFAULT_TRANSPORT_MODE, $defaults['defaultTransportMode']);
         $this->assertSame(Constants::AUTO_REFRESH_ENABLED, $defaults['autoRefreshEnabled']);
@@ -153,12 +155,12 @@ class UserContextConfigMigrationTest extends TestCase
     }
 
     /**
-     * Test getConfigurableDefaults total count is 41 (11 original + 30 new)
+     * Test getConfigurableDefaults total count is 42 (12 original + 30 new)
      */
     public function testGetConfigurableDefaultsHasExpectedCount(): void
     {
         $defaults = UserContext::getConfigurableDefaults();
-        $this->assertCount(41, $defaults);
+        $this->assertCount(42, $defaults);
     }
 
     /**
@@ -249,8 +251,8 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $existingConfig['httpTransportTimeoutSeconds']);
         $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $existingConfig['displayDateFormat']);
 
-        // Total should be 41
-        $this->assertCount(41, $existingConfig);
+        // Total should be 42
+        $this->assertCount(42, $existingConfig);
     }
 
     /**
