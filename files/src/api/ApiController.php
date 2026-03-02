@@ -369,6 +369,10 @@ class ApiController {
                 '--json'                    // Enable JSON output mode
             ];
 
+            if (!empty($data['best_fee'])) {
+                $argv[] = '--best';
+            }
+
             // Create a fresh CliOutputManager instance with JSON mode
             CliOutputManager::resetInstance();
             $outputManager = new CliOutputManager($argv);

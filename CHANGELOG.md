@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- API `POST /api/v1/wallet/send` now reads `best_fee` from request body and passes `--best` to argv — previously the field was documented but silently ignored, always using fast mode (#679)
 - CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
 
 ### Security
