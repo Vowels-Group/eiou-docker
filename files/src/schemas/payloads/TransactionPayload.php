@@ -40,7 +40,7 @@ class TransactionPayload extends BasePayload
             'currency' => $this->sanitizeString($data['currency']),
             'txid' => $data['txid'],
             'previousTxid' => $data['previousTxid'] ?? null,
-            'memo' => $memo,
+            'memo' => $this->sanitizeString($memo),
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
