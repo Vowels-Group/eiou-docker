@@ -18,6 +18,7 @@ use Eiou\Services\ServiceContainer;
 use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Exceptions\FatalServiceException;
+use Eiou\Contracts\TransactionServiceInterface;
 
 #[CoversClass(ApiController::class)]
 class ApiControllerTest extends TestCase
@@ -505,6 +506,87 @@ class ApiControllerTest extends TestCase
         $this->assertFalse($response['success']);
         $this->assertEquals(400, $response['status_code']);
         $this->assertEquals('invalid_amount', $response['error']['code']);
+    }
+
+    /**
+     * Test send transaction passes --best flag when best_fee is true
+     */
+    public function testSendTransactionPassesBestFlagWhenBestFeeTrue(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:send']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $mockTransactionService = $this->createMock(TransactionServiceInterface::class);
+        $mockTransactionService->expects($this->once())
+            ->method('sendEiou')
+            ->with($this->callback(function (array $argv) {
+                return in_array('--best', $argv, true)
+                    && in_array('--json', $argv, true);
+            }));
+
+        $this->mockServices->method('getTransactionService')
+            ->willReturn($mockTransactionService);
+
+        $this->controller->handleRequest(
+            'POST',
+            '/api/v1/wallet/send',
+            [],
+            json_encode([
+                'address' => 'test_address',
+                'amount' => 10,
+                'currency' => 'USD',
+                'best_fee' => true
+            ]),
+            []
+        );
+    }
+
+    /**
+     * Test send transaction does not pass --best flag when best_fee is absent
+     */
+    public function testSendTransactionOmitsBestFlagByDefault(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:send']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $mockTransactionService = $this->createMock(TransactionServiceInterface::class);
+        $mockTransactionService->expects($this->once())
+            ->method('sendEiou')
+            ->with($this->callback(function (array $argv) {
+                return !in_array('--best', $argv, true)
+                    && in_array('--json', $argv, true);
+            }));
+
+        $this->mockServices->method('getTransactionService')
+            ->willReturn($mockTransactionService);
+
+        $this->controller->handleRequest(
+            'POST',
+            '/api/v1/wallet/send',
+            [],
+            json_encode([
+                'address' => 'test_address',
+                'amount' => 10,
+                'currency' => 'USD'
+            ]),
+            []
+        );
     }
 
     /**
