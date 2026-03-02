@@ -6,6 +6,12 @@
 #   - MariaDB: runs as mysql
 #   - Tor: runs as debian-tor
 #   - PHP message processors: run as www-data (via runuser)
+#
+# Hardening measures:
+#   - tini as PID 1 for proper signal forwarding and zombie reaping
+#   - cap_drop: ALL with only 7 capabilities re-added (see docker-compose.yml)
+#   - no-new-privileges: prevents post-startup privilege escalation
+#   - pids_limit: caps process count to prevent fork bombs
 
 # =============================================================================
 # EIOU Node Docker Image
@@ -28,6 +34,7 @@ FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553
 # - openssl: SSL certificate generation and cryptography
 # - php, php-*: PHP runtime with required extensions
 #   - php-xml: DOM extension required for Composer dependency resolution
+# - tini: Minimal init system for proper signal forwarding and zombie reaping
 # - tor: Anonymous network for .onion addresses
 # - unzip: Required by Composer for package installation
 RUN apt-get update && apt-get install -y \
@@ -43,6 +50,7 @@ RUN apt-get update && apt-get install -y \
     php-mysql \
     php-xml \
     logrotate \
+    tini \
     tor \
     unzip \
     && rm -rf /var/lib/apt/lists/*
@@ -250,5 +258,7 @@ HEALTHCHECK --interval=30s --timeout=20s --start-period=120s --retries=5 \
 # Ensure Docker sends SIGTERM for graceful shutdown (startup.sh traps this)
 STOPSIGNAL SIGTERM
 
-# Start services using the startup script
-ENTRYPOINT ["/startup.sh"]
+# Start services using tini as PID 1 for proper signal forwarding and zombie reaping.
+# tini ensures SIGTERM reaches startup.sh reliably and reaps orphaned child processes
+# that would otherwise accumulate as zombies (PHP processors, runuser wrappers).
+ENTRYPOINT ["/usr/bin/tini", "--", "/startup.sh"]

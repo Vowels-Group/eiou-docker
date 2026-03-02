@@ -65,6 +65,19 @@ services:
       - cluster-a0-mysql-data:/var/lib/mysql
       - cluster-a0-files:/etc/eiou/
       - cluster-a0-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -98,6 +111,19 @@ services:
       - cluster-a1-mysql-data:/var/lib/mysql
       - cluster-a1-files:/etc/eiou/
       - cluster-a1-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -130,6 +156,19 @@ services:
       - cluster-a2-mysql-data:/var/lib/mysql
       - cluster-a2-files:/etc/eiou/
       - cluster-a2-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -162,6 +201,19 @@ services:
       - cluster-a3-mysql-data:/var/lib/mysql
       - cluster-a3-files:/etc/eiou/
       - cluster-a3-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -194,6 +246,19 @@ services:
       - cluster-a4-mysql-data:/var/lib/mysql
       - cluster-a4-files:/etc/eiou/
       - cluster-a4-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -227,6 +292,19 @@ services:
       - cluster-a11-mysql-data:/var/lib/mysql
       - cluster-a11-files:/etc/eiou/
       - cluster-a11-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -259,6 +337,19 @@ services:
       - cluster-a12-mysql-data:/var/lib/mysql
       - cluster-a12-files:/etc/eiou/
       - cluster-a12-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -291,6 +382,19 @@ services:
       - cluster-a21-mysql-data:/var/lib/mysql
       - cluster-a21-files:/etc/eiou/
       - cluster-a21-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -323,6 +427,19 @@ services:
       - cluster-a22-mysql-data:/var/lib/mysql
       - cluster-a22-files:/etc/eiou/
       - cluster-a22-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -355,6 +472,19 @@ services:
       - cluster-a31-mysql-data:/var/lib/mysql
       - cluster-a31-files:/etc/eiou/
       - cluster-a31-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -387,6 +517,19 @@ services:
       - cluster-a32-mysql-data:/var/lib/mysql
       - cluster-a32-files:/etc/eiou/
       - cluster-a32-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -419,6 +562,19 @@ services:
       - cluster-a41-mysql-data:/var/lib/mysql
       - cluster-a41-files:/etc/eiou/
       - cluster-a41-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]
@@ -451,6 +607,19 @@ services:
       - cluster-a42-mysql-data:/var/lib/mysql
       - cluster-a42-files:/etc/eiou/
       - cluster-a42-backups:/var/lib/eiou/backups
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/gui/"]

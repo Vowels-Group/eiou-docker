@@ -260,6 +260,28 @@ services:
     # =========================================================================
     # CONTAINER SETTINGS
     # =========================================================================
+    # =========================================================================
+    # SECURITY HARDENING
+    # =========================================================================
+    # Drop all Linux capabilities and re-add only what the container needs:
+    #   CHOWN          - chown files to www-data/debian-tor/mysql after volume sync
+    #   DAC_OVERRIDE   - read/write files owned by service users during startup
+    #   FOWNER         - chmod on files not owned by root (Tor HS keys, PHP logs)
+    #   KILL           - watchdog sends SIGTERM to crashed processors; graceful shutdown
+    #   NET_BIND_SERVICE - bind Apache to ports 80/443
+    #   SETGID         - runuser/service switch to www-data, debian-tor, mysql groups
+    #   SETUID         - runuser/service switch to www-data, debian-tor, mysql users
+    # =========================================================================
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     logging:

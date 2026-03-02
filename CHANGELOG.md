@@ -17,6 +17,9 @@ The project is currently in **ALPHA** status.
 - CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
 
 ### Security
+- Drop all Linux capabilities and re-add only the 7 required (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `KILL`, `NET_BIND_SERVICE`, `SETGID`, `SETUID`) in all compose files — significantly reduces blast radius of a container escape (#521)
+- Add `security_opt: no-new-privileges` and `pids_limit: 200` to cluster compose file (was missing from all 13 nodes)
+- Use `tini` as PID 1 for proper signal forwarding and zombie reaping — prevents zombie process accumulation from crashed PHP processors and `runuser` wrappers (#521)
 - Bind Docker port mappings to `127.0.0.1` in all dev/test compose files (single, 4line, 10line, cluster) — inter-node communication uses Docker network, host ports are only for local GUI access; production `docker-compose.yml` keeps `0.0.0.0` (required for incoming P2P) with documented `127.0.0.1` alternative for reverse proxy setups
 - Harden Tor hidden service key file creation (L-31) — set umask to 0077 before `file_put_contents()` to eliminate race window where files are briefly world-readable; add explicit error handling if `debian-tor` user is missing or `chown()`/`chgrp()` fails; restore umask in `finally` block
 - Add permission whitelist and rate limit validation to API key creation endpoint (H-5) — `ApiKeyService::validatePermissions()` and `validateRateLimit()` static methods shared by CLI and API paths; `ApiController::createApiKey()` returns 400 for invalid permissions or rate limits exceeding 1000/min
