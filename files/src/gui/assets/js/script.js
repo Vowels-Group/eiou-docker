@@ -1759,54 +1759,66 @@ function openContactModal(contact, openTab) {
         }
     }
 
-    // Populate pending currency requests section
+    // Populate pending currency requests section (direction-aware)
     var pendingCurrencySection = document.getElementById('pending-currency-section');
     var pendingCurrencyContainer = document.getElementById('pending-currency-container');
     if (pendingCurrencySection && pendingCurrencyContainer) {
-        var pendingCurrencies = contact.pending_currencies || [];
-        if (pendingCurrencies.length > 0) {
+        var pendingCurrencies = contact.pending_currencies || []; // incoming: they requested from us
+        var outgoingCurrencies = contact.outgoing_currencies || []; // outgoing: we requested from them
+        if (pendingCurrencies.length > 0 || outgoingCurrencies.length > 0) {
             pendingCurrencySection.style.display = 'block';
             var isPendingContact = (contact.status === 'pending');
-            // Update section heading based on contact status
             var sectionHeading = pendingCurrencySection.querySelector('h4');
             if (sectionHeading) {
-                if (isPendingContact) {
-                    sectionHeading.innerHTML = '<i class="fas fa-exchange-alt"></i> Currency Mismatch';
-                } else {
-                    sectionHeading.innerHTML = '<i class="fas fa-clock"></i> Pending Currency Requests';
-                }
+                sectionHeading.innerHTML = '<i class="fas fa-exchange-alt"></i> Currency Requests';
             }
             var contactAddress = contact.tor || contact.https || contact.http || '';
             var phtml = '';
-            for (var pi = 0; pi < pendingCurrencies.length; pi++) {
-                var pc = pendingCurrencies[pi];
-                phtml += '<form method="POST" class="pending-currency-form mb-sm">';
-                phtml += '<input type="hidden" name="csrf_token" value="' + escapeHtml(document.querySelector('input[name=csrf_token]').value) + '">';
-                if (isPendingContact) {
-                    // For pending contacts: switch to their currency and re-send via acceptContact flow
-                    phtml += '<input type="hidden" name="action" value="acceptContact">';
-                    phtml += '<input type="hidden" name="contact_address" value="' + escapeHtml(contactAddress) + '">';
-                    phtml += '<input type="hidden" name="contact_name" value="' + escapeHtml(contact.name || '') + '">';
-                    phtml += '<input type="hidden" name="contact_currency" value="' + escapeHtml(pc.currency) + '">';
-                    phtml += '<div class="info-grid">';
-                    phtml += '<div class="info-item"><label>They requested</label><div class="info-value"><strong>' + escapeHtml(pc.currency) + '</strong> <span class="badge badge-warning">Currency Mismatch</span></div></div>';
-                    phtml += '<div class="info-item"><label>Your Fee (%)</label><div class="info-value"><input type="number" name="contact_fee" value="' + escapeHtml(String(contact.fee || 0)) + '" step="0.1" min="0" class="form-control-sm" required></div></div>';
-                    phtml += '<div class="info-item"><label>Your Credit Limit</label><div class="info-value"><input type="number" name="contact_credit" value="' + escapeHtml(String(contact.credit_limit || 0)) + '" min="0" class="form-control-sm" required></div></div>';
-                    phtml += '<div class="info-item"><label>&nbsp;</label><div class="info-value"><button type="submit" class="btn btn-success btn-sm" title="Switch to ' + escapeHtml(pc.currency) + ' and re-send request"><i class="fas fa-check"></i> Accept ' + escapeHtml(pc.currency) + '</button></div></div>';
-                } else {
-                    // For accepted contacts: add new currency via acceptCurrency flow
-                    phtml += '<input type="hidden" name="action" value="acceptCurrency">';
-                    phtml += '<input type="hidden" name="pubkey_hash" value="' + escapeHtml(contact.pubkey_hash || '') + '">';
-                    phtml += '<input type="hidden" name="currency" value="' + escapeHtml(pc.currency) + '">';
-                    phtml += '<div class="info-grid">';
-                    phtml += '<div class="info-item"><label>Currency</label><div class="info-value"><strong>' + escapeHtml(pc.currency) + '</strong> <span class="badge badge-pending">Pending</span></div></div>';
-                    phtml += '<div class="info-item"><label>Fee (%)</label><div class="info-value"><input type="number" name="fee" value="0" step="0.1" min="0" class="form-control-sm" required></div></div>';
-                    phtml += '<div class="info-item"><label>Credit Limit</label><div class="info-value"><input type="number" name="credit" value="0" min="0" class="form-control-sm" required></div></div>';
-                    phtml += '<div class="info-item"><label>&nbsp;</label><div class="info-value"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Accept</button></div></div>';
+
+            // Show outgoing requests (we sent, awaiting their acceptance) — read-only info
+            if (outgoingCurrencies.length > 0) {
+                phtml += '<div class="mb-md"><strong><i class="fas fa-paper-plane"></i> Your requests (awaiting their acceptance):</strong></div>';
+                for (var oi = 0; oi < outgoingCurrencies.length; oi++) {
+                    var oc = outgoingCurrencies[oi];
+                    phtml += '<div class="d-flex gap-sm align-items-center mb-sm">';
+                    phtml += '<span class="badge badge-warning">' + escapeHtml(oc.currency) + '</span>';
+                    phtml += '<span class="text-muted">Awaiting their acceptance</span>';
+                    phtml += '</div>';
                 }
-                phtml += '</div>';
-                phtml += '</form>';
             }
+
+            // Show incoming requests (they sent, we can accept/reject) — actionable forms
+            if (pendingCurrencies.length > 0) {
+                phtml += '<div class="mb-md"><strong><i class="fas fa-inbox"></i> Their requests (accept or reject):</strong></div>';
+                for (var pi = 0; pi < pendingCurrencies.length; pi++) {
+                    var pc = pendingCurrencies[pi];
+                    phtml += '<form method="POST" class="pending-currency-form mb-sm">';
+                    phtml += '<input type="hidden" name="csrf_token" value="' + escapeHtml(document.querySelector('input[name=csrf_token]').value) + '">';
+                    if (isPendingContact) {
+                        phtml += '<input type="hidden" name="action" value="acceptContact">';
+                        phtml += '<input type="hidden" name="contact_address" value="' + escapeHtml(contactAddress) + '">';
+                        phtml += '<input type="hidden" name="contact_name" value="' + escapeHtml(contact.name || '') + '">';
+                        phtml += '<input type="hidden" name="contact_currency" value="' + escapeHtml(pc.currency) + '">';
+                        phtml += '<div class="info-grid">';
+                        phtml += '<div class="info-item"><label>They requested</label><div class="info-value"><strong>' + escapeHtml(pc.currency) + '</strong></div></div>';
+                        phtml += '<div class="info-item"><label>Your Fee (%)</label><div class="info-value"><input type="number" name="contact_fee" value="' + escapeHtml(String(contact.fee || 0)) + '" step="0.1" min="0" class="form-control-sm" required></div></div>';
+                        phtml += '<div class="info-item"><label>Your Credit Limit</label><div class="info-value"><input type="number" name="contact_credit" value="' + escapeHtml(String(contact.credit_limit || 0)) + '" min="0" class="form-control-sm" required></div></div>';
+                        phtml += '<div class="info-item"><label>&nbsp;</label><div class="info-value"><button type="submit" class="btn btn-success btn-sm" title="Accept ' + escapeHtml(pc.currency) + ' request"><i class="fas fa-check"></i> Accept ' + escapeHtml(pc.currency) + '</button></div></div>';
+                    } else {
+                        phtml += '<input type="hidden" name="action" value="acceptCurrency">';
+                        phtml += '<input type="hidden" name="pubkey_hash" value="' + escapeHtml(contact.pubkey_hash || '') + '">';
+                        phtml += '<input type="hidden" name="currency" value="' + escapeHtml(pc.currency) + '">';
+                        phtml += '<div class="info-grid">';
+                        phtml += '<div class="info-item"><label>They requested</label><div class="info-value"><strong>' + escapeHtml(pc.currency) + '</strong></div></div>';
+                        phtml += '<div class="info-item"><label>Fee (%)</label><div class="info-value"><input type="number" name="fee" value="0" step="0.1" min="0" class="form-control-sm" required></div></div>';
+                        phtml += '<div class="info-item"><label>Credit Limit</label><div class="info-value"><input type="number" name="credit" value="0" min="0" class="form-control-sm" required></div></div>';
+                        phtml += '<div class="info-item"><label>&nbsp;</label><div class="info-value"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Accept</button></div></div>';
+                    }
+                    phtml += '</div>';
+                    phtml += '</form>';
+                }
+            }
+
             pendingCurrencyContainer.innerHTML = phtml;
         } else {
             pendingCurrencySection.style.display = 'none';

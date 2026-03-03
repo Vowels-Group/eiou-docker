@@ -21,8 +21,14 @@ The project is currently in **ALPHA** status.
 - Pending contacts section enriched with currency data from `contact_currencies` table
 - `acceptContact()` now ensures the accepted currency is properly recorded in `contact_currencies` with fee/credit values
 - Accept contact with mismatched currency no longer rejects — user can accept with their preferred currency while remote's pending currencies stay for later acceptance
+- Cross-currency contact requests now correctly distinguished via `direction` column in `contact_currencies`: "incoming" = they requested from us, "outgoing" = we requested from them — resolves mismatch where Alice's USD request was confused with Bob's GBY request
 
 ### Added
+- `contact_currencies.direction` column (`ENUM('incoming','outgoing')`) with database migration — enables per-direction currency tracking so both sides independently track what they requested vs what was requested of them
+- Sender-side outgoing currency tracking: `handleNewContact` now inserts `direction='outgoing'` entries in `contact_currencies` when a contact request is sent, so the sender can see "Awaiting their acceptance" for each requested currency
+- Direction-aware GUI: pending contact section shows "Your pending requests (awaiting their acceptance)" for outgoing currencies and "They requested" for incoming currencies, eliminating the confusion where sender's own currency appeared as an incoming request
+- `MessageService` now updates outgoing `contact_currencies` entries to 'accepted' when remote acceptance is received
+- Unique index on `contact_currencies` changed from `(pubkey_hash, currency)` to `(pubkey_hash, currency, direction)` — allows both sides to independently request the same currency
 - Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
 - Contact detail modal currency selector: multi-currency contacts now display a dropdown to switch between currencies, updating balance, credit limit, fee, and available credit fields
 - Per-currency contact balances: `getAllContactBalances()` now returns balances grouped by currency (`pubkey => ['USD' => amount, 'GBY' => amount]`)

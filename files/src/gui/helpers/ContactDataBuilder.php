@@ -79,7 +79,8 @@ class ContactDataBuilder
             'chain_drop_proposal' => $contact['chain_drop_proposal'] ?? null,
             'chain_gap_details' => $contact['chain_gap_details'] ?? null,
             'currencies' => $contact['currencies'] ?? [],
-            'pending_currencies' => $contact['pending_currencies'] ?? []
+            'pending_currencies' => $contact['pending_currencies'] ?? [],
+            'outgoing_currencies' => $contact['outgoing_currencies'] ?? []
         ], $addresses);
     }
 

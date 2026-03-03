@@ -1298,14 +1298,14 @@ class ContactManagementService implements ContactManagementServiceInterface
 
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
 
-        // Check if currency already exists for this contact
-        if ($this->contactCurrencyRepository !== null && $this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency)) {
+        // Check if currency already exists for this contact (outgoing direction)
+        if ($this->contactCurrencyRepository !== null && $this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
             return false;
         }
 
-        // Insert into contact_currencies
+        // Insert into contact_currencies as outgoing (we are adding this currency)
         if ($this->contactCurrencyRepository !== null) {
-            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit);
+            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'accepted', 'outgoing');
         }
 
         // Create initial balance entries for the new currency

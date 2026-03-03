@@ -257,6 +257,9 @@ eiou add http://charlie:8080 Charlie 1 200 USD --json
 **Notes:**
 - Creates a pending contact request that the recipient must accept
 - To accept an incoming request, use `add` with the sender's address
+- Each currency request is tracked independently with a direction (`incoming`/`outgoing`) in the `contact_currencies` table
+- Cross-currency requests are supported: Alice can request USD from Bob while Bob requests GBY from Alice — each side accepts independently
+- Re-running `add` with a different currency for an existing pending contact updates the outgoing currency request
 - Rate limited: 20 additions per minute
 
 ---

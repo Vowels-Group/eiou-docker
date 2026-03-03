@@ -144,6 +144,7 @@ Handles all contact-related operations.
 | `handleProposeChainDrop()` | `proposeChainDrop` | Propose dropping missing tx (AJAX) | `contact_pubkey_hash` |
 | `handleAcceptChainDrop()` | `acceptChainDrop` | Accept chain drop proposal (AJAX) | `proposal_id` |
 | `handleRejectChainDrop()` | `rejectChainDrop` | Reject chain drop proposal (AJAX) | `proposal_id` |
+| `handleAcceptCurrency()` | `acceptCurrency` | Accept pending incoming currency | `pubkey_hash`, `currency`, `fee`, `credit` |
 
 **AJAX Response Format (pingContact):**
 
@@ -376,8 +377,11 @@ All three dashboard cards display per-currency rows. When a card has no data for
 - Chain status badge clicks scroll to this section
 
 **Pending Contact Requests Section:**
-- Lists incoming requests
-- Accept form with name/fee/credit fields
+- Lists incoming requests with direction-aware currency display
+- Outgoing currencies shown as read-only badges ("Awaiting their acceptance")
+- Incoming currencies shown as actionable accept forms ("They requested") with fee/credit fields
+- Per-currency accept forms when multiple currencies are requested
+- Legacy fallback form for contacts without `contact_currencies` data
 - Delete/block options
 
 ---

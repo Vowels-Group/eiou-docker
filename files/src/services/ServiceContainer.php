@@ -697,6 +697,7 @@ class ServiceContainer implements ContainerInterface {
                 $this->currentUser,
                 $this->getMessageDeliveryService()
             );
+            $this->services['MessageService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
         return $this->services['MessageService'];
     }

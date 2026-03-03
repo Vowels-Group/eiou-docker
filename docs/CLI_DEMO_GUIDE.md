@@ -723,6 +723,31 @@ docker exec carol eiou search
 docker exec daniel eiou search
 ```
 
+#### Cross-Currency Contact Requests
+
+When two nodes request different currencies, each request is tracked independently:
+
+```bash
+# Alice requests USD from Bob
+docker exec alice eiou add http://bob Bob 0.1 1000 USD
+
+# Bob requests GBY from Alice
+docker exec bob eiou add http://alice Alice 0.2 4000 GBY
+```
+
+Each side now sees:
+- **Alice**: outgoing USD (awaiting Bob), incoming GBY (from Bob — can accept)
+- **Bob**: outgoing GBY (awaiting Alice), incoming USD (from Alice — can accept)
+
+Accept specific currency requests independently:
+```bash
+# Bob accepts Alice's USD request
+docker exec bob eiou add http://alice Alice 0.2 4000 USD
+
+# Alice accepts Bob's GBY request
+docker exec alice eiou add http://bob Bob 0.1 1000 GBY
+```
+
 ---
 
 ### 5.2 pending - Viewing Pending Requests

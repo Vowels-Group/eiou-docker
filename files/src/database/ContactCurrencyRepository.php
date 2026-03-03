@@ -21,7 +21,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'status', 'created_at', 'updated_at'
+        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'status', 'direction', 'created_at', 'updated_at'
     ];
 
     /**
@@ -43,18 +43,20 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param int $feePercent Fee percentage (in minor units)
      * @param int $creditLimit Credit limit (in minor units)
      * @param string $status Currency status ('accepted' or 'pending')
+     * @param string $direction Direction ('incoming' = they requested, 'outgoing' = we requested)
      * @return bool True on success
      */
-    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $status = 'accepted'): bool {
-        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status)";
+    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $status = 'accepted', string $direction = 'incoming'): bool {
+        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status, direction)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status, :direction)";
 
         $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
             ':credit_limit' => $creditLimit,
-            ':status' => $status
+            ':status' => $status,
+            ':direction' => $direction
         ]);
 
         return $stmt !== false;
@@ -65,17 +67,25 @@ class ContactCurrencyRepository extends AbstractRepository {
      *
      * @param string $pubkeyHash Contact's public key hash
      * @param string $currency Currency code
-     * @return array|null Currency config with fee_percent, credit_limit, currency, or null if not found
+     * @param string|null $direction Optional direction filter ('incoming' or 'outgoing')
+     * @return array|null Currency config with fee_percent, credit_limit, currency, direction, or null if not found
      */
-    public function getCurrencyConfig(string $pubkeyHash, string $currency): ?array {
-        $query = "SELECT currency, fee_percent, credit_limit, status
+    public function getCurrencyConfig(string $pubkeyHash, string $currency, ?string $direction = null): ?array {
+        $params = [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency
+        ];
+
+        $query = "SELECT currency, fee_percent, credit_limit, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
-        $stmt = $this->execute($query, [
-            ':pubkey_hash' => $pubkeyHash,
-            ':currency' => $currency
-        ]);
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return null;
@@ -89,14 +99,22 @@ class ContactCurrencyRepository extends AbstractRepository {
      * Get all currency configurations for a contact
      *
      * @param string $pubkeyHash Contact's public key hash
+     * @param string|null $direction Optional direction filter ('incoming' or 'outgoing')
      * @return array Array of currency config rows
      */
-    public function getContactCurrencies(string $pubkeyHash): array {
-        $query = "SELECT currency, fee_percent, credit_limit, status
+    public function getContactCurrencies(string $pubkeyHash, ?string $direction = null): array {
+        $params = [':pubkey_hash' => $pubkeyHash];
+
+        $query = "SELECT currency, fee_percent, credit_limit, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash";
 
-        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return [];
@@ -110,16 +128,26 @@ class ContactCurrencyRepository extends AbstractRepository {
      *
      * @param string $pubkeyHash Contact's public key hash
      * @param string $currency Currency code
+     * @param string|null $direction Optional direction filter ('incoming' or 'outgoing')
      * @return bool True if the currency relationship exists
      */
-    public function hasCurrency(string $pubkeyHash, string $currency): bool {
-        $query = "SELECT 1 FROM {$this->tableName}
-                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency LIMIT 1";
-
-        $stmt = $this->execute($query, [
+    public function hasCurrency(string $pubkeyHash, string $currency, ?string $direction = null): bool {
+        $params = [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency
-        ]);
+        ];
+
+        $query = "SELECT 1 FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $query .= " LIMIT 1";
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return false;
@@ -184,7 +212,16 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param array $fields Associative array of fields to update (fee_percent, credit_limit)
      * @return bool True on success
      */
-    public function updateCurrencyConfig(string $pubkeyHash, string $currency, array $fields): bool {
+    /**
+     * Update currency configuration for a contact
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code
+     * @param array $fields Associative array of fields to update (fee_percent, credit_limit, status)
+     * @param string|null $direction Optional direction filter for the WHERE clause
+     * @return bool True on success
+     */
+    public function updateCurrencyConfig(string $pubkeyHash, string $currency, array $fields, ?string $direction = null): bool {
         $setClauses = [];
         $params = [
             ':pubkey_hash' => $pubkeyHash,
@@ -206,6 +243,11 @@ class ContactCurrencyRepository extends AbstractRepository {
         $query = "UPDATE {$this->tableName} SET {$setClause}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
         $stmt = $this->execute($query, $params);
         return $stmt !== false;
     }
@@ -217,11 +259,12 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @param int $feePercent Fee percentage
      * @param int $creditLimit Credit limit
+     * @param string $direction Direction ('incoming' or 'outgoing')
      * @return bool True on success
      */
-    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit): bool {
-        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit)
+    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $direction = 'incoming'): bool {
+        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, direction)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :direction)
                   ON DUPLICATE KEY UPDATE
                   fee_percent = VALUES(fee_percent),
                   credit_limit = VALUES(credit_limit)";
@@ -230,7 +273,8 @@ class ContactCurrencyRepository extends AbstractRepository {
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
-            ':credit_limit' => $creditLimit
+            ':credit_limit' => $creditLimit,
+            ':direction' => $direction
         ]);
 
         return $stmt !== false;
@@ -242,17 +286,25 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $pubkeyHash Contact's public key hash
      * @param string $currency Currency code
      * @param string $status New status ('accepted' or 'pending')
+     * @param string|null $direction Optional direction filter ('incoming' or 'outgoing')
      * @return bool True on success
      */
-    public function updateCurrencyStatus(string $pubkeyHash, string $currency, string $status): bool {
-        $query = "UPDATE {$this->tableName} SET status = :status
-                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
-
-        $stmt = $this->execute($query, [
+    public function updateCurrencyStatus(string $pubkeyHash, string $currency, string $status, ?string $direction = null): bool {
+        $params = [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':status' => $status,
-        ]);
+        ];
+
+        $query = "UPDATE {$this->tableName} SET status = :status
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         return $stmt !== false && $stmt->rowCount() > 0;
     }
@@ -272,14 +324,22 @@ class ContactCurrencyRepository extends AbstractRepository {
      * Get pending currency configurations for a contact
      *
      * @param string $pubkeyHash Contact's public key hash
+     * @param string|null $direction Optional direction filter ('incoming' or 'outgoing')
      * @return array Array of pending currency config rows
      */
-    public function getPendingCurrencies(string $pubkeyHash): array {
-        $query = "SELECT currency, fee_percent, credit_limit, status
+    public function getPendingCurrencies(string $pubkeyHash, ?string $direction = null): array {
+        $params = [':pubkey_hash' => $pubkeyHash];
+
+        $query = "SELECT currency, fee_percent, credit_limit, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND status = 'pending'";
 
-        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return [];

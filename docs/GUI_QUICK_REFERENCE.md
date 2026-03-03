@@ -57,6 +57,7 @@ All POST actions require CSRF token.
 | `proposeChainDrop` | `contact_pubkey_hash` | JSON (AJAX) |
 | `acceptChainDrop` | `proposal_id` | JSON (AJAX) |
 | `rejectChainDrop` | `proposal_id` | JSON (AJAX) |
+| `acceptCurrency` | `pubkey_hash`, `currency`, `fee`, `credit` | Redirect with message |
 
 ### Transaction Actions (TransactionController)
 

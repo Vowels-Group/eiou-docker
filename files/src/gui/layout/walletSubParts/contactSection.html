@@ -558,12 +558,28 @@
                 <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
             </div>
 
-            <!-- Accept Contact Form(s) -->
+            <!-- Outgoing currency requests (we sent, waiting for their acceptance) -->
+            <?php $outgoingCurrencies = $contact['outgoing_currencies'] ?? []; ?>
+            <?php if (!empty($outgoingCurrencies)): ?>
+            <div class="mb-lg">
+                <h4 class="pending-contact-accept-title">
+                    <i class="fas fa-paper-plane"></i> Your pending requests
+                </h4>
+                <?php foreach ($outgoingCurrencies as $oc): ?>
+                <div class="d-flex gap-sm align-items-center mb-sm">
+                    <span class="badge badge-warning"><?php echo htmlspecialchars($oc['currency']); ?></span>
+                    <span class="text-muted font-sm">Awaiting their acceptance</span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
+            <!-- Accept Contact Form(s) — incoming currency requests from them -->
             <div class="pending-contact-accept-form">
                 <?php $pendingCurrencies = $contact['pending_currencies'] ?? []; ?>
                 <?php if (!empty($pendingCurrencies)): ?>
                     <h4 class="pending-contact-accept-title">
-                        <i class="fas fa-user-check"></i> Accept this contact request
+                        <i class="fas fa-user-check"></i> They requested
                         <span class="text-muted font-sm">(<?php echo count($pendingCurrencies); ?> currency request<?php echo count($pendingCurrencies) > 1 ? 's' : ''; ?>)</span>
                     </h4>
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
@@ -590,7 +606,7 @@
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="contact_credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
-                                <label for="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Currency:</label>
+                                <label for="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Requested Currency:</label>
                                 <select id="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>" disabled>
                                     <option selected><?php echo htmlspecialchars($pc['currency']); ?></option>
                                 </select>

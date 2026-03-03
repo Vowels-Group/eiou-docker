@@ -1064,6 +1064,7 @@ Each node maintains a MariaDB database with these primary tables:
 | `p2p_relayed_contacts` | Contacts that returned `already_relayed` during P2P broadcast (used by two-phase relay selection in best-fee mode) |
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
 | `contact_credit` | Per-contact available credit (updated on each successful ping) |
+| `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing`) |
 
 ### Repository Pattern
 

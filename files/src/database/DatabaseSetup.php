@@ -219,6 +219,7 @@ function runColumnMigrations(PDO $pdo): array {
         ],
         'contact_currencies' => [
             'status' => "ENUM('accepted', 'pending') DEFAULT 'accepted' AFTER `credit_limit`",
+            'direction' => "ENUM('incoming', 'outgoing') DEFAULT 'incoming' AFTER `status`",
         ],
     ];
 
@@ -362,6 +363,32 @@ function runColumnMigrations(PDO $pdo): array {
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    // Migrate contact_currencies UNIQUE constraint from (pubkey_hash, currency) to (pubkey_hash, currency, direction)
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM `contact_currencies` WHERE Key_name = 'idx_cc_hash_currency'");
+        if ($stmt && $stmt->rowCount() > 0) {
+            $pdo->exec("ALTER TABLE `contact_currencies` DROP INDEX `idx_cc_hash_currency`");
+            $results['contact_currencies.unique_migration'] = 'dropped_old_unique';
+        } else {
+            $results['contact_currencies.unique_migration'] = 'old_unique_already_dropped';
+        }
+    } catch (PDOException $e) {
+        $results['contact_currencies.unique_migration'] = 'error: ' . $e->getMessage();
+    }
+
+    // Add composite unique index on contact_currencies with direction
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM `contact_currencies` WHERE Key_name = 'idx_cc_hash_currency_dir'");
+        if ($stmt && $stmt->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE `contact_currencies` ADD UNIQUE INDEX `idx_cc_hash_currency_dir` (`pubkey_hash`, `currency`, `direction`)");
+            $results['contact_currencies.composite_unique_dir'] = 'created';
+        } else {
+            $results['contact_currencies.composite_unique_dir'] = 'exists';
+        }
+    } catch (PDOException $e) {
+        $results['contact_currencies.composite_unique_dir'] = 'error: ' . $e->getMessage();
     }
 
     // Add missing indexes

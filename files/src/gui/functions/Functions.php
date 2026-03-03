@@ -272,14 +272,17 @@ if (!empty($pendingContacts) && $user->has('public')) {
     unset($pc);
 }
 
-// Enrich pending contacts with per-currency data from contact_currencies
+// Enrich pending contacts with per-currency data from contact_currencies (direction-aware)
 if (!empty($pendingContacts)) {
     try {
         $pendingCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
         foreach ($pendingContacts as &$pc) {
             $hash = $pc['pubkey_hash'] ?? '';
             if ($hash) {
-                $pc['pending_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash);
+                // Incoming: currencies THEY requested from us (we need to accept/reject)
+                $pc['pending_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash, 'incoming');
+                // Outgoing: currencies WE requested from them (waiting for their acceptance)
+                $pc['outgoing_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash, 'outgoing');
             }
         }
         unset($pc);
@@ -291,6 +294,36 @@ if (!empty($pendingContacts)) {
 $pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
 $acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
 $blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);
+
+// Enrich pending user contacts (our outgoing requests) with direction-aware currency data
+if (!empty($pendingUserContacts)) {
+    try {
+        $currencyRepo = $serviceContainer->getContactCurrencyRepository();
+        foreach ($pendingUserContacts as &$puc) {
+            $hash = $puc['pubkey_hash'] ?? '';
+            if ($hash) {
+                $puc['pending_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'incoming');
+                $puc['outgoing_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'outgoing');
+            }
+        }
+        unset($puc);
+    } catch (Exception $e) {}
+}
+
+// Enrich accepted contacts with pending incoming currency requests
+if (!empty($acceptedContacts)) {
+    try {
+        $currencyRepo = $serviceContainer->getContactCurrencyRepository();
+        foreach ($acceptedContacts as &$ac) {
+            $hash = $ac['pubkey_hash'] ?? '';
+            if ($hash) {
+                $ac['pending_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'incoming');
+                $ac['outgoing_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'outgoing');
+            }
+        }
+        unset($ac);
+    } catch (Exception $e) {}
+}
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
