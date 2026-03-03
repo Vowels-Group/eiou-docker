@@ -25,17 +25,6 @@
                 </small>
             </div>
 
-            <!-- Allowed Currencies -->
-            <div class="form-group">
-                <label for="allowedCurrencies">Allowed Currencies:</label>
-                <input type="text" id="allowedCurrencies" name="allowedCurrencies"
-                       value="<?= htmlspecialchars(implode(',', $user->getAllowedCurrencies())) ?>"
-                       class="default-value" placeholder="USD,EUR">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Comma-separated currency codes. Each must have a conversion factor defined.
-                </small>
-            </div>
 
             <!-- Default Fee -->
             <div class="form-group">
@@ -301,6 +290,7 @@
                             </small>
                         </div>
 
+
                     </div>
                 </div>
 
@@ -480,6 +470,17 @@
                             ?></textarea>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="allowedCurrencies">Allowed Currencies:</label>
+                            <textarea id="allowedCurrencies" name="allowedCurrencies" rows="3" class="default-value" placeholder="USD&#10;EUR"><?php
+                                $allowedCurrencyList = $user->getAllowedCurrencies();
+                                echo htmlspecialchars(implode("\n", $allowedCurrencyList));
+                            ?></textarea>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined.
                             </small>
                         </div>
                     </div>
