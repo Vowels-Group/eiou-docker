@@ -172,6 +172,15 @@ try {
     // Non-critical
 }
 $knownCurrencies = array_keys($knownCurrencies);
+// Sort by allowed currencies order (first currency = first row, etc.)
+$allowedCurrenciesOrder = $user->getAllowedCurrencies();
+usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
+    $posA = array_search($a, $allowedCurrenciesOrder);
+    $posB = array_search($b, $allowedCurrenciesOrder);
+    if ($posA === false) $posA = PHP_INT_MAX;
+    if ($posB === false) $posB = PHP_INT_MAX;
+    return $posA - $posB;
+});
 
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);

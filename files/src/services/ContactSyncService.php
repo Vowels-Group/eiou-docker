@@ -1030,9 +1030,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Check if WE initiated a request to them (name is set when we sent the request)
-                    if ($existingContact['name'] !== null) {
-                        // Mutual request: we sent them a request and they sent us one
-                        // Auto-accept using the values WE set when we sent our request
+                    // AND currencies must match — different currency = different request terms
+                    $existingCurrency = $existingContact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                    if ($existingContact['name'] !== null && $currency === $existingCurrency) {
+                        // Mutual request with matching currency: auto-accept using the values WE set
                         if (!empty($senderAddresses) && is_array($senderAddresses)) {
                             $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                         }
@@ -1063,6 +1064,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Contact exists as pending with name=null (they sent us a request first)
+                    // OR: name is set but currencies differ (mutual request with mismatched terms)
                     // Check if we have the contact transaction
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                         $senderPublicKeyHash
@@ -1127,9 +1129,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Check if WE initiated a request to them (name is set when we sent the request)
-                    if ($existingContact['name'] !== null) {
-                        // Mutual request: we sent them a request and they sent us one (via different address)
-                        // Auto-accept using the values WE set when we sent our request
+                    // AND currencies must match — different currency = different request terms
+                    $existingCurrency = $existingContact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                    if ($existingContact['name'] !== null && $currency === $existingCurrency) {
+                        // Mutual request with matching currency: auto-accept using the values WE set
                         $this->acceptContact(
                             $senderPublicKey,
                             $existingContact['name'],
@@ -1156,6 +1159,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Contact is pending with name=null (they sent us a request first)
+                    // OR: name is set but currencies differ (mutual request with mismatched terms)
                     // Check if we have the contact transaction
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                         $senderPublicKeyHash

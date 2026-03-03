@@ -20,13 +20,19 @@
             $currencyRows[$cur] = ['balance' => '0.00', 'earnings' => '0.00', 'credit' => '0.00'];
         }
         foreach ($totalBalanceByCurrency as $bal) {
-            $currencyRows[$bal['currency']]['balance'] = $bal['total'];
+            if (isset($currencyRows[$bal['currency']])) {
+                $currencyRows[$bal['currency']]['balance'] = $bal['total'];
+            }
         }
         foreach ($totalEarningsByCurrency as $earn) {
-            $currencyRows[$earn['currency']]['earnings'] = $earn['total'];
+            if (isset($currencyRows[$earn['currency']])) {
+                $currencyRows[$earn['currency']]['earnings'] = $earn['total'];
+            }
         }
         foreach ($totalAvailableCreditByCurrency as $credit) {
-            $currencyRows[$credit['currency']]['credit'] = $credit['total'];
+            if (isset($currencyRows[$credit['currency']])) {
+                $currencyRows[$credit['currency']]['credit'] = $credit['total'];
+            }
         }
         ?>
         <div class="wallet-stats-container">

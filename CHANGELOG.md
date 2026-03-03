@@ -57,6 +57,9 @@ The project is currently in **ALPHA** status.
 - `Functions.php` fetches per-contact currency configs and all-currency available credits for GUI display
 
 ### Fixed
+- Mutual auto-accept no longer fires when currencies differ — Alice adding Bob with USD and Bob adding Alice with GBY are now treated as separate pending requests instead of auto-accepting with mismatched currencies
+- Wallet info card currency rows now follow the allowed currencies order (first allowed currency = first row)
+- Wallet info card loops use `isset()` guards so data for currencies not in `$knownCurrencies` cannot create phantom rows
 - API `POST /api/v1/wallet/send` now reads `best_fee` from request body and passes `--best` to argv — previously the field was documented but silently ignored, always using fast mode (#679)
 - CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
 
