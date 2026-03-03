@@ -12,6 +12,16 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Per-currency independent contact requests: incoming currency from P2P contact requests is now stored in `contact_currencies` with `status='pending'` instead of being lost (root cause: `addPendingContact()` stores `currency: null`)
+- Accept contact now validates against pending currencies from `contact_currencies` instead of the always-null `contacts.currency` field
+- Accepting a pending currency for an existing accepted contact now correctly creates initial balance and credit entries for the new currency
+- GUI `handleAcceptCurrency` now inserts initial balance/credit entries when accepting a pending currency (previously only updated `contact_currencies` status)
+- Pending contact requests in GUI now show per-currency accept forms when multiple currencies are requested, each with independent fee/credit settings
+- Pending contacts section enriched with currency data from `contact_currencies` table
+- Outgoing currency requests now tracked independently in `contact_currencies` — sending a second `eiou add` with a different currency no longer overwrites the first request; both currencies are tracked as separate pending entries
+- `acceptContact()` now ensures the accepted currency is properly recorded in `contact_currencies` with fee/credit values
+
 ### Added
 - Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
 - Contact detail modal currency selector: multi-currency contacts now display a dropdown to switch between currencies, updating balance, credit limit, fee, and available credit fields

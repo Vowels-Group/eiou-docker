@@ -272,6 +272,22 @@ if (!empty($pendingContacts) && $user->has('public')) {
     unset($pc);
 }
 
+// Enrich pending contacts with per-currency data from contact_currencies
+if (!empty($pendingContacts)) {
+    try {
+        $pendingCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+        foreach ($pendingContacts as &$pc) {
+            $hash = $pc['pubkey_hash'] ?? '';
+            if ($hash) {
+                $pc['pending_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash);
+            }
+        }
+        unset($pc);
+    } catch (Exception $e) {
+        // Non-critical — pending contacts will show without currency data
+    }
+}
+
 $pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
 $acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
 $blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);

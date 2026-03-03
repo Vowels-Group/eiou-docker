@@ -237,6 +237,27 @@ class ContactCurrencyRepository extends AbstractRepository {
     }
 
     /**
+     * Update the status of a specific currency configuration
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code
+     * @param string $status New status ('accepted' or 'pending')
+     * @return bool True on success
+     */
+    public function updateCurrencyStatus(string $pubkeyHash, string $currency, string $status): bool {
+        $query = "UPDATE {$this->tableName} SET status = :status
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency,
+            ':status' => $status,
+        ]);
+
+        return $stmt !== false && $stmt->rowCount() > 0;
+    }
+
+    /**
      * Accept a pending currency configuration
      *
      * @param string $pubkeyHash Contact's public key hash
@@ -244,7 +265,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @return bool True on success
      */
     public function acceptCurrency(string $pubkeyHash, string $currency): bool {
-        return $this->updateCurrencyConfig($pubkeyHash, $currency, ['status' => 'accepted']);
+        return $this->updateCurrencyStatus($pubkeyHash, $currency, 'accepted');
     }
 
     /**

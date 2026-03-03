@@ -657,6 +657,20 @@ class ContactController
                 'status' => 'accepted'
             ]);
 
+            // Insert initial balance and credit entries for the newly accepted currency
+            $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+            if ($contactPubkey) {
+                $serviceContainer->getBalanceRepository()->insertInitialContactBalances($contactPubkey, $currency);
+                try {
+                    $serviceContainer->getContactCreditRepository()->createInitialCredit($contactPubkey, $currency);
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to create initial credit for accepted currency", [
+                        'currency' => $currency,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
             $this->session->setFlashMessage('success', "Currency {$currency} accepted.");
         } catch (\Exception $e) {
             Logger::getInstance()->logException($e);
