@@ -23,6 +23,9 @@ The project is currently in **ALPHA** status.
 - `ContactSyncService::setContactCurrencyRepository()` for new currency request handling on receiver side
 - GUI `acceptCurrency` action handler in ContactController for accepting pending currency requests
 - Pending currency badge on contact cards and accept form in contact detail modal
+- Cross-currency mutual request handling: when both sides initiate contact requests with different currencies, the remote's currency is stored as a pending entry in `contact_currencies` and displayed in the GUI as a "Currency Mismatch" with an option to accept their terms
+- CLI `eiou add` now allows updating the currency on a pending outgoing contact request — re-sends the P2P request with the new currency, enabling mutual accept when currencies now match
+- Accept contact form currency dropdown now populated dynamically from `getAllowedCurrencies()` instead of hardcoded USD
 
 - Configurable allowed currencies — the hardcoded `['USD']` allowed list in `InputValidator::validateCurrency()` is now a `Constants::ALLOWED_CURRENCIES` default that can be overridden per-node via `UserContext::getAllowedCurrencies()`
   - New `Constants::ALLOWED_CURRENCIES` constant defines the system default

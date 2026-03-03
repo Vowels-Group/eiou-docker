@@ -118,6 +118,13 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <div class="contact-badges">
                             <span class="badge badge-pending">Pending Response</span>
+                            <?php if (!empty($contact['pending_currencies'])): ?>
+                                <?php foreach ($contact['pending_currencies'] as $pc): ?>
+                                <span class="badge badge-warning" title="They requested <?php echo htmlspecialchars($pc['currency']); ?> — you requested <?php echo htmlspecialchars($contact['currency']); ?>">
+                                    <i class="fas fa-exchange-alt"></i> They want <?php echo htmlspecialchars($pc['currency']); ?>
+                                </span>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
                             <?php if (!empty($contact['http'])): ?>
@@ -580,7 +587,9 @@
                         <div class="form-group">
                             <label for="contact_currency_<?php echo $index; ?>">Currency:</label>
                             <select id="contact_currency_<?php echo $index; ?>" name="contact_currency" required>
-                                <option value="USD">USD</option>
+                                <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
+                                <option value="<?php echo htmlspecialchars($cur); ?>"<?php echo ($cur === $user->getDefaultCurrency()) ? ' selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>

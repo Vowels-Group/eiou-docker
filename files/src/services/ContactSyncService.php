@@ -543,7 +543,59 @@ class ContactSyncService implements ContactSyncServiceInterface {
         elseif($contact['status'] === Constants::CONTACT_STATUS_PENDING){
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
-                // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
+                $existingCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+
+                // Check if user is updating their pending request terms (different currency, fee, or credit)
+                if ($currency !== $existingCurrency) {
+                    // Update the pending contact's terms locally
+                    $this->contactRepository->updateContactFields($contact['pubkey'], [
+                        'currency' => $currency,
+                        'fee_percent' => $fee,
+                        'credit_limit' => $credit,
+                    ]);
+
+                    // Re-send the contact request with updated currency
+                    $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                    $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+                    $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
+                    $responseData = $sendResult['response'];
+
+                    if (isset($responseData['status']) && $responseData['status'] === Constants::STATUS_ACCEPTED) {
+                        // Currencies now match on the remote side — mutual accept
+                        $senderPublicKey = $responseData['senderPublicKey'];
+                        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+                        // Store any additional addresses from response
+                        if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                        }
+
+                        $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        // Ensure contact transaction exists
+                        if (!$this->contactTransactionExists($senderPublicKey)) {
+                            $txid = $responseData['txid'] ?? null;
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                        }
+                        $this->completeReceivedContactTransaction($senderPublicKey);
+
+                        if ($this->messageDeliveryService !== null) {
+                            $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                        }
+
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $contactData['currency'] = $currency;
+                        $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (currency updated to " . $currency . ")");
+                    } else {
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                        $contactData['currency'] = $currency;
+                        $output->success("Contact request updated to " . $currency . ", awaiting response from " . $address, $contactData, "Currency updated");
+                    }
+                    return;
+                }
+
+                // Same currency — try resyncing
                 // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
                 $syncService = $this->requireSyncTrigger();
                 $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
@@ -1065,6 +1117,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                     // Contact exists as pending with name=null (they sent us a request first)
                     // OR: name is set but currencies differ (mutual request with mismatched terms)
+
+                    // Store the remote's currency request so the GUI can inform the user
+                    if ($this->contactCurrencyRepository !== null && $currency !== $existingCurrency) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency)) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $senderPublicKeyHash, $currency, 0, 0, 'pending'
+                            );
+                        }
+                    }
+
                     // Check if we have the contact transaction
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                         $senderPublicKeyHash
@@ -1160,6 +1222,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                     // Contact is pending with name=null (they sent us a request first)
                     // OR: name is set but currencies differ (mutual request with mismatched terms)
+
+                    // Store the remote's currency request so the GUI can inform the user
+                    if ($this->contactCurrencyRepository !== null && $currency !== $existingCurrency) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency)) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $senderPublicKeyHash, $currency, 0, 0, 'pending'
+                            );
+                        }
+                    }
+
                     // Check if we have the contact transaction
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                         $senderPublicKeyHash
