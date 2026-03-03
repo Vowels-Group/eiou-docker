@@ -618,8 +618,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'currency' => $currency
         ];
 
-        // Build the payload array
-        $payload = $this->contactPayload->buildCreateRequest($address);
+        // Build the payload array (include currency so receiver knows sender's preference)
+        $payload = $this->contactPayload->buildCreateRequest($address, $currency);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
         // Generate unique message ID for contact creation tracking
@@ -920,8 +920,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 }
             }
             // Our contact request could not be processed on their end
-            elseif($responseData['status'] === 'rejection'){
-                $output->error("Contact request rejected by " . $address . " : " . ($responseData['reason'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
+            elseif($responseData['status'] === Constants::STATUS_REJECTED){
+                $output->error("Contact request rejected by " . $address . " : " . ($responseData['message'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
                     'contact' => $contactData,
                     'response' => $responseData
                 ]);
@@ -988,6 +988,18 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Extract sender's additional addresses for storage (allows fallback transport)
         $senderAddresses = $request['senderAddresses'] ?? [];
 
+        // Extract sender's preferred currency (falls back to receiver's default)
+        $currency = $request['currency'] ?? $this->currentUser->getDefaultCurrency();
+
+        // Validate currency against allowed currencies — auto-reject if not allowed
+        $allowedCurrencies = $this->currentUser->getAllowedCurrencies();
+        if (!in_array($currency, $allowedCurrencies)) {
+            return $this->contactPayload->buildRejection(
+                $senderAddress,
+                'Currency ' . $currency . ' is not accepted by this node'
+            );
+        }
+
         // Get our own (the responder's) addresses to include in response
         // This allows the requester to store all our known addresses
         $myAddresses = $this->currentUser->getUserLocaters();
@@ -1027,7 +1039,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         );
                         $txid = null;
                         if (!$hasContactTx) {
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                             $this->completeReceivedContactTransaction($senderPublicKey);
                         } else {
                             $this->completeReceivedContactTransaction($senderPublicKey);
@@ -1048,7 +1060,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                         }
                         // Create the contact transaction on our side (they already have one on their end)
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                         // Return 'received' with txid so sender can sync
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
@@ -1107,7 +1119,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         );
                         $txid = null;
                         if (!$hasContactTx) {
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                             $this->completeReceivedContactTransaction($senderPublicKey);
                         } else {
                             $this->completeReceivedContactTransaction($senderPublicKey);
@@ -1124,7 +1136,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                     if (!$hasContactTx) {
                         // Create the contact transaction on our side
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
 
@@ -1163,7 +1175,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // Insert received contact transaction with status 'accepted' (pending user acceptance)
                 // This creates the contact transaction on the receiver's side
                 // Receiver generates txid and includes it in response for sender to use
-                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                 return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
             } else{
                 // Unable to insert contact

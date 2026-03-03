@@ -286,6 +286,22 @@ class ContactManagementService implements ContactManagementServiceInterface
         $transportIndex = $this->transportUtility->determineTransportType($address);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
+        // If contact is already accepted and a different currency is requested, add the currency
+        if ($contact && $contact['status'] === Constants::CONTACT_STATUS_ACCEPTED && $currency !== ($contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) {
+            if ($this->addCurrencyToContact($contact['pubkey'], $currency, $fee, $credit)) {
+                $output->success("Currency {$currency} added to contact {$name}", [
+                    'address' => $address,
+                    'name' => $name,
+                    'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
+                    'credit' => $credit / Constants::CONVERSION_FACTORS[$currency],
+                    'currency' => $currency,
+                ], "Currency added successfully");
+            } else {
+                $output->error("Failed to add currency {$currency} to contact {$name}. Currency may already exist or contact is not accepted.", ErrorCodes::CONTACT_EXISTS, 409);
+            }
+            return;
+        }
+
         // Delegate to sync service for P2P exchange handling
         $syncService = $this->getContactSyncService();
         if ($contact) {

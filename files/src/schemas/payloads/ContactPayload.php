@@ -23,12 +23,19 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($data['address']);
         $myAddresses = $this->filterAddresses($this->currentUser->getUserLocaters());
-        return [
+        $payload = [
             'type' => 'create',
             'senderAddress' => $myAddress,
             'senderAddresses' => $myAddresses,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include sender's preferred currency if provided
+        if (isset($data['currency'])) {
+            $payload['currency'] = $data['currency'];
+        }
+
+        return $payload;
     }
 
     /**
@@ -37,9 +44,13 @@ class ContactPayload extends BasePayload
      * @param string $address The address of the contact request
      * @return array The contact creation payload
      */
-    public function buildCreateRequest(string $address): array
+    public function buildCreateRequest(string $address, ?string $currency = null): array
     {
-        return $this->build(['address' => $address]);
+        $data = ['address' => $address];
+        if ($currency !== null) {
+            $data['currency'] = $currency;
+        }
+        return $this->build($data);
     }
 
     /**
