@@ -97,6 +97,9 @@
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
                                 <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> currency</div>
                             <?php endif; ?>
+                            <?php if (!empty($contact['pending_currencies'])): ?>
+                                <div class="multi-currency-badge" style="background: #ffc107; color: #333;"><?php echo count($contact['pending_currencies']); ?> pending</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -222,6 +225,13 @@
 
         <!-- Info Tab -->
         <div id="info-tab" class="modal-tab-content active">
+            <!-- Currency Selector (shown for multi-currency contacts) -->
+            <div id="currency-selector-section" class="contact-info-section" style="display: none;">
+                <h4><i class="fas fa-coins"></i> Currency</h4>
+                <select id="modal_currency_selector" class="modal-address-selector" data-action-change="switchContactCurrency">
+                </select>
+            </div>
+
             <div class="contact-info-section">
                 <h4><i class="fas fa-wallet"></i> Balance</h4>
                 <div class="balance-display">
@@ -251,10 +261,10 @@
                 </div>
             </div>
 
-            <!-- Multi-Currency Details (populated by JS when contact has multiple currencies) -->
-            <div id="multi-currency-section" class="contact-info-section" style="display: none;">
-                <h4><i class="fas fa-coins"></i> Additional Currencies</h4>
-                <div id="multi-currency-container"></div>
+            <!-- Pending Currency Requests (populated by JS) -->
+            <div id="pending-currency-section" class="contact-info-section" style="display: none;">
+                <h4><i class="fas fa-clock"></i> Pending Currency Requests</h4>
+                <div id="pending-currency-container"></div>
             </div>
 
             <div class="contact-info-section">

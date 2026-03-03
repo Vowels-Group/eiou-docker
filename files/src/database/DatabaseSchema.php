@@ -78,6 +78,7 @@ function getContactCurrenciesTableSchema() {
         currency VARCHAR(10) NOT NULL,
         fee_percent INT NOT NULL,
         credit_limit INT NOT NULL DEFAULT 0,
+        status ENUM('accepted', 'pending') DEFAULT 'accepted',
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE INDEX idx_cc_hash_currency (pubkey_hash, currency),

@@ -1300,6 +1300,7 @@ class ServiceContainer implements ContainerInterface {
         if (isset($this->services['ContactSyncService'])) {
             $this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
             $this->services['ContactSyncService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['ContactSyncService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
 
         // Wire ContactSyncService -> MessageDeliveryService

@@ -68,6 +68,7 @@ class ContactDataBuilder
             'status' => $status,
             'pubkey' => $contact['pubkey'] ?? '',
             'balance' => $contact['balance'] ?? 0,
+            'balances_by_currency' => $contact['balances_by_currency'] ?? [],
             'contact_id' => $contact['contact_id'] ?? '',
             'transactions' => $contact['transactions'] ?? [],
             'online_status' => $contact['online_status'] ?? 'unknown',
@@ -77,7 +78,8 @@ class ContactDataBuilder
             'their_available_credit' => $contact['their_available_credit'] ?? null,
             'chain_drop_proposal' => $contact['chain_drop_proposal'] ?? null,
             'chain_gap_details' => $contact['chain_gap_details'] ?? null,
-            'currencies' => $contact['currencies'] ?? []
+            'currencies' => $contact['currencies'] ?? [],
+            'pending_currencies' => $contact['pending_currencies'] ?? []
         ], $addresses);
     }
 

@@ -338,7 +338,15 @@ class TransactionService implements TransactionServiceInterface {
         $result = [];
 
         foreach ($contacts as $contact) {
-            $balance = $balances[$contact['pubkey']] ?? 0;
+            $contactBalances = $balances[$contact['pubkey']] ?? [];
+            $primaryCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $balance = $contactBalances[$primaryCurrency] ?? 0;
+
+            $balancesByCurrency = [];
+            foreach ($contactBalances as $cur => $bal) {
+                $balancesByCurrency[$cur] = $bal ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
+            }
+
             $addresses = [];
             $contactAddrs = [];
             foreach ($addressTypes as $type) {
@@ -350,6 +358,7 @@ class TransactionService implements TransactionServiceInterface {
             $result[] = array_merge($addresses, [
                 'name' => $contact['name'],
                 'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
+                'balances_by_currency' => $balancesByCurrency,
                 'fee' => $contact['fee_percent'] ? $this->currencyUtility->convertMinorToMajor($contact['fee_percent']) : $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'] ? $this->currencyUtility->convertMinorToMajor($contact['credit_limit']) : $contact['credit_limit'],
                 'currency' => $contact['currency'],

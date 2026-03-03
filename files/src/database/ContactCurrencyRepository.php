@@ -21,7 +21,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'created_at', 'updated_at'
+        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'status', 'created_at', 'updated_at'
     ];
 
     /**
@@ -42,17 +42,19 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @param int $feePercent Fee percentage (in minor units)
      * @param int $creditLimit Credit limit (in minor units)
+     * @param string $status Currency status ('accepted' or 'pending')
      * @return bool True on success
      */
-    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit): bool {
-        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit)";
+    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $status = 'accepted'): bool {
+        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status)";
 
         $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
-            ':credit_limit' => $creditLimit
+            ':credit_limit' => $creditLimit,
+            ':status' => $status
         ]);
 
         return $stmt !== false;
@@ -66,7 +68,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @return array|null Currency config with fee_percent, credit_limit, currency, or null if not found
      */
     public function getCurrencyConfig(string $pubkeyHash, string $currency): ?array {
-        $query = "SELECT currency, fee_percent, credit_limit
+        $query = "SELECT currency, fee_percent, credit_limit, status
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
@@ -90,7 +92,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @return array Array of currency config rows
      */
     public function getContactCurrencies(string $pubkeyHash): array {
-        $query = "SELECT currency, fee_percent, credit_limit
+        $query = "SELECT currency, fee_percent, credit_limit, status
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash";
 
@@ -190,7 +192,7 @@ class ContactCurrencyRepository extends AbstractRepository {
         ];
 
         foreach ($fields as $field => $value) {
-            if (in_array($field, ['fee_percent', 'credit_limit'], true)) {
+            if (in_array($field, ['fee_percent', 'credit_limit', 'status'], true)) {
                 $setClauses[] = "{$field} = :{$field}";
                 $params[":{$field}"] = $value;
             }
@@ -232,6 +234,37 @@ class ContactCurrencyRepository extends AbstractRepository {
         ]);
 
         return $stmt !== false;
+    }
+
+    /**
+     * Accept a pending currency configuration
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code
+     * @return bool True on success
+     */
+    public function acceptCurrency(string $pubkeyHash, string $currency): bool {
+        return $this->updateCurrencyConfig($pubkeyHash, $currency, ['status' => 'accepted']);
+    }
+
+    /**
+     * Get pending currency configurations for a contact
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @return array Array of pending currency config rows
+     */
+    public function getPendingCurrencies(string $pubkeyHash): array {
+        $query = "SELECT currency, fee_percent, credit_limit, status
+                  FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash AND status = 'pending'";
+
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     /**

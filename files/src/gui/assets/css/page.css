@@ -199,6 +199,11 @@ body {
     color: #495057;
 }
 
+.wallet-stats-container {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 .wallet-stats-row {
     display: flex;
     flex-wrap: wrap;

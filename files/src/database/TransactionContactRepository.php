@@ -87,9 +87,11 @@ class TransactionContactRepository extends AbstractRepository {
     /**
      * Get all contact balances in a single optimized query (fixes N+1 problem)
      *
+     * Returns per-currency balances for each contact.
+     *
      * @param string $userPubkey
      * @param array $contactPubkeys
-     * @return array Associative array of pubkey => balance
+     * @return array Associative array of pubkey => ['USD' => balance_int, 'GBY' => balance_int]
      */
     public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array
     {
@@ -108,38 +110,41 @@ class TransactionContactRepository extends AbstractRepository {
         // Build placeholders for IN clause
         $placeholders = $this->createPlaceholders($contactHashes);
 
-        // Single query to get all balances using UNION
+        // Single query to get all balances using UNION, grouped by contact and currency
         $query = "
             SELECT
                 contact_hash,
+                currency,
                 SUM(sent) as total_sent,
                 SUM(received) as total_received
             FROM (
                 -- Sent from user to contacts
                 SELECT
                     receiver_public_key_hash as contact_hash,
+                    currency,
                     SUM(amount) as sent,
                     0 as received
                 FROM {$this->tableName}
                 WHERE sender_public_key_hash = ?
                     AND receiver_public_key_hash IN ($placeholders)
                     AND status = 'completed'
-                GROUP BY receiver_public_key_hash
+                GROUP BY receiver_public_key_hash, currency
 
                 UNION ALL
 
                 -- Received by user from contacts
                 SELECT
                     sender_public_key_hash as contact_hash,
+                    currency,
                     0 as sent,
                     SUM(amount) as received
                 FROM {$this->tableName}
                 WHERE receiver_public_key_hash = ?
                     AND sender_public_key_hash IN ($placeholders)
                     AND status = 'completed'
-                GROUP BY sender_public_key_hash
+                GROUP BY sender_public_key_hash, currency
             ) as balance_calc
-            GROUP BY contact_hash
+            GROUP BY contact_hash, currency
         ";
 
         // Prepare parameters: userHash, contactHashes, userHash, contactHashes
@@ -148,22 +153,27 @@ class TransactionContactRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
-            return array_fill_keys($contactPubkeys, 0);
+            return array_fill_keys($contactPubkeys, []);
         }
 
-        // Build result array indexed by original pubkey
+        // Build result array indexed by original pubkey, then by currency
         $balances = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $pubkey = $hashToPubkey[$row['contact_hash']] ?? null;
             if ($pubkey) {
-                $balances[$pubkey] = $row['total_received'] - $row['total_sent'];
+                if (!isset($balances[$pubkey])) {
+                    $balances[$pubkey] = [];
+                }
+                $currency = $row['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $balances[$pubkey][$currency] = ($balances[$pubkey][$currency] ?? 0)
+                    + $row['total_received'] - $row['total_sent'];
             }
         }
 
-        // Ensure all contacts have a balance entry (default to 0)
+        // Ensure all contacts have a balance entry (default to empty array)
         foreach ($contactPubkeys as $pubkey) {
             if (!isset($balances[$pubkey])) {
-                $balances[$pubkey] = 0;
+                $balances[$pubkey] = [];
             }
         }
         return $balances;

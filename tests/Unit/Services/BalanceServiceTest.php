@@ -87,7 +87,7 @@ class BalanceServiceTest extends TestCase
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->with('user-pubkey', ['test-pubkey-123'])
-            ->willReturn(['test-pubkey-123' => 5000]);
+            ->willReturn(['test-pubkey-123' => ['USD' => 5000]]);
 
         $this->addressRepository->expects($this->once())
             ->method('getAllAddressTypes')
@@ -98,7 +98,8 @@ class BalanceServiceTest extends TestCase
             ->with(['http://test.example.com', 'https://test.example.com'], 5)
             ->willReturn([]);
 
-        $this->currencyUtility->expects($this->exactly(3))
+        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
+        $this->currencyUtility->expects($this->exactly(4))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -109,6 +110,7 @@ class BalanceServiceTest extends TestCase
         $this->assertCount(1, $result);
         $this->assertEquals('Test Contact', $result[0]['name']);
         $this->assertEquals(50.0, $result[0]['balance']);
+        $this->assertEquals(['USD' => 50.0], $result[0]['balances_by_currency']);
         $this->assertEquals(1.0, $result[0]['fee']);
         $this->assertEquals(100.0, $result[0]['credit_limit']);
         $this->assertEquals('USD', $result[0]['currency']);
@@ -161,8 +163,8 @@ class BalanceServiceTest extends TestCase
             ->method('getAllContactBalances')
             ->with('user-pubkey', ['pubkey-1', 'pubkey-2'])
             ->willReturn([
-                'pubkey-1' => 1000,
-                'pubkey-2' => -500
+                'pubkey-1' => ['USD' => 1000],
+                'pubkey-2' => ['USD' => -500]
             ]);
 
         $this->addressRepository->expects($this->once())
@@ -173,7 +175,8 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        $this->currencyUtility->expects($this->exactly(6))
+        // 8 calls: 2 contacts x (balance + balances_by_currency[USD] + fee + credit_limit)
+        $this->currencyUtility->expects($this->exactly(8))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -186,11 +189,13 @@ class BalanceServiceTest extends TestCase
         // Verify first contact
         $this->assertEquals('Contact One', $result[0]['name']);
         $this->assertEquals(10.0, $result[0]['balance']);
+        $this->assertEquals(['USD' => 10.0], $result[0]['balances_by_currency']);
         $this->assertEquals('online', $result[0]['online_status']);
 
         // Verify second contact
         $this->assertEquals('Contact Two', $result[1]['name']);
         $this->assertEquals(-5.0, $result[1]['balance']);
+        $this->assertEquals(['USD' => -5.0], $result[1]['balances_by_currency']);
         $this->assertEquals('offline', $result[1]['online_status']);
     }
 
@@ -219,7 +224,7 @@ class BalanceServiceTest extends TestCase
 
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
-            ->willReturn(['zero-balance-pubkey' => 0]);
+            ->willReturn(['zero-balance-pubkey' => ['USD' => 0]]);
 
         $this->addressRepository->expects($this->once())
             ->method('getAllAddressTypes')
@@ -314,7 +319,7 @@ class BalanceServiceTest extends TestCase
 
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
-            ->willReturn(['limit-pubkey' => 1000]);
+            ->willReturn(['limit-pubkey' => ['USD' => 1000]]);
 
         $this->addressRepository->expects($this->once())
             ->method('getAllAddressTypes')
@@ -326,7 +331,8 @@ class BalanceServiceTest extends TestCase
             ->with(['http://limit.example.com'], 10)
             ->willReturn([]);
 
-        $this->currencyUtility->expects($this->exactly(3))
+        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
+        $this->currencyUtility->expects($this->exactly(4))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -367,7 +373,7 @@ class BalanceServiceTest extends TestCase
 
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
-            ->willReturn(['tx-pubkey' => 3000]);
+            ->willReturn(['tx-pubkey' => ['USD' => 3000]]);
 
         $this->addressRepository->expects($this->once())
             ->method('getAllAddressTypes')
@@ -377,7 +383,8 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn($transactions);
 
-        $this->currencyUtility->expects($this->exactly(3))
+        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
+        $this->currencyUtility->expects($this->exactly(4))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -414,7 +421,7 @@ class BalanceServiceTest extends TestCase
 
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
-            ->willReturn(['minimal-pubkey' => 1000]);
+            ->willReturn(['minimal-pubkey' => ['USD' => 1000]]);
 
         $this->addressRepository->expects($this->once())
             ->method('getAllAddressTypes')
@@ -424,7 +431,8 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        $this->currencyUtility->expects($this->exactly(3))
+        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
+        $this->currencyUtility->expects($this->exactly(4))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -688,9 +696,9 @@ class BalanceServiceTest extends TestCase
         $userPubkey = 'user-public-key';
         $contactPubkeys = ['contact-1', 'contact-2', 'contact-3'];
         $expectedBalances = [
-            'contact-1' => 1000,
-            'contact-2' => 2000,
-            'contact-3' => -500
+            'contact-1' => ['USD' => 1000],
+            'contact-2' => ['USD' => 2000],
+            'contact-3' => ['USD' => -500]
         ];
 
         $this->transactionContactRepository->expects($this->once())
@@ -727,12 +735,12 @@ class BalanceServiceTest extends TestCase
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->with('user-key', ['single-contact'])
-            ->willReturn(['single-contact' => 7500]);
+            ->willReturn(['single-contact' => ['USD' => 7500]]);
 
         $result = $this->balanceService->getAllContactBalances('user-key', ['single-contact']);
 
         $this->assertCount(1, $result);
-        $this->assertEquals(7500, $result['single-contact']);
+        $this->assertEquals(['USD' => 7500], $result['single-contact']);
     }
 
     /**

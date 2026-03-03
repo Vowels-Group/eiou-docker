@@ -115,6 +115,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     private ?ContactCreditRepository $contactCreditRepository = null;
 
+    /**
+     * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository
+     */
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
+
     // =========================================================================
     // CONSTRUCTOR
     // =========================================================================
@@ -173,6 +178,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     public function setContactCreditRepository(ContactCreditRepository $repo): void {
         $this->contactCreditRepository = $repo;
+    }
+
+    /**
+     * Set the contact currency repository
+     *
+     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
+     */
+    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
+        $this->contactCurrencyRepository = $repo;
     }
 
     /**
@@ -1070,10 +1084,23 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Don't include other addresses for pending contacts (privacy)
                     return $this->contactPayload->buildReceived($senderAddress);
                 }
-                // Contact is accepted or other status - return warning (already exists)
+                // Contact is accepted or other status
                 // Store any additional addresses from senderAddresses if present (re-add scenario)
                 if (!empty($senderAddresses) && is_array($senderAddresses)) {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                }
+
+                // Check if this is a new currency request for an existing accepted contact
+                $existingContactForCurrency = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContactForCurrency
+                    && $existingContactForCurrency['status'] === Constants::CONTACT_STATUS_ACCEPTED
+                    && $this->contactCurrencyRepository !== null
+                    && $currency !== ($existingContactForCurrency['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)
+                    && !$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency)
+                ) {
+                    // New currency from existing contact — insert as pending (requires user acceptance)
+                    $this->contactCurrencyRepository->insertCurrencyConfig($senderPublicKeyHash, $currency, 0, 0, 'pending');
+                    return $this->contactPayload->buildReceived($senderAddress, $myAddresses);
                 }
 
                 // Generate recipient signature for dual-signature protocol (re-add scenario)

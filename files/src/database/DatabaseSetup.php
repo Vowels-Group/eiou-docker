@@ -217,6 +217,9 @@ function runColumnMigrations(PDO $pdo): array {
         'p2p' => [
             'hop_wait' => 'INT DEFAULT 0 AFTER `fast`',
         ],
+        'contact_currencies' => [
+            'status' => "ENUM('accepted', 'pending') DEFAULT 'accepted' AFTER `credit_limit`",
+        ],
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]

@@ -13,6 +13,17 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
+- Contact detail modal currency selector: multi-currency contacts now display a dropdown to switch between currencies, updating balance, credit limit, fee, and available credit fields
+- Per-currency contact balances: `getAllContactBalances()` now returns balances grouped by currency (`pubkey => ['USD' => amount, 'GBY' => amount]`)
+- `balances_by_currency` field added to contact data throughout the GUI pipeline (BalanceService, TransactionService, ContactDataBuilder)
+- Pending currency acceptance flow: adding a new currency to an existing contact now sends a P2P request; the remote side sees it as "pending" and must accept with their own fee/credit terms
+- `contact_currencies.status` column (`'accepted'`/`'pending'`) with database migration for existing tables
+- `ContactCurrencyRepository::acceptCurrency()` and `getPendingCurrencies()` methods
+- `ContactSyncService::setContactCurrencyRepository()` for new currency request handling on receiver side
+- GUI `acceptCurrency` action handler in ContactController for accepting pending currency requests
+- Pending currency badge on contact cards and accept form in contact detail modal
+
 - Configurable allowed currencies — the hardcoded `['USD']` allowed list in `InputValidator::validateCurrency()` is now a `Constants::ALLOWED_CURRENCIES` default that can be overridden per-node via `UserContext::getAllowedCurrencies()`
   - New `Constants::ALLOWED_CURRENCIES` constant defines the system default
   - New `UserContext::getAllowedCurrencies()` getter reads from config (comma-separated string or array), falls back to Constants

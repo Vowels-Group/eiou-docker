@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
     // Contact actions
-    if (in_array($action, ['addContact', 'acceptContact', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
+    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
         $contactController->routeAction();
     }
 
@@ -487,16 +487,24 @@ foreach ($contactArraysForCredit as &$contacts) {
         $currencyConfigs = $contactCurrenciesByHash[$hash] ?? [];
         $allCredits = $availableCreditAllByHash[$hash] ?? [];
         $currencies = [];
+        $pendingCurrencies = [];
         foreach ($currencyConfigs as $cc) {
             $cur = $cc['currency'];
-            $currencies[] = [
+            $ccStatus = $cc['status'] ?? 'accepted';
+            $entry = [
                 'currency' => $cur,
                 'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
                 'credit_limit' => ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur],
                 'my_available_credit' => $allCredits[$cur] ?? null,
+                'status' => $ccStatus,
             ];
+            if ($ccStatus === 'pending') {
+                $pendingCurrencies[] = $entry;
+            }
+            $currencies[] = $entry;
         }
         $contact['currencies'] = $currencies;
+        $contact['pending_currencies'] = $pendingCurrencies;
     }
     unset($contact);
 }

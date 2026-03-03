@@ -1470,6 +1470,8 @@ function scrollQuickActions(direction) {
 var currentContactId = null;
 var currentContactPubkeyHash = null;
 var contactTransactionData = [];
+var currentContactCurrencies = [];
+var currentContactBalances = {};
 var contactsShowAll = false;
 var CONTACTS_DEFAULT_LIMIT = 16;
 
@@ -1733,28 +1735,57 @@ function openContactModal(contact, openTab) {
     var fee = parseFloat(contact.fee) || 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
 
-    // Populate multi-currency section if contact has additional currencies
-    var multiCurrencySection = document.getElementById('multi-currency-section');
-    var multiCurrencyContainer = document.getElementById('multi-currency-container');
-    if (multiCurrencySection && multiCurrencyContainer) {
+    // Populate currency selector dropdown for multi-currency contacts
+    var currencySelectorSection = document.getElementById('currency-selector-section');
+    var currencySelector = document.getElementById('modal_currency_selector');
+    if (currencySelectorSection && currencySelector) {
         var currencies = contact.currencies || [];
+        // Store data for currency switching
+        currentContactCurrencies = currencies;
+        currentContactBalances = contact.balances_by_currency || {};
         if (currencies.length > 1) {
-            multiCurrencySection.style.display = 'block';
-            var html = '';
+            currencySelectorSection.style.display = 'block';
+            currencySelector.innerHTML = '';
             for (var i = 0; i < currencies.length; i++) {
-                var cc = currencies[i];
-                if (cc.currency === currency) continue; // Skip default currency (already shown above)
-                html += '<div class="info-grid" style="margin-bottom: 8px;">';
-                html += '<div class="info-item"><label><i class="fas fa-money-bill"></i> Currency</label><div class="info-value">' + (cc.currency || '') + '</div></div>';
-                html += '<div class="info-item"><label><i class="fas fa-credit-card"></i> Credit Limit</label><div class="info-value">' + parseFloat(cc.credit_limit || 0).toFixed(2) + ' ' + (cc.currency || '') + '</div></div>';
-                html += '<div class="info-item"><label><i class="fas fa-percent"></i> Fee</label><div class="info-value">' + parseFloat(cc.fee || 0).toFixed(2) + '%</div></div>';
-                html += '<div class="info-item"><label><i class="fas fa-coins"></i> Your Available Credit</label><div class="info-value">' + (cc.my_available_credit !== null && cc.my_available_credit !== undefined ? parseFloat(cc.my_available_credit).toFixed(2) : '\u2014') + ' ' + (cc.currency || '') + '</div></div>';
-                html += '</div>';
+                var opt = document.createElement('option');
+                opt.value = currencies[i].currency;
+                opt.textContent = currencies[i].currency;
+                if (currencies[i].currency === currency) opt.selected = true;
+                currencySelector.appendChild(opt);
             }
-            multiCurrencyContainer.innerHTML = html;
         } else {
-            multiCurrencySection.style.display = 'none';
-            multiCurrencyContainer.innerHTML = '';
+            currencySelectorSection.style.display = 'none';
+            currencySelector.innerHTML = '';
+        }
+    }
+
+    // Populate pending currency requests section
+    var pendingCurrencySection = document.getElementById('pending-currency-section');
+    var pendingCurrencyContainer = document.getElementById('pending-currency-container');
+    if (pendingCurrencySection && pendingCurrencyContainer) {
+        var pendingCurrencies = contact.pending_currencies || [];
+        if (pendingCurrencies.length > 0) {
+            pendingCurrencySection.style.display = 'block';
+            var phtml = '';
+            for (var pi = 0; pi < pendingCurrencies.length; pi++) {
+                var pc = pendingCurrencies[pi];
+                phtml += '<form method="POST" class="pending-currency-form mb-sm">';
+                phtml += '<input type="hidden" name="csrf_token" value="' + escapeHtml(document.querySelector('input[name=csrf_token]').value) + '">';
+                phtml += '<input type="hidden" name="action" value="acceptCurrency">';
+                phtml += '<input type="hidden" name="pubkey_hash" value="' + escapeHtml(contact.pubkey_hash || '') + '">';
+                phtml += '<input type="hidden" name="currency" value="' + escapeHtml(pc.currency) + '">';
+                phtml += '<div class="info-grid">';
+                phtml += '<div class="info-item"><label>Currency</label><div class="info-value"><strong>' + escapeHtml(pc.currency) + '</strong> <span class="badge badge-pending">Pending</span></div></div>';
+                phtml += '<div class="info-item"><label>Fee (%)</label><div class="info-value"><input type="number" name="fee" value="0" step="0.1" min="0" class="form-control-sm" required></div></div>';
+                phtml += '<div class="info-item"><label>Credit Limit</label><div class="info-value"><input type="number" name="credit" value="0" min="0" class="form-control-sm" required></div></div>';
+                phtml += '<div class="info-item"><label>&nbsp;</label><div class="info-value"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Accept</button></div></div>';
+                phtml += '</div>';
+                phtml += '</form>';
+            }
+            pendingCurrencyContainer.innerHTML = phtml;
+        } else {
+            pendingCurrencySection.style.display = 'none';
+            pendingCurrencyContainer.innerHTML = '';
         }
     }
 
@@ -1991,6 +2022,65 @@ function openContactModal(contact, openTab) {
  */
 function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
+}
+
+/**
+ * Switches the contact modal display to show data for the selected currency.
+ * Updates balance, credit limit, fee, and available credit fields.
+ */
+function switchContactCurrency(selectedCurrency) {
+    if (!selectedCurrency) return;
+
+    // Find currency config from stored currencies array
+    var currencyConfig = null;
+    for (var i = 0; i < currentContactCurrencies.length; i++) {
+        if (currentContactCurrencies[i].currency === selectedCurrency) {
+            currencyConfig = currentContactCurrencies[i];
+            break;
+        }
+    }
+
+    // Update balance from per-currency balances
+    var balance = parseFloat(currentContactBalances[selectedCurrency]) || 0;
+    var balanceEl = document.getElementById('modal_balance');
+    if (balanceEl) {
+        balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
+        balanceEl.className = 'balance-amount';
+    }
+    var balanceCurrencyEl = document.getElementById('modal_balance_currency');
+    if (balanceCurrencyEl) balanceCurrencyEl.textContent = selectedCurrency;
+
+    if (currencyConfig) {
+        // Update credit limit
+        var creditLimit = parseFloat(currencyConfig.credit_limit) || 0;
+        var creditLimitEl = document.getElementById('modal_credit_limit');
+        if (creditLimitEl) creditLimitEl.textContent = creditLimit.toFixed(2);
+
+        var creditCurrencyEl = document.getElementById('modal_credit_currency');
+        if (creditCurrencyEl) creditCurrencyEl.textContent = selectedCurrency;
+
+        // Update fee
+        var fee = parseFloat(currencyConfig.fee) || 0;
+        var feeEl = document.getElementById('modal_fee');
+        if (feeEl) feeEl.textContent = fee.toFixed(2);
+
+        // Update available credits
+        var myAvailEl = document.getElementById('modal_my_available_credit');
+        if (myAvailEl) {
+            myAvailEl.textContent = (currencyConfig.my_available_credit !== null && currencyConfig.my_available_credit !== undefined)
+                ? parseFloat(currencyConfig.my_available_credit).toFixed(2) : '\u2014';
+        }
+        var myCreditCurEl = document.getElementById('modal_my_credit_currency');
+        if (myCreditCurEl) myCreditCurEl.textContent = selectedCurrency;
+
+        var theirAvailEl = document.getElementById('modal_their_available_credit');
+        if (theirAvailEl) {
+            theirAvailEl.textContent = (currencyConfig.their_available_credit !== null && currencyConfig.their_available_credit !== undefined)
+                ? parseFloat(currencyConfig.their_available_credit).toFixed(2) : '\u2014';
+        }
+        var theirCreditCurEl = document.getElementById('modal_their_credit_currency');
+        if (theirCreditCurEl) theirCreditCurEl.textContent = selectedCurrency;
+    }
 }
 
 // Track current contact address for ping
@@ -3919,6 +4009,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (action === 'showSelectedContactAddress') { showSelectedContactAddress(); }
         else if (action === 'showSelectedUserAddress') { showSelectedUserAddress(); }
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
+        else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
     }, false);
 
     // Delegated input handler
