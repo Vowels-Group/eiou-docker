@@ -1396,9 +1396,9 @@ class ContactManagementService implements ContactManagementServiceInterface
      * Lookup contact addresses by name
      *
      * @param string $name Contact name
-     * @return string|null Contact addresses or null
+     * @return array|null Contact addresses or null
      */
-    public function lookupAddressesByName(string $name): ?string
+    public function lookupAddressesByName(string $name): ?array
     {
         return $this->contactRepository->lookupAddressesByName($name);
     }

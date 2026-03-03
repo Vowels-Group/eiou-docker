@@ -403,9 +403,9 @@ class ContactService implements ContactServiceInterface
      * Lookup contact addresses by name.
      *
      * @param string $name Contact name
-     * @return string|null Contact addresses or null if not found
+     * @return array|null Contact addresses or null if not found
      */
-    public function lookupAddressesByName(string $name): ?string
+    public function lookupAddressesByName(string $name): ?array
     {
         return $this->managementService->lookupAddressesByName($name);
     }
