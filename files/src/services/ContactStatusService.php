@@ -475,7 +475,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         // Check if contact is accepted
-        if ($contact['status'] !== 'accepted') {
+        if ($contact['status'] !== Constants::CONTACT_STATUS_ACCEPTED) {
             return [
                 'success' => false,
                 'error' => 'contact_not_accepted',
@@ -597,7 +597,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             'message' => "Contact is {$statusLabel} and chain is valid"
                         ];
                     }
-                } elseif ($response['status'] === 'rejected') {
+                } elseif ($response['status'] === Constants::DELIVERY_REJECTED) {
                     // Contact rejected ping but responded - still online
                     $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
                     return [

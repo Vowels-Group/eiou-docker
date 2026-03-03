@@ -155,7 +155,7 @@ class Rp2pPayload extends BasePayload
         }
 
         return json_encode([
-            'status' => 'forwarded',
+            'status' => Constants::DELIVERY_FORWARDED,
             'message' => $message,
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -172,7 +172,7 @@ class Rp2pPayload extends BasePayload
     {
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
-            'status' => 'inserted',
+            'status' => Constants::DELIVERY_INSERTED,
             'message' => 'hash ' . $request['hash'] . ' for RP2P stored in database of ' . $receiver,
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),

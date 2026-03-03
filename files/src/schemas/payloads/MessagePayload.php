@@ -207,7 +207,7 @@ class MessagePayload extends BasePayload
         $hash = $message['hash'] ?? 'unknown';
         $hashType = $message['hashType'] ?? 'unknown';
         return json_encode([
-            'status' => 'acknowledged',
+            'status' => Constants::DELIVERY_ACKNOWLEDGED,
             'hash' => $hash,
             'hashType' => $hashType,
             'message' => $myAddress . ' confirms transaction completion was received and processed',
@@ -337,7 +337,7 @@ class MessagePayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
-            'status' => 'acknowledged',
+            'status' => Constants::DELIVERY_ACKNOWLEDGED,
             'processedCount' => $processedCount,
             'message' => $myAddress . ' has processed ' . $processedCount . ' transactions from sync',
             'senderAddress' => $myAddress,

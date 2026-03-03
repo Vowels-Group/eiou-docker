@@ -403,7 +403,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                 }
 
                 // Explicit rejection - don't retry
-                if ($status === 'rejected') {
+                if ($status === Constants::DELIVERY_REJECTED) {
                     $this->deliveryRepository->markFailed(
                         $messageType,
                         $messageId,
@@ -411,7 +411,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                     );
                     return [
                         'success' => false,
-                        'stage' => 'rejected',
+                        'stage' => Constants::DELIVERY_REJECTED,
                         'message' => $decodedResponse['message'] ?? 'Message rejected by recipient',
                         'response' => $decodedResponse,
                         'retry' => false,
@@ -559,7 +559,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         continue;
                     }
 
-                    if ($status === 'rejected') {
+                    if ($status === Constants::DELIVERY_REJECTED) {
                         $this->deliveryRepository->markFailed(
                             $messageType,
                             $messageId,
@@ -571,7 +571,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                             'raw' => $response,
                             'tracking' => [
                                 'success' => false,
-                                'stage' => 'rejected',
+                                'stage' => Constants::DELIVERY_REJECTED,
                                 'message' => $decodedResponse['message'] ?? 'Message rejected by recipient',
                                 'response' => $decodedResponse,
                                 'retry' => false,
@@ -748,7 +748,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                     }
 
                     // Explicit rejection - don't retry
-                    if ($status === 'rejected') {
+                    if ($status === Constants::DELIVERY_REJECTED) {
                         $this->deliveryRepository->markFailed(
                             $messageType,
                             $messageId,
@@ -756,7 +756,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         );
                         return [
                             'success' => false,
-                            'stage' => 'rejected',
+                            'stage' => Constants::DELIVERY_REJECTED,
                             'message' => $decodedResponse['message'] ?? 'Message rejected by recipient',
                             'response' => $decodedResponse,
                             'retry' => false,
@@ -898,12 +898,12 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      */
     private function shouldStatusCompleteDelivery(string $status, string $messageType): bool {
         // These statuses always complete delivery
-        if (in_array($status, ['accepted', 'acknowledged', 'completed'], true)) {
+        if (in_array($status, [Constants::STATUS_ACCEPTED, Constants::DELIVERY_ACKNOWLEDGED, Constants::DELIVERY_COMPLETED], true)) {
             return true;
         }
 
         // 'inserted' and 'forwarded' complete for specific message types
-        if (in_array($status, ['inserted', 'forwarded'], true)) {
+        if (in_array($status, [Constants::DELIVERY_INSERTED, Constants::DELIVERY_FORWARDED], true)) {
             return $this->shouldCompleteOnIntermediateStage($messageType);
         }
 
@@ -918,11 +918,11 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      */
     private function mapStatusToStage(string $status): string {
         // Most statuses map directly to stages
-        if (in_array($status, ['received', 'inserted', 'forwarded'], true)) {
+        if (in_array($status, [Constants::DELIVERY_RECEIVED, Constants::DELIVERY_INSERTED, Constants::DELIVERY_FORWARDED], true)) {
             return $status;
         }
         // Default fallback
-        return 'received';
+        return Constants::DELIVERY_RECEIVED;
     }
 
     /**
@@ -1078,7 +1078,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
 
         return [
             'success' => false,
-            'stage' => 'failed',
+            'stage' => Constants::DELIVERY_FAILED,
             'message' => 'Message delivery failed after ' . ($this->maxRetries + 1) . ' attempts',
             'error' => $lastError,
             'retry' => false,
@@ -1264,9 +1264,9 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             return false;
         }
 
-        return $delivery['delivery_stage'] === 'failed' ||
+        return $delivery['delivery_stage'] === Constants::DELIVERY_FAILED ||
                ((int) $delivery['retry_count'] >= (int) $delivery['max_retries'] &&
-                !in_array($delivery['delivery_stage'], ['completed', 'received', 'inserted', 'forwarded']));
+                !in_array($delivery['delivery_stage'], [Constants::DELIVERY_COMPLETED, Constants::DELIVERY_RECEIVED, Constants::DELIVERY_INSERTED, Constants::DELIVERY_FORWARDED]));
     }
 
     // =========================================================================
@@ -1293,8 +1293,8 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             'max_retries' => (int) $delivery['max_retries'],
             'last_error' => $delivery['last_error'],
             'next_retry_at' => $delivery['next_retry_at'],
-            'is_failed' => $delivery['delivery_stage'] === 'failed',
-            'is_completed' => $delivery['delivery_stage'] === 'completed',
+            'is_failed' => $delivery['delivery_stage'] === Constants::DELIVERY_FAILED,
+            'is_completed' => $delivery['delivery_stage'] === Constants::DELIVERY_COMPLETED,
             'retries_exhausted' => (int) $delivery['retry_count'] >= (int) $delivery['max_retries']
         ];
     }
@@ -1629,7 +1629,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
         $currentStage = $delivery['delivery_stage'];
 
         // Don't mark as completed if already failed
-        if ($currentStage === 'failed') {
+        if ($currentStage === Constants::DELIVERY_FAILED) {
             return false;
         }
 

@@ -686,7 +686,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             }
 
             // Contact request was received (initial insert on their end as pending, awaiting acceptance)
-            if($responseData['status'] === 'received'){
+            if($responseData['status'] === Constants::DELIVERY_RECEIVED){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
@@ -774,7 +774,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // we are known under a different address or transport type
             // Note: If contact existed locally, we would have returned early above
             // So reaching here means contact was deleted locally - need to re-insert and sync
-            elseif($responseData['status'] === 'updated'){
+            elseif($responseData['status'] === Constants::DELIVERY_UPDATED){
                 $senderAddress = $responseData['senderAddress'];
                 // Contact was deleted locally - re-insert and sync
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {

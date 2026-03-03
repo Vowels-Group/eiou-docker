@@ -475,7 +475,7 @@ class P2pService implements P2pServiceInterface {
             Logger::getInstance()->error("Error retrieving existence of P2P by hash", ['error' => $e->getMessage()]);
             if($echo){
                 echo json_encode([
-                    "status" => "rejected",
+                    "status" => Constants::DELIVERY_REJECTED,
                     "message" => "Could not retrieve existence of P2P with receiver"
                 ]);
             }

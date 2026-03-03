@@ -97,7 +97,7 @@ class ContactStatusPayload extends BasePayload
         ];
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::DELIVERY_REJECTED,
             'reason' => $reason,
             'message' => $messages[$reason] ?? "Ping rejected: {$reason}",
             'senderAddress' => $userAddress,
