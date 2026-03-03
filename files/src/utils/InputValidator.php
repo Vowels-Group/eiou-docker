@@ -86,14 +86,22 @@ class InputValidator {
     }
 
     /**
-     * Validate currency code
+     * Validate currency code against the allowed currencies list
      *
      * @param string $currency Currency code to validate
+     * @param array|null $allowedCurrencies Optional override for allowed list (useful for tests)
      * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
      */
-    public static function validateCurrency($currency): array {
-        // Allowed currencies (ISO 4217)
-        $allowedCurrencies = ['USD'];
+    public static function validateCurrency($currency, ?array $allowedCurrencies = null): array {
+        if ($allowedCurrencies === null) {
+            $allowedCurrencies = Constants::ALLOWED_CURRENCIES;
+            try {
+                $userContext = UserContext::getInstance();
+                $allowedCurrencies = $userContext->getAllowedCurrencies();
+            } catch (\Exception $e) {
+                // UserContext not initialized yet (e.g., during startup), use Constants default
+            }
+        }
 
         $currency = strtoupper(trim($currency));
 
@@ -103,6 +111,27 @@ class InputValidator {
 
         if (!in_array($currency, $allowedCurrencies)) {
             return ['valid' => false, 'value' => null, 'error' => 'Unsupported currency code'];
+        }
+
+        return ['valid' => true, 'value' => $currency, 'error' => null];
+    }
+
+    /**
+     * Validate a currency code for adding to the allowed list.
+     * The currency must have a conversion factor defined in Constants.
+     *
+     * @param string $currency Currency code to validate
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
+     */
+    public static function validateAllowedCurrency(string $currency): array {
+        $currency = strtoupper(trim($currency));
+
+        if (strlen($currency) !== Constants::VALIDATION_CURRENCY_CODE_LENGTH) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be ' . Constants::VALIDATION_CURRENCY_CODE_LENGTH . ' characters'];
+        }
+
+        if (!isset(Constants::CONVERSION_FACTORS[$currency])) {
+            return ['valid' => false, 'value' => null, 'error' => 'No conversion factor defined for currency: ' . $currency . '. Add conversion factor to Constants before enabling.'];
         }
 
         return ['valid' => true, 'value' => $currency, 'error' => null];

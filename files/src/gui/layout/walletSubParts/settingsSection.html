@@ -12,11 +12,28 @@
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
                 <select id="defaultCurrency" name="defaultCurrency" class="default-value">
-                    <option value="USD" selected>USD</option>
+                    <?php
+                    $allowedCurrencies = $user->getAllowedCurrencies();
+                    $currentDefault = $user->getDefaultCurrency();
+                    foreach ($allowedCurrencies as $curr): ?>
+                        <option value="<?= htmlspecialchars($curr) ?>" <?= $curr === $currentDefault ? 'selected' : '' ?>><?= htmlspecialchars($curr) ?></option>
+                    <?php endforeach; ?>
                 </select>
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Default currency for new contacts and transactions
+                </small>
+            </div>
+
+            <!-- Allowed Currencies -->
+            <div class="form-group">
+                <label for="allowedCurrencies">Allowed Currencies:</label>
+                <input type="text" id="allowedCurrencies" name="allowedCurrencies"
+                       value="<?= htmlspecialchars(implode(',', $user->getAllowedCurrencies())) ?>"
+                       class="default-value" placeholder="USD,EUR">
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Comma-separated currency codes. Each must have a conversion factor defined.
                 </small>
             </div>
 

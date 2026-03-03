@@ -530,6 +530,39 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getAllowedCurrencies returns default when not set
+     */
+    public function testGetAllowedCurrenciesReturnsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+
+        $this->assertEquals(Constants::ALLOWED_CURRENCIES, $instance->getAllowedCurrencies());
+    }
+
+    /**
+     * Test getAllowedCurrencies parses comma-separated string
+     */
+    public function testGetAllowedCurrenciesFromCommaSeparatedString(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['allowedCurrencies' => 'USD,EUR']);
+
+        $this->assertEquals(['USD', 'EUR'], $instance->getAllowedCurrencies());
+    }
+
+    /**
+     * Test getAllowedCurrencies returns array directly
+     */
+    public function testGetAllowedCurrenciesFromArray(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['allowedCurrencies' => ['USD', 'EUR']]);
+
+        $this->assertEquals(['USD', 'EUR'], $instance->getAllowedCurrencies());
+    }
+
+    /**
      * Test getDefaultCurrency returns default when not set
      */
     public function testGetDefaultCurrencyReturnsDefaultWhenNotSet(): void

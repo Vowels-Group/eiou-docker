@@ -411,6 +411,22 @@ class UserContext {
     }
 
     /**
+     * Get allowed currencies list
+     *
+     * @return array List of allowed ISO 4217 currency codes
+     */
+    public function getAllowedCurrencies(): array {
+        $allowed = $this->get('allowedCurrencies');
+        if ($allowed === null) {
+            return Constants::ALLOWED_CURRENCIES;
+        }
+        if (is_string($allowed)) {
+            return array_filter(array_map('trim', explode(',', $allowed)));
+        }
+        return (array) $allowed;
+    }
+
+    /**
      * Get maximum fee percentage
      *
      * @return float
@@ -830,6 +846,7 @@ class UserContext {
     public static function getConfigurableDefaults(): array {
         return [
             // Transaction settings (original 11)
+            'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,

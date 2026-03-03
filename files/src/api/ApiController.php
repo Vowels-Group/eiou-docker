@@ -1437,6 +1437,7 @@ class ApiController {
             'auto_chain_drop_accept' => ['key' => 'autoChainDropAccept', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_enabled' => ['key' => 'apiEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],
             'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Backup & logging
             'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
@@ -1531,6 +1532,16 @@ class ApiController {
                     $value = $validation['value'];
                 } elseif ($configKey === 'apiCorsAllowedOrigins') {
                     $value = trim((string) $rawValue);
+                } elseif ($configKey === 'allowedCurrencies') {
+                    $currencies = array_filter(array_map('trim', explode(',', strtoupper((string) $rawValue))));
+                    foreach ($currencies as $c) {
+                        $validation = InputValidator::validateAllowedCurrency($c);
+                        if (!$validation['valid']) {
+                            $errors[] = "allowed_currencies: Currency {$c}: " . $validation['error'];
+                            continue 2;
+                        }
+                    }
+                    $value = implode(',', $currencies);
                 } elseif ($configKey === 'name') {
                     if (empty(trim((string) $rawValue))) {
                         $errors[] = "name: Display name cannot be empty";

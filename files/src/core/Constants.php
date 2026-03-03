@@ -69,6 +69,8 @@ class Constants {
     const CONVERSION_FACTORS = [
         'USD' => 100,
     ];
+    // Allowed currencies: only currencies with a CONVERSION_FACTORS entry are valid
+    const ALLOWED_CURRENCIES = ['USD'];
 
     /**
      * Get the conversion factor for a given currency

@@ -13,6 +13,16 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Configurable allowed currencies — the hardcoded `['USD']` allowed list in `InputValidator::validateCurrency()` is now a `Constants::ALLOWED_CURRENCIES` default that can be overridden per-node via `UserContext::getAllowedCurrencies()`
+  - New `Constants::ALLOWED_CURRENCIES` constant defines the system default
+  - New `UserContext::getAllowedCurrencies()` getter reads from config (comma-separated string or array), falls back to Constants
+  - `InputValidator::validateCurrency()` now reads allowed list from UserContext; accepts optional `$allowedCurrencies` parameter for tests and override scenarios
+  - New `InputValidator::validateAllowedCurrency()` validates that a currency code has a `Constants::CONVERSION_FACTORS` entry before it can be added to the allowed list
+  - CLI `changesettings allowedCurrencies` command and interactive menu option (16) for managing allowed currencies
+  - GUI settings: dynamic default currency dropdown populated from allowed list; new "Allowed Currencies" text input field
+  - GUI SettingsController validates each currency has a conversion factor on save
+  - API `PUT /api/v1/system/settings` supports `allowed_currencies` field with per-currency conversion factor validation
+  - `allowedCurrencies` added to `UserContext::getConfigurableDefaults()` (stored as comma-separated string)
 - Multi-currency contact support — contacts can now have multiple currency relationships with independent fee and credit limit per currency
   - New `contact_currencies` table stores per-currency configuration (`pubkey_hash`, `currency`, `fee_percent`, `credit_limit`) with composite UNIQUE on `(pubkey_hash, currency)`
   - New `ContactCurrencyRepository` with full CRUD: `insertCurrencyConfig()`, `getCurrencyConfig()`, `getContactCurrencies()`, `hasCurrency()`, `getCreditLimit()`, `getFeePercent()`, `updateCurrencyConfig()`, `upsertCurrencyConfig()`, `deleteAllForContact()`, `deleteCurrencyConfig()`

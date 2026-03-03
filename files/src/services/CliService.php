@@ -449,6 +449,18 @@ class CliService implements CliServiceInterface {
                 $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            // Currency management
+            } elseif(strtolower($argv[2]) === 'allowedcurrencies'){
+                $key = 'allowedCurrencies';
+                $currencies = array_filter(array_map('trim', explode(',', strtoupper($argv[3] ?? ''))));
+                foreach ($currencies as $c) {
+                    $validation = InputValidator::validateAllowedCurrency($c);
+                    if (!$validation['valid']) {
+                        $output->validationError($key, "Currency {$c}: " . $validation['error']);
+                        return;
+                    }
+                }
+                $value = implode(',', $currencies);
             } else{
                 $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
@@ -480,6 +492,7 @@ class CliService implements CliServiceInterface {
             echo "\t13. Trusted proxy IPs\n";
             echo "\t14. Auto-accept P2P transactions\n";
             echo "\t15. Direct transaction delivery expiration\n";
+            echo "\t16. Allowed currencies\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -655,6 +668,22 @@ class CliService implements CliServiceInterface {
                         return;
                     }
                     $value = intval($rawInput);
+                    break;
+
+                case '16':
+                    echo "Current allowed currencies: " . implode(', ', UserContext::getInstance()->getAllowedCurrencies()) . "\n";
+                    echo "Enter currencies (comma-separated, e.g., USD,EUR): ";
+                    $key = 'allowedCurrencies';
+                    $input = trim(fgets(STDIN));
+                    $currencies = array_filter(array_map('trim', explode(',', strtoupper($input))));
+                    foreach ($currencies as $c) {
+                        $validation = InputValidator::validateAllowedCurrency($c);
+                        if (!$validation['valid']) {
+                            echo "Error for {$c}: " . $validation['error'] . "\n";
+                            return;
+                        }
+                    }
+                    $value = implode(',', $currencies);
                     break;
 
                 case '0':
