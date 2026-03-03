@@ -76,7 +76,8 @@ class ContactDataBuilder
             'my_available_credit' => $contact['my_available_credit'] ?? null,
             'their_available_credit' => $contact['their_available_credit'] ?? null,
             'chain_drop_proposal' => $contact['chain_drop_proposal'] ?? null,
-            'chain_gap_details' => $contact['chain_gap_details'] ?? null
+            'chain_gap_details' => $contact['chain_gap_details'] ?? null,
+            'currencies' => $contact['currencies'] ?? []
         ], $addresses);
     }
 

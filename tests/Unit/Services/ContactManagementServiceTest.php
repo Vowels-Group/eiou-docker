@@ -19,6 +19,9 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Utils\InputValidator;
 use Eiou\Core\UserContext;
 use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\ContactCreditRepository;
 
 #[CoversClass(ContactManagementService::class)]
 class ContactManagementServiceTest extends TestCase
@@ -30,6 +33,8 @@ class ContactManagementServiceTest extends TestCase
     private TransportUtilityService $transportUtility;
     private InputValidator $inputValidator;
     private UserContext $currentUser;
+    private ContactCreditRepository $contactCreditRepo;
+    private ContactCurrencyRepository $contactCurrencyRepo;
     private ContactManagementService $service;
 
     protected function setUp(): void
@@ -45,6 +50,9 @@ class ContactManagementServiceTest extends TestCase
         $this->utilityContainer->method('getTransportUtility')
             ->willReturn($this->transportUtility);
 
+        $this->contactCreditRepo = $this->createMock(ContactCreditRepository::class);
+        $this->contactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
+
         $this->service = new ContactManagementService(
             $this->contactRepo,
             $this->addressRepo,
@@ -53,6 +61,9 @@ class ContactManagementServiceTest extends TestCase
             $this->inputValidator,
             $this->currentUser
         );
+
+        $this->service->setContactCreditRepository($this->contactCreditRepo);
+        $this->service->setContactCurrencyRepository($this->contactCurrencyRepo);
     }
 
     // =========================================================================
@@ -257,5 +268,134 @@ class ContactManagementServiceTest extends TestCase
         $argv = ['eiou', 'update', 'http://test.example.com', 'all', '<script>alert(1)</script>', '0.5', '100'];
 
         $this->service->updateContact($argv, $output);
+    }
+
+    // =========================================================================
+    // acceptContact() Currency Tests
+    // =========================================================================
+
+    /**
+     * Test acceptContact creates a contact currency row via upsertCurrencyConfig
+     */
+    public function testAcceptContactCreatesContactCurrencyRow(): void
+    {
+        $pubkey = 'test-pubkey-123';
+        $name = 'TestContact';
+        $fee = 1.0;
+        $credit = 100.0;
+        $currency = 'USD';
+
+        $this->contactRepo->method('acceptContact')
+            ->with($pubkey, $name, $fee, $credit, $currency)
+            ->willReturn(true);
+
+        $this->balanceRepo->method('insertInitialContactBalances')
+            ->with($pubkey, $currency);
+
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('upsertCurrencyConfig')
+            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit)
+            ->willReturn(true);
+
+        $result = $this->service->acceptContact($pubkey, $name, $fee, $credit, $currency);
+
+        $this->assertTrue($result);
+    }
+
+    // =========================================================================
+    // getCreditLimit() Tests
+    // =========================================================================
+
+    /**
+     * Test getCreditLimit passes currency parameter to the repository
+     */
+    public function testGetCreditLimitPassesCurrencyToRepository(): void
+    {
+        $this->contactRepo->expects($this->once())
+            ->method('getCreditLimit')
+            ->with('pubkey', 'EUR')
+            ->willReturn(500.0);
+
+        $result = $this->service->getCreditLimit('pubkey', 'EUR');
+
+        $this->assertEquals(500.0, $result);
+    }
+
+    // =========================================================================
+    // addCurrencyToContact() Tests
+    // =========================================================================
+
+    /**
+     * Test addCurrencyToContact succeeds for an accepted contact with a new currency
+     */
+    public function testAddCurrencyToContactSuccess(): void
+    {
+        $pubkey = 'accepted-pubkey';
+        $currency = 'EUR';
+        $fee = 2.0;
+        $credit = 200.0;
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactRepo->method('isAcceptedContactPubkey')
+            ->with($pubkey)
+            ->willReturn(true);
+
+        $this->contactCurrencyRepo->method('hasCurrency')
+            ->with($pubkeyHash, $currency)
+            ->willReturn(false);
+
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('insertCurrencyConfig')
+            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit);
+
+        $this->balanceRepo->expects($this->once())
+            ->method('insertInitialContactBalances')
+            ->with($pubkey, $currency);
+
+        $this->contactCreditRepo->expects($this->once())
+            ->method('createInitialCredit')
+            ->with($pubkey, $currency);
+
+        $result = $this->service->addCurrencyToContact($pubkey, $currency, $fee, $credit);
+
+        $this->assertTrue($result);
+    }
+
+    /**
+     * Test addCurrencyToContact fails for a non-accepted contact
+     */
+    public function testAddCurrencyToContactFailsForNonAcceptedContact(): void
+    {
+        $this->contactRepo->method('isAcceptedContactPubkey')
+            ->with('non-accepted-pubkey')
+            ->willReturn(false);
+
+        $result = $this->service->addCurrencyToContact('non-accepted-pubkey', 'EUR', 1.0, 100.0);
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test addCurrencyToContact fails when the currency already exists
+     */
+    public function testAddCurrencyToContactFailsForDuplicateCurrency(): void
+    {
+        $pubkey = 'accepted-pubkey';
+        $currency = 'USD';
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactRepo->method('isAcceptedContactPubkey')
+            ->with($pubkey)
+            ->willReturn(true);
+
+        $this->contactCurrencyRepo->method('hasCurrency')
+            ->with($pubkeyHash, $currency)
+            ->willReturn(true);
+
+        $result = $this->service->addCurrencyToContact($pubkey, $currency, 1.0, 100.0);
+
+        $this->assertFalse($result);
     }
 }

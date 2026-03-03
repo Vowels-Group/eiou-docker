@@ -559,6 +559,62 @@ class ContactController
     }
 
     /**
+     * Handle adding a new currency to an existing contact (AJAX - returns JSON)
+     *
+     * @return void
+     */
+    public function handleAddCurrency(): void
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $this->session->verifyCSRFToken();
+
+            $pubkey = Security::sanitizeInput($_POST['pubkey'] ?? '');
+            $currency = strtoupper(Security::sanitizeInput($_POST['currency'] ?? ''));
+            $fee = Security::sanitizeInput($_POST['fee'] ?? '');
+            $credit = Security::sanitizeInput($_POST['credit'] ?? '');
+
+            if (empty($pubkey) || empty($currency) || $fee === '' || $credit === '') {
+                echo json_encode(['success' => false, 'error' => 'missing_fields', 'message' => 'All fields are required']);
+                return;
+            }
+
+            $feeValidation = InputValidator::validateFeePercent($fee);
+            if (!$feeValidation['valid']) {
+                echo json_encode(['success' => false, 'error' => 'invalid_fee', 'message' => $feeValidation['error']]);
+                return;
+            }
+
+            $creditValidation = InputValidator::validateAmount($credit, $currency);
+            if (!$creditValidation['valid']) {
+                echo json_encode(['success' => false, 'error' => 'invalid_credit', 'message' => $creditValidation['error']]);
+                return;
+            }
+
+            $app = Application::getInstance();
+            $serviceContainer = $app->getServiceContainer();
+            $contactService = $serviceContainer->getService('ContactManagementService');
+
+            $result = $contactService->addCurrencyToContact(
+                $pubkey,
+                $currency,
+                $feeValidation['value'],
+                $creditValidation['value']
+            );
+
+            if ($result) {
+                echo json_encode(['success' => true, 'message' => "Currency {$currency} added to contact"]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'add_currency_failed', 'message' => 'Failed to add currency. Contact may not be accepted or currency already exists.']);
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'An unexpected error occurred']);
+        }
+    }
+
+    /**
      * Handle ping contact request (AJAX - returns JSON)
      *
      * @return void
@@ -655,6 +711,10 @@ class ContactController
 
             case 'editContact':
                 $this->handleEditContact();
+                break;
+
+            case 'addCurrency':
+                $this->handleAddCurrency();
                 break;
 
             case 'pingContact':

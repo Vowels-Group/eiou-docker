@@ -304,7 +304,7 @@ class P2pService implements P2pServiceInterface {
                 $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
 
                 $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey']);
-                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey']);
+                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response

@@ -76,6 +76,7 @@ function freshInstall(){
                 $dbConn->exec(getContactsTableSchema());
                 $dbConn->exec(getAddressTableSchema());
                 $dbConn->exec(getContactCreditTableSchema());
+                $dbConn->exec(getContactCurrenciesTableSchema());
                 $dbConn->exec(getBalancesTableSchema());
 
                 // Transactions & Chain Integrity
@@ -169,6 +170,7 @@ function runMigrations(PDO $pdo): array {
         'p2p_senders' => __NAMESPACE__ . '\\getP2pSendersTableSchema',
         'p2p_relayed_contacts' => __NAMESPACE__ . '\\getP2pRelayedContactsTableSchema',
         'contact_credit' => __NAMESPACE__ . '\\getContactCreditTableSchema',
+        'contact_currencies' => __NAMESPACE__ . '\\getContactCurrenciesTableSchema',
         'api_nonces' => __NAMESPACE__ . '\\getApiNoncesTableSchema',
     ];
 
@@ -311,6 +313,51 @@ function runColumnMigrations(PDO $pdo): array {
                     ]);
                 }
             }
+        }
+    }
+
+    // Migrate contact_credit UNIQUE constraint from (pubkey_hash) to (pubkey_hash, currency)
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM `contact_credit` WHERE Key_name = 'pubkey_hash'");
+        if ($stmt && $stmt->rowCount() > 0) {
+            $pdo->exec("ALTER TABLE `contact_credit` DROP INDEX `pubkey_hash`");
+            $results['contact_credit.unique_migration'] = 'dropped_old_unique';
+        } else {
+            $results['contact_credit.unique_migration'] = 'old_unique_already_dropped';
+        }
+    } catch (PDOException $e) {
+        $results['contact_credit.unique_migration'] = 'error: ' . $e->getMessage();
+    }
+
+    // Add composite unique index on contact_credit if not exists
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM `contact_credit` WHERE Key_name = 'idx_contact_credit_hash_currency'");
+        if ($stmt && $stmt->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE `contact_credit` ADD UNIQUE INDEX `idx_contact_credit_hash_currency` (`pubkey_hash`, `currency`)");
+            $results['contact_credit.composite_unique'] = 'created';
+        } else {
+            $results['contact_credit.composite_unique'] = 'exists';
+        }
+    } catch (PDOException $e) {
+        $results['contact_credit.composite_unique'] = 'error: ' . $e->getMessage();
+    }
+
+    // Migrate existing contact currency data into contact_currencies table
+    try {
+        $stmt = $pdo->query("SHOW TABLES LIKE 'contact_currencies'");
+        if ($stmt && $stmt->rowCount() > 0) {
+            $pdo->exec("INSERT IGNORE INTO contact_currencies (pubkey_hash, currency, fee_percent, credit_limit)
+                         SELECT pubkey_hash, currency, fee_percent, credit_limit
+                         FROM contacts
+                         WHERE status = 'accepted' AND currency IS NOT NULL AND fee_percent IS NOT NULL");
+            $results['contact_currencies.data_migration'] = 'completed';
+        }
+    } catch (PDOException $e) {
+        $results['contact_currencies.data_migration'] = 'error: ' . $e->getMessage();
+        if (class_exists('Eiou\\Utils\\Logger')) {
+            Logger::getInstance()->error("Data migration to contact_currencies failed", [
+                'error' => $e->getMessage()
+            ]);
         }
     }
 

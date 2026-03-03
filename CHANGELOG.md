@@ -12,6 +12,29 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Multi-currency contact support — contacts can now have multiple currency relationships with independent fee and credit limit per currency
+  - New `contact_currencies` table stores per-currency configuration (`pubkey_hash`, `currency`, `fee_percent`, `credit_limit`) with composite UNIQUE on `(pubkey_hash, currency)`
+  - New `ContactCurrencyRepository` with full CRUD: `insertCurrencyConfig()`, `getCurrencyConfig()`, `getContactCurrencies()`, `hasCurrency()`, `getCreditLimit()`, `getFeePercent()`, `updateCurrencyConfig()`, `upsertCurrencyConfig()`, `deleteAllForContact()`, `deleteCurrencyConfig()`
+  - `ContactManagementService::addCurrencyToContact()` method to add a new currency to an existing accepted contact, creating rows in `contact_currencies`, `balances`, and `contact_credit`
+  - `ContactCreditRepository::getAvailableCreditAllCurrencies()` returns all per-currency credit rows for a contact
+  - GUI contact cards show "+N currency" badge when contact has multiple currencies
+  - GUI contact modal shows "Additional Currencies" section with per-currency credit limit, fee, and available credit
+  - GUI contact controller supports `addCurrency` action for adding currencies from the contact settings
+  - API `GET /api/v1/contacts/:address` response now includes `currencies` array with per-currency configuration
+  - Data migration in `DatabaseSetup::runColumnMigrations()` copies existing `contacts.{currency, fee_percent, credit_limit}` into `contact_currencies` via `INSERT IGNORE`
+
+### Changed
+- `contact_credit` table UNIQUE constraint changed from `pubkey_hash` alone to composite `(pubkey_hash, currency)` — allows storing per-currency credit entries for the same contact
+- `getCreditLimit()` across all interfaces, services, and repositories now accepts an optional `currency` parameter (defaults to `Constants::TRANSACTION_DEFAULT_CURRENCY`) — affects `ContactServiceInterface`, `ContactManagementServiceInterface`, `ContactRepository`, `ContactManagementService`, `ContactService`
+- `ContactRepository::getCreditLimit()` queries `contact_currencies` table first, falls back to `contacts` table for backward compatibility
+- `ContactCreditRepository::getAvailableCredit()` now accepts optional `currency` parameter to filter by specific currency
+- All `getCreditLimit()` call sites updated to pass currency from the request/transaction context: `TransactionValidationService`, `TransactionService`, `Rp2pService` (2 call sites), `P2pService`
+- `ContactStatusService::handlePingRequest()` reads credit limit from `contact_currencies` table first, falling back to `contacts.credit_limit`
+- `ContactManagementService::acceptContact()` now also writes to `contact_currencies` table alongside the existing `contacts` table write
+- `ContactDataBuilder` output includes `currencies` array for multi-currency GUI rendering
+- `Functions.php` fetches per-contact currency configs and all-currency available credits for GUI display
+
 ### Fixed
 - API `POST /api/v1/wallet/send` now reads `best_fee` from request body and passes `--best` to argv — previously the field was documented but silently ignored, always using fast mode (#679)
 - CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes

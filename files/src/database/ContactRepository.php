@@ -507,16 +507,35 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
-     * Get credit limit for a contact by public key
+     * Get credit limit for a contact by public key and currency
+     *
+     * Queries contact_currencies table first for per-currency config,
+     * falls back to contacts table for backward compatibility.
      *
      * @param string $senderPublicKey Sender's public key
+     * @param string $currency Currency code
      * @return float Credit limit (0 if not found)
      */
-    public function getCreditLimit(string $senderPublicKey): float {
-        $query = "SELECT credit_limit 
-                    FROM {$this->tableName} 
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float {
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+        // Try contact_currencies table first
+        $query = "SELECT credit_limit FROM contact_currencies
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
+
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return (float) ($result['credit_limit'] ?? 0);
+            }
+        }
+
+        // Fall back to contacts table
+        $query = "SELECT credit_limit
+                    FROM {$this->tableName}
                     WHERE pubkey_hash = :pubkey_hash";
-        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey)]);
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
 
         if (!$stmt) {
             return 0;

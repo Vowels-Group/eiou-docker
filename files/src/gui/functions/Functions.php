@@ -431,6 +431,39 @@ try {
     $totalAvailableCreditByCurrency = [];
 }
 
+// Fetch per-contact currency configs for multi-currency support
+$contactCurrenciesByHash = [];
+try {
+    $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+    foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
+        $hash = $c['pubkey_hash'] ?? '';
+        if ($hash && !isset($contactCurrenciesByHash[$hash])) {
+            $contactCurrenciesByHash[$hash] = $contactCurrencyRepo->getContactCurrencies($hash);
+        }
+    }
+} catch (Exception $e) {
+    $contactCurrenciesByHash = [];
+}
+
+// Fetch per-contact all-currency available credits
+$availableCreditAllByHash = [];
+try {
+    foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
+        $hash = $c['pubkey_hash'] ?? '';
+        if ($hash && !isset($availableCreditAllByHash[$hash])) {
+            $allCredits = $contactCreditRepo->getAvailableCreditAllCurrencies($hash);
+            $creditMap = [];
+            foreach ($allCredits as $cr) {
+                $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $creditMap[$cur] = $cr['available_credit'] / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur];
+            }
+            $availableCreditAllByHash[$hash] = $creditMap;
+        }
+    }
+} catch (Exception $e) {
+    $availableCreditAllByHash = [];
+}
+
 // Merge available credit into contact arrays and calculate their available credit with me
 $contactArraysForCredit = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
 foreach ($contactArraysForCredit as &$contacts) {
@@ -449,6 +482,21 @@ foreach ($contactArraysForCredit as &$contacts) {
         if ($creditLimitValue > 0 || $balanceValue != 0) {
             $contact['their_available_credit'] = round($creditLimitValue - $balanceValue, 2);
         }
+
+        // Build multi-currency data
+        $currencyConfigs = $contactCurrenciesByHash[$hash] ?? [];
+        $allCredits = $availableCreditAllByHash[$hash] ?? [];
+        $currencies = [];
+        foreach ($currencyConfigs as $cc) {
+            $cur = $cc['currency'];
+            $currencies[] = [
+                'currency' => $cur,
+                'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
+                'credit_limit' => ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur],
+                'my_available_credit' => $allCredits[$cur] ?? null,
+            ];
+        }
+        $contact['currencies'] = $currencies;
     }
     unset($contact);
 }

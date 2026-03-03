@@ -97,6 +97,11 @@ class ContactManagementService implements ContactManagementServiceInterface
      */
     private ?ContactCreditRepository $contactCreditRepository = null;
 
+    /**
+     * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository for multi-currency support
+     */
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
+
     // =========================================================================
     // CONSTRUCTOR & DEPENDENCY INJECTION
     // =========================================================================
@@ -160,6 +165,17 @@ class ContactManagementService implements ContactManagementServiceInterface
     public function setContactCreditRepository(ContactCreditRepository $repo): void
     {
         $this->contactCreditRepository = $repo;
+    }
+
+    /**
+     * Set the contact currency repository for multi-currency support
+     *
+     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
+     * @return void
+     */
+    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void
+    {
+        $this->contactCurrencyRepository = $repo;
     }
 
     /**
@@ -302,6 +318,23 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
                 } catch (\Exception $e) {
                     $this->secureLogger->warning("Failed to create initial contact credit entry", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Create contact currency configuration entry
+            if ($this->contactCurrencyRepository !== null) {
+                try {
+                    $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+                    $this->contactCurrencyRepository->upsertCurrencyConfig(
+                        $pubkeyHash,
+                        $currency,
+                        (int) $fee,
+                        (int) $credit
+                    );
+                } catch (\Exception $e) {
+                    $this->secureLogger->warning("Failed to create contact currency config", [
                         'error' => $e->getMessage()
                     ]);
                 }
@@ -1223,11 +1256,54 @@ class ContactManagementService implements ContactManagementServiceInterface
      * Get credit limit for a contact
      *
      * @param string $senderPublicKey Sender's public key
+     * @param string $currency Currency code
      * @return float Credit limit
      */
-    public function getCreditLimit(string $senderPublicKey): float
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float
     {
-        return $this->contactRepository->getCreditLimit($senderPublicKey);
+        return $this->contactRepository->getCreditLimit($senderPublicKey, $currency);
+    }
+
+    /**
+     * Add a new currency to an existing accepted contact
+     *
+     * Creates rows in contact_currencies, balances, and contact_credit
+     * for the new currency relationship.
+     *
+     * @param string $pubkey Contact's public key
+     * @param string $currency Currency code
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @return bool True on success
+     */
+    public function addCurrencyToContact(string $pubkey, string $currency, float $fee, float $credit): bool
+    {
+        // Verify contact is accepted
+        if (!$this->contactRepository->isAcceptedContactPubkey($pubkey)) {
+            return false;
+        }
+
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        // Check if currency already exists for this contact
+        if ($this->contactCurrencyRepository !== null && $this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency)) {
+            return false;
+        }
+
+        // Insert into contact_currencies
+        if ($this->contactCurrencyRepository !== null) {
+            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit);
+        }
+
+        // Create initial balance entries for the new currency
+        $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+
+        // Create initial credit entry for the new currency
+        if ($this->contactCreditRepository !== null) {
+            $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
+        }
+
+        return true;
     }
 
     /**

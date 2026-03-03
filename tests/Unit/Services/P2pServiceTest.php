@@ -274,6 +274,7 @@ class P2pServiceTest extends TestCase
             ->willReturn(0);
 
         $this->contactService->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(1000.0);
 
         $this->contactService->method('lookupByAddress')
@@ -465,6 +466,7 @@ class P2pServiceTest extends TestCase
         $this->p2pRepository->method('getCreditInP2p')
             ->willReturn(0);
         $this->contactService->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
@@ -544,6 +546,7 @@ class P2pServiceTest extends TestCase
         $this->p2pRepository->method('getCreditInP2p')
             ->willReturn(0);
         $this->contactService->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
@@ -638,6 +641,7 @@ class P2pServiceTest extends TestCase
         $this->p2pRepository->method('getCreditInP2p')
             ->willReturn(0);
         $this->contactService->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
@@ -1377,6 +1381,7 @@ class P2pServiceTest extends TestCase
             ->willReturn(0);
 
         $this->contactService->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(1000.0);
 
         ob_start();

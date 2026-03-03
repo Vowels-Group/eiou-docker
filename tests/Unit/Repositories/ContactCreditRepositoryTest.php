@@ -273,4 +273,92 @@ class ContactCreditRepositoryTest extends TestCase
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
+
+    public function testGetAvailableCreditWithCurrencyParam(): void
+    {
+        $expectedResult = ['available_credit' => 3000, 'currency' => 'USD'];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('pubkey_hash'),
+                $this->stringContains('currency')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($expectedResult);
+
+        $result = $this->repository->getAvailableCredit('hash', 'USD');
+
+        $this->assertIsArray($result);
+        $this->assertEquals(3000, $result['available_credit']);
+        $this->assertEquals('USD', $result['currency']);
+    }
+
+    public function testGetAvailableCreditAllCurrenciesReturnsMultiple(): void
+    {
+        $expectedResult = [
+            ['available_credit' => 5000, 'currency' => 'USD'],
+            ['available_credit' => 3000, 'currency' => 'EUR']
+        ];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains('SELECT available_credit, currency'))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($expectedResult);
+
+        $result = $this->repository->getAvailableCreditAllCurrencies('some-pubkey-hash');
+
+        $this->assertCount(2, $result);
+        $this->assertEquals('USD', $result[0]['currency']);
+        $this->assertEquals(5000, $result[0]['available_credit']);
+        $this->assertEquals('EUR', $result[1]['currency']);
+        $this->assertEquals(3000, $result[1]['available_credit']);
+    }
+
+    public function testGetAvailableCreditAllCurrenciesReturnsEmptyWhenNone(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn([]);
+
+        $result = $this->repository->getAvailableCreditAllCurrencies('some-pubkey-hash');
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testGetAvailableCreditAllCurrenciesReturnsEmptyOnFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willThrowException(new \PDOException('Connection error'));
+
+        $result = $this->repository->getAvailableCreditAllCurrencies('some-hash');
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
 }

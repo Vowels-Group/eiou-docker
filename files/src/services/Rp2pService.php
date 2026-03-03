@@ -272,7 +272,7 @@ class Rp2pService implements Rp2pServiceInterface {
         //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
         if(!isset($p2p['destination_address'])) {
             $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
-            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
             if(($creditLimit + $availableFunds) < $request['amount']){
                 output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 return false;
@@ -572,7 +572,7 @@ class Rp2pService implements Rp2pServiceInterface {
         // Check if previous sender can afford the rp2p amount (same validation as handleRp2pRequest)
         if (!isset($p2p['destination_address'])) {
             $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
-            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
             if (($creditLimit + $availableFunds) < $request['amount']) {
                 output(outputP2pUnableToAffordRp2p($p2p, $request), 'SILENT');
                 return;

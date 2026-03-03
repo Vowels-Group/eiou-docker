@@ -63,6 +63,7 @@ use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Database\TransactionStatisticsRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -442,6 +443,20 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->repositories['ContactCreditRepository'];
+    }
+
+    /**
+     * Get ContactCurrencyRepository instance
+     *
+     * @return ContactCurrencyRepository
+     */
+    public function getContactCurrencyRepository(): ContactCurrencyRepository {
+        if (!isset($this->repositories['ContactCurrencyRepository'])) {
+            $this->repositories['ContactCurrencyRepository'] = new ContactCurrencyRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['ContactCurrencyRepository'];
     }
 
     /**
@@ -1276,6 +1291,7 @@ class ServiceContainer implements ContainerInterface {
             }
             $this->services['ContactManagementService']->setSyncTrigger($this->getSyncServiceProxy());
             $this->services['ContactManagementService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['ContactManagementService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
 
         // Wire ContactSyncService -> SyncTriggerInterface (via proxy), ContactCreditRepository
@@ -1310,6 +1326,7 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ContactStatusService']->setAddressRepository($this->getAddressRepository());
             $this->services['ContactStatusService']->setBalanceRepository($this->getBalanceRepository());
             $this->services['ContactStatusService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['ContactStatusService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }

@@ -216,9 +216,10 @@ interface ContactManagementServiceInterface
      * Get the credit limit for a sender.
      *
      * @param string $senderPublicKey The sender's public key
+     * @param string $currency Currency code
      * @return float The credit limit
      */
-    public function getCreditLimit(string $senderPublicKey): float;
+    public function getCreditLimit(string $senderPublicKey, string $currency = \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY): float;
 
     /**
      * Get the public key for a contact by address.

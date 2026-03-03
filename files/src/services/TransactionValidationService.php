@@ -267,7 +267,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
 
             // Check if there is enough funds to complete the transaction (sufficient balance or credit limit)
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
-            $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey']);
+            $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
             $requestedAmount = $request['amount'];
 
             if (($availableFunds + $creditLimit) < $requestedAmount) {

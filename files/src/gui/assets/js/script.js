@@ -1733,6 +1733,31 @@ function openContactModal(contact, openTab) {
     var fee = parseFloat(contact.fee) || 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
 
+    // Populate multi-currency section if contact has additional currencies
+    var multiCurrencySection = document.getElementById('multi-currency-section');
+    var multiCurrencyContainer = document.getElementById('multi-currency-container');
+    if (multiCurrencySection && multiCurrencyContainer) {
+        var currencies = contact.currencies || [];
+        if (currencies.length > 1) {
+            multiCurrencySection.style.display = 'block';
+            var html = '';
+            for (var i = 0; i < currencies.length; i++) {
+                var cc = currencies[i];
+                if (cc.currency === currency) continue; // Skip default currency (already shown above)
+                html += '<div class="info-grid" style="margin-bottom: 8px;">';
+                html += '<div class="info-item"><label><i class="fas fa-money-bill"></i> Currency</label><div class="info-value">' + (cc.currency || '') + '</div></div>';
+                html += '<div class="info-item"><label><i class="fas fa-credit-card"></i> Credit Limit</label><div class="info-value">' + parseFloat(cc.credit_limit || 0).toFixed(2) + ' ' + (cc.currency || '') + '</div></div>';
+                html += '<div class="info-item"><label><i class="fas fa-percent"></i> Fee</label><div class="info-value">' + parseFloat(cc.fee || 0).toFixed(2) + '%</div></div>';
+                html += '<div class="info-item"><label><i class="fas fa-coins"></i> Your Available Credit</label><div class="info-value">' + (cc.my_available_credit !== null && cc.my_available_credit !== undefined ? parseFloat(cc.my_available_credit).toFixed(2) : '\u2014') + ' ' + (cc.currency || '') + '</div></div>';
+                html += '</div>';
+            }
+            multiCurrencyContainer.innerHTML = html;
+        } else {
+            multiCurrencySection.style.display = 'none';
+            multiCurrencyContainer.innerHTML = '';
+        }
+    }
+
     // Set status badge
     var statusBadge = document.getElementById('modal_status_badge');
     statusBadge.textContent = contact.status.charAt(0).toUpperCase() + contact.status.slice(1);

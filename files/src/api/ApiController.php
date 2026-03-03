@@ -1011,6 +1011,15 @@ class ApiController {
             $theirAvailableCredit = $theirMinorUnits / Constants::CONVERSION_FACTORS[$contactCurrency];
         }
 
+        // Fetch all currencies for this contact from contact_currencies table
+        $currencyConfigs = [];
+        try {
+            $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+            $currencyConfigs = $contactCurrencyRepo->getContactCurrencies($contact['pubkey_hash']);
+        } catch (\Exception $e) {
+            // Non-critical - continue without multi-currency data
+        }
+
         return $this->successResponse([
             'contact' => [
                 'name' => $contact['name'],
@@ -1027,6 +1036,7 @@ class ApiController {
                     'sent' => $balance['sent'] / Constants::CONVERSION_FACTORS[$contactCurrency],
                     'net' => ($balance['received'] - $balance['sent']) / Constants::CONVERSION_FACTORS[$contactCurrency]
                 ] : null,
+                'currencies' => $currencyConfigs,
                 'created_at' => $contact['created_at']
             ]
         ]);

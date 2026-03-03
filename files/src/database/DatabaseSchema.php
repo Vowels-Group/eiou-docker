@@ -61,11 +61,27 @@ function getAddressTableSchema(){
 function getContactCreditTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contact_credit (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash VARCHAR(64) NOT NULL UNIQUE,
+        pubkey_hash VARCHAR(64) NOT NULL,
         available_credit INT DEFAULT 0,
         currency VARCHAR(10),
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_contact_credit_hash_currency (pubkey_hash, currency),
         INDEX idx_contact_credit_pubkey_hash (pubkey_hash)
+    )";
+}
+
+// Contact Currencies table - per-contact currency configuration (fee, credit limit)
+function getContactCurrenciesTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS contact_currencies (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey_hash VARCHAR(64) NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        fee_percent INT NOT NULL,
+        credit_limit INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_cc_hash_currency (pubkey_hash, currency),
+        INDEX idx_cc_pubkey_hash (pubkey_hash)
     )";
 }
 

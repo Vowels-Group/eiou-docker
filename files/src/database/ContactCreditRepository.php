@@ -37,14 +37,20 @@ class ContactCreditRepository extends AbstractRepository {
     }
 
     /**
-     * Get available credit for a contact by pubkey hash
+     * Get available credit for a contact by pubkey hash and optional currency
      *
      * @param string $pubkeyHash Contact's public key hash
+     * @param string|null $currency Optional currency code to filter by
      * @return array|null Credit data with available_credit and currency, or null if not found
      */
-    public function getAvailableCredit(string $pubkeyHash): ?array {
-        $query = "SELECT available_credit, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
-        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+    public function getAvailableCredit(string $pubkeyHash, ?string $currency = null): ?array {
+        if ($currency !== null) {
+            $query = "SELECT available_credit, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+            $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
+        } else {
+            $query = "SELECT available_credit, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+            $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+        }
 
         if (!$stmt) {
             return null;
@@ -52,6 +58,23 @@ class ContactCreditRepository extends AbstractRepository {
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ?: null;
+    }
+
+    /**
+     * Get available credit for all currencies for a contact
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @return array Array of ['available_credit' => int, 'currency' => string] rows
+     */
+    public function getAvailableCreditAllCurrencies(string $pubkeyHash): array {
+        $query = "SELECT available_credit, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     /**

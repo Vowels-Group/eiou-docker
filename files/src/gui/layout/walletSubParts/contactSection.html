@@ -94,6 +94,9 @@
                             <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?> <?php echo htmlspecialchars($contact['currency']); ?></div>
                             <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo htmlspecialchars($contact['currency']); ?></div>
                             <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                            <?php if (count($contact['currencies'] ?? []) > 1): ?>
+                                <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> currency</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -246,6 +249,12 @@
                         <div class="info-value"><span id="modal_their_available_credit">—</span> <span id="modal_their_credit_currency">USD</span></div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Multi-Currency Details (populated by JS when contact has multiple currencies) -->
+            <div id="multi-currency-section" class="contact-info-section" style="display: none;">
+                <h4><i class="fas fa-coins"></i> Additional Currencies</h4>
+                <div id="multi-currency-container"></div>
             </div>
 
             <div class="contact-info-section">

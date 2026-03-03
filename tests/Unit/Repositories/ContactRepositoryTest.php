@@ -732,10 +732,11 @@ class ContactRepositoryTest extends TestCase
     // =========================================================================
 
     /**
-     * Test getCreditLimit returns credit limit for contact
+     * Test getCreditLimit returns credit limit from contact_currencies table
      */
     public function testGetCreditLimitReturnsCreditLimit(): void
     {
+        // contact_currencies query returns data, so only one prepare call needed
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->willReturn($this->stmt);
@@ -758,12 +759,143 @@ class ContactRepositoryTest extends TestCase
     }
 
     /**
-     * Test getCreditLimit returns zero when not found
+     * Test getCreditLimit returns zero when not found in either table
      */
     public function testGetCreditLimitReturnsZeroWhenNotFound(): void
     {
+        // First prepare: contact_currencies query returns no data
+        // Second prepare: contacts fallback query also returns no data
+        $currencyStmt = $this->createMock(PDOStatement::class);
+        $contactsStmt = $this->createMock(PDOStatement::class);
+
+        $this->pdo->expects($this->exactly(2))
+            ->method('prepare')
+            ->willReturnOnConsecutiveCalls($currencyStmt, $contactsStmt);
+
+        $currencyStmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+        $currencyStmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+        $currencyStmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(false);
+
+        $contactsStmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+        $contactsStmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+        $contactsStmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(null);
+
+        $result = $this->repository->getCreditLimit('nonexistent-pubkey');
+
+        $this->assertEquals(0.0, $result);
+    }
+
+    /**
+     * Test getCreditLimit with specific currency queries contact_currencies with currency parameter
+     */
+    public function testGetCreditLimitWithSpecificCurrency(): void
+    {
+        $pubkey = 'test-pubkey-eur';
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
         $this->pdo->expects($this->once())
             ->method('prepare')
+            ->with($this->callback(function ($query) {
+                return str_contains($query, 'contact_currencies')
+                    && str_contains($query, 'currency');
+            }))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue')
+            ->willReturnCallback(function ($param, $value, $type = null) use ($pubkeyHash) {
+                // Verify currency parameter is bound
+                if ($param === ':currency') {
+                    $this->assertEquals('EUR', $value);
+                }
+                if ($param === ':pubkey_hash') {
+                    $this->assertEquals($pubkeyHash, $value);
+                }
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['credit_limit' => 2500]);
+
+        $result = $this->repository->getCreditLimit($pubkey, 'EUR');
+
+        $this->assertEquals(2500.0, $result);
+    }
+
+    /**
+     * Test getCreditLimit defaults to USD when no currency parameter is passed
+     */
+    public function testGetCreditLimitDefaultsToUSD(): void
+    {
+        $pubkey = 'test-pubkey-usd';
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->callback(function ($query) {
+                return str_contains($query, 'contact_currencies')
+                    && str_contains($query, 'currency');
+            }))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue')
+            ->willReturnCallback(function ($param, $value, $type = null) use ($pubkeyHash) {
+                // Verify USD is used as default currency
+                if ($param === ':currency') {
+                    $this->assertEquals('USD', $value);
+                }
+                if ($param === ':pubkey_hash') {
+                    $this->assertEquals($pubkeyHash, $value);
+                }
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['credit_limit' => 1000]);
+
+        // Call without second parameter - should default to USD
+        $result = $this->repository->getCreditLimit($pubkey);
+
+        $this->assertEquals(1000.0, $result);
+    }
+
+    /**
+     * Test getCreditLimit queries contact_currencies first and does NOT query contacts table
+     * when contact_currencies returns data
+     */
+    public function testGetCreditLimitQueriesContactCurrenciesFirst(): void
+    {
+        // Only one prepare call should happen (contact_currencies returns data)
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->callback(function ($query) {
+                return str_contains($query, 'contact_currencies');
+            }))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->atLeastOnce())
@@ -776,11 +908,59 @@ class ContactRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(null);
+            ->willReturn(['credit_limit' => 7500]);
 
-        $result = $this->repository->getCreditLimit('nonexistent-pubkey');
+        $result = $this->repository->getCreditLimit('contact-pubkey-currencies');
 
-        $this->assertEquals(0.0, $result);
+        // Verify we got the value from contact_currencies
+        $this->assertEquals(7500.0, $result);
+        // The $this->once() on prepare ensures contacts table was NOT queried
+    }
+
+    /**
+     * Test getCreditLimit falls back to contacts table when contact_currencies has no data
+     */
+    public function testGetCreditLimitFallsBackToContactsTable(): void
+    {
+        // First query: contact_currencies returns empty result
+        $currencyStmt = $this->createMock(PDOStatement::class);
+        // Second query: contacts table returns data
+        $contactsStmt = $this->createMock(PDOStatement::class);
+
+        $this->pdo->expects($this->exactly(2))
+            ->method('prepare')
+            ->willReturnCallback(function ($query) use ($currencyStmt, $contactsStmt) {
+                if (str_contains($query, 'contact_currencies')) {
+                    return $currencyStmt;
+                }
+                return $contactsStmt;
+            });
+
+        // contact_currencies query setup - returns no data
+        $currencyStmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+        $currencyStmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+        $currencyStmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(false);
+
+        // contacts fallback query setup - returns data
+        $contactsStmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+        $contactsStmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+        $contactsStmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['credit_limit' => 3000]);
+
+        $result = $this->repository->getCreditLimit('fallback-pubkey');
+
+        $this->assertEquals(3000.0, $result);
     }
 
     // =========================================================================

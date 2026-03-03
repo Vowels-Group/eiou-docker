@@ -95,6 +95,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?ContactCreditRepository $contactCreditRepository = null;
 
     /**
+     * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository for multi-currency support
+     */
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
+
+    /**
      * Set the sync trigger (accepts interface for loose coupling)
      *
      * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
@@ -168,6 +173,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setContactCreditRepository(ContactCreditRepository $repo): void {
         $this->contactCreditRepository = $repo;
+    }
+
+    /**
+     * Set the contact currency repository for multi-currency support
+     *
+     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
+     */
+    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
+        $this->contactCurrencyRepository = $repo;
     }
 
     /**
@@ -335,7 +349,16 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $contactCurrency);
                 $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $contactCurrency);
                 $balance = $sentBalance - $receivedBalance;
-                $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
+
+                // Read credit_limit from contact_currencies table first, fall back to contacts table
+                $creditLimit = 0;
+                if ($this->contactCurrencyRepository !== null) {
+                    $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $contactCurrency);
+                }
+                if ($creditLimit === 0) {
+                    $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
+                }
                 $availableCredit = $balance + $creditLimit;
             } catch (\Exception $e) {
                 Logger::getInstance()->warning("Failed to calculate available credit for ping response", [

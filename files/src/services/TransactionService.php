@@ -430,7 +430,7 @@ class TransactionService implements TransactionServiceInterface {
         $request['amount'] = $validation['value'];
         $validationUtility = $this->utilityContainer->getValidationUtility();
         $available = $validationUtility->calculateAvailableFunds($request);
-        $credit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
+        $credit = $this->contactRepository->getCreditLimit($request['senderPublicKey'], $request['currency']);
         return ($available + $credit) >= $request['amount'];
     }
 
