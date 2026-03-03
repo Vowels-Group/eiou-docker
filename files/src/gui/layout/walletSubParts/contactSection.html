@@ -590,8 +590,10 @@
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="contact_credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
-                                <label>Requested Currency:</label>
-                                <div class="info-value"><strong><?php echo htmlspecialchars($pc['currency']); ?></strong> <span class="badge badge-pending">Pending</span></div>
+                                <label for="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Currency:</label>
+                                <select id="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>" disabled>
+                                    <option selected><?php echo htmlspecialchars($pc['currency']); ?></option>
+                                </select>
                             </div>
                         </div>
 

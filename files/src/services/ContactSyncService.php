@@ -581,25 +581,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
             if($contact['name']){
                 $existingCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
 
-                // Check if user is adding an additional currency request
+                // Check if user is updating their pending request currency
                 if ($currency !== $existingCurrency) {
-                    // Track the new currency independently in contact_currencies
-                    // Don't overwrite contacts.currency — preserve the original request
-                    $pubkeyHash = $contact['pubkey_hash'] ?? hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
-                    if ($this->contactCurrencyRepository !== null) {
-                        if (!$this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency)) {
-                            $this->contactCurrencyRepository->insertCurrencyConfig(
-                                $pubkeyHash, $currency, (int) $fee, (int) $credit, 'pending'
-                            );
-                        } else {
-                            $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, [
-                                'fee_percent' => (int) $fee,
-                                'credit_limit' => (int) $credit,
-                            ]);
-                        }
-                    }
+                    // Update the pending contact's terms locally
+                    $this->contactRepository->updateContactFields($contact['pubkey'], [
+                        'currency' => $currency,
+                        'fee_percent' => $fee,
+                        'credit_limit' => $credit,
+                    ]);
 
-                    // Send the additional currency request to the remote side
+                    // Re-send the contact request with updated currency
                     $payload = $this->contactPayload->buildCreateRequest($address, $currency);
                     $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
@@ -635,7 +626,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     } else {
                         $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                         $contactData['currency'] = $currency;
-                        $output->success("Additional currency request " . $currency . " sent to " . $address . ", awaiting response", $contactData, "Currency request sent");
+                        $output->success("Contact request updated to " . $currency . ", awaiting response from " . $address, $contactData, "Currency updated");
                     }
                     return;
                 }
@@ -669,18 +660,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         $this->contactCurrencyRepository->getPendingCurrencies($contact['pubkey_hash']),
                         'currency'
                     );
-                }
-
-                // Validate currency against pending requests (if any exist)
-                if (!empty($pendingCurrencies) && !in_array($currency, $pendingCurrencies)) {
-                    $creditDisplay = $credit / Constants::CONVERSION_FACTORS[$currency];
-                    $feeDisplay = $fee / Constants::FEE_CONVERSION_FACTOR;
-                    $output->error(
-                        "Currency mismatch. Pending currencies: " . implode(', ', $pendingCurrencies)
-                        . ". Use one of these, e.g.: eiou add " . $address . " " . $name . " " . $feeDisplay . " " . $creditDisplay . " " . $pendingCurrencies[0],
-                        ErrorCodes::INVALID_CURRENCY, 400, ['contact' => $contactData, 'pending_currencies' => $pendingCurrencies]
-                    );
-                    return;
                 }
 
                 if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
@@ -837,13 +816,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
-
-                    // Track outgoing currency request in contact_currencies
-                    if ($this->contactCurrencyRepository !== null) {
-                        $this->contactCurrencyRepository->insertCurrencyConfig(
-                            $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending'
-                        );
-                    }
 
                     // Insert contact transaction (first transaction between users, amount=0)
                     // Use the txid from the response to ensure both parties have matching txids

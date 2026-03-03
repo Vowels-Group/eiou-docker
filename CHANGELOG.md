@@ -19,8 +19,8 @@ The project is currently in **ALPHA** status.
 - GUI `handleAcceptCurrency` now inserts initial balance/credit entries when accepting a pending currency (previously only updated `contact_currencies` status)
 - Pending contact requests in GUI now show per-currency accept forms when multiple currencies are requested, each with independent fee/credit settings
 - Pending contacts section enriched with currency data from `contact_currencies` table
-- Outgoing currency requests now tracked independently in `contact_currencies` — sending a second `eiou add` with a different currency no longer overwrites the first request; both currencies are tracked as separate pending entries
 - `acceptContact()` now ensures the accepted currency is properly recorded in `contact_currencies` with fee/credit values
+- Accept contact with mismatched currency no longer rejects — user can accept with their preferred currency while remote's pending currencies stay for later acceptance
 
 ### Added
 - Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
