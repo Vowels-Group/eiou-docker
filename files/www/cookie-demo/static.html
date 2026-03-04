@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eIOU Cross-Subdomain Cookie Demo (Static)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a; color: #e0e0e0;
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        }
+        .container { max-width: 720px; width: 100%; padding: 2rem; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #fff; }
+        .subtitle { color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+        .card {
+            background: #161616; border: 1px solid #2a2a2a; border-radius: 12px;
+            padding: 1.5rem; margin-bottom: 1.5rem;
+        }
+        .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #ccc; }
+        .status {
+            display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+            font-size: 0.8rem; font-weight: 600;
+        }
+        .status.found { background: #0a3d1a; color: #4ade80; border: 1px solid #166534; }
+        .status.missing { background: #3d0a0a; color: #f87171; border: 1px solid #7f1d1d; }
+        .field { margin: 0.75rem 0; }
+        .field label { display: block; font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .field .value {
+            font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem;
+            color: #e0e0e0; word-break: break-all;
+            background: #0d0d0d; padding: 0.5rem 0.75rem; border-radius: 6px;
+            border: 1px solid #222;
+        }
+        .highlight { color: #60a5fa !important; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🍪 Cross-Subdomain Cookie Demo</h1>
+    <p class="subtitle">
+        This page is served from <strong id="current-host">...</strong>.
+        Reading wallet cookie set on <code>.eiou.org</code> — pure JavaScript, no server needed.
+    </p>
+
+    <div class="card">
+        <h2>Cookie Status</h2>
+        <div id="status-container"></div>
+    </div>
+
+    <div class="card" id="wallet-card" style="display:none;">
+        <h2>Wallet Info (from cookie)</h2>
+        <div id="wallet-fields"></div>
+    </div>
+
+    <div class="card">
+        <h2>How It Works</h2>
+        <div style="color: #888; font-size: 0.85rem; line-height: 1.6;">
+            <p>1. User logs into <code style="background:#1a1a1a;padding:0.15rem 0.4rem;border-radius:4px;color:#a78bfa;">wallet.eiou.org</code></p>
+            <p>2. Login sets cookie: <code style="background:#1a1a1a;padding:0.15rem 0.4rem;border-radius:4px;color:#a78bfa;">domain=.eiou.org</code></p>
+            <p>3. This page (any subdomain) reads it with <code style="background:#1a1a1a;padding:0.15rem 0.4rem;border-radius:4px;color:#a78bfa;">document.cookie</code></p>
+            <p style="margin-top:0.75rem;"><strong>That's it.</strong> No server, no API, no CORS. Just one cookie, readable everywhere on *.eiou.org.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('current-host').textContent = location.hostname;
+
+function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+}
+
+function renderField(label, value, highlight) {
+    return '<div class="field"><label>' + label + '</label>' +
+           '<div class="value' + (highlight ? ' highlight' : '') + '">' +
+           (value || 'n/a') + '</div></div>';
+}
+
+var raw = getCookie('eiou_wallet');
+var statusEl = document.getElementById('status-container');
+var walletCard = document.getElementById('wallet-card');
+var fieldsEl = document.getElementById('wallet-fields');
+
+if (!raw) {
+    statusEl.innerHTML = '<span class="status missing">✗ No Cookie</span>' +
+        '<p style="margin-top:1rem;color:#888;font-size:0.85rem;">' +
+        'Log into <a href="https://wallet.eiou.org/gui/" style="color:#60a5fa;">wallet.eiou.org</a> first.</p>';
+} else {
+    statusEl.innerHTML = '<span class="status found">✓ Cookie Found</span>';
+    try {
+        var parts = raw.split('.');
+        var json = atob(parts[0]);
+        var w = JSON.parse(json);
+        walletCard.style.display = 'block';
+        fieldsEl.innerHTML =
+            renderField('Display Name', w.name, true) +
+            renderField('Public Key Hash', w.pubkey_hash) +
+            renderField('HTTP Address', w.http) +
+            renderField('HTTPS Address', w.https) +
+            renderField('Tor Address', w.tor) +
+            renderField('Authenticated At', w.auth_time ? new Date(w.auth_time * 1000).toISOString() : null) +
+            renderField('Cookie Signature', parts[1]) +
+            renderField('Raw Cookie (first 80 chars)', raw.substring(0, 80) + '...');
+    } catch(e) {
+        fieldsEl.innerHTML = '<p style="color:#f87171;">Parse error: ' + e.message + '</p>';
+    }
+}
+</script>
+</body>
+</html>

@@ -4,6 +4,8 @@
 namespace Eiou\Gui\Includes;
 
 use Eiou\Core\ErrorCodes;
+use Eiou\Core\UserContext;
+use Eiou\Services\CrossDomainCookieService;
 
 /**
  *
@@ -86,6 +88,15 @@ class Session
             // Regenerate session ID on successful authentication
             session_regenerate_id(true);
 
+            // Set cross-subdomain wallet cookie (.eiou.org)
+            try {
+                $user = UserContext::getInstance();
+                $crossDomain = new CrossDomainCookieService($user);
+                $crossDomain->setWalletCookie();
+            } catch (\Exception $e) {
+                // Non-fatal: cross-domain cookie is a convenience feature
+            }
+
             return true;
         }
 
@@ -120,6 +131,15 @@ class Session
      */
     public function logout(): void
     {
+        // Clear cross-subdomain wallet cookie
+        try {
+            $user = UserContext::getInstance();
+            $crossDomain = new CrossDomainCookieService($user);
+            $crossDomain->clearWalletCookie();
+        } catch (\Exception $e) {
+            // Non-fatal
+        }
+
         // Clear session data
         $_SESSION = [];
 
