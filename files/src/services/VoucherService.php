@@ -100,6 +100,7 @@ class VoucherService
 
             $codes[] = [
                 'code' => $this->formatCode($code),
+                'voucher' => $this->formatVoucherString($code),
                 'amount' => $amount,
                 'currency' => $currency,
             ];
@@ -194,6 +195,42 @@ class VoucherService
     // ========================================================================
 
     /**
+     * Parse a full voucher string: CODE@ISSUER_ADDRESS
+     * e.g. EIOU-A3B7-K9M2-X4P1@573olmx5fax...onion
+     *      EIOU-A3B7-K9M2-X4P1@http://88.99.69.172:3002
+     *      EIOU-A3B7-K9M2-X4P1@issuer.eiou.org
+     *
+     * @param string $voucherString The full voucher string
+     * @return array ['code' => ..., 'issuer_address' => ...]
+     */
+    public static function parseVoucherString(string $voucherString): array
+    {
+        $voucherString = trim($voucherString);
+
+        // Split on @ — but be careful, issuer address might contain @
+        // Format is always CODE@ADDRESS where CODE has no @
+        $atPos = strpos($voucherString, '@');
+        if ($atPos === false) {
+            return ['code' => $voucherString, 'issuer_address' => null];
+        }
+
+        $code = substr($voucherString, 0, $atPos);
+        $address = substr($voucherString, $atPos + 1);
+
+        // If address is a bare .onion, make it a proper URL
+        if (str_ends_with($address, '.onion') && !str_contains($address, '://')) {
+            $address = 'http://' . $address;
+        }
+
+        // If address is a bare domain/IP without scheme, add https://
+        if (!str_contains($address, '://') && !str_starts_with($address, '//')) {
+            $address = 'https://' . $address;
+        }
+
+        return ['code' => $code, 'issuer_address' => $address];
+    }
+
+    /**
      * Redeem a voucher code (wallet/redeemer side).
      * This is the one-step onboarding flow:
      *   1. Validate the code with the issuer
@@ -201,12 +238,30 @@ class VoucherService
      *   3. Set credit line = voucher amount
      *   4. Issuer sends the eIOU
      *
-     * @param string $code Voucher code (from card/QR)
-     * @param string $issuerAddress Issuer's node address (printed on card or embedded in QR)
+     * Accepts either:
+     *   - Full string: "EIOU-A3B7-K9M2-X4P1@issuer.onion" (code + issuer in one)
+     *   - Separate: code + issuerAddress params
+     *
+     * @param string $code Voucher code or full voucher string (CODE@ADDRESS)
+     * @param string|null $issuerAddress Issuer address (optional if embedded in code)
      * @return array Result with balance info
      */
-    public function redeemAsWallet(string $code, string $issuerAddress): array
+    public function redeemAsWallet(string $code, ?string $issuerAddress = null): array
     {
+        // Parse CODE@ADDRESS format
+        if ($issuerAddress === null || $issuerAddress === '') {
+            $parsed = self::parseVoucherString($code);
+            $code = $parsed['code'];
+            $issuerAddress = $parsed['issuer_address'];
+        }
+
+        if (!$issuerAddress) {
+            return [
+                'success' => false,
+                'error' => 'Issuer address required. Use format: CODE@ADDRESS or provide issuer_address separately.',
+            ];
+        }
+
         $code = $this->normalizeCode($code);
 
         // Step 1: Call issuer's redeem endpoint
@@ -444,6 +499,26 @@ class VoucherService
     private function formatCode(string $code): string
     {
         return self::CODE_PREFIX . '-' . implode('-', str_split($code, 4));
+    }
+
+    /**
+     * Format full voucher string: EIOU-XXXX-XXXX-XXXX-XXXX@issuer.address
+     * This is what gets printed on cards / encoded in QR codes.
+     */
+    public function formatVoucherString(string $code): string
+    {
+        $formatted = $this->formatCode($code);
+        $address = $this->user->getTorAddress()
+            ?? $this->user->getHttpsAddress()
+            ?? $this->user->getHttpAddress();
+
+        if ($address) {
+            // Strip protocol for cleaner display (user's wallet will re-add it)
+            $clean = preg_replace('#^https?://#', '', $address);
+            return $formatted . '@' . $clean;
+        }
+
+        return $formatted;
     }
 
     /**

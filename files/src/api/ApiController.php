@@ -2765,11 +2765,14 @@ class ApiController {
         $data = json_decode($body, true);
         if (!$data) return $this->errorResponse('Invalid JSON', 400, 'invalid_json');
 
-        $code = $data['code'] ?? null;
+        // Accept either:
+        //   { "voucher": "EIOU-XXXX-XXXX-XXXX-XXXX@issuer.onion" }  — single string
+        //   { "code": "EIOU-XXXX", "issuer_address": "..." }         — separate fields
+        $voucher = $data['voucher'] ?? null;
+        $code = $data['code'] ?? $voucher;
         $issuerAddress = $data['issuer_address'] ?? null;
 
-        if (!$code) return $this->errorResponse('code required', 400, 'missing_code');
-        if (!$issuerAddress) return $this->errorResponse('issuer_address required', 400, 'missing_issuer');
+        if (!$code) return $this->errorResponse('voucher or code required', 400, 'missing_code');
 
         try {
             $service = $this->getVoucherService();
