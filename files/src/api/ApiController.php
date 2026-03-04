@@ -153,6 +153,7 @@ class ApiController {
                 'chaindrop' => $this->handleChainDrop($method, $action, $params, $body),
                 'p2p' => $this->handleP2p($method, $action, $id, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
+                'voucher' => $this->handleVoucher($method, $action, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (ServiceException $e) {
@@ -2667,6 +2668,201 @@ class ApiController {
             return "{$days}d {$hours}h {$minutes}m";
         }
         return null;
+    }
+
+    // ========================================================================
+    // Voucher / Trust-Only Onboarding
+    // ========================================================================
+
+    /**
+     * Handle voucher endpoints
+     *
+     * POST /api/v1/voucher/generate  — Generate voucher codes (issuer)
+     * POST /api/v1/voucher/redeem    — Redeem a code (issuer validates)
+     * POST /api/v1/voucher/claim     — Claim a voucher (wallet/redeemer side)
+     * GET  /api/v1/voucher/status    — Check voucher status
+     * GET  /api/v1/voucher/batch     — List batch
+     */
+    private function handleVoucher(string $method, ?string $action, array $params, string $body): array {
+        return match (true) {
+            $method === 'POST' && $action === 'generate' => $this->voucherGenerate($body),
+            $method === 'POST' && $action === 'redeem' => $this->voucherRedeem($body),
+            $method === 'POST' && $action === 'claim' => $this->voucherClaim($body),
+            $method === 'GET' && $action === 'status' => $this->voucherStatus($params),
+            $method === 'GET' && $action === 'batch' => $this->voucherBatch($params),
+            $method === 'POST' && $action === 'revoke' => $this->voucherRevoke($body),
+            default => $this->errorResponse('Invalid voucher endpoint', 404, 'invalid_endpoint')
+        };
+    }
+
+    /**
+     * POST /api/v1/voucher/generate — Issuer generates codes
+     */
+    private function voucherGenerate(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data) return $this->errorResponse('Invalid JSON', 400, 'invalid_json');
+
+        $amount = $data['amount'] ?? null;
+        $currency = $data['currency'] ?? 'USD';
+        $count = $data['count'] ?? 1;
+        $label = $data['label'] ?? null;
+        $expiresAt = $data['expires_at'] ?? null;
+
+        if (!$amount || $amount <= 0) {
+            return $this->errorResponse('amount must be positive', 400, 'invalid_amount');
+        }
+
+        try {
+            $service = $this->getVoucherService();
+            $result = $service->generateBatch((float)$amount, $currency, (int)$count, $label, $expiresAt);
+            return $this->successResponse($result, 201);
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 400, 'voucher_generate_failed');
+        }
+    }
+
+    /**
+     * POST /api/v1/voucher/redeem — Issuer verifies and marks code used
+     * Called by redeemer's node during claim flow.
+     * No API key required (public endpoint for cross-node redemption).
+     */
+    private function voucherRedeem(string $body): array {
+        $data = json_decode($body, true);
+        if (!$data) return $this->errorResponse('Invalid JSON', 400, 'invalid_json');
+
+        $code = $data['code'] ?? null;
+        $redeemerAddress = $data['redeemer_address'] ?? null;
+
+        if (!$code) return $this->errorResponse('code required', 400, 'missing_code');
+        if (!$redeemerAddress) return $this->errorResponse('redeemer_address required', 400, 'missing_redeemer');
+
+        try {
+            $service = $this->getVoucherService();
+            $result = $service->redeemAsIssuer($code, $redeemerAddress);
+
+            if ($result['success']) {
+                return $this->successResponse($result);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'redeem_failed');
+            }
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500, 'redeem_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/voucher/claim — Wallet redeems a code (auto-trust + receive)
+     */
+    private function voucherClaim(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data) return $this->errorResponse('Invalid JSON', 400, 'invalid_json');
+
+        $code = $data['code'] ?? null;
+        $issuerAddress = $data['issuer_address'] ?? null;
+
+        if (!$code) return $this->errorResponse('code required', 400, 'missing_code');
+        if (!$issuerAddress) return $this->errorResponse('issuer_address required', 400, 'missing_issuer');
+
+        try {
+            $service = $this->getVoucherService();
+            $result = $service->redeemAsWallet($code, $issuerAddress);
+
+            if ($result['success']) {
+                return $this->successResponse($result);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'claim_failed');
+            }
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500, 'claim_error');
+        }
+    }
+
+    /**
+     * GET /api/v1/voucher/status?code=XXXX — Check voucher status
+     */
+    private function voucherStatus(array $params): array {
+        if (!$this->hasPermission('wallet:read')) {
+            return $this->permissionDenied('wallet:read');
+        }
+
+        $code = $params['code'] ?? null;
+        if (!$code) return $this->errorResponse('code parameter required', 400, 'missing_code');
+
+        try {
+            $service = $this->getVoucherService();
+            $voucher = $service->getVoucherStatus($code);
+            if (!$voucher) return $this->errorResponse('Voucher not found', 404, 'not_found');
+            return $this->successResponse($voucher);
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500, 'status_error');
+        }
+    }
+
+    /**
+     * GET /api/v1/voucher/batch?batch_id=XXXX — List batch
+     */
+    private function voucherBatch(array $params): array {
+        if (!$this->hasPermission('wallet:read')) {
+            return $this->permissionDenied('wallet:read');
+        }
+
+        $batchId = $params['batch_id'] ?? null;
+        if (!$batchId) return $this->errorResponse('batch_id parameter required', 400, 'missing_batch');
+
+        try {
+            $service = $this->getVoucherService();
+            $summary = $service->getBatchSummary($batchId);
+            $codes = $service->listBatch($batchId);
+            return $this->successResponse(['summary' => $summary, 'codes' => $codes]);
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500, 'batch_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/voucher/revoke — Revoke an active voucher
+     */
+    private function voucherRevoke(string $body): array {
+        if (!$this->hasPermission('wallet:send')) {
+            return $this->permissionDenied('wallet:send');
+        }
+
+        $data = json_decode($body, true);
+        $code = $data['code'] ?? null;
+        if (!$code) return $this->errorResponse('code required', 400, 'missing_code');
+
+        try {
+            $service = $this->getVoucherService();
+            if ($service->revoke($code)) {
+                return $this->successResponse(['message' => 'Voucher revoked', 'code' => $code]);
+            } else {
+                return $this->errorResponse('Voucher not found or already used', 400, 'revoke_failed');
+            }
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage(), 500, 'revoke_error');
+        }
+    }
+
+    private function getVoucherService(): \Eiou\Services\VoucherService {
+        $app = \Eiou\Core\Application::getInstance();
+        $pdo = $app->getDatabaseContext()->getConnection();
+        $user = \Eiou\Core\UserContext::getInstance();
+
+        // Ensure tables exist
+        $schemas = \Eiou\Database\VoucherSchema::getAllSchemas();
+        foreach ($schemas as $sql) {
+            $pdo->exec($sql);
+        }
+
+        return new \Eiou\Services\VoucherService($pdo, $user);
     }
 
     /**
