@@ -325,6 +325,14 @@ if (!empty($acceptedContacts)) {
     } catch (Exception $e) {}
 }
 
+// Count contacts with pending incoming currency requests (for notifications)
+$pendingCurrencyContacts = [];
+foreach (array_merge($pendingUserContacts, $acceptedContacts) as $c) {
+    if (!empty($c['pending_currencies'])) {
+        $pendingCurrencyContacts[] = $c;
+    }
+}
+
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
 

@@ -1801,8 +1801,8 @@ function openContactModal(contact, openTab) {
                         phtml += '<input type="hidden" name="contact_currency" value="' + escapeHtml(pc.currency) + '">';
                         phtml += '<div class="info-grid">';
                         phtml += '<div class="info-item"><label>They requested</label><div class="info-value"><strong>' + escapeHtml(pc.currency) + '</strong></div></div>';
-                        phtml += '<div class="info-item"><label>Your Fee (%)</label><div class="info-value"><input type="number" name="contact_fee" value="' + escapeHtml(String(contact.fee || 0)) + '" step="0.1" min="0" class="form-control-sm" required></div></div>';
-                        phtml += '<div class="info-item"><label>Your Credit Limit</label><div class="info-value"><input type="number" name="contact_credit" value="' + escapeHtml(String(contact.credit_limit || 0)) + '" min="0" class="form-control-sm" required></div></div>';
+                        phtml += '<div class="info-item"><label>Your Fee (%)</label><div class="info-value"><input type="number" name="contact_fee" value="0" step="0.1" min="0" class="form-control-sm" required></div></div>';
+                        phtml += '<div class="info-item"><label>Your Credit Limit</label><div class="info-value"><input type="number" name="contact_credit" value="0" min="0" class="form-control-sm" required></div></div>';
                         phtml += '<div class="info-item"><label>&nbsp;</label><div class="info-value"><button type="submit" class="btn btn-success btn-sm" title="Accept ' + escapeHtml(pc.currency) + ' request"><i class="fas fa-check"></i> Accept ' + escapeHtml(pc.currency) + '</button></div></div>';
                     } else {
                         phtml += '<input type="hidden" name="action" value="acceptCurrency">';

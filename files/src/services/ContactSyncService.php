@@ -629,6 +629,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                         }
 
+                        // Mark outgoing currency as accepted (remote auto-accepted)
+                        if ($this->contactCurrencyRepository !== null) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'outgoing');
+                        }
+
                         $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                         $contactData['currency'] = $currency;
                         $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (currency updated to " . $currency . ")");

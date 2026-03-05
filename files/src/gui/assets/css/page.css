@@ -2485,6 +2485,44 @@ html {
     border-radius: 4px;
 }
 
+/* Pending Currency Forms in Modal */
+.pending-currency-form {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.pending-currency-form .info-grid {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.pending-currency-form .form-control-sm {
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.85rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    color: #212529;
+    transition: border-color 0.15s;
+}
+
+.pending-currency-form .form-control-sm:focus {
+    border-color: #4a90d9;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15);
+}
+
+@media (max-width: 600px) {
+    .pending-currency-form .info-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
 .info-tooltip-icon {
     font-size: 0.75rem;
     color: #6c757d;
