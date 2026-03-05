@@ -118,13 +118,6 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <div class="contact-badges">
                             <span class="badge badge-pending">Pending Response</span>
-                            <?php if (!empty($contact['pending_currencies'])): ?>
-                                <?php foreach ($contact['pending_currencies'] as $pc): ?>
-                                <span class="badge badge-warning" title="They requested <?php echo htmlspecialchars($pc['currency']); ?> — you requested <?php echo htmlspecialchars($contact['currency']); ?>">
-                                    <i class="fas fa-exchange-alt"></i> They want <?php echo htmlspecialchars($pc['currency']); ?>
-                                </span>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
                             <?php if (!empty($contact['http'])): ?>
@@ -519,10 +512,15 @@
     <p class="text-muted mb-lg">The following contacts have requested to connect with you:</p>
 
     <?php foreach ($pendingContacts as $index => $contact): ?>
+        <?php $hasName = !empty($contact['name']); ?>
         <div class="pending-contact-card">
             <div class="pending-contact-header">
                 <div class="d-flex align-center gap-sm">
-                    <strong class="text-primary">Contact Request #<?php echo $index + 1; ?></strong>
+                    <?php if ($hasName): ?>
+                        <strong class="text-primary"><?php echo htmlspecialchars($contact['name']); ?> — Currency Request</strong>
+                    <?php else: ?>
+                        <strong class="text-primary">Contact Request #<?php echo $index + 1; ?></strong>
+                    <?php endif; ?>
                     <?php if (!empty($contact['has_prior_history'])): ?>
                     <span class="badge badge-prior-contact" title="This contact has prior transaction history — likely a previously known contact">
                         <i class="fas fa-history"></i> Prior Contact
@@ -582,34 +580,45 @@
                         <i class="fas fa-user-check"></i> They requested
                         <span class="text-muted font-sm">(<?php echo count($pendingCurrencies); ?> currency request<?php echo count($pendingCurrencies) > 1 ? 's' : ''; ?>)</span>
                     </h4>
+                    <?php $isAccepted = ($contact['status'] ?? '') === 'accepted'; ?>
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
                     <form method="POST" class="mb-lg">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                        <input type="hidden" name="action" value="acceptContact">
-                        <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                        <input type="hidden" name="contact_pubkey" value="<?php echo htmlspecialchars($contact['pubkey']); ?>">
-                        <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                        <?php if ($isAccepted): ?>
+                            <!-- Accepted contact: use acceptCurrency action -->
+                            <input type="hidden" name="action" value="acceptCurrency">
+                            <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
+                            <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                        <?php else: ?>
+                            <!-- Pending contact: use acceptContact action -->
+                            <input type="hidden" name="action" value="acceptContact">
+                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
+                            <?php if ($hasName): ?>
+                                <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
+                            <?php endif; ?>
+                            <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                        <?php endif; ?>
 
                         <div class="form-row">
+                            <?php if (!$hasName && !$isAccepted): ?>
                             <div class="form-group">
                                 <label for="contact_name_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Name:</label>
                                 <input type="text" id="contact_name_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="contact_name" placeholder="Enter contact name" required>
                             </div>
+                            <?php endif; ?>
                             <div class="form-group">
                                 <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%) for <?php echo htmlspecialchars($pc['currency']); ?>:</label>
-                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="contact_fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
+                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit (<?php echo htmlspecialchars($pc['currency']); ?>):</label>
-                                <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="contact_credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
+                                <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
-                                <label for="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Requested Currency:</label>
-                                <select id="contact_currency_<?php echo $index; ?>_<?php echo $pcIdx; ?>" disabled>
-                                    <option selected><?php echo htmlspecialchars($pc['currency']); ?></option>
-                                </select>
+                                <label>Requested Currency:</label>
+                                <input type="text" value="<?php echo htmlspecialchars($pc['currency']); ?>" disabled class="default-value">
                             </div>
                         </div>
 

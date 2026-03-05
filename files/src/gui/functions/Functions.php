@@ -325,13 +325,27 @@ if (!empty($acceptedContacts)) {
     } catch (Exception $e) {}
 }
 
-// Count contacts with pending incoming currency requests (for notifications)
-$pendingCurrencyContacts = [];
-foreach (array_merge($pendingUserContacts, $acceptedContacts) as $c) {
-    if (!empty($c['pending_currencies'])) {
-        $pendingCurrencyContacts[] = $c;
+// Move named contacts with pending incoming currencies into $pendingContacts
+// so they show in the standalone "Pending Contact Requests" section (not just in the modal)
+$pendingUserContactsFiltered = [];
+foreach ($pendingUserContacts as $puc) {
+    if (!empty($puc['pending_currencies'])) {
+        $pendingContacts[] = $puc;
+    } else {
+        $pendingUserContactsFiltered[] = $puc;
     }
 }
+$pendingUserContacts = $pendingUserContactsFiltered;
+
+// Also add accepted contacts with pending incoming currencies to $pendingContacts
+// (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
+foreach ($acceptedContacts as $c) {
+    if (!empty($c['pending_currencies'])) {
+        $pendingContacts[] = $c;
+    }
+}
+// $pendingCurrencyContacts no longer needed for separate notification
+$pendingCurrencyContacts = [];
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
