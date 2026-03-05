@@ -655,7 +655,7 @@ class ContactController
                 'fee_percent' => $feeValidation['value'],
                 'credit_limit' => $creditValidation['value'],
                 'status' => 'accepted'
-            ]);
+            ], 'incoming');
 
             // Insert initial balance and credit entries for the newly accepted currency
             $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
@@ -670,6 +670,11 @@ class ContactController
                     ]);
                 }
             }
+
+            // Send acceptance notification to remote side so they mark their outgoing currency as accepted
+            // Also upgrades contact status from pending to accepted if needed
+            $contactSyncService = $serviceContainer->getContactSyncService();
+            $contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
 
             $this->session->setFlashMessage('success', "Currency {$currency} accepted.");
         } catch (\Exception $e) {

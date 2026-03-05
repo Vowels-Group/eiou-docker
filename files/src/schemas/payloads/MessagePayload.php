@@ -52,9 +52,10 @@ class MessagePayload extends BasePayload
      * @param string $address The recipient address
      * @param bool $encode Encode payload in JSON
      * @param string|null $recipientSignature Optional recipient signature for dual-signature protocol
+     * @param string|null $currency Optional currency that was accepted (for currency-specific acceptance)
      * @return array|string Contact accepted payload (array if not encode, JSON otherwise)
      */
-    public function buildContactIsAccepted(string $address, $encode = false, ?string $recipientSignature = null): array|string
+    public function buildContactIsAccepted(string $address, $encode = false, ?string $recipientSignature = null, ?string $currency = null): array|string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $data = [
@@ -68,6 +69,10 @@ class MessagePayload extends BasePayload
 
         if ($recipientSignature !== null) {
             $data['recipientSignature'] = $recipientSignature;
+        }
+
+        if ($currency !== null) {
+            $data['currency'] = $currency;
         }
 
         if($encode){

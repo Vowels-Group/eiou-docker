@@ -503,9 +503,19 @@ class MessageService implements MessageServiceInterface {
             // Update outgoing currency entries to 'accepted' when remote accepts our request
             if ($this->contactCurrencyRepository !== null) {
                 $senderPubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+                // If the acceptance message includes a specific currency, mark that one as accepted
+                $acceptedCurrency = $decodedMessage['currency'] ?? null;
+                if ($acceptedCurrency) {
+                    $this->contactCurrencyRepository->updateCurrencyStatus(
+                        $senderPubkeyHash, $acceptedCurrency, 'accepted', 'outgoing'
+                    );
+                }
+
+                // Also mark the contact's primary currency as accepted (backwards compatibility)
                 $contact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 $contactCurrency = $contact['currency'] ?? null;
-                if ($contactCurrency) {
+                if ($contactCurrency && $contactCurrency !== $acceptedCurrency) {
                     $this->contactCurrencyRepository->updateCurrencyStatus(
                         $senderPubkeyHash, $contactCurrency, 'accepted', 'outgoing'
                     );

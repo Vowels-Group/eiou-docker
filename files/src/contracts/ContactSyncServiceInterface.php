@@ -226,4 +226,16 @@ interface ContactSyncServiceInterface
         string $payload,
         string $description
     ): array;
+
+    /**
+     * Send a currency acceptance notification to a remote contact.
+     *
+     * Called when a user accepts a pending incoming currency via the GUI.
+     * Notifies the remote side and upgrades contact status if needed.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency The currency that was accepted
+     * @return bool True if notification was sent successfully
+     */
+    public function sendCurrencyAcceptanceNotification(string $pubkeyHash, string $currency): bool;
 }

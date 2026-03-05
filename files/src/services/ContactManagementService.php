@@ -1305,7 +1305,7 @@ class ContactManagementService implements ContactManagementServiceInterface
 
         // Insert into contact_currencies as outgoing (we are adding this currency)
         if ($this->contactCurrencyRepository !== null) {
-            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'accepted', 'outgoing');
+            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing');
         }
 
         // Create initial balance entries for the new currency

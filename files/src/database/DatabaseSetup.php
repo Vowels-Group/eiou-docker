@@ -218,7 +218,7 @@ function runColumnMigrations(PDO $pdo): array {
             'hop_wait' => 'INT DEFAULT 0 AFTER `fast`',
         ],
         'contact_currencies' => [
-            'status' => "ENUM('accepted', 'pending') DEFAULT 'accepted' AFTER `credit_limit`",
+            'status' => "ENUM('accepted', 'pending', 'blocked') DEFAULT 'pending' AFTER `credit_limit`",
             'direction' => "ENUM('incoming', 'outgoing') DEFAULT 'incoming' AFTER `status`",
         ],
     ];
@@ -279,6 +279,9 @@ function runColumnMigrations(PDO $pdo): array {
     $enumUpdates = [
         'contacts' => [
             'online_status' => "ENUM('online','partial','offline','unknown') DEFAULT 'unknown'",
+        ],
+        'contact_currencies' => [
+            'status' => "ENUM('accepted','pending','blocked') DEFAULT 'pending'",
         ],
     ];
 
