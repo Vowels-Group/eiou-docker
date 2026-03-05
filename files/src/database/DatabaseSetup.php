@@ -349,24 +349,6 @@ function runColumnMigrations(PDO $pdo): array {
         $results['contact_credit.composite_unique'] = 'error: ' . $e->getMessage();
     }
 
-    // Migrate existing contact currency data into contact_currencies table
-    try {
-        $stmt = $pdo->query("SHOW TABLES LIKE 'contact_currencies'");
-        if ($stmt && $stmt->rowCount() > 0) {
-            $pdo->exec("INSERT IGNORE INTO contact_currencies (pubkey_hash, currency, fee_percent, credit_limit)
-                         SELECT pubkey_hash, currency, fee_percent, credit_limit
-                         FROM contacts
-                         WHERE status = 'accepted' AND currency IS NOT NULL AND fee_percent IS NOT NULL");
-            $results['contact_currencies.data_migration'] = 'completed';
-        }
-    } catch (PDOException $e) {
-        $results['contact_currencies.data_migration'] = 'error: ' . $e->getMessage();
-        if (class_exists('Eiou\\Utils\\Logger')) {
-            Logger::getInstance()->error("Data migration to contact_currencies failed", [
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
 
     // Migrate contact_currencies UNIQUE constraint from (pubkey_hash, currency) to (pubkey_hash, currency, direction)
     try {
