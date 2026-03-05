@@ -3158,12 +3158,14 @@ html {
     margin-bottom: 1rem;
 }
 
-.currency-form-header {
-    margin-bottom: 0.25rem;
-}
-
 .currency-form-row {
     grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+}
+
+.currency-accept-btn {
+    height: 38px;
+    white-space: nowrap;
 }
 
 @media (max-width: 576px) {

@@ -581,34 +581,33 @@
             <!-- Accept Contact Form(s) — incoming currency requests from them -->
             <div class="pending-contact-accept-form" data-contact-index="<?php echo $index; ?>">
                 <?php $pendingCurrencies = $contact['pending_currencies'] ?? []; ?>
-                <?php $isAccepted = ($contact['status'] ?? '') === 'accepted'; ?>
+                <?php $isExisting = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']); ?>
                 <?php if (!empty($pendingCurrencies)): ?>
                     <h4 class="pending-contact-accept-title">
                         <i class="fas fa-user-check"></i> They requested
                         <span class="text-muted font-sm">(<?php echo count($pendingCurrencies); ?> currency request<?php echo count($pendingCurrencies) > 1 ? 's' : ''; ?>)</span>
                     </h4>
 
-                    <!-- Name field — single input above all currency forms -->
+                    <!-- Name: read-only display if known, editable input if new contact -->
+                    <?php if ($hasName || $isExisting): ?>
+                    <div class="mb-lg">
+                        <strong>Contact Name:</strong> <span class="text-muted"><?php echo htmlspecialchars($contact['name'] ?? 'Unknown'); ?></span>
+                    </div>
+                    <?php else: ?>
                     <div class="mb-lg pending-contact-name-section">
                         <div class="form-group">
                             <label for="contact_name_shared_<?php echo $index; ?>"><strong>Contact Name:</strong></label>
-                            <?php if ($hasName || $isAccepted): ?>
-                                <input type="text" id="contact_name_shared_<?php echo $index; ?>" value="<?php echo htmlspecialchars($contact['name']); ?>" disabled class="shared-name-input text-muted">
-                            <?php else: ?>
-                                <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter contact name" required class="shared-name-input">
-                            <?php endif; ?>
+                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter contact name" required class="shared-name-input">
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <!-- Per-currency accept forms -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
                     <?php if ($pcIdx > 0): ?><hr class="currency-separator"><?php endif; ?>
-                    <div class="currency-form-header">
-                        <span class="badge badge-info"><?php echo htmlspecialchars($pc['currency']); ?></span>
-                    </div>
-                    <form method="POST" class="mb-lg currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
+                    <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                        <?php if ($isAccepted): ?>
+                        <?php if ($isExisting): ?>
                             <input type="hidden" name="action" value="acceptCurrency">
                             <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
                             <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
@@ -626,16 +625,16 @@
 
                         <div class="form-row currency-form-row">
                             <div class="form-group">
-                                <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%):</label>
-                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
+                                <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo htmlspecialchars($pc['currency']); ?> Fee (%):</label>
+                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
                                 <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit:</label>
-                                <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
+                                <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
                             <div class="form-group d-flex align-items-end">
-                                <button type="submit" class="btn btn-success btn-compact">
-                                    <i class="fas fa-check"></i> Accept <?php echo htmlspecialchars($pc['currency']); ?>
+                                <button type="submit" class="btn btn-success btn-compact currency-accept-btn">
+                                    <i class="fas fa-check"></i> Accept
                                 </button>
                             </div>
                         </div>

@@ -325,10 +325,40 @@ if (!empty($acceptedContacts)) {
     } catch (Exception $e) {}
 }
 
+// Build lookup of contacts we already have (accepted or our outgoing pending)
+$existingContactHashes = [];
+foreach ($acceptedContacts as $ac) {
+    if (!empty($ac['pubkey_hash'])) {
+        $existingContactHashes[$ac['pubkey_hash']] = true;
+    }
+}
+foreach ($pendingUserContacts as $puc) {
+    if (!empty($puc['pubkey_hash'])) {
+        $existingContactHashes[$puc['pubkey_hash']] = true;
+    }
+}
+
+// Mark pending contact requests that already exist in our contact list
+// so the template uses acceptCurrency instead of acceptContact
+foreach ($pendingContacts as &$pc) {
+    $hash = $pc['pubkey_hash'] ?? '';
+    if ($hash && isset($existingContactHashes[$hash])) {
+        $pc['is_existing_contact'] = true;
+    }
+}
+unset($pc);
+
 // Also show named pending contacts with incoming currencies in the standalone section
 // Keep them in $pendingUserContacts too so they still appear in the contacts grid
+$pendingContactHashes = [];
+foreach ($pendingContacts as $pc) {
+    if (!empty($pc['pubkey_hash'])) {
+        $pendingContactHashes[$pc['pubkey_hash']] = true;
+    }
+}
+
 foreach ($pendingUserContacts as $puc) {
-    if (!empty($puc['pending_currencies'])) {
+    if (!empty($puc['pending_currencies']) && !isset($pendingContactHashes[$puc['pubkey_hash'] ?? ''])) {
         $pendingContacts[] = $puc;
     }
 }
@@ -336,7 +366,7 @@ foreach ($pendingUserContacts as $puc) {
 // Also add accepted contacts with pending incoming currencies to $pendingContacts
 // (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
 foreach ($acceptedContacts as $c) {
-    if (!empty($c['pending_currencies'])) {
+    if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
         $pendingContacts[] = $c;
     }
 }
