@@ -511,15 +511,6 @@ class MessageService implements MessageServiceInterface {
                         $senderPubkeyHash, $acceptedCurrency, 'accepted', 'outgoing'
                     );
                 }
-
-                // Also mark the contact's primary currency as accepted (backwards compatibility)
-                $contact = $this->contactRepository->getContactByPubkey($senderPublicKey);
-                $contactCurrency = $contact['currency'] ?? null;
-                if ($contactCurrency && $contactCurrency !== $acceptedCurrency) {
-                    $this->contactCurrencyRepository->updateCurrencyStatus(
-                        $senderPubkeyHash, $contactCurrency, 'accepted', 'outgoing'
-                    );
-                }
             }
 
             // Store recipient signature from the acceptance message (dual-signature protocol)

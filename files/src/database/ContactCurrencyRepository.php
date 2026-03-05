@@ -47,7 +47,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @return bool True on success
      */
     public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $status = 'accepted', string $direction = 'incoming'): bool {
-        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status, direction)
+        $query = "INSERT IGNORE INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status, direction)
                   VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status, :direction)";
 
         $stmt = $this->execute($query, [

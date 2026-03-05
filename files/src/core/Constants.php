@@ -68,9 +68,12 @@ class Constants {
     // Currency conversion factors: base unit (cents) to display unit (dollars)
     const CONVERSION_FACTORS = [
         'USD' => 100,
+        'DER' => 100,
+        'EUR' => 100,
+        'GBY' => 100,
     ];
     // Allowed currencies: only currencies with a CONVERSION_FACTORS entry are valid
-    const ALLOWED_CURRENCIES = ['USD'];
+    const ALLOWED_CURRENCIES = ['USD', 'DER', 'EUR', 'GBY'];
 
     /**
      * Get the conversion factor for a given currency

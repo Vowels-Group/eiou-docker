@@ -359,7 +359,9 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             } elseif($status === Constants::STATUS_REJECTED && $reason === 'unknown'){
 
                 // If no database existence of contact request on their end, resend contact request
-                $contactPayload = $this->contactPayload->buildCreateRequest($contactAddress);
+                // Include the contact's currency so the remote side processes the correct currency
+                $contactCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $contactPayload = $this->contactPayload->buildCreateRequest($contactAddress, $contactCurrency);
                 $responseData = json_decode($this->transportUtility->send($contactAddress, $contactPayload), true);
                 if(isset($responseData['status']) && ($responseData['status'] === Constants::STATUS_ACCEPTED)){
                     // Contact received our contact request, needs to be accepted by other user first
