@@ -178,6 +178,42 @@ class TransactionRepository extends AbstractRepository {
         return $result ? $result['txid'] : null;
     }
 
+    /**
+     * Get the latest txid for each currency in the chain between two parties
+     *
+     * @param string $senderPublicKey
+     * @param string $receiverPublicKey
+     * @return array Map of currency => latest txid (e.g. ['USD' => 'abc...', 'EUR' => 'def...'])
+     */
+    public function getPreviousTxidsByCurrency(string $senderPublicKey, string $receiverPublicKey): array {
+        $senderHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
+
+        $query = "SELECT currency, txid FROM {$this->tableName}
+                WHERE ((sender_public_key_hash = :s1 AND receiver_public_key_hash = :r1)
+                    OR (sender_public_key_hash = :r2 AND receiver_public_key_hash = :s2))
+                AND currency IS NOT NULL
+                ORDER BY timestamp DESC";
+
+        $stmt = $this->execute($query, [
+            ':s1' => $senderHash, ':r1' => $receiverHash,
+            ':r2' => $receiverHash, ':s2' => $senderHash
+        ]);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $result = [];
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            // First occurrence per currency is the latest (ORDER BY timestamp DESC)
+            if (!isset($result[$row['currency']])) {
+                $result[$row['currency']] = $row['txid'];
+            }
+        }
+
+        return $result;
+    }
 
     /**
      * Check for new transactions since last check

@@ -171,6 +171,15 @@ try {
 } catch (Exception $e) {
     // Non-critical
 }
+// Include currencies from accepted contact currency relationships
+try {
+    $acceptedCurrencies = $serviceContainer->getContactCurrencyRepository()->getDistinctAcceptedCurrencies();
+    foreach ($acceptedCurrencies as $cur) {
+        $knownCurrencies[$cur] = true;
+    }
+} catch (Exception $e) {
+    // Non-critical
+}
 $knownCurrencies = array_keys($knownCurrencies);
 // Sort by allowed currencies order (first currency = first row, etc.)
 $allowedCurrenciesOrder = $user->getAllowedCurrencies();

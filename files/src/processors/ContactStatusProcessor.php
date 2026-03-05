@@ -177,8 +177,12 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         }
 
         try {
-            // Get the latest transaction ID in the chain with this contact
+            // Get per-currency chain heads for this contact
             $prevTxid = $this->transactionRepository->getPreviousTxid(
+                $this->currentUser->getPublicKey(),
+                $contact['pubkey']
+            );
+            $prevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                 $this->currentUser->getPublicKey(),
                 $contact['pubkey']
             );
@@ -187,6 +191,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
                 'prevTxid' => $prevTxid,
+                'prevTxidsByCurrency' => $prevTxidsByCurrency,
                 'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
@@ -204,12 +209,30 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
 
-                    // Check chain validity
+                    // Check chain validity using per-currency comparison
                     $chainValid = $response['chainValid'] ?? true;
-                    $remotePrevTxid = $response['prevTxid'] ?? null;
+                    $remoteChainStatus = $response['chainStatusByCurrency'] ?? [];
 
-                    // If chains don't match, trigger sync
-                    if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {
+                    // Per-currency validation: compare our chain heads with remote's response
+                    if (!empty($remoteChainStatus)) {
+                        foreach ($remoteChainStatus as $cur => $curValid) {
+                            if (!$curValid) {
+                                $chainValid = false;
+                                break;
+                            }
+                        }
+                    } elseif (!$chainValid) {
+                        // Legacy fallback: remote didn't send per-currency data
+                        // chainValid already set from response
+                    } else {
+                        // Legacy single-txid comparison for older nodes
+                        $remotePrevTxid = $response['prevTxid'] ?? null;
+                        if ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null) {
+                            $chainValid = false;
+                        }
+                    }
+
+                    if (!$chainValid) {
                         $this->updateContactChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled

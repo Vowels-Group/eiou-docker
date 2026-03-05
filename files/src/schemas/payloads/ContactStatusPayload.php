@@ -28,7 +28,7 @@ class ContactStatusPayload extends BasePayload
 
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
 
-        return [
+        $payload = [
             'type' => 'ping',
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -36,6 +36,13 @@ class ContactStatusPayload extends BasePayload
             'requestSync' => $data['requestSync'] ?? false,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
+
+        // Include per-currency chain heads for multi-currency chain validation
+        if (!empty($data['prevTxidsByCurrency'])) {
+            $payload['prevTxidsByCurrency'] = $data['prevTxidsByCurrency'];
+        }
+
+        return $payload;
     }
 
     /**
@@ -50,7 +57,7 @@ class ContactStatusPayload extends BasePayload
      * @param int|null $processorsTotal Total expected message processors
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null): string
+    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null, array $chainStatusByCurrency = []): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
@@ -66,6 +73,11 @@ class ContactStatusPayload extends BasePayload
             'currency' => $currency,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
+
+        // Include per-currency chain status for multi-currency validation
+        if (!empty($chainStatusByCurrency)) {
+            $response['chainStatusByCurrency'] = $chainStatusByCurrency;
+        }
 
         if ($processorsRunning !== null) {
             $response['processorsRunning'] = $processorsRunning;

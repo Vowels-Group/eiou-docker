@@ -307,30 +307,64 @@ class ContactStatusService implements ContactStatusServiceInterface {
             return;
         }
 
-        // Get our local prev_txid for this contact's chain
+        // Per-currency chain comparison: compare chain heads for each currency independently
+        $remotePrevTxidsByCurrency = $request['prevTxidsByCurrency'] ?? [];
+        $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+            $this->currentUser->getPublicKey(),
+            $senderPubkey
+        );
+
+        // Also keep the legacy single prevTxid for backwards compatibility
         $localPrevTxid = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
             $senderPubkey
         );
 
-        // Compare with sender's prev_txid
-        $remotePrevTxid = $request['prevTxid'] ?? null;
         $chainValid = true;
+        $chainStatusByCurrency = [];
 
-        if ($remotePrevTxid !== null && $localPrevTxid !== null) {
-            // Both have transactions - compare chain heads
-            $chainValid = ($localPrevTxid === $remotePrevTxid);
+        if (!empty($remotePrevTxidsByCurrency) || !empty($localPrevTxidsByCurrency)) {
+            // Compare per-currency: check all currencies known to either side
+            $allCurrencies = array_unique(array_merge(
+                array_keys($remotePrevTxidsByCurrency),
+                array_keys($localPrevTxidsByCurrency)
+            ));
+
+            foreach ($allCurrencies as $cur) {
+                $localTxid = $localPrevTxidsByCurrency[$cur] ?? null;
+                $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
+
+                if ($localTxid !== null && $remoteTxid !== null && $localTxid !== $remoteTxid) {
+                    $chainStatusByCurrency[$cur] = false;
+                    $chainValid = false;
+                } else {
+                    $chainStatusByCurrency[$cur] = true;
+                }
+            }
+        } else {
+            // Fallback: legacy single-txid comparison for older nodes
+            $remotePrevTxid = $request['prevTxid'] ?? null;
+            if ($remotePrevTxid !== null && $localPrevTxid !== null) {
+                $chainValid = ($localPrevTxid === $remotePrevTxid);
+            }
         }
 
-        // Also check for internal chain gaps (e.g., deleted transactions in the middle)
-        // Chain heads can match even when internal transactions are missing
+        // Also check for internal chain gaps per currency
         if ($chainValid && $this->transactionChainRepository !== null) {
-            $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
-                $this->currentUser->getPublicKey(),
-                $senderPubkey
-            );
-            if (!$chainStatus['valid']) {
-                $chainValid = false;
+            $allCurrencies = array_unique(array_merge(
+                array_keys($localPrevTxidsByCurrency),
+                array_keys($remotePrevTxidsByCurrency)
+            ));
+            foreach ($allCurrencies as $cur) {
+                $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                    $this->currentUser->getPublicKey(),
+                    $senderPubkey,
+                    $cur
+                );
+                if (!$chainStatus['valid']) {
+                    $chainStatusByCurrency[$cur] = false;
+                    $chainValid = false;
+                }
             }
         }
 
@@ -373,8 +407,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
         // Update the sender's online status since they pinged us
         $this->updateContactOnlineStatus($senderPubkey);
 
-        // Send pong response with available credit and processor health
-        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal);
+        // Send pong response with available credit, processor health, and per-currency chain status
+        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal, $chainStatusByCurrency);
     }
 
     /**
@@ -495,16 +529,21 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         try {
-            // Get the latest transaction ID in the chain with this contact
+            // Get per-currency chain heads and legacy single prevTxid
             $prevTxid = $this->transactionRepository->getPreviousTxid(
                 $this->currentUser->getPublicKey(),
                 $contact['pubkey']
             );
+            $prevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+                $this->currentUser->getPublicKey(),
+                $contact['pubkey']
+            );
 
-            // Build ping payload
+            // Build ping payload with per-currency chain heads
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
                 'prevTxid' => $prevTxid,
+                'prevTxidsByCurrency' => $prevTxidsByCurrency,
                 'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
@@ -533,26 +572,39 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
 
-                    // Check chain validity from remote response
+                    // Check chain validity using per-currency comparison from pong
                     $chainValid = $response['chainValid'] ?? true;
-                    $remotePrevTxid = $response['prevTxid'] ?? null;
+                    $remoteChainStatus = $response['chainStatusByCurrency'] ?? [];
 
-                    // Also verify local chain integrity for internal gaps
-                    // Chain heads can match even when transactions in the middle are deleted
+                    if (!empty($remoteChainStatus)) {
+                        foreach ($remoteChainStatus as $cur => $curValid) {
+                            if (!$curValid) {
+                                $chainValid = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Also verify local chain integrity per currency
                     if ($chainValid && $this->transactionChainRepository !== null) {
-                        $localChainStatus = $this->transactionChainRepository->verifyChainIntegrity(
-                            $this->currentUser->getPublicKey(),
-                            $contact['pubkey']
-                        );
-                        if (!$localChainStatus['valid']) {
-                            $chainValid = false;
+                        $allCurrencies = array_keys($prevTxidsByCurrency);
+                        foreach ($allCurrencies as $cur) {
+                            $localChainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                                $this->currentUser->getPublicKey(),
+                                $contact['pubkey'],
+                                $cur
+                            );
+                            if (!$localChainStatus['valid']) {
+                                $chainValid = false;
+                                break;
+                            }
                         }
                     }
 
                     $statusLabel = $onlineStatus === Constants::CONTACT_ONLINE_STATUS_PARTIAL ? 'partial' : 'online';
 
                     // If chains don't match, update status and optionally trigger sync
-                    if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {
+                    if (!$chainValid) {
                         $this->updateChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled

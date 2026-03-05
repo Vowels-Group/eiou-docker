@@ -360,6 +360,24 @@ class ContactCurrencyRepository extends AbstractRepository {
     }
 
     /**
+     * Get all distinct accepted currencies across all contacts
+     *
+     * @return array Array of currency code strings
+     */
+    public function getDistinctAcceptedCurrencies(): array {
+        $query = "SELECT DISTINCT currency FROM {$this->tableName}
+                  WHERE status = 'accepted'";
+
+        $stmt = $this->execute($query);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    }
+
+    /**
      * Delete a specific currency configuration for a contact
      *
      * @param string $pubkeyHash Contact's public key hash
