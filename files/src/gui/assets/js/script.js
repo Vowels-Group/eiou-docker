@@ -1829,27 +1829,29 @@ function openContactModal(contact, openTab) {
     var fee = parseFloat(contact.fee) || 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
 
-    // Populate currency selector dropdown for multi-currency contacts
+    // Populate currency slider for multi-currency contacts
     var currencySelectorSection = document.getElementById('currency-selector-section');
-    var currencySelector = document.getElementById('modal_currency_selector');
-    if (currencySelectorSection && currencySelector) {
+    var sliderTrack = document.getElementById('currency_slider_track');
+    if (currencySelectorSection && sliderTrack) {
         var currencies = contact.currencies || [];
-        // Store data for currency switching
         currentContactCurrencies = currencies;
         currentContactBalances = contact.balances_by_currency || {};
         if (currencies.length > 1) {
             currencySelectorSection.style.display = 'block';
-            currencySelector.innerHTML = '';
+            sliderTrack.innerHTML = '';
             for (var i = 0; i < currencies.length; i++) {
-                var opt = document.createElement('option');
-                opt.value = currencies[i].currency;
-                opt.textContent = currencies[i].currency;
-                if (currencies[i].currency === currency) opt.selected = true;
-                currencySelector.appendChild(opt);
+                var pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'currency-slider-pill' + (currencies[i].currency === currency ? ' active' : '');
+                pill.textContent = currencies[i].currency;
+                pill.setAttribute('data-currency', currencies[i].currency);
+                pill.setAttribute('data-action', 'currencySliderSelect');
+                sliderTrack.appendChild(pill);
             }
+            updateCurrencySliderArrows();
         } else {
             currencySelectorSection.style.display = 'none';
-            currencySelector.innerHTML = '';
+            sliderTrack.innerHTML = '';
         }
     }
 
@@ -2137,6 +2139,29 @@ function closeContactModal() {
  * Switches the contact modal display to show data for the selected currency.
  * Updates balance, credit limit, fee, and available credit fields.
  */
+/**
+ * Update currency slider arrow enabled/disabled state
+ */
+function updateCurrencySliderArrows() {
+    var track = document.getElementById('currency_slider_track');
+    var prevBtn = document.getElementById('currency_slider_prev');
+    var nextBtn = document.getElementById('currency_slider_next');
+    if (!track || !prevBtn || !nextBtn) return;
+    prevBtn.disabled = track.scrollLeft <= 0;
+    nextBtn.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+}
+
+/**
+ * Slide the currency slider left or right
+ */
+function slideCurrencyTrack(direction) {
+    var track = document.getElementById('currency_slider_track');
+    if (!track) return;
+    var scrollAmount = 100;
+    track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+    setTimeout(updateCurrencySliderArrows, 300);
+}
+
 function switchContactCurrency(selectedCurrency) {
     if (!selectedCurrency) return;
 
@@ -3985,6 +4010,17 @@ document.addEventListener('DOMContentLoaded', function() {
             var tab = el.getAttribute('data-tab');
             showModalTab(tab, el);
         },
+
+        // Currency slider
+        'currencySliderSelect': function(el) {
+            var cur = el.getAttribute('data-currency');
+            var pills = document.querySelectorAll('.currency-slider-pill');
+            for (var i = 0; i < pills.length; i++) pills[i].classList.remove('active');
+            el.classList.add('active');
+            switchContactCurrency(cur);
+        },
+        'currencySliderPrev': function() { slideCurrencyTrack(-1); },
+        'currencySliderNext': function() { slideCurrencyTrack(1); },
 
         // Contact actions
         'pingContact': function() { pingContact(); },

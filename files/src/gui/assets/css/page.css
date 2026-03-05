@@ -3130,6 +3130,74 @@ html {
     display: none;
 }
 
+/* Currency slider for contact modal */
+.currency-slider {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.currency-slider-track {
+    display: flex;
+    gap: 0.5rem;
+    overflow: hidden;
+    flex: 1;
+}
+
+.currency-slider-pill {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    border: 1px solid #ced4da;
+    background: #f8f9fa;
+    color: #495057;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.currency-slider-pill:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.currency-slider-pill.active {
+    background: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+}
+
+.currency-slider-arrow {
+    background: none;
+    border: 1px solid #ced4da;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #495057;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.currency-slider-arrow:hover {
+    background: #e9ecef;
+}
+
+.currency-slider-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.currency-slider-arrow:disabled:hover {
+    background: none;
+}
+
 /* Pending contact card */
 .pending-contact-card {
     background: #f8f9fa;

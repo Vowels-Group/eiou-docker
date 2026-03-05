@@ -231,11 +231,18 @@
 
         <!-- Info Tab -->
         <div id="info-tab" class="modal-tab-content active">
-            <!-- Currency Selector (shown for multi-currency contacts) -->
+            <!-- Currency Slider (shown for multi-currency contacts) -->
             <div id="currency-selector-section" class="contact-info-section" style="display: none;">
                 <h4><i class="fas fa-coins"></i> Currency</h4>
-                <select id="modal_currency_selector" class="modal-address-selector" data-action-change="switchContactCurrency">
-                </select>
+                <div class="currency-slider" id="currency_slider">
+                    <button type="button" class="currency-slider-arrow currency-slider-prev" id="currency_slider_prev" data-action="currencySliderPrev">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="currency-slider-track" id="currency_slider_track"></div>
+                    <button type="button" class="currency-slider-arrow currency-slider-next" id="currency_slider_next" data-action="currencySliderNext">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="contact-info-section">
