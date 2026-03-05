@@ -3158,6 +3158,20 @@ html {
     margin-bottom: 1rem;
 }
 
+.badge-pending-currency {
+    background: #e8eaed;
+    color: #5f6368;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-requested-currency {
+    background: #e3f2fd;
+    color: #1565c0;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
 .currency-form-row {
     grid-template-columns: 1fr 1fr auto;
     align-items: end;

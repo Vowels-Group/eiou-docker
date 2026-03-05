@@ -98,10 +98,10 @@
                                 <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> more</div>
                             <?php endif; ?>
                             <?php if (!empty($contact['pending_currencies'])): ?>
-                                <div class="multi-currency-badge" style="background: #ffc107; color: #333;"><?php echo count($contact['pending_currencies']); ?> pending</div>
+                                <div class="multi-currency-badge badge-pending-currency"><?php echo count($contact['pending_currencies']); ?> pending</div>
                             <?php endif; ?>
                             <?php if (!empty($contact['outgoing_currencies'])): ?>
-                                <div class="multi-currency-badge" style="background: #17a2b8; color: #fff;"><?php echo count($contact['outgoing_currencies']); ?> requested</div>
+                                <div class="multi-currency-badge badge-requested-currency"><?php echo count($contact['outgoing_currencies']); ?> requested</div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -122,7 +122,7 @@
                         <div class="contact-badges">
                             <span class="badge badge-pending">Pending Response</span>
                             <?php if (!empty($contact['pending_currencies'])): ?>
-                                <span class="badge" style="background: #ffc107; color: #333;"><?php echo count($contact['pending_currencies']); ?> incoming</span>
+                                <span class="badge badge-pending-currency"><?php echo count($contact['pending_currencies']); ?> incoming</span>
                             <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
