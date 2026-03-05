@@ -2067,9 +2067,31 @@ function openContactModal(contact, openTab) {
     // Set form values
     document.getElementById('edit_contact_address').value = contact.address;
     document.getElementById('edit_contact_name').value = contact.name;
-    document.getElementById('edit_contact_fee').value = contact.fee;
-    document.getElementById('edit_contact_credit').value = contact.credit_limit;
-    document.getElementById('edit_contact_currency').value = contact.currency;
+
+    // Populate currency dropdown from contact's accepted currencies
+    var editCurrencySelect = document.getElementById('edit_contact_currency');
+    editCurrencySelect.innerHTML = '';
+    var acceptedCurrencies = (contact.currencies || []).filter(function(c) { return c.status === 'accepted'; });
+    if (acceptedCurrencies.length > 0) {
+        for (var ci = 0; ci < acceptedCurrencies.length; ci++) {
+            var opt = document.createElement('option');
+            opt.value = acceptedCurrencies[ci].currency;
+            opt.textContent = acceptedCurrencies[ci].currency;
+            editCurrencySelect.appendChild(opt);
+        }
+        // Select the first currency and load its fee/credit
+        editCurrencySelect.value = acceptedCurrencies[0].currency;
+        document.getElementById('edit_contact_fee').value = acceptedCurrencies[0].fee;
+        document.getElementById('edit_contact_credit').value = acceptedCurrencies[0].credit_limit;
+    } else {
+        // Fallback to contact's default currency
+        var opt = document.createElement('option');
+        opt.value = contact.currency;
+        opt.textContent = contact.currency;
+        editCurrencySelect.appendChild(opt);
+        document.getElementById('edit_contact_fee').value = contact.fee;
+        document.getElementById('edit_contact_credit').value = contact.credit_limit;
+    }
 
     // Set action form addresses
     document.getElementById('block_contact_address').value = contact.address;
@@ -2158,6 +2180,21 @@ function openContactModal(contact, openTab) {
  */
 function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
+}
+
+/**
+ * Handles currency change in the edit contact settings form.
+ * Loads fee and credit limit for the selected currency from stored contact data.
+ */
+function editCurrencyChanged(selectedCurrency) {
+    if (!selectedCurrency || !currentContactCurrencies) return;
+    for (var i = 0; i < currentContactCurrencies.length; i++) {
+        if (currentContactCurrencies[i].currency === selectedCurrency) {
+            document.getElementById('edit_contact_fee').value = currentContactCurrencies[i].fee;
+            document.getElementById('edit_contact_credit').value = currentContactCurrencies[i].credit_limit;
+            return;
+        }
+    }
 }
 
 /**
@@ -4179,6 +4216,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (action === 'showSelectedContactAddress') { showSelectedContactAddress(); }
         else if (action === 'showSelectedUserAddress') { showSelectedUserAddress(); }
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
+        else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
     }, false);
 

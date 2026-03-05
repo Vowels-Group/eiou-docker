@@ -522,29 +522,49 @@ class ContactController
             $contactCredit = $creditValidation['value'];
             $contactCurrency = $currencyValidation['value'];
 
-            // Create argv array with --json flag for structured output
-            $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit, '--json'];
-
-            // Create CliOutputManager with JSON mode enabled
-            CliOutputManager::resetInstance();
-            $outputManager = new CliOutputManager($argv);
-
-            // Capture output
-            ob_start();
             try {
+                // Update contact name in the contacts table
+                $argv = ['eiou', 'update', $contactAddress, 'name', $contactName, '--json'];
+                CliOutputManager::resetInstance();
+                $outputManager = new CliOutputManager($argv);
+                ob_start();
                 $this->contactService->updateContact($argv, $outputManager);
                 $output = ob_get_clean();
-
-                // Parse the JSON output to determine message type and content
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
-                $message = $messageInfo['message'];
-                $messageType = $messageInfo['type'];
+
+                if ($messageInfo['type'] === 'error') {
+                    $message = $messageInfo['message'];
+                    $messageType = 'error';
+                } else {
+                    // Update fee/credit in contact_currencies for the selected currency
+                    $app = Application::getInstance();
+                    $contactCurrencyRepo = $app->services->getContactCurrencyRepository();
+
+                    // Look up contact pubkey hash
+                    $contact = $this->contactService->lookupContactInfo($contactAddress);
+                    if ($contact) {
+                        $pubkeyHash = $contact['receiverPublicKeyHash'] ?? '';
+
+                        // Convert to minor units
+                        $feeMinor = (int) ($contactFee * Constants::FEE_CONVERSION_FACTOR);
+                        $creditMinor = (int) ($contactCredit * Constants::getConversionFactor($contactCurrency));
+
+                        $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
+                            'fee_percent' => $feeMinor,
+                            'credit_limit' => $creditMinor,
+                        ]);
+
+                        $message = 'Contact updated successfully';
+                        $messageType = 'success';
+                    } else {
+                        $message = 'Contact not found for currency update';
+                        $messageType = 'error';
+                    }
+                }
             } catch (\Throwable $e) {
-                // Ensure output buffer is cleaned up
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use Logger for exception logging
                 Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__

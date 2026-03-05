@@ -794,14 +794,14 @@ Shows contact details including balance, fee, credit limit, and bidirectional av
 # Update contact name
 docker exec alice eiou update Bob name Robert
 
-# Update fee
-docker exec alice eiou update Bob fee 0.5
+# Update fee for USD
+docker exec alice eiou update Bob fee 0.5 USD
 
-# Update credit limit
-docker exec alice eiou update Bob credit 2000
+# Update credit limit for EUR
+docker exec alice eiou update Bob credit 2000 EUR
 
-# Update all at once
-docker exec alice eiou update Bob all NewName 0.2 1500
+# Update all at once for USD
+docker exec alice eiou update Bob all NewName 0.2 1500 USD
 ```
 
 ---

@@ -311,11 +311,14 @@ eiou viewcontact --json Bob
 
 ### update
 
-Update contact information.
+Update contact information. Fee and credit updates require a currency parameter to specify which currency's settings to modify. Updates are applied to both the `contacts` table and the `contact_currencies` table.
 
 **Syntax:**
 ```bash
-eiou update <address|name> <field> [values...]
+eiou update <address|name> name <name>
+eiou update <address|name> fee <value> <currency>
+eiou update <address|name> credit <value> <currency>
+eiou update <address|name> all <name> <fee> <credit> [currency]
 ```
 
 **Arguments:**
@@ -325,20 +328,21 @@ eiou update <address|name> <field> [values...]
 | `address\|name` | required | Contact's address or display name |
 | `field` | required | Field to update: `all`, `name`, `fee`, or `credit` |
 | `values` | varies | New value(s) for the specified field(s) |
+| `currency` | required for fee/credit | Currency code (e.g., USD, EUR). Optional for `all` (defaults to contact's current currency) |
 
 **Examples:**
 ```bash
 # Update contact name
 eiou update Bob name Robert
 
-# Update fee percentage
-eiou update Bob fee 1.5
+# Update fee percentage for USD
+eiou update Bob fee 1.5 USD
 
-# Update credit limit
-eiou update Bob credit 500
+# Update credit limit for EUR
+eiou update Bob credit 500 EUR
 
-# Update all fields at once
-eiou update Bob all NewName 2.0 1000
+# Update all fields at once for GBY
+eiou update Bob all NewName 2.0 1000 GBY
 ```
 
 ---

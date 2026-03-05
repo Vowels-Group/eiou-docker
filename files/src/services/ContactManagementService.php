@@ -1097,11 +1097,19 @@ class ContactManagementService implements ContactManagementServiceInterface
     {
         $output = $output ?? CliOutputManager::getInstance();
 
-        $address = $argv[2] ?? null;
-        $field = isset($argv[3]) ? strtolower($argv[3]) : null;
-        $value = $argv[4] ?? null;
-        $value2 = $argv[5] ?? null;
-        $value3 = $argv[6] ?? null;
+        // Filter out flags (--json, etc.) from positional args
+        $positional = [];
+        foreach ($argv as $i => $arg) {
+            if ($i < 2) { $positional[] = $arg; continue; }
+            if (strpos($arg, '--') === 0) { continue; }
+            $positional[] = $arg;
+        }
+        $address = $positional[2] ?? null;
+        $field = isset($positional[3]) ? strtolower($positional[3]) : null;
+        $value = $positional[4] ?? null;
+        $value2 = $positional[5] ?? null;
+        $value3 = $positional[6] ?? null;
+        $value4 = $positional[7] ?? null;
 
         // Validate address or name
         if (!$address) {
@@ -1177,13 +1185,27 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
 
-        // Validate values
-        if (!$value || ($field === 'all' && (!$value2 || !$value3))) {
+        // Validate values — currency is required for fee/credit, optional for all (defaults to contact's currency)
+        $insufficientParams = false;
+        if ($field === 'name' && !$value) {
+            $insufficientParams = true;
+        } elseif ($field === 'fee' && (!$value || !$value2)) {
+            $insufficientParams = true;
+        } elseif ($field === 'credit' && (!$value || !$value2)) {
+            $insufficientParams = true;
+        } elseif ($field === 'all' && (!$value || !$value2 || !$value3)) {
+            $insufficientParams = true;
+        }
+        if ($insufficientParams) {
+            $usages = [
+                'name' => 'update [address] name [name]',
+                'fee' => 'update [address] fee [value] [currency]',
+                'credit' => 'update [address] credit [value] [currency]',
+                'all' => 'update [address] all [name] [fee] [credit] [currency]',
+            ];
             $output->error("Insufficient parameters for update", ErrorCodes::MISSING_PARAMS, 400, [
                 'field' => $field,
-                'usage' => $field === 'all'
-                    ? 'update [address] all [name] [fee] [credit]'
-                    : "update [address] $field [value]"
+                'usage' => $usages[$field] ?? "update [address] $field [value]"
             ]);
             return;
         }
@@ -1206,28 +1228,63 @@ class ContactManagementService implements ContactManagementServiceInterface
         $updateFields = [];
         $updateData = ['address' => $address, 'field' => $field];
 
+        // Validate and resolve currency for fee/credit updates
+        $currency = null;
+        if ($field === 'fee' || $field === 'credit') {
+            $currency = strtoupper($value2);
+        } elseif ($field === 'all') {
+            $currency = $value4 ? strtoupper($value4) : ($contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
+        }
+        if ($currency !== null) {
+            $currencyValidation = $this->inputValidator->validateCurrency($currency);
+            if (!$currencyValidation['valid']) {
+                $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_FIELD, 400);
+                return;
+            }
+            $currency = $currencyValidation['value'];
+        }
+
         if ($field === 'name') {
             $updateFields['name'] = $value;
             $updateData['name'] = $value;
         } elseif ($field === 'fee') {
             $updateFields['fee_percent'] = $value * Constants::FEE_CONVERSION_FACTOR;
+            $updateFields['currency'] = $currency;
             $updateData['fee'] = $value;
+            $updateData['currency'] = $currency;
         } elseif ($field === 'credit') {
-            $updateFields['credit_limit'] = $value * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY];
-            $updateFields['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $updateFields['credit_limit'] = $value * Constants::getConversionFactor($currency);
+            $updateFields['currency'] = $currency;
             $updateData['credit'] = $value;
+            $updateData['currency'] = $currency;
         } elseif ($field === 'all') {
             $updateFields['name'] = $value;
             $updateFields['fee_percent'] = $value2 * Constants::FEE_CONVERSION_FACTOR;
-            $updateFields['credit_limit'] = $value3 * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY];
-            $updateFields['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $updateFields['credit_limit'] = $value3 * Constants::getConversionFactor($currency);
+            $updateFields['currency'] = $currency;
             $updateData['name'] = $value;
             $updateData['fee'] = $value2;
             $updateData['credit'] = $value3;
+            $updateData['currency'] = $currency;
         }
 
-        // Perform update
+        // Perform update on contacts table
         if ($this->contactRepository->updateContactFields($contact['pubkey'], $updateFields)) {
+            // Also propagate fee/credit changes to contact_currencies table
+            if ($this->contactCurrencyRepository !== null && (isset($updateFields['fee_percent']) || isset($updateFields['credit_limit']))) {
+                $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+                $currency = $updateFields['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $currencyFields = [];
+                if (isset($updateFields['fee_percent'])) {
+                    $currencyFields['fee_percent'] = (int) $updateFields['fee_percent'];
+                }
+                if (isset($updateFields['credit_limit'])) {
+                    $currencyFields['credit_limit'] = (int) $updateFields['credit_limit'];
+                }
+                if (!empty($currencyFields)) {
+                    $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, $currencyFields);
+                }
+            }
             $output->success("Contact updated successfully", $updateData);
         } else {
             $output->error("Failed to update contact", ErrorCodes::UPDATE_FAILED, 500, $updateData);

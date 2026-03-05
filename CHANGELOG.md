@@ -27,6 +27,10 @@ The project is currently in **ALPHA** status.
 - `getCreditLimit()` without direction parameter now returns `MAX(credit_limit)` across all direction rows for that contact+currency
 - Wallet information section now includes currencies from accepted contact relationships (not just those with balances/earnings)
 - Legacy single-`prevTxid` code removed from ping/pong protocol entirely
+- CLI `update` command now requires currency parameter for `fee` and `credit` fields (`eiou update Bob fee 1.5 USD`); optional for `all` (defaults to contact's current currency)
+- CLI `update` for fee/credit now propagates changes to `contact_currencies` table (not just `contacts`)
+- GUI contact settings tab: currency selector moved above fee/credit, populated from contact's accepted currencies; changing currency loads that currency's current fee/credit values
+- GUI `handleEditContact` updates `contact_currencies` directly for fee/credit per selected currency instead of only updating `contacts` table
 
 ### Fixed
 - Credit limit conversion: `handleAcceptCurrency` and `handleAcceptAllCurrencies` now properly convert fee and credit limit to minor units (cents) before storing — previously stored raw float values
