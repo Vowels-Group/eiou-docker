@@ -359,6 +359,7 @@ foreach ($pendingContacts as $pc) {
 
 foreach ($pendingUserContacts as $puc) {
     if (!empty($puc['pending_currencies']) && !isset($pendingContactHashes[$puc['pubkey_hash'] ?? ''])) {
+        $puc['is_existing_contact'] = true;
         $pendingContacts[] = $puc;
     }
 }
@@ -367,6 +368,7 @@ foreach ($pendingUserContacts as $puc) {
 // (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
 foreach ($acceptedContacts as $c) {
     if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
+        $c['is_existing_contact'] = true;
         $pendingContacts[] = $c;
     }
 }

@@ -643,6 +643,7 @@
 
                     <!-- Accept All button (when multiple currencies) -->
                     <?php if (count($pendingCurrencies) > 1): ?>
+                    <hr class="currency-separator-double">
                     <div class="mb-lg">
                         <button type="button" class="btn btn-success w-100 accept-all-btn" data-contact-index="<?php echo $index; ?>">
                             <i class="fas fa-check-double"></i> Accept All <?php echo count($pendingCurrencies); ?> Currencies

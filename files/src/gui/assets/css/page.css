@@ -3158,18 +3158,31 @@ html {
     margin-bottom: 1rem;
 }
 
+/* Multi-currency badge (contact cards) */
+.multi-currency-badge {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+
 .badge-pending-currency {
     background: #e8eaed;
     color: #5f6368;
-    font-size: 0.75rem;
-    font-weight: 500;
 }
 
 .badge-requested-currency {
     background: #e3f2fd;
     color: #1565c0;
-    font-size: 0.75rem;
-    font-weight: 500;
+}
+
+/* Pending contact addresses — prevent overflow on mobile */
+.pending-addresses .address-line .monospace {
+    word-break: break-all;
+    overflow-wrap: break-word;
+    min-width: 0;
 }
 
 .currency-form-row {
@@ -3186,12 +3199,22 @@ html {
     .currency-form-row {
         grid-template-columns: 1fr;
     }
+    .currency-accept-btn {
+        width: 100%;
+        height: auto;
+    }
 }
 
 hr.currency-separator {
     border: none;
     border-top: 1px solid rgba(0, 0, 0, 0.1);
     margin: 0.75rem 0;
+}
+
+hr.currency-separator-double {
+    border: none;
+    border-top: 3px double rgba(0, 0, 0, 0.2);
+    margin: 1rem 0;
 }
 
 .pending-contact-name-section {
