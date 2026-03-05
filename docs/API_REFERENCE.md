@@ -554,11 +554,16 @@ List all contacts.
                 "name": "Bob",
                 "pubkey_hash": "abc123...",
                 "status": "accepted",
-                "currency": "USD",
-                "fee_percent": 1.0,
-                "credit_limit": 100.00,
+                "currencies": [
+                    {
+                        "currency": "USD",
+                        "fee_percent": 1.0,
+                        "credit_limit": 100.00,
+                        "status": "accepted",
+                        "direction": "outgoing"
+                    }
+                ],
                 "my_available_credit": 95.00,
-                "their_available_credit": 100.00,
                 "addresses": {
                     "http": "http://bob.local:8080",
                     "https": null,
@@ -573,9 +578,8 @@ List all contacts.
 ```
 
 **Fields:**
+- `currencies`: Array of per-currency configurations with `currency`, `fee_percent`, `credit_limit`, `status` (`accepted`/`pending`), and `direction` (`incoming`/`outgoing`).
 - `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known. Stored per-currency in the `contact_credit` table.
-- `their_available_credit`: How much credit this contact can use through you (calculated per currency: credit_limit - balance). `null` if balance data unavailable.
-- `currency`, `fee_percent`, `credit_limit`: Legacy top-level fields from the `contacts` table. Per-currency details are in the `currencies` array (see `GET /api/v1/contacts/:address`).
 
 ---
 
@@ -649,9 +653,6 @@ Get all pending contact requests (incoming and outgoing).
                     "name": "Charlie",
                     "pubkey_hash": "def456...",
                     "status": "pending",
-                    "currency": "USD",
-                    "fee_percent": 1.0,
-                    "credit_limit": 100.00,
                     "addresses": {
                         "http": "http://charlie.local:8080"
                     },
@@ -697,11 +698,7 @@ Search contacts by name.
                 "addresses": {
                     "http": "http://bob.local:8080"
                 },
-                "fee_percent": 1.0,
-                "credit_limit": 100.00,
-                "my_available_credit": 85.50,
-                "their_available_credit": 114.50,
-                "currency": "USD"
+                "my_available_credit": 85.50
             }
         ],
         "count": 1
@@ -710,11 +707,8 @@ Search contacts by name.
 ```
 
 **Contact fields:**
-- `fee_percent`: Fee percentage for transactions through this contact
-- `credit_limit`: Credit limit set for this contact
 - `my_available_credit`: How much credit this contact extends to you (from pong, refreshed on ~5 min intervals). `null` if not yet received. Stored per-currency in `contact_credit`.
-- `their_available_credit`: How much credit you extend to this contact (calculated per currency: credit_limit - balance). `null` if no balance data.
-- `currency`: Legacy currency code from `contacts` table. Per-currency details available via `GET /api/v1/contacts/:address` `currencies` array.
+  Per-currency fee/credit details are available via `GET /api/v1/contacts` (with `currencies` array) or `GET /api/v1/contacts/:address`.
 
 ---
 
@@ -764,11 +758,7 @@ Get contact details by address or name.
             "name": "Bob",
             "pubkey_hash": "abc123...",
             "status": "accepted",
-            "currency": "USD",
-            "fee_percent": 1.0,
-            "credit_limit": 100.00,
             "my_available_credit": 95.00,
-            "their_available_credit": 100.00,
             "addresses": {
                 "http": "http://bob.local:8080",
                 "https": null,
@@ -782,10 +772,8 @@ Get contact details by address or name.
             "currencies": [
                 {
                     "currency": "USD",
-                    "fee": 1.0,
+                    "fee_percent": 1.0,
                     "credit_limit": 100.00,
-                    "my_available_credit": 95.00,
-                    "their_available_credit": 100.00,
                     "status": "accepted",
                     "direction": "outgoing"
                 }
@@ -798,9 +786,7 @@ Get contact details by address or name.
 
 **Fields:**
 - `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known. Stored per-currency in `contact_credit`.
-- `their_available_credit`: How much credit this contact can use through you (calculated per currency: credit_limit - balance). `null` if balance data unavailable.
-- `currencies`: Array of per-currency configurations. Each entry has `currency`, `fee`, `credit_limit`, `my_available_credit`, `their_available_credit`, `status` (`accepted`/`pending`), and `direction` (`incoming`/`outgoing` = who initiated the relationship).
-- Top-level `currency`, `fee_percent`, `credit_limit` are legacy fields from the `contacts` table; use the `currencies` array for per-currency data.
+- `currencies`: Array of per-currency configurations. Each entry has `currency`, `fee_percent`, `credit_limit`, `status` (`accepted`/`pending`), and `direction` (`incoming`/`outgoing` = who initiated the relationship).
 
 **Error Response (404):**
 

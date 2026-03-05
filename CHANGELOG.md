@@ -32,6 +32,13 @@ The project is currently in **ALPHA** status.
 - GUI contact settings tab: currency selector moved above fee/credit, populated from contact's accepted currencies; changing currency loads that currency's current fee/credit values
 - GUI `handleEditContact` updates `contact_currencies` directly for fee/credit per selected currency instead of only updating `contacts` table
 
+### Removed
+- Legacy `currency`, `fee_percent`, `credit_limit` columns from `contacts` table — fee/credit configuration is now exclusively in `contact_currencies` table
+- Dual-write pattern: services no longer write fee/credit/currency to `contacts` table; only `contact_currencies` is used
+- Single-value fee/credit/currency from CLI `get` and `search` output; replaced with per-currency display
+- Single-value `fee_percent`, `credit_limit`, `currency` from API GET endpoints (`/contacts`, `/contacts/search`, `/contacts/ping`); replaced with `currencies` array
+- Legacy `their_available_credit` single-value calculation from GUI; per-currency values in `currencies` array are used instead
+
 ### Fixed
 - Credit limit conversion: `handleAcceptCurrency` and `handleAcceptAllCurrencies` now properly convert fee and credit limit to minor units (cents) before storing — previously stored raw float values
 - "Their Available Credit" in contact modal now calculated per-currency as `credit_limit - balance` instead of showing "—"

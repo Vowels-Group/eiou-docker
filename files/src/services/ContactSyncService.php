@@ -579,17 +579,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
         elseif($contact['status'] === Constants::CONTACT_STATUS_PENDING){
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
-                $existingCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                // Check if user is adding a new currency to their pending request
+                $currencyAlreadyPending = $this->contactCurrencyRepository !== null
+                    && $this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing');
 
-                // Check if user is updating their pending request currency
-                if ($currency !== $existingCurrency) {
-                    // Update the pending contact's terms locally
-                    $this->contactRepository->updateContactFields($contact['pubkey'], [
-                        'currency' => $currency,
-                        'fee_percent' => $fee,
-                        'credit_limit' => $credit,
-                    ]);
-
+                if (!$currencyAlreadyPending) {
                     // Track the new outgoing currency request in contact_currencies
                     if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                         if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
@@ -732,13 +726,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
                 } else {
                     // Currency mismatch — don't accept contact, send new contact request with user's currency
-                    // Set the name/fee/credit so the contact appears in the contacts grid as "Pending Response"
+                    // Set the name so the contact appears in the contacts grid as "Pending Response"
                     // It will also appear in "Pending Contact Requests" section due to pending_currencies
                     $this->contactRepository->updateContactFields($contact['pubkey'], [
                         'name' => $name,
-                        'fee_percent' => $fee,
-                        'credit_limit' => $credit,
-                        'currency' => $currency,
                     ]);
 
                     // Store outgoing currency as pending
@@ -907,12 +898,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             return;
                         }
                     } else {
-                        // Currency mismatch — update contact info but keep pending
+                        // Currency mismatch — update contact name but keep pending
                         $this->contactRepository->updateContactFields($senderPublicKey, [
                             'name' => $name,
-                            'fee_percent' => $fee,
-                            'credit_limit' => $credit,
-                            'currency' => $currency,
                         ]);
 
                         // Store outgoing currency as pending

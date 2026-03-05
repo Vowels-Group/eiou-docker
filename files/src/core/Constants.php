@@ -49,7 +49,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 2;
+    const SCHEMA_VERSION = 3;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.

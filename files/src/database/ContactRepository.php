@@ -23,8 +23,7 @@ class ContactRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'contact_id', 'pubkey', 'pubkey_hash', 'name', 'status',
-        'online_status', 'valid_chain', 'currency', 'fee_percent',
-        'credit_limit', 'created_at', 'last_ping_at'
+        'online_status', 'valid_chain', 'created_at', 'last_ping_at'
     ];
 
     /**
@@ -63,9 +62,6 @@ class ContactRepository extends AbstractRepository {
         $data = [
             'name' => $name,
             'status' => 'accepted',
-            'fee_percent' => $fee,
-            'credit_limit' => $credit,
-            'currency' => $currency
         ];
 
         $affectedRows = $this->update($data, $this->primaryKey, $senderPublicKey);
@@ -85,9 +81,6 @@ class ContactRepository extends AbstractRepository {
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
             'name' => null,
             'status' => 'pending',
-            'fee_percent' => null,
-            'credit_limit' => null,
-            'currency' => null
         ];
         return $this->insert($data);
     }
@@ -519,7 +512,6 @@ class ContactRepository extends AbstractRepository {
     public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
-        // Try contact_currencies table first
         $query = "SELECT credit_limit FROM contact_currencies
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
@@ -531,18 +523,7 @@ class ContactRepository extends AbstractRepository {
             }
         }
 
-        // Fall back to contacts table
-        $query = "SELECT credit_limit
-                    FROM {$this->tableName}
-                    WHERE pubkey_hash = :pubkey_hash";
-        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['credit_limit'] ?? 0);
+        return 0;
     }
 
     /**
@@ -568,9 +549,6 @@ class ContactRepository extends AbstractRepository {
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPublicKey),
             'name' => $name,
             'status' => 'pending',
-            'fee_percent' => $fee,
-            'credit_limit' => $credit,
-            'currency' => $currency
         ];
 
         $result = $this->insert($data);
@@ -1157,8 +1135,8 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of contacts
      */
     public function searchContacts(?string $name = null): array {
-        $query = "SELECT a.*, c.name, c.fee_percent, c.credit_limit, c.currency, c.status 
-                    FROM {$this->tableName} c 
+        $query = "SELECT a.*, c.name, c.status
+                    FROM {$this->tableName} c
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash"; 
 
@@ -1211,9 +1189,6 @@ class ContactRepository extends AbstractRepository {
         $data = [
             'name' => $name,
             'status' => 'accepted',
-            'fee_percent' => $fee,
-            'credit_limit' => $credit,
-            'currency' => $currency
         ];
 
         $affectedRows = $this->update($data, $this->primaryKey, $pubkey);

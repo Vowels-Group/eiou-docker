@@ -68,9 +68,6 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'test-pubkey-123',
             'name' => 'Test Contact',
-            'fee_percent' => 100,
-            'credit_limit' => 10000,
-            'currency' => 'USD',
             'contact_id' => 'contact-1',
             'online_status' => 'online',
             'valid_chain' => true,
@@ -98,8 +95,8 @@ class BalanceServiceTest extends TestCase
             ->with(['http://test.example.com', 'https://test.example.com'], 5)
             ->willReturn([]);
 
-        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
-        $this->currencyUtility->expects($this->exactly(4))
+        // 2 calls: balance, balances_by_currency[USD]
+        $this->currencyUtility->expects($this->exactly(2))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -111,9 +108,6 @@ class BalanceServiceTest extends TestCase
         $this->assertEquals('Test Contact', $result[0]['name']);
         $this->assertEquals(50.0, $result[0]['balance']);
         $this->assertEquals(['USD' => 50.0], $result[0]['balances_by_currency']);
-        $this->assertEquals(1.0, $result[0]['fee']);
-        $this->assertEquals(100.0, $result[0]['credit_limit']);
-        $this->assertEquals('USD', $result[0]['currency']);
         $this->assertEquals('test-pubkey-123', $result[0]['pubkey']);
         $this->assertEquals('contact-1', $result[0]['contact_id']);
         $this->assertEquals('online', $result[0]['online_status']);
@@ -130,9 +124,6 @@ class BalanceServiceTest extends TestCase
             [
                 'pubkey' => 'pubkey-1',
                 'name' => 'Contact One',
-                'fee_percent' => 100,
-                'credit_limit' => 5000,
-                'currency' => 'USD',
                 'contact_id' => 'c1',
                 'online_status' => 'online',
                 'valid_chain' => true,
@@ -143,9 +134,6 @@ class BalanceServiceTest extends TestCase
             [
                 'pubkey' => 'pubkey-2',
                 'name' => 'Contact Two',
-                'fee_percent' => 200,
-                'credit_limit' => 10000,
-                'currency' => 'USD',
                 'contact_id' => 'c2',
                 'online_status' => 'offline',
                 'valid_chain' => false,
@@ -175,8 +163,8 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        // 8 calls: 2 contacts x (balance + balances_by_currency[USD] + fee + credit_limit)
-        $this->currencyUtility->expects($this->exactly(8))
+        // 4 calls: 2 contacts x (balance + balances_by_currency[USD])
+        $this->currencyUtility->expects($this->exactly(4))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -207,9 +195,6 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'zero-balance-pubkey',
             'name' => 'Zero Balance Contact',
-            'fee_percent' => 0,
-            'credit_limit' => 0,
-            'currency' => 'USD',
             'contact_id' => 'zero-contact',
             'online_status' => 'unknown',
             'valid_chain' => null,
@@ -234,7 +219,7 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        // With zero values, convertMinorToMajor should not be called for balance/fee/credit_limit
+        // With zero values, convertMinorToMajor should not be called for balance
         $this->currencyUtility->expects($this->never())
             ->method('convertMinorToMajor');
 
@@ -242,8 +227,6 @@ class BalanceServiceTest extends TestCase
 
         $this->assertCount(1, $result);
         $this->assertEquals(0, $result[0]['balance']);
-        $this->assertEquals(0, $result[0]['fee']);
-        $this->assertEquals(0, $result[0]['credit_limit']);
     }
 
     /**
@@ -254,9 +237,6 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'missing-balance-pubkey',
             'name' => 'Missing Balance Contact',
-            'fee_percent' => 50,
-            'credit_limit' => 2500,
-            'currency' => 'USD',
             'contact_id' => 'missing-c',
             'online_status' => 'online',
             'valid_chain' => true,
@@ -282,11 +262,9 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        $this->currencyUtility->expects($this->exactly(2))
-            ->method('convertMinorToMajor')
-            ->willReturnCallback(function ($minorAmount) {
-                return $minorAmount / 100;
-            });
+        // No convertMinorToMajor calls since balance is 0 (missing pubkey)
+        $this->currencyUtility->expects($this->never())
+            ->method('convertMinorToMajor');
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
 
@@ -302,9 +280,6 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'limit-pubkey',
             'name' => 'Limit Contact',
-            'fee_percent' => 100,
-            'credit_limit' => 5000,
-            'currency' => 'USD',
             'contact_id' => 'limit-c',
             'online_status' => 'online',
             'valid_chain' => true,
@@ -331,8 +306,8 @@ class BalanceServiceTest extends TestCase
             ->with(['http://limit.example.com'], 10)
             ->willReturn([]);
 
-        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
-        $this->currencyUtility->expects($this->exactly(4))
+        // 2 calls: balance, balances_by_currency[USD]
+        $this->currencyUtility->expects($this->exactly(2))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -351,9 +326,6 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'tx-pubkey',
             'name' => 'Transaction Contact',
-            'fee_percent' => 100,
-            'credit_limit' => 5000,
-            'currency' => 'USD',
             'contact_id' => 'tx-c',
             'online_status' => 'online',
             'valid_chain' => true,
@@ -383,8 +355,8 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn($transactions);
 
-        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
-        $this->currencyUtility->expects($this->exactly(4))
+        // 2 calls: balance, balances_by_currency[USD]
+        $this->currencyUtility->expects($this->exactly(2))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;
@@ -406,9 +378,6 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'minimal-pubkey',
             'name' => 'Minimal Contact',
-            'fee_percent' => 100,
-            'credit_limit' => 5000,
-            'currency' => 'USD',
             'http' => 'http://minimal.example.com',
             'https' => '',
             'tor' => ''
@@ -431,8 +400,8 @@ class BalanceServiceTest extends TestCase
             ->method('getTransactionsWithContact')
             ->willReturn([]);
 
-        // 4 calls: balance, balances_by_currency[USD], fee, credit_limit
-        $this->currencyUtility->expects($this->exactly(4))
+        // 2 calls: balance, balances_by_currency[USD]
+        $this->currencyUtility->expects($this->exactly(2))
             ->method('convertMinorToMajor')
             ->willReturnCallback(function ($minorAmount) {
                 return $minorAmount / 100;

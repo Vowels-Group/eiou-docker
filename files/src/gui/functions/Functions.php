@@ -588,17 +588,8 @@ foreach ($contactArraysForCredit as &$contacts) {
         $hash = $contact['pubkey_hash'] ?? '';
         // My available credit with them (from pong, stored in contact_credit)
         $contact['my_available_credit'] = $availableCreditByContact[$hash] ?? null;
-        // Their available credit with me: credit_limit - balance
-        // Uses the same balance data as the displayed contact balance (from transactions table)
-        // Formula: credit_limit - balance, where balance = received - sent
-        // When balance is negative (I owe them), their credit increases
-        // When balance is positive (they owe me), their credit decreases
+        // Their available credit is now computed per-currency in the currencies array below
         $contact['their_available_credit'] = null;
-        $balanceValue = floatval($contact['balance'] ?? 0);
-        $creditLimitValue = floatval($contact['credit_limit'] ?? 0);
-        if ($creditLimitValue > 0 || $balanceValue != 0) {
-            $contact['their_available_credit'] = round($creditLimitValue - $balanceValue, 2);
-        }
 
         // Build multi-currency data (direction-aware)
         $currencyConfigs = $contactCurrenciesByHash[$hash] ?? [];

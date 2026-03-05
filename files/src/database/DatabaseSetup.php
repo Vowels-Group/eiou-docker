@@ -239,7 +239,9 @@ function runColumnMigrations(PDO $pdo): array {
     $columnsToAdd = [];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
-    $columnsToDrop = [];
+    $columnsToDrop = [
+        'contacts' => ['currency', 'fee_percent', 'credit_limit'],
+    ];
 
     // Add new columns
     foreach ($columnsToAdd as $tableName => $columns) {

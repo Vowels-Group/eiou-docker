@@ -63,8 +63,6 @@ class ContactDataBuilder
             'address' => $primaryAddress ?? '',
             'name' => $contact['name'] ?? ($status === 'blocked' ? '-' : ''),
             'fee' => $contact['fee'] ?? 0,
-            'credit_limit' => $contact['credit_limit'] ?? 0,
-            'currency' => $contact['currency'] ?? 'USD',
             'status' => $status,
             'pubkey' => $contact['pubkey'] ?? '',
             'balance' => $contact['balance'] ?? 0,

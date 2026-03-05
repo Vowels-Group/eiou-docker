@@ -28,9 +28,6 @@ function getContactsTableSchema() {
             'unknown'   /* Ping not performed (default or feature disabled) */
         ) DEFAULT 'unknown',
         valid_chain TINYINT(1) DEFAULT NULL, /* true/false if chain sync was validated, NULL if not checked */
-        currency VARCHAR(10),
-        fee_percent INT,
-        credit_limit INT,
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         last_ping_at TIMESTAMP(6) NULL, /* When the contact was last pinged */
         INDEX idx_contacts_contact_id (contact_id),

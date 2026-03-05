@@ -97,9 +97,9 @@ class BalanceService implements BalanceServiceInterface
         foreach ($contacts as $contact) {
             // Get pre-calculated per-currency balances from batch query result
             $contactBalances = $balances[$contact['pubkey']] ?? [];
-            $primaryCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
 
-            // Primary balance uses the contact's default currency
+            // Primary balance uses the first available currency from balances, or default
+            $primaryCurrency = !empty($contactBalances) ? array_key_first($contactBalances) : Constants::TRANSACTION_DEFAULT_CURRENCY;
             $balance = $contactBalances[$primaryCurrency] ?? 0;
 
             // Build balances_by_currency (converted to major units)
@@ -107,9 +107,6 @@ class BalanceService implements BalanceServiceInterface
             foreach ($contactBalances as $cur => $bal) {
                 $balancesByCurrency[$cur] = $bal ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
             }
-
-            $feePercent = $contact['fee_percent'];
-            $creditLimit = $contact['credit_limit'];
 
             // Build addresses associative array
             $addressesAssociative = [];
@@ -132,9 +129,6 @@ class BalanceService implements BalanceServiceInterface
                 'name' => $contact['name'],
                 'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
                 'balances_by_currency' => $balancesByCurrency,
-                'fee' => $feePercent ? $this->currencyUtility->convertMinorToMajor($feePercent) : $feePercent,
-                'credit_limit' => $creditLimit ? $this->currencyUtility->convertMinorToMajor($creditLimit) : $creditLimit,
-                'currency' => $contact['currency'],
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
                 'transactions' => $transactions,
