@@ -164,15 +164,7 @@ function runMigrations(PDO $pdo): array {
 
     // List of migration tables to create (added after initial release)
     // Use fully-qualified names since dynamic calls don't use namespace resolution
-    $migrations = [
-        'chain_drop_proposals' => __NAMESPACE__ . '\\getChainDropProposalsTableSchema',
-        'rp2p_candidates' => __NAMESPACE__ . '\\getRp2pCandidatesTableSchema',
-        'p2p_senders' => __NAMESPACE__ . '\\getP2pSendersTableSchema',
-        'p2p_relayed_contacts' => __NAMESPACE__ . '\\getP2pRelayedContactsTableSchema',
-        'contact_credit' => __NAMESPACE__ . '\\getContactCreditTableSchema',
-        'contact_currencies' => __NAMESPACE__ . '\\getContactCurrenciesTableSchema',
-        'api_nonces' => __NAMESPACE__ . '\\getApiNoncesTableSchema',
-    ];
+    $migrations = [];
 
     foreach ($migrations as $tableName => $schemaFunction) {
         try {
@@ -213,15 +205,7 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [
-        'p2p' => [
-            'hop_wait' => 'INT DEFAULT 0 AFTER `fast`',
-        ],
-        'contact_currencies' => [
-            'status' => "ENUM('accepted', 'pending', 'blocked') DEFAULT 'pending' AFTER `credit_limit`",
-            'direction' => "ENUM('incoming', 'outgoing') DEFAULT 'incoming' AFTER `status`",
-        ],
-    ];
+    $columnsToAdd = [];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [];
@@ -276,14 +260,7 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Update ENUM columns to add new values
-    $enumUpdates = [
-        'contacts' => [
-            'online_status' => "ENUM('online','partial','offline','unknown') DEFAULT 'unknown'",
-        ],
-        'contact_currencies' => [
-            'status' => "ENUM('accepted','pending','blocked') DEFAULT 'pending'",
-        ],
-    ];
+    $enumUpdates = [];
 
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
@@ -323,58 +300,6 @@ function runColumnMigrations(PDO $pdo): array {
         }
     }
 
-    // Migrate contact_credit UNIQUE constraint from (pubkey_hash) to (pubkey_hash, currency)
-    try {
-        $stmt = $pdo->query("SHOW INDEX FROM `contact_credit` WHERE Key_name = 'pubkey_hash'");
-        if ($stmt && $stmt->rowCount() > 0) {
-            $pdo->exec("ALTER TABLE `contact_credit` DROP INDEX `pubkey_hash`");
-            $results['contact_credit.unique_migration'] = 'dropped_old_unique';
-        } else {
-            $results['contact_credit.unique_migration'] = 'old_unique_already_dropped';
-        }
-    } catch (PDOException $e) {
-        $results['contact_credit.unique_migration'] = 'error: ' . $e->getMessage();
-    }
-
-    // Add composite unique index on contact_credit if not exists
-    try {
-        $stmt = $pdo->query("SHOW INDEX FROM `contact_credit` WHERE Key_name = 'idx_contact_credit_hash_currency'");
-        if ($stmt && $stmt->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `contact_credit` ADD UNIQUE INDEX `idx_contact_credit_hash_currency` (`pubkey_hash`, `currency`)");
-            $results['contact_credit.composite_unique'] = 'created';
-        } else {
-            $results['contact_credit.composite_unique'] = 'exists';
-        }
-    } catch (PDOException $e) {
-        $results['contact_credit.composite_unique'] = 'error: ' . $e->getMessage();
-    }
-
-
-    // Migrate contact_currencies UNIQUE constraint from (pubkey_hash, currency) to (pubkey_hash, currency, direction)
-    try {
-        $stmt = $pdo->query("SHOW INDEX FROM `contact_currencies` WHERE Key_name = 'idx_cc_hash_currency'");
-        if ($stmt && $stmt->rowCount() > 0) {
-            $pdo->exec("ALTER TABLE `contact_currencies` DROP INDEX `idx_cc_hash_currency`");
-            $results['contact_currencies.unique_migration'] = 'dropped_old_unique';
-        } else {
-            $results['contact_currencies.unique_migration'] = 'old_unique_already_dropped';
-        }
-    } catch (PDOException $e) {
-        $results['contact_currencies.unique_migration'] = 'error: ' . $e->getMessage();
-    }
-
-    // Add composite unique index on contact_currencies with direction
-    try {
-        $stmt = $pdo->query("SHOW INDEX FROM `contact_currencies` WHERE Key_name = 'idx_cc_hash_currency_dir'");
-        if ($stmt && $stmt->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE `contact_currencies` ADD UNIQUE INDEX `idx_cc_hash_currency_dir` (`pubkey_hash`, `currency`, `direction`)");
-            $results['contact_currencies.composite_unique_dir'] = 'created';
-        } else {
-            $results['contact_currencies.composite_unique_dir'] = 'exists';
-        }
-    } catch (PDOException $e) {
-        $results['contact_currencies.composite_unique_dir'] = 'error: ' . $e->getMessage();
-    }
 
     // Add missing indexes
     $indexesToAdd = [];
