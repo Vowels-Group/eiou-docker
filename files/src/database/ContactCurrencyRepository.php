@@ -169,12 +169,14 @@ class ContactCurrencyRepository extends AbstractRepository {
             ':currency' => $currency
         ];
 
-        $query = "SELECT credit_limit FROM {$this->tableName}
-                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
-
         if ($direction !== null) {
-            $query .= " AND direction = :direction";
+            $query = "SELECT credit_limit FROM {$this->tableName}
+                      WHERE pubkey_hash = :pubkey_hash AND currency = :currency AND direction = :direction";
             $params[':direction'] = $direction;
+        } else {
+            // When no direction specified, return the highest credit limit across directions
+            $query = "SELECT MAX(credit_limit) as credit_limit FROM {$this->tableName}
+                      WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
         }
 
         $stmt = $this->execute($query, $params);

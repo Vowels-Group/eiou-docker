@@ -606,15 +606,19 @@ foreach ($contactArraysForCredit as &$contacts) {
         $acceptedCurrencies = [];
         $pendingIncoming = [];
         $pendingOutgoing = [];
+        $contactBalancesByCurrency = $contact['balances_by_currency'] ?? [];
         foreach ($currencyConfigs as $cc) {
             $cur = $cc['currency'];
             $ccStatus = $cc['status'] ?? 'accepted';
             $ccDirection = $cc['direction'] ?? 'outgoing';
+            $creditLimitMajor = ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur];
+            $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
             $entry = [
                 'currency' => $cur,
                 'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
-                'credit_limit' => ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur],
+                'credit_limit' => $creditLimitMajor,
                 'my_available_credit' => $allCredits[$cur] ?? null,
+                'their_available_credit' => ($creditLimitMajor > 0 || $balanceForCur != 0) ? round($creditLimitMajor - $balanceForCur, 2) : null,
                 'status' => $ccStatus,
                 'direction' => $ccDirection,
             ];

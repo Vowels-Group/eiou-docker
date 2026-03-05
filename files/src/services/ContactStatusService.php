@@ -383,10 +383,10 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
                     $balance = $sentBalance - $receivedBalance;
 
-                    // Use incoming direction: this is the credit limit we set for the pinging contact
+                    // Get the credit limit we set for this contact in this currency
                     $creditLimit = 0;
                     if ($this->contactCurrencyRepository !== null) {
-                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur, 'incoming');
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur);
                     }
                     $availableCreditByCurrency[$cur] = $balance + $creditLimit;
                 }
