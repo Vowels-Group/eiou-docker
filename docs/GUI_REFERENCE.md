@@ -158,6 +158,8 @@ Handles all contact-related operations.
 }
 ```
 
+Internally, the ping/pong protocol exchanges per-currency data: `prevTxidsByCurrency` (chain heads per currency), `chainStatusByCurrency` (per-currency chain validity), and `availableCreditByCurrency` (per-currency available credit). The AJAX response aggregates chain validity into a single `chain_valid` boolean. Per-currency available credit is stored in the `contact_credit` table and displayed in the contact modal.
+
 ---
 
 ### TransactionController
@@ -324,13 +326,14 @@ All three dashboard cards display per-currency rows. When a card has no data for
 | address_type | select | Address type for selected contact |
 | manual_recipient | text | Direct address entry (P2P) |
 | amount | number | Transaction amount |
-| currency | select | Currency code |
+| currency | select | Currency code (dynamically populated from user's allowed currencies; filtered to contact's accepted currencies when a contact is selected) |
 | description | text | Optional memo |
 | best_fee | checkbox | **[Experimental]** Use best-fee routing: collects all route responses and selects the lowest fee |
 
 **Features:**
 - P2P routing information alert
 - Dynamic address type selector
+- Dynamic currency dropdown: shows all allowed currencies when no contact selected, filtered to contact's accepted currencies when a contact is selected
 - Transaction type indicator
 - Best-fee routing checkbox with experimental warning label
 
@@ -344,7 +347,7 @@ All three dashboard cards display per-currency rows. When a card has no data for
 | name | text | Display name |
 | credit | number | Credit limit (default from settings) |
 | fee | number | Fee percentage (default from settings) |
-| currency | select | Currency code |
+| currency | select | Currency code (dynamically populated from user's allowed currencies) |
 
 ---
 
@@ -366,7 +369,7 @@ All three dashboard cards display per-currency rows. When a card has no data for
 
 | Tab | Contents |
 |-----|----------|
-| Info | Balance, credit limit, fee, your/their available credit, online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
+| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
 | Transactions | Recent transactions with this contact |
 | Settings | Edit form, block/unblock/delete buttons |
 

@@ -12,6 +12,27 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
+- Per-currency available credit exchange: pong returns `availableCreditByCurrency` map; each currency's available credit stored independently in `contact_credit` table (UNIQUE on `pubkey_hash, currency`)
+- GUI currency slider: contact modal uses horizontal pill-style currency slider with left/right arrows to switch between currencies, replacing the dropdown selector
+- Dynamic currency dropdowns: Send eIOU form populates currencies from user's allowed currencies and filters to contact's accepted currencies when a contact is selected; Add Contact form also uses allowed currencies
+- Per-currency "Your Available Credit" and "Their Available Credit" display in contact modal per-currency entries
+- `TransactionRepository::getPreviousTxidsByCurrency()` for retrieving per-currency chain heads
+- `ContactCurrencyRepository::getDistinctAcceptedCurrencies()` for wallet info currency display
+
+### Changed
+- `ContactStatusPayload::build()` sends `prevTxidsByCurrency` instead of single `prevTxid`
+- `ContactStatusPayload::buildResponse()` takes `chainStatusByCurrency` and `availableCreditByCurrency` maps instead of single `chainValid`/`availableCredit`/`currency` values
+- `getCreditLimit()` without direction parameter now returns `MAX(credit_limit)` across all direction rows for that contact+currency
+- Wallet information section now includes currencies from accepted contact relationships (not just those with balances/earnings)
+- Legacy single-`prevTxid` code removed from ping/pong protocol entirely
+
+### Fixed
+- Credit limit conversion: `handleAcceptCurrency` and `handleAcceptAllCurrencies` now properly convert fee and credit limit to minor units (cents) before storing — previously stored raw float values
+- "Their Available Credit" in contact modal now calculated per-currency as `credit_limit - balance` instead of showing "—"
+- "Your Available Credit" in pong calculation no longer incorrectly filters by direction — credit limit lookup uses max across directions
+
 ### Fixed
 - Per-currency independent contact requests: incoming currency from P2P contact requests is now stored in `contact_currencies` with `status='pending'` instead of being lost (root cause: `addPendingContact()` stores `currency: null`)
 - Accept contact now validates against pending currencies from `contact_currencies` instead of the always-null `contacts.currency` field

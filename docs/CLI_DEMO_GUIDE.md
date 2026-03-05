@@ -821,7 +821,7 @@ Response Time: 45ms
 Chain Valid:   Yes
 ```
 
-Ping also exchanges available credit information with the contact in the background. After a ping, `viewcontact` will show the latest available credit values.
+Ping also exchanges per-currency available credit and chain validity with the contact. After a ping, `viewcontact` will show the latest per-currency available credit values (stored in `contact_credit` table).
 
 ---
 

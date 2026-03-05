@@ -40,7 +40,7 @@ All requests require HMAC-SHA256 authentication:
 | `POST` | `/api/v1/contacts` | `contacts:write` | Add new contact |
 | `GET` | `/api/v1/contacts/pending` | `contacts:read` | Get pending requests |
 | `GET` | `/api/v1/contacts/search` | `contacts:read` | Search contacts by name |
-| `POST` | `/api/v1/contacts/ping/:address` | `contacts:read` | Ping contact status + exchange credit |
+| `POST` | `/api/v1/contacts/ping/:address` | `contacts:read` | Ping contact status + exchange per-currency credit |
 | `GET` | `/api/v1/contacts/:address` | `contacts:read` | Get contact details |
 | `PUT` | `/api/v1/contacts/:address` | `contacts:write` | Update contact |
 | `DELETE` | `/api/v1/contacts/:address` | `contacts:write` | Delete contact |

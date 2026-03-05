@@ -949,8 +949,8 @@ chains. Operates in 5-minute cycles.
 
 - Pings one contact per iteration to spread load
 - Updates contact online status (online/partial/offline/unknown)
-- Validates transaction chain integrity (prev_txid matching)
-- Triggers sync if chains don't match
+- Validates per-currency transaction chain integrity (`prevTxidsByCurrency` maps)
+- Triggers sync if any currency's chain heads don't match
 - Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
@@ -1063,8 +1063,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
 | `p2p_relayed_contacts` | Contacts that returned `already_relayed` during P2P broadcast (used by two-phase relay selection in best-fee mode) |
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
-| `contact_credit` | Per-contact available credit (updated on each successful ping) |
-| `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing`) |
+| `contact_credit` | Per-contact, per-currency available credit received from pong (UNIQUE on `pubkey_hash, currency`) |
+| `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing` = who initiated the relationship) |
 
 ### Repository Pattern
 
@@ -1939,8 +1939,10 @@ the `ContactStatusProcessor`: `online`, `partial`, `offline`, or `unknown` (defa
 The `partial` status indicates the node is reachable but has degraded message processors
 (some of P2P, Transaction, or Cleanup processors are not running). The pong response
 includes `processorsRunning` and `processorsTotal` fields for remote nodes to determine
-partial vs online status. The processor pings one contact per cycle, validates chain
-integrity, and triggers sync if chains don't match.
+partial vs online status, `chainStatusByCurrency` for per-currency chain validation results,
+and `availableCreditByCurrency` for per-currency available credit. The processor pings one
+contact per cycle, validates chain integrity per currency, and triggers sync if any
+currency's chain heads don't match.
 
 **Contact Request Flow:**
 
@@ -2156,8 +2158,8 @@ API (8080). It uses an MVC-like structure with controllers, helpers, and HTML te
 │       ├── quickActions        # Action buttons (Send, Add Contact, etc.)
 │       ├── walletInformation   # Balance, earnings, available credit cards
 │       ├── contactSection      # Contact cards with scroll navigation
-│       ├── contactForm         # Contact modal (add/accept/view)
-│       ├── eiouForm            # Send eIOU form with P2P options
+│       ├── contactForm         # Contact modal (add/accept/view) with currency slider pills
+│       ├── eiouForm            # Send eIOU form with dynamic currency list and P2P options
 │       ├── transactionHistory  # Recent transactions list
 │       ├── settingsSection     # Node settings panel
 │       ├── notifications       # Toast notification container
@@ -2255,7 +2257,7 @@ BasePayload (abstract)
     |
     +-- TransactionPayload    # Standard send transactions
     +-- ContactPayload        # Contact request/acceptance messages
-    +-- ContactStatusPayload  # Ping/pong status messages
+    +-- ContactStatusPayload  # Ping/pong status messages (per-currency chain validation and credit exchange)
     +-- P2pPayload            # P2P routing request messages
     +-- Rp2pPayload           # Return P2P response messages
     +-- MessagePayload        # General inter-node messages (sync, chain drop)

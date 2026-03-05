@@ -573,8 +573,9 @@ List all contacts.
 ```
 
 **Fields:**
-- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
-- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known. Stored per-currency in the `contact_credit` table.
+- `their_available_credit`: How much credit this contact can use through you (calculated per currency: credit_limit - balance). `null` if balance data unavailable.
+- `currency`, `fee_percent`, `credit_limit`: Legacy top-level fields from the `contacts` table. Per-currency details are in the `currencies` array (see `GET /api/v1/contacts/:address`).
 
 ---
 
@@ -711,9 +712,9 @@ Search contacts by name.
 **Contact fields:**
 - `fee_percent`: Fee percentage for transactions through this contact
 - `credit_limit`: Credit limit set for this contact
-- `my_available_credit`: How much credit this contact extends to you (from pong, refreshed on ~5 min intervals). `null` if not yet received.
-- `their_available_credit`: How much credit you extend to this contact (calculated from balance + credit limit). `null` if no balance data.
-- `currency`: Currency code for this contact relationship
+- `my_available_credit`: How much credit this contact extends to you (from pong, refreshed on ~5 min intervals). `null` if not yet received. Stored per-currency in `contact_credit`.
+- `their_available_credit`: How much credit you extend to this contact (calculated per currency: credit_limit - balance). `null` if no balance data.
+- `currency`: Legacy currency code from `contacts` table. Per-currency details available via `GET /api/v1/contacts/:address` `currencies` array.
 
 ---
 
@@ -743,7 +744,7 @@ Ping a contact to check online status.
 }
 ```
 
-**Note:** Ping also exchanges available credit information with the contact in the background. The `my_available_credit` field on subsequent contact queries will reflect the latest value received from this ping.
+**Note:** Ping exchanges per-currency data with the contact: `prevTxidsByCurrency` (chain heads), `chainStatusByCurrency` (per-currency chain validity), and `availableCreditByCurrency` (per-currency available credit). The per-currency available credit is stored in the `contact_credit` table and reflected in the `my_available_credit` field on subsequent contact queries.
 
 ---
 
@@ -778,6 +779,17 @@ Get contact details by address or name.
                 "sent": 50.00,
                 "net": 50.00
             },
+            "currencies": [
+                {
+                    "currency": "USD",
+                    "fee": 1.0,
+                    "credit_limit": 100.00,
+                    "my_available_credit": 95.00,
+                    "their_available_credit": 100.00,
+                    "status": "accepted",
+                    "direction": "outgoing"
+                }
+            ],
             "created_at": "2026-01-01T00:00:00Z"
         }
     }
@@ -785,8 +797,10 @@ Get contact details by address or name.
 ```
 
 **Fields:**
-- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
-- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known. Stored per-currency in `contact_credit`.
+- `their_available_credit`: How much credit this contact can use through you (calculated per currency: credit_limit - balance). `null` if balance data unavailable.
+- `currencies`: Array of per-currency configurations. Each entry has `currency`, `fee`, `credit_limit`, `my_available_credit`, `their_available_credit`, `status` (`accepted`/`pending`), and `direction` (`incoming`/`outgoing` = who initiated the relationship).
+- Top-level `currency`, `fee_percent`, `credit_limit` are legacy fields from the `contacts` table; use the `currencies` array for per-currency data.
 
 **Error Response (404):**
 
