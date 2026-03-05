@@ -621,31 +621,32 @@ class ContactController
      */
     public function handleAcceptCurrency(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        $currency = strtoupper(Security::sanitizeInput($_POST['currency'] ?? ''));
+        $fee = Security::sanitizeInput($_POST['fee'] ?? '');
+        $credit = Security::sanitizeInput($_POST['credit'] ?? '');
+
+        if (empty($pubkeyHash) || empty($currency) || $fee === '' || $credit === '') {
+            MessageHelper::redirectMessage('All fields are required to accept a currency.', 'error');
+            return;
+        }
+
+        $feeValidation = InputValidator::validateFeePercent($fee);
+        if (!$feeValidation['valid']) {
+            MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
+            return;
+        }
+
+        $creditValidation = InputValidator::validateAmount($credit, $currency);
+        if (!$creditValidation['valid']) {
+            MessageHelper::redirectMessage('Invalid credit: ' . $creditValidation['error'], 'error');
+            return;
+        }
+
         try {
-            $this->session->verifyCSRFToken();
-
-            $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
-            $currency = strtoupper(Security::sanitizeInput($_POST['currency'] ?? ''));
-            $fee = Security::sanitizeInput($_POST['fee'] ?? '');
-            $credit = Security::sanitizeInput($_POST['credit'] ?? '');
-
-            if (empty($pubkeyHash) || empty($currency) || $fee === '' || $credit === '') {
-                $this->session->setFlashMessage('error', 'All fields are required to accept a currency.');
-                return;
-            }
-
-            $feeValidation = InputValidator::validateFeePercent($fee);
-            if (!$feeValidation['valid']) {
-                $this->session->setFlashMessage('error', 'Invalid fee: ' . $feeValidation['error']);
-                return;
-            }
-
-            $creditValidation = InputValidator::validateAmount($credit, $currency);
-            if (!$creditValidation['valid']) {
-                $this->session->setFlashMessage('error', 'Invalid credit: ' . $creditValidation['error']);
-                return;
-            }
-
             $app = Application::getInstance();
             $serviceContainer = $app->getServiceContainer();
             $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
@@ -682,10 +683,10 @@ class ContactController
             $contactSyncService = $serviceContainer->getContactSyncService();
             $contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
 
-            $this->session->setFlashMessage('success', "Currency {$currency} accepted.");
+            MessageHelper::redirectMessage("Currency {$currency} accepted.", 'success');
         } catch (\Exception $e) {
             Logger::getInstance()->logException($e);
-            $this->session->setFlashMessage('error', 'An unexpected error occurred.');
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
         }
     }
 

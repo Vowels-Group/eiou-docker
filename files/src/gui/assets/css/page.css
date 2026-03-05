@@ -2239,6 +2239,7 @@ html {
     justify-content: center;
     width: 32px;
     height: 32px;
+    min-width: 32px;
     border-radius: 50%;
     cursor: help;
     transition: transform 0.2s ease;
@@ -3187,7 +3188,6 @@ html {
 
 .currency-form-row {
     grid-template-columns: 1fr 1fr auto;
-    align-items: end;
 }
 
 .currency-accept-btn {
@@ -3195,9 +3195,16 @@ html {
     white-space: nowrap;
 }
 
+.currency-accept-spacer {
+    visibility: hidden;
+}
+
 @media (max-width: 576px) {
     .currency-form-row {
         grid-template-columns: 1fr;
+    }
+    .currency-accept-spacer {
+        display: none;
     }
     .currency-accept-btn {
         width: 100%;

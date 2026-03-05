@@ -632,7 +632,8 @@
                                 <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit:</label>
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
-                            <div class="form-group d-flex align-items-end">
+                            <div class="form-group">
+                                <label class="currency-accept-spacer">&nbsp;</label>
                                 <button type="submit" class="btn btn-success btn-compact currency-accept-btn">
                                     <i class="fas fa-check"></i> Accept
                                 </button>
