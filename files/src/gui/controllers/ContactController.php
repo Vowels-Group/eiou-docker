@@ -651,10 +651,14 @@ class ContactController
             $serviceContainer = $app->services;
             $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
 
+            // Convert to minor units for storage
+            $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
+            $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+
             // Update the pending currency with user's fee/credit and set status to accepted
             $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
-                'fee_percent' => $feeValidation['value'],
-                'credit_limit' => $creditValidation['value'],
+                'fee_percent' => $feeMinor,
+                'credit_limit' => $creditMinor,
                 'status' => 'accepted'
             ], 'incoming');
 
@@ -738,9 +742,13 @@ class ContactController
                     continue;
                 }
 
+                // Convert to minor units for storage
+                $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
+                $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+
                 $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
-                    'fee_percent' => $feeValidation['value'],
-                    'credit_limit' => $creditValidation['value'],
+                    'fee_percent' => $feeMinor,
+                    'credit_limit' => $creditMinor,
                     'status' => 'accepted'
                 ], 'incoming');
 

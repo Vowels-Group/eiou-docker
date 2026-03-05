@@ -163,14 +163,21 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @return int Credit limit (0 if not found)
      */
-    public function getCreditLimit(string $pubkeyHash, string $currency): int {
+    public function getCreditLimit(string $pubkeyHash, string $currency, ?string $direction = null): int {
+        $params = [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency
+        ];
+
         $query = "SELECT credit_limit FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
-        $stmt = $this->execute($query, [
-            ':pubkey_hash' => $pubkeyHash,
-            ':currency' => $currency
-        ]);
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return 0;

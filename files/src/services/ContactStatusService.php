@@ -362,15 +362,16 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 $contactData = $this->contactRepository->getContactByPubkey($senderPubkey);
                 $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
 
-                // Get all accepted currencies for this contact
+                // Get all distinct accepted currencies for this contact
                 $contactCurrencies = [];
                 if ($this->contactCurrencyRepository !== null) {
                     $currencyConfigs = $this->contactCurrencyRepository->getContactCurrencies($pubkeyHash);
                     foreach ($currencyConfigs as $cc) {
                         if (($cc['status'] ?? '') === 'accepted') {
-                            $contactCurrencies[] = $cc['currency'];
+                            $contactCurrencies[$cc['currency']] = true;
                         }
                     }
+                    $contactCurrencies = array_keys($contactCurrencies);
                 }
                 // Fallback to default currency if no accepted currencies found
                 if (empty($contactCurrencies)) {
@@ -382,12 +383,10 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
                     $balance = $sentBalance - $receivedBalance;
 
+                    // Use incoming direction: this is the credit limit we set for the pinging contact
                     $creditLimit = 0;
                     if ($this->contactCurrencyRepository !== null) {
-                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur);
-                    }
-                    if ($creditLimit === 0) {
-                        $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur, 'incoming');
                     }
                     $availableCreditByCurrency[$cur] = $balance + $creditLimit;
                 }
