@@ -657,6 +657,12 @@ class ContactController
                 'status' => 'accepted'
             ], 'incoming');
 
+            // If we also have an outgoing pending request for the same currency (cross-request),
+            // mark it as accepted too — their incoming request proves they agree to this currency
+            if ($contactCurrencyRepo->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
+                $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
+            }
+
             // Insert initial balance and credit entries for the newly accepted currency
             $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
             if ($contactPubkey) {

@@ -1380,6 +1380,33 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     && $currency !== ($existingContactForCurrency['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)
                     && !$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')
                 ) {
+                    // Check if we also have an outgoing pending request for the same currency
+                    // If so, this is a mutual/cross-request — auto-accept both directions
+                    if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                        $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
+                        // Insert incoming as accepted using our outgoing fee/credit values
+                        $this->contactCurrencyRepository->insertCurrencyConfig(
+                            $senderPublicKeyHash, $currency,
+                            (int)($outgoingConfig['fee_percent'] ?? 0),
+                            (int)($outgoingConfig['credit_limit'] ?? 0),
+                            'accepted', 'incoming'
+                        );
+                        // Mark outgoing as accepted too
+                        $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+
+                        // Ensure balance and credit entries exist for the new currency
+                        $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+                        if ($this->contactCreditRepository !== null) {
+                            try {
+                                $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
+                            } catch (\Exception $e) {
+                                // Credit may already exist
+                            }
+                        }
+
+                        return $this->contactPayload->buildReceived($senderAddress, $myAddresses);
+                    }
+
                     // New currency from existing contact — insert as pending incoming (requires user acceptance)
                     $this->contactCurrencyRepository->insertCurrencyConfig($senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming');
                     return $this->contactPayload->buildReceived($senderAddress, $myAddresses);
