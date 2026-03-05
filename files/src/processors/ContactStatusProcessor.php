@@ -178,10 +178,6 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
 
         try {
             // Get per-currency chain heads for this contact
-            $prevTxid = $this->transactionRepository->getPreviousTxid(
-                $this->currentUser->getPublicKey(),
-                $contact['pubkey']
-            );
             $prevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                 $this->currentUser->getPublicKey(),
                 $contact['pubkey']
@@ -190,7 +186,6 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             // Build ping payload
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
-                'prevTxid' => $prevTxid,
                 'prevTxidsByCurrency' => $prevTxidsByCurrency,
                 'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
@@ -213,22 +208,10 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                     $chainValid = $response['chainValid'] ?? true;
                     $remoteChainStatus = $response['chainStatusByCurrency'] ?? [];
 
-                    // Per-currency validation: compare our chain heads with remote's response
-                    if (!empty($remoteChainStatus)) {
-                        foreach ($remoteChainStatus as $cur => $curValid) {
-                            if (!$curValid) {
-                                $chainValid = false;
-                                break;
-                            }
-                        }
-                    } elseif (!$chainValid) {
-                        // Legacy fallback: remote didn't send per-currency data
-                        // chainValid already set from response
-                    } else {
-                        // Legacy single-txid comparison for older nodes
-                        $remotePrevTxid = $response['prevTxid'] ?? null;
-                        if ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null) {
+                    foreach ($remoteChainStatus as $cur => $curValid) {
+                        if (!$curValid) {
                             $chainValid = false;
+                            break;
                         }
                     }
 

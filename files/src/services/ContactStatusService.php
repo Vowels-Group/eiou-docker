@@ -314,47 +314,29 @@ class ContactStatusService implements ContactStatusServiceInterface {
             $senderPubkey
         );
 
-        // Also keep the legacy single prevTxid for backwards compatibility
-        $localPrevTxid = $this->transactionRepository->getPreviousTxid(
-            $this->currentUser->getPublicKey(),
-            $senderPubkey
-        );
-
         $chainValid = true;
         $chainStatusByCurrency = [];
 
-        if (!empty($remotePrevTxidsByCurrency) || !empty($localPrevTxidsByCurrency)) {
-            // Compare per-currency: check all currencies known to either side
-            $allCurrencies = array_unique(array_merge(
-                array_keys($remotePrevTxidsByCurrency),
-                array_keys($localPrevTxidsByCurrency)
-            ));
+        // Compare per-currency: check all currencies known to either side
+        $allCurrencies = array_unique(array_merge(
+            array_keys($remotePrevTxidsByCurrency),
+            array_keys($localPrevTxidsByCurrency)
+        ));
 
-            foreach ($allCurrencies as $cur) {
-                $localTxid = $localPrevTxidsByCurrency[$cur] ?? null;
-                $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
+        foreach ($allCurrencies as $cur) {
+            $localTxid = $localPrevTxidsByCurrency[$cur] ?? null;
+            $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
 
-                if ($localTxid !== null && $remoteTxid !== null && $localTxid !== $remoteTxid) {
-                    $chainStatusByCurrency[$cur] = false;
-                    $chainValid = false;
-                } else {
-                    $chainStatusByCurrency[$cur] = true;
-                }
-            }
-        } else {
-            // Fallback: legacy single-txid comparison for older nodes
-            $remotePrevTxid = $request['prevTxid'] ?? null;
-            if ($remotePrevTxid !== null && $localPrevTxid !== null) {
-                $chainValid = ($localPrevTxid === $remotePrevTxid);
+            if ($localTxid !== null && $remoteTxid !== null && $localTxid !== $remoteTxid) {
+                $chainStatusByCurrency[$cur] = false;
+                $chainValid = false;
+            } else {
+                $chainStatusByCurrency[$cur] = true;
             }
         }
 
         // Also check for internal chain gaps per currency
         if ($chainValid && $this->transactionChainRepository !== null) {
-            $allCurrencies = array_unique(array_merge(
-                array_keys($localPrevTxidsByCurrency),
-                array_keys($remotePrevTxidsByCurrency)
-            ));
             foreach ($allCurrencies as $cur) {
                 $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
                     $this->currentUser->getPublicKey(),
@@ -408,7 +390,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         $this->updateContactOnlineStatus($senderPubkey);
 
         // Send pong response with available credit, processor health, and per-currency chain status
-        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal, $chainStatusByCurrency);
+        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal);
     }
 
     /**
@@ -529,11 +511,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         try {
-            // Get per-currency chain heads and legacy single prevTxid
-            $prevTxid = $this->transactionRepository->getPreviousTxid(
-                $this->currentUser->getPublicKey(),
-                $contact['pubkey']
-            );
+            // Get per-currency chain heads
             $prevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                 $this->currentUser->getPublicKey(),
                 $contact['pubkey']
@@ -542,7 +520,6 @@ class ContactStatusService implements ContactStatusServiceInterface {
             // Build ping payload with per-currency chain heads
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
-                'prevTxid' => $prevTxid,
                 'prevTxidsByCurrency' => $prevTxidsByCurrency,
                 'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);

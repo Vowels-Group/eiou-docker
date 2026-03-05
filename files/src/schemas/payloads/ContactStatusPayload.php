@@ -18,7 +18,7 @@ class ContactStatusPayload extends BasePayload
      *
      * @param array $data Ping data containing:
      *                    - receiverAddress: Address to ping
-     *                    - prevTxid: Last transaction ID in the chain with this contact
+     *                    - prevTxidsByCurrency: Per-currency chain heads for validation
      *                    - requestSync: Whether to request chain validation/sync
      * @return array The ping payload
      */
@@ -28,36 +28,29 @@ class ContactStatusPayload extends BasePayload
 
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
 
-        $payload = [
+        return [
             'type' => 'ping',
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'prevTxid' => $data['prevTxid'] ?? null,
+            'prevTxidsByCurrency' => $data['prevTxidsByCurrency'] ?? [],
             'requestSync' => $data['requestSync'] ?? false,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
-
-        // Include per-currency chain heads for multi-currency chain validation
-        if (!empty($data['prevTxidsByCurrency'])) {
-            $payload['prevTxidsByCurrency'] = $data['prevTxidsByCurrency'];
-        }
-
-        return $payload;
     }
 
     /**
      * Build ping response payload (pong)
      *
      * @param array $request The ping request data
-     * @param string|null $localPrevTxid Our local prev_txid for comparison
-     * @param bool $chainValid Whether the chains match
+     * @param bool $chainValid Whether all chains match
+     * @param array $chainStatusByCurrency Per-currency chain validity map
      * @param int|null $availableCredit Available credit for the pinging contact (in cents)
      * @param string|null $currency Currency code for the available credit
      * @param int|null $processorsRunning Number of message processors currently running
      * @param int|null $processorsTotal Total expected message processors
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null, array $chainStatusByCurrency = []): string
+    public function buildResponse(array $request, bool $chainValid = true, array $chainStatusByCurrency = [], ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
@@ -67,17 +60,12 @@ class ContactStatusPayload extends BasePayload
             'status' => 'pong',
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'prevTxid' => $localPrevTxid,
             'chainValid' => $chainValid,
+            'chainStatusByCurrency' => $chainStatusByCurrency,
             'availableCredit' => $availableCredit,
             'currency' => $currency,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
-
-        // Include per-currency chain status for multi-currency validation
-        if (!empty($chainStatusByCurrency)) {
-            $response['chainStatusByCurrency'] = $chainStatusByCurrency;
-        }
 
         if ($processorsRunning !== null) {
             $response['processorsRunning'] = $processorsRunning;
