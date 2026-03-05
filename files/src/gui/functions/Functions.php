@@ -325,17 +325,13 @@ if (!empty($acceptedContacts)) {
     } catch (Exception $e) {}
 }
 
-// Move named contacts with pending incoming currencies into $pendingContacts
-// so they show in the standalone "Pending Contact Requests" section (not just in the modal)
-$pendingUserContactsFiltered = [];
+// Also show named pending contacts with incoming currencies in the standalone section
+// Keep them in $pendingUserContacts too so they still appear in the contacts grid
 foreach ($pendingUserContacts as $puc) {
     if (!empty($puc['pending_currencies'])) {
         $pendingContacts[] = $puc;
-    } else {
-        $pendingUserContactsFiltered[] = $puc;
     }
 }
-$pendingUserContacts = $pendingUserContactsFiltered;
 
 // Also add accepted contacts with pending incoming currencies to $pendingContacts
 // (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
@@ -563,28 +559,40 @@ foreach ($contactArraysForCredit as &$contacts) {
             $contact['their_available_credit'] = round($creditLimitValue - $balanceValue, 2);
         }
 
-        // Build multi-currency data
+        // Build multi-currency data (direction-aware)
         $currencyConfigs = $contactCurrenciesByHash[$hash] ?? [];
         $allCredits = $availableCreditAllByHash[$hash] ?? [];
-        $currencies = [];
-        $pendingCurrencies = [];
+        $acceptedCurrencies = [];
+        $pendingIncoming = [];
+        $pendingOutgoing = [];
         foreach ($currencyConfigs as $cc) {
             $cur = $cc['currency'];
             $ccStatus = $cc['status'] ?? 'accepted';
+            $ccDirection = $cc['direction'] ?? 'outgoing';
             $entry = [
                 'currency' => $cur,
                 'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
                 'credit_limit' => ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur],
                 'my_available_credit' => $allCredits[$cur] ?? null,
                 'status' => $ccStatus,
+                'direction' => $ccDirection,
             ];
-            if ($ccStatus === 'pending') {
-                $pendingCurrencies[] = $entry;
+            if ($ccStatus === 'accepted') {
+                // Deduplicate: keep one entry per currency (prefer outgoing — has our fee/credit)
+                if (!isset($acceptedCurrencies[$cur]) || $ccDirection === 'outgoing') {
+                    $acceptedCurrencies[$cur] = $entry;
+                }
+            } elseif ($ccStatus === 'pending') {
+                if ($ccDirection === 'incoming') {
+                    $pendingIncoming[] = $entry;
+                } else {
+                    $pendingOutgoing[] = $entry;
+                }
             }
-            $currencies[] = $entry;
         }
-        $contact['currencies'] = $currencies;
-        $contact['pending_currencies'] = $pendingCurrencies;
+        $contact['currencies'] = array_values($acceptedCurrencies);
+        $contact['pending_currencies'] = $pendingIncoming;
+        $contact['outgoing_currencies'] = $pendingOutgoing;
     }
     unset($contact);
 }

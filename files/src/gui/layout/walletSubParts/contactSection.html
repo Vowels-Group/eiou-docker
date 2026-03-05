@@ -95,10 +95,13 @@
                             <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo htmlspecialchars($contact['currency']); ?></div>
                             <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
-                                <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> currency</div>
+                                <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> more</div>
                             <?php endif; ?>
                             <?php if (!empty($contact['pending_currencies'])): ?>
                                 <div class="multi-currency-badge" style="background: #ffc107; color: #333;"><?php echo count($contact['pending_currencies']); ?> pending</div>
+                            <?php endif; ?>
+                            <?php if (!empty($contact['outgoing_currencies'])): ?>
+                                <div class="multi-currency-badge" style="background: #17a2b8; color: #fff;"><?php echo count($contact['outgoing_currencies']); ?> requested</div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -118,6 +121,9 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <div class="contact-badges">
                             <span class="badge badge-pending">Pending Response</span>
+                            <?php if (!empty($contact['pending_currencies'])): ?>
+                                <span class="badge" style="background: #ffc107; color: #333;"><?php echo count($contact['pending_currencies']); ?> incoming</span>
+                            <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
                             <?php if (!empty($contact['http'])): ?>
@@ -573,45 +579,51 @@
             <?php endif; ?>
 
             <!-- Accept Contact Form(s) — incoming currency requests from them -->
-            <div class="pending-contact-accept-form">
+            <div class="pending-contact-accept-form" data-contact-index="<?php echo $index; ?>">
                 <?php $pendingCurrencies = $contact['pending_currencies'] ?? []; ?>
+                <?php $isAccepted = ($contact['status'] ?? '') === 'accepted'; ?>
                 <?php if (!empty($pendingCurrencies)): ?>
                     <h4 class="pending-contact-accept-title">
                         <i class="fas fa-user-check"></i> They requested
                         <span class="text-muted font-sm">(<?php echo count($pendingCurrencies); ?> currency request<?php echo count($pendingCurrencies) > 1 ? 's' : ''; ?>)</span>
                     </h4>
-                    <?php $isAccepted = ($contact['status'] ?? '') === 'accepted'; ?>
+
+                    <!-- Name field — single input above all currency forms -->
+                    <?php if (!$hasName && !$isAccepted): ?>
+                    <div class="mb-lg pending-contact-name-section">
+                        <div class="form-group">
+                            <label for="contact_name_shared_<?php echo $index; ?>"><strong>Contact Name:</strong></label>
+                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter contact name" required class="shared-name-input">
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Per-currency accept forms -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
-                    <form method="POST" class="mb-lg">
+                    <form method="POST" class="mb-lg currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <?php if ($isAccepted): ?>
-                            <!-- Accepted contact: use acceptCurrency action -->
                             <input type="hidden" name="action" value="acceptCurrency">
                             <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
                             <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
                         <?php else: ?>
-                            <!-- Pending contact: use acceptContact action -->
                             <input type="hidden" name="action" value="acceptContact">
                             <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
                             <?php if ($hasName): ?>
                                 <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
                             <?php endif; ?>
+                            <!-- Hidden name target — filled from shared name input by JS -->
+                            <?php if (!$hasName): ?>
+                                <input type="hidden" name="contact_name" class="shared-name-target" value="">
+                            <?php endif; ?>
                             <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
                         <?php endif; ?>
 
                         <div class="form-row">
-                            <?php if (!$hasName && !$isAccepted): ?>
-                            <div class="form-group">
-                                <label for="contact_name_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Name:</label>
-                                <input type="text" id="contact_name_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="contact_name" placeholder="Enter contact name" required>
-                            </div>
-                            <?php endif; ?>
                             <div class="form-group">
                                 <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%) for <?php echo htmlspecialchars($pc['currency']); ?>:</label>
                                 <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
                             </div>
-                        </div>
-                        <div class="form-row">
                             <div class="form-group">
                                 <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit (<?php echo htmlspecialchars($pc['currency']); ?>):</label>
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
@@ -629,6 +641,15 @@
                         </div>
                     </form>
                     <?php endforeach; ?>
+
+                    <!-- Accept All button (when multiple currencies) -->
+                    <?php if (count($pendingCurrencies) > 1): ?>
+                    <div class="mb-lg">
+                        <button type="button" class="btn btn-success w-100 accept-all-btn" data-contact-index="<?php echo $index; ?>">
+                            <i class="fas fa-check-double"></i> Accept All <?php echo count($pendingCurrencies); ?> Currencies
+                        </button>
+                    </div>
+                    <?php endif; ?>
                 <?php else: ?>
                     <!-- Fallback: single form for legacy contacts with no pending_currencies data -->
                     <h4 class="pending-contact-accept-title">

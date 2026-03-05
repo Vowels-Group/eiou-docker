@@ -1178,9 +1178,106 @@ function initializeFormLoaders() {
     }
 }
 
+/**
+ * Initializes shared name fields and Accept All buttons for pending contact currency forms.
+ *
+ * Shared name: A single Name input above all currency forms for a contact.
+ * On form submit, the name value is copied to a hidden field inside the form.
+ *
+ * Accept All: Sequentially submits all currency forms for a contact via fetch,
+ * then reloads the page to show results.
+ */
+function initializeCurrencyAcceptHandlers() {
+    // Before form submit, copy shared name to hidden field
+    var currencyForms = document.querySelectorAll('.currency-accept-form');
+    for (var i = 0; i < currencyForms.length; i++) {
+        (function(form) {
+            form.addEventListener('submit', function(e) {
+                var sharedNameId = form.getAttribute('data-shared-name-id');
+                if (sharedNameId) {
+                    var nameInput = document.getElementById(sharedNameId);
+                    var target = form.querySelector('.shared-name-target');
+                    if (nameInput && target) {
+                        var nameVal = nameInput.value.trim();
+                        if (!nameVal) {
+                            e.preventDefault();
+                            nameInput.focus();
+                            nameInput.style.borderColor = '#dc3545';
+                            if (typeof showToast === 'function') {
+                                showToast('Required', 'Please enter a name for this contact', 'warning');
+                            }
+                            return false;
+                        }
+                        target.value = nameVal;
+                    }
+                }
+            });
+        })(currencyForms[i]);
+    }
+
+    // Accept All button handler
+    var acceptAllBtns = document.querySelectorAll('.accept-all-btn');
+    for (var j = 0; j < acceptAllBtns.length; j++) {
+        (function(btn) {
+            btn.addEventListener('click', function() {
+                var contactIndex = btn.getAttribute('data-contact-index');
+                var card = btn.closest('.pending-contact-accept-form');
+                if (!card) return;
+
+                // Validate shared name first
+                var nameInput = card.querySelector('.shared-name-input');
+                if (nameInput && !nameInput.value.trim()) {
+                    nameInput.focus();
+                    nameInput.style.borderColor = '#dc3545';
+                    if (typeof showToast === 'function') {
+                        showToast('Required', 'Please enter a name for this contact', 'warning');
+                    }
+                    return;
+                }
+
+                var forms = card.querySelectorAll('.currency-accept-form');
+                if (forms.length === 0) return;
+
+                // Copy shared name to all hidden targets
+                if (nameInput) {
+                    var targets = card.querySelectorAll('.shared-name-target');
+                    for (var t = 0; t < targets.length; t++) {
+                        targets[t].value = nameInput.value.trim();
+                    }
+                }
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+
+                // Submit forms sequentially via fetch, then reload
+                var formArray = Array.prototype.slice.call(forms);
+                var submitNext = function(idx) {
+                    if (idx >= formArray.length) {
+                        window.location.reload();
+                        return;
+                    }
+                    var f = formArray[idx];
+                    var formData = new FormData(f);
+                    fetch(f.action || window.location.href, {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin'
+                    }).then(function() {
+                        submitNext(idx + 1);
+                    }).catch(function() {
+                        submitNext(idx + 1);
+                    });
+                };
+                submitNext(0);
+            });
+        })(acceptAllBtns[j]);
+    }
+}
+
 // Add to existing DOMContentLoaded
 window.addEventListener('DOMContentLoaded', function() {
     initializeFormLoaders();
+    initializeCurrencyAcceptHandlers();
 });
 
 /**
