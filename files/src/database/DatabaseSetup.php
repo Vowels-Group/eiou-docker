@@ -148,17 +148,35 @@ function freshInstall(){
             chmod($configPath, 0640);
             chgrp($configPath, 'www-data');
         }
+
+        // Mark schema as current — fresh installs have all tables, no migrations needed
+        @file_put_contents('/etc/eiou/config/.schema_version', (string) \Eiou\Core\Constants::SCHEMA_VERSION);
     }
 }
 
 /**
  * Run database migrations to add new tables to existing databases
- * This function is idempotent - safe to run multiple times
+ *
+ * Migrations only run when the stored schema version (in /etc/eiou/config/.schema_version)
+ * is behind Constants::SCHEMA_VERSION. After successful completion the version file is
+ * updated so subsequent requests skip all migration queries entirely.
+ *
+ * To add a new migration:
+ *   1. Add your migration code to this function or runColumnMigrations()
+ *   2. Bump Constants::SCHEMA_VERSION in src/core/Constants.php
  *
  * @param PDO $pdo Database connection
- * @return array Migration results
+ * @return array Migration results (empty if skipped)
  */
 function runMigrations(PDO $pdo): array {
+
+    $schemaVersion = \Eiou\Core\Constants::SCHEMA_VERSION;
+    $versionFile = '/etc/eiou/config/.schema_version';
+    $currentVersion = file_exists($versionFile) ? (int) trim(file_get_contents($versionFile)) : 0;
+
+    if ($currentVersion >= $schemaVersion) {
+        return ['_status' => 'up_to_date'];
+    }
 
     $results = [];
 
@@ -190,6 +208,19 @@ function runMigrations(PDO $pdo): array {
     // Run column migrations
     $columnResults = runColumnMigrations($pdo);
     $results = array_merge($results, $columnResults);
+
+    // Check if any migration errored — only update version if all succeeded
+    $hasErrors = false;
+    foreach ($results as $status) {
+        if (is_string($status) && strpos($status, 'error:') === 0) {
+            $hasErrors = true;
+            break;
+        }
+    }
+
+    if (!$hasErrors) {
+        @file_put_contents($versionFile, (string) $schemaVersion);
+    }
 
     return $results;
 }
