@@ -600,6 +600,7 @@
 
                     <!-- Per-currency accept forms -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
+                    <?php if ($pcIdx > 0): ?><hr class="currency-separator"><?php endif; ?>
                     <form method="POST" class="mb-lg currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <?php if ($isAccepted): ?>
@@ -612,7 +613,6 @@
                             <?php if ($hasName): ?>
                                 <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
                             <?php endif; ?>
-                            <!-- Hidden name target — filled from shared name input by JS -->
                             <?php if (!$hasName): ?>
                                 <input type="hidden" name="contact_name" class="shared-name-target" value="">
                             <?php endif; ?>
@@ -628,16 +628,12 @@
                                 <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit (<?php echo htmlspecialchars($pc['currency']); ?>):</label>
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
-                            <div class="form-group">
-                                <label>Requested Currency:</label>
-                                <input type="text" value="<?php echo htmlspecialchars($pc['currency']); ?>" disabled class="default-value">
+                            <div class="form-group form-group-sm d-flex align-items-end gap-sm">
+                                <span class="badge badge-info"><?php echo htmlspecialchars($pc['currency']); ?></span>
+                                <button type="submit" class="btn btn-success btn-compact">
+                                    <i class="fas fa-check"></i> Accept <?php echo htmlspecialchars($pc['currency']); ?>
+                                </button>
                             </div>
-                        </div>
-
-                        <div class="d-flex gap-sm flex-wrap">
-                            <button type="submit" class="btn btn-success pending-contact-action-col">
-                                <i class="fas fa-check"></i> Accept <?php echo htmlspecialchars($pc['currency']); ?>
-                            </button>
                         </div>
                     </form>
                     <?php endforeach; ?>

@@ -3158,6 +3158,12 @@ html {
     margin-bottom: 1rem;
 }
 
+hr.currency-separator {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin: 0.75rem 0;
+}
+
 .pending-contact-name-section {
     background: rgba(13, 110, 253, 0.05);
     border: 1px solid rgba(13, 110, 253, 0.2);
