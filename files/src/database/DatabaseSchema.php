@@ -158,6 +158,7 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
         INDEX idx_transactions_chain (sender_public_key_hash, receiver_public_key_hash, timestamp DESC),
+        INDEX idx_transactions_currency_chain (sender_public_key_hash, receiver_public_key_hash, currency, timestamp DESC),
         INDEX idx_transactions_status (status),
         INDEX idx_transactions_timestamp (timestamp),
         INDEX idx_transactions_status_timestamp (status, timestamp DESC),

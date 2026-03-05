@@ -274,7 +274,9 @@ class TransactionService implements TransactionServiceInterface {
         $data['txid'] = $this->createUniqueTxid($data);
         $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
-            $data['receiverPublicKey']
+            $data['receiverPublicKey'],
+            null,
+            $data['currency']
         );
         $data['end_recipient_address'] = $data['receiverAddress'];
         $data['initial_sender_address'] = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
@@ -292,7 +294,9 @@ class TransactionService implements TransactionServiceInterface {
         $data['memo'] = $request['hash'];
         $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
-            $data['receiverPublicKey']
+            $data['receiverPublicKey'],
+            null,
+            $data['currency']
         );
 
         if ($description !== null) {
@@ -392,13 +396,13 @@ class TransactionService implements TransactionServiceInterface {
     // DELEGATED: Chain Verification
     // =========================================================================
 
-    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array {
+    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey, ?string $currency = null): array {
         if ($this->chainVerificationService !== null) {
-            return $this->chainVerificationService->verifySenderChainAndSync($contactAddress, $contactPublicKey);
+            return $this->chainVerificationService->verifySenderChainAndSync($contactAddress, $contactPublicKey, $currency);
         }
         // Minimal fallback
         $result = ['success' => true, 'synced' => false, 'error' => null];
-        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey, $currency);
         if ($chainStatus['valid']) return $result;
 
         output(outputSyncChainIntegrityFailed(count($chainStatus['gaps'])), 'SILENT');
@@ -406,7 +410,7 @@ class TransactionService implements TransactionServiceInterface {
         $result['synced'] = true;
 
         if (!$syncResult['success']) {
-            $recheck = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+            $recheck = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey, $currency);
             if (!$recheck['valid']) {
                 $result['success'] = false;
                 $result['error'] = 'Failed to repair chain: ' . ($syncResult['error'] ?? 'unknown');
@@ -426,7 +430,7 @@ class TransactionService implements TransactionServiceInterface {
             return $this->transactionValidationService->checkPreviousTxid($request);
         }
         if (!isset($request['senderPublicKey'], $request['receiverPublicKey'])) return false;
-        $expected = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
+        $expected = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey'], null, $request['currency'] ?? null);
         return $expected === ($request['previousTxid'] ?? null);
     }
 

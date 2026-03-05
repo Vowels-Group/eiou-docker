@@ -35,7 +35,7 @@ interface ChainVerificationServiceInterface
      *   - synced: bool - Whether a sync was performed
      *   - error: string|null - Error message if failed
      */
-    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array;
+    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey, ?string $currency = null): array;
 
     /**
      * Set the sync trigger for chain repair operations (interface for loose coupling)

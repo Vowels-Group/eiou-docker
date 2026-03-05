@@ -700,7 +700,8 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         $localConflict = $this->transactionChainRepository->getLocalTransactionByPreviousTxid(
                             $remotePreviousTxid,
                             $userPubkeyHash,
-                            $contactPubkeyHash
+                            $contactPubkeyHash,
+                            $tx['currency'] ?? null
                         );
 
                         if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {

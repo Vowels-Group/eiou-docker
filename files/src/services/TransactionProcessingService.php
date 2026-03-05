@@ -541,7 +541,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Syncing balances...', 'SILENT');
             $this->getSyncTrigger()->syncContactBalance($message['receiver_public_key']);
 
-            $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']);
+            $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key'], null, $message['currency'] ?? null);
             if ($correctPrevTxid !== null && $this->updateAndResignTransaction($txid, $correctPrevTxid, true)) {
                 output('Transaction re-signed after sync. Retrying transaction...', 'SILENT');
 
@@ -607,7 +607,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced.', 'SILENT');
             $this->getSyncTrigger()->syncContactBalance($message['receiver_public_key']);
 
-            $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']);
+            $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key'], null, $message['currency'] ?? null);
             if ($correctPrevTxid !== null && $this->updateAndResignTransaction($txid, $correctPrevTxid, false)) {
                 output('Transaction re-signed after sync', 'SILENT');
                 output('Sync retry: Immediately resending...', 'SILENT');

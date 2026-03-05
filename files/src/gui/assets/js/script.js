@@ -1215,18 +1215,18 @@ function initializeCurrencyAcceptHandlers() {
         })(currencyForms[i]);
     }
 
-    // Accept All button handler
-    var acceptAllBtns = document.querySelectorAll('.accept-all-btn');
-    for (var j = 0; j < acceptAllBtns.length; j++) {
-        (function(btn) {
-            btn.addEventListener('click', function() {
-                var contactIndex = btn.getAttribute('data-contact-index');
-                var card = btn.closest('.pending-contact-accept-form');
-                if (!card) return;
+    // Accept All form handler — collects fee/credit from individual currency forms
+    var acceptAllForms = document.querySelectorAll('.accept-all-form');
+    for (var j = 0; j < acceptAllForms.length; j++) {
+        (function(form) {
+            form.addEventListener('submit', function(e) {
+                var card = form.closest('.pending-contact-accept-form');
+                if (!card) { e.preventDefault(); return; }
 
                 // Validate shared name first
                 var nameInput = card.querySelector('.shared-name-input');
                 if (nameInput && !nameInput.value.trim()) {
+                    e.preventDefault();
                     nameInput.focus();
                     nameInput.style.borderColor = '#dc3545';
                     if (typeof showToast === 'function') {
@@ -1235,42 +1235,39 @@ function initializeCurrencyAcceptHandlers() {
                     return;
                 }
 
-                var forms = card.querySelectorAll('.currency-accept-form');
-                if (forms.length === 0) return;
-
-                // Copy shared name to all hidden targets
-                if (nameInput) {
-                    var targets = card.querySelectorAll('.shared-name-target');
-                    for (var t = 0; t < targets.length; t++) {
-                        targets[t].value = nameInput.value.trim();
+                // Collect currency data from individual forms
+                var currencyForms = card.querySelectorAll('.currency-accept-form');
+                var currencies = [];
+                for (var k = 0; k < currencyForms.length; k++) {
+                    var cf = currencyForms[k];
+                    var currency = cf.querySelector('input[name="currency"]');
+                    var fee = cf.querySelector('input[name="fee"]');
+                    var credit = cf.querySelector('input[name="credit"]');
+                    if (currency && fee && credit) {
+                        currencies.push({
+                            currency: currency.value,
+                            fee: fee.value,
+                            credit: credit.value
+                        });
                     }
                 }
 
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+                if (currencies.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
 
-                // Submit forms sequentially via fetch, then reload
-                var formArray = Array.prototype.slice.call(forms);
-                var submitNext = function(idx) {
-                    if (idx >= formArray.length) {
-                        window.location.reload();
-                        return;
-                    }
-                    var f = formArray[idx];
-                    var formData = new FormData(f);
-                    fetch(f.action || window.location.href, {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'same-origin'
-                    }).then(function() {
-                        submitNext(idx + 1);
-                    }).catch(function() {
-                        submitNext(idx + 1);
-                    });
-                };
-                submitNext(0);
+                // Set the JSON data into the hidden field
+                form.querySelector('.accept-all-currencies-data').value = JSON.stringify(currencies);
+
+                // Show loading state
+                var btn = form.querySelector('.accept-all-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+                }
             });
-        })(acceptAllBtns[j]);
+        })(acceptAllForms[j]);
     }
 }
 

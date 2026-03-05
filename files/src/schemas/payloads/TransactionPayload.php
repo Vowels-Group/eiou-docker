@@ -149,10 +149,12 @@ class TransactionPayload extends BasePayload
             'amount' => $transactionService->removeTransactionFee($message),
             'currency' => $rp2pData['currency'] ?? 'USD',
             'txid' => $transactionService->createUniqueDatabaseTxid($message, $rp2pData),
-            // Include previous_txid for chain validation on receiver side
+            // Include previous_txid for chain validation on receiver side (per-currency chain)
             'previous_txid' => $transactionRepository->getPreviousTxid(
                 $this->currentUser->getPublicKey(),
-                $rp2pData['sender_public_key'] ?? ''
+                $rp2pData['sender_public_key'] ?? '',
+                null,
+                $rp2pData['currency'] ?? 'USD'
             ),
             'memo' => $rp2pData['hash'] ?? null,
             'senderAddress' => $userAddress,

@@ -643,12 +643,18 @@
                     <?php endforeach; ?>
 
                     <!-- Accept All button (when multiple currencies) -->
-                    <?php if (count($pendingCurrencies) > 1): ?>
+                    <?php if ($isExisting && count($pendingCurrencies) > 1): ?>
                     <hr class="currency-separator-double">
                     <div class="mb-lg">
-                        <button type="button" class="btn btn-success w-100 accept-all-btn" data-contact-index="<?php echo $index; ?>">
-                            <i class="fas fa-check-double"></i> Accept All <?php echo count($pendingCurrencies); ?> Currencies
-                        </button>
+                        <form method="POST" class="accept-all-form" data-contact-index="<?php echo $index; ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                            <input type="hidden" name="action" value="acceptAllCurrencies">
+                            <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
+                            <input type="hidden" name="currencies" class="accept-all-currencies-data" value="">
+                            <button type="submit" class="btn btn-success w-100 accept-all-btn" data-contact-index="<?php echo $index; ?>">
+                                <i class="fas fa-check-double"></i> Accept All <?php echo count($pendingCurrencies); ?> Currencies
+                            </button>
+                        </form>
                     </div>
                     <?php endif; ?>
                 <?php else: ?>

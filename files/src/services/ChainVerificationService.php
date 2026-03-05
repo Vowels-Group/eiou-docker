@@ -78,13 +78,14 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
      * @param string $contactPublicKey The contact's public key
      * @return array Result with success, synced, and error keys
      */
-    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array {
+    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey, ?string $currency = null): array {
         $result = ['success' => true, 'synced' => false, 'error' => null];
 
-        // Verify local chain integrity
+        // Verify local chain integrity (per-currency if specified)
         $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
             $this->currentUser->getPublicKey(),
-            $contactPublicKey
+            $contactPublicKey,
+            $currency
         );
 
         // If chain is valid or empty, we're good to go
@@ -109,7 +110,8 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
             // Sync failed - check if chain is now valid anyway
             $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
                 $this->currentUser->getPublicKey(),
-                $contactPublicKey
+                $contactPublicKey,
+                $currency
             );
 
             if (!$recheckStatus['valid']) {
