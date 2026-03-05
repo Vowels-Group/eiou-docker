@@ -3158,6 +3158,20 @@ html {
     margin-bottom: 1rem;
 }
 
+.currency-form-header {
+    margin-bottom: 0.25rem;
+}
+
+.currency-form-row {
+    grid-template-columns: 1fr 1fr auto;
+}
+
+@media (max-width: 576px) {
+    .currency-form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 hr.currency-separator {
     border: none;
     border-top: 1px solid rgba(0, 0, 0, 0.1);

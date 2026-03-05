@@ -1889,7 +1889,7 @@ function openContactModal(contact, openTab) {
                     var pc = pendingCurrencies[pi];
                     phtml += '<div class="d-flex gap-sm align-items-center mb-sm">';
                     phtml += '<span class="badge badge-info">' + escapeHtml(pc.currency) + '</span>';
-                    phtml += '<span class="text-muted">Accept via Pending Contact Requests below</span>';
+                    phtml += '<span class="text-muted">Accept via Pending Contact Requests section</span>';
                     phtml += '</div>';
                 }
             }

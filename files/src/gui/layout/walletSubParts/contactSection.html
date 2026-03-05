@@ -589,18 +589,23 @@
                     </h4>
 
                     <!-- Name field — single input above all currency forms -->
-                    <?php if (!$hasName && !$isAccepted): ?>
                     <div class="mb-lg pending-contact-name-section">
                         <div class="form-group">
                             <label for="contact_name_shared_<?php echo $index; ?>"><strong>Contact Name:</strong></label>
-                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter contact name" required class="shared-name-input">
+                            <?php if ($hasName || $isAccepted): ?>
+                                <input type="text" id="contact_name_shared_<?php echo $index; ?>" value="<?php echo htmlspecialchars($contact['name']); ?>" disabled class="shared-name-input text-muted">
+                            <?php else: ?>
+                                <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter contact name" required class="shared-name-input">
+                            <?php endif; ?>
                         </div>
                     </div>
-                    <?php endif; ?>
 
                     <!-- Per-currency accept forms -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
                     <?php if ($pcIdx > 0): ?><hr class="currency-separator"><?php endif; ?>
+                    <div class="currency-form-header">
+                        <span class="badge badge-info"><?php echo htmlspecialchars($pc['currency']); ?></span>
+                    </div>
                     <form method="POST" class="mb-lg currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <?php if ($isAccepted): ?>
@@ -619,17 +624,16 @@
                             <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
                         <?php endif; ?>
 
-                        <div class="form-row">
+                        <div class="form-row currency-form-row">
                             <div class="form-group">
-                                <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%) for <?php echo htmlspecialchars($pc['currency']); ?>:</label>
+                                <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%):</label>
                                 <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
-                                <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit (<?php echo htmlspecialchars($pc['currency']); ?>):</label>
+                                <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit:</label>
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isAccepted ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
-                            <div class="form-group form-group-sm d-flex align-items-end gap-sm">
-                                <span class="badge badge-info"><?php echo htmlspecialchars($pc['currency']); ?></span>
+                            <div class="form-group d-flex align-items-end">
                                 <button type="submit" class="btn btn-success btn-compact">
                                     <i class="fas fa-check"></i> Accept <?php echo htmlspecialchars($pc['currency']); ?>
                                 </button>
