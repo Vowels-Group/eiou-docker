@@ -173,6 +173,8 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 
 ### PUT /api/v1/contacts/:address
 
+All fields optional. `currency` required when updating `fee_percent` or `credit_limit`.
+
 ```json
 {
     "name": "New Name",

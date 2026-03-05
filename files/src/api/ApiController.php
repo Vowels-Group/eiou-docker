@@ -1151,7 +1151,27 @@ class ApiController {
                 return $this->errorResponse('No fields to update', 400, 'no_fields');
             }
 
+            // Require currency when updating fee or credit
+            if ((isset($data['fee_percent']) || isset($data['credit_limit'])) && !isset($data['currency'])) {
+                return $this->errorResponse('Currency is required when updating fee_percent or credit_limit', 400, 'missing_currency');
+            }
+
             if ($contactRepo->updateContactFields($contact['pubkey'], $updateFields)) {
+                // Propagate fee/credit changes to contact_currencies table
+                if (isset($data['currency']) && (isset($data['fee_percent']) || isset($data['credit_limit']))) {
+                    $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+                    $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+                    $currencyFields = [];
+                    if (isset($data['fee_percent'])) {
+                        $currencyFields['fee_percent'] = (int) ($data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR);
+                    }
+                    if (isset($data['credit_limit'])) {
+                        $currencyFields['credit_limit'] = (int) ($data['credit_limit'] * Constants::getConversionFactor($data['currency']));
+                    }
+                    if (!empty($currencyFields)) {
+                        $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);
+                    }
+                }
                 return $this->successResponse([
                     'message' => 'Contact updated successfully',
                     'updated' => $updatedData

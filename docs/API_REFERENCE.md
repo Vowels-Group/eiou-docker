@@ -835,7 +835,7 @@ Update contact information.
 }
 ```
 
-All fields are optional. Only provided fields will be updated.
+All fields are optional. Only provided fields will be updated. **`currency` is required when updating `fee_percent` or `credit_limit`** — it specifies which currency's settings to modify. Updates are applied to both the `contacts` table (legacy) and the `contact_currencies` table.
 
 **Response:**
 
