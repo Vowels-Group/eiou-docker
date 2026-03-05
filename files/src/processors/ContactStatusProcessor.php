@@ -278,17 +278,25 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
      * @param array $response The pong response data
      */
     private function saveAvailableCreditFromPong(string $contactPubkey, array $response): void {
-        if (!isset($response['availableCredit']) || $this->contactCreditRepository === null) {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $response['availableCreditByCurrency'] ?? [];
+
+        if (empty($creditByCurrency)) {
             return;
         }
 
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
-            $this->contactCreditRepository->upsertAvailableCredit(
-                $pubkeyHash,
-                (int) $response['availableCredit'],
-                $response['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY
-            );
+            foreach ($creditByCurrency as $currency => $credit) {
+                $this->contactCreditRepository->upsertAvailableCredit(
+                    $pubkeyHash,
+                    (int) $credit,
+                    $currency
+                );
+            }
         } catch (Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from pong", [
                 'error' => $e->getMessage()

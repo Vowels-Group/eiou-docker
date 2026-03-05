@@ -355,27 +355,42 @@ class ContactStatusService implements ContactStatusServiceInterface {
             $this->triggerSync($request['senderAddress'] ?? '', $senderPubkey);
         }
 
-        // Calculate available credit for the pinging contact
-        $availableCredit = null;
-        $contactCurrency = null;
+        // Calculate available credit per currency for the pinging contact
+        $availableCreditByCurrency = [];
         if ($this->balanceRepository !== null) {
             try {
                 $contactData = $this->contactRepository->getContactByPubkey($senderPubkey);
-                $contactCurrency = $contactData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $contactCurrency);
-                $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $contactCurrency);
-                $balance = $sentBalance - $receivedBalance;
+                $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
 
-                // Read credit_limit from contact_currencies table first, fall back to contacts table
-                $creditLimit = 0;
+                // Get all accepted currencies for this contact
+                $contactCurrencies = [];
                 if ($this->contactCurrencyRepository !== null) {
-                    $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
-                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $contactCurrency);
+                    $currencyConfigs = $this->contactCurrencyRepository->getContactCurrencies($pubkeyHash);
+                    foreach ($currencyConfigs as $cc) {
+                        if (($cc['status'] ?? '') === 'accepted') {
+                            $contactCurrencies[] = $cc['currency'];
+                        }
+                    }
                 }
-                if ($creditLimit === 0) {
-                    $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
+                // Fallback to default currency if no accepted currencies found
+                if (empty($contactCurrencies)) {
+                    $contactCurrencies[] = $contactData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 }
-                $availableCredit = $balance + $creditLimit;
+
+                foreach ($contactCurrencies as $cur) {
+                    $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
+                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
+                    $balance = $sentBalance - $receivedBalance;
+
+                    $creditLimit = 0;
+                    if ($this->contactCurrencyRepository !== null) {
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur);
+                    }
+                    if ($creditLimit === 0) {
+                        $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
+                    }
+                    $availableCreditByCurrency[$cur] = $balance + $creditLimit;
+                }
             } catch (\Exception $e) {
                 Logger::getInstance()->warning("Failed to calculate available credit for ping response", [
                     'error' => $e->getMessage()
@@ -389,8 +404,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
         // Update the sender's online status since they pinged us
         $this->updateContactOnlineStatus($senderPubkey);
 
-        // Send pong response with available credit, processor health, and per-currency chain status
-        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal);
+        // Send pong response with per-currency credit, processor health, and chain status
+        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $availableCreditByCurrency, $processorsRunning, $processorsTotal);
     }
 
     /**
@@ -679,17 +694,25 @@ class ContactStatusService implements ContactStatusServiceInterface {
      * @param array $response The pong response data
      */
     private function saveAvailableCreditFromPong(string $contactPubkey, array $response): void {
-        if (!isset($response['availableCredit']) || $this->contactCreditRepository === null) {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $response['availableCreditByCurrency'] ?? [];
+
+        if (empty($creditByCurrency)) {
             return;
         }
 
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
-            $this->contactCreditRepository->upsertAvailableCredit(
-                $pubkeyHash,
-                (int) $response['availableCredit'],
-                $response['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY
-            );
+            foreach ($creditByCurrency as $currency => $credit) {
+                $this->contactCreditRepository->upsertAvailableCredit(
+                    $pubkeyHash,
+                    (int) $credit,
+                    $currency
+                );
+            }
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from pong", [
                 'error' => $e->getMessage()

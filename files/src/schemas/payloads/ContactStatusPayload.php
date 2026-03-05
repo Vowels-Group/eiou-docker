@@ -44,13 +44,12 @@ class ContactStatusPayload extends BasePayload
      * @param array $request The ping request data
      * @param bool $chainValid Whether all chains match
      * @param array $chainStatusByCurrency Per-currency chain validity map
-     * @param int|null $availableCredit Available credit for the pinging contact (in cents)
-     * @param string|null $currency Currency code for the available credit
+     * @param array $availableCreditByCurrency Per-currency available credit map (currency => cents)
      * @param int|null $processorsRunning Number of message processors currently running
      * @param int|null $processorsTotal Total expected message processors
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, bool $chainValid = true, array $chainStatusByCurrency = [], ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null): string
+    public function buildResponse(array $request, bool $chainValid = true, array $chainStatusByCurrency = [], array $availableCreditByCurrency = [], ?int $processorsRunning = null, ?int $processorsTotal = null): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
@@ -62,8 +61,7 @@ class ContactStatusPayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
             'chainValid' => $chainValid,
             'chainStatusByCurrency' => $chainStatusByCurrency,
-            'availableCredit' => $availableCredit,
-            'currency' => $currency,
+            'availableCreditByCurrency' => $availableCreditByCurrency,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
 

@@ -34,10 +34,12 @@
                             $addressData[$type] = $contact[$type];
                         }
                     }
+                    $contactCurrencyCodes = array_map(function($c) { return $c['currency']; }, $contact['currencies'] ?? []);
                     ?>
                     <div class="recipient-option"
                          data-name="<?php echo htmlspecialchars($contact['name']); ?>"
                          data-addresses='<?php echo htmlspecialchars(json_encode($addressData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'
+                         data-currencies='<?php echo htmlspecialchars(json_encode($contactCurrencyCodes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'
                          ><?php echo htmlspecialchars($contact['name']); ?> <span class="recipient-tag">(Contact)</span></div>
                 <?php endforeach; ?>
             </div>
@@ -77,7 +79,9 @@
             <div class="form-group">
                 <label for="currency">Currency:</label>
                 <select id="currency" name="currency" required>
-                    <option value="USD">USD</option>
+                    <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
+                        <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
         </div>

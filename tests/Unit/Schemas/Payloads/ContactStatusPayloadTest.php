@@ -391,16 +391,16 @@ class ContactStatusPayloadTest extends TestCase
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
         $chainStatus = ['USD' => false, 'EUR' => true];
-        $result = json_decode($this->payload->buildResponse($request, false, $chainStatus), true);
+        $creditByCurrency = ['USD' => 50000, 'EUR' => 30000];
+        $result = json_decode($this->payload->buildResponse($request, false, $chainStatus, $creditByCurrency), true);
 
-        $this->assertCount(8, $result);
+        $this->assertCount(7, $result);
         $this->assertEquals('pong', $result['status']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
         $this->assertFalse($result['chainValid']);
         $this->assertEquals(['USD' => false, 'EUR' => true], $result['chainStatusByCurrency']);
-        $this->assertNull($result['availableCredit']);
-        $this->assertNull($result['currency']);
+        $this->assertEquals(['USD' => 50000, 'EUR' => 30000], $result['availableCreditByCurrency']);
         $this->assertEquals(self::TEST_MICROTIME, $result['time']);
     }
 
@@ -779,14 +779,14 @@ class ContactStatusPayloadTest extends TestCase
     }
 
     /**
-     * Test buildResponse payload has exactly 8 keys (includes availableCredit and currency)
+     * Test buildResponse payload has exactly 7 keys
      */
-    public function testBuildResponsePayloadHasExactlyEightKeys(): void
+    public function testBuildResponsePayloadHasExactlySevenKeys(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
         $result = json_decode($this->payload->buildResponse($request), true);
 
-        $this->assertCount(8, $result);
+        $this->assertCount(7, $result);
     }
 
     /**
@@ -830,7 +830,7 @@ class ContactStatusPayloadTest extends TestCase
 
         $this->assertArrayNotHasKey('extraField', $result);
         $this->assertArrayNotHasKey('anotherField', $result);
-        $this->assertCount(8, $result);
+        $this->assertCount(7, $result);
     }
 
     /**

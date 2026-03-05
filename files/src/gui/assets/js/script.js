@@ -259,6 +259,13 @@ function initializeSendForm() {
                 transactionTypeIndicator.style.display = 'block';
                 transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
                 transactionTypeText.style.color = '#ffc107';
+                // Restore all currency options
+                var currSelect = document.getElementById('currency');
+                if (currSelect) {
+                    for (var ri = 0; ri < currSelect.options.length; ri++) {
+                        currSelect.options[ri].style.display = '';
+                    }
+                }
                 return;
             }
 
@@ -343,6 +350,24 @@ function initializeSendForm() {
             } else {
                 addressTypeGroup.style.display = 'none';
                 addressTypeSelect.required = false;
+            }
+
+            // Filter currency dropdown to contact's accepted currencies
+            var currencySelect = document.getElementById('currency');
+            if (currencySelect) {
+                var contactCurrenciesJson = optionEl.getAttribute('data-currencies');
+                var contactCurrencies = [];
+                try { contactCurrencies = contactCurrenciesJson ? JSON.parse(contactCurrenciesJson) : []; } catch (e) {}
+                if (contactCurrencies.length > 0) {
+                    var allCurrencyOpts = currencySelect.options;
+                    for (var ci = 0; ci < allCurrencyOpts.length; ci++) {
+                        allCurrencyOpts[ci].style.display = contactCurrencies.indexOf(allCurrencyOpts[ci].value) !== -1 ? '' : 'none';
+                    }
+                    // Select first available currency if current selection is hidden
+                    if (contactCurrencies.indexOf(currencySelect.value) === -1) {
+                        currencySelect.value = contactCurrencies[0];
+                    }
+                }
             }
 
             transactionTypeIndicator.style.display = 'block';
