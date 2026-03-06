@@ -283,10 +283,10 @@ class MessagePayload extends BasePayload
      * @param string|null $lastKnownTxid The last known txid in the mutual chain (or null)
      * @return array The sync request payload
      */
-    public function buildTransactionSyncRequest(string $contactAddress, string $contactPublicKey, ?string $lastKnownTxid = null): array
+    public function buildTransactionSyncRequest(string $contactAddress, string $contactPublicKey, ?string $lastKnownTxid = null, array $lastKnownTxidsByCurrency = []): array
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($contactAddress);
-        return [
+        $request = [
             'type' => 'message',
             'typeMessage' => 'sync',
             'syncType' => 'transaction_chain',
@@ -297,6 +297,13 @@ class MessagePayload extends BasePayload
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include per-currency cursors for multi-currency sync
+        if (!empty($lastKnownTxidsByCurrency)) {
+            $request['lastKnownTxidsByCurrency'] = $lastKnownTxidsByCurrency;
+        }
+
+        return $request;
     }
 
     /**

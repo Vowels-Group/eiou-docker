@@ -552,7 +552,14 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         try { // Re-entrant guard try/finally wrapper
         try {
-            // Get our latest known txid with this contact
+            // Get per-currency chain heads for multi-currency sync
+            $lastKnownTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            // Legacy single cursor: use the overall latest txid for backward compatibility
+            // with nodes that don't support per-currency cursors yet
             $lastKnownTxid = $this->transactionRepository->getPreviousTxid(
                 $this->currentUser->getPublicKey(),
                 $contactPublicKey
@@ -592,6 +599,10 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                             $this->currentUser->getPublicKey(),
                             $contactPublicKey
                         );
+                        $lastKnownTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+                            $this->currentUser->getPublicKey(),
+                            $contactPublicKey
+                        );
 
                         // Update remaining gaps after re-verification
                         $remainingMissingTxids = $recheckStatus['gaps'] ?? [];
@@ -618,11 +629,12 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             do {
                 $chunkCount++;
 
-                // Build and send sync request
+                // Build and send sync request with per-currency cursors
                 $syncRequest = $this->messagePayload->buildTransactionSyncRequest(
                     $contactAddress,
                     $contactPublicKey,
-                    $lastKnownTxid
+                    $lastKnownTxid,
+                    $lastKnownTxidsByCurrency
                 );
 
                 // Include remaining missing txids so the remote side can check its backups (first chunk only)
@@ -1236,17 +1248,35 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 $senderPublicKey
             );
 
-            // Filter to only include transactions NEWER than lastKnownTxid if provided
-            // Transactions are ordered by timestamp DESC (newest first), so we collect
-            // all transactions until we hit the lastKnownTxid
+            // Filter to only include transactions the requester is missing
+            // Transactions are ordered by timestamp DESC (newest first)
             // Cancelled/rejected/completed transactions are included, but pending/sending
             // are excluded since they haven't been signed yet (signature added after send)
             $filteredTransactions = [];
 
+            // Per-currency cursors: each currency has its own chain head
+            // If provided, use per-currency filtering; otherwise fall back to single cursor
+            $lastKnownTxidsByCurrency = $request['lastKnownTxidsByCurrency'] ?? [];
+            $reachedCursorForCurrency = [];
+
             foreach ($transactions as $tx) {
-                // If we hit the lastKnownTxid, stop - requester already has this and older
-                if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
-                    break;
+                $currency = $tx['currency'] ?? '';
+
+                if (!empty($lastKnownTxidsByCurrency)) {
+                    // Per-currency cursor mode: skip transactions at or before the cursor for each currency
+                    if (isset($reachedCursorForCurrency[$currency])) {
+                        continue; // Already past the cursor for this currency
+                    }
+                    $cursorForCurrency = $lastKnownTxidsByCurrency[$currency] ?? null;
+                    if ($cursorForCurrency !== null && $tx['txid'] === $cursorForCurrency) {
+                        $reachedCursorForCurrency[$currency] = true;
+                        continue;
+                    }
+                } else {
+                    // Legacy single cursor: stop at the first match (all currencies)
+                    if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
+                        break;
+                    }
                 }
 
                 // Skip transactions that haven't been sent yet - they won't have signatures

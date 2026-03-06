@@ -307,12 +307,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                             $this->contactRepository->updateContactStatus($senderPubkey, 'accepted');
 
-                            // Create balances, credit, and currency entries for each restored currency
+                            // Create credit and currency entries for each restored currency
                             $restoredCurrencies = array_unique(array_merge($remoteCurrencies, array_keys($localPrevTxidsByCurrency)));
                             foreach ($restoredCurrencies as $cur) {
-                                if ($this->balanceRepository !== null) {
-                                    $this->balanceRepository->insertInitialContactBalances($senderPubkey, $cur);
-                                }
                                 if ($this->contactCreditRepository !== null) {
                                     try {
                                         $this->contactCreditRepository->createInitialCredit($senderPubkey, $cur);
@@ -332,6 +329,10 @@ class ContactStatusService implements ContactStatusServiceInterface {
                                     $this->contactCurrencyRepository->updateCurrencyStatus($pubkeyHash, $cur, 'accepted', 'outgoing');
                                 }
                             }
+
+                            // Recalculate balances from the synced transactions instead of
+                            // initializing to 0/0 — the sync brought real transaction history
+                            $this->getSyncTrigger()->syncContactBalance($senderPubkey);
 
                             Logger::getInstance()->info("Auto-accepted restored contact after sync", [
                                 'sender_address' => $senderAddress,
