@@ -45,6 +45,8 @@ The project is currently in **ALPHA** status.
 - "Your Available Credit" in pong calculation no longer incorrectly filters by direction — credit limit lookup uses max across directions
 
 ### Fixed
+- Multi-currency acceptance for existing contacts: `handleExistingContact()` now creates an outgoing `contact_currencies` entry and sends a P2P notification when accepting an incoming pending currency — previously only the incoming entry was accepted, leaving the remote side stuck on "Awaiting their acceptance" for non-default currencies
+- False positive chain gap after contact add/accept cycle: pong handler now re-evaluates chain validity after sync using txid existence checks instead of stale head comparison — resolves race condition where in-flight transactions caused chain head mismatches between ping and pong
 - Per-currency independent contact requests: incoming currency from P2P contact requests is now stored in `contact_currencies` with `status='pending'` instead of being lost (root cause: `addPendingContact()` stores `currency: null`)
 - Accept contact now validates against pending currencies from `contact_currencies` instead of the always-null `contacts.currency` field
 - Accepting a pending currency for an existing accepted contact now correctly creates initial balance and credit entries for the new currency
