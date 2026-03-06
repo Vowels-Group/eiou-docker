@@ -700,7 +700,7 @@ class P2pService implements P2pServiceInterface {
             throw new InvalidArgumentException("Amount is required for P2P request");
         }
 
-        $validation = InputValidator::validateAmount($request[3], Constants::TRANSACTION_DEFAULT_CURRENCY);
+        $validation = InputValidator::validateAmount($request[3], $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
         if (!$validation['valid']) {
             throw new InvalidArgumentException("Invalid amount for P2P request: " . $validation['error']);
         }
@@ -711,7 +711,7 @@ class P2pService implements P2pServiceInterface {
         $data['receiverAddress'] = $request[2];
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
-        $data['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY; // Default to USD
+        $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
         $data['amount'] = round($validatedAmount * Constants::CONVERSION_FACTORS[$data['currency']]); // Convert to cents
 
         // Additional data preparation - Use cryptographically secure random
