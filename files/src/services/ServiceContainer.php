@@ -1515,6 +1515,7 @@ class ServiceContainer implements ContainerInterface {
         //         and P2pService for cascade cancel notification propagation
         if (isset($this->services['Rp2pService'])) {
             $this->services['Rp2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            $this->services['Rp2pService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['P2pService'])) {
                 $this->services['Rp2pService']->setP2pService($this->services['P2pService']);
             }
