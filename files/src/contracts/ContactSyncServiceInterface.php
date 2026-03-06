@@ -62,9 +62,10 @@ interface ContactSyncServiceInterface
      * public key and the current user's credentials.
      *
      * @param string $receiverPublicKey The receiver's public key
+     * @param string $currency The currency for the contact transaction
      * @return string The generated contact transaction ID
      */
-    public function createContactTxid(string $receiverPublicKey): string;
+    public function createContactTxid(string $receiverPublicKey, string $currency = 'USD'): string;
 
     // =========================================================================
     // CONTACT EXCHANGE HANDLERS

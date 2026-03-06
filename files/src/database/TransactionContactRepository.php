@@ -268,19 +268,26 @@ class TransactionContactRepository extends AbstractRepository {
      * @param string $receiverPublicKeyHash The hash of the receiver's public key
      * @return bool True if a contact transaction exists
      */
-    public function contactTransactionExistsForReceiver(string $receiverPublicKeyHash): bool {
+    public function contactTransactionExistsForReceiver(string $receiverPublicKeyHash, ?string $currency = null): bool {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
 
         $query = "SELECT 1 FROM {$this->tableName}
                   WHERE tx_type = 'contact'
                   AND sender_public_key_hash = :sender_public_key_hash
-                  AND receiver_public_key_hash = :receiver_public_key_hash
-                  LIMIT 1";
-
-        $stmt = $this->execute($query, [
+                  AND receiver_public_key_hash = :receiver_public_key_hash";
+        $params = [
             ':sender_public_key_hash' => $senderPublicKeyHash,
             ':receiver_public_key_hash' => $receiverPublicKeyHash
-        ]);
+        ];
+
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $query .= " LIMIT 1";
+
+        $stmt = $this->execute($query, $params);
 
         return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
     }

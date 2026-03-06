@@ -215,11 +215,13 @@ class TransactionService implements TransactionServiceInterface {
         if (!isset($data['receiverPublicKey'], $data['amount'], $data['time'])) {
             throw new InvalidArgumentException("Missing required fields for txid creation");
         }
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
+        $currency = $data['currency'] ?? '';
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $currency . $data['time']);
     }
 
     public function createUniqueDatabaseTxid(array $data, array $rp2p): string {
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $rp2p['time']);
+        $currency = $data['currency'] ?? $rp2p['currency'] ?? '';
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $currency . $rp2p['time']);
     }
 
     public function createContactHash(string $receiverAddress, string $salt, string $time): string {
