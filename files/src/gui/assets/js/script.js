@@ -1260,14 +1260,22 @@ function initializeCurrencyAcceptHandlers() {
                     return;
                 }
 
+                // Copy shared name into the Accept All form's hidden field (for new contacts)
+                var nameTarget = form.querySelector('.accept-all-name-target');
+                if (nameTarget && nameInput) {
+                    nameTarget.value = nameInput.value.trim();
+                }
+
                 // Collect currency data from individual forms
+                // Field names differ: existing contacts use "currency"/"fee"/"credit",
+                // new contacts use "contact_currency"/"contact_fee"/"contact_credit"
                 var currencyForms = card.querySelectorAll('.currency-accept-form');
                 var currencies = [];
                 for (var k = 0; k < currencyForms.length; k++) {
                     var cf = currencyForms[k];
-                    var currency = cf.querySelector('input[name="currency"]');
-                    var fee = cf.querySelector('input[name="fee"]');
-                    var credit = cf.querySelector('input[name="credit"]');
+                    var currency = cf.querySelector('input[name="currency"]') || cf.querySelector('input[name="contact_currency"]');
+                    var fee = cf.querySelector('input[name="fee"]') || cf.querySelector('input[name="contact_fee"]');
+                    var credit = cf.querySelector('input[name="credit"]') || cf.querySelector('input[name="contact_credit"]');
                     if (currency && fee && credit) {
                         currencies.push({
                             currency: currency.value,

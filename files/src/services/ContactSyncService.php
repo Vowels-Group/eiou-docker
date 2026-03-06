@@ -1697,7 +1697,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             return null;
         }
 
-        $recipientSig = $this->contactPayload->generateRecipientSignature($txData['signature_nonce']);
+        $recipientSig = $this->contactPayload->generateRecipientSignature($txData['signature_nonce'], $txData['currency'] ?? null);
 
         if ($recipientSig === null) {
             return null;

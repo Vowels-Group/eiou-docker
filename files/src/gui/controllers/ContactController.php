@@ -724,6 +724,7 @@ class ContactController
         $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
         $currenciesJson = $_POST['currencies'] ?? '[]';
         $currencies = json_decode($currenciesJson, true);
+        $isNewContact = !empty($_POST['is_new_contact']);
 
         if (empty($pubkeyHash) || empty($currencies) || !is_array($currencies)) {
             MessageHelper::redirectMessage('Invalid request to accept currencies.', 'error');
@@ -740,6 +741,48 @@ class ContactController
             $accepted = [];
             $errors = [];
 
+            // For new contacts: accept the first currency via addContact to establish the contact,
+            // then accept remaining currencies via the standard currency acceptance path
+            $firstCurrencyHandled = false;
+            if ($isNewContact && !empty($contactPubkey)) {
+                $contact = $serviceContainer->getContactRepository()->getContactByPubkey($contactPubkey);
+                if ($contact && $contact['status'] !== Constants::CONTACT_STATUS_ACCEPTED) {
+                    $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+                    $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
+
+                    if (!empty($contactAddress) && !empty($contactName) && !empty($currencies[0])) {
+                        $firstEntry = $currencies[0];
+                        $firstCurrency = strtoupper(Security::sanitizeInput($firstEntry['currency'] ?? ''));
+                        $firstFee = Security::sanitizeInput($firstEntry['fee'] ?? '');
+                        $firstCredit = Security::sanitizeInput($firstEntry['credit'] ?? '');
+
+                        if (!empty($firstCurrency) && $firstFee !== '' && $firstCredit !== '') {
+                            // Accept the contact with the first currency via CLI addContact
+                            $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstCurrency, '--json'];
+                            CliOutputManager::resetInstance();
+                            $outputManager = new CliOutputManager($argv);
+
+                            ob_start();
+                            try {
+                                $this->contactService->addContact($argv, $outputManager);
+                                ob_end_clean();
+                                $accepted[] = $firstCurrency;
+                                $firstCurrencyHandled = true;
+                            } catch (\Throwable $e) {
+                                if (ob_get_level() > 0) { ob_end_clean(); }
+                                $errors[] = "{$firstCurrency}: " . $e->getMessage();
+                            }
+                        }
+                    }
+
+                    // Remove the first currency from the list since it was handled
+                    if ($firstCurrencyHandled) {
+                        array_shift($currencies);
+                    }
+                }
+            }
+
+            // Accept remaining currencies (or all if contact was already accepted)
             foreach ($currencies as $entry) {
                 $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
                 $fee = Security::sanitizeInput($entry['fee'] ?? '');
@@ -776,10 +819,12 @@ class ContactController
                     $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
                 }
 
-                if ($contactPubkey) {
-                    $serviceContainer->getBalanceRepository()->insertInitialContactBalances($contactPubkey, $currency);
+                // Re-fetch pubkey in case it was just established by the first currency acceptance
+                $currentPubkey = $contactPubkey ?: $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+                if ($currentPubkey) {
+                    $serviceContainer->getBalanceRepository()->insertInitialContactBalances($currentPubkey, $currency);
                     try {
-                        $serviceContainer->getContactCreditRepository()->createInitialCredit($contactPubkey, $currency);
+                        $serviceContainer->getContactCreditRepository()->createInitialCredit($currentPubkey, $currency);
                     } catch (\Exception $e) {
                         // Credit may already exist
                     }

@@ -779,6 +779,7 @@ class TransportUtilityService implements TransportServiceInterface
         // Remove transport metadata from payload content (will be at top level)
         $messageContent = $payload;
         unset($messageContent['senderAddress']);
+        unset($messageContent['senderAddresses']);
         unset($messageContent['senderPublicKey']);
         unset($messageContent['signature']);
 

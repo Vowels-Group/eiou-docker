@@ -225,15 +225,21 @@ class ContactPayload extends BasePayload
     /**
      * Generate recipient signature for a contact transaction
      *
-     * Signs the same message content that the sender signed: {'type':'create','nonce':N}
+     * Signs the same message content that the sender signed:
+     * {'type':'create','currency':'USD','nonce':N}
      * This provides cryptographic proof that the recipient accepted the contact request.
      *
      * @param string $nonce The signature nonce from the contact transaction
+     * @param string|null $currency The currency for this contact transaction
      * @return string|null Base64-encoded signature, or null if signing fails
      */
-    public function generateRecipientSignature(string $nonce): ?string
+    public function generateRecipientSignature(string $nonce, ?string $currency = null): ?string
     {
-        $messageContent = ['type' => 'create', 'nonce' => $nonce];
+        $messageContent = ['type' => 'create'];
+        if ($currency !== null) {
+            $messageContent['currency'] = $currency;
+        }
+        $messageContent['nonce'] = $nonce;
         $message = json_encode($messageContent);
 
         $privateKey = $this->currentUser->getPrivateKey();
