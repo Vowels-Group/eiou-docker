@@ -1788,11 +1788,12 @@ syncTransactionChain(contactAddress, contactPublicKey)
   |
   +-- 1. Get lastKnownTxid (our latest tx with this contact)
   |
-  +-- 2. Local self-repair (if BackupService available)
+  +-- 2. Detect chain gaps and attempt local self-repair
   |     +-- verifyChainIntegrity() -> get list of gaps
-  |     +-- For each missing txid:
-  |     |     +-- restoreTransactionFromBackup() -> recovered? remove from gaps list
-  |     +-- Re-verify chain, update lastKnownTxid and remaining gaps
+  |     +-- If BackupService available:
+  |     |     +-- For each missing txid: restoreTransactionFromBackup()
+  |     |     +-- Re-verify chain, update lastKnownTxid and remaining gaps
+  |     +-- Else: all gaps become missingTxids for remote to resolve
   |
   +-- 3. Build sync request
   |     +-- buildTransactionSyncRequest(contactAddress, contactPubkey, lastKnownTxid)
@@ -1820,7 +1821,7 @@ handleTransactionSyncRequest(request)  [Contact's side]
   +-- 4. Check missingTxids[] from requester (cap at 10)
   |     +-- For each missing txid not already in response:
   |     |     +-- Check local DB -> if found, format and include
-  |     |     +-- Check local backups -> if restored, format and include
+  |     |     +-- If BackupService available: check local backups -> if restored, format and include
   +-- 5. Return filtered transactions (oldest first)
 ```
 
@@ -1952,7 +1953,7 @@ currency's chain heads don't match.
     +-- eiou add <address>                        |
     |     +-- Send contact request -------------->|
     |         (tx_type='contact', amount=0,       +-- Contact appears as 'pending'
-    |          senderAddresses=[all addresses])   |
+    |          currency=<requested currency>)     |
     |                                             |
     |                                             +-- eiou accept <name>
     |                                             |     +-- Update contact to 'accepted'

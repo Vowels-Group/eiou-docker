@@ -42,6 +42,12 @@ The project is currently in **ALPHA** status.
 - Legacy `their_available_credit` single-value calculation from GUI; per-currency values in `currencies` array are used instead
 
 ### Fixed
+- Contact transaction sync recovery: chain gap detection and `missingTxids` DB lookup no longer gated behind `backupService !== null` — previously, if `BackupService` was not wired (lazy-loaded), sync could not detect gaps or ask the remote to look up missing transactions, causing permanent "both sides missing same transactions" errors even when the remote had the transaction in its DB
+- Contact transaction signature verification during sync: `senderAddresses` removed from signed content in `signWithCapture()` — previously, the sender's full address set was included in the signed message, making signatures unverifiable if any address was added or removed after signing
+- Contact signature reconstruction: `reconstructContactSignedMessage()` now includes `currency` field to match the actual signed content — previously reconstructed only `{"type":"create","nonce":"..."}` which never matched the signed payload
+- Recipient signature for contact transactions: `generateRecipientSignature()` now includes `currency` to match sender signature format; `getContactTransactionByParties()` query updated to return `currency` column — previously recipient signed without currency, causing verification mismatch during sync recovery
+- Accept All button for new pending contacts: removed `$isExisting` gate so the "Accept All N Currencies" button appears for both new and existing contacts with multiple pending currencies — previously only shown after the first currency was individually accepted
+- Accept All for new contacts: `handleAcceptAllCurrencies` now handles new contacts by accepting the first currency via `addContact` CLI flow (to establish the contact) then remaining currencies via standard acceptance path — previously only worked for already-accepted contacts
 - Credit limit conversion: `handleAcceptCurrency` and `handleAcceptAllCurrencies` now properly convert fee and credit limit to minor units (cents) before storing — previously stored raw float values
 - "Their Available Credit" in contact modal now calculated per-currency as `credit_limit - balance` instead of showing "—"
 - "Your Available Credit" in pong calculation no longer incorrectly filters by direction — credit limit lookup uses max across directions
