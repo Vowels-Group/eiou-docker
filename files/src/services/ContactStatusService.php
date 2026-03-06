@@ -353,6 +353,29 @@ class ContactStatusService implements ContactStatusServiceInterface {
         // If chains don't match and sync was requested, trigger sync
         if (!$chainValid && ($request['requestSync'] ?? false)) {
             $this->triggerSync($request['senderAddress'] ?? '', $senderPubkey);
+
+            // Re-evaluate chain after sync — in-flight transactions may have arrived
+            // during the sync window, resolving the mismatch
+            $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+                $this->currentUser->getPublicKey(),
+                $senderPubkey
+            );
+            $chainValid = true;
+            $chainStatusByCurrency = [];
+            $allCurrencies = array_unique(array_merge(
+                array_keys($remotePrevTxidsByCurrency),
+                array_keys($localPrevTxidsByCurrency)
+            ));
+            foreach ($allCurrencies as $cur) {
+                $localTxid = $localPrevTxidsByCurrency[$cur] ?? null;
+                $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
+                if ($localTxid !== null && $remoteTxid !== null && $localTxid !== $remoteTxid) {
+                    $chainStatusByCurrency[$cur] = false;
+                    $chainValid = false;
+                } else {
+                    $chainStatusByCurrency[$cur] = true;
+                }
+            }
         }
 
         // Calculate available credit per currency for the pinging contact
