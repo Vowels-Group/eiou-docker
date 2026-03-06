@@ -1266,42 +1266,35 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Check if WE initiated a request to them (name is set when we sent the request)
-                    // AND currencies must match — different currency = different request terms
-                    // Also check contact_currencies for outgoing pending currency match
-                    $existingCurrency = $existingContact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                    $currencyMatchesPrimary = ($existingContact['name'] !== null && $currency === $existingCurrency);
-
-                    // Also check if the incoming currency matches any outgoing pending currency
+                    // AND currencies must match — check contact_currencies for outgoing currency match
                     $currencyMatchesOutgoing = false;
-                    if (!$currencyMatchesPrimary && $this->contactCurrencyRepository !== null && $existingContact['name'] !== null) {
-                        $outgoingPending = array_column(
-                            $this->contactCurrencyRepository->getPendingCurrencies($senderPublicKeyHash, 'outgoing'),
-                            'currency'
-                        );
-                        $currencyMatchesOutgoing = in_array($currency, $outgoingPending);
+                    if ($this->contactCurrencyRepository !== null && $existingContact['name'] !== null) {
+                        $currencyMatchesOutgoing = $this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing');
                     }
 
-                    if ($currencyMatchesPrimary || $currencyMatchesOutgoing) {
-                        // Mutual request with matching currency: auto-accept using the values WE set
+                    if ($currencyMatchesOutgoing) {
+                        // Mutual request with matching currency: auto-accept
                         if (!empty($senderAddresses) && is_array($senderAddresses)) {
                             $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                         }
 
+                        // Get fee/credit from our outgoing currency config
+                        $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
+                        $fee = (float) ($outgoingConfig['fee_percent'] ?? 0);
+                        $credit = (float) ($outgoingConfig['credit_limit'] ?? 0);
+
                         $this->acceptContact(
                             $senderPublicKey,
                             $existingContact['name'],
-                            (float)$existingContact['fee_percent'],
-                            (float)$existingContact['credit_limit'],
-                            $currencyMatchesPrimary ? $existingContact['currency'] : $currency
+                            $fee,
+                            $credit,
+                            $currency
                         );
 
                         // Mark matching currencies as accepted in contact_currencies
-                        if ($this->contactCurrencyRepository !== null) {
-                            $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
-                            // Also mark incoming direction as accepted
-                            if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
-                                $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
-                            }
+                        $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+                        if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
                         }
 
                         $this->generateAndStoreContactRecipientSignature($senderPublicKey);
@@ -1325,7 +1318,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // OR: name is set but currencies differ (mutual request with mismatched terms)
 
                     // Store the remote's currency request so the GUI can inform the user
-                    if ($this->contactCurrencyRepository !== null && $currency !== $existingCurrency) {
+                    if ($this->contactCurrencyRepository !== null) {
                         if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
                             $this->contactCurrencyRepository->insertCurrencyConfig(
                                 $senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming'
@@ -1365,7 +1358,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 if ($existingContactForCurrency
                     && $existingContactForCurrency['status'] === Constants::CONTACT_STATUS_ACCEPTED
                     && $this->contactCurrencyRepository !== null
-                    && $currency !== ($existingContactForCurrency['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)
                     && !$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')
                 ) {
                     // Check if we also have an outgoing pending request for the same currency
@@ -1424,36 +1416,31 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Check if WE initiated a request to them (name is set when we sent the request)
-                    // AND currencies must match — different currency = different request terms
-                    // Also check contact_currencies for outgoing pending currency match
-                    $existingCurrency = $existingContact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                    $currencyMatchesPrimary = ($existingContact['name'] !== null && $currency === $existingCurrency);
-
+                    // AND currencies must match — check contact_currencies for outgoing currency match
                     $currencyMatchesOutgoing = false;
-                    if (!$currencyMatchesPrimary && $this->contactCurrencyRepository !== null && $existingContact['name'] !== null) {
-                        $outgoingPending = array_column(
-                            $this->contactCurrencyRepository->getPendingCurrencies($senderPublicKeyHash, 'outgoing'),
-                            'currency'
-                        );
-                        $currencyMatchesOutgoing = in_array($currency, $outgoingPending);
+                    if ($this->contactCurrencyRepository !== null && $existingContact['name'] !== null) {
+                        $currencyMatchesOutgoing = $this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing');
                     }
 
-                    if ($currencyMatchesPrimary || $currencyMatchesOutgoing) {
-                        // Mutual request with matching currency: auto-accept using the values WE set
+                    if ($currencyMatchesOutgoing) {
+                        // Mutual request with matching currency: auto-accept
+                        // Get fee/credit from our outgoing currency config
+                        $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
+                        $fee = (float) ($outgoingConfig['fee_percent'] ?? 0);
+                        $credit = (float) ($outgoingConfig['credit_limit'] ?? 0);
+
                         $this->acceptContact(
                             $senderPublicKey,
                             $existingContact['name'],
-                            (float)$existingContact['fee_percent'],
-                            (float)$existingContact['credit_limit'],
-                            $currencyMatchesPrimary ? $existingContact['currency'] : $currency
+                            $fee,
+                            $credit,
+                            $currency
                         );
 
                         // Mark matching currencies as accepted in contact_currencies
-                        if ($this->contactCurrencyRepository !== null) {
-                            $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
-                            if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
-                                $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
-                            }
+                        $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+                        if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
                         }
 
                         $this->generateAndStoreContactRecipientSignature($senderPublicKey);
@@ -1477,7 +1464,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // OR: name is set but currencies differ (mutual request with mismatched terms)
 
                     // Store the remote's currency request so the GUI can inform the user
-                    if ($this->contactCurrencyRepository !== null && $currency !== $existingCurrency) {
+                    if ($this->contactCurrencyRepository !== null) {
                         if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
                             $this->contactCurrencyRepository->insertCurrencyConfig(
                                 $senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming'
