@@ -272,26 +272,91 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         $this->contactRepository->addPendingContact($senderPubkey);
                         $this->addressRepository->insertAddress($senderPubkey, $transportIndexAssociative);
 
+                        // Create contact_currencies entries for all currencies the remote has
+                        $remotePrevTxidsByCurrency = $request['prevTxidsByCurrency'] ?? [];
+                        $remoteCurrencies = array_keys($remotePrevTxidsByCurrency);
+                        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+
+                        if ($this->contactCurrencyRepository !== null && !empty($remoteCurrencies)) {
+                            foreach ($remoteCurrencies as $cur) {
+                                $this->contactCurrencyRepository->insertCurrencyConfig(
+                                    $pubkeyHash, $cur, 0, 0, 'pending', 'incoming'
+                                );
+                            }
+                        }
+
                         Logger::getInstance()->info("Auto-created pending contact from ping (possible wallet restore)", [
-                            'sender_address' => $senderAddress
+                            'sender_address' => $senderAddress,
+                            'currencies' => $remoteCurrencies
                         ]);
 
                         // Trigger sync to restore transaction chain from the remote side
                         $this->triggerSync($senderAddress, $senderPubkey);
 
-                        // After sync, get updated chain state
-                        $localPrevTxid = $this->transactionRepository->getPreviousTxid(
+                        // After sync, check if transactions were restored — if so, auto-accept
+                        // the contact since the transaction history proves the prior relationship
+                        $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                             $this->currentUser->getPublicKey(),
                             $senderPubkey
                         );
 
+                        if (!empty($localPrevTxidsByCurrency)) {
+                            // Transactions exist — auto-accept the contact
+                            $defaultFee = (int) ($this->currentUser->getDefaultFee() * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY]);
+                            $defaultCredit = (int) ($this->currentUser->getDefaultCreditLimit() * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY]);
+
+                            $this->contactRepository->updateContactStatus($senderPubkey, 'accepted');
+
+                            // Create balances, credit, and currency entries for each restored currency
+                            $restoredCurrencies = array_unique(array_merge($remoteCurrencies, array_keys($localPrevTxidsByCurrency)));
+                            foreach ($restoredCurrencies as $cur) {
+                                if ($this->balanceRepository !== null) {
+                                    $this->balanceRepository->insertInitialContactBalances($senderPubkey, $cur);
+                                }
+                                if ($this->contactCreditRepository !== null) {
+                                    try {
+                                        $this->contactCreditRepository->createInitialCredit($senderPubkey, $cur);
+                                    } catch (\Exception $e) {
+                                        // Ignore duplicate key errors
+                                    }
+                                }
+                                if ($this->contactCurrencyRepository !== null) {
+                                    // Upsert both directions as accepted with default fee/credit
+                                    $this->contactCurrencyRepository->upsertCurrencyConfig(
+                                        $pubkeyHash, $cur, $defaultFee, $defaultCredit, 'incoming'
+                                    );
+                                    $this->contactCurrencyRepository->updateCurrencyStatus($pubkeyHash, $cur, 'accepted', 'incoming');
+                                    $this->contactCurrencyRepository->upsertCurrencyConfig(
+                                        $pubkeyHash, $cur, $defaultFee, $defaultCredit, 'outgoing'
+                                    );
+                                    $this->contactCurrencyRepository->updateCurrencyStatus($pubkeyHash, $cur, 'accepted', 'outgoing');
+                                }
+                            }
+
+                            Logger::getInstance()->info("Auto-accepted restored contact after sync", [
+                                'sender_address' => $senderAddress,
+                                'currencies' => $restoredCurrencies
+                            ]);
+                        }
+
+                        // Re-evaluate chain validity after sync
+                        $chainValid = true;
+                        $chainStatusByCurrency = [];
+                        foreach ($remotePrevTxidsByCurrency as $cur => $remoteTxid) {
+                            if ($remoteTxid !== null && !$this->transactionRepository->transactionExistsTxid($remoteTxid)) {
+                                $chainStatusByCurrency[$cur] = false;
+                                $chainValid = false;
+                            } else {
+                                $chainStatusByCurrency[$cur] = true;
+                            }
+                        }
+
                         // Update online status for the newly created contact
                         $this->updateContactOnlineStatus($senderPubkey);
 
-                        // Respond with pong so remote knows we're alive
-                        // Chain is marked invalid since we just restored from scratch
+                        // Respond with pong including per-currency chain status
                         [$prRunning, $prTotal] = $this->checkProcessorHealth();
-                        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, false, null, null, $prRunning, $prTotal);
+                        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, [], $prRunning, $prTotal);
                         return;
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to auto-create pending contact from ping", [
