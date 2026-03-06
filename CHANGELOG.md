@@ -22,6 +22,8 @@ The project is currently in **ALPHA** status.
 - `ContactCurrencyRepository::getDistinctAcceptedCurrencies()` for wallet info currency display
 
 ### Changed
+- `MessagePayload::buildTransactionSyncRequest()` now accepts optional `lastKnownTxidsByCurrency` parameter for per-currency sync cursors
+- `SyncService::handleTransactionSyncRequest()` filters transactions per-currency when `lastKnownTxidsByCurrency` is provided in the request
 - `ContactStatusPayload::build()` sends `prevTxidsByCurrency` instead of single `prevTxid`
 - `ContactStatusPayload::buildResponse()` takes `chainStatusByCurrency` and `availableCreditByCurrency` maps instead of single `chainValid`/`availableCredit`/`currency` values
 - `getCreditLimit()` without direction parameter now returns `MAX(credit_limit)` across all direction rows for that contact+currency
@@ -47,6 +49,10 @@ The project is currently in **ALPHA** status.
 ### Fixed
 - Multi-currency acceptance for existing contacts: `handleExistingContact()` now creates an outgoing `contact_currencies` entry and sends a P2P notification when accepting an incoming pending currency — previously only the incoming entry was accepted, leaving the remote side stuck on "Awaiting their acceptance" for non-default currencies
 - False positive chain gap after contact add/accept cycle: pong handler now re-evaluates chain validity after sync using txid existence checks instead of stale head comparison — resolves race condition where in-flight transactions caused chain head mismatches between ping and pong
+- Wallet restore via ping: `handlePingRequest` auto-create path now creates `contact_currencies` entries for all currencies from `prevTxidsByCurrency`, auto-accepts the contact when sync proves prior relationship, and uses the correct multi-currency `buildResponse` signature — previously only created a bare pending contact with no currencies and used the deprecated single-value response signature
+- Wallet restore balance recalculation: auto-create path now calls `syncContactBalance()` to recalculate balances from synced transaction history instead of initializing to 0/0 — previously all restored contact balances showed zero
+- Multi-currency transaction sync: `syncTransactionChain()` now sends per-currency cursors (`lastKnownTxidsByCurrency`) so the handler can filter independently per currency — previously used a single `lastKnownTxid` cursor across all currencies, causing partial syncs to miss older transactions in currencies other than the one with the latest txid
+- Sync handler per-currency filtering: `handleTransactionSyncRequest()` now supports `lastKnownTxidsByCurrency` for per-currency cursor filtering with backward-compatible fallback to single `lastKnownTxid` break
 - Per-currency independent contact requests: incoming currency from P2P contact requests is now stored in `contact_currencies` with `status='pending'` instead of being lost (root cause: `addPendingContact()` stores `currency: null`)
 - Accept contact now validates against pending currencies from `contact_currencies` instead of the always-null `contacts.currency` field
 - Accepting a pending currency for an existing accepted contact now correctly creates initial balance and credit entries for the new currency
