@@ -542,10 +542,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
                 }
 
-                // Send P2P notification so remote side updates their outgoing entry to accepted
-                $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                // Send acceptance notification so remote side marks their outgoing currency as accepted
+                // Use buildContactIsAccepted (not buildCreateRequest) to avoid triggering a new contact tx on the remote
+                $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency);
                 $messageId = 'currency-accept-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
-                $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
+                $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
 
                 $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                 $contactData['currency'] = $currency;
@@ -649,6 +650,13 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         $contactData['currency'] = $currency;
                         $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (currency updated to " . $currency . ")");
                     } else {
+                        // Response is "received" — create the sender-side contact transaction
+                        // using the txid from the receiver to ensure both sides match
+                        if (isset($responseData['txid'])) {
+                            $senderPublicKey = $responseData['senderPublicKey'] ?? $contact['pubkey'];
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $responseData['txid']);
+                        }
+
                         $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                         $contactData['currency'] = $currency;
                         $output->success("Contact request updated to " . $currency . ", awaiting response from " . $address, $contactData, "Currency updated");
@@ -1359,9 +1367,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                        // Ensure we have a received contact transaction
+                        // Ensure we have a received contact transaction for this specific currency
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                            $senderPublicKeyHash
+                            $senderPublicKeyHash, $currency
                         );
                         $txid = null;
                         if (!$hasContactTx) {
@@ -1512,9 +1520,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                        // Ensure we have a received contact transaction
+                        // Ensure we have a received contact transaction for this specific currency
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                            $senderPublicKeyHash
+                            $senderPublicKeyHash, $currency
                         );
                         $txid = null;
                         if (!$hasContactTx) {
@@ -1539,13 +1547,13 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
                     }
 
-                    // Check if we have the contact transaction
+                    // Check if we have a contact transaction for this specific currency
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                        $senderPublicKeyHash
+                        $senderPublicKeyHash, $currency
                     );
 
                     if (!$hasContactTx) {
-                        // Create the contact transaction on our side
+                        // Create the contact transaction on our side for this currency
                         $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
