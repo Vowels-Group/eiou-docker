@@ -517,6 +517,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     'credit_limit' => (int) $credit,
                 ], 'incoming');
 
+                // Create outgoing entry as accepted (mutual acceptance)
+                if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
+                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                        $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'accepted', 'outgoing'
+                    );
+                } else {
+                    $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'outgoing');
+                }
+
                 // Insert initial balance and credit entries for the new currency
                 $this->balanceRepository->insertInitialContactBalances($contact['pubkey'], $currency);
                 if ($this->contactCreditRepository !== null) {
@@ -529,6 +538,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         ]);
                     }
                 }
+
+                // Send P2P notification so remote side updates their outgoing entry to accepted
+                $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                $messageId = 'currency-accept-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+                $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
 
                 $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                 $contactData['currency'] = $currency;
