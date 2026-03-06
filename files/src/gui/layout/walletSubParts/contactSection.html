@@ -91,9 +91,15 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-details">
-                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?> <?php echo htmlspecialchars($contact['currency']); ?></div>
-                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo htmlspecialchars($contact['currency']); ?></div>
-                            <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                            <?php
+                                $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
+                                $displayCurrency = $primaryCur['currency'] ?? 'USD';
+                            ?>
+                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <?php if ($primaryCur): ?>
+                            <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, 2); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <div>Fee: <?php echo number_format($primaryCur['fee'] ?? 0, 2); ?>%</div>
+                            <?php endif; ?>
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
                                 <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> more</div>
                             <?php endif; ?>
@@ -143,8 +149,13 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-details">
-                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo htmlspecialchars($contact['currency']); ?></div>
-                            <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                            <?php
+                                $pendCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
+                            ?>
+                            <?php if ($pendCur): ?>
+                            <div>Credit: <?php echo number_format($pendCur['credit_limit'] ?? 0, 2); ?> <?php echo htmlspecialchars($pendCur['currency'] ?? 'USD'); ?></div>
+                            <div>Fee: <?php echo number_format($pendCur['fee'] ?? 0, 2); ?>%</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -182,9 +193,15 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-details">
-                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, 2); ?> <?php echo htmlspecialchars($contact['currency'] ?? 'USD'); ?></div>
-                            <div>Credit: <?php echo number_format($contact['credit_limit'] ?? 0, 2); ?> <?php echo htmlspecialchars($contact['currency'] ?? 'USD'); ?></div>
-                            <div>Fee: <?php echo number_format($contact['fee'] ?? 0, 2); ?>%</div>
+                            <?php
+                                $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
+                                $blkCurrency = $blkCur['currency'] ?? 'USD';
+                            ?>
+                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, 2); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
+                            <?php if ($blkCur): ?>
+                            <div>Credit: <?php echo number_format($blkCur['credit_limit'] ?? 0, 2); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
+                            <div>Fee: <?php echo number_format($blkCur['fee'] ?? 0, 2); ?>%</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -690,7 +707,7 @@
                                 <input type="number" id="contact_credit_<?php echo $index; ?>" name="contact_credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
-                                <?php $requestedCurrency = $contact['currency'] ?? 'USD'; ?>
+                                <?php $requestedCurrency = !empty($contact['pending_currencies']) ? ($contact['pending_currencies'][0]['currency'] ?? 'USD') : 'USD'; ?>
                                 <label for="contact_currency_<?php echo $index; ?>">Currency (requested: <?php echo htmlspecialchars($requestedCurrency); ?>):</label>
                                 <select id="contact_currency_<?php echo $index; ?>" name="contact_currency" required>
                                     <?php foreach ($user->getAllowedCurrencies() as $cur): ?>

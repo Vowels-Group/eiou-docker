@@ -62,7 +62,7 @@ class ContactDataBuilder
         return array_merge([
             'address' => $primaryAddress ?? '',
             'name' => $contact['name'] ?? ($status === 'blocked' ? '-' : ''),
-            'fee' => $contact['fee'] ?? 0,
+            'fee' => !empty($contact['currencies']) ? ($contact['currencies'][0]['fee'] ?? 0) : 0,
             'status' => $status,
             'pubkey' => $contact['pubkey'] ?? '',
             'balance' => $contact['balance'] ?? 0,

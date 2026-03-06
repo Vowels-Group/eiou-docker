@@ -1825,19 +1825,22 @@ function openContactModal(contact, openTab) {
     var balanceEl = document.getElementById('modal_balance');
     balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
     balanceEl.className = 'balance-amount';
-    document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
+    // Derive initial currency, credit_limit, and fee from first accepted currency
+    var primaryCur = (contact.currencies && contact.currencies.length > 0) ? contact.currencies[0] : null;
+    var currency = primaryCur ? primaryCur.currency : 'USD';
+    document.getElementById('modal_balance_currency').textContent = currency;
 
     // Set credit limit, available credits (both directions), and fee
-    var creditLimit = parseFloat(contact.credit_limit) || 0;
+    var creditLimit = primaryCur ? (parseFloat(primaryCur.credit_limit) || 0) : 0;
     document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
-    document.getElementById('modal_credit_currency').textContent = contact.currency || 'USD';
-    var currency = contact.currency || 'USD';
+    document.getElementById('modal_credit_currency').textContent = currency;
 
     // My available credit with them (from pong)
     var myAvailableCreditEl = document.getElementById('modal_my_available_credit');
     if (myAvailableCreditEl) {
-        myAvailableCreditEl.textContent = (contact.my_available_credit !== null && contact.my_available_credit !== undefined)
-            ? parseFloat(contact.my_available_credit).toFixed(2) : '—';
+        var myAvailCredit = primaryCur ? primaryCur.my_available_credit : contact.my_available_credit;
+        myAvailableCreditEl.textContent = (myAvailCredit !== null && myAvailCredit !== undefined)
+            ? parseFloat(myAvailCredit).toFixed(2) : '—';
     }
     var myCreditCurrencyEl = document.getElementById('modal_my_credit_currency');
     if (myCreditCurrencyEl) myCreditCurrencyEl.textContent = currency;
@@ -1845,13 +1848,14 @@ function openContactModal(contact, openTab) {
     // Their available credit with me (calculated)
     var theirAvailableCreditEl = document.getElementById('modal_their_available_credit');
     if (theirAvailableCreditEl) {
-        theirAvailableCreditEl.textContent = (contact.their_available_credit !== null && contact.their_available_credit !== undefined)
-            ? parseFloat(contact.their_available_credit).toFixed(2) : '—';
+        var theirAvailCredit = primaryCur ? primaryCur.their_available_credit : contact.their_available_credit;
+        theirAvailableCreditEl.textContent = (theirAvailCredit !== null && theirAvailCredit !== undefined)
+            ? parseFloat(theirAvailCredit).toFixed(2) : '—';
     }
     var theirCreditCurrencyEl = document.getElementById('modal_their_credit_currency');
     if (theirCreditCurrencyEl) theirCreditCurrencyEl.textContent = currency;
 
-    var fee = parseFloat(contact.fee) || 0;
+    var fee = primaryCur ? (parseFloat(primaryCur.fee) || 0) : 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
 
     // Populate currency slider for multi-currency contacts
@@ -2084,13 +2088,13 @@ function openContactModal(contact, openTab) {
         document.getElementById('edit_contact_fee').value = acceptedCurrencies[0].fee;
         document.getElementById('edit_contact_credit').value = acceptedCurrencies[0].credit_limit;
     } else {
-        // Fallback to contact's default currency
+        // Fallback: no accepted currencies
         var opt = document.createElement('option');
-        opt.value = contact.currency;
-        opt.textContent = contact.currency;
+        opt.value = 'USD';
+        opt.textContent = 'USD';
         editCurrencySelect.appendChild(opt);
-        document.getElementById('edit_contact_fee').value = contact.fee;
-        document.getElementById('edit_contact_credit').value = contact.credit_limit;
+        document.getElementById('edit_contact_fee').value = 0;
+        document.getElementById('edit_contact_credit').value = 0;
     }
 
     // Set action form addresses
