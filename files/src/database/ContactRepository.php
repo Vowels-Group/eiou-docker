@@ -151,10 +151,10 @@ class ContactRepository extends AbstractRepository {
      */
     public function updateContactStatus(string $pubkey, string $status): bool
     {
-        $query ="UPDATE {$this->tableName} 
-                    SET status = ? 
-                    WHERE $this->primaryKey = ?";
-        $stmt = $this->execute($query,[$status, $pubkey]);
+        $query ="UPDATE {$this->tableName}
+                    SET status = :status
+                    WHERE {$this->primaryKey} = :pubkey";
+        $stmt = $this->execute($query, [':status' => $status, ':pubkey' => $pubkey]);
         if(!$stmt){
             return false;
         }
@@ -260,8 +260,8 @@ class ContactRepository extends AbstractRepository {
     {   
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE name IS NULL AND status = 'pending'
-                    AND created_at > ?";
-        $stmt = $this->execute($query,[date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
+                    AND created_at > :created_after";
+        $stmt = $this->execute($query, [':created_after' => date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
         if(!$stmt){
             return false;
         }
@@ -1094,8 +1094,8 @@ class ContactRepository extends AbstractRepository {
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
                     AND status = 'accepted' 
-                    ORDER BY created_at DESC LIMIT ?";
-        $stmt = $this->execute($query,[$limit]);
+                    ORDER BY created_at DESC LIMIT :limit";
+        $stmt = $this->execute($query, [':limit' => $limit]);
         
         if(!$stmt){
             return [];
@@ -1117,8 +1117,8 @@ class ContactRepository extends AbstractRepository {
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
                     AND status = 'accepted'
-                    AND name LIKE ?"; 
-        $stmt = $this->execute($query,['%' . $searchTerm . '%']);
+                    AND name LIKE :search_term";
+        $stmt = $this->execute($query, [':search_term' => '%' . $searchTerm . '%']);
         
         if(!$stmt){
             return [];
