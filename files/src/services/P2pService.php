@@ -12,6 +12,7 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
@@ -132,6 +133,11 @@ class P2pService implements P2pServiceInterface {
     private ?Rp2pService $rp2pService = null;
 
     /**
+     * @var ContactCurrencyRepository|null Repository for per-currency fee lookup
+     */
+    private ?ContactCurrencyRepository $contactCurrencyRepository = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -209,6 +215,16 @@ class P2pService implements P2pServiceInterface {
      */
     public function setRp2pService(Rp2pService $service): void {
         $this->rp2pService = $service;
+    }
+
+    /**
+     * Set the ContactCurrencyRepository for per-currency fee lookup
+     *
+     * @param ContactCurrencyRepository $repository
+     * @return void
+     */
+    public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
+        $this->contactCurrencyRepository = $repository;
     }
 
     /**
@@ -303,7 +319,7 @@ class P2pService implements P2pServiceInterface {
                 $requestedAmount = $this->calculateRequestedAmount($request);
                 $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
 
-                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey']);
+                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
                 $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
@@ -338,7 +354,18 @@ class P2pService implements P2pServiceInterface {
         if ($transportIndex !== null) {
             $senderContact = $this->contactService->lookupByAddress($transportIndex, $address);
         }
-        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee());
+
+        // Fee is per-currency in contact_currencies table; the old contacts.fee_percent
+        // column no longer exists. Look up from contact_currencies, fall back to user default.
+        $fee = $this->currentUser->getDefaultFee();
+        if ($senderContact && isset($senderContact['pubkey_hash'])) {
+            $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $feePercent = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
+            if ($feePercent !== null) {
+                $fee = $feePercent;
+            }
+        }
+
         return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
     }
 
@@ -1330,8 +1357,8 @@ class P2pService implements P2pServiceInterface {
      * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey): float {
-        return $this->p2pRepository->getCreditInP2p($pubkey);
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): float {
+        return $this->p2pRepository->getCreditInP2p($pubkey, $currency);
     }
 
     /**

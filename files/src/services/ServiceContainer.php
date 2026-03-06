@@ -1527,6 +1527,7 @@ class ServiceContainer implements ContainerInterface {
         if (isset($this->services['P2pService'])) {
             $this->services['P2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
             $this->services['P2pService']->setRp2pRepository($this->getRp2pRepository());
+            $this->services['P2pService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['Rp2pService'])) {
                 $this->services['P2pService']->setRp2pService($this->services['Rp2pService']);
             }

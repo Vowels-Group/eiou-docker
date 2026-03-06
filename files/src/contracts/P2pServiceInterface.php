@@ -58,7 +58,7 @@ interface P2pServiceInterface
      * @param string $pubkey The public key to check
      * @return float The total credit amount in P2P
      */
-    public function getCreditInP2p(string $pubkey): float;
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): float;
 
     /**
      * Get P2P statistics.
