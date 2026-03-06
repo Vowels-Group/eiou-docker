@@ -41,11 +41,16 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     echo -e "\n\t-> Verifying contact: ${containerKeys[0]} -> ${containerKeys[1]}"
 
-    # Query contact details using PHP (with single retry if not found)
+    # Query contact details and per-currency config using PHP (with single retry if not found)
+    # fee_percent, credit_limit, and currency are now in the contact_currencies table
     contactData=$(docker exec ${containerKeys[0]} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        \$contact = \Eiou\Core\Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
         if (\$contact) {
+            \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contact['pubkey']);
+            \$currencies = \$app->services->getContactCurrencyRepository()->getContactCurrencies(\$pubkeyHash);
+            \$contact['currencies'] = \$currencies;
             echo json_encode(\$contact);
         } else {
             echo 'NOT_FOUND';
@@ -59,8 +64,12 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         wait_for_queue_processed ${containerKeys[1]} 5
         contactData=$(docker exec ${containerKeys[0]} php -r "
             require_once('${BOOTSTRAP_PATH}');
-            \$contact = \Eiou\Core\Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+            \$app = \Eiou\Core\Application::getInstance();
+            \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
             if (\$contact) {
+                \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contact['pubkey']);
+                \$currencies = \$app->services->getContactCurrencyRepository()->getContactCurrencies(\$pubkeyHash);
+                \$contact['currencies'] = \$currencies;
                 echo json_encode(\$contact);
             } else {
                 echo 'NOT_FOUND';
@@ -76,7 +85,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
             nameCorrect="false"
         fi
 
-        if  [[ "$contactData" =~ "\"fee_percent\":${expectedFee}" ]] || [[ "$contactData" =~ "\"fee_percent\":\"${expectedFee}\"" ]]; then
+        # fee_percent and credit_limit are now in the currencies array from contact_currencies table
+        if [[ "$contactData" =~ "\"fee_percent\":${expectedFee}" ]] || [[ "$contactData" =~ "\"fee_percent\":\"${expectedFee}\"" ]]; then
             feeCorrect="true"
         else
             feeCorrect="false"
