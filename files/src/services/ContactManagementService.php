@@ -1510,9 +1510,9 @@ class ContactManagementService implements ContactManagementServiceInterface
      *
      * @return array List of accepted contact addresses
      */
-    public function getAllAcceptedAddresses(): array
+    public function getAllAcceptedAddresses(?string $currency = null): array
     {
-        return $this->contactRepository->getAllAcceptedAddresses();
+        return $this->contactRepository->getAllAcceptedAddresses($currency);
     }
 
     /**

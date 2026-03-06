@@ -778,13 +778,20 @@ class ContactRepository extends AbstractRepository {
      *
      * @return array Array of accepted addresses
      */
-    public function getAllAcceptedAddresses(): array {
-        $query = "SELECT * 
-                    FROM addresses a JOIN {$this->tableName} c 
+    public function getAllAcceptedAddresses(?string $currency = null): array {
+        $query = "SELECT a.*
+                    FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'accepted'";
-        
-        $stmt = $this->execute($query);
+        $params = [];
+
+        if ($currency !== null) {
+            $query .= " JOIN contact_currencies cc ON cc.pubkey_hash = c.pubkey_hash
+                        AND cc.currency = :currency AND cc.status = 'accepted'";
+            $params[':currency'] = $currency;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return [];

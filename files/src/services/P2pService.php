@@ -836,10 +836,8 @@ class P2pService implements P2pServiceInterface {
             $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
         }
 
-        if($queuedMessages !== []){
-            $contacts = $this->contactService->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
-            $contactsCount = count($contacts); // Count amount of contacts to send p2p request
-        }
+        // Per-currency contact cache to avoid redundant queries
+        $contactsByCurrency = [];
 
         // ── Phase 1: Prepare ──────────────────────────────────────────────
         // Collect ALL sends from ALL queued P2Ps into one mega-batch (no I/O).
@@ -879,6 +877,12 @@ class P2pService implements P2pServiceInterface {
             }
 
             // Path B: Broadcast — collect eligible contacts into mega-batch
+            $currency = $message['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            if (!isset($contactsByCurrency[$currency])) {
+                $contactsByCurrency[$currency] = $this->contactService->getAllAcceptedAddresses($currency);
+            }
+            $contacts = $contactsByCurrency[$currency];
+            $contactsCount = count($contacts);
             $contactsToSend = $contactsCount;
             $batchKeys = [];
 
@@ -1063,8 +1067,9 @@ class P2pService implements P2pServiceInterface {
                 return true;
             }
 
-            // Path B: Broadcast to all contacts via curl_multi
-            $contacts = $this->contactService->getAllAcceptedAddresses();
+            // Path B: Broadcast to contacts that support this currency via curl_multi
+            $currency = $message['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $contacts = $this->contactService->getAllAcceptedAddresses($currency);
             $contactsCount = count($contacts);
             $sends = [];
             $batchKeys = [];

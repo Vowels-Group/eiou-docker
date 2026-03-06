@@ -415,9 +415,9 @@ class ContactService implements ContactServiceInterface
      *
      * @return array List of accepted contact addresses
      */
-    public function getAllAcceptedAddresses(): array
+    public function getAllAcceptedAddresses(?string $currency = null): array
     {
-        return $this->managementService->getAllAcceptedAddresses();
+        return $this->managementService->getAllAcceptedAddresses($currency);
     }
 
     /**
