@@ -354,22 +354,17 @@ class ContactStatusService implements ContactStatusServiceInterface {
         if (!$chainValid && ($request['requestSync'] ?? false)) {
             $this->triggerSync($request['senderAddress'] ?? '', $senderPubkey);
 
-            // Re-evaluate chain after sync — in-flight transactions may have arrived
-            // during the sync window, resolving the mismatch
-            $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
-                $this->currentUser->getPublicKey(),
-                $senderPubkey
-            );
+            // Re-evaluate after sync: check if the remote's chain heads now exist locally.
+            // The ping's remote prevTxids are stale (snapshot from before sync), so comparing
+            // local heads vs remote heads can still mismatch if in-flight transactions arrived
+            // during the sync window advancing our local chain past the remote's snapshot.
+            // Instead, verify we have every txid the remote claimed — if so, we've caught up.
             $chainValid = true;
             $chainStatusByCurrency = [];
-            $allCurrencies = array_unique(array_merge(
-                array_keys($remotePrevTxidsByCurrency),
-                array_keys($localPrevTxidsByCurrency)
-            ));
             foreach ($allCurrencies as $cur) {
-                $localTxid = $localPrevTxidsByCurrency[$cur] ?? null;
                 $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
-                if ($localTxid !== null && $remoteTxid !== null && $localTxid !== $remoteTxid) {
+                if ($remoteTxid !== null && !$this->transactionRepository->transactionExistsTxid($remoteTxid)) {
+                    // Remote claims a txid we don't have — real gap
                     $chainStatusByCurrency[$cur] = false;
                     $chainValid = false;
                 } else {
