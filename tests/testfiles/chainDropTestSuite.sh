@@ -269,11 +269,13 @@ clean_chain_on() {
         require_once('${BOOTSTRAP_PATH}');
         \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
         \$stmt = \$pdo->prepare('DELETE FROM transactions
-            WHERE (sender_public_key_hash = :myHash AND receiver_public_key_hash = :contactHash)
-               OR (sender_public_key_hash = :contactHash2 AND receiver_public_key_hash = :myHash2)');
+            WHERE ((sender_public_key_hash = :myHash AND receiver_public_key_hash = :contactHash)
+               OR (sender_public_key_hash = :contactHash2 AND receiver_public_key_hash = :myHash2))
+               AND tx_type != :contactType');
         \$stmt->execute([
             'myHash' => '${myHash}', 'contactHash' => '${contactHash}',
-            'contactHash2' => '${contactHash}', 'myHash2' => '${myHash}'
+            'contactHash2' => '${contactHash}', 'myHash2' => '${myHash}',
+            'contactType' => 'contact'
         ]);
         echo \$stmt->rowCount();
     " 2>/dev/null

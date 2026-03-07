@@ -1448,14 +1448,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
                 }
 
-                // Ensure contact TX exists for dual-signature generation (may be lost after data cleanup/sync)
-                $existingTx = $this->transactionContactRepository->getContactTransactionByParties(
-                    $senderPublicKey, $this->currentUser->getPublicKey()
-                );
-                if (!$existingTx) {
-                    $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
-                }
-
                 // Generate recipient signature for dual-signature protocol (re-add scenario)
                 // The sender may have lost their database; include txid + signature so they can restore dual-sig
                 $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
@@ -1552,14 +1544,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // Store any additional addresses from senderAddresses if present
                 if (!empty($senderAddresses) && is_array($senderAddresses)) {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
-                }
-
-                // Ensure contact TX exists for dual-signature generation (may be lost after data cleanup/sync)
-                $existingTx = $this->transactionContactRepository->getContactTransactionByParties(
-                    $senderPublicKey, $this->currentUser->getPublicKey()
-                );
-                if (!$existingTx) {
-                    $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                 }
 
                 // Generate recipient signature for dual-signature protocol (re-add scenario)
