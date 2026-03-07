@@ -627,7 +627,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
 
                         $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
-                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
                         // Ensure contact transaction exists
                         if (!$this->contactTransactionExists($senderPublicKey)) {
@@ -635,6 +634,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
                         }
                         $this->completeReceivedContactTransaction($senderPublicKey);
+
+                        // Store recipient signature from remote's response on our sent contact TX
+                        $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
 
                         if ($this->messageDeliveryService !== null) {
                             $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
@@ -773,13 +775,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
 
                         $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
-                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
                         if (!$this->contactTransactionExists($senderPublicKey)) {
                             $txid = $responseData['txid'] ?? null;
                             $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
                         }
                         $this->completeReceivedContactTransaction($senderPublicKey);
+
+                        // Store recipient signature from remote's response on our sent contact TX
+                        $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
 
                         if ($this->messageDeliveryService !== null) {
                             $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
@@ -1059,10 +1063,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
                     }
 
-                    // Generate recipient signature on the received contact TX (dual-signature protocol)
-                    // We have a received TX from the remote's prior request (sender→us direction)
-                    // where we are the recipient — sign it to prove we accepted the contact
-                    $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+                    // Store recipient signature from remote's response on our sent contact TX
+                    // The remote generates the recipient signature and includes it in the acceptance response
+                    $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
 
                     // Update delivery stage
                     if ($this->messageDeliveryService !== null) {
@@ -1362,11 +1365,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
 
                         // Generate recipient signature after TX exists (needs signature_nonce from TX)
-                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+                        $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
                         $this->completeReceivedContactTransaction($senderPublicKey);
 
-                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid);
+                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid, $recipientSig);
                     }
 
                     // Contact exists as pending with name=null (they sent us a request first)
@@ -1504,11 +1507,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
 
                         // Generate recipient signature after TX exists (needs signature_nonce from TX)
-                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+                        $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
                         $this->completeReceivedContactTransaction($senderPublicKey);
 
-                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid);
+                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid, $recipientSig);
                     }
 
                     // Contact is pending with name=null (they sent us a request first)
@@ -1682,6 +1685,33 @@ class ContactSyncService implements ContactSyncServiceInterface {
         $this->transactionRepository->updateRecipientSignature($txData['txid'], $recipientSig);
 
         return $recipientSig;
+    }
+
+    /**
+     * Store the recipient signature from a remote's acceptance response on our sent contact TX.
+     *
+     * When we initiate a contact request (sender=us, receiver=them), the remote generates
+     * the recipient signature and includes it in the STATUS_ACCEPTED response. This method
+     * extracts that signature and stores it on our local sent contact TX.
+     *
+     * @param string $contactPublicKey The public key of the contact (the remote/receiver)
+     * @param array $responseData The decoded response from the remote
+     */
+    private function storeRecipientSignatureFromResponse(string $contactPublicKey, array $responseData): void
+    {
+        $recipientSignature = $responseData['recipientSignature'] ?? null;
+        if ($recipientSignature === null) {
+            return;
+        }
+
+        // Our sent contact TX: sender=us, receiver=them
+        $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
+            $this->currentUser->getPublicKey(), $contactPublicKey
+        );
+
+        if ($contactTx && isset($contactTx['txid'])) {
+            $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
+        }
     }
 
     /**

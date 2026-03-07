@@ -248,7 +248,7 @@ insertResult=$(docker exec ${receiver} php -r "
             ':memo' => 'standard',
             ':description' => 'chunked-sync-test-${timestamp}-' . \$i,
             ':status' => 'completed',
-            ':timestamp' => \$ts,
+            ':timestamp' => date('Y-m-d H:i:s', \$ts),
             ':time' => \$microtime,
             ':signature' => base64_encode('fake-sig-' . \$i),
             ':nonce' => \$ts,
@@ -385,7 +385,7 @@ insertResult2=$(docker exec ${receiver} php -r "
             ':memo' => 'standard',
             ':description' => 'small-sync-test-${timestamp2}-' . \$i,
             ':status' => 'completed',
-            ':timestamp' => \$ts,
+            ':timestamp' => date('Y-m-d H:i:s', \$ts),
             ':time' => \$microtime,
             ':signature' => base64_encode('fake-sig-' . \$i),
             ':nonce' => \$ts,
@@ -514,7 +514,7 @@ cursorResult=$(docker exec ${receiver} php -r "
             ':memo' => 'standard',
             ':description' => 'cursor-sync-test-${timestamp3}-' . \$i,
             ':status' => 'completed',
-            ':timestamp' => \$ts,
+            ':timestamp' => date('Y-m-d H:i:s', \$ts),
             ':time' => \$microtime,
             ':signature' => base64_encode('fake-sig-' . \$i),
             ':nonce' => \$ts,
@@ -629,7 +629,7 @@ payloadResult=$(docker exec ${sender} php -r "
     \$hasMoreVal = \$decoded['hasMore'] === true ? 'true' : 'false';
     \$totalVal = \$decoded['totalTransactions'];
 
-    echo \"{$hasField1}|{$hasField2}|{$hasMoreVal}|{$totalVal}\";
+    echo \"{\$hasField1}|{\$hasField2}|{\$hasMoreVal}|{\$totalVal}\";
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$payloadResult" == "yes|yes|true|75" ]]; then
@@ -660,7 +660,7 @@ defaultResult=$(docker exec ${sender} php -r "
     \$hasMoreVal = \$decoded['hasMore'] === false ? 'false' : 'true';
     \$totalVal = \$decoded['totalTransactions'];
 
-    echo \"{$hasMoreVal}|{$totalVal}\";
+    echo \"{\$hasMoreVal}|{\$totalVal}\";
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$defaultResult" == "false|0" ]]; then
