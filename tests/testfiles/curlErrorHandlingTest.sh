@@ -446,8 +446,8 @@ echo -e "\n[Test 17: Proper Resource Cleanup on Error]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-# Verify curl_close is called in error path (restrict to sendByHttp/sendByTor, use -B25 for Tor's wider gap)
-cleanupCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function createCurlHandle/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep -B25 \"'status' => 'error'\" | grep -c 'curl_close'" 2>/dev/null || echo "0")
+# Verify curl_close is called in error path (restrict to sendByHttp/sendByTor, use -B35 for Tor's wider gap due to SOCKS5 restart signal code)
+cleanupCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function createCurlHandle/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep -B35 \"'status' => 'error'\" | grep -c 'curl_close'" 2>/dev/null || echo "0")
 
 if [[ "$cleanupCheck" -ge "2" ]]; then
     printf "\t   Curl handle properly closed on error ${GREEN}PASSED${NC}\n"
