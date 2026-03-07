@@ -197,7 +197,7 @@ environment:
 
 #### EIOU_BACKUP_AUTO_ENABLED
 
-Controls automatic daily database backups at midnight. Backups are encrypted using the user's master key.
+Controls automatic daily database backups at midnight. Backups are encrypted using the master key derived from the seed phrase.
 
 ```yaml
 environment:
@@ -209,7 +209,7 @@ environment:
 - Backups are stored in `/var/lib/eiou/backups/`
 - Only the 3 most recent backups are retained (configurable)
 - Backups are encrypted with AES-256-GCM
-- Restore requires wallet restoration first (master key dependency)
+- Restore requires wallet restoration first (the master key is derived from the seed phrase)
 
 #### EIOU_AUTO_CHAIN_DROP_PROPOSE
 
@@ -897,7 +897,7 @@ environment:
 **Backup Details:**
 - Backups run automatically at midnight (container local time)
 - Stored in `/var/lib/eiou/backups/` (persisted via `{node}-backups` volume)
-- Encrypted with AES-256-GCM using the wallet's master key
+- Encrypted with AES-256-GCM using the master key (derived from the seed phrase)
 - Only the 3 most recent backups are retained by default
 - Backup files are named with timestamps: `backup_YYYYMMDD_HHmmss.eiou.enc`
 

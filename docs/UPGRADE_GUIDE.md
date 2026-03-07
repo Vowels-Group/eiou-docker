@@ -43,7 +43,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 |------|--------|----------------|-------|
 | Database (transactions, contacts, balances) | `{node}-mysql-data` | `/var/lib/mysql` | All structured data |
 | Wallet keys (encrypted) | `{node}-files` | `/etc/eiou/config/userconfig.json` | Public key, encrypted private key, mnemonic |
-| Master encryption key | `{node}-files` | `/etc/eiou/config/.master.key` | Required for backup decryption |
+| Master encryption key | `{node}-files` | `/etc/eiou/config/.master.key` | Derived from seed phrase; recoverable via restore |
 | Database credentials | `{node}-files` | `/etc/eiou/config/dbconfig.json` | Auto-generated username and password |
 | User settings | `{node}-files` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, etc. |
 | Encrypted backups | `{node}-backups` | `/var/lib/eiou/backups/*.eiou.enc` | AES-256-GCM encrypted database dumps |
@@ -270,7 +270,7 @@ The named volumes were removed (likely by `docker-compose down -v`). The `-v` fl
    environment:
      - RESTORE=word1 word2 word3 ... word24
    ```
-   Note: Restoring from seed creates a new master key. Old encrypted backups will not be decryptable with the new key.
+   The master key is derived deterministically from the seed phrase, so restoring from seed recovers the same master key. Old encrypted backups remain decryptable.
 
 ### Database connection error after upgrade
 
@@ -326,11 +326,10 @@ Your 24-word BIP39 mnemonic is displayed only once during initial wallet generat
 
 Always run `eiou backup create` before upgrading. The encrypted backup file can be used to restore your database if anything goes wrong. Backup files are stored on the `{node}-backups` volume, which is preserved across upgrades.
 
-### Master Key Is Not Derivable from Seed
+### Master Key Is Derived from Seed
 
-The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is randomly generated and is **not** derived from the seed phrase. If the `{node}-files` volume is lost:
-- Wallet keys can be regenerated from the seed phrase
-- Existing encrypted backups **cannot** be decrypted (they require the original master key)
-- A new master key is generated for future backups
+The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is deterministically derived from the BIP39 seed phrase. If the `{node}-files` volume is lost:
+- Wallet keys, Tor address, auth code, and master key are all recoverable from the seed phrase
+- Encrypted backups remain decryptable after a seed restore (the same master key is re-derived)
 
-This is why preserving the `{node}-files` volume is critical.
+The seed phrase is the single recovery secret for the entire node.

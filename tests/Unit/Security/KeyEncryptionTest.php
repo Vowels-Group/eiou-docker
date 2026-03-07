@@ -161,6 +161,83 @@ class KeyEncryptionTest extends TestCase
     }
 
     // =========================================================================
+    // Seed-based Master Key Derivation Tests (M-13)
+    // =========================================================================
+
+    /**
+     * Test deriveMasterKeyFromSeed returns 32 bytes
+     */
+    public function testDeriveMasterKeyFromSeedReturns32Bytes(): void
+    {
+        $seed = random_bytes(64); // BIP39 seed is 64 bytes
+        $key = KeyEncryption::deriveMasterKeyFromSeed($seed);
+
+        $this->assertEquals(32, strlen($key));
+    }
+
+    /**
+     * Test deriveMasterKeyFromSeed is deterministic
+     */
+    public function testDeriveMasterKeyFromSeedIsDeterministic(): void
+    {
+        $seed = random_bytes(64);
+
+        $key1 = KeyEncryption::deriveMasterKeyFromSeed($seed);
+        $key2 = KeyEncryption::deriveMasterKeyFromSeed($seed);
+
+        $this->assertEquals($key1, $key2);
+    }
+
+    /**
+     * Test deriveMasterKeyFromSeed produces different keys for different seeds
+     */
+    public function testDeriveMasterKeyFromSeedDifferentSeeds(): void
+    {
+        $seed1 = random_bytes(64);
+        $seed2 = random_bytes(64);
+
+        $key1 = KeyEncryption::deriveMasterKeyFromSeed($seed1);
+        $key2 = KeyEncryption::deriveMasterKeyFromSeed($seed2);
+
+        $this->assertNotEquals($key1, $key2);
+    }
+
+    /**
+     * Test getMasterKey throws when master key file does not exist
+     */
+    public function testGetMasterKeyThrowsWhenNoFile(): void
+    {
+        // Outside Docker, the master key file won't exist
+        if (file_exists('/etc/eiou/config/.master.key')) {
+            $this->markTestSkipped('Master key file exists (running in Docker)');
+        }
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Master key not found');
+
+        // Trigger getMasterKey() via encrypt()
+        KeyEncryption::encrypt('test-data');
+    }
+
+    /**
+     * Test master key derivation uses distinct HMAC context from EC key derivation
+     *
+     * Verifies domain separation: the same seed produces different outputs
+     * for master key vs EC key derivation (different HMAC context strings).
+     */
+    public function testDeriveMasterKeyDomainSeparation(): void
+    {
+        $seed = random_bytes(64);
+
+        $masterKey = KeyEncryption::deriveMasterKeyFromSeed($seed);
+        // EC key uses 'eiou-ec-key' context; master key uses 'eiou-master-key'
+        $ecKey = hash_hmac('sha256', $seed, 'eiou-ec-key', true);
+
+        $this->assertNotEquals($masterKey, $ecKey,
+            'Master key and EC key must differ (domain separation via HMAC context)');
+    }
+
+    // =========================================================================
     // Encryption Format v2 (AAD context) Tests
     // =========================================================================
 

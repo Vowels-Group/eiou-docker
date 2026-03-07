@@ -19,6 +19,7 @@ echo -e "Testing:"
 echo -e "  - Seed phrase generate/restore"
 echo -e "  - Secure seedphrase display (security)"
 echo -e "  - Authcode restoration from seedphrase"
+echo -e "  - Master key deterministic derivation (M-13)"
 echo -e "  - Restore + QUICKSTART hostname application"
 echo -e "  - Startup authcode temp file creation"
 echo -e "================================================================\n"
@@ -157,37 +158,35 @@ else
     return 1
 fi
 
-############################ BACKUP MASTER KEY ############################
+############################ STORE ORIGINAL MASTER KEY HASH ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Step 1.5: Backing up master key before deletion"
-
-# Show file permissions for debugging
-masterKeyPerms=$(docker exec ${testContainer} ls -la ${MASTER_KEY} 2>&1)
+echo -e "\n\t-> Step 1.5: Storing original master key hash before deletion"
 
 # First check if master key file exists
 masterKeyExists=$(docker exec ${testContainer} test -f ${MASTER_KEY} && echo "EXISTS" || echo "NOT_FOUND")
 
 if [[ "$masterKeyExists" == "EXISTS" ]]; then
-    # Backup the master key since it's needed for encryption operations
-    masterKeyBackup=$(docker exec ${testContainer} cat ${MASTER_KEY} 2>&1 | base64)
+    # Store SHA-256 hash of master key for deterministic derivation comparison after restore
+    originalMasterKeyHash=$(docker exec ${testContainer} sha256sum ${MASTER_KEY} 2>&1 | awk '{print $1}')
 
-    if [[ -n "$masterKeyBackup" ]]; then
-        printf "\t   Master key backed up ${GREEN}PASSED${NC}\n"
+    if [[ -n "$originalMasterKeyHash" ]] && [[ ${#originalMasterKeyHash} -eq 64 ]]; then
+        printf "\t   Master key hash stored ${GREEN}PASSED${NC}\n"
+        printf "\t   BEFORE - Master Key SHA-256: ${originalMasterKeyHash}\n"
         passed=$(( passed + 1 ))
     else
-        printf "\t   Master key backup ${RED}FAILED${NC} - file exists but could not read\n"
+        printf "\t   Master key hash ${RED}FAILED${NC} - file exists but could not hash\n"
         failure=$(( failure + 1 ))
     fi
 else
-    printf "\t   Master key backup ${RED}FAILED${NC} - file does not exist (test -f returned NOT_FOUND)\n"
+    printf "\t   Master key hash ${RED}FAILED${NC} - file does not exist (test -f returned NOT_FOUND)\n"
     failure=$(( failure + 1 ))
 fi
 
-############################ DELETE USERCONFIG AND TOR FILES ############################
+############################ DELETE USERCONFIG, MASTER KEY, AND TOR FILES ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Step 1.6: Deleting userconfig.json and Tor files to simulate fresh wallet"
+echo -e "\n\t-> Step 1.6: Deleting userconfig.json, master key, and Tor files to simulate fresh wallet"
 
 # Show file permissions for debugging
 userconfigPerms=$(docker exec ${testContainer} ls -la ${USERCONFIG} 2>&1)
@@ -207,6 +206,10 @@ fi
 deleteResult=$(docker exec ${testContainer} rm -f ${USERCONFIG} 2>&1)
 verifyDeleted=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "EXISTS" || echo "DELETED")
 
+# Delete master key to test deterministic re-derivation from seed (M-13)
+deleteMasterKeyResult=$(docker exec ${testContainer} rm -f ${MASTER_KEY} 2>&1)
+verifyMasterKeyDeleted=$(docker exec ${testContainer} test -f ${MASTER_KEY} && echo "EXISTS" || echo "DELETED")
+
 # Clean up any existing temp files so we can verify restore doesn't re-create seedphrase file
 docker exec ${testContainer} sh -c 'rm -f /dev/shm/eiou_wallet_info_* /tmp/eiou_wallet_info_* /dev/shm/eiou_authcode_* /tmp/eiou_authcode_*' 2>/dev/null
 
@@ -214,16 +217,17 @@ docker exec ${testContainer} sh -c 'rm -f /dev/shm/eiou_wallet_info_* /tmp/eiou_
 deleteTorResult=$(docker exec ${testContainer} rm -f ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1)
 verifyTorDeleted=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "DELETED")
 
-if [[ "$verifyDeleted" == "DELETED" ]] && [[ "$verifyTorDeleted" == "DELETED" ]]; then
-    printf "\t   userconfig.json and Tor files deleted ${GREEN}PASSED${NC}\n"
+if [[ "$verifyDeleted" == "DELETED" ]] && [[ "$verifyMasterKeyDeleted" == "DELETED" ]] && [[ "$verifyTorDeleted" == "DELETED" ]]; then
+    printf "\t   userconfig.json, master key, and Tor files deleted ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
-elif [[ "$verifyDeleted" == "DELETED" ]]; then
-    printf "\t   userconfig.json deleted, Tor files deletion ${YELLOW}WARNING${NC}\n"
+elif [[ "$verifyDeleted" == "DELETED" ]] && [[ "$verifyMasterKeyDeleted" == "DELETED" ]]; then
+    printf "\t   userconfig.json and master key deleted, Tor files deletion ${YELLOW}WARNING${NC}\n"
     printf "\t   Tor delete result: ${deleteTorResult}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   File deletion ${RED}FAILED${NC}\n"
-    printf "\t   Delete result: ${deleteResult}\n"
+    printf "\t   Delete userconfig result: ${deleteResult}\n"
+    printf "\t   Delete master key result: ${deleteMasterKeyResult}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -286,6 +290,39 @@ if [[ -n "$authcodeFileExists" ]]; then
 else
     printf "\t   Authcode file NOT created on restore ${RED}FAILED${NC}\n"
     printf "\t   No eiou_authcode_* files found in /dev/shm/ or /tmp/\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ VERIFY MASTER KEY DETERMINISTIC DERIVATION ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 1.7c: Verify master key was deterministically re-derived (M-13)"
+
+# The master key was deleted in Step 1.6. After restore, it should be re-derived
+# from the seed phrase and produce the exact same key as the original.
+restoredMasterKeyExists=$(docker exec ${testContainer} test -f ${MASTER_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+
+if [[ "$restoredMasterKeyExists" == "EXISTS" ]]; then
+    restoredMasterKeyHash=$(docker exec ${testContainer} sha256sum ${MASTER_KEY} 2>&1 | awk '{print $1}')
+
+    echo -e "\n\t   ============================================"
+    echo -e "\t   MASTER KEY COMPARISON (M-13)"
+    echo -e "\t   ============================================"
+    echo -e "\t   BEFORE: ${originalMasterKeyHash}"
+    echo -e "\t   AFTER:  ${restoredMasterKeyHash}"
+    echo -e "\t   ============================================\n"
+
+    if [[ "$originalMasterKeyHash" == "$restoredMasterKeyHash" ]]; then
+        printf "\t   ${GREEN}MASTER KEYS MATCH - Deterministic derivation from seed working correctly!${NC}\n"
+        printf "\t   Master key deterministic derivation ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   ${RED}MASTER KEYS DO NOT MATCH - Deterministic derivation from seed broken!${NC}\n"
+        printf "\t   Master key deterministic derivation ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Master key file not re-created after restore ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -449,6 +486,37 @@ if [[ "$restoredTorAddressContainer" != "ERROR_NO_TOR_ADDRESS" ]] && [[ -n "$res
     passed=$(( passed + 1 ))
 else
     printf "\t   Tor address retrieval from new container ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ VERIFY MASTER KEY ON NEW CONTAINER ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 1.14a: Verify master key on new container matches original (M-13)"
+
+restoredMasterKeyContainerExists=$(docker exec ${restoreContainer} test -f ${MASTER_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+
+if [[ "$restoredMasterKeyContainerExists" == "EXISTS" ]]; then
+    restoredMasterKeyContainerHash=$(docker exec ${restoreContainer} sha256sum ${MASTER_KEY} 2>&1 | awk '{print $1}')
+
+    echo -e "\n\t   ============================================"
+    echo -e "\t   MASTER KEY - NEW CONTAINER (M-13)"
+    echo -e "\t   ============================================"
+    echo -e "\t   ORIGINAL:      ${originalMasterKeyHash}"
+    echo -e "\t   NEW CONTAINER: ${restoredMasterKeyContainerHash}"
+    echo -e "\t   ============================================\n"
+
+    if [[ "$originalMasterKeyHash" == "$restoredMasterKeyContainerHash" ]]; then
+        printf "\t   ${GREEN}MASTER KEY MATCHES ON NEW CONTAINER - Seed-derived master key working!${NC}\n"
+        printf "\t   New container master key comparison ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   ${RED}MASTER KEY MISMATCH ON NEW CONTAINER - Seed derivation broken!${NC}\n"
+        printf "\t   New container master key comparison ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Master key not found on new container ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
