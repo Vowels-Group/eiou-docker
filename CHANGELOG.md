@@ -17,7 +17,9 @@ The project is currently in **ALPHA** status.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
 ### Fixed
-- `ContactRepository::getCreditLimit()` now uses `MAX()` across currency directions to prevent returning 0 from an unaccepted incoming entry when a valid outgoing entry exists
+- `contact_currencies` table enforces single row per (pubkey_hash, currency) — direction column records who initiated, but only one row exists per contact-currency pair. Eliminates dual-row creation during mutual accept flows.
+- `credit_limit` column defaults to NULL instead of 0: NULL means "not yet configured", 0 means "explicitly set to zero" (e.g., to block transactions in that currency)
+- `ContactRepository::getCreditLimit()` simplified to direct single-row query (no MAX needed with single-row design)
 - Contact transaction `signature_nonce` is now generated during `insertReceivedContactTransaction()` when not provided by the sender, enabling the dual-signature protocol for contact transactions
 - Recipient signature generation ordering: `generateAndStoreContactRecipientSignature()` is now called after the received contact transaction is created (was called before, finding no TX)
 - Added recipient signature generation on sender's node when receiving mutual accept (STATUS_ACCEPTED), ensuring both sides have valid dual signatures

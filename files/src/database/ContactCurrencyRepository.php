@@ -46,7 +46,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $direction Direction ('incoming' = they requested, 'outgoing' = we requested)
      * @return bool True on success
      */
-    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $status = 'accepted', string $direction = 'incoming'): bool {
+    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $status = 'accepted', string $direction = 'incoming'): bool {
         $query = "INSERT IGNORE INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status, direction)
                   VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status, :direction)";
 
@@ -163,30 +163,24 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @return int Credit limit (0 if not found)
      */
-    public function getCreditLimit(string $pubkeyHash, string $currency, ?string $direction = null): int {
-        $params = [
+    public function getCreditLimit(string $pubkeyHash, string $currency): ?int {
+        $query = "SELECT credit_limit FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+
+        $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency
-        ];
-
-        if ($direction !== null) {
-            $query = "SELECT credit_limit FROM {$this->tableName}
-                      WHERE pubkey_hash = :pubkey_hash AND currency = :currency AND direction = :direction";
-            $params[':direction'] = $direction;
-        } else {
-            // When no direction specified, return the highest credit limit across directions
-            $query = "SELECT MAX(credit_limit) as credit_limit FROM {$this->tableName}
-                      WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
-        }
-
-        $stmt = $this->execute($query, $params);
+        ]);
 
         if (!$stmt) {
-            return 0;
+            return null;
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($result['credit_limit'] ?? 0);
+        if ($result && $result['credit_limit'] !== null) {
+            return (int) $result['credit_limit'];
+        }
+        return null;
     }
 
     /**
@@ -271,7 +265,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $direction Direction ('incoming' or 'outgoing')
      * @return bool True on success
      */
-    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, int $creditLimit, string $direction = 'incoming'): bool {
+    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $direction = 'incoming'): bool {
         $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, direction)
                   VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :direction)
                   ON DUPLICATE KEY UPDATE

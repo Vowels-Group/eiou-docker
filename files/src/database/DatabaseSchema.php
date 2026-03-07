@@ -74,12 +74,12 @@ function getContactCurrenciesTableSchema() {
         pubkey_hash VARCHAR(64) NOT NULL,
         currency VARCHAR(10) NOT NULL,
         fee_percent INT NOT NULL,
-        credit_limit INT NOT NULL DEFAULT 0,
+        credit_limit INT DEFAULT NULL,
         status ENUM('accepted', 'pending', 'blocked') DEFAULT 'pending',
         direction ENUM('incoming', 'outgoing') DEFAULT 'incoming',
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE INDEX idx_cc_hash_currency_dir (pubkey_hash, currency, direction),
+        UNIQUE INDEX idx_cc_hash_currency (pubkey_hash, currency),
         INDEX idx_cc_pubkey_hash (pubkey_hash)
     )";
 }
