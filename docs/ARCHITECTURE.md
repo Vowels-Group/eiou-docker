@@ -314,8 +314,8 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders | ContactRepo, P2pRepo, P2pSenderRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, TransportUtility, MessageDeliveryService |
+| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface) |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -1282,7 +1282,7 @@ request patterns.
 2. P2pService creates P2P record with randomized level and status `queued`
 3. P2pMessageProcessor daemon picks up queued messages (polls every 100ms–5s)
 4. Coalesce delay groups concurrent P2Ps into a single mega-batch (2000ms window)
-5. Mega-batch broadcasts to all accepted contacts via `sendMultiBatch()` (`curl_multi`)
+5. Mega-batch broadcasts to accepted contacts that support the transaction's currency via `sendMultiBatch()` (`curl_multi`)
 6. Concurrency-limited sliding window caps simultaneous connections per protocol
 7. Each relay node queues, coalesces, and broadcasts to its own contacts (level++)
 8. Process continues until recipient found or level exceeds maxRequestLevel
