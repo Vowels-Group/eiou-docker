@@ -219,6 +219,24 @@ class KeyEncryptionTest extends TestCase
         KeyEncryption::encrypt('test-data');
     }
 
+    /**
+     * Test master key derivation uses distinct HMAC context from EC key derivation
+     *
+     * Verifies domain separation: the same seed produces different outputs
+     * for master key vs EC key derivation (different HMAC context strings).
+     */
+    public function testDeriveMasterKeyDomainSeparation(): void
+    {
+        $seed = random_bytes(64);
+
+        $masterKey = KeyEncryption::deriveMasterKeyFromSeed($seed);
+        // EC key uses 'eiou-ec-key' context; master key uses 'eiou-master-key'
+        $ecKey = hash_hmac('sha256', $seed, 'eiou-ec-key', true);
+
+        $this->assertNotEquals($masterKey, $ecKey,
+            'Master key and EC key must differ (domain separation via HMAC context)');
+    }
+
     // =========================================================================
     // Encryption Format v2 (AAD context) Tests
     // =========================================================================
