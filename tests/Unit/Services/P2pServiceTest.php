@@ -27,6 +27,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -52,6 +53,7 @@ class P2pServiceTest extends TestCase
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pSenderRepository $p2pSenderRepository;
+    private MockObject|ContactCurrencyRepository $contactCurrencyRepository;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -75,6 +77,7 @@ class P2pServiceTest extends TestCase
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
+        $this->contactCurrencyRepository = $this->createMock(ContactCurrencyRepository::class);
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -108,6 +111,7 @@ class P2pServiceTest extends TestCase
             $this->messageDeliveryService,
             $this->p2pSenderRepository
         );
+        $this->service->setContactCurrencyRepository($this->contactCurrencyRepository);
     }
 
     // =========================================================================
@@ -278,7 +282,7 @@ class P2pServiceTest extends TestCase
             ->willReturn(1000.0);
 
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
 
         $this->currencyUtility->method('calculateFee')
             ->willReturn(1000);
@@ -336,7 +340,7 @@ class P2pServiceTest extends TestCase
             ->willReturn('http');
 
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
 
         $this->currencyUtility->method('calculateFee')
             ->with(10000, 1.0, 10)
@@ -345,6 +349,36 @@ class P2pServiceTest extends TestCase
         $result = $this->service->calculateRequestedAmount($request);
 
         $this->assertEquals(10100, $result);
+    }
+
+    /**
+     * Test calculateRequestedAmount uses per-currency fee from contact_currencies
+     */
+    public function testCalculateRequestedAmountUsesPerCurrencyFee(): void
+    {
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'amount' => 10000,
+            'currency' => 'DER'
+        ];
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['pubkey_hash' => 'test_hash']);
+
+        $this->contactCurrencyRepository->method('getFeePercent')
+            ->with('test_hash', 'DER')
+            ->willReturn(30); // 0.3% stored as integer
+
+        $this->currencyUtility->method('calculateFee')
+            ->with(10000, 30, 10)
+            ->willReturn(300);
+
+        $result = $this->service->calculateRequestedAmount($request);
+
+        $this->assertEquals(10300, $result);
     }
 
     /**
@@ -471,7 +505,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
             ->willReturn(100);
 
@@ -551,7 +585,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
             ->willReturn(100);
 
@@ -646,7 +680,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
             ->willReturn(100);
 
@@ -705,7 +739,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
             ->willReturn(100);
 
@@ -1263,9 +1297,12 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
 
-        // First hop contact has 1.5% fee
+        // First hop contact has 1.5% fee (from contact_currencies)
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.5]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
+
+        $this->contactCurrencyRepository->method('getFeePercent')
+            ->willReturn(1.5);
 
         // Fee calculation: 10000 * 1.5% = 150 (with minimum fee of 10)
         $this->currencyUtility->method('calculateFee')
@@ -1307,10 +1344,14 @@ class P2pServiceTest extends TestCase
             $this->transportUtility->method('determineTransportType')
                 ->willReturn('http');
 
-            // Each contact has different fee rate
+            // Each contact has different fee rate (from contact_currencies)
             $this->contactService->expects($this->atLeastOnce())
                 ->method('lookupByAddress')
-                ->willReturn(['fee_percent' => $feeRate]);
+                ->willReturn(['pubkey_hash' => 'test_hash']);
+
+            $this->contactCurrencyRepository->expects($this->atLeastOnce())
+                ->method('getFeePercent')
+                ->willReturn($feeRate);
 
             $this->currencyUtility->expects($this->atLeastOnce())
                 ->method('calculateFee')
@@ -1368,7 +1409,7 @@ class P2pServiceTest extends TestCase
             ->willReturn('http');
 
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 1.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
 
         // High fee that would push total over limit
         $this->currencyUtility->method('calculateFee')
@@ -1604,7 +1645,10 @@ class P2pServiceTest extends TestCase
             ->willReturn('http');
 
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 2.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
+
+        $this->contactCurrencyRepository->method('getFeePercent')
+            ->willReturn(2.0);
 
         // Fee calculation: 10000 * 2% = 200
         $expectedFee = 200;
@@ -2467,7 +2511,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
-            ->willReturn(['fee_percent' => 2.0]);
+            ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
             ->willReturn(200);
 

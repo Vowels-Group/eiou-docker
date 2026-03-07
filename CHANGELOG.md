@@ -67,6 +67,11 @@ The project is currently in **ALPHA** status.
 - Accept contact now validates against pending currencies from `contact_currencies` instead of the always-null `contacts.currency` field
 - Accepting a pending currency for an existing accepted contact now correctly creates initial balance and credit entries for the new currency
 - GUI `handleAcceptCurrency` now inserts initial balance/credit entries when accepting a pending currency (previously only updated `contact_currencies` status)
+- P2P fee lookup crash: `P2pService::calculateRequestedAmount()` and `Rp2pService::handleRp2pRequest()` referenced removed `contacts.fee_percent` column — now uses `ContactCurrencyRepository::getFeePercent()` for per-currency fee lookup with user default fallback
+- P2P funds-on-hold not filtered by currency: `getCreditInP2p()` summed ALL active P2P amounts regardless of currency, incorrectly blocking transactions in one currency due to holds in another — now filters by currency
+- P2P broadcast to ineligible contacts: `processQueuedP2pMessages()` and `processSingleP2p()` broadcast P2P requests to all accepted contacts regardless of currency support — now uses currency-filtered `getAllAcceptedAddresses($currency)` so requests are only sent to contacts that have the transaction's currency accepted
+- P2P currency hardcoded to USD: `prepareP2pRequestData()` ignored request currency and defaulted to USD — now reads currency from request
+- Auto-recovery crash on wallet restore: `ContactRepository` methods used 0-indexed positional params causing PDO `ValueError` — fixed with named params
 - Pending contact requests in GUI now show per-currency accept forms when multiple currencies are requested, each with independent fee/credit settings
 - Pending contacts section enriched with currency data from `contact_currencies` table
 - `acceptContact()` now ensures the accepted currency is properly recorded in `contact_currencies` with fee/credit values
