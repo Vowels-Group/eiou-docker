@@ -1086,7 +1086,7 @@ docker exec alice eiou backup cleanup
 docker exec alice eiou backup restore backup_20260126_030000.eiou.enc --confirm
 ```
 
-**Note:** Restoration requires the original seed phrase (backups are encrypted with master key).
+**Note:** Restoration requires the original seed phrase (the master key used for backup encryption is derived from it).
 
 ---
 

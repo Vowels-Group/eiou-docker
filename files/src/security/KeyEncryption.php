@@ -43,47 +43,85 @@ class KeyEncryption {
     private const ENCRYPTION_VERSION = 2;
 
     /**
+     * HMAC context for master key derivation from BIP39 seed
+     */
+    private const HMAC_CONTEXT_MASTER_KEY = 'eiou-master-key';
+
+    /**
      * Master key file location
      */
     private const MASTER_KEY_FILE = '/etc/eiou/config/.master.key';
 
     /**
-     * Get or generate master encryption key
+     * Get master encryption key
+     *
+     * The master key must be initialized via initMasterKeyFromSeed() during
+     * wallet generation or restore. This method only reads the existing key.
      *
      * @return string Binary encryption key (32 bytes for AES-256)
-     * @throws RuntimeException If key generation fails
+     * @throws RuntimeException If master key file does not exist or is corrupted
      */
     private static function getMasterKey(): string {
-        // Check if master key exists
-        if (file_exists(self::MASTER_KEY_FILE)) {
-            $key = file_get_contents(self::MASTER_KEY_FILE);
-
-            if ($key === false || strlen($key) !== 32) {
-                throw new RuntimeException('Master key file corrupted');
-            }
-
-            return $key;
+        if (!file_exists(self::MASTER_KEY_FILE)) {
+            throw new RuntimeException(
+                'Master key not found. Initialize wallet first via generate or restore.'
+            );
         }
 
-        // Generate new master key (32 bytes = 256 bits)
-        // Note: random_bytes() throws Exception on failure in PHP 7+, never returns false
-        $key = random_bytes(32);
+        $key = file_get_contents(self::MASTER_KEY_FILE);
 
-        // Save master key with strict permissions
-        $oldUmask = umask(0077); // Ensure 600 permissions
+        if ($key === false || strlen($key) !== 32) {
+            throw new RuntimeException('Master key file corrupted');
+        }
+
+        return $key;
+    }
+
+    /**
+     * Derive a deterministic master key from a BIP39 seed
+     *
+     * Uses HMAC-SHA256 with a unique context string to ensure domain separation
+     * from other seed-derived values (keypair, Tor keys, auth code).
+     *
+     * @param string $seed Raw BIP39 seed bytes (64 bytes)
+     * @return string 32-byte deterministic master key
+     */
+    public static function deriveMasterKeyFromSeed(string $seed): string {
+        return hash_hmac('sha256', $seed, self::HMAC_CONTEXT_MASTER_KEY, true);
+    }
+
+    /**
+     * Initialize the master key file from a BIP39 seed
+     *
+     * Derives the master key deterministically and writes it to disk.
+     * Must be called during wallet generation or restore, before any
+     * encrypt/decrypt operations.
+     *
+     * @param string $seed Raw BIP39 seed bytes (64 bytes)
+     * @throws RuntimeException If the key file cannot be written
+     */
+    public static function initMasterKeyFromSeed(string $seed): void {
+        $key = self::deriveMasterKeyFromSeed($seed);
+
+        $dir = dirname(self::MASTER_KEY_FILE);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+
+        $oldUmask = umask(0077);
         $result = file_put_contents(self::MASTER_KEY_FILE, $key, LOCK_EX);
         umask($oldUmask);
+
+        self::secureClear($key);
 
         if ($result === false) {
             throw new RuntimeException('Failed to save master key');
         }
 
-        chown(self::MASTER_KEY_FILE, 'www-data');
-        
-        // Verify file permissions
+        if (posix_getuid() === 0) {
+            chown(self::MASTER_KEY_FILE, 'www-data');
+        }
         chmod(self::MASTER_KEY_FILE, 0600);
-
-        return $key;
     }
 
     /**

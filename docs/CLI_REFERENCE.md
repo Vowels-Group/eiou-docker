@@ -1414,8 +1414,8 @@ eiou backup status --json
 ```
 
 **Security Notes:**
-- Backups are encrypted with AES-256-GCM using your master key
-- Restore is only possible after wallet restoration (key dependency)
+- Backups are encrypted with AES-256-GCM using the master key (derived from your seed phrase)
+- Restore requires wallet restoration first (the master key is re-derived from the seed phrase)
 - Backup directory has restricted permissions (700)
 - Rate limited: 10 backup operations per minute
 

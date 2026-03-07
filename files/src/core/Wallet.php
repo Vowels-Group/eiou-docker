@@ -97,6 +97,10 @@ class Wallet{
         // This ensures the same authcode is restored from the seed phrase
         $authCode = BIP39::seedToAuthCode($seed);
 
+        // Derive and initialize the master encryption key from seed (M-13)
+        // This ensures the master key can be recovered from the seed phrase
+        KeyEncryption::initMasterKeyFromSeed($seed);
+
         // Clear seed from memory
         BIP39::secureClear($seed);
 
@@ -269,6 +273,10 @@ class Wallet{
         // Derive deterministic authentication code from seed
         // This restores the SAME authcode as the original wallet
         $authCode = BIP39::seedToAuthCode($seed);
+
+        // Derive and initialize the master encryption key from seed (M-13)
+        // This restores the SAME master key as the original wallet
+        KeyEncryption::initMasterKeyFromSeed($seed);
 
         // Clear seed from memory
         BIP39::secureClear($seed);
