@@ -207,7 +207,7 @@ insertResult=$(docker exec ${receiver} php -r "
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    \$myPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$myPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$myPubkeyHash = hash('sha256', \$myPubkey);
     \$contactPubkey = base64_decode('${senderPubkeyB64}');
     \$contactPubkeyHash = hash('sha256', \$contactPubkey);
@@ -344,7 +344,7 @@ insertResult2=$(docker exec ${receiver} php -r "
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    \$myPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$myPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$myPubkeyHash = hash('sha256', \$myPubkey);
     \$contactPubkey = base64_decode('${senderPubkeyB64}');
     \$contactPubkeyHash = hash('sha256', \$contactPubkey);
@@ -473,7 +473,7 @@ cursorResult=$(docker exec ${receiver} php -r "
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    \$myPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$myPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$myPubkeyHash = hash('sha256', \$myPubkey);
     \$contactPubkey = base64_decode('${senderPubkeyB64}');
     \$contactPubkeyHash = hash('sha256', \$contactPubkey);
@@ -612,7 +612,7 @@ echo -e "\n\t-> Testing payload includes hasMore and totalTransactions fields"
 payloadResult=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$payload = \$app->services->getMessagePayload();
+    \$payload = new \Eiou\Schemas\Payloads\MessagePayload(\$app->services->getCurrentUser(), \$app->services->getUtilityContainer());
 
     // Build a response with hasMore=true
     \$json = \$payload->buildTransactionSyncResponse(
@@ -647,7 +647,7 @@ echo -e "\n\t-> Testing payload defaults (backward compatibility)"
 defaultResult=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$payload = \$app->services->getMessagePayload();
+    \$payload = new \Eiou\Schemas\Payloads\MessagePayload(\$app->services->getCurrentUser(), \$app->services->getUtilityContainer());
 
     // Build with default parameters (no hasMore/totalTransactions)
     \$json = \$payload->buildTransactionSyncResponse(
