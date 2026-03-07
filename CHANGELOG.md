@@ -14,6 +14,15 @@ The project is currently in **ALPHA** status.
 
 ### Security
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
+- Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
+
+### Fixed
+- `ContactRepository::getCreditLimit()` now uses `MAX()` across currency directions to prevent returning 0 from an unaccepted incoming entry when a valid outgoing entry exists
+- Contact transaction `signature_nonce` is now generated during `insertReceivedContactTransaction()` when not provided by the sender, enabling the dual-signature protocol for contact transactions
+- Recipient signature generation ordering: `generateAndStoreContactRecipientSignature()` is now called after the received contact transaction is created (was called before, finding no TX)
+- Added recipient signature generation on sender's node when receiving mutual accept (STATUS_ACCEPTED), ensuring both sides have valid dual signatures
+- Ping test 6.1/6.2: signature check now looks for the received contact TX direction first (where the current node is the recipient and recipient_signature exists)
+- Ping test 6.3: signature verification now includes `currency` in the reconstructed signed message, matching `ContactPayload::generateRecipientSignature()` format
 
 ### Added
 - Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity

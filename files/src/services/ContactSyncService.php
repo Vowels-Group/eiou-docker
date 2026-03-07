@@ -339,6 +339,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Currency is included to ensure unique txids when multiple currencies are added between the same parties
         $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $currency . $time);
 
+        // Generate a signature nonce for the dual-signature protocol.
+        // If the sender didn't provide one, generate it on the receiver side.
+        // This nonce is used by both parties to sign/verify the contact message:
+        // {'type':'create','currency':'USD','nonce':N}
+        if (empty($nonce)) {
+            $nonce = bin2hex(random_bytes(16));
+        }
+
         // Build transaction data with status 'accepted' (pending user acceptance, will move to 'completed')
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($senderAddress);
         $transactionData = [
@@ -1075,6 +1083,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
                     }
 
+                    // Generate recipient signature on the received contact TX (dual-signature protocol)
+                    // We have a received TX from the remote's prior request (sender→us direction)
+                    // where we are the recipient — sign it to prove we accepted the contact
+                    $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
                     // Update delivery stage
                     if ($this->messageDeliveryService !== null) {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
@@ -1365,19 +1378,20 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
                         }
 
-                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
-
                         // Ensure we have a received contact transaction for this specific currency
+                        // Must be created BEFORE generating recipient signature (needs signature_nonce)
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                             $senderPublicKeyHash, $currency
                         );
                         $txid = null;
                         if (!$hasContactTx) {
                             $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
-                            $this->completeReceivedContactTransaction($senderPublicKey);
-                        } else {
-                            $this->completeReceivedContactTransaction($senderPublicKey);
                         }
+
+                        // Generate recipient signature after TX exists (needs signature_nonce from TX)
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        $this->completeReceivedContactTransaction($senderPublicKey);
 
                         return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid);
                     }
@@ -1518,19 +1532,20 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
                         }
 
-                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
-
                         // Ensure we have a received contact transaction for this specific currency
+                        // Must be created BEFORE generating recipient signature (needs signature_nonce)
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                             $senderPublicKeyHash, $currency
                         );
                         $txid = null;
                         if (!$hasContactTx) {
                             $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
-                            $this->completeReceivedContactTransaction($senderPublicKey);
-                        } else {
-                            $this->completeReceivedContactTransaction($senderPublicKey);
                         }
+
+                        // Generate recipient signature after TX exists (needs signature_nonce from TX)
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        $this->completeReceivedContactTransaction($senderPublicKey);
 
                         return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid);
                     }

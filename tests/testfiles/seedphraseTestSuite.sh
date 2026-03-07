@@ -172,7 +172,6 @@ if [[ "$masterKeyExists" == "EXISTS" ]]; then
 
     if [[ -n "$originalMasterKeyHash" ]] && [[ ${#originalMasterKeyHash} -eq 64 ]]; then
         printf "\t   Master key hash stored ${GREEN}PASSED${NC}\n"
-        printf "\t   BEFORE - Master Key SHA-256: ${originalMasterKeyHash}\n"
         passed=$(( passed + 1 ))
     else
         printf "\t   Master key hash ${RED}FAILED${NC} - file exists but could not hash\n"
@@ -308,8 +307,7 @@ if [[ "$restoredMasterKeyExists" == "EXISTS" ]]; then
     echo -e "\n\t   ============================================"
     echo -e "\t   MASTER KEY COMPARISON (M-13)"
     echo -e "\t   ============================================"
-    echo -e "\t   BEFORE: ${originalMasterKeyHash}"
-    echo -e "\t   AFTER:  ${restoredMasterKeyHash}"
+    echo -e "\t   Hashes match: $([ "$originalMasterKeyHash" == "$restoredMasterKeyHash" ] && echo 'YES' || echo 'NO')"
     echo -e "\t   ============================================\n"
 
     if [[ "$originalMasterKeyHash" == "$restoredMasterKeyHash" ]]; then
@@ -502,8 +500,7 @@ if [[ "$restoredMasterKeyContainerExists" == "EXISTS" ]]; then
     echo -e "\n\t   ============================================"
     echo -e "\t   MASTER KEY - NEW CONTAINER (M-13)"
     echo -e "\t   ============================================"
-    echo -e "\t   ORIGINAL:      ${originalMasterKeyHash}"
-    echo -e "\t   NEW CONTAINER: ${restoredMasterKeyContainerHash}"
+    echo -e "\t   Hashes match: $([ "$originalMasterKeyHash" == "$restoredMasterKeyContainerHash" ] && echo 'YES' || echo 'NO')"
     echo -e "\t   ============================================\n"
 
     if [[ "$originalMasterKeyHash" == "$restoredMasterKeyContainerHash" ]]; then
