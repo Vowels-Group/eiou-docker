@@ -25,6 +25,8 @@ The project is currently in **ALPHA** status.
 - Added recipient signature generation on sender's node when receiving mutual accept (STATUS_ACCEPTED), ensuring both sides have valid dual signatures
 - Ping test 6.1/6.2: signature check now looks for the received contact TX direction first (where the current node is the recipient and recipient_signature exists)
 - Ping test 6.3: signature verification now includes `currency` in the reconstructed signed message, matching `ContactPayload::generateRecipientSignature()` format
+- Dual-signature protocol: `buildAlreadyExists` and `buildUpdated` response paths now re-create the received contact TX if it was lost, ensuring recipient signature can always be generated on re-add
+- Chunked sync test: fixed `getUserContext()` → `getCurrentUser()` and `getMessagePayload()` → direct `MessagePayload` instantiation (methods don't exist on ServiceContainer)
 
 ### Added
 - Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
