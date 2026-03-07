@@ -177,8 +177,8 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         }
 
         try {
-            // Get the latest transaction ID in the chain with this contact
-            $prevTxid = $this->transactionRepository->getPreviousTxid(
+            // Get per-currency chain heads for this contact
+            $prevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                 $this->currentUser->getPublicKey(),
                 $contact['pubkey']
             );
@@ -186,7 +186,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             // Build ping payload
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
-                'prevTxid' => $prevTxid,
+                'prevTxidsByCurrency' => $prevTxidsByCurrency,
                 'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
@@ -204,12 +204,18 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
 
-                    // Check chain validity
+                    // Check chain validity using per-currency comparison
                     $chainValid = $response['chainValid'] ?? true;
-                    $remotePrevTxid = $response['prevTxid'] ?? null;
+                    $remoteChainStatus = $response['chainStatusByCurrency'] ?? [];
 
-                    // If chains don't match, trigger sync
-                    if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {
+                    foreach ($remoteChainStatus as $cur => $curValid) {
+                        if (!$curValid) {
+                            $chainValid = false;
+                            break;
+                        }
+                    }
+
+                    if (!$chainValid) {
                         $this->updateContactChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled
@@ -272,17 +278,25 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
      * @param array $response The pong response data
      */
     private function saveAvailableCreditFromPong(string $contactPubkey, array $response): void {
-        if (!isset($response['availableCredit']) || $this->contactCreditRepository === null) {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $response['availableCreditByCurrency'] ?? [];
+
+        if (empty($creditByCurrency)) {
             return;
         }
 
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
-            $this->contactCreditRepository->upsertAvailableCredit(
-                $pubkeyHash,
-                (int) $response['availableCredit'],
-                $response['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY
-            );
+            foreach ($creditByCurrency as $currency => $credit) {
+                $this->contactCreditRepository->upsertAvailableCredit(
+                    $pubkeyHash,
+                    (int) $credit,
+                    $currency
+                );
+            }
         } catch (Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from pong", [
                 'error' => $e->getMessage()

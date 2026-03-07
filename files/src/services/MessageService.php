@@ -107,6 +107,11 @@ class MessageService implements MessageServiceInterface {
     private ?ChainDropServiceInterface $chainDropService = null;
 
     /**
+     * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository (setter injected)
+     */
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
+
+    /**
      * @var TransactionContactRepository Transaction contact repository for contact transaction operations
      */
     private TransactionContactRepository $transactionContactRepository;
@@ -189,6 +194,15 @@ class MessageService implements MessageServiceInterface {
      */
     public function setChainDropService(ChainDropServiceInterface $service): void {
         $this->chainDropService = $service;
+    }
+
+    /**
+     * Set the contact currency repository for direction-aware currency tracking
+     *
+     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
+     */
+    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
+        $this->contactCurrencyRepository = $repo;
     }
 
     /**
@@ -485,6 +499,19 @@ class MessageService implements MessageServiceInterface {
 
             // Complete the contact transaction (update status from 'sent' to 'completed')
             $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
+
+            // Update outgoing currency entries to 'accepted' when remote accepts our request
+            if ($this->contactCurrencyRepository !== null) {
+                $senderPubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+                // If the acceptance message includes a specific currency, mark that one as accepted
+                $acceptedCurrency = $decodedMessage['currency'] ?? null;
+                if ($acceptedCurrency) {
+                    $this->contactCurrencyRepository->updateCurrencyStatus(
+                        $senderPubkeyHash, $acceptedCurrency, 'accepted', 'outgoing'
+                    );
+                }
+            }
 
             // Store recipient signature from the acceptance message (dual-signature protocol)
             // currentUser is the original sender; senderPublicKey (from the message) is the recipient who accepted

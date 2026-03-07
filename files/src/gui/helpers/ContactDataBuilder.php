@@ -62,12 +62,11 @@ class ContactDataBuilder
         return array_merge([
             'address' => $primaryAddress ?? '',
             'name' => $contact['name'] ?? ($status === 'blocked' ? '-' : ''),
-            'fee' => $contact['fee'] ?? 0,
-            'credit_limit' => $contact['credit_limit'] ?? 0,
-            'currency' => $contact['currency'] ?? 'USD',
+            'fee' => !empty($contact['currencies']) ? ($contact['currencies'][0]['fee'] ?? 0) : 0,
             'status' => $status,
             'pubkey' => $contact['pubkey'] ?? '',
             'balance' => $contact['balance'] ?? 0,
+            'balances_by_currency' => $contact['balances_by_currency'] ?? [],
             'contact_id' => $contact['contact_id'] ?? '',
             'transactions' => $contact['transactions'] ?? [],
             'online_status' => $contact['online_status'] ?? 'unknown',
@@ -76,7 +75,10 @@ class ContactDataBuilder
             'my_available_credit' => $contact['my_available_credit'] ?? null,
             'their_available_credit' => $contact['their_available_credit'] ?? null,
             'chain_drop_proposal' => $contact['chain_drop_proposal'] ?? null,
-            'chain_gap_details' => $contact['chain_gap_details'] ?? null
+            'chain_gap_details' => $contact['chain_gap_details'] ?? null,
+            'currencies' => $contact['currencies'] ?? [],
+            'pending_currencies' => $contact['pending_currencies'] ?? [],
+            'outgoing_currencies' => $contact['outgoing_currencies'] ?? []
         ], $addresses);
     }
 

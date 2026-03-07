@@ -216,9 +216,10 @@ interface ContactManagementServiceInterface
      * Get the credit limit for a sender.
      *
      * @param string $senderPublicKey The sender's public key
+     * @param string $currency Currency code
      * @return float The credit limit
      */
-    public function getCreditLimit(string $senderPublicKey): float;
+    public function getCreditLimit(string $senderPublicKey, string $currency = \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY): float;
 
     /**
      * Get the public key for a contact by address.
@@ -289,9 +290,9 @@ interface ContactManagementServiceInterface
      * Used for address resolution when sending to a contact by name.
      *
      * @param string $name Contact name
-     * @return string|null Contact addresses or null if not found
+     * @return array|null Contact addresses or null if not found
      */
-    public function lookupAddressesByName(string $name): ?string;
+    public function lookupAddressesByName(string $name): ?array;
 
     /**
      * Get all accepted contact addresses for P2P routing.
@@ -301,7 +302,7 @@ interface ContactManagementServiceInterface
      *
      * @return array List of accepted contact addresses
      */
-    public function getAllAcceptedAddresses(): array;
+    public function getAllAcceptedAddresses(?string $currency = null): array;
 
     /**
      * Lookup a contact name by their address.

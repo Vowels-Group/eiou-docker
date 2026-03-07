@@ -78,6 +78,7 @@ wipe_contact_data() {
     docker exec ${container} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$pdo->exec('DELETE FROM contact_currencies');
         \$pdo->exec('DELETE FROM contacts');
         \$pdo->exec('DELETE FROM addresses');
         \$pdo->exec('DELETE FROM balances');

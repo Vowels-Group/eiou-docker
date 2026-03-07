@@ -12,7 +12,131 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
+- Per-currency available credit exchange: pong returns `availableCreditByCurrency` map; each currency's available credit stored independently in `contact_credit` table (UNIQUE on `pubkey_hash, currency`)
+- GUI currency slider: contact modal uses horizontal pill-style currency slider with left/right arrows to switch between currencies, replacing the dropdown selector
+- Dynamic currency dropdowns: Send eIOU form populates currencies from user's allowed currencies and filters to contact's accepted currencies when a contact is selected; Add Contact form also uses allowed currencies
+- Per-currency "Your Available Credit" and "Their Available Credit" display in contact modal per-currency entries
+- `TransactionRepository::getPreviousTxidsByCurrency()` for retrieving per-currency chain heads
+- `ContactCurrencyRepository::getDistinctAcceptedCurrencies()` for wallet info currency display
+
+### Changed
+- `MessagePayload::buildTransactionSyncRequest()` now accepts optional `lastKnownTxidsByCurrency` parameter for per-currency sync cursors
+- `SyncService::handleTransactionSyncRequest()` filters transactions per-currency when `lastKnownTxidsByCurrency` is provided in the request
+- `ContactStatusPayload::build()` sends `prevTxidsByCurrency` instead of single `prevTxid`
+- `ContactStatusPayload::buildResponse()` takes `chainStatusByCurrency` and `availableCreditByCurrency` maps instead of single `chainValid`/`availableCredit`/`currency` values
+- `getCreditLimit()` without direction parameter now returns `MAX(credit_limit)` across all direction rows for that contact+currency
+- Wallet information section now includes currencies from accepted contact relationships (not just those with balances/earnings)
+- Legacy single-`prevTxid` code removed from ping/pong protocol entirely
+- CLI `update` command now requires currency parameter for `fee` and `credit` fields (`eiou update Bob fee 1.5 USD`); optional for `all` (defaults to contact's current currency)
+- CLI `update` for fee/credit now propagates changes to `contact_currencies` table (not just `contacts`)
+- GUI contact settings tab: currency selector moved above fee/credit, populated from contact's accepted currencies; changing currency loads that currency's current fee/credit values
+- GUI `handleEditContact` updates `contact_currencies` directly for fee/credit per selected currency instead of only updating `contacts` table
+
+### Removed
+- Legacy `currency`, `fee_percent`, `credit_limit` columns from `contacts` table — fee/credit configuration is now exclusively in `contact_currencies` table
+- Dual-write pattern: services no longer write fee/credit/currency to `contacts` table; only `contact_currencies` is used
+- Single-value fee/credit/currency from CLI `get` and `search` output; replaced with per-currency display
+- Single-value `fee_percent`, `credit_limit`, `currency` from API GET endpoints (`/contacts`, `/contacts/search`, `/contacts/ping`); replaced with `currencies` array
+- Legacy `their_available_credit` single-value calculation from GUI; per-currency values in `currencies` array are used instead
+
 ### Fixed
+- Contact transaction sync recovery: chain gap detection and `missingTxids` DB lookup no longer gated behind `backupService !== null` — previously, if `BackupService` was not wired (lazy-loaded), sync could not detect gaps or ask the remote to look up missing transactions, causing permanent "both sides missing same transactions" errors even when the remote had the transaction in its DB
+- Contact transaction signature verification during sync: `senderAddresses` removed from signed content in `signWithCapture()` — previously, the sender's full address set was included in the signed message, making signatures unverifiable if any address was added or removed after signing
+- Contact signature reconstruction: `reconstructContactSignedMessage()` now includes `currency` field to match the actual signed content — previously reconstructed only `{"type":"create","nonce":"..."}` which never matched the signed payload
+- Recipient signature for contact transactions: `generateRecipientSignature()` now includes `currency` to match sender signature format; `getContactTransactionByParties()` query updated to return `currency` column — previously recipient signed without currency, causing verification mismatch during sync recovery
+- Accept All button for new pending contacts: removed `$isExisting` gate so the "Accept All N Currencies" button appears for both new and existing contacts with multiple pending currencies — previously only shown after the first currency was individually accepted
+- Accept All for new contacts: `handleAcceptAllCurrencies` now handles new contacts by accepting the first currency via `addContact` CLI flow (to establish the contact) then remaining currencies via standard acceptance path — previously only worked for already-accepted contacts
+- Credit limit conversion: `handleAcceptCurrency` and `handleAcceptAllCurrencies` now properly convert fee and credit limit to minor units (cents) before storing — previously stored raw float values
+- "Their Available Credit" in contact modal now calculated per-currency as `credit_limit - balance` instead of showing "—"
+- "Your Available Credit" in pong calculation no longer incorrectly filters by direction — credit limit lookup uses max across directions
+
+### Fixed
+- Multi-currency acceptance for existing contacts: `handleExistingContact()` now creates an outgoing `contact_currencies` entry and sends a P2P notification when accepting an incoming pending currency — previously only the incoming entry was accepted, leaving the remote side stuck on "Awaiting their acceptance" for non-default currencies
+- False positive chain gap after contact add/accept cycle: pong handler now re-evaluates chain validity after sync using txid existence checks instead of stale head comparison — resolves race condition where in-flight transactions caused chain head mismatches between ping and pong
+- Wallet restore via ping: `handlePingRequest` auto-create path now creates `contact_currencies` entries for all currencies from `prevTxidsByCurrency`, auto-accepts the contact when sync proves prior relationship, and uses the correct multi-currency `buildResponse` signature — previously only created a bare pending contact with no currencies and used the deprecated single-value response signature
+- Wallet restore balance recalculation: auto-create path now calls `syncContactBalance()` to recalculate balances from synced transaction history instead of initializing to 0/0 — previously all restored contact balances showed zero
+- Multi-currency transaction sync: `syncTransactionChain()` now sends per-currency cursors (`lastKnownTxidsByCurrency`) so the handler can filter independently per currency — previously used a single `lastKnownTxid` cursor across all currencies, causing partial syncs to miss older transactions in currencies other than the one with the latest txid
+- Sync handler per-currency filtering: `handleTransactionSyncRequest()` now supports `lastKnownTxidsByCurrency` for per-currency cursor filtering with backward-compatible fallback to single `lastKnownTxid` break
+- Multi-currency contact add for existing contacts: `handleNewContact()` now creates outgoing `contact_currencies` entry, contact transaction, and balance/credit entries when adding additional currencies to an existing contact — previously silently returned "Contact address updated" without any per-currency state
+- Receiver-side per-currency contact transactions: `handleContactCreation()` now creates a contact transaction per currency for both pending and accepted contacts — previously only created one contact transaction for the first currency, causing asymmetric chain state
+- Per-currency contact transaction check: `contactTransactionExistsForReceiver()` now supports optional currency filter — previously checked only whether any contact transaction existed regardless of currency
+- Txid hash now includes currency: `createUniqueTxid`, `createUniqueDatabaseTxid`, `insertContactTransaction`, and `insertReceivedContactTransaction` all include currency in the hash input — prevents potential txid collisions when the same amount is sent in different currencies at the same microsecond, or when multiple per-currency contact transactions are created between the same parties
+- Per-currency independent contact requests: incoming currency from P2P contact requests is now stored in `contact_currencies` with `status='pending'` instead of being lost (root cause: `addPendingContact()` stores `currency: null`)
+- Accept contact now validates against pending currencies from `contact_currencies` instead of the always-null `contacts.currency` field
+- Accepting a pending currency for an existing accepted contact now correctly creates initial balance and credit entries for the new currency
+- GUI `handleAcceptCurrency` now inserts initial balance/credit entries when accepting a pending currency (previously only updated `contact_currencies` status)
+- P2P fee lookup crash: `P2pService::calculateRequestedAmount()` and `Rp2pService::handleRp2pRequest()` referenced removed `contacts.fee_percent` column — now uses `ContactCurrencyRepository::getFeePercent()` for per-currency fee lookup with user default fallback
+- P2P funds-on-hold not filtered by currency: `getCreditInP2p()` summed ALL active P2P amounts regardless of currency, incorrectly blocking transactions in one currency due to holds in another — now filters by currency
+- P2P broadcast to ineligible contacts: `processQueuedP2pMessages()` and `processSingleP2p()` broadcast P2P requests to all accepted contacts regardless of currency support — now uses currency-filtered `getAllAcceptedAddresses($currency)` so requests are only sent to contacts that have the transaction's currency accepted
+- P2P currency hardcoded to USD: `prepareP2pRequestData()` ignored request currency and defaulted to USD — now reads currency from request
+- Auto-recovery crash on wallet restore: `ContactRepository` methods used 0-indexed positional params causing PDO `ValueError` — fixed with named params
+- Pending contact requests in GUI now show per-currency accept forms when multiple currencies are requested, each with independent fee/credit settings
+- Pending contacts section enriched with currency data from `contact_currencies` table
+- `acceptContact()` now ensures the accepted currency is properly recorded in `contact_currencies` with fee/credit values
+- `handleContactCreation` no longer references removed `currency`, `fee_percent`, `credit_limit` columns from `contacts` table — now reads from `contact_currencies` for mutual accept matching
+- GUI `openContactModal` in script.js now derives currency/fee/credit from `currencies[0]` instead of removed top-level contact fields
+- GUI `contactSection.html` now derives fee/credit/currency display from `currencies` array instead of removed top-level contact fields
+- Accept contact with mismatched currency no longer rejects — user can accept with their preferred currency while remote's pending currencies stay for later acceptance
+- Cross-currency contact requests now correctly distinguished via `direction` column in `contact_currencies`: "incoming" = they requested from us, "outgoing" = we requested from them — resolves mismatch where Alice's USD request was confused with Bob's GBY request
+
+### Added
+- `contact_currencies.direction` column (`ENUM('incoming','outgoing')`) with database migration — enables per-direction currency tracking so both sides independently track what they requested vs what was requested of them
+- Sender-side outgoing currency tracking: `handleNewContact` now inserts `direction='outgoing'` entries in `contact_currencies` when a contact request is sent, so the sender can see "Awaiting their acceptance" for each requested currency
+- Direction-aware GUI: pending contact section shows "Your pending requests (awaiting their acceptance)" for outgoing currencies and "They requested" for incoming currencies, eliminating the confusion where sender's own currency appeared as an incoming request
+- `MessageService` now updates outgoing `contact_currencies` entries to 'accepted' when remote acceptance is received
+- Unique index on `contact_currencies` changed from `(pubkey_hash, currency)` to `(pubkey_hash, currency, direction)` — allows both sides to independently request the same currency
+- Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
+- Contact detail modal currency selector: multi-currency contacts now display a dropdown to switch between currencies, updating balance, credit limit, fee, and available credit fields
+- Per-currency contact balances: `getAllContactBalances()` now returns balances grouped by currency (`pubkey => ['USD' => amount, 'GBY' => amount]`)
+- `balances_by_currency` field added to contact data throughout the GUI pipeline (BalanceService, TransactionService, ContactDataBuilder)
+- Pending currency acceptance flow: adding a new currency to an existing contact now sends a P2P request; the remote side sees it as "pending" and must accept with their own fee/credit terms
+- `contact_currencies.status` column (`'accepted'`/`'pending'`) with database migration for existing tables
+- `ContactCurrencyRepository::acceptCurrency()` and `getPendingCurrencies()` methods
+- `ContactSyncService::setContactCurrencyRepository()` for new currency request handling on receiver side
+- GUI `acceptCurrency` action handler in ContactController for accepting pending currency requests
+- Pending currency badge on contact cards and accept form in contact detail modal
+- Cross-currency mutual request handling: when both sides initiate contact requests with different currencies, the remote's currency is stored as a pending entry in `contact_currencies` and displayed in the GUI as a "Currency Mismatch" with an option to accept their terms
+- CLI `eiou add` now allows updating the currency on a pending outgoing contact request — re-sends the P2P request with the new currency, enabling mutual accept when currencies now match
+- Accept contact form currency dropdown now populated dynamically from `getAllowedCurrencies()` instead of hardcoded USD
+
+- Configurable allowed currencies — the hardcoded `['USD']` allowed list in `InputValidator::validateCurrency()` is now a `Constants::ALLOWED_CURRENCIES` default that can be overridden per-node via `UserContext::getAllowedCurrencies()`
+  - New `Constants::ALLOWED_CURRENCIES` constant defines the system default
+  - New `UserContext::getAllowedCurrencies()` getter reads from config (comma-separated string or array), falls back to Constants
+  - `InputValidator::validateCurrency()` now reads allowed list from UserContext; accepts optional `$allowedCurrencies` parameter for tests and override scenarios
+  - New `InputValidator::validateAllowedCurrency()` validates that a currency code has a `Constants::CONVERSION_FACTORS` entry before it can be added to the allowed list
+  - CLI `changesettings allowedCurrencies` command and interactive menu option (16) for managing allowed currencies
+  - GUI settings: dynamic default currency dropdown populated from allowed list; new "Allowed Currencies" text input field
+  - GUI SettingsController validates each currency has a conversion factor on save
+  - API `PUT /api/v1/system/settings` supports `allowed_currencies` field with per-currency conversion factor validation
+  - `allowedCurrencies` added to `UserContext::getConfigurableDefaults()` (stored as comma-separated string)
+- Multi-currency contact support — contacts can now have multiple currency relationships with independent fee and credit limit per currency
+  - New `contact_currencies` table stores per-currency configuration (`pubkey_hash`, `currency`, `fee_percent`, `credit_limit`) with composite UNIQUE on `(pubkey_hash, currency)`
+  - New `ContactCurrencyRepository` with full CRUD: `insertCurrencyConfig()`, `getCurrencyConfig()`, `getContactCurrencies()`, `hasCurrency()`, `getCreditLimit()`, `getFeePercent()`, `updateCurrencyConfig()`, `upsertCurrencyConfig()`, `deleteAllForContact()`, `deleteCurrencyConfig()`
+  - `ContactManagementService::addCurrencyToContact()` method to add a new currency to an existing accepted contact, creating rows in `contact_currencies`, `balances`, and `contact_credit`
+  - `ContactCreditRepository::getAvailableCreditAllCurrencies()` returns all per-currency credit rows for a contact
+  - GUI contact cards show "+N currency" badge when contact has multiple currencies
+  - GUI contact modal shows "Additional Currencies" section with per-currency credit limit, fee, and available credit
+  - GUI contact controller supports `addCurrency` action for adding currencies from the contact settings
+  - API `GET /api/v1/contacts/:address` response now includes `currencies` array with per-currency configuration
+  - Data migration in `DatabaseSetup::runColumnMigrations()` copies existing `contacts.{currency, fee_percent, credit_limit}` into `contact_currencies` via `INSERT IGNORE`
+
+### Changed
+- `contact_credit` table UNIQUE constraint changed from `pubkey_hash` alone to composite `(pubkey_hash, currency)` — allows storing per-currency credit entries for the same contact
+- `getCreditLimit()` across all interfaces, services, and repositories now accepts an optional `currency` parameter (defaults to `Constants::TRANSACTION_DEFAULT_CURRENCY`) — affects `ContactServiceInterface`, `ContactManagementServiceInterface`, `ContactRepository`, `ContactManagementService`, `ContactService`
+- `ContactRepository::getCreditLimit()` queries `contact_currencies` table first, falls back to `contacts` table for backward compatibility
+- `ContactCreditRepository::getAvailableCredit()` now accepts optional `currency` parameter to filter by specific currency
+- All `getCreditLimit()` call sites updated to pass currency from the request/transaction context: `TransactionValidationService`, `TransactionService`, `Rp2pService` (2 call sites), `P2pService`
+- `ContactStatusService::handlePingRequest()` reads credit limit from `contact_currencies` table first, falling back to `contacts.credit_limit`
+- `ContactManagementService::acceptContact()` now also writes to `contact_currencies` table alongside the existing `contacts` table write
+- `ContactDataBuilder` output includes `currencies` array for multi-currency GUI rendering
+- `Functions.php` fetches per-contact currency configs and all-currency available credits for GUI display
+
+### Fixed
+- Mutual auto-accept no longer fires when currencies differ — Alice adding Bob with USD and Bob adding Alice with GBY are now treated as separate pending requests instead of auto-accepting with mismatched currencies
+- Wallet info card currency rows now follow the allowed currencies order (first allowed currency = first row)
+- Wallet info card loops use `isset()` guards so data for currencies not in `$knownCurrencies` cannot create phantom rows
 - API `POST /api/v1/wallet/send` now reads `best_fee` from request body and passes `--best` to argv — previously the field was documented but silently ignored, always using fast mode (#679)
 - CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
 

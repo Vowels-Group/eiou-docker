@@ -574,6 +574,37 @@ class P2pRepositoryTest extends TestCase
         $this->assertEquals(0, $result);
     }
 
+    /**
+     * Test getCreditInP2p with currency filter includes currency in query
+     */
+    public function testGetCreditInP2pWithCurrencyFilter(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('SUM(amount)'),
+                $this->stringContains('currency')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['total_amount' => 3000]);
+
+        $result = $this->repository->getCreditInP2p('pubkey_123', 'DER');
+
+        $this->assertEquals(3000, $result);
+    }
+
     // =========================================================================
     // getUserTotalEarnings() Tests
     // =========================================================================

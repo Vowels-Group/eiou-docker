@@ -257,6 +257,9 @@ eiou add http://charlie:8080 Charlie 1 200 USD --json
 **Notes:**
 - Creates a pending contact request that the recipient must accept
 - To accept an incoming request, use `add` with the sender's address
+- Each currency request is tracked independently with a direction (`incoming`/`outgoing`) in the `contact_currencies` table
+- Cross-currency requests are supported: Alice can request USD from Bob while Bob requests GBY from Alice — each side accepts independently
+- Re-running `add` with a different currency for an existing pending contact updates the outgoing currency request
 - Rate limited: 20 additions per minute
 
 ---
@@ -287,8 +290,8 @@ eiou viewcontact --json Bob
 - Contact name, status, addresses
 - Balance (received, sent, net)
 - Fee percentage and credit limit
-- Your available credit with them (received via ping/pong, ~5 min refresh)
-- Their available credit with you (calculated: sent - received + credit_limit)
+- Your available credit with them per currency (received via ping/pong, stored in `contact_credit`, ~5 min refresh)
+- Their available credit with you per currency (calculated: credit_limit - balance)
 
 **On Failure (JSON):**
 ```json
@@ -308,11 +311,14 @@ eiou viewcontact --json Bob
 
 ### update
 
-Update contact information.
+Update contact information. Fee and credit updates require a currency parameter to specify which currency's settings to modify. Updates are applied to both the `contacts` table and the `contact_currencies` table.
 
 **Syntax:**
 ```bash
-eiou update <address|name> <field> [values...]
+eiou update <address|name> name <name>
+eiou update <address|name> fee <value> <currency>
+eiou update <address|name> credit <value> <currency>
+eiou update <address|name> all <name> <fee> <credit> [currency]
 ```
 
 **Arguments:**
@@ -322,20 +328,21 @@ eiou update <address|name> <field> [values...]
 | `address\|name` | required | Contact's address or display name |
 | `field` | required | Field to update: `all`, `name`, `fee`, or `credit` |
 | `values` | varies | New value(s) for the specified field(s) |
+| `currency` | required for fee/credit | Currency code (e.g., USD, EUR). Optional for `all` (defaults to contact's current currency) |
 
 **Examples:**
 ```bash
 # Update contact name
 eiou update Bob name Robert
 
-# Update fee percentage
-eiou update Bob fee 1.5
+# Update fee percentage for USD
+eiou update Bob fee 1.5 USD
 
-# Update credit limit
-eiou update Bob credit 500
+# Update credit limit for EUR
+eiou update Bob credit 500 EUR
 
-# Update all fields at once
-eiou update Bob all NewName 2.0 1000
+# Update all fields at once for GBY
+eiou update Bob all NewName 2.0 1000 GBY
 ```
 
 ---
@@ -379,7 +386,7 @@ eiou search alice --json
 
 Check if a contact is online, verify chain validity, and retrieve available credit.
 
-Ping compares chain heads with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). All gap detection is performed locally — no transaction lists are exchanged over the wire. The pong response also includes the available credit the contact extends to you, which is stored locally for use by `viewcontact`, `search`, and `info`.
+Ping compares per-currency chain heads (`prevTxidsByCurrency`) with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). Each currency has its own independent transaction chain. All gap detection is performed locally — no transaction lists are exchanged over the wire. The pong response includes per-currency available credit (`availableCreditByCurrency`) and per-currency chain validity (`chainStatusByCurrency`), stored locally for use by `viewcontact`, `search`, and `info`.
 
 **Syntax:**
 ```bash
@@ -405,10 +412,10 @@ eiou ping --json Alice
 - Response message
 
 **Available credit exchange:**
-The pong response includes the available credit the contact has for you (how much you can spend with them), calculated as: what they sent you − what you sent them + their credit limit for you. This value is stored locally in the background and is visible via `viewcontact`, `search`, and `info`. The automatic ContactStatusProcessor also performs this exchange every ~5 minutes.
+The pong response includes per-currency available credit (`availableCreditByCurrency`). For each currency, the available credit is calculated as: what they sent you − what you sent them + their credit limit for you in that currency. These values are stored per-currency in the `contact_credit` table and visible via `viewcontact`, `search`, and `info`. The automatic ContactStatusProcessor also performs this exchange every ~5 minutes.
 
 **Chain mismatch behavior:**
-If the local and remote chain heads don't match, or if internal gaps are detected, ping automatically triggers a sync (including backup recovery on both sides). If the sync fails to resolve the gap, a chain drop is auto-proposed. See [Chain Drop Commands](#chain-drop-commands) for details.
+If any currency's local and remote chain heads don't match, or if internal gaps are detected, ping automatically triggers a sync (including backup recovery on both sides). If the sync fails to resolve the gap, a chain drop is auto-proposed. See [Chain Drop Commands](#chain-drop-commands) for details.
 
 **Wallet restore behavior:**
 When a ping is received by a node that was restored from a seed phrase, the ContactStatusService detects the incoming ping from a previously unknown address, auto-creates a pending contact, and triggers a sync to restore the shared transaction chain. The prior contact then appears as a pending request that the restored wallet owner can review via `eiou pending` and re-accept via `eiou add`. This allows prior contacts to re-establish their relationship with a restored wallet simply by pinging it.

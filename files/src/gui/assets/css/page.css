@@ -199,6 +199,11 @@ body {
     color: #495057;
 }
 
+.wallet-stats-container {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 .wallet-stats-row {
     display: flex;
     flex-wrap: wrap;
@@ -2234,6 +2239,7 @@ html {
     justify-content: center;
     width: 32px;
     height: 32px;
+    min-width: 32px;
     border-radius: 50%;
     cursor: help;
     transition: transform 0.2s ease;
@@ -2478,6 +2484,44 @@ html {
     background: #f8f9fa;
     padding: 0.5rem;
     border-radius: 4px;
+}
+
+/* Pending Currency Forms in Modal */
+.pending-currency-form {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.pending-currency-form .info-grid {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.pending-currency-form .form-control-sm {
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.85rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    color: #212529;
+    transition: border-color 0.15s;
+}
+
+.pending-currency-form .form-control-sm:focus {
+    border-color: #4a90d9;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15);
+}
+
+@media (max-width: 600px) {
+    .pending-currency-form .info-grid {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 .info-tooltip-icon {
@@ -3086,6 +3130,74 @@ html {
     display: none;
 }
 
+/* Currency slider for contact modal */
+.currency-slider {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.currency-slider-track {
+    display: flex;
+    gap: 0.5rem;
+    overflow: hidden;
+    flex: 1;
+}
+
+.currency-slider-pill {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    border: 1px solid #ced4da;
+    background: #f8f9fa;
+    color: #495057;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.currency-slider-pill:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.currency-slider-pill.active {
+    background: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+}
+
+.currency-slider-arrow {
+    background: none;
+    border: 1px solid #ced4da;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #495057;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.currency-slider-arrow:hover {
+    background: #e9ecef;
+}
+
+.currency-slider-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.currency-slider-arrow:disabled:hover {
+    background: none;
+}
+
 /* Pending contact card */
 .pending-contact-card {
     background: #f8f9fa;
@@ -3113,6 +3225,82 @@ html {
 .pending-contact-accept-title {
     color: #0d6efd;
     margin-bottom: 1rem;
+}
+
+/* Multi-currency badge (contact cards) */
+.multi-currency-badge {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+
+.badge-pending-currency {
+    background: #e8eaed;
+    color: #5f6368;
+}
+
+.badge-requested-currency {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+/* Pending contact addresses — prevent overflow on mobile */
+.pending-addresses .address-line .monospace {
+    word-break: break-all;
+    overflow-wrap: break-word;
+    min-width: 0;
+}
+
+.currency-form-row {
+    grid-template-columns: 1fr 1fr auto;
+}
+
+.currency-accept-btn {
+    height: 38px;
+    white-space: nowrap;
+}
+
+.currency-accept-spacer {
+    visibility: hidden;
+}
+
+@media (max-width: 576px) {
+    .currency-form-row {
+        grid-template-columns: 1fr;
+    }
+    .currency-accept-spacer {
+        display: none;
+    }
+    .currency-accept-btn {
+        width: 100%;
+        height: auto;
+    }
+}
+
+hr.currency-separator {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin: 0.75rem 0;
+}
+
+hr.currency-separator-double {
+    border: none;
+    border-top: 3px double rgba(0, 0, 0, 0.2);
+    margin: 1rem 0;
+}
+
+.pending-contact-name-section {
+    background: rgba(13, 110, 253, 0.05);
+    border: 1px solid rgba(13, 110, 253, 0.2);
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+.pending-contact-name-section label {
+    color: #0d6efd;
 }
 
 .pending-contact-actions {

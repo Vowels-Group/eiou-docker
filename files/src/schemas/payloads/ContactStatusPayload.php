@@ -18,7 +18,7 @@ class ContactStatusPayload extends BasePayload
      *
      * @param array $data Ping data containing:
      *                    - receiverAddress: Address to ping
-     *                    - prevTxid: Last transaction ID in the chain with this contact
+     *                    - prevTxidsByCurrency: Per-currency chain heads for validation
      *                    - requestSync: Whether to request chain validation/sync
      * @return array The ping payload
      */
@@ -32,7 +32,7 @@ class ContactStatusPayload extends BasePayload
             'type' => 'ping',
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'prevTxid' => $data['prevTxid'] ?? null,
+            'prevTxidsByCurrency' => $data['prevTxidsByCurrency'] ?? [],
             'requestSync' => $data['requestSync'] ?? false,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
@@ -42,15 +42,14 @@ class ContactStatusPayload extends BasePayload
      * Build ping response payload (pong)
      *
      * @param array $request The ping request data
-     * @param string|null $localPrevTxid Our local prev_txid for comparison
-     * @param bool $chainValid Whether the chains match
-     * @param int|null $availableCredit Available credit for the pinging contact (in cents)
-     * @param string|null $currency Currency code for the available credit
+     * @param bool $chainValid Whether all chains match
+     * @param array $chainStatusByCurrency Per-currency chain validity map
+     * @param array $availableCreditByCurrency Per-currency available credit map (currency => cents)
      * @param int|null $processorsRunning Number of message processors currently running
      * @param int|null $processorsTotal Total expected message processors
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, ?string $localPrevTxid = null, bool $chainValid = true, ?int $availableCredit = null, ?string $currency = null, ?int $processorsRunning = null, ?int $processorsTotal = null): string
+    public function buildResponse(array $request, bool $chainValid = true, array $chainStatusByCurrency = [], array $availableCreditByCurrency = [], ?int $processorsRunning = null, ?int $processorsTotal = null): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
@@ -60,10 +59,9 @@ class ContactStatusPayload extends BasePayload
             'status' => 'pong',
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'prevTxid' => $localPrevTxid,
             'chainValid' => $chainValid,
-            'availableCredit' => $availableCredit,
-            'currency' => $currency,
+            'chainStatusByCurrency' => $chainStatusByCurrency,
+            'availableCreditByCurrency' => $availableCreditByCurrency,
             'time' => $this->timeUtility->getCurrentMicrotime()
         ];
 
@@ -97,7 +95,7 @@ class ContactStatusPayload extends BasePayload
         ];
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::DELIVERY_REJECTED,
             'reason' => $reason,
             'message' => $messages[$reason] ?? "Ping rejected: {$reason}",
             'senderAddress' => $userAddress,

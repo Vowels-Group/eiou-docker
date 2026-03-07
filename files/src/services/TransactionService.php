@@ -215,11 +215,13 @@ class TransactionService implements TransactionServiceInterface {
         if (!isset($data['receiverPublicKey'], $data['amount'], $data['time'])) {
             throw new InvalidArgumentException("Missing required fields for txid creation");
         }
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
+        $currency = $data['currency'] ?? '';
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $currency . $data['time']);
     }
 
     public function createUniqueDatabaseTxid(array $data, array $rp2p): string {
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $rp2p['time']);
+        $currency = $data['currency'] ?? $rp2p['currency'] ?? '';
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $currency . $rp2p['time']);
     }
 
     public function createContactHash(string $receiverAddress, string $salt, string $time): string {
@@ -274,7 +276,9 @@ class TransactionService implements TransactionServiceInterface {
         $data['txid'] = $this->createUniqueTxid($data);
         $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
-            $data['receiverPublicKey']
+            $data['receiverPublicKey'],
+            null,
+            $data['currency']
         );
         $data['end_recipient_address'] = $data['receiverAddress'];
         $data['initial_sender_address'] = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
@@ -292,7 +296,9 @@ class TransactionService implements TransactionServiceInterface {
         $data['memo'] = $request['hash'];
         $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
-            $data['receiverPublicKey']
+            $data['receiverPublicKey'],
+            null,
+            $data['currency']
         );
 
         if ($description !== null) {
@@ -338,7 +344,15 @@ class TransactionService implements TransactionServiceInterface {
         $result = [];
 
         foreach ($contacts as $contact) {
-            $balance = $balances[$contact['pubkey']] ?? 0;
+            $contactBalances = $balances[$contact['pubkey']] ?? [];
+            $primaryCurrency = !empty($contactBalances) ? array_key_first($contactBalances) : Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $balance = $contactBalances[$primaryCurrency] ?? 0;
+
+            $balancesByCurrency = [];
+            foreach ($contactBalances as $cur => $bal) {
+                $balancesByCurrency[$cur] = $bal ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
+            }
+
             $addresses = [];
             $contactAddrs = [];
             foreach ($addressTypes as $type) {
@@ -350,15 +364,14 @@ class TransactionService implements TransactionServiceInterface {
             $result[] = array_merge($addresses, [
                 'name' => $contact['name'],
                 'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
-                'fee' => $contact['fee_percent'] ? $this->currencyUtility->convertMinorToMajor($contact['fee_percent']) : $contact['fee_percent'],
-                'credit_limit' => $contact['credit_limit'] ? $this->currencyUtility->convertMinorToMajor($contact['credit_limit']) : $contact['credit_limit'],
-                'currency' => $contact['currency'],
+                'balances_by_currency' => $balancesByCurrency,
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
                 'transactions' => $transactions,
                 'online_status' => $contact['online_status'] ?? 'unknown',
                 'valid_chain' => $contact['valid_chain'] ?? null,
-                'pubkey_hash' => $contact['pubkey_hash'] ?? ''
+                'pubkey_hash' => $contact['pubkey_hash'] ?? '',
+                'status' => $contact['status'] ?? ''
             ]);
         }
         return $result;
@@ -382,13 +395,13 @@ class TransactionService implements TransactionServiceInterface {
     // DELEGATED: Chain Verification
     // =========================================================================
 
-    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array {
+    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey, ?string $currency = null): array {
         if ($this->chainVerificationService !== null) {
-            return $this->chainVerificationService->verifySenderChainAndSync($contactAddress, $contactPublicKey);
+            return $this->chainVerificationService->verifySenderChainAndSync($contactAddress, $contactPublicKey, $currency);
         }
         // Minimal fallback
         $result = ['success' => true, 'synced' => false, 'error' => null];
-        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey, $currency);
         if ($chainStatus['valid']) return $result;
 
         output(outputSyncChainIntegrityFailed(count($chainStatus['gaps'])), 'SILENT');
@@ -396,7 +409,7 @@ class TransactionService implements TransactionServiceInterface {
         $result['synced'] = true;
 
         if (!$syncResult['success']) {
-            $recheck = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+            $recheck = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey, $currency);
             if (!$recheck['valid']) {
                 $result['success'] = false;
                 $result['error'] = 'Failed to repair chain: ' . ($syncResult['error'] ?? 'unknown');
@@ -416,7 +429,7 @@ class TransactionService implements TransactionServiceInterface {
             return $this->transactionValidationService->checkPreviousTxid($request);
         }
         if (!isset($request['senderPublicKey'], $request['receiverPublicKey'])) return false;
-        $expected = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
+        $expected = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey'], null, $request['currency'] ?? null);
         return $expected === ($request['previousTxid'] ?? null);
     }
 
@@ -430,7 +443,7 @@ class TransactionService implements TransactionServiceInterface {
         $request['amount'] = $validation['value'];
         $validationUtility = $this->utilityContainer->getValidationUtility();
         $available = $validationUtility->calculateAvailableFunds($request);
-        $credit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
+        $credit = $this->contactRepository->getCreditLimit($request['senderPublicKey'], $request['currency']);
         return ($available + $credit) >= $request['amount'];
     }
 

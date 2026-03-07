@@ -522,29 +522,49 @@ class ContactController
             $contactCredit = $creditValidation['value'];
             $contactCurrency = $currencyValidation['value'];
 
-            // Create argv array with --json flag for structured output
-            $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit, '--json'];
-
-            // Create CliOutputManager with JSON mode enabled
-            CliOutputManager::resetInstance();
-            $outputManager = new CliOutputManager($argv);
-
-            // Capture output
-            ob_start();
             try {
+                // Update contact name in the contacts table
+                $argv = ['eiou', 'update', $contactAddress, 'name', $contactName, '--json'];
+                CliOutputManager::resetInstance();
+                $outputManager = new CliOutputManager($argv);
+                ob_start();
                 $this->contactService->updateContact($argv, $outputManager);
                 $output = ob_get_clean();
-
-                // Parse the JSON output to determine message type and content
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
-                $message = $messageInfo['message'];
-                $messageType = $messageInfo['type'];
+
+                if ($messageInfo['type'] === 'error') {
+                    $message = $messageInfo['message'];
+                    $messageType = 'error';
+                } else {
+                    // Update fee/credit in contact_currencies for the selected currency
+                    $app = Application::getInstance();
+                    $contactCurrencyRepo = $app->services->getContactCurrencyRepository();
+
+                    // Look up contact pubkey hash
+                    $contact = $this->contactService->lookupContactInfo($contactAddress);
+                    if ($contact) {
+                        $pubkeyHash = $contact['receiverPublicKeyHash'] ?? '';
+
+                        // Convert to minor units
+                        $feeMinor = (int) ($contactFee * Constants::FEE_CONVERSION_FACTOR);
+                        $creditMinor = (int) ($contactCredit * Constants::getConversionFactor($contactCurrency));
+
+                        $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
+                            'fee_percent' => $feeMinor,
+                            'credit_limit' => $creditMinor,
+                        ]);
+
+                        $message = 'Contact updated successfully';
+                        $messageType = 'success';
+                    } else {
+                        $message = 'Contact not found for currency update';
+                        $messageType = 'error';
+                    }
+                }
             } catch (\Throwable $e) {
-                // Ensure output buffer is cleaned up
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use Logger for exception logging
                 Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
@@ -556,6 +576,277 @@ class ContactController
             }
         }
         MessageHelper::redirectMessage($message, $messageType);
+    }
+
+    /**
+     * Handle adding a new currency to an existing contact (AJAX - returns JSON)
+     *
+     * @return void
+     */
+    public function handleAddCurrency(): void
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $this->session->verifyCSRFToken();
+
+            $pubkey = Security::sanitizeInput($_POST['pubkey'] ?? '');
+            $currency = strtoupper(Security::sanitizeInput($_POST['currency'] ?? ''));
+            $fee = Security::sanitizeInput($_POST['fee'] ?? '');
+            $credit = Security::sanitizeInput($_POST['credit'] ?? '');
+
+            if (empty($pubkey) || empty($currency) || $fee === '' || $credit === '') {
+                echo json_encode(['success' => false, 'error' => 'missing_fields', 'message' => 'All fields are required']);
+                return;
+            }
+
+            $feeValidation = InputValidator::validateFeePercent($fee);
+            if (!$feeValidation['valid']) {
+                echo json_encode(['success' => false, 'error' => 'invalid_fee', 'message' => $feeValidation['error']]);
+                return;
+            }
+
+            $creditValidation = InputValidator::validateAmount($credit, $currency);
+            if (!$creditValidation['valid']) {
+                echo json_encode(['success' => false, 'error' => 'invalid_credit', 'message' => $creditValidation['error']]);
+                return;
+            }
+
+            $app = Application::getInstance();
+            $serviceContainer = $app->services;
+            $contactService = $serviceContainer->getService('ContactManagementService');
+
+            $result = $contactService->addCurrencyToContact(
+                $pubkey,
+                $currency,
+                $feeValidation['value'],
+                $creditValidation['value']
+            );
+
+            if ($result) {
+                echo json_encode(['success' => true, 'message' => "Currency {$currency} added to contact"]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'add_currency_failed', 'message' => 'Failed to add currency. Contact may not be accepted or currency already exists.']);
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'An unexpected error occurred']);
+        }
+    }
+
+    /**
+     * Handle accepting a pending currency for an existing contact
+     *
+     * Accepts a pending currency request with user-provided fee and credit limit values.
+     */
+    public function handleAcceptCurrency(): void
+    {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        $currency = strtoupper(Security::sanitizeInput($_POST['currency'] ?? ''));
+        $fee = Security::sanitizeInput($_POST['fee'] ?? '');
+        $credit = Security::sanitizeInput($_POST['credit'] ?? '');
+
+        if (empty($pubkeyHash) || empty($currency) || $fee === '' || $credit === '') {
+            MessageHelper::redirectMessage('All fields are required to accept a currency.', 'error');
+            return;
+        }
+
+        $feeValidation = InputValidator::validateFeePercent($fee);
+        if (!$feeValidation['valid']) {
+            MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
+            return;
+        }
+
+        $creditValidation = InputValidator::validateAmount($credit, $currency);
+        if (!$creditValidation['valid']) {
+            MessageHelper::redirectMessage('Invalid credit: ' . $creditValidation['error'], 'error');
+            return;
+        }
+
+        try {
+            $app = Application::getInstance();
+            $serviceContainer = $app->services;
+            $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+
+            // Convert to minor units for storage
+            $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
+            $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+
+            // Update the pending currency with user's fee/credit and set status to accepted
+            $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
+                'fee_percent' => $feeMinor,
+                'credit_limit' => $creditMinor,
+                'status' => 'accepted'
+            ], 'incoming');
+
+            // If we also have an outgoing pending request for the same currency (cross-request),
+            // mark it as accepted too — their incoming request proves they agree to this currency
+            if ($contactCurrencyRepo->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
+                $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
+            }
+
+            // Insert initial balance and credit entries for the newly accepted currency
+            $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+            if ($contactPubkey) {
+                $serviceContainer->getBalanceRepository()->insertInitialContactBalances($contactPubkey, $currency);
+                try {
+                    $serviceContainer->getContactCreditRepository()->createInitialCredit($contactPubkey, $currency);
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to create initial credit for accepted currency", [
+                        'currency' => $currency,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Send acceptance notification to remote side so they mark their outgoing currency as accepted
+            // Also upgrades contact status from pending to accepted if needed
+            $contactSyncService = $serviceContainer->getContactSyncService();
+            $contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
+
+            MessageHelper::redirectMessage("Currency {$currency} accepted.", 'success');
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
+        }
+    }
+
+    /**
+     * Handle accept all currencies for a contact in a single POST
+     */
+    public function handleAcceptAllCurrencies(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        $currenciesJson = $_POST['currencies'] ?? '[]';
+        $currencies = json_decode($currenciesJson, true);
+        $isNewContact = !empty($_POST['is_new_contact']);
+
+        if (empty($pubkeyHash) || empty($currencies) || !is_array($currencies)) {
+            MessageHelper::redirectMessage('Invalid request to accept currencies.', 'error');
+            return;
+        }
+
+        try {
+            $app = Application::getInstance();
+            $serviceContainer = $app->services;
+            $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+            $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+            $contactSyncService = $serviceContainer->getContactSyncService();
+
+            $accepted = [];
+            $errors = [];
+
+            // For new contacts: accept the first currency via addContact to establish the contact,
+            // then accept remaining currencies via the standard currency acceptance path
+            $firstCurrencyHandled = false;
+            if ($isNewContact && !empty($contactPubkey)) {
+                $contact = $serviceContainer->getContactRepository()->getContactByPubkey($contactPubkey);
+                if ($contact && $contact['status'] !== Constants::CONTACT_STATUS_ACCEPTED) {
+                    $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+                    $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
+
+                    if (!empty($contactAddress) && !empty($contactName) && !empty($currencies[0])) {
+                        $firstEntry = $currencies[0];
+                        $firstCurrency = strtoupper(Security::sanitizeInput($firstEntry['currency'] ?? ''));
+                        $firstFee = Security::sanitizeInput($firstEntry['fee'] ?? '');
+                        $firstCredit = Security::sanitizeInput($firstEntry['credit'] ?? '');
+
+                        if (!empty($firstCurrency) && $firstFee !== '' && $firstCredit !== '') {
+                            // Accept the contact with the first currency via CLI addContact
+                            $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstCurrency, '--json'];
+                            CliOutputManager::resetInstance();
+                            $outputManager = new CliOutputManager($argv);
+
+                            ob_start();
+                            try {
+                                $this->contactService->addContact($argv, $outputManager);
+                                ob_end_clean();
+                                $accepted[] = $firstCurrency;
+                                $firstCurrencyHandled = true;
+                            } catch (\Throwable $e) {
+                                if (ob_get_level() > 0) { ob_end_clean(); }
+                                $errors[] = "{$firstCurrency}: " . $e->getMessage();
+                            }
+                        }
+                    }
+
+                    // Remove the first currency from the list since it was handled
+                    if ($firstCurrencyHandled) {
+                        array_shift($currencies);
+                    }
+                }
+            }
+
+            // Accept remaining currencies (or all if contact was already accepted)
+            foreach ($currencies as $entry) {
+                $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
+                $fee = Security::sanitizeInput($entry['fee'] ?? '');
+                $credit = Security::sanitizeInput($entry['credit'] ?? '');
+
+                if (empty($currency) || $fee === '' || $credit === '') {
+                    $errors[] = "{$currency}: missing fields";
+                    continue;
+                }
+
+                $feeValidation = InputValidator::validateFeePercent($fee);
+                if (!$feeValidation['valid']) {
+                    $errors[] = "{$currency}: invalid fee";
+                    continue;
+                }
+
+                $creditValidation = InputValidator::validateAmount($credit, $currency);
+                if (!$creditValidation['valid']) {
+                    $errors[] = "{$currency}: invalid credit";
+                    continue;
+                }
+
+                // Convert to minor units for storage
+                $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
+                $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+
+                $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
+                    'fee_percent' => $feeMinor,
+                    'credit_limit' => $creditMinor,
+                    'status' => 'accepted'
+                ], 'incoming');
+
+                if ($contactCurrencyRepo->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
+                    $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
+                }
+
+                // Re-fetch pubkey in case it was just established by the first currency acceptance
+                $currentPubkey = $contactPubkey ?: $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+                if ($currentPubkey) {
+                    $serviceContainer->getBalanceRepository()->insertInitialContactBalances($currentPubkey, $currency);
+                    try {
+                        $serviceContainer->getContactCreditRepository()->createInitialCredit($currentPubkey, $currency);
+                    } catch (\Exception $e) {
+                        // Credit may already exist
+                    }
+                }
+
+                $contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
+                $accepted[] = $currency;
+            }
+
+            if (!empty($accepted)) {
+                $msg = 'Accepted: ' . implode(', ', $accepted) . '.';
+                if (!empty($errors)) {
+                    $msg .= ' Errors: ' . implode('; ', $errors);
+                }
+                MessageHelper::redirectMessage($msg, 'success');
+            } else {
+                MessageHelper::redirectMessage('Failed to accept currencies: ' . implode('; ', $errors), 'error');
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
+        }
     }
 
     /**
@@ -655,6 +946,18 @@ class ContactController
 
             case 'editContact':
                 $this->handleEditContact();
+                break;
+
+            case 'addCurrency':
+                $this->handleAddCurrency();
+                break;
+
+            case 'acceptCurrency':
+                $this->handleAcceptCurrency();
+                break;
+
+            case 'acceptAllCurrencies':
+                $this->handleAcceptAllCurrencies();
                 break;
 
             case 'pingContact':

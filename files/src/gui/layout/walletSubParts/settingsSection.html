@@ -12,13 +12,19 @@
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
                 <select id="defaultCurrency" name="defaultCurrency" class="default-value">
-                    <option value="USD" selected>USD</option>
+                    <?php
+                    $allowedCurrencies = $user->getAllowedCurrencies();
+                    $currentDefault = $user->getDefaultCurrency();
+                    foreach ($allowedCurrencies as $curr): ?>
+                        <option value="<?= htmlspecialchars($curr) ?>" <?= $curr === $currentDefault ? 'selected' : '' ?>><?= htmlspecialchars($curr) ?></option>
+                    <?php endforeach; ?>
                 </select>
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Default currency for new contacts and transactions
                 </small>
             </div>
+
 
             <!-- Default Fee -->
             <div class="form-group">
@@ -284,6 +290,7 @@
                             </small>
                         </div>
 
+
                     </div>
                 </div>
 
@@ -463,6 +470,17 @@
                             ?></textarea>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="allowedCurrencies">Allowed Currencies:</label>
+                            <textarea id="allowedCurrencies" name="allowedCurrencies" rows="3" class="default-value" placeholder="USD&#10;EUR"><?php
+                                $allowedCurrencyList = $user->getAllowedCurrencies();
+                                echo htmlspecialchars(implode("\n", $allowedCurrencyList));
+                            ?></textarea>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined.
                             </small>
                         </div>
                     </div>

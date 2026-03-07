@@ -368,10 +368,14 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
             if ($correctPreviousTxid === null) {
                 // Fallback: get from transaction chain, excluding the held transaction itself
+                // Use per-currency chain lookup
+                $heldTx = $this->transactionRepository->getByTxid($txid);
+                $heldCurrency = $heldTx['currency'] ?? null;
                 $correctPreviousTxid = $this->transactionRepository->getPreviousTxid(
                     $this->currentUser->getPublicKey(),
                     $contactPubkey,
-                    $txid
+                    $txid,
+                    $heldCurrency
                 );
             }
 

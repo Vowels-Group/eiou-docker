@@ -554,11 +554,16 @@ List all contacts.
                 "name": "Bob",
                 "pubkey_hash": "abc123...",
                 "status": "accepted",
-                "currency": "USD",
-                "fee_percent": 1.0,
-                "credit_limit": 100.00,
+                "currencies": [
+                    {
+                        "currency": "USD",
+                        "fee_percent": 1.0,
+                        "credit_limit": 100.00,
+                        "status": "accepted",
+                        "direction": "outgoing"
+                    }
+                ],
                 "my_available_credit": 95.00,
-                "their_available_credit": 100.00,
                 "addresses": {
                     "http": "http://bob.local:8080",
                     "https": null,
@@ -573,8 +578,8 @@ List all contacts.
 ```
 
 **Fields:**
-- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
-- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
+- `currencies`: Array of per-currency configurations with `currency`, `fee_percent`, `credit_limit`, `status` (`accepted`/`pending`), and `direction` (`incoming`/`outgoing`).
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known. Stored per-currency in the `contact_credit` table.
 
 ---
 
@@ -648,9 +653,6 @@ Get all pending contact requests (incoming and outgoing).
                     "name": "Charlie",
                     "pubkey_hash": "def456...",
                     "status": "pending",
-                    "currency": "USD",
-                    "fee_percent": 1.0,
-                    "credit_limit": 100.00,
                     "addresses": {
                         "http": "http://charlie.local:8080"
                     },
@@ -696,11 +698,7 @@ Search contacts by name.
                 "addresses": {
                     "http": "http://bob.local:8080"
                 },
-                "fee_percent": 1.0,
-                "credit_limit": 100.00,
-                "my_available_credit": 85.50,
-                "their_available_credit": 114.50,
-                "currency": "USD"
+                "my_available_credit": 85.50
             }
         ],
         "count": 1
@@ -709,11 +707,8 @@ Search contacts by name.
 ```
 
 **Contact fields:**
-- `fee_percent`: Fee percentage for transactions through this contact
-- `credit_limit`: Credit limit set for this contact
-- `my_available_credit`: How much credit this contact extends to you (from pong, refreshed on ~5 min intervals). `null` if not yet received.
-- `their_available_credit`: How much credit you extend to this contact (calculated from balance + credit limit). `null` if no balance data.
-- `currency`: Currency code for this contact relationship
+- `my_available_credit`: How much credit this contact extends to you (from pong, refreshed on ~5 min intervals). `null` if not yet received. Stored per-currency in `contact_credit`.
+  Per-currency fee/credit details are available via `GET /api/v1/contacts` (with `currencies` array) or `GET /api/v1/contacts/:address`.
 
 ---
 
@@ -743,7 +738,7 @@ Ping a contact to check online status.
 }
 ```
 
-**Note:** Ping also exchanges available credit information with the contact in the background. The `my_available_credit` field on subsequent contact queries will reflect the latest value received from this ping.
+**Note:** Ping exchanges per-currency data with the contact: `prevTxidsByCurrency` (chain heads), `chainStatusByCurrency` (per-currency chain validity), and `availableCreditByCurrency` (per-currency available credit). The per-currency available credit is stored in the `contact_credit` table and reflected in the `my_available_credit` field on subsequent contact queries.
 
 ---
 
@@ -763,11 +758,7 @@ Get contact details by address or name.
             "name": "Bob",
             "pubkey_hash": "abc123...",
             "status": "accepted",
-            "currency": "USD",
-            "fee_percent": 1.0,
-            "credit_limit": 100.00,
             "my_available_credit": 95.00,
-            "their_available_credit": 100.00,
             "addresses": {
                 "http": "http://bob.local:8080",
                 "https": null,
@@ -778,6 +769,15 @@ Get contact details by address or name.
                 "sent": 50.00,
                 "net": 50.00
             },
+            "currencies": [
+                {
+                    "currency": "USD",
+                    "fee_percent": 1.0,
+                    "credit_limit": 100.00,
+                    "status": "accepted",
+                    "direction": "outgoing"
+                }
+            ],
             "created_at": "2026-01-01T00:00:00Z"
         }
     }
@@ -785,8 +785,8 @@ Get contact details by address or name.
 ```
 
 **Fields:**
-- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known.
-- `their_available_credit`: How much credit this contact can use through you (calculated: sent - received + credit_limit). `null` if balance data unavailable.
+- `my_available_credit`: How much credit you can use through this contact (received via ping/pong, ~5 min refresh). `null` if not yet known. Stored per-currency in `contact_credit`.
+- `currencies`: Array of per-currency configurations. Each entry has `currency`, `fee_percent`, `credit_limit`, `status` (`accepted`/`pending`), and `direction` (`incoming`/`outgoing` = who initiated the relationship).
 
 **Error Response (404):**
 
@@ -821,7 +821,7 @@ Update contact information.
 }
 ```
 
-All fields are optional. Only provided fields will be updated.
+All fields are optional. Only provided fields will be updated. **`currency` is required when updating `fee_percent` or `credit_limit`** — it specifies which currency's settings to modify. Updates are applied to the `contact_currencies` table.
 
 **Response:**
 

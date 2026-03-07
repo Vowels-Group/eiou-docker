@@ -123,6 +123,50 @@ class InputValidatorTest extends TestCase
         $this->assertStringContainsString('characters', $result['error']);
     }
 
+    public function testValidateCurrencyWithCustomAllowedList(): void
+    {
+        $result = InputValidator::validateCurrency('EUR', ['USD', 'EUR']);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('EUR', $result['value']);
+    }
+
+    public function testValidateCurrencyRejectsWhenNotInCustomList(): void
+    {
+        $result = InputValidator::validateCurrency('USD', ['EUR']);
+
+        $this->assertFalse($result['valid']);
+        $this->assertEquals('Unsupported currency code', $result['error']);
+    }
+
+    // =========================================================================
+    // validateAllowedCurrency Tests
+    // =========================================================================
+
+    public function testValidateAllowedCurrencyAcceptsWithConversionFactor(): void
+    {
+        $result = InputValidator::validateAllowedCurrency('USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('USD', $result['value']);
+    }
+
+    public function testValidateAllowedCurrencyRejectsWithoutConversionFactor(): void
+    {
+        $result = InputValidator::validateAllowedCurrency('EUR');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('No conversion factor defined', $result['error']);
+    }
+
+    public function testValidateAllowedCurrencyRejectsInvalidLength(): void
+    {
+        $result = InputValidator::validateAllowedCurrency('US');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('characters', $result['error']);
+    }
+
     // =========================================================================
     // validateAddress Tests
     // =========================================================================

@@ -95,11 +95,18 @@ class BalanceService implements BalanceServiceInterface
         $contactsWithBalances = [];
 
         foreach ($contacts as $contact) {
-            // Get pre-calculated balance from batch query result
-            $balance = $balances[$contact['pubkey']] ?? 0;
+            // Get pre-calculated per-currency balances from batch query result
+            $contactBalances = $balances[$contact['pubkey']] ?? [];
 
-            $feePercent = $contact['fee_percent'];
-            $creditLimit = $contact['credit_limit'];
+            // Primary balance uses the first available currency from balances, or default
+            $primaryCurrency = !empty($contactBalances) ? array_key_first($contactBalances) : Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $balance = $contactBalances[$primaryCurrency] ?? 0;
+
+            // Build balances_by_currency (converted to major units)
+            $balancesByCurrency = [];
+            foreach ($contactBalances as $cur => $bal) {
+                $balancesByCurrency[$cur] = $bal ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
+            }
 
             // Build addresses associative array
             $addressesAssociative = [];
@@ -121,15 +128,14 @@ class BalanceService implements BalanceServiceInterface
             $contactsWithBalances[] = array_merge($addressesAssociative, [
                 'name' => $contact['name'],
                 'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
-                'fee' => $feePercent ? $this->currencyUtility->convertMinorToMajor($feePercent) : $feePercent,
-                'credit_limit' => $creditLimit ? $this->currencyUtility->convertMinorToMajor($creditLimit) : $creditLimit,
-                'currency' => $contact['currency'],
+                'balances_by_currency' => $balancesByCurrency,
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
                 'transactions' => $transactions,
                 'online_status' => $contact['online_status'] ?? 'unknown',
                 'valid_chain' => $contact['valid_chain'] ?? null,
-                'pubkey_hash' => $contact['pubkey_hash'] ?? ''
+                'pubkey_hash' => $contact['pubkey_hash'] ?? '',
+                'status' => $contact['status'] ?? ''
             ]);
         }
 

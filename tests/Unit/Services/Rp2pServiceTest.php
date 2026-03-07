@@ -227,6 +227,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
@@ -279,6 +280,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(0);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(1000.0);
 
         // With amount 101000 (100000 + 1000 fee) and only 1000 credit, should reject
@@ -777,6 +779,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
@@ -843,6 +846,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
@@ -910,6 +914,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         // Verify the hash is preserved in the RP2P record
@@ -977,6 +982,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         // Verify the accumulated amount (base + fee) is stored in the RP2P record
@@ -1033,6 +1039,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
@@ -1091,6 +1098,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
@@ -1152,6 +1160,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
@@ -1221,6 +1230,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         // Verify the amount remains unchanged when fee is zero
@@ -1296,6 +1306,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -1367,6 +1378,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -1442,6 +1454,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $rp2pCandidateRepo->expects($this->once())
@@ -1721,6 +1734,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $rp2pCandidateRepo->expects($this->once())
@@ -1803,6 +1817,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $rp2pCandidateRepo->expects($this->once())
@@ -1903,6 +1918,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $rp2pCandidateRepo->expects($this->once())
@@ -1982,6 +1998,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $rp2pCandidateRepo->expects($this->once())
@@ -2105,6 +2122,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -2186,6 +2204,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -2245,6 +2264,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -2320,6 +2340,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(100000.0);
 
         $rp2pCandidateRepo->expects($this->once())
@@ -2434,6 +2455,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(0);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(0.0);
 
         // rp2p should NOT be inserted
@@ -2688,6 +2710,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(0);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(0.0);
 
         // Should increment response count for the rejected RP2P
@@ -2771,6 +2794,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(0);
         $this->contactRepository->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
             ->willReturn(0.0);
 
         // Should increment count

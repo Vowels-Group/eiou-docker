@@ -63,6 +63,7 @@ use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Database\TransactionStatisticsRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -445,6 +446,20 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get ContactCurrencyRepository instance
+     *
+     * @return ContactCurrencyRepository
+     */
+    public function getContactCurrencyRepository(): ContactCurrencyRepository {
+        if (!isset($this->repositories['ContactCurrencyRepository'])) {
+            $this->repositories['ContactCurrencyRepository'] = new ContactCurrencyRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['ContactCurrencyRepository'];
+    }
+
+    /**
      * Get RateLimiterRepository instance
      *
      * @return RateLimiterRepository
@@ -682,6 +697,7 @@ class ServiceContainer implements ContainerInterface {
                 $this->currentUser,
                 $this->getMessageDeliveryService()
             );
+            $this->services['MessageService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
         return $this->services['MessageService'];
     }
@@ -1276,6 +1292,7 @@ class ServiceContainer implements ContainerInterface {
             }
             $this->services['ContactManagementService']->setSyncTrigger($this->getSyncServiceProxy());
             $this->services['ContactManagementService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['ContactManagementService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
 
         // Wire ContactSyncService -> SyncTriggerInterface (via proxy), ContactCreditRepository
@@ -1284,6 +1301,7 @@ class ServiceContainer implements ContainerInterface {
         if (isset($this->services['ContactSyncService'])) {
             $this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
             $this->services['ContactSyncService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['ContactSyncService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
 
         // Wire ContactSyncService -> MessageDeliveryService
@@ -1310,6 +1328,7 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ContactStatusService']->setAddressRepository($this->getAddressRepository());
             $this->services['ContactStatusService']->setBalanceRepository($this->getBalanceRepository());
             $this->services['ContactStatusService']->setContactCreditRepository($this->getContactCreditRepository());
+            $this->services['ContactStatusService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
@@ -1496,6 +1515,7 @@ class ServiceContainer implements ContainerInterface {
         //         and P2pService for cascade cancel notification propagation
         if (isset($this->services['Rp2pService'])) {
             $this->services['Rp2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            $this->services['Rp2pService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['P2pService'])) {
                 $this->services['Rp2pService']->setP2pService($this->services['P2pService']);
             }
@@ -1508,6 +1528,7 @@ class ServiceContainer implements ContainerInterface {
         if (isset($this->services['P2pService'])) {
             $this->services['P2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
             $this->services['P2pService']->setRp2pRepository($this->getRp2pRepository());
+            $this->services['P2pService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['Rp2pService'])) {
                 $this->services['P2pService']->setRp2pService($this->services['Rp2pService']);
             }

@@ -163,11 +163,11 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     }
 
     /** Verify sender's local chain integrity and sync if needed */
-    private function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array {
+    private function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey, ?string $currency = null): array {
         $result = ['success' => true, 'synced' => false, 'error' => null];
         if ($this->transactionChainRepository === null) return $result;
 
-        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey, $currency);
         if ($chainStatus['valid']) return $result;
 
         output(outputSyncChainIntegrityFailed(count($chainStatus['gaps'])), 'SILENT');
@@ -187,7 +187,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         // ALWAYS re-verify chain integrity after sync, regardless of sync success.
         // Sync can return success=true with 0 transactions synced when both sides
         // are missing the same transactions (mutual gap). In that case the gap persists.
-        $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+        $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey, $currency);
         if (!$recheckStatus['valid']) {
             $errorMsg = !$syncResult['success']
                 ? 'Failed to repair chain: ' . ($syncResult['error'] ?? 'unknown')
@@ -291,7 +291,8 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             $contactAddress = $transportIndex !== null ? ($contactInfo[$transportIndex] ?? null) : null;
 
             if ($contactAddress !== null && isset($contactInfo['receiverPublicKey'])) {
-                $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey']);
+                $txCurrency = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey'], $txCurrency);
                 if (!$chainVerification['success']) {
                     // Auto-propose chain drop if sync couldn't repair the gap
                     if ($chainVerification['synced'] && $this->chainDropService !== null && $this->currentUser->getAutoChainDropPropose()) {

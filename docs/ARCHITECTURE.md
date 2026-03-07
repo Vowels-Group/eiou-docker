@@ -314,8 +314,8 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders | ContactRepo, P2pRepo, P2pSenderRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, TransportUtility, MessageDeliveryService |
+| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface) |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -949,8 +949,8 @@ chains. Operates in 5-minute cycles.
 
 - Pings one contact per iteration to spread load
 - Updates contact online status (online/partial/offline/unknown)
-- Validates transaction chain integrity (prev_txid matching)
-- Triggers sync if chains don't match
+- Validates per-currency transaction chain integrity (`prevTxidsByCurrency` maps)
+- Triggers sync if any currency's chain heads don't match
 - Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
@@ -1063,7 +1063,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
 | `p2p_relayed_contacts` | Contacts that returned `already_relayed` during P2P broadcast (used by two-phase relay selection in best-fee mode) |
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
-| `contact_credit` | Per-contact available credit (updated on each successful ping) |
+| `contact_credit` | Per-contact, per-currency available credit received from pong (UNIQUE on `pubkey_hash, currency`) |
+| `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing` = who initiated the relationship) |
 
 ### Repository Pattern
 
@@ -1281,7 +1282,7 @@ request patterns.
 2. P2pService creates P2P record with randomized level and status `queued`
 3. P2pMessageProcessor daemon picks up queued messages (polls every 100ms–5s)
 4. Coalesce delay groups concurrent P2Ps into a single mega-batch (2000ms window)
-5. Mega-batch broadcasts to all accepted contacts via `sendMultiBatch()` (`curl_multi`)
+5. Mega-batch broadcasts to accepted contacts that support the transaction's currency via `sendMultiBatch()` (`curl_multi`)
 6. Concurrency-limited sliding window caps simultaneous connections per protocol
 7. Each relay node queues, coalesces, and broadcasts to its own contacts (level++)
 8. Process continues until recipient found or level exceeds maxRequestLevel
@@ -1787,11 +1788,12 @@ syncTransactionChain(contactAddress, contactPublicKey)
   |
   +-- 1. Get lastKnownTxid (our latest tx with this contact)
   |
-  +-- 2. Local self-repair (if BackupService available)
+  +-- 2. Detect chain gaps and attempt local self-repair
   |     +-- verifyChainIntegrity() -> get list of gaps
-  |     +-- For each missing txid:
-  |     |     +-- restoreTransactionFromBackup() -> recovered? remove from gaps list
-  |     +-- Re-verify chain, update lastKnownTxid and remaining gaps
+  |     +-- If BackupService available:
+  |     |     +-- For each missing txid: restoreTransactionFromBackup()
+  |     |     +-- Re-verify chain, update lastKnownTxid and remaining gaps
+  |     +-- Else: all gaps become missingTxids for remote to resolve
   |
   +-- 3. Build sync request
   |     +-- buildTransactionSyncRequest(contactAddress, contactPubkey, lastKnownTxid)
@@ -1819,7 +1821,7 @@ handleTransactionSyncRequest(request)  [Contact's side]
   +-- 4. Check missingTxids[] from requester (cap at 10)
   |     +-- For each missing txid not already in response:
   |     |     +-- Check local DB -> if found, format and include
-  |     |     +-- Check local backups -> if restored, format and include
+  |     |     +-- If BackupService available: check local backups -> if restored, format and include
   +-- 5. Return filtered transactions (oldest first)
 ```
 
@@ -1938,8 +1940,10 @@ the `ContactStatusProcessor`: `online`, `partial`, `offline`, or `unknown` (defa
 The `partial` status indicates the node is reachable but has degraded message processors
 (some of P2P, Transaction, or Cleanup processors are not running). The pong response
 includes `processorsRunning` and `processorsTotal` fields for remote nodes to determine
-partial vs online status. The processor pings one contact per cycle, validates chain
-integrity, and triggers sync if chains don't match.
+partial vs online status, `chainStatusByCurrency` for per-currency chain validation results,
+and `availableCreditByCurrency` for per-currency available credit. The processor pings one
+contact per cycle, validates chain integrity per currency, and triggers sync if any
+currency's chain heads don't match.
 
 **Contact Request Flow:**
 
@@ -1949,7 +1953,7 @@ integrity, and triggers sync if chains don't match.
     +-- eiou add <address>                        |
     |     +-- Send contact request -------------->|
     |         (tx_type='contact', amount=0,       +-- Contact appears as 'pending'
-    |          senderAddresses=[all addresses])   |
+    |          currency=<requested currency>)     |
     |                                             |
     |                                             +-- eiou accept <name>
     |                                             |     +-- Update contact to 'accepted'
@@ -2155,8 +2159,8 @@ API (8080). It uses an MVC-like structure with controllers, helpers, and HTML te
 │       ├── quickActions        # Action buttons (Send, Add Contact, etc.)
 │       ├── walletInformation   # Balance, earnings, available credit cards
 │       ├── contactSection      # Contact cards with scroll navigation
-│       ├── contactForm         # Contact modal (add/accept/view)
-│       ├── eiouForm            # Send eIOU form with P2P options
+│       ├── contactForm         # Contact modal (add/accept/view) with currency slider pills
+│       ├── eiouForm            # Send eIOU form with dynamic currency list and P2P options
 │       ├── transactionHistory  # Recent transactions list
 │       ├── settingsSection     # Node settings panel
 │       ├── notifications       # Toast notification container
@@ -2254,7 +2258,7 @@ BasePayload (abstract)
     |
     +-- TransactionPayload    # Standard send transactions
     +-- ContactPayload        # Contact request/acceptance messages
-    +-- ContactStatusPayload  # Ping/pong status messages
+    +-- ContactStatusPayload  # Ping/pong status messages (per-currency chain validation and credit exchange)
     +-- P2pPayload            # P2P routing request messages
     +-- Rp2pPayload           # Return P2P response messages
     +-- MessagePayload        # General inter-node messages (sync, chain drop)

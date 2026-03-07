@@ -305,15 +305,16 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[2.2 Manually ping B from A while B is online]"
 
-# Get A's previous txid with B for the ping
-prevTxidAB=$(docker exec ${containerA} php -r "
+# Get A's per-currency chain heads with B for the ping
+prevTxidsByCurrencyAB=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$userPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$contactPubkey = base64_decode('${pubkeyBfromA}');
-    \$txid = \$app->services->getTransactionRepository()->getPreviousTxid(\$userPubkey, \$contactPubkey);
-    echo \$txid ?? 'NULL';
-" 2>/dev/null || echo "ERROR")
+    \$contactPubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contactPubkey);
+    \$txids = \$app->services->getTransactionRepository()->getPreviousTxidsByCurrency(\$contactPubkeyHash);
+    echo json_encode(\$txids);
+" 2>/dev/null || echo "{}")
 
 # Execute ping via the transport utility
 pingResult=$(docker exec ${containerA} php -r "
@@ -324,10 +325,11 @@ pingResult=$(docker exec ${containerA} php -r "
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
+    \$prevTxidsByCurrency = json_decode('${prevTxidsByCurrencyAB}', true) ?: [];
     \$payload = new \Eiou\Schemas\Payloads\ContactStatusPayload(\$currentUser, \$utilityContainer);
     \$builtPayload = \$payload->build([
         'receiverAddress' => '${addressB}',
-        'prevTxid' => '${prevTxidAB}' === 'NULL' ? null : '${prevTxidAB}',
+        'prevTxidsByCurrency' => \$prevTxidsByCurrency,
         'requestSync' => false
     ]);
 
@@ -523,6 +525,8 @@ docker exec ${containerB} mysql -u root eiou -e "
     DELETE FROM p2p;
     DELETE FROM transactions;
     DELETE FROM balances;
+    DELETE FROM contact_currencies;
+    DELETE FROM contact_credit;
     DELETE FROM addresses;
     DELETE FROM contacts;
     DELETE FROM debug;
@@ -557,7 +561,7 @@ pingFailResult=$(docker exec ${containerA} php -r "
     \$payload = new \Eiou\Schemas\Payloads\ContactStatusPayload(\$currentUser, \$utilityContainer);
     \$builtPayload = \$payload->build([
         'receiverAddress' => '${addressB}',
-        'prevTxid' => null,
+        'prevTxidsByCurrency' => [],
         'requestSync' => false
     ]);
 
@@ -998,6 +1002,7 @@ if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT
         if (\$contactB) {
             \$pdo = \$app->services->getPdo();
             \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contactB['pubkey']);
+            \$pdo->exec(\"DELETE FROM contact_currencies WHERE pubkey_hash = '\" . \$pubkeyHash . \"'\");
             \$pdo->exec(\"DELETE FROM contacts WHERE pubkey_hash = '\" . \$pubkeyHash . \"'\");
             \$pdo->exec(\"DELETE FROM addresses WHERE pubkey_hash = '\" . \$pubkeyHash . \"'\");
         }

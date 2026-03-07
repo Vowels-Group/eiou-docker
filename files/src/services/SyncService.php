@@ -552,21 +552,30 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         try { // Re-entrant guard try/finally wrapper
         try {
-            // Get our latest known txid with this contact
+            // Get per-currency chain heads for multi-currency sync
+            $lastKnownTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            // Legacy single cursor: use the overall latest txid for backward compatibility
+            // with nodes that don't support per-currency cursors yet
             $lastKnownTxid = $this->transactionRepository->getPreviousTxid(
                 $this->currentUser->getPublicKey(),
                 $contactPublicKey
             );
 
-            // Self-repair: check local backups for any chain gaps before contacting remote
+            // Detect chain gaps before contacting remote — these will be sent as missingTxids
+            // so the remote side can look them up in their DB or backups
             $remainingMissingTxids = [];
-            if ($this->backupService !== null) {
-                $preCheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
-                    $this->currentUser->getPublicKey(),
-                    $contactPublicKey
-                );
+            $preCheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
 
-                if (!$preCheckStatus['valid'] && !empty($preCheckStatus['gaps'])) {
+            if (!$preCheckStatus['valid'] && !empty($preCheckStatus['gaps'])) {
+                // Try local backup recovery first (if backup service is available)
+                if ($this->backupService !== null) {
                     $localRecoveredCount = 0;
                     foreach ($preCheckStatus['gaps'] as $missingTxid) {
                         $restoreResult = $this->backupService->restoreTransactionFromBackup($missingTxid);
@@ -592,6 +601,10 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                             $this->currentUser->getPublicKey(),
                             $contactPublicKey
                         );
+                        $lastKnownTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
+                            $this->currentUser->getPublicKey(),
+                            $contactPublicKey
+                        );
 
                         // Update remaining gaps after re-verification
                         $remainingMissingTxids = $recheckStatus['gaps'] ?? [];
@@ -602,6 +615,9 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                             'contact_address' => $contactAddress
                         ]);
                     }
+                } else {
+                    // No backup service — all gaps become missingTxids for the remote to resolve
+                    $remainingMissingTxids = $preCheckStatus['gaps'];
                 }
             }
 
@@ -618,11 +634,12 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             do {
                 $chunkCount++;
 
-                // Build and send sync request
+                // Build and send sync request with per-currency cursors
                 $syncRequest = $this->messagePayload->buildTransactionSyncRequest(
                     $contactAddress,
                     $contactPublicKey,
-                    $lastKnownTxid
+                    $lastKnownTxid,
+                    $lastKnownTxidsByCurrency
                 );
 
                 // Include remaining missing txids so the remote side can check its backups (first chunk only)
@@ -700,7 +717,8 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         $localConflict = $this->transactionChainRepository->getLocalTransactionByPreviousTxid(
                             $remotePreviousTxid,
                             $userPubkeyHash,
-                            $contactPubkeyHash
+                            $contactPubkeyHash,
+                            $tx['currency'] ?? null
                         );
 
                         if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
@@ -1235,17 +1253,35 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 $senderPublicKey
             );
 
-            // Filter to only include transactions NEWER than lastKnownTxid if provided
-            // Transactions are ordered by timestamp DESC (newest first), so we collect
-            // all transactions until we hit the lastKnownTxid
+            // Filter to only include transactions the requester is missing
+            // Transactions are ordered by timestamp DESC (newest first)
             // Cancelled/rejected/completed transactions are included, but pending/sending
             // are excluded since they haven't been signed yet (signature added after send)
             $filteredTransactions = [];
 
+            // Per-currency cursors: each currency has its own chain head
+            // If provided, use per-currency filtering; otherwise fall back to single cursor
+            $lastKnownTxidsByCurrency = $request['lastKnownTxidsByCurrency'] ?? [];
+            $reachedCursorForCurrency = [];
+
             foreach ($transactions as $tx) {
-                // If we hit the lastKnownTxid, stop - requester already has this and older
-                if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
-                    break;
+                $currency = $tx['currency'] ?? '';
+
+                if (!empty($lastKnownTxidsByCurrency)) {
+                    // Per-currency cursor mode: skip transactions at or before the cursor for each currency
+                    if (isset($reachedCursorForCurrency[$currency])) {
+                        continue; // Already past the cursor for this currency
+                    }
+                    $cursorForCurrency = $lastKnownTxidsByCurrency[$currency] ?? null;
+                    if ($cursorForCurrency !== null && $tx['txid'] === $cursorForCurrency) {
+                        $reachedCursorForCurrency[$currency] = true;
+                        continue;
+                    }
+                } else {
+                    // Legacy single cursor: stop at the first match (all currencies)
+                    if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
+                        break;
+                    }
                 }
 
                 // Skip transactions that haven't been sent yet - they won't have signatures
@@ -1259,9 +1295,9 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 $filteredTransactions[] = $this->formatTransactionForSync($tx);
             }
 
-            // Check if the requester asked us to look up missing txids from our backups
+            // Check if the requester asked us to look up missing txids
             $missingTxids = $request['missingTxids'] ?? [];
-            if (!empty($missingTxids) && $this->backupService !== null) {
+            if (!empty($missingTxids)) {
                 // Cap at 10 to prevent abuse
                 $missingTxids = array_slice($missingTxids, 0, 10);
 
@@ -1286,17 +1322,19 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         }
                     }
 
-                    // Not in DB — try restoring from our backups
-                    $restoreResult = $this->backupService->restoreTransactionFromBackup($missingTxid);
-                    if ($restoreResult['success']) {
-                        $rows = $this->transactionRepository->getByTxid($missingTxid);
-                        if ($rows && isset($rows[0])) {
-                            $filteredTransactions[] = $this->formatTransactionForSync($rows[0]);
-                            $includedTxids[$missingTxid] = true;
-                            Logger::getInstance()->info("Recovered missing transaction from backup for remote sync request", [
-                                'missing_txid' => substr($missingTxid, 0, 16) . '...',
-                                'requester' => $senderAddress
-                            ]);
+                    // Not in DB — try restoring from our backups (if backup service available)
+                    if ($this->backupService !== null) {
+                        $restoreResult = $this->backupService->restoreTransactionFromBackup($missingTxid);
+                        if ($restoreResult['success']) {
+                            $rows = $this->transactionRepository->getByTxid($missingTxid);
+                            if ($rows && isset($rows[0])) {
+                                $filteredTransactions[] = $this->formatTransactionForSync($rows[0]);
+                                $includedTxids[$missingTxid] = true;
+                                Logger::getInstance()->info("Recovered missing transaction from backup for remote sync request", [
+                                    'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                                    'requester' => $senderAddress
+                                ]);
+                            }
                         }
                     }
                 }
@@ -1656,11 +1694,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      * Reconstruct the signed message for a contact transaction
      *
      * Contact transactions use ContactPayload::build() which creates:
-     * {'type' => 'create', 'senderAddress' => ..., 'senderPublicKey' => ...}
+     * {'type' => 'create', 'senderAddress' => ..., 'senderAddresses' => {...},
+     *  'senderPublicKey' => ..., ['currency' => ...]}
      *
-     * After TransportUtilityService::sign() removes senderAddress/senderPublicKey
-     * and adds nonce, the signed message becomes:
-     * {'type': 'create', 'nonce': ...}
+     * After TransportUtilityService::signWithCapture() removes senderAddress,
+     * senderAddresses, senderPublicKey, signature, description and adds nonce,
+     * the signed message becomes:
+     * {'type': 'create', ['currency': ...], 'nonce': ...}
      *
      * @param array $tx Transaction data including signature_nonce
      * @return string|null JSON message or null if reconstruction fails
@@ -1673,11 +1713,17 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return null;
         }
 
-        // Contact payload after signing is simply: {'type': 'create', 'nonce': ...}
-        $messageContent = [
-            'type' => 'create',
-            'nonce' => $tx['signature_nonce']
-        ];
+        // Build message in the same key order as the original payload after signing:
+        // type → [currency] → nonce
+        $messageContent = ['type' => 'create'];
+
+        // Currency is included for multi-currency contact requests
+        $currency = $tx['currency'] ?? null;
+        if ($currency !== null) {
+            $messageContent['currency'] = $currency;
+        }
+
+        $messageContent['nonce'] = $tx['signature_nonce'];
 
         return json_encode($messageContent);
     }

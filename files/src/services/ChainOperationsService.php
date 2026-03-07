@@ -112,12 +112,13 @@ class ChainOperationsService implements ChainOperationsInterface
      *   - gaps: array - List of missing previous_txid values
      *   - broken_txids: array - Transactions with missing previous_txid
      */
-    public function verifyChainIntegrity(string $userPubkey, string $contactPubkey): array
+    public function verifyChainIntegrity(string $userPubkey, string $contactPubkey, ?string $currency = null): array
     {
         try {
             $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
                 $userPubkey,
-                $contactPubkey
+                $contactPubkey,
+                $currency
             );
 
             $this->secureLogger->debug("Chain integrity verification completed", [
@@ -161,12 +162,14 @@ class ChainOperationsService implements ChainOperationsInterface
      * @param string $contactPubkey Contact's public key
      * @return string|null The correct previous_txid or null if first transaction
      */
-    public function getCorrectPreviousTxid(string $userPubkey, string $contactPubkey): ?string
+    public function getCorrectPreviousTxid(string $userPubkey, string $contactPubkey, ?string $currency = null): ?string
     {
         try {
             $previousTxid = $this->transactionRepository->getPreviousTxid(
                 $userPubkey,
-                $contactPubkey
+                $contactPubkey,
+                null,
+                $currency
             );
 
             $this->secureLogger->debug("Previous txid lookup completed", [
@@ -208,7 +211,7 @@ class ChainOperationsService implements ChainOperationsInterface
      *   - synced_count: int - Number of transactions synced (if repair attempted)
      *   - error: string|null - Error message if repair failed
      */
-    public function repairChainIfNeeded(string $contactAddress, string $contactPubkey): array
+    public function repairChainIfNeeded(string $contactAddress, string $contactPubkey, ?string $currency = null): array
     {
         $result = [
             'success' => false,
@@ -222,7 +225,7 @@ class ChainOperationsService implements ChainOperationsInterface
             $userPubkey = $this->currentUser->getPublicKey();
 
             // Step 1: Verify current chain integrity
-            $chainStatus = $this->verifyChainIntegrity($userPubkey, $contactPubkey);
+            $chainStatus = $this->verifyChainIntegrity($userPubkey, $contactPubkey, $currency);
 
             // If chain is valid or empty, no repair needed
             if ($chainStatus['valid']) {
@@ -277,7 +280,7 @@ class ChainOperationsService implements ChainOperationsInterface
 
             if ($syncResult['success']) {
                 // Step 4: Re-verify chain after sync
-                $recheckStatus = $this->verifyChainIntegrity($userPubkey, $contactPubkey);
+                $recheckStatus = $this->verifyChainIntegrity($userPubkey, $contactPubkey, $currency);
 
                 if ($recheckStatus['valid']) {
                     $result['success'] = true;
@@ -303,7 +306,7 @@ class ChainOperationsService implements ChainOperationsInterface
                 }
             } else {
                 // Sync failed - check if chain is now valid anyway
-                $recheckStatus = $this->verifyChainIntegrity($userPubkey, $contactPubkey);
+                $recheckStatus = $this->verifyChainIntegrity($userPubkey, $contactPubkey, $currency);
 
                 if ($recheckStatus['valid']) {
                     // Chain is valid despite sync reporting failure

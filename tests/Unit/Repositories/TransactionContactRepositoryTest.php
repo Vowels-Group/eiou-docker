@@ -172,11 +172,13 @@ class TransactionContactRepositoryTest extends TestCase
         $balanceData = [
             [
                 'contact_hash' => hash(Constants::HASH_ALGORITHM, 'contact1'),
+                'currency' => 'USD',
                 'total_sent' => 1000,
                 'total_received' => 2000
             ],
             [
                 'contact_hash' => hash(Constants::HASH_ALGORITHM, 'contact2'),
+                'currency' => 'USD',
                 'total_sent' => 500,
                 'total_received' => 500
             ]
@@ -206,9 +208,9 @@ class TransactionContactRepositoryTest extends TestCase
         $this->assertArrayHasKey('contact1', $result);
         $this->assertArrayHasKey('contact2', $result);
         $this->assertArrayHasKey('contact3', $result);
-        $this->assertEquals(1000, $result['contact1']); // 2000 - 1000
-        $this->assertEquals(0, $result['contact2']); // 500 - 500
-        $this->assertEquals(0, $result['contact3']); // Default for missing
+        $this->assertEquals(['USD' => 1000], $result['contact1']); // 2000 - 1000
+        $this->assertEquals(['USD' => 0], $result['contact2']); // 500 - 500
+        $this->assertEquals([], $result['contact3']); // Default for missing
     }
 
     public function testGetAllContactBalancesReturnsZerosOnQueryFailure(): void
@@ -225,7 +227,7 @@ class TransactionContactRepositoryTest extends TestCase
 
         $result = $this->repository->getAllContactBalances('user', $contactPubkeys);
 
-        $this->assertEquals(['contact1' => 0, 'contact2' => 0], $result);
+        $this->assertEquals(['contact1' => [], 'contact2' => []], $result);
     }
 
     // =========================================================================

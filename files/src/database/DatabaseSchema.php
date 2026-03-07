@@ -28,9 +28,6 @@ function getContactsTableSchema() {
             'unknown'   /* Ping not performed (default or feature disabled) */
         ) DEFAULT 'unknown',
         valid_chain TINYINT(1) DEFAULT NULL, /* true/false if chain sync was validated, NULL if not checked */
-        currency VARCHAR(10),
-        fee_percent INT,
-        credit_limit INT,
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         last_ping_at TIMESTAMP(6) NULL, /* When the contact was last pinged */
         INDEX idx_contacts_contact_id (contact_id),
@@ -61,11 +58,29 @@ function getAddressTableSchema(){
 function getContactCreditTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contact_credit (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash VARCHAR(64) NOT NULL UNIQUE,
+        pubkey_hash VARCHAR(64) NOT NULL,
         available_credit INT DEFAULT 0,
         currency VARCHAR(10),
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_contact_credit_hash_currency (pubkey_hash, currency),
         INDEX idx_contact_credit_pubkey_hash (pubkey_hash)
+    )";
+}
+
+// Contact Currencies table - per-contact currency configuration (fee, credit limit)
+function getContactCurrenciesTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS contact_currencies (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey_hash VARCHAR(64) NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        fee_percent INT NOT NULL,
+        credit_limit INT NOT NULL DEFAULT 0,
+        status ENUM('accepted', 'pending', 'blocked') DEFAULT 'pending',
+        direction ENUM('incoming', 'outgoing') DEFAULT 'incoming',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_cc_hash_currency_dir (pubkey_hash, currency, direction),
+        INDEX idx_cc_pubkey_hash (pubkey_hash)
     )";
 }
 
@@ -140,6 +155,7 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
         INDEX idx_transactions_chain (sender_public_key_hash, receiver_public_key_hash, timestamp DESC),
+        INDEX idx_transactions_currency_chain (sender_public_key_hash, receiver_public_key_hash, currency, timestamp DESC),
         INDEX idx_transactions_status (status),
         INDEX idx_transactions_timestamp (timestamp),
         INDEX idx_transactions_status_timestamp (status, timestamp DESC),

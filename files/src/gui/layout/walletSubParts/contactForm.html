@@ -31,7 +31,9 @@
             <div class="form-group">
                 <label for="contactCurrency">Currency:</label>
                 <select id="contactCurrency" name="currency" required>
-                    <option value="USD">USD</option>
+                    <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
+                        <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
         </div>

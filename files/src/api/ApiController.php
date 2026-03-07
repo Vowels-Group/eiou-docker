@@ -670,33 +670,32 @@ class ApiController {
                 $addresses[$type] = $contactAddresses[$type] ?? null;
             }
 
+            // Get per-currency config
+            $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+            $currencies = $contactCurrencyRepo->getContactCurrencies($contact['pubkey_hash']);
+
             // My available credit with them (from contact_credit table, received via pong)
             $myAvailableCredit = null;
             $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
             if ($creditData !== null) {
-                $currency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$currency];
-            }
-
-            // Their available credit with me (calculated: sent - received + credit_limit)
-            $theirAvailableCredit = null;
-            $currency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-            $balanceData = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash'], $currency);
-            if ($balanceData && count($balanceData) > 0) {
-                $b = $balanceData[0];
-                $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contact['credit_limit'] ?? 0));
-                $theirAvailableCredit = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
+                $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
             }
 
             $result[] = [
                 'name' => $contact['name'],
                 'pubkey_hash' => $contact['pubkey_hash'],
                 'status' => $contact['status'],
-                'currency' => $contact['currency'],
-                'fee_percent' => $contact['fee_percent'],
-                'credit_limit' => $contact['credit_limit'],
+                'currencies' => array_map(function ($c) {
+                    return [
+                        'currency' => $c['currency'],
+                        'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
+                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'status' => $c['status'] ?? null,
+                        'direction' => $c['direction'] ?? null,
+                    ];
+                }, $currencies),
                 'my_available_credit' => $myAvailableCredit,
-                'their_available_credit' => $theirAvailableCredit,
                 'addresses' => $addresses,
                 'created_at' => $contact['created_at']
             ];
@@ -757,9 +756,6 @@ class ApiController {
                 'name' => $contact['name'] ?? null,
                 'pubkey_hash' => $contact['pubkey_hash'] ?? null,
                 'status' => $contact['status'] ?? null,
-                'currency' => $contact['currency'] ?? null,
-                'fee_percent' => $contact['fee_percent'] ?? null,
-                'credit_limit' => $contact['credit_limit'] ?? null,
                 'addresses' => $addresses,
                 'created_at' => $contact['created_at'] ?? null
             ];
@@ -814,20 +810,8 @@ class ApiController {
                 if ($hash) {
                     $creditData = $creditRepo->getAvailableCredit($hash);
                     if ($creditData !== null) {
-                        $contactCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$contactCurrency];
-                    }
-                }
-
-                // Their available credit (calculated: sent - received + credit_limit)
-                $theirAvailableCredit = null;
-                if ($hash) {
-                    $currency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                    $balance = $balanceRepo->getContactBalanceByPubkeyHash($hash, $currency);
-                    if ($balance && count($balance) > 0) {
-                        $b = $balance[0];
-                        $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($contact['credit_limit'] ?? 0));
-                        $theirAvailableCredit = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
+                        $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                        $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
                     }
                 }
 
@@ -836,11 +820,7 @@ class ApiController {
                     'pubkey_hash' => $hash,
                     'status' => $contact['status'] ?? null,
                     'addresses' => $addresses,
-                    'fee_percent' => isset($contact['fee_percent']) ? $contact['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null,
-                    'credit_limit' => isset($contact['credit_limit']) ? $contact['credit_limit'] / Constants::CONVERSION_FACTORS[$contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY] : null,
                     'my_available_credit' => $myAvailableCredit,
-                    'their_available_credit' => $theirAvailableCredit,
-                    'currency' => $contact['currency'] ?? null
                 ];
             }
         }
@@ -998,35 +978,45 @@ class ApiController {
         // My available credit with them (from contact_credit table, received via pong)
         $creditRepo = $this->services->getContactCreditRepository();
         $myAvailableCredit = null;
-        $contactCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
         $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
         if ($creditData !== null) {
-            $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$contactCurrency];
+            $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
         }
 
-        // Their available credit with me (calculated: sent - received + credit_limit)
-        $theirAvailableCredit = null;
-        if ($balance) {
-            $theirMinorUnits = ((int)($balance['sent'] ?? 0)) - ((int)($balance['received'] ?? 0)) + ((int)($contact['credit_limit'] ?? 0));
-            $theirAvailableCredit = $theirMinorUnits / Constants::CONVERSION_FACTORS[$contactCurrency];
+        // Fetch all currencies for this contact from contact_currencies table
+        $currencyConfigs = [];
+        try {
+            $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+            $currencyConfigs = $contactCurrencyRepo->getContactCurrencies($contact['pubkey_hash']);
+        } catch (\Exception $e) {
+            // Non-critical - continue without multi-currency data
         }
+
+        // Balance per first available currency
+        $balanceCurrency = !empty($currencyConfigs) ? $currencyConfigs[0]['currency'] : Constants::TRANSACTION_DEFAULT_CURRENCY;
 
         return $this->successResponse([
             'contact' => [
                 'name' => $contact['name'],
                 'pubkey_hash' => $contact['pubkey_hash'],
                 'status' => $contact['status'],
-                'currency' => $contact['currency'],
-                'fee_percent' => $contact['fee_percent'],
-                'credit_limit' => $contact['credit_limit'],
                 'my_available_credit' => $myAvailableCredit,
-                'their_available_credit' => $theirAvailableCredit,
                 'addresses' => $addresses,
                 'balance' => $balance ? [
-                    'received' => $balance['received'] / Constants::CONVERSION_FACTORS[$contactCurrency],
-                    'sent' => $balance['sent'] / Constants::CONVERSION_FACTORS[$contactCurrency],
-                    'net' => ($balance['received'] - $balance['sent']) / Constants::CONVERSION_FACTORS[$contactCurrency]
+                    'received' => $balance['received'] / Constants::CONVERSION_FACTORS[$balanceCurrency],
+                    'sent' => $balance['sent'] / Constants::CONVERSION_FACTORS[$balanceCurrency],
+                    'net' => ($balance['received'] - $balance['sent']) / Constants::CONVERSION_FACTORS[$balanceCurrency]
                 ] : null,
+                'currencies' => array_map(function ($c) {
+                    return [
+                        'currency' => $c['currency'],
+                        'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
+                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'status' => $c['status'] ?? null,
+                        'direction' => $c['direction'] ?? null,
+                    ];
+                }, $currencyConfigs),
                 'created_at' => $contact['created_at']
             ]
         ]);
@@ -1125,23 +1115,46 @@ class ApiController {
                 $updatedData['name'] = $data['name'];
             }
             if (isset($data['fee_percent'])) {
-                $updateFields['fee_percent'] = $data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR;
                 $updatedData['fee_percent'] = $data['fee_percent'];
             }
             if (isset($data['credit_limit'])) {
-                $updateFields['credit_limit'] = $data['credit_limit'] * Constants::CONVERSION_FACTORS[$data['currency'] ?? $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY];
                 $updatedData['credit_limit'] = $data['credit_limit'];
             }
             if (isset($data['currency'])) {
-                $updateFields['currency'] = $data['currency'];
                 $updatedData['currency'] = $data['currency'];
             }
 
-            if (empty($updateFields)) {
+            if (empty($updateFields) && !isset($data['fee_percent']) && !isset($data['credit_limit'])) {
                 return $this->errorResponse('No fields to update', 400, 'no_fields');
             }
 
-            if ($contactRepo->updateContactFields($contact['pubkey'], $updateFields)) {
+            // Require currency when updating fee or credit
+            if ((isset($data['fee_percent']) || isset($data['credit_limit'])) && !isset($data['currency'])) {
+                return $this->errorResponse('Currency is required when updating fee_percent or credit_limit', 400, 'missing_currency');
+            }
+
+            // Update name in contacts table if provided
+            $contactUpdateOk = true;
+            if (!empty($updateFields)) {
+                $contactUpdateOk = $contactRepo->updateContactFields($contact['pubkey'], $updateFields);
+            }
+
+            if ($contactUpdateOk) {
+                // Update fee/credit in contact_currencies table
+                if (isset($data['currency']) && (isset($data['fee_percent']) || isset($data['credit_limit']))) {
+                    $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+                    $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+                    $currencyFields = [];
+                    if (isset($data['fee_percent'])) {
+                        $currencyFields['fee_percent'] = (int) ($data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR);
+                    }
+                    if (isset($data['credit_limit'])) {
+                        $currencyFields['credit_limit'] = (int) ($data['credit_limit'] * Constants::getConversionFactor($data['currency']));
+                    }
+                    if (!empty($currencyFields)) {
+                        $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);
+                    }
+                }
                 return $this->successResponse([
                     'message' => 'Contact updated successfully',
                     'updated' => $updatedData
@@ -1427,6 +1440,7 @@ class ApiController {
             'auto_chain_drop_accept' => ['key' => 'autoChainDropAccept', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_enabled' => ['key' => 'apiEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],
             'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Backup & logging
             'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
@@ -1521,6 +1535,16 @@ class ApiController {
                     $value = $validation['value'];
                 } elseif ($configKey === 'apiCorsAllowedOrigins') {
                     $value = trim((string) $rawValue);
+                } elseif ($configKey === 'allowedCurrencies') {
+                    $currencies = array_filter(array_map('trim', explode(',', strtoupper((string) $rawValue))));
+                    foreach ($currencies as $c) {
+                        $validation = InputValidator::validateAllowedCurrency($c);
+                        if (!$validation['valid']) {
+                            $errors[] = "allowed_currencies: Currency {$c}: " . $validation['error'];
+                            continue 2;
+                        }
+                    }
+                    $value = implode(',', $currencies);
                 } elseif ($configKey === 'name') {
                     if (empty(trim((string) $rawValue))) {
                         $errors[] = "name: Display name cannot be empty";

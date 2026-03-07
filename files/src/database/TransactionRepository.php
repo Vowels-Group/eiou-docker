@@ -134,7 +134,7 @@ class TransactionRepository extends AbstractRepository {
      * @param string|null $excludeTxid Optional txid to exclude from the query
      * @return string|null Previous txid or null
      */
-    public function getPreviousTxid(string $senderPublicKey, string $receiverPublicKey, ?string $excludeTxid = null): ?string {
+    public function getPreviousTxid(string $senderPublicKey, string $receiverPublicKey, ?string $excludeTxid = null, ?string $currency = null): ?string {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
@@ -151,6 +151,12 @@ class TransactionRepository extends AbstractRepository {
             ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
             ':second_sender_public_key_hash' => $senderPublicKeyHash
         ];
+
+        // Filter by currency for per-currency chain separation
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
 
         // Exclude specific txid if provided (used when updating held transaction's previous_txid)
         if ($excludeTxid !== null) {
@@ -172,6 +178,42 @@ class TransactionRepository extends AbstractRepository {
         return $result ? $result['txid'] : null;
     }
 
+    /**
+     * Get the latest txid for each currency in the chain between two parties
+     *
+     * @param string $senderPublicKey
+     * @param string $receiverPublicKey
+     * @return array Map of currency => latest txid (e.g. ['USD' => 'abc...', 'EUR' => 'def...'])
+     */
+    public function getPreviousTxidsByCurrency(string $senderPublicKey, string $receiverPublicKey): array {
+        $senderHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
+
+        $query = "SELECT currency, txid FROM {$this->tableName}
+                WHERE ((sender_public_key_hash = :s1 AND receiver_public_key_hash = :r1)
+                    OR (sender_public_key_hash = :r2 AND receiver_public_key_hash = :s2))
+                AND currency IS NOT NULL
+                ORDER BY timestamp DESC";
+
+        $stmt = $this->execute($query, [
+            ':s1' => $senderHash, ':r1' => $receiverHash,
+            ':r2' => $receiverHash, ':s2' => $senderHash
+        ]);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $result = [];
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            // First occurrence per currency is the latest (ORDER BY timestamp DESC)
+            if (!isset($result[$row['currency']])) {
+                $result[$row['currency']] = $row['txid'];
+            }
+        }
+
+        return $result;
+    }
 
     /**
      * Check for new transactions since last check
@@ -624,20 +666,29 @@ class TransactionRepository extends AbstractRepository {
                 // Use the provided previous_txid (from sync or explicit set)
                 $previousTxid = $request['previousTxid'];
             } else {
-                // Look up previous txid - include ALL transactions for chain integrity
+                // Look up previous txid - per-currency chain separation
+                // Each currency between a contact pair has its own independent chain
                 // Chain must include cancelled/rejected transactions for proper linking
-                // Order by timestamp (database insertion time) for chain ordering
+                $txCurrency = $request['currency'] ?? null;
                 $query = "SELECT txid FROM {$this->tableName}
                         WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
-                            OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
-                        ORDER BY timestamp DESC LIMIT 1";
+                            OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))";
 
-                $stmt = $this->execute($query, [
+                $inlineParams = [
                     ':sender_public_key_hash' => $senderPublicKeyHash,
                     ':receiver_public_key_hash' => $receiverPublicKeyHash,
                     ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
                     ':second_sender_public_key_hash' => $senderPublicKeyHash
-                ]);
+                ];
+
+                if ($txCurrency !== null) {
+                    $query .= " AND currency = :currency";
+                    $inlineParams[':currency'] = $txCurrency;
+                }
+
+                $query .= " ORDER BY timestamp DESC LIMIT 1";
+
+                $stmt = $this->execute($query, $inlineParams);
                 $lookupResult = $stmt->fetch(PDO::FETCH_ASSOC);
                 $previousTxid = $lookupResult ? $lookupResult['txid'] : null;
             }

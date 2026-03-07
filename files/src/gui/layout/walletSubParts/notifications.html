@@ -142,6 +142,36 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif; ?>
 
+<!-- Pending Currency Requests Notification (for named contacts with incoming currency requests) -->
+<?php if (!empty($pendingCurrencyContacts)): ?>
+<div class="alert alert-warning fade-in-up mb-2xl">
+    <div class="d-flex align-center gap-lg">
+        <i class="fas fa-exchange-alt alert-icon-primary"></i>
+        <div class="flex-1">
+            <h4 class="alert-title-primary">
+                Pending Currency Request<?php echo count($pendingCurrencyContacts) > 1 ? 's' : ''; ?>
+            </h4>
+            <p class="alert-body-text-sm">
+                <?php
+                    $currencyNames = [];
+                    foreach ($pendingCurrencyContacts as $pcc) {
+                        $contactName = $pcc['name'] ?? 'Unknown';
+                        foreach ($pcc['pending_currencies'] as $pc) {
+                            $currencyNames[] = '<strong>' . htmlspecialchars($contactName) . '</strong> requested <strong>' . htmlspecialchars($pc['currency']) . '</strong>';
+                        }
+                    }
+                    echo implode('; ', $currencyNames) . '.';
+                ?>
+                Review and accept or reject below.
+            </p>
+        </div>
+        <a href="#pending-contacts" class="btn btn-primary btn-compact">
+            <i class="fas fa-eye"></i> View Requests
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Incoming Chain Drop Proposal Notification -->
 <?php
 $incomingChainDropContacts = [];

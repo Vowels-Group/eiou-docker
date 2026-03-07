@@ -93,7 +93,7 @@ class ContactStatusPayloadTest extends TestCase
         $this->assertArrayHasKey('type', $result);
         $this->assertArrayHasKey('senderAddress', $result);
         $this->assertArrayHasKey('senderPublicKey', $result);
-        $this->assertArrayHasKey('prevTxid', $result);
+        $this->assertArrayHasKey('prevTxidsByCurrency', $result);
         $this->assertArrayHasKey('requestSync', $result);
         $this->assertArrayHasKey('time', $result);
     }
@@ -134,26 +134,27 @@ class ContactStatusPayloadTest extends TestCase
     }
 
     /**
-     * Test build includes prevTxid when provided
+     * Test build includes prevTxidsByCurrency when provided
      */
-    public function testBuildIncludesPrevTxidWhenProvided(): void
+    public function testBuildIncludesPrevTxidsByCurrencyWhenProvided(): void
     {
+        $chainHeads = ['USD' => self::TEST_TXID, 'EUR' => 'eur_txid_123'];
         $result = $this->payload->build([
             'receiverAddress' => self::TEST_HTTP_ADDRESS,
-            'prevTxid' => self::TEST_TXID
+            'prevTxidsByCurrency' => $chainHeads
         ]);
 
-        $this->assertEquals(self::TEST_TXID, $result['prevTxid']);
+        $this->assertEquals($chainHeads, $result['prevTxidsByCurrency']);
     }
 
     /**
-     * Test build sets prevTxid to null when not provided
+     * Test build sets prevTxidsByCurrency to empty array when not provided
      */
-    public function testBuildSetsPrevTxidToNullWhenNotProvided(): void
+    public function testBuildSetsPrevTxidsByCurrencyToEmptyArrayWhenNotProvided(): void
     {
         $result = $this->payload->build(['receiverAddress' => self::TEST_HTTP_ADDRESS]);
 
-        $this->assertNull($result['prevTxid']);
+        $this->assertEquals([], $result['prevTxidsByCurrency']);
     }
 
     /**
@@ -218,9 +219,10 @@ class ContactStatusPayloadTest extends TestCase
      */
     public function testBuildWithAllOptionalParameters(): void
     {
+        $chainHeads = ['USD' => self::TEST_TXID];
         $result = $this->payload->build([
             'receiverAddress' => self::TEST_HTTP_ADDRESS,
-            'prevTxid' => self::TEST_TXID,
+            'prevTxidsByCurrency' => $chainHeads,
             'requestSync' => true
         ]);
 
@@ -228,7 +230,7 @@ class ContactStatusPayloadTest extends TestCase
         $this->assertEquals('ping', $result['type']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
-        $this->assertEquals(self::TEST_TXID, $result['prevTxid']);
+        $this->assertEquals($chainHeads, $result['prevTxidsByCurrency']);
         $this->assertTrue($result['requestSync']);
         $this->assertEquals(self::TEST_MICROTIME, $result['time']);
     }
@@ -261,8 +263,8 @@ class ContactStatusPayloadTest extends TestCase
         $this->assertArrayHasKey('status', $result);
         $this->assertArrayHasKey('senderAddress', $result);
         $this->assertArrayHasKey('senderPublicKey', $result);
-        $this->assertArrayHasKey('prevTxid', $result);
         $this->assertArrayHasKey('chainValid', $result);
+        $this->assertArrayHasKey('chainStatusByCurrency', $result);
         $this->assertArrayHasKey('time', $result);
     }
 
@@ -305,25 +307,26 @@ class ContactStatusPayloadTest extends TestCase
     }
 
     /**
-     * Test buildResponse includes localPrevTxid when provided
+     * Test buildResponse includes chainStatusByCurrency when provided
      */
-    public function testBuildResponseIncludesLocalPrevTxidWhenProvided(): void
+    public function testBuildResponseIncludesChainStatusByCurrencyWhenProvided(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
-        $result = json_decode($this->payload->buildResponse($request, self::TEST_TXID), true);
+        $chainStatus = ['USD' => true, 'EUR' => false];
+        $result = json_decode($this->payload->buildResponse($request, false, $chainStatus), true);
 
-        $this->assertEquals(self::TEST_TXID, $result['prevTxid']);
+        $this->assertEquals(['USD' => true, 'EUR' => false], $result['chainStatusByCurrency']);
     }
 
     /**
-     * Test buildResponse sets prevTxid to null when not provided
+     * Test buildResponse sets chainStatusByCurrency to empty array when not provided
      */
-    public function testBuildResponseSetsPrevTxidToNullWhenNotProvided(): void
+    public function testBuildResponseSetsChainStatusByCurrencyToEmptyWhenNotProvided(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
         $result = json_decode($this->payload->buildResponse($request), true);
 
-        $this->assertNull($result['prevTxid']);
+        $this->assertEquals([], $result['chainStatusByCurrency']);
     }
 
     /**
@@ -343,7 +346,7 @@ class ContactStatusPayloadTest extends TestCase
     public function testBuildResponseIncludesChainValidAsFalseWhenSpecified(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
-        $result = json_decode($this->payload->buildResponse($request, null, false), true);
+        $result = json_decode($this->payload->buildResponse($request, false), true);
 
         $this->assertFalse($result['chainValid']);
     }
@@ -354,7 +357,7 @@ class ContactStatusPayloadTest extends TestCase
     public function testBuildResponseIncludesChainValidAsTrueWhenSpecified(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
-        $result = json_decode($this->payload->buildResponse($request, self::TEST_TXID, true), true);
+        $result = json_decode($this->payload->buildResponse($request, true, ['USD' => true]), true);
 
         $this->assertTrue($result['chainValid']);
     }
@@ -387,16 +390,17 @@ class ContactStatusPayloadTest extends TestCase
     public function testBuildResponseWithAllParameters(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
-        $result = json_decode($this->payload->buildResponse($request, self::TEST_TXID, false), true);
+        $chainStatus = ['USD' => false, 'EUR' => true];
+        $creditByCurrency = ['USD' => 50000, 'EUR' => 30000];
+        $result = json_decode($this->payload->buildResponse($request, false, $chainStatus, $creditByCurrency), true);
 
-        $this->assertCount(8, $result);
+        $this->assertCount(7, $result);
         $this->assertEquals('pong', $result['status']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
-        $this->assertEquals(self::TEST_TXID, $result['prevTxid']);
         $this->assertFalse($result['chainValid']);
-        $this->assertNull($result['availableCredit']);
-        $this->assertNull($result['currency']);
+        $this->assertEquals(['USD' => false, 'EUR' => true], $result['chainStatusByCurrency']);
+        $this->assertEquals(['USD' => 50000, 'EUR' => 30000], $result['availableCreditByCurrency']);
         $this->assertEquals(self::TEST_MICROTIME, $result['time']);
     }
 
@@ -729,27 +733,27 @@ class ContactStatusPayloadTest extends TestCase
     // =========================================================================
 
     /**
-     * Test build with empty string prevTxid
+     * Test build with empty prevTxidsByCurrency
      */
-    public function testBuildWithEmptyStringPrevTxid(): void
+    public function testBuildWithEmptyPrevTxidsByCurrency(): void
     {
         $result = $this->payload->build([
             'receiverAddress' => self::TEST_HTTP_ADDRESS,
-            'prevTxid' => ''
+            'prevTxidsByCurrency' => []
         ]);
 
-        $this->assertEquals('', $result['prevTxid']);
+        $this->assertEquals([], $result['prevTxidsByCurrency']);
     }
 
     /**
-     * Test buildResponse with empty string localPrevTxid
+     * Test buildResponse with empty chainStatusByCurrency
      */
-    public function testBuildResponseWithEmptyStringLocalPrevTxid(): void
+    public function testBuildResponseWithEmptyChainStatusByCurrency(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
-        $result = json_decode($this->payload->buildResponse($request, ''), true);
+        $result = json_decode($this->payload->buildResponse($request, true, []), true);
 
-        $this->assertEquals('', $result['prevTxid']);
+        $this->assertEquals([], $result['chainStatusByCurrency']);
     }
 
     /**
@@ -775,14 +779,14 @@ class ContactStatusPayloadTest extends TestCase
     }
 
     /**
-     * Test buildResponse payload has exactly 8 keys (includes availableCredit and currency)
+     * Test buildResponse payload has exactly 7 keys
      */
-    public function testBuildResponsePayloadHasExactlyEightKeys(): void
+    public function testBuildResponsePayloadHasExactlySevenKeys(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
         $result = json_decode($this->payload->buildResponse($request), true);
 
-        $this->assertCount(8, $result);
+        $this->assertCount(7, $result);
     }
 
     /**
@@ -826,7 +830,7 @@ class ContactStatusPayloadTest extends TestCase
 
         $this->assertArrayNotHasKey('extraField', $result);
         $this->assertArrayNotHasKey('anotherField', $result);
-        $this->assertCount(8, $result);
+        $this->assertCount(7, $result);
     }
 
     /**

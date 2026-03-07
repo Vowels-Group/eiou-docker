@@ -12,6 +12,7 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
@@ -132,6 +133,11 @@ class P2pService implements P2pServiceInterface {
     private ?Rp2pService $rp2pService = null;
 
     /**
+     * @var ContactCurrencyRepository|null Repository for per-currency fee lookup
+     */
+    private ?ContactCurrencyRepository $contactCurrencyRepository = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -209,6 +215,16 @@ class P2pService implements P2pServiceInterface {
      */
     public function setRp2pService(Rp2pService $service): void {
         $this->rp2pService = $service;
+    }
+
+    /**
+     * Set the ContactCurrencyRepository for per-currency fee lookup
+     *
+     * @param ContactCurrencyRepository $repository
+     * @return void
+     */
+    public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
+        $this->contactCurrencyRepository = $repository;
     }
 
     /**
@@ -303,8 +319,8 @@ class P2pService implements P2pServiceInterface {
                 $requestedAmount = $this->calculateRequestedAmount($request);
                 $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
 
-                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey']);
-                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey']);
+                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
+                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
@@ -338,7 +354,18 @@ class P2pService implements P2pServiceInterface {
         if ($transportIndex !== null) {
             $senderContact = $this->contactService->lookupByAddress($transportIndex, $address);
         }
-        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee());
+
+        // Fee is per-currency in contact_currencies table; the old contacts.fee_percent
+        // column no longer exists. Look up from contact_currencies, fall back to user default.
+        $fee = $this->currentUser->getDefaultFee();
+        if ($senderContact && isset($senderContact['pubkey_hash'])) {
+            $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $feePercent = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
+            if ($feePercent !== null) {
+                $fee = $feePercent;
+            }
+        }
+
         return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
     }
 
@@ -475,7 +502,7 @@ class P2pService implements P2pServiceInterface {
             Logger::getInstance()->error("Error retrieving existence of P2P by hash", ['error' => $e->getMessage()]);
             if($echo){
                 echo json_encode([
-                    "status" => "rejected",
+                    "status" => Constants::DELIVERY_REJECTED,
                     "message" => "Could not retrieve existence of P2P with receiver"
                 ]);
             }
@@ -700,7 +727,7 @@ class P2pService implements P2pServiceInterface {
             throw new InvalidArgumentException("Amount is required for P2P request");
         }
 
-        $validation = InputValidator::validateAmount($request[3], Constants::TRANSACTION_DEFAULT_CURRENCY);
+        $validation = InputValidator::validateAmount($request[3], $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
         if (!$validation['valid']) {
             throw new InvalidArgumentException("Invalid amount for P2P request: " . $validation['error']);
         }
@@ -711,7 +738,7 @@ class P2pService implements P2pServiceInterface {
         $data['receiverAddress'] = $request[2];
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
-        $data['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY; // Default to USD
+        $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
         $data['amount'] = round($validatedAmount * Constants::CONVERSION_FACTORS[$data['currency']]); // Convert to cents
 
         // Additional data preparation - Use cryptographically secure random
@@ -809,10 +836,8 @@ class P2pService implements P2pServiceInterface {
             $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
         }
 
-        if($queuedMessages !== []){
-            $contacts = $this->contactService->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
-            $contactsCount = count($contacts); // Count amount of contacts to send p2p request
-        }
+        // Per-currency contact cache to avoid redundant queries
+        $contactsByCurrency = [];
 
         // ── Phase 1: Prepare ──────────────────────────────────────────────
         // Collect ALL sends from ALL queued P2Ps into one mega-batch (no I/O).
@@ -852,6 +877,12 @@ class P2pService implements P2pServiceInterface {
             }
 
             // Path B: Broadcast — collect eligible contacts into mega-batch
+            $currency = $message['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            if (!isset($contactsByCurrency[$currency])) {
+                $contactsByCurrency[$currency] = $this->contactService->getAllAcceptedAddresses($currency);
+            }
+            $contacts = $contactsByCurrency[$currency];
+            $contactsCount = count($contacts);
             $contactsToSend = $contactsCount;
             $batchKeys = [];
 
@@ -1036,8 +1067,9 @@ class P2pService implements P2pServiceInterface {
                 return true;
             }
 
-            // Path B: Broadcast to all contacts via curl_multi
-            $contacts = $this->contactService->getAllAcceptedAddresses();
+            // Path B: Broadcast to contacts that support this currency via curl_multi
+            $currency = $message['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $contacts = $this->contactService->getAllAcceptedAddresses($currency);
             $contactsCount = count($contacts);
             $sends = [];
             $batchKeys = [];
@@ -1330,8 +1362,8 @@ class P2pService implements P2pServiceInterface {
      * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey): float {
-        return $this->p2pRepository->getCreditInP2p($pubkey);
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): float {
+        return $this->p2pRepository->getCreditInP2p($pubkey, $currency);
     }
 
     /**

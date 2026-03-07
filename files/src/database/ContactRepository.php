@@ -23,8 +23,7 @@ class ContactRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'contact_id', 'pubkey', 'pubkey_hash', 'name', 'status',
-        'online_status', 'valid_chain', 'currency', 'fee_percent',
-        'credit_limit', 'created_at', 'last_ping_at'
+        'online_status', 'valid_chain', 'created_at', 'last_ping_at'
     ];
 
     /**
@@ -63,9 +62,6 @@ class ContactRepository extends AbstractRepository {
         $data = [
             'name' => $name,
             'status' => 'accepted',
-            'fee_percent' => $fee,
-            'credit_limit' => $credit,
-            'currency' => $currency
         ];
 
         $affectedRows = $this->update($data, $this->primaryKey, $senderPublicKey);
@@ -85,9 +81,6 @@ class ContactRepository extends AbstractRepository {
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
             'name' => null,
             'status' => 'pending',
-            'fee_percent' => null,
-            'credit_limit' => null,
-            'currency' => null
         ];
         return $this->insert($data);
     }
@@ -158,10 +151,10 @@ class ContactRepository extends AbstractRepository {
      */
     public function updateContactStatus(string $pubkey, string $status): bool
     {
-        $query ="UPDATE {$this->tableName} 
-                    SET status = ? 
-                    WHERE $this->primaryKey = ?";
-        $stmt = $this->execute($query,[$status, $pubkey]);
+        $query ="UPDATE {$this->tableName}
+                    SET status = :status
+                    WHERE {$this->primaryKey} = :pubkey";
+        $stmt = $this->execute($query, [':status' => $status, ':pubkey' => $pubkey]);
         if(!$stmt){
             return false;
         }
@@ -267,8 +260,8 @@ class ContactRepository extends AbstractRepository {
     {   
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE name IS NULL AND status = 'pending'
-                    AND created_at > ?";
-        $stmt = $this->execute($query,[date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
+                    AND created_at > :created_after";
+        $stmt = $this->execute($query, [':created_after' => date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
         if(!$stmt){
             return false;
         }
@@ -507,23 +500,30 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
-     * Get credit limit for a contact by public key
+     * Get credit limit for a contact by public key and currency
+     *
+     * Queries contact_currencies table first for per-currency config,
+     * falls back to contacts table for backward compatibility.
      *
      * @param string $senderPublicKey Sender's public key
+     * @param string $currency Currency code
      * @return float Credit limit (0 if not found)
      */
-    public function getCreditLimit(string $senderPublicKey): float {
-        $query = "SELECT credit_limit 
-                    FROM {$this->tableName} 
-                    WHERE pubkey_hash = :pubkey_hash";
-        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey)]);
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float {
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
-        if (!$stmt) {
-            return 0;
+        $query = "SELECT credit_limit FROM contact_currencies
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
+
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return (float) ($result['credit_limit'] ?? 0);
+            }
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['credit_limit'] ?? 0);
+        return 0;
     }
 
     /**
@@ -549,9 +549,6 @@ class ContactRepository extends AbstractRepository {
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPublicKey),
             'name' => $name,
             'status' => 'pending',
-            'fee_percent' => $fee,
-            'credit_limit' => $credit,
-            'currency' => $currency
         ];
 
         $result = $this->insert($data);
@@ -781,13 +778,20 @@ class ContactRepository extends AbstractRepository {
      *
      * @return array Array of accepted addresses
      */
-    public function getAllAcceptedAddresses(): array {
-        $query = "SELECT * 
-                    FROM addresses a JOIN {$this->tableName} c 
+    public function getAllAcceptedAddresses(?string $currency = null): array {
+        $query = "SELECT a.*
+                    FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'accepted'";
-        
-        $stmt = $this->execute($query);
+        $params = [];
+
+        if ($currency !== null) {
+            $query .= " JOIN contact_currencies cc ON cc.pubkey_hash = c.pubkey_hash
+                        AND cc.currency = :currency AND cc.status = 'accepted'";
+            $params[':currency'] = $currency;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return [];
@@ -1097,8 +1101,8 @@ class ContactRepository extends AbstractRepository {
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
                     AND status = 'accepted' 
-                    ORDER BY created_at DESC LIMIT ?";
-        $stmt = $this->execute($query,[$limit]);
+                    ORDER BY created_at DESC LIMIT :limit";
+        $stmt = $this->execute($query, [':limit' => $limit]);
         
         if(!$stmt){
             return [];
@@ -1120,8 +1124,8 @@ class ContactRepository extends AbstractRepository {
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
                     AND status = 'accepted'
-                    AND name LIKE ?"; 
-        $stmt = $this->execute($query,['%' . $searchTerm . '%']);
+                    AND name LIKE :search_term";
+        $stmt = $this->execute($query, [':search_term' => '%' . $searchTerm . '%']);
         
         if(!$stmt){
             return [];
@@ -1138,8 +1142,8 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of contacts
      */
     public function searchContacts(?string $name = null): array {
-        $query = "SELECT a.*, c.name, c.fee_percent, c.credit_limit, c.currency, c.status 
-                    FROM {$this->tableName} c 
+        $query = "SELECT a.*, c.name, c.status
+                    FROM {$this->tableName} c
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash"; 
 
@@ -1192,9 +1196,6 @@ class ContactRepository extends AbstractRepository {
         $data = [
             'name' => $name,
             'status' => 'accepted',
-            'fee_percent' => $fee,
-            'credit_limit' => $credit,
-            'currency' => $currency
         ];
 
         $affectedRows = $this->update($data, $this->primaryKey, $pubkey);

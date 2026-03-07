@@ -76,6 +76,7 @@ function freshInstall(){
                 $dbConn->exec(getContactsTableSchema());
                 $dbConn->exec(getAddressTableSchema());
                 $dbConn->exec(getContactCreditTableSchema());
+                $dbConn->exec(getContactCurrenciesTableSchema());
                 $dbConn->exec(getBalancesTableSchema());
 
                 // Transactions & Chain Integrity
@@ -147,30 +148,41 @@ function freshInstall(){
             chmod($configPath, 0640);
             chgrp($configPath, 'www-data');
         }
+
+        // Mark schema as current — fresh installs have all tables, no migrations needed
+        @file_put_contents('/etc/eiou/config/.schema_version', (string) \Eiou\Core\Constants::SCHEMA_VERSION);
     }
 }
 
 /**
  * Run database migrations to add new tables to existing databases
- * This function is idempotent - safe to run multiple times
+ *
+ * Migrations only run when the stored schema version (in /etc/eiou/config/.schema_version)
+ * is behind Constants::SCHEMA_VERSION. After successful completion the version file is
+ * updated so subsequent requests skip all migration queries entirely.
+ *
+ * To add a new migration:
+ *   1. Add your migration code to this function or runColumnMigrations()
+ *   2. Bump Constants::SCHEMA_VERSION in src/core/Constants.php
  *
  * @param PDO $pdo Database connection
- * @return array Migration results
+ * @return array Migration results (empty if skipped)
  */
 function runMigrations(PDO $pdo): array {
+
+    $schemaVersion = \Eiou\Core\Constants::SCHEMA_VERSION;
+    $versionFile = '/etc/eiou/config/.schema_version';
+    $currentVersion = file_exists($versionFile) ? (int) trim(file_get_contents($versionFile)) : 0;
+
+    if ($currentVersion >= $schemaVersion) {
+        return ['_status' => 'up_to_date'];
+    }
 
     $results = [];
 
     // List of migration tables to create (added after initial release)
     // Use fully-qualified names since dynamic calls don't use namespace resolution
-    $migrations = [
-        'chain_drop_proposals' => __NAMESPACE__ . '\\getChainDropProposalsTableSchema',
-        'rp2p_candidates' => __NAMESPACE__ . '\\getRp2pCandidatesTableSchema',
-        'p2p_senders' => __NAMESPACE__ . '\\getP2pSendersTableSchema',
-        'p2p_relayed_contacts' => __NAMESPACE__ . '\\getP2pRelayedContactsTableSchema',
-        'contact_credit' => __NAMESPACE__ . '\\getContactCreditTableSchema',
-        'api_nonces' => __NAMESPACE__ . '\\getApiNoncesTableSchema',
-    ];
+    $migrations = [];
 
     foreach ($migrations as $tableName => $schemaFunction) {
         try {
@@ -197,6 +209,19 @@ function runMigrations(PDO $pdo): array {
     $columnResults = runColumnMigrations($pdo);
     $results = array_merge($results, $columnResults);
 
+    // Check if any migration errored — only update version if all succeeded
+    $hasErrors = false;
+    foreach ($results as $status) {
+        if (is_string($status) && strpos($status, 'error:') === 0) {
+            $hasErrors = true;
+            break;
+        }
+    }
+
+    if (!$hasErrors) {
+        @file_put_contents($versionFile, (string) $schemaVersion);
+    }
+
     return $results;
 }
 
@@ -211,14 +236,12 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [
-        'p2p' => [
-            'hop_wait' => 'INT DEFAULT 0 AFTER `fast`',
-        ],
-    ];
+    $columnsToAdd = [];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
-    $columnsToDrop = [];
+    $columnsToDrop = [
+        'contacts' => ['currency', 'fee_percent', 'credit_limit'],
+    ];
 
     // Add new columns
     foreach ($columnsToAdd as $tableName => $columns) {
@@ -270,11 +293,7 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Update ENUM columns to add new values
-    $enumUpdates = [
-        'contacts' => [
-            'online_status' => "ENUM('online','partial','offline','unknown') DEFAULT 'unknown'",
-        ],
-    ];
+    $enumUpdates = [];
 
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
@@ -313,6 +332,7 @@ function runColumnMigrations(PDO $pdo): array {
             }
         }
     }
+
 
     // Add missing indexes
     $indexesToAdd = [];

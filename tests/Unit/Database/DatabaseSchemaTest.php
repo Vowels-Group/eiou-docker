@@ -18,6 +18,7 @@ require_once $filesRoot . '/src/database/DatabaseSchema.php';
 use function Eiou\Database\getContactsTableSchema;
 use function Eiou\Database\getAddressTableSchema;
 use function Eiou\Database\getContactCreditTableSchema;
+use function Eiou\Database\getContactCurrenciesTableSchema;
 use function Eiou\Database\getBalancesTableSchema;
 
 // Transactions & Chain Integrity
@@ -50,6 +51,7 @@ use function Eiou\Database\getRateLimitsTableSchema;
 #[CoversFunction('Eiou\Database\getContactsTableSchema')]
 #[CoversFunction('Eiou\Database\getAddressTableSchema')]
 #[CoversFunction('Eiou\Database\getContactCreditTableSchema')]
+#[CoversFunction('Eiou\Database\getContactCurrenciesTableSchema')]
 #[CoversFunction('Eiou\Database\getBalancesTableSchema')]
 // Transactions & Chain Integrity
 #[CoversFunction('Eiou\Database\getTransactionsTableSchema')]
@@ -1458,5 +1460,71 @@ class DatabaseSchemaTest extends TestCase
 
         $this->assertStringContainsString('INDEX idx_p2p_senders_hash (hash)', $schema);
         $this->assertStringContainsString('INDEX idx_p2p_senders_created_at (created_at)', $schema);
+    }
+
+    // =========================================================================
+    // Contact Currencies Table Tests
+    // =========================================================================
+
+    /**
+     * Test contact_currencies table schema has required columns
+     */
+    public function testContactCurrenciesTableSchemaHasRequiredColumns(): void
+    {
+        $schema = getContactCurrenciesTableSchema();
+
+        $expectedColumns = [
+            'id',
+            'pubkey_hash',
+            'currency',
+            'fee_percent',
+            'credit_limit',
+            'created_at',
+            'updated_at'
+        ];
+
+        foreach ($expectedColumns as $column) {
+            $this->assertStringContainsString($column, $schema, "Missing column: $column");
+        }
+    }
+
+    /**
+     * Test contact_currencies table schema has composite unique index
+     */
+    public function testContactCurrenciesTableSchemaHasCompositeUniqueIndex(): void
+    {
+        $schema = getContactCurrenciesTableSchema();
+
+        $this->assertStringContainsString(
+            'UNIQUE INDEX idx_cc_hash_currency (pubkey_hash, currency)',
+            $schema,
+            'Missing composite unique index on (pubkey_hash, currency)'
+        );
+    }
+
+    // =========================================================================
+    // Contact Credit Table Tests
+    // =========================================================================
+
+    /**
+     * Test contact_credit table schema has composite unique index (not column-level UNIQUE)
+     */
+    public function testContactCreditTableSchemaHasCompositeUniqueIndex(): void
+    {
+        $schema = getContactCreditTableSchema();
+
+        // Should have the composite unique index
+        $this->assertStringContainsString(
+            'UNIQUE INDEX idx_contact_credit_hash_currency (pubkey_hash, currency)',
+            $schema,
+            'Missing composite unique index on (pubkey_hash, currency)'
+        );
+
+        // Should NOT have the old column-level UNIQUE on pubkey_hash alone
+        $this->assertStringNotContainsString(
+            'pubkey_hash VARCHAR(64) NOT NULL UNIQUE',
+            $schema,
+            'Schema should use composite unique index, not column-level UNIQUE on pubkey_hash'
+        );
     }
 }

@@ -45,6 +45,12 @@ class Constants {
     const APP_VERSION = '0.0.1';
     const APP_DEBUG = true;
 
+    // Database schema version — bump this when adding new migrations in DatabaseSetup.php.
+    // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
+    // is lower than this value. After all migrations succeed the file is updated,
+    // so subsequent requests skip migration queries entirely.
+    const SCHEMA_VERSION = 3;
+
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
     // Only set to false for debugging during development.
@@ -69,6 +75,8 @@ class Constants {
     const CONVERSION_FACTORS = [
         'USD' => 100,
     ];
+    // Allowed currencies: only currencies with a CONVERSION_FACTORS entry are valid
+    const ALLOWED_CURRENCIES = ['USD'];
 
     /**
      * Get the conversion factor for a given currency

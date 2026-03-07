@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
     // Contact actions
-    if (in_array($action, ['addContact', 'acceptContact', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
+    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
         $contactController->routeAction();
     }
 
@@ -171,7 +171,25 @@ try {
 } catch (Exception $e) {
     // Non-critical
 }
+// Include currencies from accepted contact currency relationships
+try {
+    $acceptedCurrencies = $serviceContainer->getContactCurrencyRepository()->getDistinctAcceptedCurrencies();
+    foreach ($acceptedCurrencies as $cur) {
+        $knownCurrencies[$cur] = true;
+    }
+} catch (Exception $e) {
+    // Non-critical
+}
 $knownCurrencies = array_keys($knownCurrencies);
+// Sort by allowed currencies order (first currency = first row, etc.)
+$allowedCurrenciesOrder = $user->getAllowedCurrencies();
+usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
+    $posA = array_search($a, $allowedCurrenciesOrder);
+    $posB = array_search($b, $allowedCurrenciesOrder);
+    if ($posA === false) $posA = PHP_INT_MAX;
+    if ($posB === false) $posB = PHP_INT_MAX;
+    return $posA - $posB;
+});
 
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
@@ -263,9 +281,108 @@ if (!empty($pendingContacts) && $user->has('public')) {
     unset($pc);
 }
 
+// Enrich pending contacts with per-currency data from contact_currencies (direction-aware)
+if (!empty($pendingContacts)) {
+    try {
+        $pendingCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+        foreach ($pendingContacts as &$pc) {
+            $hash = $pc['pubkey_hash'] ?? '';
+            if ($hash) {
+                // Incoming: currencies THEY requested from us (we need to accept/reject)
+                $pc['pending_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash, 'incoming');
+                // Outgoing: currencies WE requested from them (waiting for their acceptance)
+                $pc['outgoing_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash, 'outgoing');
+            }
+        }
+        unset($pc);
+    } catch (Exception $e) {
+        // Non-critical — pending contacts will show without currency data
+    }
+}
+
 $pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
 $acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
 $blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);
+
+// Enrich pending user contacts (our outgoing requests) with direction-aware currency data
+if (!empty($pendingUserContacts)) {
+    try {
+        $currencyRepo = $serviceContainer->getContactCurrencyRepository();
+        foreach ($pendingUserContacts as &$puc) {
+            $hash = $puc['pubkey_hash'] ?? '';
+            if ($hash) {
+                $puc['pending_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'incoming');
+                $puc['outgoing_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'outgoing');
+            }
+        }
+        unset($puc);
+    } catch (Exception $e) {}
+}
+
+// Enrich accepted contacts with pending incoming currency requests
+if (!empty($acceptedContacts)) {
+    try {
+        $currencyRepo = $serviceContainer->getContactCurrencyRepository();
+        foreach ($acceptedContacts as &$ac) {
+            $hash = $ac['pubkey_hash'] ?? '';
+            if ($hash) {
+                $ac['pending_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'incoming');
+                $ac['outgoing_currencies'] = $currencyRepo->getPendingCurrencies($hash, 'outgoing');
+            }
+        }
+        unset($ac);
+    } catch (Exception $e) {}
+}
+
+// Build lookup of contacts we already have (accepted or our outgoing pending)
+$existingContactHashes = [];
+foreach ($acceptedContacts as $ac) {
+    if (!empty($ac['pubkey_hash'])) {
+        $existingContactHashes[$ac['pubkey_hash']] = true;
+    }
+}
+foreach ($pendingUserContacts as $puc) {
+    if (!empty($puc['pubkey_hash'])) {
+        $existingContactHashes[$puc['pubkey_hash']] = true;
+    }
+}
+
+// Mark pending contact requests that already exist in our contact list
+// so the template uses acceptCurrency instead of acceptContact
+foreach ($pendingContacts as &$pc) {
+    $hash = $pc['pubkey_hash'] ?? '';
+    if ($hash && isset($existingContactHashes[$hash])) {
+        $pc['is_existing_contact'] = true;
+    }
+}
+unset($pc);
+
+// Also show named pending contacts with incoming currencies in the standalone section
+// Keep them in $pendingUserContacts too so they still appear in the contacts grid
+$pendingContactHashes = [];
+foreach ($pendingContacts as $pc) {
+    if (!empty($pc['pubkey_hash'])) {
+        $pendingContactHashes[$pc['pubkey_hash']] = true;
+    }
+}
+
+foreach ($pendingUserContacts as $puc) {
+    if (!empty($puc['pending_currencies']) && !isset($pendingContactHashes[$puc['pubkey_hash'] ?? ''])) {
+        $puc['is_existing_contact'] = true;
+        $pendingContacts[] = $puc;
+    }
+}
+
+// Also add accepted contacts with pending incoming currencies to $pendingContacts
+// (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
+foreach ($acceptedContacts as $c) {
+    if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
+        $c['is_existing_contact'] = true;
+        $pendingContacts[] = $c;
+    }
+}
+// $pendingCurrencyContacts no longer needed for separate notification
+$pendingCurrencyContacts = [];
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
@@ -431,6 +548,39 @@ try {
     $totalAvailableCreditByCurrency = [];
 }
 
+// Fetch per-contact currency configs for multi-currency support
+$contactCurrenciesByHash = [];
+try {
+    $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+    foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
+        $hash = $c['pubkey_hash'] ?? '';
+        if ($hash && !isset($contactCurrenciesByHash[$hash])) {
+            $contactCurrenciesByHash[$hash] = $contactCurrencyRepo->getContactCurrencies($hash);
+        }
+    }
+} catch (Exception $e) {
+    $contactCurrenciesByHash = [];
+}
+
+// Fetch per-contact all-currency available credits
+$availableCreditAllByHash = [];
+try {
+    foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
+        $hash = $c['pubkey_hash'] ?? '';
+        if ($hash && !isset($availableCreditAllByHash[$hash])) {
+            $allCredits = $contactCreditRepo->getAvailableCreditAllCurrencies($hash);
+            $creditMap = [];
+            foreach ($allCredits as $cr) {
+                $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $creditMap[$cur] = $cr['available_credit'] / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur];
+            }
+            $availableCreditAllByHash[$hash] = $creditMap;
+        }
+    }
+} catch (Exception $e) {
+    $availableCreditAllByHash = [];
+}
+
 // Merge available credit into contact arrays and calculate their available credit with me
 $contactArraysForCredit = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
 foreach ($contactArraysForCredit as &$contacts) {
@@ -438,17 +588,47 @@ foreach ($contactArraysForCredit as &$contacts) {
         $hash = $contact['pubkey_hash'] ?? '';
         // My available credit with them (from pong, stored in contact_credit)
         $contact['my_available_credit'] = $availableCreditByContact[$hash] ?? null;
-        // Their available credit with me: credit_limit - balance
-        // Uses the same balance data as the displayed contact balance (from transactions table)
-        // Formula: credit_limit - balance, where balance = received - sent
-        // When balance is negative (I owe them), their credit increases
-        // When balance is positive (they owe me), their credit decreases
+        // Their available credit is now computed per-currency in the currencies array below
         $contact['their_available_credit'] = null;
-        $balanceValue = floatval($contact['balance'] ?? 0);
-        $creditLimitValue = floatval($contact['credit_limit'] ?? 0);
-        if ($creditLimitValue > 0 || $balanceValue != 0) {
-            $contact['their_available_credit'] = round($creditLimitValue - $balanceValue, 2);
+
+        // Build multi-currency data (direction-aware)
+        $currencyConfigs = $contactCurrenciesByHash[$hash] ?? [];
+        $allCredits = $availableCreditAllByHash[$hash] ?? [];
+        $acceptedCurrencies = [];
+        $pendingIncoming = [];
+        $pendingOutgoing = [];
+        $contactBalancesByCurrency = $contact['balances_by_currency'] ?? [];
+        foreach ($currencyConfigs as $cc) {
+            $cur = $cc['currency'];
+            $ccStatus = $cc['status'] ?? 'accepted';
+            $ccDirection = $cc['direction'] ?? 'outgoing';
+            $creditLimitMajor = ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur];
+            $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
+            $entry = [
+                'currency' => $cur,
+                'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
+                'credit_limit' => $creditLimitMajor,
+                'my_available_credit' => $allCredits[$cur] ?? null,
+                'their_available_credit' => ($creditLimitMajor > 0 || $balanceForCur != 0) ? round($creditLimitMajor - $balanceForCur, 2) : null,
+                'status' => $ccStatus,
+                'direction' => $ccDirection,
+            ];
+            if ($ccStatus === 'accepted') {
+                // Deduplicate: keep one entry per currency (prefer outgoing — has our fee/credit)
+                if (!isset($acceptedCurrencies[$cur]) || $ccDirection === 'outgoing') {
+                    $acceptedCurrencies[$cur] = $entry;
+                }
+            } elseif ($ccStatus === 'pending') {
+                if ($ccDirection === 'incoming') {
+                    $pendingIncoming[] = $entry;
+                } else {
+                    $pendingOutgoing[] = $entry;
+                }
+            }
         }
+        $contact['currencies'] = array_values($acceptedCurrencies);
+        $contact['pending_currencies'] = $pendingIncoming;
+        $contact['outgoing_currencies'] = $pendingOutgoing;
     }
     unset($contact);
 }

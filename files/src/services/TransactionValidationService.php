@@ -206,7 +206,9 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             // getPreviousTxid expects public keys (not addresses) to hash and compare
             $expectedPreviousTxid = $this->transactionRepository->getPreviousTxid(
                 $request['senderPublicKey'],
-                $request['receiverPublicKey']
+                $request['receiverPublicKey'],
+                null,
+                $request['currency'] ?? null
             );
 
             // Get the previous txid from the incoming request (may be NULL for first tx or if sender lost data)
@@ -267,7 +269,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
 
             // Check if there is enough funds to complete the transaction (sufficient balance or credit limit)
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
-            $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey']);
+            $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
             $requestedAmount = $request['amount'];
 
             if (($availableFunds + $creditLimit) < $requestedAmount) {
@@ -314,7 +316,9 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             // Include expected_txid in rejection to help sender resync
             $expectedTxid = $this->transactionRepository->getPreviousTxid(
                 $request['senderPublicKey'],
-                $request['receiverPublicKey']
+                $request['receiverPublicKey'],
+                null,
+                $request['currency'] ?? null
             );
             $receivedPreviousTxid = $request['previousTxid'] ?? null;
 

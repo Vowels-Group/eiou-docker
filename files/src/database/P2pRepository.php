@@ -214,11 +214,18 @@ class P2pRepository extends AbstractRepository {
      * @param string $pubkey Sender pubkey
      * @return int Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey): int {
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): int {
         $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
                   WHERE sender_public_key = :pubkey
                     AND status NOT IN ('cancelled', 'completed', 'expired')";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+        $params = [':pubkey' => $pubkey];
+
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return 0;

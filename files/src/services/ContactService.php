@@ -309,11 +309,12 @@ class ContactService implements ContactServiceInterface
      * Get the credit limit for a sender.
      *
      * @param string $senderPublicKey The sender's public key
+     * @param string $currency Currency code
      * @return float The credit limit
      */
-    public function getCreditLimit(string $senderPublicKey): float
+    public function getCreditLimit(string $senderPublicKey, string $currency = \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY): float
     {
-        return $this->managementService->getCreditLimit($senderPublicKey);
+        return $this->managementService->getCreditLimit($senderPublicKey, $currency);
     }
 
     /**
@@ -402,9 +403,9 @@ class ContactService implements ContactServiceInterface
      * Lookup contact addresses by name.
      *
      * @param string $name Contact name
-     * @return string|null Contact addresses or null if not found
+     * @return array|null Contact addresses or null if not found
      */
-    public function lookupAddressesByName(string $name): ?string
+    public function lookupAddressesByName(string $name): ?array
     {
         return $this->managementService->lookupAddressesByName($name);
     }
@@ -414,9 +415,9 @@ class ContactService implements ContactServiceInterface
      *
      * @return array List of accepted contact addresses
      */
-    public function getAllAcceptedAddresses(): array
+    public function getAllAcceptedAddresses(?string $currency = null): array
     {
-        return $this->managementService->getAllAcceptedAddresses();
+        return $this->managementService->getAllAcceptedAddresses($currency);
     }
 
     /**

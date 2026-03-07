@@ -1265,7 +1265,8 @@ class SyncServiceTest extends TestCase
     /**
      * Create a signed contact transaction for testing
      *
-     * Contact transactions have a different message format: {'type': 'create', 'nonce': ...}
+     * Contact transactions have a different message format:
+     * {'type': 'create', ['currency': ...], 'nonce': ...}
      *
      * @param array $senderKeys Key pair for the sender
      * @param array $receiverKeys Key pair for the receiver
@@ -1278,11 +1279,15 @@ class SyncServiceTest extends TestCase
         $txid = 'contact-txid-' . bin2hex(random_bytes(8));
 
         // Contact transactions use a simpler message format
-        // This matches ContactPayload::build() -> TransportUtilityService::sign()
-        $messageContent = [
-            'type' => 'create',
-            'nonce' => $nonce
-        ];
+        // This matches ContactPayload::build() -> TransportUtilityService::signWithCapture()
+        // signWithCapture strips senderAddresses before signing, leaving:
+        // type -> [currency] -> nonce
+        $messageContent = ['type' => 'create'];
+        $currency = $overrides['currency'] ?? 'USD';
+        if ($currency !== null) {
+            $messageContent['currency'] = $currency;
+        }
+        $messageContent['nonce'] = $nonce;
 
         // Sign the message
         $message = json_encode($messageContent);

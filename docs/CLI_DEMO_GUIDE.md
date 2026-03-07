@@ -723,6 +723,31 @@ docker exec carol eiou search
 docker exec daniel eiou search
 ```
 
+#### Cross-Currency Contact Requests
+
+When two nodes request different currencies, each request is tracked independently:
+
+```bash
+# Alice requests USD from Bob
+docker exec alice eiou add http://bob Bob 0.1 1000 USD
+
+# Bob requests GBY from Alice
+docker exec bob eiou add http://alice Alice 0.2 4000 GBY
+```
+
+Each side now sees:
+- **Alice**: outgoing USD (awaiting Bob), incoming GBY (from Bob — can accept)
+- **Bob**: outgoing GBY (awaiting Alice), incoming USD (from Alice — can accept)
+
+Accept specific currency requests independently:
+```bash
+# Bob accepts Alice's USD request
+docker exec bob eiou add http://alice Alice 0.2 4000 USD
+
+# Alice accepts Bob's GBY request
+docker exec alice eiou add http://bob Bob 0.1 1000 GBY
+```
+
 ---
 
 ### 5.2 pending - Viewing Pending Requests
@@ -769,14 +794,14 @@ Shows contact details including balance, fee, credit limit, and bidirectional av
 # Update contact name
 docker exec alice eiou update Bob name Robert
 
-# Update fee
-docker exec alice eiou update Bob fee 0.5
+# Update fee for USD
+docker exec alice eiou update Bob fee 0.5 USD
 
-# Update credit limit
-docker exec alice eiou update Bob credit 2000
+# Update credit limit for EUR
+docker exec alice eiou update Bob credit 2000 EUR
 
-# Update all at once
-docker exec alice eiou update Bob all NewName 0.2 1500
+# Update all at once for USD
+docker exec alice eiou update Bob all NewName 0.2 1500 USD
 ```
 
 ---
@@ -796,7 +821,7 @@ Response Time: 45ms
 Chain Valid:   Yes
 ```
 
-Ping also exchanges available credit information with the contact in the background. After a ping, `viewcontact` will show the latest available credit values.
+Ping also exchanges per-currency available credit and chain validity with the contact. After a ping, `viewcontact` will show the latest per-currency available credit values (stored in `contact_credit` table).
 
 ---
 

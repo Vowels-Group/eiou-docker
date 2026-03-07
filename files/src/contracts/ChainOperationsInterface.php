@@ -35,7 +35,7 @@ interface ChainOperationsInterface
      *   - gaps: array - List of missing previous_txid values
      *   - broken_txids: array - Transactions with missing previous_txid
      */
-    public function verifyChainIntegrity(string $userPubkey, string $contactPubkey): array;
+    public function verifyChainIntegrity(string $userPubkey, string $contactPubkey, ?string $currency = null): array;
 
     /**
      * Get the correct previous txid for a new transaction
@@ -48,7 +48,7 @@ interface ChainOperationsInterface
      * @param string $contactPubkey Contact's public key
      * @return string|null The correct previous_txid or null if first transaction
      */
-    public function getCorrectPreviousTxid(string $userPubkey, string $contactPubkey): ?string;
+    public function getCorrectPreviousTxid(string $userPubkey, string $contactPubkey, ?string $currency = null): ?string;
 
     /**
      * Repair chain if needed by triggering sync
@@ -69,7 +69,7 @@ interface ChainOperationsInterface
      *   - synced_count: int - Number of transactions synced (if repair attempted)
      *   - error: string|null - Error message if repair failed
      */
-    public function repairChainIfNeeded(string $contactAddress, string $contactPubkey): array;
+    public function repairChainIfNeeded(string $contactAddress, string $contactPubkey, ?string $currency = null): array;
 
     /**
      * Set the sync service for chain repair operations

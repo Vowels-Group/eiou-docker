@@ -17,6 +17,8 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\ContactStatusService;
 use Eiou\Services\RateLimiterService;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -46,6 +48,8 @@ class ContactStatusServiceTest extends TestCase
     private UserContext $mockUserContext;
     private SyncTriggerInterface $mockSyncTrigger;
     private RateLimiterService $mockRateLimiter;
+    private BalanceRepository $mockBalanceRepo;
+    private ContactCurrencyRepository $mockContactCurrencyRepo;
 
     private const TEST_USER_PUBKEY = 'test-user-public-key-abc123';
     private const TEST_USER_PUBKEY_HASH = 'test-user-pubkey-hash';
@@ -69,6 +73,8 @@ class ContactStatusServiceTest extends TestCase
         $this->mockUserContext = $this->createMock(UserContext::class);
         $this->mockSyncTrigger = $this->createMock(SyncTriggerInterface::class);
         $this->mockRateLimiter = $this->createMock(RateLimiterService::class);
+        $this->mockBalanceRepo = $this->createMock(BalanceRepository::class);
+        $this->mockContactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
 
         // Configure utility container to return all required concrete mock utilities
         $this->mockUtilityContainer->method('getTransportUtility')
@@ -85,6 +91,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(self::TEST_USER_PUBKEY);
         $this->mockUserContext->method('getPublicKeyHash')
             ->willReturn(self::TEST_USER_PUBKEY_HASH);
+        $this->mockUserContext->method('getContactStatusEnabled')
+            ->willReturn(true);
 
         // Default transport utility setup for address resolution
         $this->mockTransportUtility->method('resolveUserAddressForTransport')
@@ -1459,5 +1467,151 @@ class ContactStatusServiceTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertEquals('online', $result['online_status']);
+    }
+
+    // =========================================================================
+    // Contact Currency Credit Limit Tests
+    // =========================================================================
+
+    /**
+     * Test handlePingRequest calculates credit from contact_currencies table
+     *
+     * When contactCurrencyRepository->getCreditLimit() returns a non-zero value,
+     * the pong response should use that value instead of the contact's credit_limit field.
+     */
+    public function testHandlePingRequestCalculatesCreditFromContactCurrencies(): void
+    {
+        $request = [
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS,
+            'prevTxid' => self::TEST_PREV_TXID
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('isAcceptedContactPubkey')
+            ->with(self::TEST_CONTACT_PUBKEY)
+            ->willReturn(true);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Inject balance repo to enable credit calculation path
+        $this->service->setBalanceRepository($this->mockBalanceRepo);
+        $this->service->setContactCurrencyRepository($this->mockContactCurrencyRepo);
+
+        // Contact data with a credit_limit that should NOT be used
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByPubkey')
+            ->with(self::TEST_CONTACT_PUBKEY)
+            ->willReturn([
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
+                'currency' => 'USD',
+                'credit_limit' => 1000
+            ]);
+
+        // Balance: sent 300, received 100 => balance = 200
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactSentBalance')
+            ->with(self::TEST_CONTACT_PUBKEY, 'USD')
+            ->willReturn(300);
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactReceivedBalance')
+            ->with(self::TEST_CONTACT_PUBKEY, 'USD')
+            ->willReturn(100);
+
+        // ContactCurrencyRepository returns 5000 (overrides contact's credit_limit of 1000)
+        $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+        $this->mockContactCurrencyRepo->expects($this->once())
+            ->method('getCreditLimit')
+            ->with($expectedPubkeyHash, 'USD')
+            ->willReturn(5000);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        ob_start();
+        $this->service->handlePingRequest($request);
+        $output = ob_get_clean();
+
+        $response = json_decode($output, true);
+        $this->assertNotNull($response, 'Response should be valid JSON');
+        $this->assertEquals('pong', $response['status']);
+        // availableCredit = balance (200) + creditLimit (5000) = 5200
+        $this->assertEquals(5200, $response['availableCredit']);
+        $this->assertEquals('USD', $response['currency']);
+    }
+
+    /**
+     * Test handlePingRequest falls back to contact credit_limit when contactCurrencyRepository returns 0
+     *
+     * When contactCurrencyRepository->getCreditLimit() returns 0 (no per-currency config),
+     * the service should fall back to using the contact's credit_limit field.
+     */
+    public function testHandlePingRequestFallsBackToContactCreditLimit(): void
+    {
+        $request = [
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS,
+            'prevTxid' => self::TEST_PREV_TXID
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('isAcceptedContactPubkey')
+            ->with(self::TEST_CONTACT_PUBKEY)
+            ->willReturn(true);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Inject balance repo to enable credit calculation path
+        $this->service->setBalanceRepository($this->mockBalanceRepo);
+        $this->service->setContactCurrencyRepository($this->mockContactCurrencyRepo);
+
+        // Contact data with credit_limit that SHOULD be used as fallback
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByPubkey')
+            ->with(self::TEST_CONTACT_PUBKEY)
+            ->willReturn([
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
+                'currency' => 'USD',
+                'credit_limit' => 2000
+            ]);
+
+        // Balance: sent 500, received 200 => balance = 300
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactSentBalance')
+            ->with(self::TEST_CONTACT_PUBKEY, 'USD')
+            ->willReturn(500);
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactReceivedBalance')
+            ->with(self::TEST_CONTACT_PUBKEY, 'USD')
+            ->willReturn(200);
+
+        // ContactCurrencyRepository returns 0 (no per-currency config)
+        $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+        $this->mockContactCurrencyRepo->expects($this->once())
+            ->method('getCreditLimit')
+            ->with($expectedPubkeyHash, 'USD')
+            ->willReturn(0);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        ob_start();
+        $this->service->handlePingRequest($request);
+        $output = ob_get_clean();
+
+        $response = json_decode($output, true);
+        $this->assertNotNull($response, 'Response should be valid JSON');
+        $this->assertEquals('pong', $response['status']);
+        // availableCredit = balance (300) + creditLimit (2000 from contact fallback) = 2300
+        $this->assertEquals(2300, $response['availableCredit']);
+        $this->assertEquals('USD', $response['currency']);
     }
 }

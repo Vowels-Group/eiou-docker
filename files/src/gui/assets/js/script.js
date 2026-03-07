@@ -259,6 +259,13 @@ function initializeSendForm() {
                 transactionTypeIndicator.style.display = 'block';
                 transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
                 transactionTypeText.style.color = '#ffc107';
+                // Restore all currency options
+                var currSelect = document.getElementById('currency');
+                if (currSelect) {
+                    for (var ri = 0; ri < currSelect.options.length; ri++) {
+                        currSelect.options[ri].style.display = '';
+                    }
+                }
                 return;
             }
 
@@ -343,6 +350,24 @@ function initializeSendForm() {
             } else {
                 addressTypeGroup.style.display = 'none';
                 addressTypeSelect.required = false;
+            }
+
+            // Filter currency dropdown to contact's accepted currencies
+            var currencySelect = document.getElementById('currency');
+            if (currencySelect) {
+                var contactCurrenciesJson = optionEl.getAttribute('data-currencies');
+                var contactCurrencies = [];
+                try { contactCurrencies = contactCurrenciesJson ? JSON.parse(contactCurrenciesJson) : []; } catch (e) {}
+                if (contactCurrencies.length > 0) {
+                    var allCurrencyOpts = currencySelect.options;
+                    for (var ci = 0; ci < allCurrencyOpts.length; ci++) {
+                        allCurrencyOpts[ci].style.display = contactCurrencies.indexOf(allCurrencyOpts[ci].value) !== -1 ? '' : 'none';
+                    }
+                    // Select first available currency if current selection is hidden
+                    if (contactCurrencies.indexOf(currencySelect.value) === -1) {
+                        currencySelect.value = contactCurrencies[0];
+                    }
+                }
             }
 
             transactionTypeIndicator.style.display = 'block';
@@ -1178,9 +1203,111 @@ function initializeFormLoaders() {
     }
 }
 
+/**
+ * Initializes shared name fields and Accept All buttons for pending contact currency forms.
+ *
+ * Shared name: A single Name input above all currency forms for a contact.
+ * On form submit, the name value is copied to a hidden field inside the form.
+ *
+ * Accept All: Sequentially submits all currency forms for a contact via fetch,
+ * then reloads the page to show results.
+ */
+function initializeCurrencyAcceptHandlers() {
+    // Before form submit, copy shared name to hidden field
+    var currencyForms = document.querySelectorAll('.currency-accept-form');
+    for (var i = 0; i < currencyForms.length; i++) {
+        (function(form) {
+            form.addEventListener('submit', function(e) {
+                var sharedNameId = form.getAttribute('data-shared-name-id');
+                if (sharedNameId) {
+                    var nameInput = document.getElementById(sharedNameId);
+                    var target = form.querySelector('.shared-name-target');
+                    if (nameInput && target) {
+                        var nameVal = nameInput.value.trim();
+                        if (!nameVal) {
+                            e.preventDefault();
+                            nameInput.focus();
+                            nameInput.style.borderColor = '#dc3545';
+                            if (typeof showToast === 'function') {
+                                showToast('Required', 'Please enter a name for this contact', 'warning');
+                            }
+                            return false;
+                        }
+                        target.value = nameVal;
+                    }
+                }
+            });
+        })(currencyForms[i]);
+    }
+
+    // Accept All form handler — collects fee/credit from individual currency forms
+    var acceptAllForms = document.querySelectorAll('.accept-all-form');
+    for (var j = 0; j < acceptAllForms.length; j++) {
+        (function(form) {
+            form.addEventListener('submit', function(e) {
+                var card = form.closest('.pending-contact-accept-form');
+                if (!card) { e.preventDefault(); return; }
+
+                // Validate shared name first
+                var nameInput = card.querySelector('.shared-name-input');
+                if (nameInput && !nameInput.value.trim()) {
+                    e.preventDefault();
+                    nameInput.focus();
+                    nameInput.style.borderColor = '#dc3545';
+                    if (typeof showToast === 'function') {
+                        showToast('Required', 'Please enter a name for this contact', 'warning');
+                    }
+                    return;
+                }
+
+                // Copy shared name into the Accept All form's hidden field (for new contacts)
+                var nameTarget = form.querySelector('.accept-all-name-target');
+                if (nameTarget && nameInput) {
+                    nameTarget.value = nameInput.value.trim();
+                }
+
+                // Collect currency data from individual forms
+                // Field names differ: existing contacts use "currency"/"fee"/"credit",
+                // new contacts use "contact_currency"/"contact_fee"/"contact_credit"
+                var currencyForms = card.querySelectorAll('.currency-accept-form');
+                var currencies = [];
+                for (var k = 0; k < currencyForms.length; k++) {
+                    var cf = currencyForms[k];
+                    var currency = cf.querySelector('input[name="currency"]') || cf.querySelector('input[name="contact_currency"]');
+                    var fee = cf.querySelector('input[name="fee"]') || cf.querySelector('input[name="contact_fee"]');
+                    var credit = cf.querySelector('input[name="credit"]') || cf.querySelector('input[name="contact_credit"]');
+                    if (currency && fee && credit) {
+                        currencies.push({
+                            currency: currency.value,
+                            fee: fee.value,
+                            credit: credit.value
+                        });
+                    }
+                }
+
+                if (currencies.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                // Set the JSON data into the hidden field
+                form.querySelector('.accept-all-currencies-data').value = JSON.stringify(currencies);
+
+                // Show loading state
+                var btn = form.querySelector('.accept-all-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+                }
+            });
+        })(acceptAllForms[j]);
+    }
+}
+
 // Add to existing DOMContentLoaded
 window.addEventListener('DOMContentLoaded', function() {
     initializeFormLoaders();
+    initializeCurrencyAcceptHandlers();
 });
 
 /**
@@ -1470,6 +1597,8 @@ function scrollQuickActions(direction) {
 var currentContactId = null;
 var currentContactPubkeyHash = null;
 var contactTransactionData = [];
+var currentContactCurrencies = [];
+var currentContactBalances = {};
 var contactsShowAll = false;
 var CONTACTS_DEFAULT_LIMIT = 16;
 
@@ -1704,19 +1833,22 @@ function openContactModal(contact, openTab) {
     var balanceEl = document.getElementById('modal_balance');
     balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
     balanceEl.className = 'balance-amount';
-    document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
+    // Derive initial currency, credit_limit, and fee from first accepted currency
+    var primaryCur = (contact.currencies && contact.currencies.length > 0) ? contact.currencies[0] : null;
+    var currency = primaryCur ? primaryCur.currency : 'USD';
+    document.getElementById('modal_balance_currency').textContent = currency;
 
     // Set credit limit, available credits (both directions), and fee
-    var creditLimit = parseFloat(contact.credit_limit) || 0;
+    var creditLimit = primaryCur ? (parseFloat(primaryCur.credit_limit) || 0) : 0;
     document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
-    document.getElementById('modal_credit_currency').textContent = contact.currency || 'USD';
-    var currency = contact.currency || 'USD';
+    document.getElementById('modal_credit_currency').textContent = currency;
 
     // My available credit with them (from pong)
     var myAvailableCreditEl = document.getElementById('modal_my_available_credit');
     if (myAvailableCreditEl) {
-        myAvailableCreditEl.textContent = (contact.my_available_credit !== null && contact.my_available_credit !== undefined)
-            ? parseFloat(contact.my_available_credit).toFixed(2) : '—';
+        var myAvailCredit = primaryCur ? primaryCur.my_available_credit : contact.my_available_credit;
+        myAvailableCreditEl.textContent = (myAvailCredit !== null && myAvailCredit !== undefined)
+            ? parseFloat(myAvailCredit).toFixed(2) : '—';
     }
     var myCreditCurrencyEl = document.getElementById('modal_my_credit_currency');
     if (myCreditCurrencyEl) myCreditCurrencyEl.textContent = currency;
@@ -1724,14 +1856,86 @@ function openContactModal(contact, openTab) {
     // Their available credit with me (calculated)
     var theirAvailableCreditEl = document.getElementById('modal_their_available_credit');
     if (theirAvailableCreditEl) {
-        theirAvailableCreditEl.textContent = (contact.their_available_credit !== null && contact.their_available_credit !== undefined)
-            ? parseFloat(contact.their_available_credit).toFixed(2) : '—';
+        var theirAvailCredit = primaryCur ? primaryCur.their_available_credit : contact.their_available_credit;
+        theirAvailableCreditEl.textContent = (theirAvailCredit !== null && theirAvailCredit !== undefined)
+            ? parseFloat(theirAvailCredit).toFixed(2) : '—';
     }
     var theirCreditCurrencyEl = document.getElementById('modal_their_credit_currency');
     if (theirCreditCurrencyEl) theirCreditCurrencyEl.textContent = currency;
 
-    var fee = parseFloat(contact.fee) || 0;
+    var fee = primaryCur ? (parseFloat(primaryCur.fee) || 0) : 0;
     document.getElementById('modal_fee').textContent = fee.toFixed(2);
+
+    // Populate currency slider for multi-currency contacts
+    var currencySelectorSection = document.getElementById('currency-selector-section');
+    var sliderTrack = document.getElementById('currency_slider_track');
+    if (currencySelectorSection && sliderTrack) {
+        var currencies = contact.currencies || [];
+        currentContactCurrencies = currencies;
+        currentContactBalances = contact.balances_by_currency || {};
+        if (currencies.length > 1) {
+            currencySelectorSection.style.display = 'block';
+            sliderTrack.innerHTML = '';
+            for (var i = 0; i < currencies.length; i++) {
+                var pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'currency-slider-pill' + (currencies[i].currency === currency ? ' active' : '');
+                pill.textContent = currencies[i].currency;
+                pill.setAttribute('data-currency', currencies[i].currency);
+                pill.setAttribute('data-action', 'currencySliderSelect');
+                sliderTrack.appendChild(pill);
+            }
+            updateCurrencySliderArrows();
+        } else {
+            currencySelectorSection.style.display = 'none';
+            sliderTrack.innerHTML = '';
+        }
+    }
+
+    // Populate pending currency requests section (read-only info in modal)
+    var pendingCurrencySection = document.getElementById('pending-currency-section');
+    var pendingCurrencyContainer = document.getElementById('pending-currency-container');
+    if (pendingCurrencySection && pendingCurrencyContainer) {
+        var pendingCurrencies = contact.pending_currencies || []; // incoming: they requested from us
+        var outgoingCurrencies = contact.outgoing_currencies || []; // outgoing: we requested from them
+        if (pendingCurrencies.length > 0 || outgoingCurrencies.length > 0) {
+            pendingCurrencySection.style.display = 'block';
+            var sectionHeading = pendingCurrencySection.querySelector('h4');
+            if (sectionHeading) {
+                sectionHeading.innerHTML = '<i class="fas fa-exchange-alt"></i> Currency Requests';
+            }
+            var phtml = '';
+
+            // Show outgoing requests (we sent, awaiting their acceptance)
+            if (outgoingCurrencies.length > 0) {
+                phtml += '<div class="mb-md"><strong><i class="fas fa-paper-plane"></i> Your requests:</strong></div>';
+                for (var oi = 0; oi < outgoingCurrencies.length; oi++) {
+                    var oc = outgoingCurrencies[oi];
+                    phtml += '<div class="d-flex gap-sm align-items-center mb-sm">';
+                    phtml += '<span class="badge badge-warning">' + escapeHtml(oc.currency) + '</span>';
+                    phtml += '<span class="text-muted">Awaiting their acceptance</span>';
+                    phtml += '</div>';
+                }
+            }
+
+            // Show incoming requests (read-only — accept via Pending Contact Requests section)
+            if (pendingCurrencies.length > 0) {
+                phtml += '<div class="mb-md"><strong><i class="fas fa-inbox"></i> Their requests:</strong></div>';
+                for (var pi = 0; pi < pendingCurrencies.length; pi++) {
+                    var pc = pendingCurrencies[pi];
+                    phtml += '<div class="d-flex gap-sm align-items-center mb-sm">';
+                    phtml += '<span class="badge badge-info">' + escapeHtml(pc.currency) + '</span>';
+                    phtml += '<span class="text-muted">Accept via Pending Contact Requests section</span>';
+                    phtml += '</div>';
+                }
+            }
+
+            pendingCurrencyContainer.innerHTML = phtml;
+        } else {
+            pendingCurrencySection.style.display = 'none';
+            pendingCurrencyContainer.innerHTML = '';
+        }
+    }
 
     // Set status badge
     var statusBadge = document.getElementById('modal_status_badge');
@@ -1875,9 +2079,31 @@ function openContactModal(contact, openTab) {
     // Set form values
     document.getElementById('edit_contact_address').value = contact.address;
     document.getElementById('edit_contact_name').value = contact.name;
-    document.getElementById('edit_contact_fee').value = contact.fee;
-    document.getElementById('edit_contact_credit').value = contact.credit_limit;
-    document.getElementById('edit_contact_currency').value = contact.currency;
+
+    // Populate currency dropdown from contact's accepted currencies
+    var editCurrencySelect = document.getElementById('edit_contact_currency');
+    editCurrencySelect.innerHTML = '';
+    var acceptedCurrencies = (contact.currencies || []).filter(function(c) { return c.status === 'accepted'; });
+    if (acceptedCurrencies.length > 0) {
+        for (var ci = 0; ci < acceptedCurrencies.length; ci++) {
+            var opt = document.createElement('option');
+            opt.value = acceptedCurrencies[ci].currency;
+            opt.textContent = acceptedCurrencies[ci].currency;
+            editCurrencySelect.appendChild(opt);
+        }
+        // Select the first currency and load its fee/credit
+        editCurrencySelect.value = acceptedCurrencies[0].currency;
+        document.getElementById('edit_contact_fee').value = acceptedCurrencies[0].fee;
+        document.getElementById('edit_contact_credit').value = acceptedCurrencies[0].credit_limit;
+    } else {
+        // Fallback: no accepted currencies
+        var opt = document.createElement('option');
+        opt.value = 'USD';
+        opt.textContent = 'USD';
+        editCurrencySelect.appendChild(opt);
+        document.getElementById('edit_contact_fee').value = 0;
+        document.getElementById('edit_contact_credit').value = 0;
+    }
 
     // Set action form addresses
     document.getElementById('block_contact_address').value = contact.address;
@@ -1966,6 +2192,103 @@ function openContactModal(contact, openTab) {
  */
 function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
+}
+
+/**
+ * Handles currency change in the edit contact settings form.
+ * Loads fee and credit limit for the selected currency from stored contact data.
+ */
+function editCurrencyChanged(selectedCurrency) {
+    if (!selectedCurrency || !currentContactCurrencies) return;
+    for (var i = 0; i < currentContactCurrencies.length; i++) {
+        if (currentContactCurrencies[i].currency === selectedCurrency) {
+            document.getElementById('edit_contact_fee').value = currentContactCurrencies[i].fee;
+            document.getElementById('edit_contact_credit').value = currentContactCurrencies[i].credit_limit;
+            return;
+        }
+    }
+}
+
+/**
+ * Switches the contact modal display to show data for the selected currency.
+ * Updates balance, credit limit, fee, and available credit fields.
+ */
+/**
+ * Update currency slider arrow enabled/disabled state
+ */
+function updateCurrencySliderArrows() {
+    var track = document.getElementById('currency_slider_track');
+    var prevBtn = document.getElementById('currency_slider_prev');
+    var nextBtn = document.getElementById('currency_slider_next');
+    if (!track || !prevBtn || !nextBtn) return;
+    prevBtn.disabled = track.scrollLeft <= 0;
+    nextBtn.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1;
+}
+
+/**
+ * Slide the currency slider left or right
+ */
+function slideCurrencyTrack(direction) {
+    var track = document.getElementById('currency_slider_track');
+    if (!track) return;
+    var scrollAmount = 100;
+    track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+    setTimeout(updateCurrencySliderArrows, 300);
+}
+
+function switchContactCurrency(selectedCurrency) {
+    if (!selectedCurrency) return;
+
+    // Find currency config from stored currencies array
+    var currencyConfig = null;
+    for (var i = 0; i < currentContactCurrencies.length; i++) {
+        if (currentContactCurrencies[i].currency === selectedCurrency) {
+            currencyConfig = currentContactCurrencies[i];
+            break;
+        }
+    }
+
+    // Update balance from per-currency balances
+    var balance = parseFloat(currentContactBalances[selectedCurrency]) || 0;
+    var balanceEl = document.getElementById('modal_balance');
+    if (balanceEl) {
+        balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
+        balanceEl.className = 'balance-amount';
+    }
+    var balanceCurrencyEl = document.getElementById('modal_balance_currency');
+    if (balanceCurrencyEl) balanceCurrencyEl.textContent = selectedCurrency;
+
+    if (currencyConfig) {
+        // Update credit limit
+        var creditLimit = parseFloat(currencyConfig.credit_limit) || 0;
+        var creditLimitEl = document.getElementById('modal_credit_limit');
+        if (creditLimitEl) creditLimitEl.textContent = creditLimit.toFixed(2);
+
+        var creditCurrencyEl = document.getElementById('modal_credit_currency');
+        if (creditCurrencyEl) creditCurrencyEl.textContent = selectedCurrency;
+
+        // Update fee
+        var fee = parseFloat(currencyConfig.fee) || 0;
+        var feeEl = document.getElementById('modal_fee');
+        if (feeEl) feeEl.textContent = fee.toFixed(2);
+
+        // Update available credits
+        var myAvailEl = document.getElementById('modal_my_available_credit');
+        if (myAvailEl) {
+            myAvailEl.textContent = (currencyConfig.my_available_credit !== null && currencyConfig.my_available_credit !== undefined)
+                ? parseFloat(currencyConfig.my_available_credit).toFixed(2) : '\u2014';
+        }
+        var myCreditCurEl = document.getElementById('modal_my_credit_currency');
+        if (myCreditCurEl) myCreditCurEl.textContent = selectedCurrency;
+
+        var theirAvailEl = document.getElementById('modal_their_available_credit');
+        if (theirAvailEl) {
+            theirAvailEl.textContent = (currencyConfig.their_available_credit !== null && currencyConfig.their_available_credit !== undefined)
+                ? parseFloat(currencyConfig.their_available_credit).toFixed(2) : '\u2014';
+        }
+        var theirCreditCurEl = document.getElementById('modal_their_credit_currency');
+        if (theirCreditCurEl) theirCreditCurEl.textContent = selectedCurrency;
+    }
 }
 
 // Track current contact address for ping
@@ -3762,6 +4085,17 @@ document.addEventListener('DOMContentLoaded', function() {
             showModalTab(tab, el);
         },
 
+        // Currency slider
+        'currencySliderSelect': function(el) {
+            var cur = el.getAttribute('data-currency');
+            var pills = document.querySelectorAll('.currency-slider-pill');
+            for (var i = 0; i < pills.length; i++) pills[i].classList.remove('active');
+            el.classList.add('active');
+            switchContactCurrency(cur);
+        },
+        'currencySliderPrev': function() { slideCurrencyTrack(-1); },
+        'currencySliderNext': function() { slideCurrencyTrack(1); },
+
         // Contact actions
         'pingContact': function() { pingContact(); },
         'proposeChainDrop': function() { proposeChainDrop(); },
@@ -3894,6 +4228,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (action === 'showSelectedContactAddress') { showSelectedContactAddress(); }
         else if (action === 'showSelectedUserAddress') { showSelectedUserAddress(); }
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
+        else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
+        else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
     }, false);
 
     // Delegated input handler

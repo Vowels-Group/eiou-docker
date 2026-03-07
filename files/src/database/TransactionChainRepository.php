@@ -58,7 +58,7 @@ class TransactionChainRepository extends AbstractRepository
      *   - gaps: array - List of missing previous_txid values
      *   - broken_txids: array - Transactions with missing previous_txid
      */
-    public function verifyChainIntegrity(string $userPublicKey, string $contactPublicKey): array {
+    public function verifyChainIntegrity(string $userPublicKey, string $contactPublicKey, ?string $currency = null): array {
         $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
@@ -72,24 +72,27 @@ class TransactionChainRepository extends AbstractRepository
         ];
 
         // Get all active transactions between the two parties (excluding cancelled/rejected).
-        // We need ALL active txids in the lookup set so that a completed transaction
-        // referencing an in-flight transaction's txid doesn't falsely report a gap.
-        // However, we only CHECK previous_txid links on settled transactions
-        // (completed/accepted/paid) because in-flight transactions (pending/sending/sent)
-        // may reference a previous_txid that hasn't been synced yet, or may be re-signed
-        // with a different previous_txid after sync (see HeldTransactionService).
+        // When currency is specified, only check that currency's chain.
         $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
                          OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                  AND status NOT IN ('cancelled', 'rejected')
-                  ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+                  AND status NOT IN ('cancelled', 'rejected')";
 
-        $stmt = $this->execute($query, [
+        $params = [
             ':user_hash' => $userPubkeyHash,
             ':contact_hash' => $contactPubkeyHash,
             ':contact_hash2' => $contactPubkeyHash,
             ':user_hash2' => $userPubkeyHash
-        ]);
+        ];
+
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $query .= " ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return $result;
@@ -163,7 +166,7 @@ class TransactionChainRepository extends AbstractRepository
      * @param string|null $afterTxid Only return transactions after this txid
      * @return array List of transactions
      */
-    public function getTransactionChain(string $userPublicKey, string $contactPublicKey, ?string $afterTxid = null): array {
+    public function getTransactionChain(string $userPublicKey, string $contactPublicKey, ?string $afterTxid = null, ?string $currency = null): array {
         $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
@@ -178,6 +181,11 @@ class TransactionChainRepository extends AbstractRepository
             ':contact_hash2' => $contactPubkeyHash,
             ':user_hash2' => $userPubkeyHash
         ];
+
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
 
         // If afterTxid specified, only get newer transactions
         if ($afterTxid !== null) {
@@ -207,14 +215,13 @@ class TransactionChainRepository extends AbstractRepository
      * @param string $contactPublicKey Contact's public key
      * @return array Chain state summary
      */
-    public function getChainStateSummary(string $userPublicKey, string $contactPublicKey): array {
+    public function getChainStateSummary(string $userPublicKey, string $contactPublicKey, ?string $currency = null): array {
         $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
         // Get count and oldest/newest txids
         // NOTE: Do NOT filter by status - chain state summary must include ALL transactions
-        // for accurate sync comparison. Excluding cancelled/rejected transactions causes
-        // sync to think data exists when it doesn't.
+        // for accurate sync comparison.
         $query = "SELECT
                     COUNT(*) as transaction_count,
                     MIN(txid) as oldest_txid,
@@ -223,12 +230,19 @@ class TransactionChainRepository extends AbstractRepository
                   WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
                          OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
 
-        $stmt = $this->execute($query, [
+        $params = [
             ':user_hash' => $userPubkeyHash,
             ':contact_hash' => $contactPubkeyHash,
             ':contact_hash2' => $contactPubkeyHash,
             ':user_hash2' => $userPubkeyHash
-        ]);
+        ];
+
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return [
@@ -245,15 +259,23 @@ class TransactionChainRepository extends AbstractRepository
         // NOTE: Do NOT filter by status - must match the count query above
         $txidQuery = "SELECT txid FROM {$this->tableName}
                       WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                             OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                      ORDER BY timestamp ASC";
+                             OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
 
-        $txidStmt = $this->execute($txidQuery, [
+        $txidParams = [
             ':user_hash' => $userPubkeyHash,
             ':contact_hash' => $contactPubkeyHash,
             ':contact_hash2' => $contactPubkeyHash,
             ':user_hash2' => $userPubkeyHash
-        ]);
+        ];
+
+        if ($currency !== null) {
+            $txidQuery .= " AND currency = :currency";
+            $txidParams[':currency'] = $currency;
+        }
+
+        $txidQuery .= " ORDER BY timestamp ASC";
+
+        $txidStmt = $this->execute($txidQuery, $txidParams);
 
         $txidList = [];
         if ($txidStmt) {
@@ -304,24 +326,31 @@ class TransactionChainRepository extends AbstractRepository
      * @param string $pubkeyHash2 Second party's pubkey hash
      * @return array|null Transaction data if found, null otherwise
      */
-    public function getLocalTransactionByPreviousTxid(string $previousTxid, string $pubkeyHash1, string $pubkeyHash2): ?array {
+    public function getLocalTransactionByPreviousTxid(string $previousTxid, string $pubkeyHash1, string $pubkeyHash2, ?string $currency = null): ?array {
         // NOTE: Do NOT filter by status here - chain conflict detection requires ALL transactions
         // to be included, even cancelled/rejected ones. The chain must be complete for proper
         // conflict resolution during sync operations.
         $query = "SELECT * FROM {$this->tableName}
                   WHERE previous_txid = :previous_txid
                   AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
-                       OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))
-                  ORDER BY timestamp DESC
-                  LIMIT 1";
+                       OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))";
 
-        $stmt = $this->execute($query, [
+        $params = [
             ':previous_txid' => $previousTxid,
             ':pubkey_hash1' => $pubkeyHash1,
             ':pubkey_hash2' => $pubkeyHash2,
             ':pubkey_hash3' => $pubkeyHash2,
             ':pubkey_hash4' => $pubkeyHash1
-        ]);
+        ];
+
+        if ($currency !== null) {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $query .= " ORDER BY timestamp DESC LIMIT 1";
+
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return null;

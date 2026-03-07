@@ -52,9 +52,10 @@ class MessagePayload extends BasePayload
      * @param string $address The recipient address
      * @param bool $encode Encode payload in JSON
      * @param string|null $recipientSignature Optional recipient signature for dual-signature protocol
+     * @param string|null $currency Optional currency that was accepted (for currency-specific acceptance)
      * @return array|string Contact accepted payload (array if not encode, JSON otherwise)
      */
-    public function buildContactIsAccepted(string $address, $encode = false, ?string $recipientSignature = null): array|string
+    public function buildContactIsAccepted(string $address, $encode = false, ?string $recipientSignature = null, ?string $currency = null): array|string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $data = [
@@ -68,6 +69,10 @@ class MessagePayload extends BasePayload
 
         if ($recipientSignature !== null) {
             $data['recipientSignature'] = $recipientSignature;
+        }
+
+        if ($currency !== null) {
+            $data['currency'] = $currency;
         }
 
         if($encode){
@@ -207,7 +212,7 @@ class MessagePayload extends BasePayload
         $hash = $message['hash'] ?? 'unknown';
         $hashType = $message['hashType'] ?? 'unknown';
         return json_encode([
-            'status' => 'acknowledged',
+            'status' => Constants::DELIVERY_ACKNOWLEDGED,
             'hash' => $hash,
             'hashType' => $hashType,
             'message' => $myAddress . ' confirms transaction completion was received and processed',
@@ -278,10 +283,10 @@ class MessagePayload extends BasePayload
      * @param string|null $lastKnownTxid The last known txid in the mutual chain (or null)
      * @return array The sync request payload
      */
-    public function buildTransactionSyncRequest(string $contactAddress, string $contactPublicKey, ?string $lastKnownTxid = null): array
+    public function buildTransactionSyncRequest(string $contactAddress, string $contactPublicKey, ?string $lastKnownTxid = null, array $lastKnownTxidsByCurrency = []): array
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($contactAddress);
-        return [
+        $request = [
             'type' => 'message',
             'typeMessage' => 'sync',
             'syncType' => 'transaction_chain',
@@ -292,6 +297,13 @@ class MessagePayload extends BasePayload
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include per-currency cursors for multi-currency sync
+        if (!empty($lastKnownTxidsByCurrency)) {
+            $request['lastKnownTxidsByCurrency'] = $lastKnownTxidsByCurrency;
+        }
+
+        return $request;
     }
 
     /**
@@ -337,7 +349,7 @@ class MessagePayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
-            'status' => 'acknowledged',
+            'status' => Constants::DELIVERY_ACKNOWLEDGED,
             'processedCount' => $processedCount,
             'message' => $myAddress . ' has processed ' . $processedCount . ' transactions from sync',
             'senderAddress' => $myAddress,

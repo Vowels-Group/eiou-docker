@@ -95,6 +95,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?ContactCreditRepository $contactCreditRepository = null;
 
     /**
+     * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository for multi-currency support
+     */
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
+
+    /**
      * Set the sync trigger (accepts interface for loose coupling)
      *
      * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
@@ -168,6 +173,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setContactCreditRepository(ContactCreditRepository $repo): void {
         $this->contactCreditRepository = $repo;
+    }
+
+    /**
+     * Set the contact currency repository for multi-currency support
+     *
+     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
+     */
+    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
+        $this->contactCurrencyRepository = $repo;
     }
 
     /**
@@ -258,26 +272,92 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         $this->contactRepository->addPendingContact($senderPubkey);
                         $this->addressRepository->insertAddress($senderPubkey, $transportIndexAssociative);
 
+                        // Create contact_currencies entries for all currencies the remote has
+                        $remotePrevTxidsByCurrency = $request['prevTxidsByCurrency'] ?? [];
+                        $remoteCurrencies = array_keys($remotePrevTxidsByCurrency);
+                        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+
+                        if ($this->contactCurrencyRepository !== null && !empty($remoteCurrencies)) {
+                            foreach ($remoteCurrencies as $cur) {
+                                $this->contactCurrencyRepository->insertCurrencyConfig(
+                                    $pubkeyHash, $cur, 0, 0, 'pending', 'incoming'
+                                );
+                            }
+                        }
+
                         Logger::getInstance()->info("Auto-created pending contact from ping (possible wallet restore)", [
-                            'sender_address' => $senderAddress
+                            'sender_address' => $senderAddress,
+                            'currencies' => $remoteCurrencies
                         ]);
 
                         // Trigger sync to restore transaction chain from the remote side
                         $this->triggerSync($senderAddress, $senderPubkey);
 
-                        // After sync, get updated chain state
-                        $localPrevTxid = $this->transactionRepository->getPreviousTxid(
+                        // After sync, check if transactions were restored — if so, auto-accept
+                        // the contact since the transaction history proves the prior relationship
+                        $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                             $this->currentUser->getPublicKey(),
                             $senderPubkey
                         );
 
+                        if (!empty($localPrevTxidsByCurrency)) {
+                            // Transactions exist — auto-accept the contact
+                            $defaultFee = (int) ($this->currentUser->getDefaultFee() * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY]);
+                            $defaultCredit = (int) ($this->currentUser->getDefaultCreditLimit() * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY]);
+
+                            $this->contactRepository->updateContactStatus($senderPubkey, 'accepted');
+
+                            // Create credit and currency entries for each restored currency
+                            $restoredCurrencies = array_unique(array_merge($remoteCurrencies, array_keys($localPrevTxidsByCurrency)));
+                            foreach ($restoredCurrencies as $cur) {
+                                if ($this->contactCreditRepository !== null) {
+                                    try {
+                                        $this->contactCreditRepository->createInitialCredit($senderPubkey, $cur);
+                                    } catch (\Exception $e) {
+                                        // Ignore duplicate key errors
+                                    }
+                                }
+                                if ($this->contactCurrencyRepository !== null) {
+                                    // Upsert both directions as accepted with default fee/credit
+                                    $this->contactCurrencyRepository->upsertCurrencyConfig(
+                                        $pubkeyHash, $cur, $defaultFee, $defaultCredit, 'incoming'
+                                    );
+                                    $this->contactCurrencyRepository->updateCurrencyStatus($pubkeyHash, $cur, 'accepted', 'incoming');
+                                    $this->contactCurrencyRepository->upsertCurrencyConfig(
+                                        $pubkeyHash, $cur, $defaultFee, $defaultCredit, 'outgoing'
+                                    );
+                                    $this->contactCurrencyRepository->updateCurrencyStatus($pubkeyHash, $cur, 'accepted', 'outgoing');
+                                }
+                            }
+
+                            // Recalculate balances from the synced transactions instead of
+                            // initializing to 0/0 — the sync brought real transaction history
+                            $this->getSyncTrigger()->syncContactBalance($senderPubkey);
+
+                            Logger::getInstance()->info("Auto-accepted restored contact after sync", [
+                                'sender_address' => $senderAddress,
+                                'currencies' => $restoredCurrencies
+                            ]);
+                        }
+
+                        // Re-evaluate chain validity after sync
+                        $chainValid = true;
+                        $chainStatusByCurrency = [];
+                        foreach ($remotePrevTxidsByCurrency as $cur => $remoteTxid) {
+                            if ($remoteTxid !== null && !$this->transactionRepository->transactionExistsTxid($remoteTxid)) {
+                                $chainStatusByCurrency[$cur] = false;
+                                $chainValid = false;
+                            } else {
+                                $chainStatusByCurrency[$cur] = true;
+                            }
+                        }
+
                         // Update online status for the newly created contact
                         $this->updateContactOnlineStatus($senderPubkey);
 
-                        // Respond with pong so remote knows we're alive
-                        // Chain is marked invalid since we just restored from scratch
+                        // Respond with pong including per-currency chain status
                         [$prRunning, $prTotal] = $this->checkProcessorHealth();
-                        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, false, null, null, $prRunning, $prTotal);
+                        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, [], $prRunning, $prTotal);
                         return;
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to auto-create pending contact from ping", [
@@ -293,50 +373,107 @@ class ContactStatusService implements ContactStatusServiceInterface {
             return;
         }
 
-        // Get our local prev_txid for this contact's chain
-        $localPrevTxid = $this->transactionRepository->getPreviousTxid(
+        // Per-currency chain comparison: compare chain heads for each currency independently
+        $remotePrevTxidsByCurrency = $request['prevTxidsByCurrency'] ?? [];
+        $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
             $this->currentUser->getPublicKey(),
             $senderPubkey
         );
 
-        // Compare with sender's prev_txid
-        $remotePrevTxid = $request['prevTxid'] ?? null;
         $chainValid = true;
+        $chainStatusByCurrency = [];
 
-        if ($remotePrevTxid !== null && $localPrevTxid !== null) {
-            // Both have transactions - compare chain heads
-            $chainValid = ($localPrevTxid === $remotePrevTxid);
+        // Compare per-currency: check all currencies known to either side
+        $allCurrencies = array_unique(array_merge(
+            array_keys($remotePrevTxidsByCurrency),
+            array_keys($localPrevTxidsByCurrency)
+        ));
+
+        foreach ($allCurrencies as $cur) {
+            $localTxid = $localPrevTxidsByCurrency[$cur] ?? null;
+            $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
+
+            if ($localTxid !== null && $remoteTxid !== null && $localTxid !== $remoteTxid) {
+                $chainStatusByCurrency[$cur] = false;
+                $chainValid = false;
+            } else {
+                $chainStatusByCurrency[$cur] = true;
+            }
         }
 
-        // Also check for internal chain gaps (e.g., deleted transactions in the middle)
-        // Chain heads can match even when internal transactions are missing
+        // Also check for internal chain gaps per currency
         if ($chainValid && $this->transactionChainRepository !== null) {
-            $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
-                $this->currentUser->getPublicKey(),
-                $senderPubkey
-            );
-            if (!$chainStatus['valid']) {
-                $chainValid = false;
+            foreach ($allCurrencies as $cur) {
+                $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                    $this->currentUser->getPublicKey(),
+                    $senderPubkey,
+                    $cur
+                );
+                if (!$chainStatus['valid']) {
+                    $chainStatusByCurrency[$cur] = false;
+                    $chainValid = false;
+                }
             }
         }
 
         // If chains don't match and sync was requested, trigger sync
         if (!$chainValid && ($request['requestSync'] ?? false)) {
             $this->triggerSync($request['senderAddress'] ?? '', $senderPubkey);
+
+            // Re-evaluate after sync: check if the remote's chain heads now exist locally.
+            // The ping's remote prevTxids are stale (snapshot from before sync), so comparing
+            // local heads vs remote heads can still mismatch if in-flight transactions arrived
+            // during the sync window advancing our local chain past the remote's snapshot.
+            // Instead, verify we have every txid the remote claimed — if so, we've caught up.
+            $chainValid = true;
+            $chainStatusByCurrency = [];
+            foreach ($allCurrencies as $cur) {
+                $remoteTxid = $remotePrevTxidsByCurrency[$cur] ?? null;
+                if ($remoteTxid !== null && !$this->transactionRepository->transactionExistsTxid($remoteTxid)) {
+                    // Remote claims a txid we don't have — real gap
+                    $chainStatusByCurrency[$cur] = false;
+                    $chainValid = false;
+                } else {
+                    $chainStatusByCurrency[$cur] = true;
+                }
+            }
         }
 
-        // Calculate available credit for the pinging contact
-        $availableCredit = null;
-        $contactCurrency = null;
+        // Calculate available credit per currency for the pinging contact
+        $availableCreditByCurrency = [];
         if ($this->balanceRepository !== null) {
             try {
                 $contactData = $this->contactRepository->getContactByPubkey($senderPubkey);
-                $contactCurrency = $contactData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $contactCurrency);
-                $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $contactCurrency);
-                $balance = $sentBalance - $receivedBalance;
-                $creditLimit = (int) ($contactData['credit_limit'] ?? 0);
-                $availableCredit = $balance + $creditLimit;
+                $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+
+                // Get all distinct accepted currencies for this contact
+                $contactCurrencies = [];
+                if ($this->contactCurrencyRepository !== null) {
+                    $currencyConfigs = $this->contactCurrencyRepository->getContactCurrencies($pubkeyHash);
+                    foreach ($currencyConfigs as $cc) {
+                        if (($cc['status'] ?? '') === 'accepted') {
+                            $contactCurrencies[$cc['currency']] = true;
+                        }
+                    }
+                    $contactCurrencies = array_keys($contactCurrencies);
+                }
+                // Fallback to default currency if no accepted currencies found
+                if (empty($contactCurrencies)) {
+                    $contactCurrencies[] = $contactData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                }
+
+                foreach ($contactCurrencies as $cur) {
+                    $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
+                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
+                    $balance = $sentBalance - $receivedBalance;
+
+                    // Get the credit limit we set for this contact in this currency
+                    $creditLimit = 0;
+                    if ($this->contactCurrencyRepository !== null) {
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur);
+                    }
+                    $availableCreditByCurrency[$cur] = $balance + $creditLimit;
+                }
             } catch (\Exception $e) {
                 Logger::getInstance()->warning("Failed to calculate available credit for ping response", [
                     'error' => $e->getMessage()
@@ -350,8 +487,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
         // Update the sender's online status since they pinged us
         $this->updateContactOnlineStatus($senderPubkey);
 
-        // Send pong response with available credit and processor health
-        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid, $availableCredit, $contactCurrency, $processorsRunning, $processorsTotal);
+        // Send pong response with per-currency credit, processor health, and chain status
+        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $availableCreditByCurrency, $processorsRunning, $processorsTotal);
     }
 
     /**
@@ -452,7 +589,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         // Check if contact is accepted
-        if ($contact['status'] !== 'accepted') {
+        if ($contact['status'] !== Constants::CONTACT_STATUS_ACCEPTED) {
             return [
                 'success' => false,
                 'error' => 'contact_not_accepted',
@@ -472,16 +609,16 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         try {
-            // Get the latest transaction ID in the chain with this contact
-            $prevTxid = $this->transactionRepository->getPreviousTxid(
+            // Get per-currency chain heads
+            $prevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
                 $this->currentUser->getPublicKey(),
                 $contact['pubkey']
             );
 
-            // Build ping payload
+            // Build ping payload with per-currency chain heads
             $payload = $this->contactStatusPayload->build([
                 'receiverAddress' => $contactAddress,
-                'prevTxid' => $prevTxid,
+                'prevTxidsByCurrency' => $prevTxidsByCurrency,
                 'requestSync' => $this->currentUser->getContactStatusSyncOnPing()
             ]);
 
@@ -510,26 +647,39 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
 
-                    // Check chain validity from remote response
+                    // Check chain validity using per-currency comparison from pong
                     $chainValid = $response['chainValid'] ?? true;
-                    $remotePrevTxid = $response['prevTxid'] ?? null;
+                    $remoteChainStatus = $response['chainStatusByCurrency'] ?? [];
 
-                    // Also verify local chain integrity for internal gaps
-                    // Chain heads can match even when transactions in the middle are deleted
+                    if (!empty($remoteChainStatus)) {
+                        foreach ($remoteChainStatus as $cur => $curValid) {
+                            if (!$curValid) {
+                                $chainValid = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Also verify local chain integrity per currency
                     if ($chainValid && $this->transactionChainRepository !== null) {
-                        $localChainStatus = $this->transactionChainRepository->verifyChainIntegrity(
-                            $this->currentUser->getPublicKey(),
-                            $contact['pubkey']
-                        );
-                        if (!$localChainStatus['valid']) {
-                            $chainValid = false;
+                        $allCurrencies = array_keys($prevTxidsByCurrency);
+                        foreach ($allCurrencies as $cur) {
+                            $localChainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                                $this->currentUser->getPublicKey(),
+                                $contact['pubkey'],
+                                $cur
+                            );
+                            if (!$localChainStatus['valid']) {
+                                $chainValid = false;
+                                break;
+                            }
                         }
                     }
 
                     $statusLabel = $onlineStatus === Constants::CONTACT_ONLINE_STATUS_PARTIAL ? 'partial' : 'online';
 
                     // If chains don't match, update status and optionally trigger sync
-                    if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {
+                    if (!$chainValid) {
                         $this->updateChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled
@@ -574,7 +724,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             'message' => "Contact is {$statusLabel} and chain is valid"
                         ];
                     }
-                } elseif ($response['status'] === 'rejected') {
+                } elseif ($response['status'] === Constants::DELIVERY_REJECTED) {
                     // Contact rejected ping but responded - still online
                     $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
                     return [
@@ -627,17 +777,25 @@ class ContactStatusService implements ContactStatusServiceInterface {
      * @param array $response The pong response data
      */
     private function saveAvailableCreditFromPong(string $contactPubkey, array $response): void {
-        if (!isset($response['availableCredit']) || $this->contactCreditRepository === null) {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $response['availableCreditByCurrency'] ?? [];
+
+        if (empty($creditByCurrency)) {
             return;
         }
 
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
-            $this->contactCreditRepository->upsertAvailableCredit(
-                $pubkeyHash,
-                (int) $response['availableCredit'],
-                $response['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY
-            );
+            foreach ($creditByCurrency as $currency => $credit) {
+                $this->contactCreditRepository->upsertAvailableCredit(
+                    $pubkeyHash,
+                    (int) $credit,
+                    $currency
+                );
+            }
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from pong", [
                 'error' => $e->getMessage()

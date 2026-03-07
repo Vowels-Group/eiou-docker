@@ -23,12 +23,19 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($data['address']);
         $myAddresses = $this->filterAddresses($this->currentUser->getUserLocaters());
-        return [
+        $payload = [
             'type' => 'create',
             'senderAddress' => $myAddress,
             'senderAddresses' => $myAddresses,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include sender's preferred currency if provided
+        if (isset($data['currency'])) {
+            $payload['currency'] = $data['currency'];
+        }
+
+        return $payload;
     }
 
     /**
@@ -37,9 +44,13 @@ class ContactPayload extends BasePayload
      * @param string $address The address of the contact request
      * @return array The contact creation payload
      */
-    public function buildCreateRequest(string $address): array
+    public function buildCreateRequest(string $address, ?string $currency = null): array
     {
-        return $this->build(['address' => $address]);
+        $data = ['address' => $address];
+        if ($currency !== null) {
+            $data['currency'] = $currency;
+        }
+        return $this->build($data);
     }
 
     /**
@@ -214,15 +225,21 @@ class ContactPayload extends BasePayload
     /**
      * Generate recipient signature for a contact transaction
      *
-     * Signs the same message content that the sender signed: {'type':'create','nonce':N}
+     * Signs the same message content that the sender signed:
+     * {'type':'create','currency':'USD','nonce':N}
      * This provides cryptographic proof that the recipient accepted the contact request.
      *
      * @param string $nonce The signature nonce from the contact transaction
+     * @param string|null $currency The currency for this contact transaction
      * @return string|null Base64-encoded signature, or null if signing fails
      */
-    public function generateRecipientSignature(string $nonce): ?string
+    public function generateRecipientSignature(string $nonce, ?string $currency = null): ?string
     {
-        $messageContent = ['type' => 'create', 'nonce' => $nonce];
+        $messageContent = ['type' => 'create'];
+        if ($currency !== null) {
+            $messageContent['currency'] = $currency;
+        }
+        $messageContent['nonce'] = $nonce;
         $message = json_encode($messageContent);
 
         $privateKey = $this->currentUser->getPrivateKey();

@@ -13,6 +13,7 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
@@ -118,6 +119,11 @@ class Rp2pService implements Rp2pServiceInterface {
     private ?P2pServiceInterface $p2pService = null;
 
     /**
+     * @var ContactCurrencyRepository|null Repository for per-currency fee lookup
+     */
+    private ?ContactCurrencyRepository $contactCurrencyRepository = null;
+
+    /**
      * Set the P2P transaction sender (setter injection to break circular dependency)
      *
      * This method accepts P2pTransactionSenderInterface, which breaks the circular
@@ -151,6 +157,16 @@ class Rp2pService implements Rp2pServiceInterface {
      */
     public function setP2pService(P2pServiceInterface $service): void {
         $this->p2pService = $service;
+    }
+
+    /**
+     * Set the ContactCurrencyRepository for per-currency fee lookup
+     *
+     * @param ContactCurrencyRepository $repository
+     * @return void
+     */
+    public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
+        $this->contactCurrencyRepository = $repository;
     }
 
     /**
@@ -272,7 +288,7 @@ class Rp2pService implements Rp2pServiceInterface {
         //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
         if(!isset($p2p['destination_address'])) {
             $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
-            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
             if(($creditLimit + $availableFunds) < $request['amount']){
                 output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 return false;
@@ -364,7 +380,16 @@ class Rp2pService implements Rp2pServiceInterface {
                     $senderContact = ($transportIndex !== null)
                         ? $this->contactRepository->lookupByAddress($transportIndex, $senderAddress)
                         : null;
-                    $feePercent = $senderContact ? $senderContact['fee_percent'] : $defaultFee;
+
+                    // Fee is per-currency in contact_currencies table
+                    $feePercent = $defaultFee;
+                    if ($senderContact && isset($senderContact['pubkey_hash'])) {
+                        $currency = $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                        $contactFee = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
+                        if ($contactFee !== null) {
+                            $feePercent = $contactFee;
+                        }
+                    }
                     $senderFee = $currencyUtility->calculateFee($p2p['amount'], $feePercent, $minimumFee);
 
                     // Build per-sender RP2P payload with the correct fee
@@ -572,7 +597,7 @@ class Rp2pService implements Rp2pServiceInterface {
         // Check if previous sender can afford the rp2p amount (same validation as handleRp2pRequest)
         if (!isset($p2p['destination_address'])) {
             $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
-            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
             if (($creditLimit + $availableFunds) < $request['amount']) {
                 output(outputP2pUnableToAffordRp2p($p2p, $request), 'SILENT');
                 return;

@@ -489,4 +489,114 @@ class ContactDataBuilderTest extends TestCase
         $this->assertCount(3, $result['transactions']);
         $this->assertEquals('tx2', $result['transactions'][1]['txid']);
     }
+
+    /**
+     * Test buildContactData includes currencies array
+     */
+    public function testBuildContactDataIncludesCurrenciesArray(): void
+    {
+        $builder = new ContactDataBuilder(['http']);
+
+        $currencies = [
+            ['currency' => 'USD', 'fee' => 0.10, 'credit_limit' => 100.00, 'my_available_credit' => 50.00],
+            ['currency' => 'EUR', 'fee' => 0.15, 'credit_limit' => 80.00, 'my_available_credit' => null],
+        ];
+
+        $contact = [
+            'http' => 'http://example.com',
+            'name' => 'Test User',
+            'currencies' => $currencies
+        ];
+
+        $result = $builder->buildContactData($contact, 'accepted');
+
+        $this->assertArrayHasKey('currencies', $result);
+        $this->assertCount(2, $result['currencies']);
+        $this->assertEquals('USD', $result['currencies'][0]['currency']);
+        $this->assertEquals(0.10, $result['currencies'][0]['fee']);
+        $this->assertEquals(100.00, $result['currencies'][0]['credit_limit']);
+        $this->assertEquals(50.00, $result['currencies'][0]['my_available_credit']);
+        $this->assertEquals('EUR', $result['currencies'][1]['currency']);
+        $this->assertEquals(0.15, $result['currencies'][1]['fee']);
+        $this->assertEquals(80.00, $result['currencies'][1]['credit_limit']);
+        $this->assertNull($result['currencies'][1]['my_available_credit']);
+    }
+
+    /**
+     * Test buildContactData currencies array defaults to empty when not provided
+     */
+    public function testBuildContactDataCurrenciesArrayDefaultsToEmpty(): void
+    {
+        $builder = new ContactDataBuilder(['http']);
+
+        $contact = [
+            'http' => 'http://example.com',
+            'name' => 'Test User'
+        ];
+
+        $result = $builder->buildContactData($contact, 'accepted');
+
+        $this->assertArrayHasKey('currencies', $result);
+        $this->assertEquals([], $result['currencies']);
+    }
+
+    /**
+     * Test buildContactData keeps backward compatible flat fields alongside currencies array
+     */
+    public function testBuildContactDataKeepsBackwardCompatFlatFields(): void
+    {
+        $builder = new ContactDataBuilder(['http']);
+
+        $contact = [
+            'http' => 'http://example.com',
+            'name' => 'Test User',
+            'fee' => 0.25,
+            'credit_limit' => 500,
+            'currency' => 'GBP',
+            'currencies' => [
+                ['currency' => 'USD', 'fee' => 0.10, 'credit_limit' => 100.00, 'my_available_credit' => 50.00],
+                ['currency' => 'EUR', 'fee' => 0.15, 'credit_limit' => 80.00, 'my_available_credit' => null],
+            ]
+        ];
+
+        $result = $builder->buildContactData($contact, 'accepted');
+
+        // Flat fields preserved
+        $this->assertEquals(0.25, $result['fee']);
+        $this->assertEquals(500, $result['credit_limit']);
+        $this->assertEquals('GBP', $result['currency']);
+
+        // Currencies array also present
+        $this->assertArrayHasKey('currencies', $result);
+        $this->assertCount(2, $result['currencies']);
+        $this->assertEquals('USD', $result['currencies'][0]['currency']);
+        $this->assertEquals('EUR', $result['currencies'][1]['currency']);
+    }
+
+    /**
+     * Test buildEncodedContactData includes currencies in encoded output
+     */
+    public function testBuildEncodedContactDataIncludesCurrencies(): void
+    {
+        $builder = new ContactDataBuilder(['http']);
+
+        $contact = [
+            'http' => 'http://example.com',
+            'name' => 'Test User',
+            'currencies' => [
+                ['currency' => 'USD', 'fee' => 0.10, 'credit_limit' => 100.00, 'my_available_credit' => 50.00],
+                ['currency' => 'EUR', 'fee' => 0.15, 'credit_limit' => 80.00, 'my_available_credit' => null],
+            ]
+        ];
+
+        $encoded = $builder->buildEncodedContactData($contact, 'accepted');
+
+        $decoded = json_decode(html_entity_decode($encoded, ENT_QUOTES, 'UTF-8'), true);
+
+        $this->assertNotNull($decoded);
+        $this->assertArrayHasKey('currencies', $decoded);
+        $this->assertCount(2, $decoded['currencies']);
+        $this->assertEquals('USD', $decoded['currencies'][0]['currency']);
+        $this->assertEquals('EUR', $decoded['currencies'][1]['currency']);
+    }
 }

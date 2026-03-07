@@ -115,6 +115,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     private ?ContactCreditRepository $contactCreditRepository = null;
 
+    /**
+     * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository
+     */
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
+
     // =========================================================================
     // CONSTRUCTOR
     // =========================================================================
@@ -176,6 +181,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
     }
 
     /**
+     * Set the contact currency repository
+     *
+     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
+     */
+    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
+        $this->contactCurrencyRepository = $repo;
+    }
+
+    /**
      * Get the sync trigger
      *
      * @return SyncTriggerInterface|null The sync trigger or null if not set
@@ -214,14 +228,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * Create unique transaction ID for contact requests
      *
      * For contact transactions, amount is always 0, so txid is generated from:
-     * senderPublicKey + receiverPublicKey + 0 + time
+     * senderPublicKey + receiverPublicKey + 0 + currency + time
      *
      * @param string $receiverPublicKey The receiver's public key
+     * @param string $currency The currency for the contact transaction
      * @return string The generated transaction ID (SHA-256 hash)
      */
-    public function createContactTxid(string $receiverPublicKey): string {
+    public function createContactTxid(string $receiverPublicKey, string $currency = 'USD'): string {
         $time = $this->timeUtility->getCurrentMicrotime();
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $time);
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $currency . $time);
     }
 
     // =========================================================================
@@ -260,8 +275,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     public function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): ?string {
         // Use provided txid from receiver, or generate locally as fallback
+        // Currency is included in fallback hash to ensure unique txids per currency
         $time = $this->timeUtility->getCurrentMicrotime();
-        $txid = $txid ?? hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $time);
+        $txid = $txid ?? hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $currency . $time);
 
         // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($receiverAddress);
@@ -319,8 +335,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Generate time and txid on receiver side
         $time = $this->timeUtility->getCurrentMicrotime();
 
-        // Generate txid using sender's public key + receiver's public key + 0 + time
-        $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $time);
+        // Generate txid using sender's public key + receiver's public key + 0 + currency + time
+        // Currency is included to ensure unique txids when multiple currencies are added between the same parties
+        $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $currency . $time);
 
         // Build transaction data with status 'accepted' (pending user acceptance, will move to 'completed')
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($senderAddress);
@@ -486,6 +503,57 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
         // Check if contact is already an accepted contact
         if($contact['status'] === Constants::CONTACT_STATUS_ACCEPTED){
+            // Check for pending incoming currencies from the remote side
+            $pendingCurrencies = [];
+            if ($this->contactCurrencyRepository !== null) {
+                $pendingCurrencies = array_column(
+                    $this->contactCurrencyRepository->getPendingCurrencies($contact['pubkey_hash'], 'incoming'),
+                    'currency'
+                );
+            }
+
+            if (in_array($currency, $pendingCurrencies)) {
+                // Accepting a pending incoming currency request from the remote side
+                $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'incoming');
+                $this->contactCurrencyRepository->updateCurrencyConfig($contact['pubkey_hash'], $currency, [
+                    'fee_percent' => (int) $fee,
+                    'credit_limit' => (int) $credit,
+                ], 'incoming');
+
+                // Create outgoing entry as accepted (mutual acceptance)
+                if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
+                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                        $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'accepted', 'outgoing'
+                    );
+                } else {
+                    $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'outgoing');
+                }
+
+                // Insert initial balance and credit entries for the new currency
+                $this->balanceRepository->insertInitialContactBalances($contact['pubkey'], $currency);
+                if ($this->contactCreditRepository !== null) {
+                    try {
+                        $this->contactCreditRepository->createInitialCredit($contact['pubkey'], $currency);
+                    } catch (\Exception $e) {
+                        Logger::getInstance()->warning("Failed to create initial credit for new currency", [
+                            'currency' => $currency,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+
+                // Send acceptance notification so remote side marks their outgoing currency as accepted
+                // Use buildContactIsAccepted (not buildCreateRequest) to avoid triggering a new contact tx on the remote
+                $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency);
+                $messageId = 'currency-accept-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+                $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
+
+                $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                $contactData['currency'] = $currency;
+                $output->success("Accepted currency " . $currency . " for contact " . $address, $contactData, "Currency accepted");
+                return;
+            }
+
             $output->error("Contact " . $address . " already exists ", ErrorCodes::CONTACT_EXISTS, 409, ['contact' => $contactData]);
         }
         // Check if contact was blocked
@@ -529,7 +597,74 @@ class ContactSyncService implements ContactSyncServiceInterface {
         elseif($contact['status'] === Constants::CONTACT_STATUS_PENDING){
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
-                // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
+                // Check if user is adding a new currency to their pending request
+                $currencyAlreadyPending = $this->contactCurrencyRepository !== null
+                    && $this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing');
+
+                if (!$currencyAlreadyPending) {
+                    // Track the new outgoing currency request in contact_currencies
+                    if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                            );
+                        }
+                    }
+
+                    // Re-send the contact request with updated currency
+                    $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                    $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+                    $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
+                    $responseData = $sendResult['response'];
+
+                    if (isset($responseData['status']) && $responseData['status'] === Constants::STATUS_ACCEPTED) {
+                        // Currencies now match on the remote side — mutual accept
+                        $senderPublicKey = $responseData['senderPublicKey'];
+                        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+                        // Store any additional addresses from response
+                        if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                        }
+
+                        $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        // Ensure contact transaction exists
+                        if (!$this->contactTransactionExists($senderPublicKey)) {
+                            $txid = $responseData['txid'] ?? null;
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                        }
+                        $this->completeReceivedContactTransaction($senderPublicKey);
+
+                        if ($this->messageDeliveryService !== null) {
+                            $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                        }
+
+                        // Mark outgoing currency as accepted (remote auto-accepted)
+                        if ($this->contactCurrencyRepository !== null) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'outgoing');
+                        }
+
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $contactData['currency'] = $currency;
+                        $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (currency updated to " . $currency . ")");
+                    } else {
+                        // Response is "received" — create the sender-side contact transaction
+                        // using the txid from the receiver to ensure both sides match
+                        if (isset($responseData['txid'])) {
+                            $senderPublicKey = $responseData['senderPublicKey'] ?? $contact['pubkey'];
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $responseData['txid']);
+                        }
+
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                        $contactData['currency'] = $currency;
+                        $output->success("Contact request updated to " . $currency . ", awaiting response from " . $address, $contactData, "Currency updated");
+                    }
+                    return;
+                }
+
+                // Same currency — try resyncing
                 // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
                 $syncService = $this->requireSyncTrigger();
                 $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
@@ -550,45 +685,128 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $output->info("Contact request already sent, awaiting response from " . $address, $contactData);
                 }
             } else{
-                // If contact already exists with an address, it's a contact request, skip sending a message
-                if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
-                    // Generate recipient signature for dual-signature protocol
-                    $recipientSig = $this->generateAndStoreContactRecipientSignature($contact['pubkey']);
-
-                    // Send message of successful contact acceptance back to original contact requester with tracking
-                    // Message ID format: accept-{hash} (message_type 'contact' provides context)
-                    // IMPORTANT: Use sync delivery (async=false) to ensure the original requester updates
-                    // their contact status to 'accepted' before we return success. This prevents race conditions
-                    // when multiple contacts are added in rapid succession.
-                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig);
-                    $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
-                    $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false); // sync delivery
-
-                    // Log if acceptance message delivery failed
-                    if (!$sendResult['success']) {
-                        Logger::getInstance()->warning("Contact acceptance message delivery failed", [
-                            'recipient_address' => $address,
-                            'message_id' => $messageId,
-                            'error' => $sendResult['tracking']['error'] ?? 'unknown'
-                        ]);
-                    }
-
-                    // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
-                    // The acceptance message was sent and our local DB was updated (acceptContact above)
-                    // Stage progression: pending -> sent -> received (from transport) -> inserted (local) -> completed
-                    if ($sendResult['success'] && $this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
-                    }
-
-                    // Complete the received contact transaction (update status from 'accepted' to 'completed')
-                    $this->completeReceivedContactTransaction($contact['pubkey']);
-
-                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
-                    $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+                // Accepting an incoming contact request (they sent us a request first, name=null)
+                // Look up pending incoming currencies from contact_currencies for this contact
+                $pendingIncomingCurrencies = [];
+                if ($this->contactCurrencyRepository !== null) {
+                    $pendingIncomingCurrencies = array_column(
+                        $this->contactCurrencyRepository->getPendingCurrencies($contact['pubkey_hash'], 'incoming'),
+                        'currency'
+                    );
                 }
-                else {
-                    $output->error("Failed to accept contact request from " . $address, ErrorCodes::ACCEPT_FAILED, 500, ['contact' => $contactData]);
-                    return;
+
+                // Check if user's currency matches a pending incoming currency request
+                $currencyMatches = in_array($currency, $pendingIncomingCurrencies);
+
+                if ($currencyMatches) {
+                    // Currency matches! Accept the contact and the currency
+                    if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
+                        // Update contact_currencies status from pending to accepted (incoming direction)
+                        if ($this->contactCurrencyRepository !== null) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'incoming');
+                            $this->contactCurrencyRepository->updateCurrencyConfig($contact['pubkey_hash'], $currency, [
+                                'fee_percent' => (int) $fee,
+                                'credit_limit' => (int) $credit,
+                            ], 'incoming');
+                            // Store user's outgoing entry as accepted (mutual match)
+                            if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
+                                $this->contactCurrencyRepository->insertCurrencyConfig(
+                                    $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'accepted', 'outgoing'
+                                );
+                            } else {
+                                $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'outgoing');
+                            }
+                        }
+                        // Generate recipient signature for dual-signature protocol
+                        $recipientSig = $this->generateAndStoreContactRecipientSignature($contact['pubkey']);
+
+                        // Send message of successful contact acceptance back to original contact requester with tracking
+                        // Include the accepted currency so the remote can mark it as accepted
+                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency);
+                        $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
+                        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false); // sync delivery
+
+                        // Log if acceptance message delivery failed
+                        if (!$sendResult['success']) {
+                            Logger::getInstance()->warning("Contact acceptance message delivery failed", [
+                                'recipient_address' => $address,
+                                'message_id' => $messageId,
+                                'error' => $sendResult['tracking']['error'] ?? 'unknown'
+                            ]);
+                        }
+
+                        if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                            $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                        }
+
+                        // Complete the received contact transaction (update status from 'accepted' to 'completed')
+                        $this->completeReceivedContactTransaction($contact['pubkey']);
+
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+                    }
+                    else {
+                        $output->error("Failed to accept contact request from " . $address, ErrorCodes::ACCEPT_FAILED, 500, ['contact' => $contactData]);
+                        return;
+                    }
+                } else {
+                    // Currency mismatch — don't accept contact, send new contact request with user's currency
+                    // Set the name so the contact appears in the contacts grid as "Pending Response"
+                    // It will also appear in "Pending Contact Requests" section due to pending_currencies
+                    $this->contactRepository->updateContactFields($contact['pubkey'], [
+                        'name' => $name,
+                    ]);
+
+                    // Store outgoing currency as pending
+                    if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                            );
+                        }
+                    }
+
+                    // Send a contact creation request to remote with user's currency
+                    $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                    $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+                    $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
+                    $responseData = $sendResult['response'];
+
+                    // Check if remote auto-accepted (they already have matching outgoing currency)
+                    if (isset($responseData['status']) && $responseData['status'] === Constants::STATUS_ACCEPTED) {
+                        $senderPublicKey = $responseData['senderPublicKey'];
+                        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+                        if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                            $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                        }
+
+                        $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
+                        $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                        if (!$this->contactTransactionExists($senderPublicKey)) {
+                            $txid = $responseData['txid'] ?? null;
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                        }
+                        $this->completeReceivedContactTransaction($senderPublicKey);
+
+                        if ($this->messageDeliveryService !== null) {
+                            $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                        }
+
+                        // Mark outgoing currency as accepted
+                        if ($this->contactCurrencyRepository !== null) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($contact['pubkey_hash'], $currency, 'accepted', 'outgoing');
+                        }
+
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (currency " . $currency . ")");
+                    } else {
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                        $contactData['currency'] = $currency;
+                        $pendingInfo = !empty($pendingIncomingCurrencies) ? ' (pending incoming: ' . implode(', ', $pendingIncomingCurrencies) . ')' : '';
+                        $output->success("Contact request sent with currency " . $currency . ", awaiting acceptance" . $pendingInfo, $contactData, "Contact request sent");
+                    }
                 }
             }
         }
@@ -618,8 +836,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'currency' => $currency
         ];
 
-        // Build the payload array
-        $payload = $this->contactPayload->buildCreateRequest($address);
+        // Build the payload array (include currency so receiver knows sender's preference)
+        $payload = $this->contactPayload->buildCreateRequest($address, $currency);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
         // Generate unique message ID for contact creation tracking
@@ -648,37 +866,129 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                 }
 
-                // If contact is pending without name (we received their request), accept with our provided values
+                // If contact is pending without name (we received their request), check currency match
                 if ($existingLocalContact['status'] === Constants::CONTACT_STATUS_PENDING && $existingLocalContact['name'] === null) {
-                    // Accept the contact with the user-provided name/fee/credit values
-                    if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
-                        // Generate recipient signature for dual-signature protocol
-                        $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+                    // Look up pending incoming currencies for this contact
+                    $pendingIncomingCurrencies = [];
+                    if ($this->contactCurrencyRepository !== null) {
+                        $pendingIncomingCurrencies = array_column(
+                            $this->contactCurrencyRepository->getPendingCurrencies($senderPublicKeyHash, 'incoming'),
+                            'currency'
+                        );
+                    }
 
-                        // Send acceptance message back to them
-                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig);
-                        $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
-                        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
+                    $currencyMatches = in_array($currency, $pendingIncomingCurrencies);
 
-                        if (!$sendResult['success']) {
-                            Logger::getInstance()->warning("Contact acceptance message delivery failed", [
-                                'recipient_address' => $address,
-                                'message_id' => $acceptMessageId,
-                                'error' => $sendResult['tracking']['error'] ?? 'unknown'
-                            ]);
+                    if ($currencyMatches) {
+                        // Currency matches — accept the contact
+                        if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                            // Update currency statuses
+                            if ($this->contactCurrencyRepository !== null) {
+                                $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
+                                $this->contactCurrencyRepository->updateCurrencyConfig($senderPublicKeyHash, $currency, [
+                                    'fee_percent' => (int) $fee,
+                                    'credit_limit' => (int) $credit,
+                                ], 'incoming');
+                                if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                                        $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'accepted', 'outgoing'
+                                    );
+                                } else {
+                                    $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+                                }
+                            }
+
+                            // Generate recipient signature for dual-signature protocol
+                            $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                            // Send acceptance message back with currency info
+                            $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency);
+                            $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
+                            $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
+
+                            if (!$sendResult['success']) {
+                                Logger::getInstance()->warning("Contact acceptance message delivery failed", [
+                                    'recipient_address' => $address,
+                                    'message_id' => $acceptMessageId,
+                                    'error' => $sendResult['tracking']['error'] ?? 'unknown'
+                                ]);
+                            }
+
+                            // Complete the received contact transaction
+                            $this->completeReceivedContactTransaction($senderPublicKey);
+
+                            $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                            $contactData['pubkey'] = $senderPublicKey;
+                            $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+                            return;
+                        }
+                    } else {
+                        // Currency mismatch — update contact name but keep pending
+                        $this->contactRepository->updateContactFields($senderPublicKey, [
+                            'name' => $name,
+                        ]);
+
+                        // Store outgoing currency as pending
+                        if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                            if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                                $this->contactCurrencyRepository->insertCurrencyConfig(
+                                    $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                );
+                            }
                         }
 
-                        // Complete the received contact transaction
-                        $this->completeReceivedContactTransaction($senderPublicKey);
-
-                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                         $contactData['pubkey'] = $senderPublicKey;
-                        $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+                        $pendingInfo = !empty($pendingIncomingCurrencies) ? ' (pending incoming: ' . implode(', ', $pendingIncomingCurrencies) . ')' : '';
+                        $output->success("Contact request sent with currency " . $currency . ", awaiting acceptance" . $pendingInfo, $contactData, "Contact request sent");
                         return;
                     }
                 }
 
-                // Contact exists with name or non-pending status - just report the update
+                // Contact exists with name or non-pending status
+                // If response is DELIVERY_RECEIVED, the receiver stored our new currency request
+                // We need to create the outgoing currency entry and contact transaction for this currency
+                if ($responseData['status'] === Constants::DELIVERY_RECEIVED && !empty($currency)) {
+                    // Store outgoing currency as pending (or accepted if contact is already accepted)
+                    $currencyStatus = ($existingLocalContact['status'] === Constants::CONTACT_STATUS_ACCEPTED) ? 'accepted' : 'pending';
+                    if ($this->contactCurrencyRepository !== null) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, $currencyStatus, 'outgoing'
+                            );
+                        }
+                    }
+
+                    // Initialize balance and credit for the new currency
+                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+                    if ($this->contactCreditRepository !== null) {
+                        try {
+                            $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
+                        } catch (\Exception $e) {
+                            // Credit may already exist
+                        }
+                    }
+
+                    // Create contact transaction for this currency
+                    $txid = $responseData['txid'] ?? null;
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+
+                    // Store signature data
+                    $signingData = $sendResult['signing_data'] ?? null;
+                    if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                        $this->transactionRepository->updateSignatureData(
+                            $txid,
+                            $signingData['signature'],
+                            $signingData['nonce']
+                        );
+                    }
+
+                    $contactData['status'] = $existingLocalContact['status'];
+                    $contactData['pubkey'] = $senderPublicKey;
+                    $output->success("Currency " . $currency . " added to contact " . $name, $contactData, "New currency added to existing contact");
+                    return;
+                }
+
                 $contactData['status'] = $existingLocalContact['status'];
                 $contactData['pubkey'] = $senderPublicKey;
                 $output->success("Contact address updated for " . $name, $contactData, "New address type added to existing contact");
@@ -686,7 +996,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             }
 
             // Contact request was received (initial insert on their end as pending, awaiting acceptance)
-            if($responseData['status'] === 'received'){
+            if($responseData['status'] === Constants::DELIVERY_RECEIVED){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
@@ -697,6 +1007,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    // Track outgoing currency request in contact_currencies
+                    // This records that WE requested this currency from them (direction=outgoing)
+                    if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                        $this->contactCurrencyRepository->insertCurrencyConfig(
+                            $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                        );
+                    }
 
                     // Insert contact transaction (first transaction between users, amount=0)
                     // Use the txid from the response to ensure both parties have matching txids
@@ -774,7 +1092,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // we are known under a different address or transport type
             // Note: If contact existed locally, we would have returned early above
             // So reaching here means contact was deleted locally - need to re-insert and sync
-            elseif($responseData['status'] === 'updated'){
+            elseif($responseData['status'] === Constants::DELIVERY_UPDATED){
                 $senderAddress = $responseData['senderAddress'];
                 // Contact was deleted locally - re-insert and sync
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
@@ -920,8 +1238,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 }
             }
             // Our contact request could not be processed on their end
-            elseif($responseData['status'] === 'rejection'){
-                $output->error("Contact request rejected by " . $address . " : " . ($responseData['reason'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
+            elseif($responseData['status'] === Constants::STATUS_REJECTED){
+                $output->error("Contact request rejected by " . $address . " : " . ($responseData['message'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
                     'contact' => $contactData,
                     'response' => $responseData
                 ]);
@@ -988,6 +1306,18 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Extract sender's additional addresses for storage (allows fallback transport)
         $senderAddresses = $request['senderAddresses'] ?? [];
 
+        // Extract sender's preferred currency (falls back to receiver's default)
+        $currency = $request['currency'] ?? $this->currentUser->getDefaultCurrency();
+
+        // Validate currency against allowed currencies — auto-reject if not allowed
+        $allowedCurrencies = $this->currentUser->getAllowedCurrencies();
+        if (!in_array($currency, $allowedCurrencies)) {
+            return $this->contactPayload->buildRejection(
+                $senderAddress,
+                'Currency ' . $currency . ' is not accepted by this node'
+            );
+        }
+
         // Get our own (the responder's) addresses to include in response
         // This allows the requester to store all our known addresses
         $myAddresses = $this->currentUser->getUserLocaters();
@@ -1004,30 +1334,46 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Check if WE initiated a request to them (name is set when we sent the request)
-                    if ($existingContact['name'] !== null) {
-                        // Mutual request: we sent them a request and they sent us one
-                        // Auto-accept using the values WE set when we sent our request
+                    // AND currencies must match — check contact_currencies for outgoing currency match
+                    $currencyMatchesOutgoing = false;
+                    if ($this->contactCurrencyRepository !== null && $existingContact['name'] !== null) {
+                        $currencyMatchesOutgoing = $this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing');
+                    }
+
+                    if ($currencyMatchesOutgoing) {
+                        // Mutual request with matching currency: auto-accept
                         if (!empty($senderAddresses) && is_array($senderAddresses)) {
                             $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                         }
 
+                        // Get fee/credit from our outgoing currency config
+                        $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
+                        $fee = (float) ($outgoingConfig['fee_percent'] ?? 0);
+                        $credit = (float) ($outgoingConfig['credit_limit'] ?? 0);
+
                         $this->acceptContact(
                             $senderPublicKey,
                             $existingContact['name'],
-                            (float)$existingContact['fee_percent'],
-                            (float)$existingContact['credit_limit'],
-                            $existingContact['currency']
+                            $fee,
+                            $credit,
+                            $currency
                         );
+
+                        // Mark matching currencies as accepted in contact_currencies
+                        $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+                        if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
+                        }
 
                         $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                        // Ensure we have a received contact transaction
+                        // Ensure we have a received contact transaction for this specific currency
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                            $senderPublicKeyHash
+                            $senderPublicKeyHash, $currency
                         );
                         $txid = null;
                         if (!$hasContactTx) {
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                             $this->completeReceivedContactTransaction($senderPublicKey);
                         } else {
                             $this->completeReceivedContactTransaction($senderPublicKey);
@@ -1037,31 +1383,88 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Contact exists as pending with name=null (they sent us a request first)
-                    // Check if we have the contact transaction
-                    $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                        $senderPublicKeyHash
+                    // OR: name is set but currencies differ (mutual request with mismatched terms)
+
+                    // Store the remote's currency request so the GUI can inform the user
+                    if ($this->contactCurrencyRepository !== null) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming'
+                            );
+                        }
+                    }
+
+                    // Check if we have a contact transaction for this specific currency
+                    $hasContactTxForCurrency = $this->transactionContactRepository->contactTransactionExistsForReceiver(
+                        $senderPublicKeyHash, $currency
                     );
 
-                    if (!$hasContactTx) {
+                    if (!$hasContactTxForCurrency) {
                         // Store any additional addresses from senderAddresses if present
                         if (!empty($senderAddresses) && is_array($senderAddresses)) {
                             $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                         }
-                        // Create the contact transaction on our side (they already have one on their end)
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                        // Create the contact transaction on our side for this currency
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                         // Return 'received' with txid so sender can sync
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
 
-                    // Contact exists as pending with contact transaction - treat as re-confirmation
+                    // Contact exists as pending with contact transaction for this currency - treat as re-confirmation
                     // Return 'received' so sender handles it like a new contact (no sync attempt)
                     // Don't include other addresses for pending contacts (privacy)
                     return $this->contactPayload->buildReceived($senderAddress);
                 }
-                // Contact is accepted or other status - return warning (already exists)
+                // Contact is accepted or other status
                 // Store any additional addresses from senderAddresses if present (re-add scenario)
                 if (!empty($senderAddresses) && is_array($senderAddresses)) {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
+                }
+
+                // Check if this is a new currency request for an existing accepted contact
+                $existingContactForCurrency = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContactForCurrency
+                    && $existingContactForCurrency['status'] === Constants::CONTACT_STATUS_ACCEPTED
+                    && $this->contactCurrencyRepository !== null
+                    && !$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')
+                ) {
+                    // Check if we also have an outgoing pending request for the same currency
+                    // If so, this is a mutual/cross-request — auto-accept both directions
+                    if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                        $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
+                        // Insert incoming as accepted using our outgoing fee/credit values
+                        $this->contactCurrencyRepository->insertCurrencyConfig(
+                            $senderPublicKeyHash, $currency,
+                            (int)($outgoingConfig['fee_percent'] ?? 0),
+                            (int)($outgoingConfig['credit_limit'] ?? 0),
+                            'accepted', 'incoming'
+                        );
+                        // Mark outgoing as accepted too
+                        $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+
+                        // Ensure balance and credit entries exist for the new currency
+                        $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+                        if ($this->contactCreditRepository !== null) {
+                            try {
+                                $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
+                            } catch (\Exception $e) {
+                                // Credit may already exist
+                            }
+                        }
+
+                        // Create contact transaction for this currency so both sides have matching per-currency chains
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+
+                        return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
+                    }
+
+                    // New currency from existing contact — insert as pending incoming (requires user acceptance)
+                    $this->contactCurrencyRepository->insertCurrencyConfig($senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming');
+
+                    // Create contact transaction for this currency
+                    $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+
+                    return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                 }
 
                 // Generate recipient signature for dual-signature protocol (re-add scenario)
@@ -1088,26 +1491,42 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Check if WE initiated a request to them (name is set when we sent the request)
-                    if ($existingContact['name'] !== null) {
-                        // Mutual request: we sent them a request and they sent us one (via different address)
-                        // Auto-accept using the values WE set when we sent our request
+                    // AND currencies must match — check contact_currencies for outgoing currency match
+                    $currencyMatchesOutgoing = false;
+                    if ($this->contactCurrencyRepository !== null && $existingContact['name'] !== null) {
+                        $currencyMatchesOutgoing = $this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing');
+                    }
+
+                    if ($currencyMatchesOutgoing) {
+                        // Mutual request with matching currency: auto-accept
+                        // Get fee/credit from our outgoing currency config
+                        $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
+                        $fee = (float) ($outgoingConfig['fee_percent'] ?? 0);
+                        $credit = (float) ($outgoingConfig['credit_limit'] ?? 0);
+
                         $this->acceptContact(
                             $senderPublicKey,
                             $existingContact['name'],
-                            (float)$existingContact['fee_percent'],
-                            (float)$existingContact['credit_limit'],
-                            $existingContact['currency']
+                            $fee,
+                            $credit,
+                            $currency
                         );
+
+                        // Mark matching currencies as accepted in contact_currencies
+                        $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'outgoing');
+                        if ($this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
+                            $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted', 'incoming');
+                        }
 
                         $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                        // Ensure we have a received contact transaction
+                        // Ensure we have a received contact transaction for this specific currency
                         $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                            $senderPublicKeyHash
+                            $senderPublicKeyHash, $currency
                         );
                         $txid = null;
                         if (!$hasContactTx) {
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                             $this->completeReceivedContactTransaction($senderPublicKey);
                         } else {
                             $this->completeReceivedContactTransaction($senderPublicKey);
@@ -1117,14 +1536,25 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Contact is pending with name=null (they sent us a request first)
-                    // Check if we have the contact transaction
+                    // OR: name is set but currencies differ (mutual request with mismatched terms)
+
+                    // Store the remote's currency request so the GUI can inform the user
+                    if ($this->contactCurrencyRepository !== null) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'incoming')) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming'
+                            );
+                        }
+                    }
+
+                    // Check if we have a contact transaction for this specific currency
                     $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
-                        $senderPublicKeyHash
+                        $senderPublicKeyHash, $currency
                     );
 
                     if (!$hasContactTx) {
-                        // Create the contact transaction on our side
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                        // Create the contact transaction on our side for this currency
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
 
@@ -1160,16 +1590,86 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                 }
 
+                // Store the sender's requested currency as a pending incoming request
+                // This preserves which currency they want so the receiver can accept/reject per-currency
+                if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                        $senderPublicKeyHash, $currency, 0, 0, 'pending', 'incoming'
+                    );
+                }
+
                 // Insert received contact transaction with status 'accepted' (pending user acceptance)
                 // This creates the contact transaction on the receiver's side
                 // Receiver generates txid and includes it in response for sender to use
-                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
                 return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
             } else{
                 // Unable to insert contact
                 return $this->contactPayload->buildRejection($senderAddress);
             }
         }
+    }
+
+    // =========================================================================
+    // PUBLIC HELPERS
+    // =========================================================================
+
+    /**
+     * Send a currency acceptance notification to a remote contact
+     *
+     * Called from the GUI when a user accepts a pending incoming currency.
+     * Notifies the remote side so they can mark their outgoing currency as accepted.
+     * Also upgrades the contact status to 'accepted' if it was still 'pending'.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency The currency that was accepted
+     * @return bool True if notification was sent successfully
+     */
+    public function sendCurrencyAcceptanceNotification(string $pubkeyHash, string $currency): bool {
+        // Look up the contact's address
+        $addresses = $this->addressRepository->lookupByPubkeyHash($pubkeyHash);
+        $address = $addresses['http'] ?? $addresses['https'] ?? $addresses['tor'] ?? null;
+        if ($address === null) {
+            Logger::getInstance()->warning("Cannot send currency acceptance: no address found", [
+                'pubkey_hash' => substr($pubkeyHash, 0, 16),
+                'currency' => $currency,
+            ]);
+            return false;
+        }
+
+        // Get the contact's pubkey for status update
+        $pubkey = $this->contactRepository->getContactPubkeyFromHash($pubkeyHash);
+        if ($pubkey === null) {
+            return false;
+        }
+        $contact = $this->contactRepository->getContactByPubkey($pubkey);
+        if ($contact === null) {
+            return false;
+        }
+
+        // Build and send the acceptance message with currency info
+        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency);
+        $messageId = 'currency-accept-' . hash('sha256', $address . $pubkeyHash . $currency . $this->timeUtility->getCurrentMicrotime());
+        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
+
+        if (!$sendResult['success']) {
+            Logger::getInstance()->warning("Currency acceptance notification delivery failed", [
+                'recipient_address' => $address,
+                'currency' => $currency,
+                'message_id' => $messageId,
+                'error' => $sendResult['tracking']['error'] ?? 'unknown'
+            ]);
+        }
+
+        // If contact is still pending, upgrade to accepted (we now have a mutually accepted currency)
+        if ($contact['status'] === Constants::CONTACT_STATUS_PENDING) {
+            $this->contactRepository->updateStatus($contact['pubkey'], Constants::STATUS_ACCEPTED);
+
+            // Complete the received contact transaction if it exists
+            $this->completeReceivedContactTransaction($contact['pubkey']);
+        }
+
+        return $sendResult['success'];
     }
 
     // =========================================================================
@@ -1197,7 +1697,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             return null;
         }
 
-        $recipientSig = $this->contactPayload->generateRecipientSignature($txData['signature_nonce']);
+        $recipientSig = $this->contactPayload->generateRecipientSignature($txData['signature_nonce'], $txData['currency'] ?? null);
 
         if ($recipientSig === null) {
             return null;
@@ -1232,6 +1732,22 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     Logger::getInstance()->warning("Failed to create initial contact credit entry", [
                         'error' => $e->getMessage()
                     ]);
+                }
+            }
+
+            // Ensure the accepted currency is tracked in contact_currencies
+            if ($this->contactCurrencyRepository !== null) {
+                $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+                if (!$this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency, 'incoming')) {
+                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                        $pubkeyHash, $currency, (int) $fee, (int) $credit, 'accepted', 'incoming'
+                    );
+                } else {
+                    $this->contactCurrencyRepository->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'incoming');
+                    $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, [
+                        'fee_percent' => (int) $fee,
+                        'credit_limit' => (int) $credit,
+                    ], 'incoming');
                 }
             }
 

@@ -220,6 +220,24 @@ class SettingsController
             $settings['apiCorsAllowedOrigins'] = implode(',', $sanitizedOrigins);
         }
 
+        // Allowed Currencies — textarea (newline or comma-separated), each must have a conversion factor
+        if (isset($_POST['allowedCurrencies'])) {
+            $rawCurrencies = preg_split('/[\r\n,]+/', strtoupper($_POST['allowedCurrencies']), -1, PREG_SPLIT_NO_EMPTY);
+            $currencies = array_filter(array_map('trim', $rawCurrencies));
+            $currencyErrors = [];
+            foreach ($currencies as $c) {
+                $validation = InputValidator::validateAllowedCurrency($c);
+                if (!$validation['valid']) {
+                    $currencyErrors[] = "Invalid currency {$c}: " . $validation['error'];
+                }
+            }
+            if (!empty($currencyErrors)) {
+                $errors = array_merge($errors, $currencyErrors);
+            } else {
+                $settings['allowedCurrencies'] = implode(',', $currencies);
+            }
+        }
+
         // Backup & logging
         if (isset($_POST['backupRetentionCount'])) {
             $validation = InputValidator::validatePositiveInteger($_POST['backupRetentionCount'], 1);
