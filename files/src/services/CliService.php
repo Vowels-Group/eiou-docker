@@ -237,7 +237,7 @@ class CliService implements CliServiceInterface {
                     return;
                 }
                 $value = $validation['value'];
-            } elseif(strtolower($argv[2]) === 'maxp2pLevel'){
+            } elseif(strtolower($argv[2]) === 'maxp2plevel'){
                 $key = 'maxP2pLevel';
                 $validation = InputValidator::validateRequestLevel($argv[3]);
                 if (!$validation['valid']) {
@@ -281,6 +281,11 @@ class CliService implements CliServiceInterface {
                     $output->validationError('autoRefreshEnabled', 'Value must be true/false, on/off, yes/no, or 1/0');
                     return;
                 }
+            } elseif(strtolower($argv[2]) === 'autobackupenabled'){
+                $key = 'autoBackupEnabled';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'autoaccepttransaction'){
                 $key = 'autoAcceptTransaction';
                 $inputValue = strtolower($argv[3]);
@@ -476,29 +481,65 @@ class CliService implements CliServiceInterface {
             $this->displayCurrentSettings($output);
 
             // Prompt user for which setting they want to change
-            echo "Select the setting you want to change:\n";
+            echo "\nSelect the setting you want to change:\n";
+            echo "\n  Transaction Settings:\n";
             echo "\t1. Default currency\n";
             echo "\t2. Minimum fee amount\n";
             echo "\t3. Default fee percentage\n";
             echo "\t4. Maximum fee percentage\n";
             echo "\t5. Default credit limit\n";
+            echo "\n  P2P & Network:\n";
             echo "\t6. Maximum peer to peer Level\n";
             echo "\t7. Default peer to peer Expiration\n";
-            echo "\t8. Maximum lines of balance/transaction output\n";
+            echo "\t8. Direct transaction delivery expiration\n";
             echo "\t9. Default transport type\n";
-            echo "\t10. Hostname\n";
-            echo "\t11. Auto-refresh transactions\n";
-            echo "\t12. Auto-backup database\n";
+            echo "\t10. HTTP transport timeout\n";
+            echo "\t11. Tor transport timeout\n";
+            echo "\t12. Hostname\n";
             echo "\t13. Trusted proxy IPs\n";
             echo "\t14. Auto-accept P2P transactions\n";
-            echo "\t15. Direct transaction delivery expiration\n";
-            echo "\t16. Allowed currencies\n";
-            echo "\t0. Cancel\n";
+            echo "\n  Feature Toggles:\n";
+            echo "\t15. Display name\n";
+            echo "\t16. Auto-refresh transactions\n";
+            echo "\t17. Contact status pinging\n";
+            echo "\t18. Contact status sync on ping\n";
+            echo "\t19. Auto chain drop propose\n";
+            echo "\t20. Auto chain drop accept\n";
+            echo "\t21. API enabled\n";
+            echo "\t22. API CORS allowed origins\n";
+            echo "\t23. Rate limiting enabled\n";
+            echo "\n  Backup & Logging:\n";
+            echo "\t24. Auto-backup database\n";
+            echo "\t25. Backup retention count\n";
+            echo "\t26. Backup schedule hour\n";
+            echo "\t27. Backup schedule minute\n";
+            echo "\t28. Log level\n";
+            echo "\t29. Log max entries\n";
+            echo "\n  Data Retention:\n";
+            echo "\t30. Delivery retention days\n";
+            echo "\t31. DLQ retention days\n";
+            echo "\t32. Held TX retention days\n";
+            echo "\t33. RP2P retention days\n";
+            echo "\t34. Metrics retention days\n";
+            echo "\n  Rate Limiting:\n";
+            echo "\t35. P2P rate limit per minute\n";
+            echo "\t36. Rate limit max attempts\n";
+            echo "\t37. Rate limit window seconds\n";
+            echo "\t38. Rate limit block duration\n";
+            echo "\n  Display:\n";
+            echo "\t39. Maximum lines of balance/transaction output\n";
+            echo "\t40. Date format\n";
+            echo "\t41. Currency decimals\n";
+            echo "\t42. Recent transactions limit\n";
+            echo "\n  Currency Management:\n";
+            echo "\t43. Allowed currencies\n";
+            echo "\n\t0. Cancel\n";
 
             // Read user input
             $setting_choice = trim(fgets(STDIN));
 
             switch($setting_choice) {
+                // Transaction Settings
                 case '1':
                     echo "Enter new default currency (e.g., USD): ";
                     $key = 'defaultCurrency';
@@ -543,7 +584,6 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-
                 case '5':
                     echo "Enter new default credit limit: ";
                     $key = 'defaultCreditLimit';
@@ -555,7 +595,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-
+                // P2P & Network
                 case '6':
                     echo "Enter new maximum peer to peer Level: ";
                     $key = 'maxP2pLevel';
@@ -579,14 +619,14 @@ class CliService implements CliServiceInterface {
                     break;
 
                 case '8':
-                    echo "Enter new maximum of balance/transaction output lines to display (0 = unlimited): ";
-                    $key = 'maxOutput';
-                    $read = trim(fgets(STDIN));
-                    if (!is_numeric($read) || intval($read) < 0) {
-                        echo "Error: Max output must be a non-negative integer (0 = unlimited)\n";
+                    echo "Enter direct transaction delivery expiration in seconds (0 = no expiry, e.g., 3600): ";
+                    $key = 'directTxExpiration';
+                    $rawInput = trim(fgets(STDIN));
+                    if (!is_numeric($rawInput) || intval($rawInput) < 0) {
+                        echo "Error: Must be a non-negative integer (0 = no expiry)\n";
                         return;
                     }
-                    $value = intval($read);
+                    $value = intval($rawInput);
                     break;
 
                 case '9':
@@ -596,9 +636,9 @@ class CliService implements CliServiceInterface {
                     break;
 
                 case '10':
-                    echo "Enter new hostname (e.g. http://httpA): ";
-                    $key = 'hostname';
-                    $validation = InputValidator::validateHostname(strtolower(trim(fgets(STDIN))));
+                    echo "Enter HTTP transport timeout in seconds (5-120): ";
+                    $key = 'httpTransportTimeoutSeconds';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 5, 120, 'HTTP timeout');
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
                         return;
@@ -607,31 +647,25 @@ class CliService implements CliServiceInterface {
                     break;
 
                 case '11':
-                    echo "Enable auto-refresh for pending transactions? (yes/no): ";
-                    $key = 'autoRefreshEnabled';
-                    $inputValue = strtolower(trim(fgets(STDIN)));
-                    if ($inputValue === 'yes' || $inputValue === 'y' || $inputValue === 'true' || $inputValue === '1' || $inputValue === 'on') {
-                        $value = true;
-                    } elseif ($inputValue === 'no' || $inputValue === 'n' || $inputValue === 'false' || $inputValue === '0' || $inputValue === 'off') {
-                        $value = false;
-                    } else {
-                        echo "Error: Please enter yes or no\n";
+                    echo "Enter Tor transport timeout in seconds (10-300): ";
+                    $key = 'torTransportTimeoutSeconds';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 10, 300, 'Tor timeout');
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
                         return;
                     }
+                    $value = $validation['value'];
                     break;
 
                 case '12':
-                    echo "Enable automatic daily database backups? (yes/no): ";
-                    $key = 'autoBackupEnabled';
-                    $inputValue = strtolower(trim(fgets(STDIN)));
-                    if ($inputValue === 'yes' || $inputValue === 'y' || $inputValue === 'true' || $inputValue === '1' || $inputValue === 'on') {
-                        $value = true;
-                    } elseif ($inputValue === 'no' || $inputValue === 'n' || $inputValue === 'false' || $inputValue === '0' || $inputValue === 'off') {
-                        $value = false;
-                    } else {
-                        echo "Error: Please enter yes or no\n";
+                    echo "Enter new hostname (e.g. http://httpA): ";
+                    $key = 'hostname';
+                    $validation = InputValidator::validateHostname(strtolower(trim(fgets(STDIN))));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
                         return;
                     }
+                    $value = $validation['value'];
                     break;
 
                 case '13':
@@ -648,29 +682,324 @@ class CliService implements CliServiceInterface {
                 case '14':
                     echo "Auto-accept P2P transactions when route found? (yes/no): ";
                     $key = 'autoAcceptTransaction';
-                    $inputValue = strtolower(trim(fgets(STDIN)));
-                    if ($inputValue === 'yes' || $inputValue === 'y' || $inputValue === 'true' || $inputValue === '1' || $inputValue === 'on') {
-                        $value = true;
-                    } elseif ($inputValue === 'no' || $inputValue === 'n' || $inputValue === 'false' || $inputValue === '0' || $inputValue === 'off') {
-                        $value = false;
-                    } else {
-                        echo "Error: Please enter yes or no\n";
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
                         return;
                     }
+                    $value = $validation['value'];
                     break;
 
+                // Feature Toggles
                 case '15':
-                    echo "Enter direct transaction delivery expiration in seconds (0 = no expiry, e.g., 3600): ";
-                    $key = 'directTxExpiration';
+                    echo "Enter display name for this node: ";
+                    $key = 'name';
                     $rawInput = trim(fgets(STDIN));
-                    if (!is_numeric($rawInput) || intval($rawInput) < 0) {
-                        echo "Error: Must be a non-negative integer (0 = no expiry)\n";
+                    if (empty($rawInput)) {
+                        echo "Error: Display name cannot be empty\n";
                         return;
                     }
-                    $value = intval($rawInput);
+                    $value = $rawInput;
                     break;
 
                 case '16':
+                    echo "Enable auto-refresh for pending transactions? (yes/no): ";
+                    $key = 'autoRefreshEnabled';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '17':
+                    echo "Enable contact status pinging? (yes/no): ";
+                    $key = 'contactStatusEnabled';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '18':
+                    echo "Enable contact status sync on ping? (yes/no): ";
+                    $key = 'contactStatusSyncOnPing';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '19':
+                    echo "Enable auto chain drop propose? (yes/no): ";
+                    $key = 'autoChainDropPropose';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '20':
+                    echo "Enable auto chain drop accept? (yes/no): ";
+                    $key = 'autoChainDropAccept';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '21':
+                    echo "Enable API? (yes/no): ";
+                    $key = 'apiEnabled';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '22':
+                    echo "Enter API CORS allowed origins (empty to clear): ";
+                    $key = 'apiCorsAllowedOrigins';
+                    $value = trim(fgets(STDIN));
+                    break;
+
+                case '23':
+                    echo "Enable rate limiting? (yes/no): ";
+                    $key = 'rateLimitEnabled';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                // Backup & Logging
+                case '24':
+                    echo "Enable automatic daily database backups? (yes/no): ";
+                    $key = 'autoBackupEnabled';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '25':
+                    echo "Enter backup retention count (minimum 1): ";
+                    $key = 'backupRetentionCount';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '26':
+                    echo "Enter backup schedule hour (0-23): ";
+                    $key = 'backupCronHour';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 23, 'Backup hour');
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '27':
+                    echo "Enter backup schedule minute (0-59): ";
+                    $key = 'backupCronMinute';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 59, 'Backup minute');
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '28':
+                    echo "Enter log level (debug, info, warning, error): ";
+                    $key = 'logLevel';
+                    $validation = InputValidator::validateLogLevel(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '29':
+                    echo "Enter log max entries (minimum 10): ";
+                    $key = 'logMaxEntries';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 10);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                // Data Retention
+                case '30':
+                    echo "Enter delivery retention days (minimum 1): ";
+                    $key = 'cleanupDeliveryRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '31':
+                    echo "Enter DLQ retention days (minimum 1): ";
+                    $key = 'cleanupDlqRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '32':
+                    echo "Enter held TX retention days (minimum 1): ";
+                    $key = 'cleanupHeldTxRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '33':
+                    echo "Enter RP2P retention days (minimum 1): ";
+                    $key = 'cleanupRp2pRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '34':
+                    echo "Enter metrics retention days (minimum 1): ";
+                    $key = 'cleanupMetricsRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                // Rate Limiting
+                case '35':
+                    echo "Enter P2P rate limit per minute (minimum 1): ";
+                    $key = 'p2pRateLimitPerMinute';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '36':
+                    echo "Enter rate limit max attempts (minimum 1): ";
+                    $key = 'rateLimitMaxAttempts';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '37':
+                    echo "Enter rate limit window in seconds (minimum 1): ";
+                    $key = 'rateLimitWindowSeconds';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '38':
+                    echo "Enter rate limit block duration in seconds (minimum 1): ";
+                    $key = 'rateLimitBlockSeconds';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                // Display
+                case '39':
+                    echo "Enter new maximum of balance/transaction output lines to display (0 = unlimited): ";
+                    $key = 'maxOutput';
+                    $read = trim(fgets(STDIN));
+                    if (!is_numeric($read) || intval($read) < 0) {
+                        echo "Error: Max output must be a non-negative integer (0 = unlimited)\n";
+                        return;
+                    }
+                    $value = intval($read);
+                    break;
+
+                case '40':
+                    echo "Enter date format (e.g., Y-m-d H:i:s): ";
+                    $key = 'displayDateFormat';
+                    $validation = InputValidator::validateDateFormat(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '41':
+                    echo "Enter currency decimals (0-8): ";
+                    $key = 'displayCurrencyDecimals';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 8, 'Currency decimals');
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '42':
+                    echo "Enter recent transactions limit (minimum 1): ";
+                    $key = 'displayRecentTransactionsLimit';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                // Currency Management
+                case '43':
                     echo "Current allowed currencies: " . implode(', ', UserContext::getInstance()->getAllowedCurrencies()) . "\n";
                     echo "Enter currencies (comma-separated, e.g., USD,EUR): ";
                     $key = 'allowedCurrencies';
@@ -754,6 +1083,7 @@ class CliService implements CliServiceInterface {
         $output = $output ?? CliOutputManager::getInstance();
 
         $settings = [
+            'name' => $this->currentUser->getName(),
             'default_currency' => $this->currentUser->getDefaultCurrency(),
             'minimum_fee_amount' => $this->currentUser->getMinimumFee(),
             'minimum_fee_currency' => $this->currentUser->getDefaultCurrency(),
@@ -762,14 +1092,15 @@ class CliService implements CliServiceInterface {
             'default_credit_limit' => $this->currentUser->getDefaultCreditLimit(),
             'max_p2p_level' => $this->currentUser->getMaxP2pLevel(),
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
+            'direct_tx_expiration' => $this->currentUser->getDirectTxExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
             'default_transport_mode' => $this->currentUser->getDefaultTransportMode(),
             'hostname' => $this->currentUser->getHttpAddress(),
             'hostname_secure' => $this->currentUser->getHttpsAddress(),
+            'trusted_proxies' => $this->currentUser->getTrustedProxies(),
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
             'auto_accept_transaction' => $this->currentUser->getAutoAcceptTransaction(),
-            'trusted_proxies' => $this->currentUser->getTrustedProxies(),
             // Feature toggles
             'contact_status_enabled' => $this->currentUser->getContactStatusEnabled(),
             'contact_status_sync_on_ping' => $this->currentUser->getContactStatusSyncOnPing(),
@@ -802,6 +1133,8 @@ class CliService implements CliServiceInterface {
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_currency_decimals' => $this->currentUser->getDisplayCurrencyDecimals(),
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
+            // Currency management
+            'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
         ];
 
         if ($output->isJsonMode()) {
@@ -817,16 +1150,17 @@ class CliService implements CliServiceInterface {
             echo "\n  P2P & Network:\n";
             echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
+            echo "\tDirect TX delivery expiration: " . ($settings['direct_tx_expiration'] === 0 ? 'no expiry' : $settings['direct_tx_expiration'] . " seconds") . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
             echo "\tHTTP transport timeout: " . $settings['http_transport_timeout_seconds'] . "s\n";
             echo "\tTor transport timeout: " . $settings['tor_transport_timeout_seconds'] . "s\n";
             if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
-            echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
-            echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
-            echo "\tAuto-accept P2P transactions: " . ($settings['auto_accept_transaction'] ? 'enabled' : 'disabled') . "\n";
             echo "\tTrusted proxies: " . ($settings['trusted_proxies'] ?: '(none)') . "\n";
+            echo "\tAuto-accept P2P transactions: " . ($settings['auto_accept_transaction'] ? 'enabled' : 'disabled') . "\n";
             echo "\n  Feature Toggles:\n";
+            if ($settings['name']) echo "\tDisplay name: " . $settings['name'] . "\n";
+            echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status pinging: " . ($settings['contact_status_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status sync on ping: " . ($settings['contact_status_sync_on_ping'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop propose: " . ($settings['auto_chain_drop_propose'] ? 'enabled' : 'disabled') . "\n";
@@ -834,7 +1168,6 @@ class CliService implements CliServiceInterface {
             echo "\tAPI enabled: " . ($settings['api_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAPI CORS origins: " . ($settings['api_cors_allowed_origins'] ?: '(none)') . "\n";
             echo "\tRate limiting: " . ($settings['rate_limit_enabled'] ? 'enabled' : 'disabled') . "\n";
-            echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\n  Backup & Logging:\n";
             echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tBackup retention count: " . $settings['backup_retention_count'] . "\n";
@@ -857,6 +1190,8 @@ class CliService implements CliServiceInterface {
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
             echo "\tCurrency decimals: " . $settings['display_currency_decimals'] . "\n";
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
+            echo "\n  Currency Management:\n";
+            echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
         }
     }
 
@@ -1120,20 +1455,57 @@ class CliService implements CliServiceInterface {
                     'value' => ['type' => 'optional', 'description' => 'New value for the setting']
                 ],
                 'available_settings' => [
-                    'defaultFee' => 'Default fee percentage for transactions (e.g., 1.0)',
-                    'defaultCreditLimit' => 'Default credit limit for new contacts (e.g., 100)',
+                    // Transaction Settings
                     'defaultCurrency' => 'Default currency code (e.g., USD)',
                     'minFee' => 'Minimum fee amount (e.g., 0.01)',
+                    'defaultFee' => 'Default fee percentage for transactions (e.g., 1.0)',
                     'maxFee' => 'Maximum fee percentage (e.g., 5.0)',
+                    'defaultCreditLimit' => 'Default credit limit for new contacts (e.g., 100)',
+                    // P2P & Network
                     'maxP2pLevel' => 'Maximum peer-to-peer routing hops (e.g., 3)',
                     'p2pExpiration' => 'Peer-to-peer request expiration time in seconds (e.g., 300)',
                     'directTxExpiration' => 'Direct transaction delivery expiry in seconds; 0 = no expiry (default). P2P transactions use p2pExpiration + ' . Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS . 's automatically.',
-                    'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
                     'defaultTransportMode' => 'Default transport type: http, https, or tor',
-                    'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
-                    'autoBackupEnabled' => 'Enable automatic daily database backups (true/false)',
+                    'httpTransportTimeoutSeconds' => 'HTTP transport timeout in seconds (5-120)',
+                    'torTransportTimeoutSeconds' => 'Tor transport timeout in seconds (10-300)',
                     'hostname' => 'Node hostname (e.g., http://alice). Automatically derives HTTPS version and regenerates SSL cert',
-                    'name' => 'Display name for this node (shown in local UI)'
+                    'trustedProxies' => 'Trusted proxy IPs (comma-separated)',
+                    'autoAcceptTransaction' => 'Auto-accept P2P transactions when route found (true/false)',
+                    // Feature Toggles
+                    'name' => 'Display name for this node (shown in local UI)',
+                    'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
+                    'contactStatusEnabled' => 'Enable contact status pinging (true/false)',
+                    'contactStatusSyncOnPing' => 'Enable contact status sync on ping (true/false)',
+                    'autoChainDropPropose' => 'Enable auto chain drop propose (true/false)',
+                    'autoChainDropAccept' => 'Enable auto chain drop accept (true/false)',
+                    'apiEnabled' => 'Enable API access (true/false)',
+                    'apiCorsAllowedOrigins' => 'API CORS allowed origins',
+                    'rateLimitEnabled' => 'Enable rate limiting (true/false)',
+                    // Backup & Logging
+                    'autoBackupEnabled' => 'Enable automatic daily database backups (true/false)',
+                    'backupRetentionCount' => 'Number of backups to retain (minimum 1)',
+                    'backupCronHour' => 'Backup schedule hour (0-23)',
+                    'backupCronMinute' => 'Backup schedule minute (0-59)',
+                    'logLevel' => 'Log level: debug, info, warning, error',
+                    'logMaxEntries' => 'Maximum log entries to retain (minimum 10)',
+                    // Data Retention
+                    'cleanupDeliveryRetentionDays' => 'Delivery record retention in days (minimum 1)',
+                    'cleanupDlqRetentionDays' => 'DLQ record retention in days (minimum 1)',
+                    'cleanupHeldTxRetentionDays' => 'Held TX retention in days (minimum 1)',
+                    'cleanupRp2pRetentionDays' => 'RP2P retention in days (minimum 1)',
+                    'cleanupMetricsRetentionDays' => 'Metrics retention in days (minimum 1)',
+                    // Rate Limiting
+                    'p2pRateLimitPerMinute' => 'P2P rate limit per minute (minimum 1)',
+                    'rateLimitMaxAttempts' => 'Rate limit max attempts (minimum 1)',
+                    'rateLimitWindowSeconds' => 'Rate limit window in seconds (minimum 1)',
+                    'rateLimitBlockSeconds' => 'Rate limit block duration in seconds (minimum 1)',
+                    // Display
+                    'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
+                    'displayDateFormat' => 'Date format (e.g., Y-m-d H:i:s)',
+                    'displayCurrencyDecimals' => 'Currency decimal places (0-8)',
+                    'displayRecentTransactionsLimit' => 'Recent transactions display limit (minimum 1)',
+                    // Currency Management
+                    'allowedCurrencies' => 'Allowed currencies (comma-separated, e.g., USD,EUR)',
                 ],
                 'examples' => [
                     'changesettings' => 'Interactive mode (prompts for setting)',

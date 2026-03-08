@@ -1352,6 +1352,7 @@ class ApiController {
 
         return $this->successResponse([
             'settings' => [
+                'name' => $currentUser->getName(),
                 'default_currency' => $currentUser->getDefaultCurrency(),
                 'minimum_fee_amount' => $currentUser->getMinimumFee(),
                 'default_fee_percent' => $currentUser->getDefaultFee(),
@@ -1359,10 +1360,12 @@ class ApiController {
                 'default_credit_limit' => $currentUser->getDefaultCreditLimit(),
                 'max_p2p_level' => $currentUser->getMaxP2pLevel(),
                 'p2p_expiration_seconds' => $currentUser->getP2pExpirationTime(),
+                'direct_tx_expiration' => $currentUser->getDirectTxExpirationTime(),
                 'max_output_lines' => $currentUser->getMaxOutput(),
                 'default_transport_mode' => $currentUser->getDefaultTransportMode(),
                 'hostname' => $currentUser->getHttpAddress(),
                 'hostname_secure' => $currentUser->getHttpsAddress(),
+                'trusted_proxies' => $currentUser->getTrustedProxies(),
                 'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled(),
                 'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
                 'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
@@ -1398,6 +1401,8 @@ class ApiController {
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
                 'display_currency_decimals' => $currentUser->getDisplayCurrencyDecimals(),
                 'display_recent_transactions_limit' => $currentUser->getDisplayRecentTransactionsLimit(),
+                // Currency management
+                'allowed_currencies' => $currentUser->getAllowedCurrencies(),
             ]
         ]);
     }
@@ -1431,6 +1436,8 @@ class ApiController {
             'auto_refresh_enabled' => ['key' => 'autoRefreshEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_backup_enabled' => ['key' => 'autoBackupEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_accept_transaction' => ['key' => 'autoAcceptTransaction', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'direct_tx_expiration' => ['key' => 'directTxExpiration', 'validate' => null, 'config' => 'defaultconfig.json', 'intMin' => 0],
+            'trusted_proxies' => ['key' => 'trustedProxies', 'validate' => 'validateTrustedProxies', 'config' => 'defaultconfig.json'],
             'hostname' => ['key' => 'hostname', 'validate' => 'validateHostname', 'config' => 'userconfig.json'],
             'name' => ['key' => 'name', 'validate' => null, 'config' => 'userconfig.json'],
             // Feature toggles
