@@ -24,6 +24,9 @@ The project is currently in **ALPHA** status.
 - API GET `/api/v1/system/settings` response now includes `name`, `direct_tx_expiration`, `trusted_proxies`, `allowed_currencies`
 - API PUT `/api/v1/system/settings` now accepts `direct_tx_expiration` and `trusted_proxies`
 
+### Docs
+- `update` CLI help now documents the required `currency` parameter for `fee` and `credit` fields, and optional currency for `all`. Usage, arguments, examples, and note all updated to reflect the actual command syntax.
+
 ### Fixed
 - `changesettings maxP2pLevel` via command-line was broken: `strtolower($argv[2]) === 'maxp2pLevel'` comparison could never match due to uppercase in the comparison target
 - `autoBackupEnabled` was only changeable in interactive mode; added to command-line argv handling

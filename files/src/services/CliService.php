@@ -1267,20 +1267,22 @@ class CliService implements CliServiceInterface {
             ],
             'update' => [
                 'description' => 'Update contact settings (name, fee, credit limit, or all at once)',
-                'usage' => 'update [address/name] [all/name/fee/credit] ([values...])',
+                'usage' => 'update [address/name] [name/fee/credit/all] [values...] [currency]',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Contact address or display name'],
-                    'field' => ['type' => 'required', 'description' => 'Field to update: all, name, fee, or credit'],
-                    'values' => ['type' => 'optional', 'description' => 'New value(s) for the field(s)']
+                    'field' => ['type' => 'required', 'description' => 'Field to update: name, fee, credit, or all'],
+                    'values' => ['type' => 'required', 'description' => 'New value(s) for the field(s)'],
+                    'currency' => ['type' => 'required for fee/credit', 'description' => 'Currency code (e.g., USD, EUR). Optional for "all" (defaults to contact\'s current currency)']
                 ],
                 'examples' => [
                     'update Bob name Robert' => 'Rename contact',
-                    'update Bob fee 1.5' => 'Change fee percentage',
-                    'update Bob credit 500' => 'Change credit limit',
-                    'update Bob all NewName 2.0 1000' => 'Update all fields at once',
-                    'update http://bob:8080 fee 2.0 --json' => 'Update by address with JSON output'
+                    'update Bob fee 1.5 USD' => 'Change fee percentage for USD',
+                    'update Bob credit 500 EUR' => 'Change credit limit for EUR',
+                    'update Bob all NewName 2.0 1000 USD' => 'Update all fields at once for USD',
+                    'update Bob all NewName 2.0 1000' => 'Update all (currency defaults to contact\'s)',
+                    'update http://bob:8080 fee 2.0 USD --json' => 'Update by address with JSON output'
                 ],
-                'note' => 'Changes are local only — the contact is not notified. Fee percentage controls what you charge for relaying transactions through you for this contact. Credit limit is the maximum amount you allow this contact to owe you.'
+                'note' => 'Changes are local only — the contact is not notified. Fee percentage controls what you charge for relaying transactions through you for this contact. Credit limit is the maximum amount you allow this contact to owe you. Currency is required for fee and credit updates to specify which currency\'s settings to modify.'
             ],
             'block' => [
                 'description' => 'Block a contact from sending transactions to you',
