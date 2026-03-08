@@ -402,32 +402,30 @@ done
 sendEndTime=$(date +%s)
 bestfeeElapsed=$((sendEndTime - sendStartTime))
 
+# Get the P2P hash from the originator for per-hop diagnostics
+bestFeeHash=$(docker exec ${testSender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$stmt = \$pdo->query('SELECT hash FROM p2p WHERE fast = 0 ORDER BY id DESC LIMIT 1');
+    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+    echo \$row ? \$row['hash'] : 'UNKNOWN';
+" 2>/dev/null || echo "UNKNOWN")
+
 if [ "$balanceChangedBest" -eq 1 ]; then
     printf "\t   Best-fee mode send ${GREEN}PASSED${NC} (Balance: %s -> %s, Time: %ds)\n" "$initialBalanceBest" "$newBalanceBest" "$bestfeeElapsed"
     passed=$(( passed + 1 ))
+
+    # Print per-hop timing on success to help diagnose slow cascades
+    if [ "$bestfeeElapsed" -gt 60 ] && [ "$bestFeeHash" != "UNKNOWN" ]; then
+        echo -e "\n\t   --- Slow cascade diagnostic (${bestfeeElapsed}s > 60s expected) ---"
+        dump_p2p_diagnostic "${all_containers}" "$bestFeeHash"
+    fi
 else
     printf "\t   Best-fee mode send ${RED}FAILED${NC} (Balance unchanged: %s, Timeout after %ds)\n" "$initialBalanceBest" "$bestfeeElapsed"
     printf "\t   Send result: %s\n" "${bestFeeSendResult:0:200}"
 
-    # Diagnostic: check P2P state and processor health on all containers
-    echo -e "\n\t   --- Best-fee Diagnostic ---"
-    for c in ${all_containers}; do
-        p2pState=$(docker exec ${c} php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            \$stmt = \$pdo->query('SELECT hash, status, fast, hop_wait, sender_address FROM p2p ORDER BY id DESC LIMIT 3');
-            \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
-            foreach (\$rows as \$r) {
-                echo substr(\$r['hash'],0,12) . ' status=' . \$r['status'] . ' fast=' . \$r['fast'] . ' hop_wait=' . \$r['hop_wait'] . ' from=' . \$r['sender_address'] . ' | ';
-            }
-        " 2>/dev/null || echo "ERROR")
-        procState=$(docker exec ${c} sh -c "
-            p2p_running=\$(test -f /tmp/p2pmessages_lock.pid && kill -0 \$(cat /tmp/p2pmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
-            cleanup_running=\$(test -f /tmp/cleanupmessages_lock.pid && kill -0 \$(cat /tmp/cleanupmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
-            echo \"P2P=\${p2p_running} Cleanup=\${cleanup_running}\"
-        " 2>/dev/null || echo "ERROR")
-        printf "\t   %s: [%s] %s\n" "$c" "$procState" "${p2pState:0:200}"
-    done
+    echo ""
+    dump_p2p_diagnostic "${all_containers}" "$bestFeeHash"
 
     failure=$(( failure + 1 ))
 fi
