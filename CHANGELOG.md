@@ -16,6 +16,11 @@ The project is currently in **ALPHA** status.
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 
 ### Added
+- **Proxy Authorization Service** (Patent Claims 3, 10, 11, 15): Offline participation via delegated proxy nodes with scoped authorization records, shadow balance snapshots, first-commit conflict resolution for multi-proxy setups, and dispute flagging for out-of-scope transactions
+- **Split Payment Service** (Patent Claim 9): Route splitting when no single route has sufficient capacity — evaluates RP2P candidates, creates greedy allocation plans across routes proportional to confirmed capacity, and coordinates parallel sequential commitments
+- **Route Cancellation Service** (Patent Claim 16): Cancellation RP2P messages for unselected routes after best-fee selection, releasing reserved credit capacity back to available balance on all intermediary nodes
+- **Randomized Hop Budget** (Patent Claim 5): Geometric distribution hop budget initialization within bounded range, preventing traffic analysis attacks based on observed hop counts
+- Database schemas for proxy authorizations, proxy balance snapshots, proxy transactions, split payments, split payment routes, route cancellations, and capacity reservations
 - Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
 - Per-currency available credit exchange: pong returns `availableCreditByCurrency` map; each currency's available credit stored independently in `contact_credit` table (UNIQUE on `pubkey_hash, currency`)
 - GUI currency slider: contact modal uses horizontal pill-style currency slider with left/right arrows to switch between currencies, replacing the dropdown selector
