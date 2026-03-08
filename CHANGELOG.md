@@ -16,7 +16,17 @@ The project is currently in **ALPHA** status.
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
+### Changed
+- Interactive `changesettings` menu expanded from 16 to 43 options, now covering all available settings organized by category (Transaction, P2P & Network, Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Display, Currency Management)
+- `viewsettings` display now includes all changeable settings: added `name`, `direct_tx_expiration`, `allowed_currencies`; removed duplicate autoRefresh and autoBackup entries that appeared in two sections
+- Added newline separator between `viewsettings` output and the interactive menu prompt for readability
+- Help `available_settings` for `changesettings` updated from 14 to 43 entries
+- API GET `/api/v1/system/settings` response now includes `name`, `direct_tx_expiration`, `trusted_proxies`, `allowed_currencies`
+- API PUT `/api/v1/system/settings` now accepts `direct_tx_expiration` and `trusted_proxies`
+
 ### Fixed
+- `changesettings maxP2pLevel` via command-line was broken: `strtolower($argv[2]) === 'maxp2pLevel'` comparison could never match due to uppercase in the comparison target
+- `autoBackupEnabled` was only changeable in interactive mode; added to command-line argv handling
 - P2P best-fee mode over Tor: forced fast mode now detects Tor transport on any hop (originator resolved address or incoming sender address), not just when the final destination is a `.onion` address. Previously, if the originator's address resolved to Tor via fallback but the destination was HTTP, best-fee mode (`fast=0`) persisted across the entire chain — causing 240s+ delays waiting for Tor relay timeouts on unresponsive routes. Transport index cascading (`determineTransportType(sender_address)`) propagated Tor to all downstream relays.
 - Chain drop test suite: `clean_chain()` preserves the contact transaction (`tx_type != 'contact'`), so `tx1.previous_txid` correctly points to it rather than being NULL. Removed false `tx1.previous_txid == NULL` assertions from tests 6.6, 7.6, and 8.4 — the chain drop relink assertions (the actual test targets) were already passing.
 - Chunked sync test 2.2: assertion now accounts for pre-existing transactions from earlier test suites instead of assuming exactly 10 transactions between the two contacts
