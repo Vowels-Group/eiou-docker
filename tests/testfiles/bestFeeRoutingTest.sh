@@ -388,12 +388,6 @@ balanceChangedBest=0
 while [ $elapsed -lt $bestfeeTimeout ]; do
     sleep 5
 
-    # Process message queues on all containers so P2P messages relay through intermediaries
-    for c in ${all_containers}; do
-        docker exec -e EIOU_TEST_MODE=true ${c} eiou out >/dev/null 2>&1 || true
-        docker exec -e EIOU_TEST_MODE=true ${c} eiou in >/dev/null 2>&1 || true
-    done
-
     # Check if balance changed (early exit)
     newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
     balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
@@ -414,6 +408,27 @@ if [ "$balanceChangedBest" -eq 1 ]; then
 else
     printf "\t   Best-fee mode send ${RED}FAILED${NC} (Balance unchanged: %s, Timeout after %ds)\n" "$initialBalanceBest" "$bestfeeElapsed"
     printf "\t   Send result: %s\n" "${bestFeeSendResult:0:200}"
+
+    # Diagnostic: check P2P state and processor health on all containers
+    echo -e "\n\t   --- Best-fee Diagnostic ---"
+    for c in ${all_containers}; do
+        p2pState=$(docker exec ${c} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+            \$stmt = \$pdo->query('SELECT hash, status, fast, hop_wait, sender_address FROM p2p ORDER BY id DESC LIMIT 3');
+            \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach (\$rows as \$r) {
+                echo substr(\$r['hash'],0,12) . ' status=' . \$r['status'] . ' fast=' . \$r['fast'] . ' hop_wait=' . \$r['hop_wait'] . ' from=' . \$r['sender_address'] . ' | ';
+            }
+        " 2>/dev/null || echo "ERROR")
+        procState=$(docker exec ${c} sh -c "
+            p2p_running=\$(test -f /tmp/p2pmessages_lock.pid && kill -0 \$(cat /tmp/p2pmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
+            cleanup_running=\$(test -f /tmp/cleanupmessages_lock.pid && kill -0 \$(cat /tmp/cleanupmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
+            echo \"P2P=\${p2p_running} Cleanup=\${cleanup_running}\"
+        " 2>/dev/null || echo "ERROR")
+        printf "\t   %s: [%s] %s\n" "$c" "$procState" "${p2pState:0:200}"
+    done
+
     failure=$(( failure + 1 ))
 fi
 
