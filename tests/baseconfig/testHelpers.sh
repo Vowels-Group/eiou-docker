@@ -606,6 +606,128 @@ verify_chain_integrity() {
     " 2>/dev/null || echo "ERROR"
 }
 
+# ==================== Backup Functions ====================
+
+# Remove all backup files from a container
+# Usage: cleanup_backups <container>
+cleanup_backups() {
+    local container="$1"
+    docker exec ${container} sh -c "rm -f /var/lib/eiou/backups/*.eiou.enc" 2>/dev/null
+}
+
+# Count backup files on a container
+# Usage: count_backups <container>
+count_backups() {
+    local container="$1"
+    docker exec ${container} sh -c "ls -1 /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l" 2>/dev/null
+}
+
+# Check if a specific txid exists in a container's database
+# Usage: verify_tx_exists <container> <txid>
+# Returns: "1" if exists, "0" if not
+verify_tx_exists() {
+    local container="$1"
+    local txid="$2"
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare('SELECT COUNT(*) FROM transactions WHERE txid = :txid');
+        \$stmt->execute(['txid' => '${txid}']);
+        echo \$stmt->fetchColumn();
+    " 2>/dev/null
+}
+
+# ==================== P2P Diagnostic Functions ====================
+
+# Check processor health on a container
+# Usage: get_processor_health <container>
+# Returns: "P2P=UP Tx=UP Cleanup=UP" (or DOWN for any crashed processor)
+get_processor_health() {
+    local container="$1"
+    docker exec ${container} sh -c "
+        p2p=\$(test -f /tmp/p2pmessages_lock.pid && kill -0 \$(cat /tmp/p2pmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
+        tx=\$(test -f /tmp/transactionmessages_lock.pid && kill -0 \$(cat /tmp/transactionmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
+        cleanup=\$(test -f /tmp/cleanupmessages_lock.pid && kill -0 \$(cat /tmp/cleanupmessages_lock.pid) 2>/dev/null && echo 'UP' || echo 'DOWN');
+        echo \"P2P=\${p2p} Tx=\${tx} Cleanup=\${cleanup}\"
+    " 2>/dev/null || echo "ERROR"
+}
+
+# Get recent P2P records from a container
+# Usage: get_p2p_state <container> [limit]
+# Returns: one line per record: "hash=abc123 status=sent fast=0 hop_wait=23 from=http://httpA"
+get_p2p_state() {
+    local container="$1"
+    local limit="${2:-3}"
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->query('SELECT hash, status, fast, hop_wait, sender_address FROM p2p ORDER BY id DESC LIMIT ${limit}');
+        \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach (\$rows as \$r) {
+            echo substr(\$r['hash'],0,12) . ' status=' . \$r['status'] . ' fast=' . \$r['fast'] . ' hop_wait=' . \$r['hop_wait'] . ' from=' . \$r['sender_address'] . ' | ';
+        }
+    " 2>/dev/null || echo "ERROR"
+}
+
+# Get P2P timing details for a specific hash on a container
+# Usage: get_p2p_timing <container> <hash>
+# Returns: "status=sent created=1234567890 expiration=1234568190 candidates=2 responded=1/1 relayed=0/0"
+get_p2p_timing() {
+    local container="$1"
+    local hash="$2"
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare('SELECT status, fast, hop_wait, time, expiration, destination_address,
+            contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count
+            FROM p2p WHERE hash = :hash');
+        \$stmt->execute(['hash' => '${hash}']);
+        \$r = \$stmt->fetch(PDO::FETCH_ASSOC);
+        if (!\$r) { echo 'NOT_FOUND'; exit; }
+        \$now = (int)(microtime(true) * 10000);
+        \$created = \$r['time'] ?? 0;
+        \$exp = \$r['expiration'] ?? 0;
+        \$age = \$now > 0 && \$created > 0 ? round((\$now - \$created) / 10000, 1) : '?';
+        \$ttl = \$exp > 0 && \$now > 0 ? round((\$exp - \$now) / 10000, 1) : '?';
+        echo 'status=' . \$r['status'];
+        echo ' fast=' . \$r['fast'];
+        echo ' hop_wait=' . \$r['hop_wait'];
+        echo ' age=' . \$age . 's';
+        echo ' ttl=' . \$ttl . 's';
+        echo ' responded=' . \$r['contacts_responded_count'] . '/' . \$r['contacts_sent_count'];
+        echo ' relayed=' . \$r['contacts_relayed_responded_count'] . '/' . \$r['contacts_relayed_count'];
+        echo (\$r['destination_address'] ? ' ORIGINATOR' : ' RELAY');
+        // Check rp2p candidates
+        \$cStmt = \$pdo->prepare('SELECT COUNT(*) FROM rp2p_candidates WHERE hash = :hash');
+        \$cStmt->execute(['hash' => '${hash}']);
+        echo ' candidates=' . \$cStmt->fetchColumn();
+    " 2>/dev/null || echo "ERROR"
+}
+
+# Full P2P diagnostic across all containers
+# Usage: dump_p2p_diagnostic "<space-separated containers>" [hash]
+# Prints processor health and P2P state for each container.
+# If hash is provided, also prints per-hash timing details.
+dump_p2p_diagnostic() {
+    local container_list="$1"
+    local hash="$2"
+    local indent="${3:-\t   }"
+
+    echo -e "${indent}--- P2P Diagnostic ---"
+    for c in ${container_list}; do
+        local health=$(get_processor_health "$c")
+        local state=$(get_p2p_state "$c" 3)
+        printf "${indent}%s: [%s] %s\n" "$c" "$health" "${state:0:200}"
+
+        if [[ -n "$hash" ]]; then
+            local timing=$(get_p2p_timing "$c" "$hash")
+            if [[ "$timing" != "NOT_FOUND" ]] && [[ "$timing" != "ERROR" ]]; then
+                printf "${indent}  -> %s\n" "$timing"
+            fi
+        fi
+    done
+}
+
 # ==================== Retry Helpers for Time-Dependent Tests ====================
 
 # Wait for transaction count to reach expected value with retry

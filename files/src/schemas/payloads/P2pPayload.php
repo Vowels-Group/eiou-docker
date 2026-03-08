@@ -28,6 +28,16 @@ class P2pPayload extends BasePayload
         //output(outputBuildingP2pPayload($data),'SILENT');
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
 
+        // Force fast mode if our resolved address is Tor — transport index cascading
+        // means the entire P2P chain will propagate over Tor, making best-fee mode
+        // impractical due to per-hop Tor latency (~5s × 6 Tor relays per EIOU hop).
+        $isTorRoute = $this->transportUtility->isTorAddress($data['receiverAddress'])
+            || $this->transportUtility->isTorAddress($userAddress);
+
+        if ($isTorRoute && !($data['fast'] ?? true)) {
+            $data['fast'] = 1;
+        }
+
         // Calculate per-hop wait time for best-fee mode relay nodes
         // Formula: floor(expiration / hop_wait_divisor) - processing_buffer, clamped to minimum
         // Uses HOP_WAIT_DIVISOR (fixed, not actual max level) so all P2Ps produce the same
@@ -36,7 +46,7 @@ class P2pPayload extends BasePayload
 
         // Tor hidden services add significant per-hop latency (each EIOU hop = 6 Tor relay hops).
         // Scale expiration so multi-hop Tor chains don't expire prematurely.
-        if ($this->transportUtility->isTorAddress($data['receiverAddress'])) {
+        if ($isTorRoute) {
             $expirationSeconds *= Constants::P2P_TOR_EXPIRATION_MULTIPLIER;
         }
 

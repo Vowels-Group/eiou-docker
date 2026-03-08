@@ -207,7 +207,7 @@ insertResult=$(docker exec ${receiver} php -r "
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    \$myPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$myPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$myPubkeyHash = hash('sha256', \$myPubkey);
     \$contactPubkey = base64_decode('${senderPubkeyB64}');
     \$contactPubkeyHash = hash('sha256', \$contactPubkey);
@@ -248,7 +248,7 @@ insertResult=$(docker exec ${receiver} php -r "
             ':memo' => 'standard',
             ':description' => 'chunked-sync-test-${timestamp}-' . \$i,
             ':status' => 'completed',
-            ':timestamp' => \$ts,
+            ':timestamp' => date('Y-m-d H:i:s', \$ts),
             ':time' => \$microtime,
             ':signature' => base64_encode('fake-sig-' . \$i),
             ':nonce' => \$ts,
@@ -338,13 +338,33 @@ echo -e "\n\t-> Testing responder returns hasMore=false for <SYNC_CHUNK_SIZE tra
 
 timestamp2=$(date +%s%N)
 
+# Count pre-existing transactions between sender and receiver (from earlier test suites)
+preExistingCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$senderPubkey = base64_decode('${senderPubkeyB64}');
+    \$txs = \$app->services->getTransactionRepository()->getTransactionsBetweenPubkeys(
+        \$app->services->getCurrentUser()->getPublicKey(),
+        \$senderPubkey
+    );
+    // Count only non-pending/sending (same filter as handleTransactionSyncRequest)
+    \$count = 0;
+    foreach (\$txs as \$tx) {
+        \$status = \$tx['status'] ?? '';
+        if (\$status !== \Eiou\Core\Constants::STATUS_PENDING && \$status !== \Eiou\Core\Constants::STATUS_SENDING) {
+            \$count++;
+        }
+    }
+    echo \$count;
+" 2>/dev/null || echo "0")
+
 # Insert 10 synthetic transactions
 insertResult2=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    \$myPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$myPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$myPubkeyHash = hash('sha256', \$myPubkey);
     \$contactPubkey = base64_decode('${senderPubkeyB64}');
     \$contactPubkeyHash = hash('sha256', \$contactPubkey);
@@ -385,7 +405,7 @@ insertResult2=$(docker exec ${receiver} php -r "
             ':memo' => 'standard',
             ':description' => 'small-sync-test-${timestamp2}-' . \$i,
             ':status' => 'completed',
-            ':timestamp' => \$ts,
+            ':timestamp' => date('Y-m-d H:i:s', \$ts),
             ':time' => \$microtime,
             ':signature' => base64_encode('fake-sig-' . \$i),
             ':nonce' => \$ts,
@@ -442,9 +462,10 @@ else
         echo \$json['transactionCount'] ?? 0;
     " 2>/dev/null || echo "0")
 
-    echo -e "\t   Response: hasMore=${smallHasMore}, transactionCount=${smallTxCount}"
+    expectedSmallCount=$((preExistingCount + 10))
+    echo -e "\t   Response: hasMore=${smallHasMore}, transactionCount=${smallTxCount} (expected ${expectedSmallCount}: ${preExistingCount} pre-existing + 10 synthetic)"
 
-    if [[ "$smallHasMore" == "false" ]] && [[ "$smallTxCount" -eq 10 ]]; then
+    if [[ "$smallHasMore" == "false" ]] && [[ "$smallTxCount" -eq "$expectedSmallCount" ]]; then
         printf "\t   Responder returns all when under chunk size ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
@@ -473,7 +494,7 @@ cursorResult=$(docker exec ${receiver} php -r "
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    \$myPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$myPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$myPubkeyHash = hash('sha256', \$myPubkey);
     \$contactPubkey = base64_decode('${senderPubkeyB64}');
     \$contactPubkeyHash = hash('sha256', \$contactPubkey);
@@ -514,7 +535,7 @@ cursorResult=$(docker exec ${receiver} php -r "
             ':memo' => 'standard',
             ':description' => 'cursor-sync-test-${timestamp3}-' . \$i,
             ':status' => 'completed',
-            ':timestamp' => \$ts,
+            ':timestamp' => date('Y-m-d H:i:s', \$ts),
             ':time' => \$microtime,
             ':signature' => base64_encode('fake-sig-' . \$i),
             ':nonce' => \$ts,
@@ -612,7 +633,7 @@ echo -e "\n\t-> Testing payload includes hasMore and totalTransactions fields"
 payloadResult=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$payload = \$app->services->getMessagePayload();
+    \$payload = new \Eiou\Schemas\Payloads\MessagePayload(\$app->services->getCurrentUser(), \$app->services->getUtilityContainer());
 
     // Build a response with hasMore=true
     \$json = \$payload->buildTransactionSyncResponse(
@@ -629,7 +650,7 @@ payloadResult=$(docker exec ${sender} php -r "
     \$hasMoreVal = \$decoded['hasMore'] === true ? 'true' : 'false';
     \$totalVal = \$decoded['totalTransactions'];
 
-    echo \"{$hasField1}|{$hasField2}|{$hasMoreVal}|{$totalVal}\";
+    echo \"{\$hasField1}|{\$hasField2}|{\$hasMoreVal}|{\$totalVal}\";
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$payloadResult" == "yes|yes|true|75" ]]; then
@@ -647,7 +668,7 @@ echo -e "\n\t-> Testing payload defaults (backward compatibility)"
 defaultResult=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$payload = \$app->services->getMessagePayload();
+    \$payload = new \Eiou\Schemas\Payloads\MessagePayload(\$app->services->getCurrentUser(), \$app->services->getUtilityContainer());
 
     // Build with default parameters (no hasMore/totalTransactions)
     \$json = \$payload->buildTransactionSyncResponse(
@@ -660,7 +681,7 @@ defaultResult=$(docker exec ${sender} php -r "
     \$hasMoreVal = \$decoded['hasMore'] === false ? 'false' : 'true';
     \$totalVal = \$decoded['totalTransactions'];
 
-    echo \"{$hasMoreVal}|{$totalVal}\";
+    echo \"{\$hasMoreVal}|{\$totalVal}\";
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$defaultResult" == "false|0" ]]; then

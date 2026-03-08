@@ -1082,11 +1082,13 @@ dualSigResultA=$(docker exec ${containerA} php -r "
         exit;
     }
 
-    // Find contact transaction between A and B (try both directions via repo)
+    // Find contact transaction between A and B
+    // Check receiver direction first (B->me) where recipient_signature can exist
+    // (recipient_signature is signed by the receiver, i.e., the current node)
     \$tcRepo = \$app->services->getTransactionContactRepository();
-    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     if (!\$tx) {
-        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+        \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
     }
 
     // If repo lookup fails, try direct DB lookup using stored public keys
@@ -1094,24 +1096,24 @@ dualSigResultA=$(docker exec ${containerA} php -r "
     if (!\$tx) {
         \$algo = \Eiou\Core\Constants::HASH_ALGORITHM;
         \$myHash = hash(\$algo, \$myPubkey);
+        \$bHash = hash(\$algo, \$contactB['pubkey']);
+        // Prefer the TX where I am the receiver (recipient_signature is mine)
         \$stmt = \$pdo->prepare(\"SELECT txid, signature_nonce, sender_public_key_hash, receiver_public_key_hash,
             receiver_public_key FROM transactions WHERE tx_type = 'contact'
-            AND (sender_public_key_hash = :myHash1 OR receiver_public_key_hash = :myHash2)\");
-        \$stmt->execute([':myHash1' => \$myHash, ':myHash2' => \$myHash]);
+            AND (sender_public_key_hash = :myHash1 OR receiver_public_key_hash = :myHash2)
+            ORDER BY CASE WHEN receiver_public_key_hash = :myHash3 THEN 0 ELSE 1 END\");
+        \$stmt->execute([':myHash1' => \$myHash, ':myHash2' => \$myHash, ':myHash3' => \$myHash]);
         \$candidates = \$stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Match by checking if the other party's stored pubkey matches B
-        \$bHash = hash(\$algo, \$contactB['pubkey']);
         foreach (\$candidates as \$candidate) {
             \$otherHash = (\$candidate['sender_public_key_hash'] === \$myHash)
                 ? \$candidate['receiver_public_key_hash']
                 : \$candidate['sender_public_key_hash'];
-            // Check if the stored full pubkey hashes to B's hash OR if the receiver_public_key matches B
             if (\$otherHash === \$bHash) {
                 \$tx = \$candidate;
                 break;
             }
-            // Also check via full public key stored in TX
             if (isset(\$candidate['receiver_public_key']) && hash(\$algo, \$candidate['receiver_public_key']) === \$bHash) {
                 \$tx = \$candidate;
                 break;
@@ -1178,11 +1180,12 @@ dualSigResultC=$(docker exec ${containerC} php -r "
         exit;
     }
 
-    // Find contact transaction between C and B (try both directions)
+    // Find contact transaction between C and B
+    // Check receiver direction first (B->me) where recipient_signature can exist
     \$tcRepo = \$app->services->getTransactionContactRepository();
-    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     if (!\$tx) {
-        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+        \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
     }
 
     if (!\$tx) {
@@ -1229,12 +1232,13 @@ verifySigResult=$(docker exec ${containerA} php -r "
     if (!\$contactB) { echo 'NO_CONTACT'; exit; }
 
     // Find contact transaction between A and B
+    // Check receiver direction first (B->me) where recipient_signature can exist
     \$tcRepo = \$app->services->getTransactionContactRepository();
-    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
-    \$iAmSender = true;
+    \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+    \$iAmSender = false;
     if (!\$tx) {
-        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
-        \$iAmSender = false;
+        \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+        \$iAmSender = true;
     }
 
     // Fallback: direct DB lookup using stored public keys
@@ -1242,10 +1246,12 @@ verifySigResult=$(docker exec ${containerA} php -r "
         \$algo = \Eiou\Core\Constants::HASH_ALGORITHM;
         \$myHash = hash(\$algo, \$myPubkey);
         \$bHash = hash(\$algo, \$contactB['pubkey']);
-        \$stmt = \$pdo->prepare(\"SELECT txid, signature_nonce, sender_public_key_hash, receiver_public_key_hash
+        // Prefer TXs where I am the receiver (recipient_signature is mine)
+        \$stmt = \$pdo->prepare(\"SELECT txid, signature_nonce, currency, sender_public_key_hash, receiver_public_key_hash
             FROM transactions WHERE tx_type = 'contact'
-            AND (sender_public_key_hash = :myHash1 OR receiver_public_key_hash = :myHash2)\");
-        \$stmt->execute([':myHash1' => \$myHash, ':myHash2' => \$myHash]);
+            AND (sender_public_key_hash = :myHash1 OR receiver_public_key_hash = :myHash2)
+            ORDER BY CASE WHEN receiver_public_key_hash = :myHash3 THEN 0 ELSE 1 END\");
+        \$stmt->execute([':myHash1' => \$myHash, ':myHash2' => \$myHash, ':myHash3' => \$myHash]);
         \$candidates = \$stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach (\$candidates as \$candidate) {
             \$otherHash = (\$candidate['sender_public_key_hash'] === \$myHash)
@@ -1265,8 +1271,8 @@ verifySigResult=$(docker exec ${containerA} php -r "
         exit;
     }
 
-    // Get full transaction data
-    \$stmt = \$pdo->prepare('SELECT signature_nonce, recipient_signature FROM transactions WHERE txid = :txid');
+    // Get full transaction data including currency for signature verification
+    \$stmt = \$pdo->prepare('SELECT signature_nonce, recipient_signature, currency FROM transactions WHERE txid = :txid');
     \$stmt->execute([':txid' => \$tx['txid']]);
     \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -1279,8 +1285,14 @@ verifySigResult=$(docker exec ${containerA} php -r "
     // If I'm sender, receiver is B; if I'm receiver, receiver is me
     \$verifyPubkey = \$iAmSender ? \$contactB['pubkey'] : \$myPubkey;
 
-    // Reconstruct the signed message: {'type':'create','nonce':N}
-    \$message = json_encode(['type' => 'create', 'nonce' => \$fullTx['signature_nonce']]);
+    // Reconstruct the signed message: {'type':'create','currency':'USD','nonce':N}
+    // Must include currency when present (matches ContactPayload::generateRecipientSignature)
+    \$messageContent = ['type' => 'create'];
+    if (!empty(\$fullTx['currency'])) {
+        \$messageContent['currency'] = \$fullTx['currency'];
+    }
+    \$messageContent['nonce'] = \$fullTx['signature_nonce'];
+    \$message = json_encode(\$messageContent);
 
     \$pubkeyResource = openssl_pkey_get_public(\$verifyPubkey);
     if (!\$pubkeyResource) { echo 'BAD_PUBKEY'; exit; }

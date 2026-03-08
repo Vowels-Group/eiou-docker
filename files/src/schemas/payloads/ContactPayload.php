@@ -199,7 +199,7 @@ class ContactPayload extends BasePayload
      * @param string|null $txid The transaction ID for this contact (for txid synchronization)
      * @return string JSON-encoded contact accepted payload
      */
-    public function buildMutuallyAccepted(string $address, ?array $knownAddresses = null, ?string $txid = null): string
+    public function buildMutuallyAccepted(string $address, ?array $knownAddresses = null, ?string $txid = null, ?string $recipientSignature = null): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
@@ -217,6 +217,11 @@ class ContactPayload extends BasePayload
         // Include txid for synchronized contact transactions
         if ($txid !== null) {
             $payload['txid'] = $txid;
+        }
+
+        // Include recipient signature for dual-signature protocol
+        if ($recipientSignature !== null) {
+            $payload['recipientSignature'] = $recipientSignature;
         }
 
         return json_encode($payload);

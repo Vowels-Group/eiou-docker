@@ -14,8 +14,27 @@ The project is currently in **ALPHA** status.
 
 ### Security
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
+- Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
+
+### Fixed
+- P2P best-fee mode over Tor: forced fast mode now detects Tor transport on any hop (originator resolved address or incoming sender address), not just when the final destination is a `.onion` address. Previously, if the originator's address resolved to Tor via fallback but the destination was HTTP, best-fee mode (`fast=0`) persisted across the entire chain — causing 240s+ delays waiting for Tor relay timeouts on unresponsive routes. Transport index cascading (`determineTransportType(sender_address)`) propagated Tor to all downstream relays.
+- Chain drop test suite: `clean_chain()` preserves the contact transaction (`tx_type != 'contact'`), so `tx1.previous_txid` correctly points to it rather than being NULL. Removed false `tx1.previous_txid == NULL` assertions from tests 6.6, 7.6, and 8.4 — the chain drop relink assertions (the actual test targets) were already passing.
+- Chunked sync test 2.2: assertion now accounts for pre-existing transactions from earlier test suites instead of assuming exactly 10 transactions between the two contacts
+- `contact_currencies` table enforces single row per (pubkey_hash, currency) — direction column records who initiated, but only one row exists per contact-currency pair. Eliminates dual-row creation during mutual accept flows.
+- `credit_limit` column defaults to NULL instead of 0: NULL means "not yet configured", 0 means "explicitly set to zero" (e.g., to block transactions in that currency)
+- `ContactRepository::getCreditLimit()` simplified to direct single-row query (no MAX needed with single-row design)
+- Contact transaction `signature_nonce` is now generated during `insertReceivedContactTransaction()` when not provided by the sender, enabling the dual-signature protocol for contact transactions
+- Recipient signature generation ordering: `generateAndStoreContactRecipientSignature()` is now called after the received contact transaction is created (was called before, finding no TX)
+- Added recipient signature generation on sender's node when receiving mutual accept (STATUS_ACCEPTED), ensuring both sides have valid dual signatures
+- Ping test 6.1/6.2: signature check now looks for the received contact TX direction first (where the current node is the recipient and recipient_signature exists)
+- Ping test 6.3: signature verification now includes `currency` in the reconstructed signed message, matching `ContactPayload::generateRecipientSignature()` format
+- Chunked sync test: fixed `getUserContext()` → `getCurrentUser()` and `getMessagePayload()` → direct `MessagePayload` instantiation (methods don't exist on ServiceContainer)
+- Chain drop test suite: `clean_chain()` deletes ALL transactions including the contact TX — identified as root cause of ping test 6.1/6.3 dual-signature failures (design decision pending: missing contact TX invalidates entire chain)
 
 ### Added
+- Shared P2P diagnostic functions in `testHelpers.sh`: `get_processor_health`, `get_p2p_state`, `get_p2p_timing`, `dump_p2p_diagnostic` — reusable across all test suites for debugging P2P routing issues
+- Shared backup helper functions moved to `testHelpers.sh`: `cleanup_backups`, `count_backups`, `verify_tx_exists` — previously defined inline in `chainDropTestSuite.sh` after first use (causing `command not found` errors)
+- Best-fee routing test: diagnostic output on failure AND on slow success (>60s), showing per-hop P2P status, timing, candidate counts, and processor health
 - Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
 - Per-currency available credit exchange: pong returns `availableCreditByCurrency` map; each currency's available credit stored independently in `contact_credit` table (UNIQUE on `pubkey_hash, currency`)
 - GUI currency slider: contact modal uses horizontal pill-style currency slider with left/right arrows to switch between currencies, replacing the dropdown selector

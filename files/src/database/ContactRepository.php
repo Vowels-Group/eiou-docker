@@ -512,14 +512,15 @@ class ContactRepository extends AbstractRepository {
     public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
+        // Single row per (pubkey_hash, currency) — NULL means not yet configured
         $query = "SELECT credit_limit FROM contact_currencies
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
 
         if ($stmt) {
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($result) {
-                return (float) ($result['credit_limit'] ?? 0);
+            if ($result && $result['credit_limit'] !== null) {
+                return (float) $result['credit_limit'];
             }
         }
 
