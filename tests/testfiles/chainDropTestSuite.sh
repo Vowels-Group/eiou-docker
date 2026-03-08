@@ -1947,37 +1947,6 @@ fi
 # Cleanup test 8
 clean_chain > /dev/null
 
-# ========================= Helper: Backup cleanup =========================
-
-# Remove all backup files from a container
-# Usage: cleanup_backups <container>
-cleanup_backups() {
-    local container="$1"
-    docker exec ${container} sh -c "rm -f /var/lib/eiou/backups/*.eiou.enc" 2>/dev/null
-}
-
-# Check if a specific txid exists in a container's database
-# Usage: verify_tx_exists <container> <txid>
-# Returns: "1" if exists, "0" if not
-verify_tx_exists() {
-    local container="$1"
-    local txid="$2"
-    docker exec ${container} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        \$stmt = \$pdo->prepare('SELECT COUNT(*) FROM transactions WHERE txid = :txid');
-        \$stmt->execute(['txid' => '${txid}']);
-        echo \$stmt->fetchColumn();
-    " 2>/dev/null
-}
-
-# Count backup files on a container
-# Usage: count_backups <container>
-count_backups() {
-    local container="$1"
-    docker exec ${container} sh -c "ls -1 /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l" 2>/dev/null
-}
-
 #################### TEST 9: Backup Recovery on Propose (Sender Side) ####################
 
 echo -e "\n"
