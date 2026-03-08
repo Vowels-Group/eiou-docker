@@ -388,6 +388,12 @@ balanceChangedBest=0
 while [ $elapsed -lt $bestfeeTimeout ]; do
     sleep 5
 
+    # Process message queues on all containers so P2P messages relay through intermediaries
+    for c in ${all_containers}; do
+        docker exec -e EIOU_TEST_MODE=true ${c} eiou out >/dev/null 2>&1 || true
+        docker exec -e EIOU_TEST_MODE=true ${c} eiou in >/dev/null 2>&1 || true
+    done
+
     # Check if balance changed (early exit)
     newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
     balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")

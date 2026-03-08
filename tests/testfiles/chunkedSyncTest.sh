@@ -338,6 +338,26 @@ echo -e "\n\t-> Testing responder returns hasMore=false for <SYNC_CHUNK_SIZE tra
 
 timestamp2=$(date +%s%N)
 
+# Count pre-existing transactions between sender and receiver (from earlier test suites)
+preExistingCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$senderPubkey = base64_decode('${senderPubkeyB64}');
+    \$txs = \$app->services->getTransactionRepository()->getTransactionsBetweenPubkeys(
+        \$app->services->getCurrentUser()->getPublicKey(),
+        \$senderPubkey
+    );
+    // Count only non-pending/sending (same filter as handleTransactionSyncRequest)
+    \$count = 0;
+    foreach (\$txs as \$tx) {
+        \$status = \$tx['status'] ?? '';
+        if (\$status !== \Eiou\Core\Constants::STATUS_PENDING && \$status !== \Eiou\Core\Constants::STATUS_SENDING) {
+            \$count++;
+        }
+    }
+    echo \$count;
+" 2>/dev/null || echo "0")
+
 # Insert 10 synthetic transactions
 insertResult2=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
@@ -442,9 +462,10 @@ else
         echo \$json['transactionCount'] ?? 0;
     " 2>/dev/null || echo "0")
 
-    echo -e "\t   Response: hasMore=${smallHasMore}, transactionCount=${smallTxCount}"
+    expectedSmallCount=$((preExistingCount + 10))
+    echo -e "\t   Response: hasMore=${smallHasMore}, transactionCount=${smallTxCount} (expected ${expectedSmallCount}: ${preExistingCount} pre-existing + 10 synthetic)"
 
-    if [[ "$smallHasMore" == "false" ]] && [[ "$smallTxCount" -eq 10 ]]; then
+    if [[ "$smallHasMore" == "false" ]] && [[ "$smallTxCount" -eq "$expectedSmallCount" ]]; then
         printf "\t   Responder returns all when under chunk size ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
