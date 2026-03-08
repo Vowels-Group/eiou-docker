@@ -1051,6 +1051,7 @@ Get system settings.
     "success": true,
     "data": {
         "settings": {
+            "name": "Alice",
             "default_currency": "USD",
             "minimum_fee_amount": 0.01,
             "default_fee_percent": 1.0,
@@ -1058,12 +1059,15 @@ Get system settings.
             "default_credit_limit": 100.00,
             "max_p2p_level": 3,
             "p2p_expiration_seconds": 3600,
+            "direct_tx_expiration": 0,
             "max_output_lines": 100,
             "default_transport_mode": "http",
             "hostname": "http://alice",
             "hostname_secure": "https://alice",
+            "trusted_proxies": "",
             "auto_refresh_enabled": true,
             "auto_backup_enabled": true,
+            "auto_accept_transaction": true,
             "contact_status_enabled": true,
             "contact_status_sync_on_ping": true,
             "auto_chain_drop_propose": true,
@@ -1087,18 +1091,17 @@ Get system settings.
             "rate_limit_block_seconds": 300,
             "http_transport_timeout_seconds": 15,
             "tor_transport_timeout_seconds": 30,
-            "sync_chunk_size": 50,
-            "sync_max_chunks": 100,
-            "held_tx_sync_timeout_seconds": 120,
             "display_date_format": "Y-m-d H:i:s.u",
             "display_currency_decimals": 2,
-            "display_recent_transactions_limit": 5
+            "display_recent_transactions_limit": 5,
+            "allowed_currencies": ["USD", "EUR"]
         }
     }
 }
 ```
 
 **Fields:**
+- `name`: Display name for this node
 - `default_currency`: Default currency code for transactions (e.g., "USD")
 - `minimum_fee_amount`: Minimum fee amount for transactions
 - `default_fee_percent`: Default fee percentage for new contacts
@@ -1106,12 +1109,15 @@ Get system settings.
 - `default_credit_limit`: Default credit limit for new contacts
 - `max_p2p_level`: Maximum P2P relay depth level
 - `p2p_expiration_seconds`: Time in seconds before P2P requests expire
+- `direct_tx_expiration`: Direct (non-P2P) transaction delivery timeout in seconds (0 = no expiry)
 - `max_output_lines`: Maximum output lines for CLI commands
 - `default_transport_mode`: Default transport protocol ("http", "https", or "tor")
 - `hostname`: HTTP hostname of the node (e.g., "http://alice")
 - `hostname_secure`: HTTPS hostname of the node (e.g., "https://alice")
+- `trusted_proxies`: Trusted proxy IPs for header forwarding (comma-separated, empty = none)
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
+- `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `contact_status_enabled`: Whether contact status tracking is enabled
 - `contact_status_sync_on_ping`: Whether to sync contact status during ping
 - `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
@@ -1135,12 +1141,10 @@ Get system settings.
 - `rate_limit_block_seconds`: Block duration after limit exceeded in seconds (min 1)
 - `http_transport_timeout_seconds`: HTTP transport timeout (5-120 seconds)
 - `tor_transport_timeout_seconds`: Tor transport timeout (10-300 seconds)
-- `sync_chunk_size`: Number of transactions per sync chunk (10-500)
-- `sync_max_chunks`: Maximum sync chunks per cycle (10-1000)
-- `held_tx_sync_timeout_seconds`: Max seconds a held transaction sync can be in progress before considered stale (30-299, must be less than P2P expiration)
 - `display_date_format`: PHP date format string for timestamps
 - `display_currency_decimals`: Decimal places for currency display (0-8)
 - `display_recent_transactions_limit`: Number of recent transactions on dashboard (min 1)
+- `allowed_currencies`: List of allowed currency codes
 
 ---
 
@@ -1169,12 +1173,15 @@ Update system settings.
 | `max_fee` | number | Maximum fee percentage |
 | `max_p2p_level` | int | Maximum P2P relay depth |
 | `p2p_expiration` | int | P2P request expiration in seconds |
+| `direct_tx_expiration` | int | Direct TX delivery timeout in seconds (0 = no expiry) |
 | `max_output` | int | Maximum CLI output lines (0 = unlimited) |
 | `default_transport_mode` | string | Default transport protocol (http, https, tor) |
 | `auto_refresh_enabled` | boolean | Enable/disable auto-refresh |
 | `auto_backup_enabled` | boolean | Enable/disable automatic backups |
+| `trusted_proxies` | string | Trusted proxy IPs (comma-separated, empty = none) |
 | `hostname` | string | Node hostname (triggers SSL cert regeneration) |
 | `name` | string | Node display name |
+| `allowed_currencies` | string | Allowed currencies (comma-separated, e.g., "USD,EUR") |
 | `contact_status_enabled` | boolean | Enable/disable contact status tracking |
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
 | `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |

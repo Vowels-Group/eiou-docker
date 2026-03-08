@@ -890,17 +890,15 @@ eiou viewsettings
 eiou viewsettings --json
 ```
 
-**Settings displayed:**
-- Default currency
-- Minimum/Default/Maximum fee percentages
-- Default credit limit
-- Max P2P routing level
-- P2P expiration time
-- Max output lines (displays "unlimited" when set to 0)
-- Default transport mode
-- Hostname (HTTP and HTTPS)
-- Auto-refresh status
-- Auto-backup status
+**Settings displayed (grouped by category):**
+- **Transaction Settings:** Default currency, minimum/default/maximum fee percentages, default credit limit
+- **P2P & Network:** Max P2P level, P2P expiration, direct TX delivery expiration, default transport mode, HTTP/Tor transport timeouts, hostname (HTTP and HTTPS), trusted proxies, auto-accept P2P transactions
+- **Feature Toggles:** Display name, auto-refresh, contact status pinging, contact status sync on ping, auto chain drop propose/accept, API enabled, API CORS origins, rate limiting
+- **Backup & Logging:** Auto-backup, backup retention count, backup schedule, log level, log max entries
+- **Data Retention:** Delivery, DLQ, held TX, RP2P, metrics retention days
+- **Rate Limiting:** P2P rate limit per minute, max attempts, window, block duration
+- **Display:** Max output lines (displays "unlimited" when set to 0), date format, currency decimals, recent transactions limit
+- **Currency Management:** Allowed currencies
 
 ---
 
@@ -938,7 +936,9 @@ eiou changesettings [setting] [value]
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
 | `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
+| `name` | Display name for this node | `Alice` |
 | `trustedProxies` | Trusted proxy IPs for header forwarding | `10.0.0.1,172.16.0.0/12` |
+| `allowedCurrencies` | Allowed currencies (comma-separated) | `USD,EUR` |
 
 **Advanced Settings (Feature Toggles):**
 
@@ -1004,9 +1004,13 @@ eiou changesettings [setting] [value]
 | `displayCurrencyDecimals` | Currency decimal places (0-8) | `2` |
 | `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
 
+**Interactive Mode:**
+
+Running `eiou changesettings` without arguments enters interactive mode, which displays all current settings then presents a numbered menu of all 43 changeable settings grouped by category. All settings available via direct command-line mode are also available interactively.
+
 **Examples:**
 ```bash
-# Interactive mode
+# Interactive mode (shows all settings, prompts for selection)
 eiou changesettings
 
 # Direct setting change
@@ -1018,6 +1022,8 @@ eiou changesettings autoBackupEnabled false
 eiou changesettings autoAcceptTransaction false  # Require approval before sending P2P
 eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"
 eiou changesettings trustedProxies ""       # Clear (trust no proxies)
+eiou changesettings name "My Node"
+eiou changesettings allowedCurrencies "USD,EUR"
 
 # Advanced settings
 eiou changesettings logLevel WARNING
