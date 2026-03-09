@@ -111,8 +111,10 @@ cd ../
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
-# Pass EIOU_CONTACT_STATUS_ENABLED from parent shell (defaults to true if not set)
+# Pass env flags from parent shell (defaults if not set)
 CONTACT_STATUS_FLAG="${EIOU_CONTACT_STATUS_ENABLED:-true}"
+TOR_FORCE_FAST_FLAG="${EIOU_TOR_FORCE_FAST:-true}"
+DEFAULT_TRANSPORT_FLAG="${EIOU_DEFAULT_TRANSPORT_MODE:-http}"
 for container in "${containers[@]}"; do
-    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-backups:/var/lib/eiou/backups" -e QUICKSTART=$container -e EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_FLAG eiou/eiou
+    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container -e EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_FLAG -e EIOU_TOR_FORCE_FAST=$TOR_FORCE_FAST_FLAG -e EIOU_DEFAULT_TRANSPORT_MODE=$DEFAULT_TRANSPORT_FLAG eiou/eiou
 done

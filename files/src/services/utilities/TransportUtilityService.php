@@ -84,7 +84,7 @@ class TransportUtilityService implements TransportServiceInterface
      * @return string|null The type of database index
      */
     public function fallbackTransportType(string $info, array $contactInfo): ?string {
-        $transportIndex = $this->determineTransportType($info) ?? Constants::DEFAULT_TRANSPORT_MODE;
+        $transportIndex = $this->determineTransportType($info) ?? Constants::getDefaultTransportMode();
         if(isset($contactInfo[$transportIndex])){
             return $transportIndex;
         } 

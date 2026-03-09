@@ -554,7 +554,9 @@ class P2pService implements P2pServiceInterface {
             // Checks both the final destination AND the incoming sender transport,
             // because transport index cascading means if the sender used Tor to
             // reach us, all our downstream forwards will also use Tor.
-            if (!($request['fast'] ?? true)
+            // Disabled when EIOU_TOR_FORCE_FAST=false (for testing best-fee over Tor).
+            if (Constants::isTorForceFast()
+                && !($request['fast'] ?? true)
                 && (
                     (isset($request['receiverAddress']) && $this->transportUtility->isTorAddress($request['receiverAddress']))
                     || (isset($request['senderAddress']) && $this->transportUtility->isTorAddress($request['senderAddress']))
@@ -806,7 +808,8 @@ class P2pService implements P2pServiceInterface {
 
         // Force fast mode for Tor recipients — best-fee mode generates excessive
         // relay traffic and Tor latency (~5s/hop) amplifies the wait overhead
-        if (!$data['fast'] && $this->transportUtility->isTorAddress($data['receiverAddress'])) {
+        // Disabled when EIOU_TOR_FORCE_FAST=false (for testing best-fee over Tor).
+        if (Constants::isTorForceFast() && !$data['fast'] && $this->transportUtility->isTorAddress($data['receiverAddress'])) {
             $data['fast'] = 1;
         }
 

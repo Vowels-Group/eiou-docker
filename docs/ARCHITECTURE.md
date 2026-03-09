@@ -1228,7 +1228,7 @@ no direct connection exists. The system supports two routing modes:
 | Mode | Flag | Internal | Behavior |
 |------|------|----------|----------|
 | **Fast** (default) | None | `fast=1` | First RP2P response wins; lowest latency |
-| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee (HTTP/HTTPS only — forced to fast for Tor) |
+| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee (forced to fast for Tor unless `EIOU_TOR_FORCE_FAST=false`) |
 
 ```
       ALICE                   BOB                    CAROL                   EVE
@@ -1318,6 +1318,7 @@ No candidate storage or selection logic is involved.
   generates excessive relay traffic and Tor's ~5s/hop latency amplifies the wait overhead.
   Enforced on both sender side (`prepareP2pRequestData`) and receiver side
   (`handleP2pRequest`) to prevent remote nodes from forcing best-fee over Tor.
+  Can be disabled via `EIOU_TOR_FORCE_FAST=false` env variable for testing.
 - **Rejection counting:** When `handleRp2pRequest()` returns false (fee too high or
   relay can't afford), `checkRp2pPossible()` increments `contacts_responded_count` for
   the sender. When all contacts have responded (all rejected or cancelled), the node

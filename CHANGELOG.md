@@ -23,6 +23,8 @@ The project is currently in **ALPHA** status.
 - Randomized hop budget (Patent Claim 5): geometric distribution for hop budget initialization preventing traffic analysis attacks
 - New `route_cancel` message type for inter-node route cancellation delivery
 - Full cancel downstream propagation: `broadcastFullCancelForHash()` on P2pService broadcasts `route_cancel` with `full_cancel=true` to all accepted contacts, enabling originator and relay cancellation to propagate through the entire route chain
+- `EIOU_DEFAULT_TRANSPORT_MODE` env variable: overrides the default transport mode (`tor` in production) used when sending to a contact name. Test buildfiles default to `http` so best-fee tests don't silently use Tor's force-fast mode
+- `EIOU_TOR_FORCE_FAST` env variable: when set to `false`, disables the automatic fast-mode override for Tor routes, allowing best-fee mode testing over Tor topologies
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
 
 ### Fixed

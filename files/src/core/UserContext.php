@@ -482,7 +482,7 @@ class UserContext {
      * @return string
      */
     public function getDefaultTransportMode(): string {
-        return $this->get('defaultTransportMode') ?? Constants::DEFAULT_TRANSPORT_MODE;
+        return $this->get('defaultTransportMode') ?? Constants::getDefaultTransportMode();
     }
 
     /**
@@ -856,7 +856,7 @@ class UserContext {
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
             'directTxExpiration' => Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS, // Default: one Tor round-trip (60s); 0 = no expiry
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
-            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
+            'defaultTransportMode' => Constants::getDefaultTransportMode(),
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
