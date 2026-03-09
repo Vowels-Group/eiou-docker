@@ -22,6 +22,7 @@ use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Schemas\Payloads\Rp2pPayload;
+use Eiou\Contracts\RouteCancellationServiceInterface;
 use PDOException;
 use Exception;
 use RuntimeException;
@@ -124,6 +125,11 @@ class Rp2pService implements Rp2pServiceInterface {
     private ?ContactCurrencyRepository $contactCurrencyRepository = null;
 
     /**
+     * @var RouteCancellationServiceInterface|null Route cancellation service
+     */
+    private ?RouteCancellationServiceInterface $routeCancellationService = null;
+
+    /**
      * Set the P2P transaction sender (setter injection to break circular dependency)
      *
      * This method accepts P2pTransactionSenderInterface, which breaks the circular
@@ -167,6 +173,15 @@ class Rp2pService implements Rp2pServiceInterface {
      */
     public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
         $this->contactCurrencyRepository = $repository;
+    }
+
+    /**
+     * Set the RouteCancellationService
+     *
+     * @param RouteCancellationServiceInterface $service
+     */
+    public function setRouteCancellationService(RouteCancellationServiceInterface $service): void {
+        $this->routeCancellationService = $service;
     }
 
     /**
@@ -1056,6 +1071,15 @@ class Rp2pService implements Rp2pServiceInterface {
                 if ($this->p2pService !== null) {
                     $this->p2pService->sendCancelNotificationForHash($hash);
                 }
+            }
+        }
+
+        // Cancel unselected routes to release their reserved capacity immediately
+        if ($success && $this->routeCancellationService !== null) {
+            $selectedCandidateId = (string) ($candidates[$index]['id'] ?? $index);
+            $unselectedCandidates = array_filter($candidates, fn($c, $i) => $i !== $index, ARRAY_FILTER_USE_BOTH);
+            if (!empty($unselectedCandidates)) {
+                $this->routeCancellationService->cancelUnselectedRoutes($hash, $selectedCandidateId, array_values($unselectedCandidates));
             }
         }
 

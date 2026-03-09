@@ -13,6 +13,7 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\CapacityReservationRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
@@ -138,6 +139,11 @@ class P2pService implements P2pServiceInterface {
     private ?ContactCurrencyRepository $contactCurrencyRepository = null;
 
     /**
+     * @var CapacityReservationRepository|null Capacity reservation repository
+     */
+    private ?CapacityReservationRepository $capacityReservationRepository = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -225,6 +231,15 @@ class P2pService implements P2pServiceInterface {
      */
     public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
         $this->contactCurrencyRepository = $repository;
+    }
+
+    /**
+     * Set the CapacityReservationRepository
+     *
+     * @param CapacityReservationRepository $repo
+     */
+    public function setCapacityReservationRepository(CapacityReservationRepository $repo): void {
+        $this->capacityReservationRepository = $repo;
     }
 
     /**
@@ -319,8 +334,11 @@ class P2pService implements P2pServiceInterface {
                 $requestedAmount = $this->calculateRequestedAmount($request);
                 $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
 
-                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
-                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
+                $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
+                $fundsOnHold = $this->capacityReservationRepository !== null
+                    ? $this->capacityReservationRepository->getTotalReservedForPubkey($senderPubkeyHash, $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)
+                    : $this->p2pRepository->getCreditInP2p($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
+                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
@@ -632,6 +650,21 @@ class P2pService implements P2pServiceInterface {
                     $request['hash'], $request['senderAddress'], $request['senderPublicKey']
                 );
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
+
+            // Create capacity reservation for this relay
+            if ($this->capacityReservationRepository !== null) {
+                $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
+                $baseAmount = (int) $request['amount'];
+                $totalAmount = $this->calculateRequestedAmount($request);
+                $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $this->capacityReservationRepository->createReservation(
+                    $request['hash'],
+                    $senderPubkeyHash,
+                    $baseAmount,
+                    $totalAmount,
+                    $currency
+                );
+            }
             }
         } catch (PDOException $e) {
             Logger::getInstance()->logException($e, [], 'ERROR');

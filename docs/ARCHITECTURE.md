@@ -314,8 +314,9 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection, creates capacity reservations on relay | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, CapacityReservationRepo, TransportUtility, MessageDeliveryService |
+| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup, triggers route cancellation for unselected candidates | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface), RouteCancellationService |
+| `RouteCancellationService` | Actively cancels unselected P2P routes after best-fee selection (Patent Claim 16); releases capacity reservations, sends `route_cancel` messages, handles incoming cancellations; randomized hop budget (Patent Claim 5) via geometric distribution | P2pService (via P2pServiceInterface), CapacityReservationRepo, RouteCancellationRepo, P2pRepo |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -325,7 +326,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
 | `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
-| `CleanupService` | Expired message/proposal cleanup | P2pRepo, Rp2pRepo, TransactionRepo, ChainDropService |
+| `CleanupService` | Expired message/proposal cleanup; releases expired capacity reservations, prunes old cancellation records | P2pRepo, Rp2pRepo, TransactionRepo, ChainDropService, CapacityReservationRepo, RouteCancellationRepo |
 | `BackupService` | Encrypted backup and restore | TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
 | `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService |
@@ -432,6 +433,7 @@ coupling and makes circular dependencies easier to break.
 | `ChainOperationsInterface` | Chain verification and repair | `ChainOperationsService` |
 | `LockingServiceInterface` | Distributed locking | `DatabaseLockingService` |
 | `EventDispatcherInterface` | Event-driven communication | `EventDispatcher` |
+| `RouteCancellationServiceInterface` | Route cancellation and hop budget | `RouteCancellationService` |
 
 **Example - SyncTriggerInterface:**
 
@@ -1065,6 +1067,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
 | `contact_credit` | Per-contact, per-currency available credit received from pong (UNIQUE on `pubkey_hash, currency`) |
 | `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing` = who initiated the relationship) |
+| `capacity_reservations` | Credit reserved at each relay hop during P2P routing (base_amount and total_amount including fees), status: active/released/committed |
+| `route_cancellations` | Audit trail for route cancellation messages sent to unselected P2P candidates after best-fee selection |
 
 ### Repository Pattern
 
@@ -1365,6 +1369,13 @@ If a candidate fails validation (fee exceeds originator's `maxFee`, or relay
 node can't afford the amount), the next candidate is tried. If all candidates
 fail, the P2P is cancelled and a cancel notification is sent upstream.
 All candidates are deleted after the loop completes regardless of outcome.
+
+After successful selection, `RouteCancellationService::cancelUnselectedRoutes()`
+sends `route_cancel` messages to all unselected candidates' contacts, releasing
+their capacity reservations immediately rather than waiting for CleanupService
+TTL expiry. Each cancellation is recorded in the `route_cancellations` audit
+table. Downstream hops beyond the first are not actively cancelled — they expire
+naturally via CleanupService, which also releases associated capacity reservations.
 
 **Phase 3a — Two-Phase Relay Selection (Mesh Deadlock Prevention):**
 

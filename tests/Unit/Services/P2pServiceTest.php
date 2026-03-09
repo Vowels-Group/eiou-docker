@@ -28,6 +28,7 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\CapacityReservationRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -54,6 +55,7 @@ class P2pServiceTest extends TestCase
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pSenderRepository $p2pSenderRepository;
     private MockObject|ContactCurrencyRepository $contactCurrencyRepository;
+    private MockObject|CapacityReservationRepository $capacityReservationRepository;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -78,6 +80,7 @@ class P2pServiceTest extends TestCase
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
         $this->contactCurrencyRepository = $this->createMock(ContactCurrencyRepository::class);
+        $this->capacityReservationRepository = $this->createMock(CapacityReservationRepository::class);
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -112,6 +115,7 @@ class P2pServiceTest extends TestCase
             $this->p2pSenderRepository
         );
         $this->service->setContactCurrencyRepository($this->contactCurrencyRepository);
+        $this->service->setCapacityReservationRepository($this->capacityReservationRepository);
     }
 
     // =========================================================================
@@ -274,7 +278,7 @@ class P2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(0);
 
-        $this->p2pRepository->method('getCreditInP2p')
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
             ->willReturn(0);
 
         $this->contactService->method('getCreditLimit')
@@ -497,7 +501,7 @@ class P2pServiceTest extends TestCase
         // Funds check mocks (intermediary path — matchYourselfP2P returns false)
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
-        $this->p2pRepository->method('getCreditInP2p')
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
             ->willReturn(0);
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
@@ -577,7 +581,7 @@ class P2pServiceTest extends TestCase
         // Funds check mocks
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
-        $this->p2pRepository->method('getCreditInP2p')
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
             ->willReturn(0);
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
@@ -672,7 +676,7 @@ class P2pServiceTest extends TestCase
         // Funds check mocks
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(100000);
-        $this->p2pRepository->method('getCreditInP2p')
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
             ->willReturn(0);
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
@@ -1145,7 +1149,7 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test getCreditInP2p delegates to repository
+     * Test getCreditInP2p delegates to repository (legacy path)
      */
     public function testGetCreditInP2pDelegatesToRepository(): void
     {
@@ -1157,6 +1161,48 @@ class P2pServiceTest extends TestCase
         $result = $this->service->getCreditInP2p(self::TEST_PUBLIC_KEY);
 
         $this->assertEquals(5000, $result);
+    }
+
+    /**
+     * Test checkAvailableFunds uses CapacityReservationRepository when injected
+     */
+    public function testCheckAvailableFundsUsesCapacityReservation(): void
+    {
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'amount' => self::TEST_AMOUNT
+        ];
+
+        $senderPubkeyHash = hash('sha256', self::TEST_PUBLIC_KEY);
+
+        $this->capacityReservationRepository->expects($this->once())
+            ->method('getTotalReservedForPubkey')
+            ->with($senderPubkeyHash, 'USD')
+            ->willReturn(5000);
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://other.address');
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactService->method('getCreditLimit')
+            ->with($this->anything(), 'USD')
+            ->willReturn(100000.0);
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['pubkey_hash' => 'test_hash']);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://me.test']);
+
+        $result = $this->service->checkAvailableFunds($request);
+
+        $this->assertTrue($result);
     }
 
     /**
@@ -1418,7 +1464,7 @@ class P2pServiceTest extends TestCase
         $this->validationUtility->method('calculateAvailableFunds')
             ->willReturn(5000); // Less than requested amount + fees
 
-        $this->p2pRepository->method('getCreditInP2p')
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
             ->willReturn(0);
 
         $this->contactService->method('getCreditLimit')

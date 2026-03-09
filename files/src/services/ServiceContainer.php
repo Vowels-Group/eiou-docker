@@ -22,6 +22,7 @@ use Eiou\Contracts\Rp2pServiceInterface;
 use Eiou\Contracts\WalletServiceInterface;
 use Eiou\Contracts\MessageServiceInterface;
 use Eiou\Contracts\CleanupServiceInterface;
+use Eiou\Contracts\RouteCancellationServiceInterface;
 use Eiou\Contracts\SyncServiceInterface;
 use Eiou\Contracts\DebugServiceInterface;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
@@ -69,6 +70,8 @@ use Eiou\Database\TransactionStatisticsRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\TransactionRecoveryRepository;
 use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\RouteCancellationRepository;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Cli\CliOutputManager;
 use PDO;
@@ -530,6 +533,34 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get CapacityReservationRepository instance
+     *
+     * @return CapacityReservationRepository
+     */
+    public function getCapacityReservationRepository(): CapacityReservationRepository {
+        if (!isset($this->repositories['CapacityReservationRepository'])) {
+            $this->repositories['CapacityReservationRepository'] = new CapacityReservationRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['CapacityReservationRepository'];
+    }
+
+    /**
+     * Get RouteCancellationRepository instance
+     *
+     * @return RouteCancellationRepository
+     */
+    public function getRouteCancellationRepository(): RouteCancellationRepository {
+        if (!isset($this->repositories['RouteCancellationRepository'])) {
+            $this->repositories['RouteCancellationRepository'] = new RouteCancellationRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['RouteCancellationRepository'];
+    }
+
+    /**
      * Get ContactManagementService instance
      * @return ContactManagementServiceInterface
      */
@@ -720,6 +751,18 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['CleanupService'];
+    }
+
+    /**
+     * Get RouteCancellationService instance
+     *
+     * @return RouteCancellationServiceInterface
+     */
+    public function getRouteCancellationService(): RouteCancellationServiceInterface {
+        if (!isset($this->services['RouteCancellationService'])) {
+            $this->services['RouteCancellationService'] = new RouteCancellationService();
+        }
+        return $this->services['RouteCancellationService'];
     }
 
     /**
@@ -1533,6 +1576,32 @@ class ServiceContainer implements ContainerInterface {
                 $this->services['P2pService']->setRp2pService($this->services['Rp2pService']);
             }
         }
+
+        // Wire RouteCancellationService dependencies
+        if (isset($this->services['RouteCancellationService'])) {
+            $this->services['RouteCancellationService']->setCapacityReservationRepository($this->getCapacityReservationRepository());
+            $this->services['RouteCancellationService']->setRouteCancellationRepository($this->getRouteCancellationRepository());
+            $this->services['RouteCancellationService']->setP2pRepository($this->getP2pRepository());
+            if (isset($this->services['P2pService'])) {
+                $this->services['RouteCancellationService']->setP2pService($this->services['P2pService']);
+            }
+        }
+
+        // Wire Rp2pService -> RouteCancellationService
+        if (isset($this->services['Rp2pService']) && isset($this->services['RouteCancellationService'])) {
+            $this->services['Rp2pService']->setRouteCancellationService($this->services['RouteCancellationService']);
+        }
+
+        // Wire P2pService -> CapacityReservationRepository
+        if (isset($this->services['P2pService'])) {
+            $this->services['P2pService']->setCapacityReservationRepository($this->getCapacityReservationRepository());
+        }
+
+        // Wire CleanupService -> CapacityReservationRepository, RouteCancellationRepository
+        if (isset($this->services['CleanupService'])) {
+            $this->services['CleanupService']->setCapacityReservationRepository($this->getCapacityReservationRepository());
+            $this->services['CleanupService']->setRouteCancellationRepository($this->getRouteCancellationRepository());
+        }
     }
 
     /**
@@ -1564,6 +1633,7 @@ class ServiceContainer implements ContainerInterface {
         $this->getContactStatusService();
         $this->getRateLimiterService();
         $this->getCleanupService();
+        $this->getRouteCancellationService();
         $this->getTransactionRecoveryService();
 
         // Initialize new refactored services

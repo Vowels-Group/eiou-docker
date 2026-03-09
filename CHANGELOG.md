@@ -16,7 +16,16 @@ The project is currently in **ALPHA** status.
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
+### Added
+- Route cancellation service (Patent Claim 16): actively cancels unselected P2P routes after best-fee selection to immediately release reserved credit capacity. CleanupService TTL expiry remains as natural fallback
+- Capacity reservation table (`capacity_reservations`): dedicated table tracking credit reserved at each relay hop with base_amount and total_amount (including fees), replacing implicit credit hold calculation from P2P table
+- Route cancellation audit table (`route_cancellations`): tracks cancellation messages sent to unselected routes
+- Randomized hop budget (Patent Claim 5): geometric distribution for hop budget initialization preventing traffic analysis attacks
+- New `route_cancel` message type for inter-node route cancellation delivery
+
 ### Changed
+- Credit hold calculation in `checkAvailableFunds` now uses `capacity_reservations` table (Option 1: single source of truth) with fallback to legacy `getCreditInP2p` method
+- `P2pServiceTest` updated to mock `CapacityReservationRepository::getTotalReservedForPubkey` instead of legacy `P2pRepository::getCreditInP2p`, testing the new capacity reservation path as primary
 - Letsencrypt volume mount changed from optional (commented out) to always-created named volume to prevent dangling anonymous volumes on container rebuilds. Safe to comment out if you will never use Let's Encrypt
 - Legacy demo/test compose files updated with letsencrypt named volumes for consistency
 - Legacy demo sleep timers increased from 5s/10s to 15s to account for longer container boot times

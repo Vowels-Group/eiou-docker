@@ -136,6 +136,12 @@ elseif ($type === "rp2p") {
   // Returns false in all cases (processing handled internally)
   $rp2pService->checkRp2pPossible($request);
 }
+elseif ($type === "route_cancel") {
+  // Handle Route Cancellation (Claim 16: release reserved capacity on unselected routes)
+  $debugService->output("Processing route_cancel from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'] ?? 'unknown', TRUE), 'SILENT');
+  $routeCancellationService = $serviceContainer->getRouteCancellationService();
+  $routeCancellationService->handleIncomingCancellation($request);
+}
 elseif ($type === "message") {
   // Handle messages
   $debugService->output("Processing message from " . print_r($envelope['senderAddress'],true), 'SILENT');

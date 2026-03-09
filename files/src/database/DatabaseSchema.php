@@ -533,3 +533,43 @@ function getRateLimitsTableSchema() {
         INDEX idx_blocked_until (blocked_until)
     )";
 }
+
+// ============================================================================
+// CAPACITY RESERVATIONS & ROUTE CANCELLATIONS
+// Tables for tracking reserved credit capacity during P2P route discovery
+// and audit trail for route cancellation messages.
+// ============================================================================
+
+// Capacity Reservations table - tracks credit reserved at each relay hop
+function getCapacityReservationsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS capacity_reservations (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(128) NOT NULL,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,
+        base_amount INT NOT NULL,
+        total_amount INT NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        status ENUM('active', 'released', 'committed') DEFAULT 'active',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        released_at TIMESTAMP(6) NULL,
+        release_reason ENUM('cancelled', 'expired', 'committed') NULL,
+        UNIQUE INDEX idx_cap_res_hash_contact (hash, contact_pubkey_hash, currency),
+        INDEX idx_cap_res_status (status),
+        INDEX idx_cap_res_hash (hash)
+    )";
+}
+
+// Route Cancellations table - audit trail for cancellation messages sent to unselected routes
+function getRouteCancellationsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS route_cancellations (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(128) NOT NULL,
+        candidate_id INT NULL,
+        contact_address VARCHAR(255) NOT NULL,
+        status ENUM('sent', 'acknowledged', 'failed') DEFAULT 'sent',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        acknowledged_at TIMESTAMP(6) NULL,
+        INDEX idx_route_cancel_hash (hash),
+        INDEX idx_route_cancel_status (status)
+    )";
+}

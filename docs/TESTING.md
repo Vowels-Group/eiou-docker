@@ -97,6 +97,8 @@ Integration tests validate the complete system behavior using Docker containers.
 | **DatabaseSchemaTest.php** | 67 | Schema validation for all 14 tables, column types, constraints, indexes |
 | **DatabaseSetupTest.php** | 15+ | Migration execution, column migrations, idempotency |
 | **P2pSenderRepositoryTest.php** | 20+ | Multi-path upstream sender tracking for RP2P forwarding |
+| **CapacityReservationRepositoryTest.php** | 12 | Capacity reservation CRUD, total reserved queries, release/commit by hash, TTL cleanup |
+| **RouteCancellationRepositoryTest.php** | 8 | Route cancellation audit trail, acknowledgment, hash queries, TTL cleanup |
 | **PdoConnectionTest.php** | 10+ | Connection creation, DSN format, PDO options |
 
 ### Processors Tests (`tests/Unit/Processors/`)
@@ -156,8 +158,9 @@ Integration tests validate the complete system behavior using Docker containers.
 | **CliServiceTest.php** | 25+ | CLI command handling, output formatting |
 | **DebugServiceTest.php** | 15+ | Debug context, error logging setup |
 | **MessageServiceTest.php** | 25+ | Message processing, validation, routing |
-| **P2pServiceTest.php** | 30+ | P2P routing logic, fund availability, matching |
+| **P2pServiceTest.php** | 63 | P2P routing logic, fund availability via capacity reservations, matching, fee calculation |
 | **Rp2pServiceTest.php** | 46 | RP2P relay logic, fee calculation, two-phase relay selection, race condition coverage |
+| **RouteCancellationServiceTest.php** | 15 | Route cancellation for unselected candidates, incoming cancellation handling, hop budget (geometric distribution), capacity reservation release |
 | **SendOperationServiceTest.php** | 20+ | Send operations with locking, message delivery |
 | **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
 | **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |
@@ -357,8 +360,10 @@ tests/
 │   │   ├── ConstantsTest.php
 │   │   └── ErrorCodesTest.php
 │   ├── Database/
+│   │   ├── CapacityReservationRepositoryTest.php
 │   │   ├── DatabaseSchemaTest.php
-│   │   └── P2pSenderRepositoryTest.php
+│   │   ├── P2pSenderRepositoryTest.php
+│   │   └── RouteCancellationRepositoryTest.php
 │   ├── Events/
 │   │   ├── EventDispatcherTest.php
 │   │   └── SyncEventsTest.php
@@ -426,6 +431,7 @@ tests/
 │   │   ├── MessageServiceTest.php
 │   │   ├── P2pServiceTest.php
 │   │   ├── RateLimiterServiceTest.php
+│   │   ├── RouteCancellationServiceTest.php
 │   │   ├── Rp2pServiceTest.php
 │   │   ├── SendOperationServiceTest.php
 │   │   ├── ServiceContainerTest.php
