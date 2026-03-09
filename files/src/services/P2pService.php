@@ -256,7 +256,7 @@ class P2pService implements P2pServiceInterface {
      * @param string|null $messageId Optional unique message ID for tracking (uses hash if available)
      * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
      */
-    private function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array {
+    public function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array {
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
             // Use async=true for non-blocking delivery (allows P2P broadcast loops to continue)
@@ -1347,6 +1347,56 @@ class P2pService implements P2pServiceInterface {
         Logger::getInstance()->info("Sent cancel notification upstream", [
             'hash' => $hash,
             'sender_count' => count($senders),
+        ]);
+    }
+
+    /**
+     * Broadcast full cancellation downstream to all accepted contacts
+     *
+     * Used when the originator rejects a P2P or when a relay receives a
+     * full_cancel. Sends route_cancel with full_cancel=true to all accepted
+     * contacts, who will cancel their P2P, release reservations, and propagate.
+     *
+     * @param string $hash The P2P hash to cancel
+     * @return void
+     */
+    public function broadcastFullCancelForHash(string $hash): void
+    {
+        $p2p = $this->p2pRepository->getByHash($hash);
+        if (!$p2p) {
+            return;
+        }
+
+        // Determine transport type from the P2P record
+        $address = $p2p['destination_address'] ?? $p2p['sender_address'] ?? '';
+        $transportIndex = $this->transportUtility->determineTransportType($address);
+
+        $currency = $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+        $contacts = $this->contactService->getAllAcceptedAddresses($currency);
+
+        $cancelPayload = [
+            'type' => 'route_cancel',
+            'hash' => $hash,
+            'cancelled' => true,
+            'full_cancel' => true,
+        ];
+
+        $sentCount = 0;
+        foreach ($contacts as $contact) {
+            $contactAddress = $contact[$transportIndex] ?? '';
+            if ($contactAddress === '') {
+                continue;
+            }
+
+            $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
+            $messageId = 'full-cancel-' . $hash . '-' . $contactHash;
+            $this->sendP2pMessage('route_cancel', $contactAddress, $cancelPayload, $messageId);
+            $sentCount++;
+        }
+
+        Logger::getInstance()->info("Broadcast full cancel downstream", [
+            'hash' => $hash,
+            'contact_count' => $sentCount,
         ]);
     }
 

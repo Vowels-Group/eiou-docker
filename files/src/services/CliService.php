@@ -3367,9 +3367,10 @@ extendedKeyUsage = serverAuth
         try {
             $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
 
-            // Propagate cancel upstream
+            // Propagate full cancel downstream to all contacts
+            // (originator has destination_address set, so upstream cancel is not applicable)
             if ($this->p2pService !== null) {
-                $this->p2pService->sendCancelNotificationForHash($hash);
+                $this->p2pService->broadcastFullCancelForHash($hash);
             }
 
             // Clean up any remaining candidates

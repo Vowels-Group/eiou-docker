@@ -22,7 +22,14 @@ The project is currently in **ALPHA** status.
 - Route cancellation audit table (`route_cancellations`): tracks cancellation messages sent to unselected routes
 - Randomized hop budget (Patent Claim 5): geometric distribution for hop budget initialization preventing traffic analysis attacks
 - New `route_cancel` message type for inter-node route cancellation delivery
-- Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, gap documentation for originator downstream cancel and multi-hop cancel propagation
+- Full cancel downstream propagation: `broadcastFullCancelForHash()` on P2pService broadcasts `route_cancel` with `full_cancel=true` to all accepted contacts, enabling originator and relay cancellation to propagate through the entire route chain
+- Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
+
+### Fixed
+- Originator cancel now propagates downstream: `CliService::rejectP2p()` calls `broadcastFullCancelForHash()` instead of `sendCancelNotificationForHash()` which exited early for originator nodes
+- Multi-route cancel safety (diamond topology): regular `route_cancel` from best-fee selection now just acknowledges without cancelling P2P or releasing reservation, preventing incorrect resource freeing when a node is part of both selected and unselected routes
+- `handleIncomingCancellation` now propagates `full_cancel` downstream to relay contacts, enabling cancel cascade through the full route chain instead of being local-only
+- `P2pService::sendP2pMessage` visibility changed from private to public and added to `P2pServiceInterface`, fixing runtime error when called from `RouteCancellationService::cancelUnselectedRoutes`
 
 ### Changed
 - Credit hold calculation in `checkAvailableFunds` now uses `capacity_reservations` table (Option 1: single source of truth) with fallback to legacy `getCreditInP2p` method

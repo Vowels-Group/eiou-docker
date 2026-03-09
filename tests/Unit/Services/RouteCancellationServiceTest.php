@@ -21,15 +21,6 @@ use Eiou\Database\RouteCancellationRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Core\Constants;
 
-/**
- * Extended interface for testing: sendP2pMessage is called by RouteCancellationService
- * but not declared on P2pServiceInterface (it is private on P2pService).
- */
-interface TestableP2pServiceInterface extends P2pServiceInterface
-{
-    public function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array;
-}
-
 #[CoversClass(RouteCancellationService::class)]
 class RouteCancellationServiceTest extends TestCase
 {
@@ -50,9 +41,7 @@ class RouteCancellationServiceTest extends TestCase
 
         $this->service = new RouteCancellationService();
 
-        // Use TestableP2pServiceInterface which extends P2pServiceInterface
-        // with sendP2pMessage (called by RouteCancellationService but not on the base interface)
-        $this->p2pService = $this->createMock(TestableP2pServiceInterface::class);
+        $this->p2pService = $this->createMock(P2pServiceInterface::class);
         $this->capacityReservationRepository = $this->createMock(CapacityReservationRepository::class);
         $this->routeCancellationRepository = $this->createMock(RouteCancellationRepository::class);
         $this->p2pRepository = $this->createMock(P2pRepository::class);
@@ -162,14 +151,59 @@ class RouteCancellationServiceTest extends TestCase
     }
 
     // =========================================================================
-    // handleIncomingCancellation() Tests
+    // handleIncomingCancellation() Tests — Regular route_cancel (no full_cancel)
     // =========================================================================
 
     /**
-     * Test handleIncomingCancellation marks local P2P as cancelled
+     * Test regular route_cancel just acknowledges without cancelling P2P
+     *
+     * Multi-route safety: this node may still be part of the selected route
+     * in a diamond topology, so we must NOT cancel the P2P or release reservation.
      */
-    public function testHandleIncomingCancellationMarksP2pCancelled(): void
+    public function testRegularRouteCancelJustAcknowledges(): void
     {
+        $this->p2pRepository->expects($this->never())
+            ->method('getByHash');
+        $this->p2pRepository->expects($this->never())
+            ->method('updateStatus');
+        $this->capacityReservationRepository->expects($this->never())
+            ->method('releaseByHash');
+
+        ob_start();
+        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH]);
+        $output = ob_get_clean();
+
+        $decoded = json_decode($output, true);
+        $this->assertEquals('acknowledged', $decoded['status']);
+        $this->assertStringContainsString('acknowledged', $decoded['message']);
+    }
+
+    /**
+     * Test regular route_cancel does not propagate downstream
+     */
+    public function testRegularRouteCancelDoesNotPropagate(): void
+    {
+        $this->service->setP2pService($this->p2pService);
+
+        $this->p2pService->expects($this->never())
+            ->method('broadcastFullCancelForHash');
+
+        ob_start();
+        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH]);
+        ob_get_clean();
+    }
+
+    // =========================================================================
+    // handleIncomingCancellation() Tests — Full cancel (full_cancel=true)
+    // =========================================================================
+
+    /**
+     * Test full cancel marks local P2P as cancelled
+     */
+    public function testFullCancelMarksP2pCancelled(): void
+    {
+        $this->service->setP2pService($this->p2pService);
+
         $this->p2pRepository->method('getByHash')
             ->with(self::TEST_HASH)
             ->willReturn(['hash' => self::TEST_HASH, 'status' => 'pending']);
@@ -179,18 +213,21 @@ class RouteCancellationServiceTest extends TestCase
             ->with(self::TEST_HASH, Constants::STATUS_CANCELLED);
 
         ob_start();
-        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH]);
+        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH, 'full_cancel' => true]);
         $output = ob_get_clean();
 
         $decoded = json_decode($output, true);
         $this->assertEquals('acknowledged', $decoded['status']);
+        $this->assertStringContainsString('Full cancel', $decoded['message']);
     }
 
     /**
-     * Test handleIncomingCancellation releases capacity reservation
+     * Test full cancel releases capacity reservation
      */
-    public function testHandleIncomingCancellationReleasesReservation(): void
+    public function testFullCancelReleasesReservation(): void
     {
+        $this->service->setP2pService($this->p2pService);
+
         $this->p2pRepository->method('getByHash')
             ->with(self::TEST_HASH)
             ->willReturn(['hash' => self::TEST_HASH, 'status' => 'pending']);
@@ -200,16 +237,34 @@ class RouteCancellationServiceTest extends TestCase
             ->with(self::TEST_HASH, 'cancelled');
 
         ob_start();
-        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH]);
+        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH, 'full_cancel' => true]);
         ob_get_clean();
     }
 
     /**
-     * Test handleIncomingCancellation skips status update for terminal statuses
-     *
-     * If the P2P is already completed, cancelled, or expired, updateStatus should NOT be called.
+     * Test full cancel propagates downstream via broadcastFullCancelForHash
      */
-    public function testHandleIncomingCancellationSkipsTerminalStatuses(): void
+    public function testFullCancelPropagatesDownstream(): void
+    {
+        $this->service->setP2pService($this->p2pService);
+
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn(['hash' => self::TEST_HASH, 'status' => 'pending']);
+
+        $this->p2pService->expects($this->once())
+            ->method('broadcastFullCancelForHash')
+            ->with(self::TEST_HASH);
+
+        ob_start();
+        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH, 'full_cancel' => true]);
+        ob_get_clean();
+    }
+
+    /**
+     * Test full cancel skips status update for terminal statuses
+     */
+    public function testFullCancelSkipsTerminalStatuses(): void
     {
         $terminalStatuses = [
             Constants::STATUS_COMPLETED,
@@ -221,8 +276,10 @@ class RouteCancellationServiceTest extends TestCase
             $service = new RouteCancellationService();
             $p2pRepo = $this->createMock(P2pRepository::class);
             $capacityRepo = $this->createMock(CapacityReservationRepository::class);
+            $p2pMock = $this->createMock(P2pServiceInterface::class);
             $service->setP2pRepository($p2pRepo);
             $service->setCapacityReservationRepository($capacityRepo);
+            $service->setP2pService($p2pMock);
 
             $p2pRepo->method('getByHash')
                 ->with(self::TEST_HASH)
@@ -232,7 +289,7 @@ class RouteCancellationServiceTest extends TestCase
                 ->method('updateStatus');
 
             ob_start();
-            $service->handleIncomingCancellation(['hash' => self::TEST_HASH]);
+            $service->handleIncomingCancellation(['hash' => self::TEST_HASH, 'full_cancel' => true]);
             ob_get_clean();
         }
     }
@@ -255,9 +312,9 @@ class RouteCancellationServiceTest extends TestCase
     }
 
     /**
-     * Test handleIncomingCancellation handles P2P not found in repository
+     * Test full cancel handles P2P not found in repository
      */
-    public function testHandleIncomingCancellationHandlesMissingP2p(): void
+    public function testFullCancelHandlesMissingP2p(): void
     {
         $this->p2pRepository->method('getByHash')
             ->with(self::TEST_HASH)
@@ -267,7 +324,7 @@ class RouteCancellationServiceTest extends TestCase
             ->method('updateStatus');
 
         ob_start();
-        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH]);
+        $this->service->handleIncomingCancellation(['hash' => self::TEST_HASH, 'full_cancel' => true]);
         $output = ob_get_clean();
 
         $decoded = json_decode($output, true);

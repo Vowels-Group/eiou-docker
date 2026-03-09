@@ -347,60 +347,53 @@ else
 fi
 
 # ==================== Test 10: Originator Cancel Propagates Downstream ====================
-echo -e "\n[Test 10: Originator cancel propagates downstream (GAP CHECK)]"
+echo -e "\n[Test 10: Originator cancel propagates downstream via broadcastFullCancelForHash]"
 
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\t-> Checking if sendCancelNotification sends downstream for originator nodes"
+echo -e "\t-> Checking broadcastFullCancelForHash exists on P2pService"
 
-# The originator has destination_address set. The current sendCancelNotification()
-# returns early if destination_address is set (line 1317 of P2pService.php).
-# This means originator cancel does NOT propagate downstream — relay nodes
-# holding P2P resources must wait for CleanupService TTL expiry.
 originatorCancelCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getP2pService();
 
-    // Check if P2pService has a method for downstream cancel propagation
-    // (cancelDownstream, sendDownstreamCancel, or similar)
-    \$downstreamMethods = ['cancelDownstream', 'sendDownstreamCancel', 'propagateCancelDownstream'];
-    \$hasDownstream = false;
-    foreach (\$downstreamMethods as \$m) {
-        if (method_exists(\$service, \$m)) {
-            \$hasDownstream = true;
-            break;
-        }
+    // broadcastFullCancelForHash sends route_cancel with full_cancel=true
+    // to all accepted contacts, enabling downstream cancel propagation
+    if (!method_exists(\$service, 'broadcastFullCancelForHash')) {
+        echo 'MISSING_METHOD';
+        exit;
     }
 
-    // Also check if sendCancelNotification handles originator case
-    // by using reflection to read the method body
-    \$ref = new ReflectionMethod(\$service, 'sendCancelNotificationForHash');
-    // The public method delegates to private sendCancelNotification
-    // which has: if (isset(\\\$p2p['destination_address'])) { return; }
-    // This means originator cancel is silently skipped
+    // Verify CliService::rejectP2p calls broadcastFullCancelForHash (not sendCancelNotificationForHash)
+    \$cliService = \$app->services->getCliService();
+    \$ref = new ReflectionMethod(\$cliService, 'rejectP2p');
+    \$filename = \$ref->getFileName();
+    \$startLine = \$ref->getStartLine();
+    \$endLine = \$ref->getEndLine();
+    \$source = implode('', array_slice(file(\$filename), \$startLine - 1, \$endLine - \$startLine + 1));
 
-    echo \$hasDownstream ? 'IMPLEMENTED' : 'NOT_IMPLEMENTED';
+    if (strpos(\$source, 'broadcastFullCancelForHash') !== false) {
+        echo 'OK';
+    } else {
+        echo 'NOT_WIRED';
+    }
 " 2>/dev/null || echo "ERROR")
 
-if [ "$originatorCancelCheck" = "IMPLEMENTED" ]; then
-    printf "\t   Originator downstream cancel ${GREEN}PASSED${NC} (method exists)\n"
+if [ "$originatorCancelCheck" = "OK" ]; then
+    printf "\t   Originator downstream cancel ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Originator downstream cancel ${YELLOW}NOT IMPLEMENTED${NC}\n"
-    printf "\t   Gap: sendCancelNotification() exits early for originator nodes\n"
-    printf "\t   (destination_address is set). Relay P2P resources wait for TTL expiry.\n"
-    printf "\t   Recommendation: Add downstream cancel propagation from originator.\n"
-    # Count as pass since this is a known gap being documented, not a regression
-    passed=$(( passed + 1 ))
+    printf "\t   Originator downstream cancel ${RED}FAILED${NC} (${originatorCancelCheck})\n"
+    failure=$(( failure + 1 ))
 fi
 
-# ==================== Test 11: handleIncomingCancellation Propagation ====================
-echo -e "\n[Test 11: handleIncomingCancellation propagates further downstream (GAP CHECK)]"
+# ==================== Test 11: handleIncomingCancellation Multi-Route Safety ====================
+echo -e "\n[Test 11: handleIncomingCancellation multi-route safety + full_cancel propagation]"
 
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\t-> Checking if handleIncomingCancellation forwards cancel to downstream contacts"
+echo -e "\t-> Checking full_cancel flag handling and downstream propagation"
 
 propagationCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
@@ -414,29 +407,27 @@ propagationCheck=$(docker exec ${testSender} php -r "
     \$endLine = \$ref->getEndLine();
     \$source = implode('', array_slice(file(\$filename), \$startLine - 1, \$endLine - \$startLine + 1));
 
-    // Check if it calls any method to propagate downstream
-    \$propagates = (
-        strpos(\$source, 'sendCancelNotification') !== false ||
-        strpos(\$source, 'cancelUnselectedRoutes') !== false ||
-        strpos(\$source, 'sendP2pMessage') !== false ||
-        strpos(\$source, 'propagate') !== false ||
-        strpos(\$source, 'downstream') !== false
-    );
+    // Check 1: Regular route_cancel just acknowledges (multi-route safe)
+    \$hasFullCancelCheck = strpos(\$source, 'full_cancel') !== false;
 
-    echo \$propagates ? 'PROPAGATES' : 'LOCAL_ONLY';
+    // Check 2: Full cancel propagates downstream via broadcastFullCancelForHash
+    \$propagatesDownstream = strpos(\$source, 'broadcastFullCancelForHash') !== false;
+
+    if (\$hasFullCancelCheck && \$propagatesDownstream) {
+        echo 'OK';
+    } elseif (\$hasFullCancelCheck) {
+        echo 'NO_PROPAGATION';
+    } else {
+        echo 'NO_FULL_CANCEL_CHECK';
+    }
 " 2>/dev/null || echo "ERROR")
 
-if [ "$propagationCheck" = "PROPAGATES" ]; then
-    printf "\t   Incoming cancellation propagation ${GREEN}PASSED${NC} (propagates downstream)\n"
+if [ "$propagationCheck" = "OK" ]; then
+    printf "\t   Multi-route safety + full cancel propagation ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Incoming cancellation propagation ${YELLOW}LOCAL ONLY${NC}\n"
-    printf "\t   Gap: handleIncomingCancellation marks local P2P cancelled and releases\n"
-    printf "\t   local reservation, but does not forward cancel to this node's own\n"
-    printf "\t   downstream contacts. Those hops expire via CleanupService naturally.\n"
-    printf "\t   Impact: One-hop cancel (best-fee to unselected). Deeper hops wait for TTL.\n"
-    # Count as pass since this is a known gap being documented
-    passed=$(( passed + 1 ))
+    printf "\t   Multi-route safety + full cancel propagation ${RED}FAILED${NC} (${propagationCheck})\n"
+    failure=$(( failure + 1 ))
 fi
 
 # ==================== Test 12: Timing — Active Cancel vs Passive Expiry ====================

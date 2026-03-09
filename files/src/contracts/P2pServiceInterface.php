@@ -89,4 +89,28 @@ interface P2pServiceInterface
      * @return void
      */
     public function sendCancelNotificationForHash(string $hash): void;
+
+    /**
+     * Send a P2P message to a contact
+     *
+     * @param string $messageType The message type (e.g. 'p2p', 'rp2p', 'route_cancel')
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string|null $messageId Optional unique message ID for tracking
+     * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
+     */
+    public function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array;
+
+    /**
+     * Broadcast a full cancellation downstream to all accepted contacts
+     *
+     * Called when the originator rejects a P2P or when a relay receives a
+     * full_cancel message. Sends route_cancel with full_cancel flag to all
+     * accepted contacts so they can cancel their P2P records, release capacity
+     * reservations, and propagate further downstream.
+     *
+     * @param string $hash The P2P hash to cancel
+     * @return void
+     */
+    public function broadcastFullCancelForHash(string $hash): void;
 }

@@ -32,12 +32,20 @@ interface RouteCancellationServiceInterface
     /**
      * Handle an incoming route cancellation message
      *
-     * When a relay node receives a cancellation for a P2P it was relaying:
-     * 1. Marks its local P2P record as cancelled
-     * 2. Releases its capacity reservation
-     * 3. Downstream nodes expire naturally via CleanupService
+     * Two modes based on the full_cancel flag:
      *
-     * @param array $request The cancellation message containing hash
+     * Regular route_cancel (full_cancel absent/false):
+     *   Just acknowledges — does NOT cancel P2P or release reservation.
+     *   This node may still be part of the selected route in a diamond topology.
+     *   Resources are freed by CleanupService TTL if unused.
+     *
+     * Full cancel (full_cancel=true):
+     *   The originator cancelled the entire P2P transaction.
+     *   1. Marks local P2P record as cancelled
+     *   2. Releases capacity reservation
+     *   3. Propagates full cancel downstream to own contacts
+     *
+     * @param array $request The cancellation message containing hash and optional full_cancel flag
      * @return void
      */
     public function handleIncomingCancellation(array $request): void;

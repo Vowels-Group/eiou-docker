@@ -314,9 +314,9 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection, creates capacity reservations on relay | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, CapacityReservationRepo, TransportUtility, MessageDeliveryService |
+| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection, creates capacity reservations on relay, broadcasts full cancel downstream to all contacts via `broadcastFullCancelForHash()` | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, CapacityReservationRepo, TransportUtility, MessageDeliveryService |
 | `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup, triggers route cancellation for unselected candidates | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface), RouteCancellationService |
-| `RouteCancellationService` | Actively cancels unselected P2P routes after best-fee selection (Patent Claim 16); releases capacity reservations, sends `route_cancel` messages, handles incoming cancellations; randomized hop budget (Patent Claim 5) via geometric distribution | P2pService (via P2pServiceInterface), CapacityReservationRepo, RouteCancellationRepo, P2pRepo |
+| `RouteCancellationService` | Actively cancels unselected P2P routes after best-fee selection (Patent Claim 16); releases capacity reservations, sends `route_cancel` messages; handles incoming cancellations with two modes: partial (acknowledge only, multi-route safe) and full cancel (cancel P2P, release reservation, propagate downstream); randomized hop budget (Patent Claim 5) via geometric distribution | P2pService (via P2pServiceInterface), CapacityReservationRepo, RouteCancellationRepo, P2pRepo |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -1374,8 +1374,17 @@ After successful selection, `RouteCancellationService::cancelUnselectedRoutes()`
 sends `route_cancel` messages to all unselected candidates' contacts, releasing
 their capacity reservations immediately rather than waiting for CleanupService
 TTL expiry. Each cancellation is recorded in the `route_cancellations` audit
-table. Downstream hops beyond the first are not actively cancelled — they expire
-naturally via CleanupService, which also releases associated capacity reservations.
+table. Receiving nodes acknowledge the partial `route_cancel` without cancelling
+their own P2P or releasing reservations — this is safe for diamond topologies
+where a node may be part of both selected and unselected routes.
+
+When the originator rejects a P2P (via CLI `p2p reject` or API), a full cancel
+is broadcast downstream via `P2pService::broadcastFullCancelForHash()`. This
+sends `route_cancel` with `full_cancel=true` to all accepted contacts. Relay
+nodes receiving a full cancel: (1) mark their local P2P as cancelled, (2) release
+their capacity reservation, and (3) propagate the full cancel further downstream
+to their own contacts — creating a cascade that frees resources through the
+entire route chain. CleanupService TTL expiry remains as a natural fallback.
 
 **Phase 3a — Two-Phase Relay Selection (Mesh Deadlock Prevention):**
 

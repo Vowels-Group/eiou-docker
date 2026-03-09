@@ -101,6 +101,7 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
 
     public function handleIncomingCancellation(array $request): void {
         $hash = $request['hash'] ?? null;
+        $isFullCancel = !empty($request['full_cancel']);
 
         if ($hash === null) {
             Logger::getInstance()->warning('RouteCancellation: Received cancellation without hash');
@@ -108,13 +109,25 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
             return;
         }
 
-        // Mark local P2P as cancelled (immediately releases implicit credit hold
-        // since getCreditInP2p excludes cancelled status)
+        // Regular route_cancel (from best-fee selection): just acknowledge.
+        // Do NOT cancel P2P or release reservation — this node may still be
+        // part of the selected route in a diamond topology. Resources will be
+        // freed by CleanupService TTL if unused.
+        if (!$isFullCancel) {
+            Logger::getInstance()->info('RouteCancellation: Acknowledged route_cancel (partial)', [
+                'hash' => $hash,
+            ]);
+            echo json_encode(['status' => 'acknowledged', 'message' => 'Route cancel acknowledged']);
+            return;
+        }
+
+        // Full cancel — originator cancelled the entire P2P transaction.
+        // Cancel local P2P, release reservation, and propagate downstream.
         if ($this->p2pRepository !== null) {
             $p2p = $this->p2pRepository->getByHash($hash);
 
             if (!$p2p) {
-                Logger::getInstance()->warning('RouteCancellation: No local P2P for incoming cancellation', [
+                Logger::getInstance()->warning('RouteCancellation: No local P2P for incoming full cancel', [
                     'hash' => $hash,
                 ]);
                 echo json_encode(['status' => 'acknowledged', 'message' => 'No local P2P found']);
@@ -131,11 +144,14 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
         // Release capacity reservation
         $this->capacityReservationRepository?->releaseByHash($hash, 'cancelled');
 
-        Logger::getInstance()->info('RouteCancellation: Handled incoming cancellation', [
+        // Propagate full cancel downstream to this node's contacts
+        $this->p2pService?->broadcastFullCancelForHash($hash);
+
+        Logger::getInstance()->info('RouteCancellation: Handled full cancel', [
             'hash' => $hash,
         ]);
 
-        echo json_encode(['status' => 'acknowledged', 'message' => 'Route cancelled']);
+        echo json_encode(['status' => 'acknowledged', 'message' => 'Full cancel processed']);
     }
 
     public function generateRandomizedHopBudget(int $minHops, int $maxHops): int {
