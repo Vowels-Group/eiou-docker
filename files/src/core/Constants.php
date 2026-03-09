@@ -404,7 +404,8 @@ class Constants {
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
     const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
     const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
-    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals (with balance guard) - default OFF for safety
+    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals - default OFF for safety
+    const AUTO_CHAIN_DROP_ACCEPT_GUARD = true;     // Balance guard for auto-accept: compares stored vs calculated balances to block acceptance when missing transactions would erase debt owed to us. Disable to accept unconditionally.
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
 
     // Debug logging limits
@@ -484,6 +485,26 @@ class Constants {
             return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
         }
         return self::AUTO_CHAIN_DROP_ACCEPT;
+    }
+
+    /**
+     * Check if the auto-accept balance guard is enabled
+     * Supports runtime override via EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD env variable
+     *
+     * When enabled (default), auto-accept compares stored vs calculated balances
+     * and blocks acceptance if missing transactions would erase debt owed to us.
+     * When disabled, auto-accept proceeds unconditionally.
+     *
+     * Only meaningful when AUTO_CHAIN_DROP_ACCEPT is true.
+     *
+     * @return bool Whether the balance guard is enabled
+     */
+    public static function isAutoChainDropAcceptGuardEnabled(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::AUTO_CHAIN_DROP_ACCEPT_GUARD;
     }
 
     /**

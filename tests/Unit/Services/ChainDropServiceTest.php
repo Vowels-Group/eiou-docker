@@ -699,10 +699,12 @@ class ChainDropServiceTest extends TestCase
      */
     public function testAutoAcceptTriggersWhenBalanceGuardSafe(): void
     {
-        // Enable auto-accept (default is OFF for safety)
-        putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT=true');
+        // Enable auto-accept on the mock UserContext
+        $this->userContext->method('getAutoChainDropAccept')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropAcceptGuard')
+            ->willReturn(true);
 
-        try {
         $senderPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
 
         // Wire BalanceRepository for balance guard
@@ -777,9 +779,6 @@ class ChainDropServiceTest extends TestCase
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS
         ]);
-        } finally {
-            putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
-        }
     }
 
     /**
@@ -787,10 +786,12 @@ class ChainDropServiceTest extends TestCase
      */
     public function testAutoAcceptBlockedByBalanceGuard(): void
     {
-        // Enable auto-accept to test guard behavior
-        putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT=true');
+        // Enable auto-accept with guard on the mock UserContext
+        $this->userContext->method('getAutoChainDropAccept')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropAcceptGuard')
+            ->willReturn(true);
 
-        try {
         // Wire BalanceRepository for balance guard
         $this->service->setBalanceRepository($this->balanceRepository);
 
@@ -846,9 +847,6 @@ class ChainDropServiceTest extends TestCase
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS
         ]);
-        } finally {
-            putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');
-        }
     }
 
     /**
@@ -900,6 +898,12 @@ class ChainDropServiceTest extends TestCase
      */
     public function testAutoAcceptBlockedWithoutBalanceRepository(): void
     {
+        // Enable auto-accept with guard on the mock UserContext
+        $this->userContext->method('getAutoChainDropAccept')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropAcceptGuard')
+            ->willReturn(true);
+
         // Do NOT wire BalanceRepository — isAutoAcceptSafe returns false
 
         $this->proposalRepository->method('getActiveProposalForGap')
@@ -973,5 +977,122 @@ class ChainDropServiceTest extends TestCase
 
         // Should be back to default (disabled)
         $this->assertFalse(Constants::isAutoChainDropAcceptEnabled());
+    }
+
+    /**
+     * Test auto-accept guard toggle in Constants with env var override
+     */
+    public function testAutoChainDropAcceptGuardToggle(): void
+    {
+        // Default should be enabled (safety)
+        $this->assertTrue(Constants::isAutoChainDropAcceptGuardEnabled());
+
+        // Disable via env var
+        putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=false');
+        try {
+            $this->assertFalse(Constants::isAutoChainDropAcceptGuardEnabled());
+        } finally {
+            putenv('EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD');
+        }
+
+        // Should be back to default (enabled)
+        $this->assertTrue(Constants::isAutoChainDropAcceptGuardEnabled());
+    }
+
+    /**
+     * Test auto-accept bypasses balance guard when guard is disabled
+     */
+    public function testAutoAcceptBypassesGuardWhenGuardDisabled(): void
+    {
+        // Enable auto-accept AND disable the guard on the mock UserContext
+        $this->userContext->method('getAutoChainDropAccept')
+            ->willReturn(true);
+        $this->userContext->method('getAutoChainDropAcceptGuard')
+            ->willReturn(false);
+
+        $senderPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
+
+        // Wire BalanceRepository — would block if guard were enabled
+        $this->service->setBalanceRepository($this->balanceRepository);
+
+        $this->proposalRepository->method('getActiveProposalForGap')
+            ->willReturn(null);
+
+        $this->transactionChainRepository->method('verifyChainIntegrity')
+            ->willReturnOnConsecutiveCalls(
+                [
+                    'valid' => false,
+                    'gaps' => [self::TEST_MISSING_TXID],
+                    'broken_txids' => [self::TEST_BROKEN_TXID],
+                    'transaction_count' => 8
+                ],
+                ['valid' => true, 'gaps' => [], 'broken_txids' => [], 'transaction_count' => 7]
+            );
+
+        $this->transactionChainRepository->method('getTransactionChain')
+            ->willReturn([
+                ['txid' => self::TEST_PREVIOUS_TXID],
+                ['txid' => self::TEST_BROKEN_TXID]
+            ]);
+
+        $this->proposalRepository->method('createProposal')
+            ->willReturn(true);
+
+        // Balance guard would block this (debt erasure risk), but guard is disabled
+        $this->transactionRepository->method('getTransactionsBetweenPubkeys')
+            ->willReturn([
+                [
+                    'status' => 'completed',
+                    'currency' => 'USD',
+                    'sender_address' => self::TEST_CONTACT_ADDRESS,
+                    'receiver_address' => 'http://myaddress.example.com',
+                    'amount' => 1000
+                ]
+            ]);
+
+        $this->balanceRepository->method('getContactReceivedBalance')
+            ->willReturn(2000);
+        $this->balanceRepository->method('getContactSentBalance')
+            ->willReturn(0);
+
+        $this->proposalRepository->method('getByProposalId')
+            ->with(self::TEST_PROPOSAL_ID)
+            ->willReturn([
+                'proposal_id' => self::TEST_PROPOSAL_ID,
+                'contact_pubkey_hash' => $senderPubkeyHash,
+                'missing_txid' => self::TEST_MISSING_TXID,
+                'broken_txid' => self::TEST_BROKEN_TXID,
+                'previous_txid_before_gap' => self::TEST_PREVIOUS_TXID,
+                'direction' => 'incoming',
+                'status' => 'pending'
+            ]);
+
+        $this->transactionChainRepository->method('updatePreviousTxid')
+            ->willReturn(true);
+        $this->transactionRepository->method('getByTxid')
+            ->willReturn(['sender_public_key_hash' => 'other-sender-hash', 'memo' => 'standard']);
+
+        $this->contactRepository->method('lookupByPubkeyHash')
+            ->willReturn([
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
+                'http' => self::TEST_CONTACT_ADDRESS
+            ]);
+
+        // KEY ASSERTION: guard is disabled, so auto-accept proceeds despite risky balances
+        $this->proposalRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_PROPOSAL_ID, 'accepted');
+
+        // isAutoAcceptSafe should NOT be called when guard is disabled
+        $this->balanceRepository->expects($this->never())
+            ->method('getContactReceivedBalance');
+
+        $this->service->handleIncomingProposal([
+            'proposalId' => self::TEST_PROPOSAL_ID,
+            'missingTxid' => self::TEST_MISSING_TXID,
+            'brokenTxid' => self::TEST_BROKEN_TXID,
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS
+        ]);
     }
 }

@@ -574,6 +574,22 @@ class UserContext {
     }
 
     /**
+     * Get auto chain drop accept guard setting
+     *
+     * When true, auto-accept checks balances before accepting (blocks debt erasure).
+     * When false, auto-accept proceeds unconditionally.
+     *
+     * @return bool
+     */
+    public function getAutoChainDropAcceptGuard(): bool {
+        $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('autoChainDropAcceptGuard') ?? Constants::AUTO_CHAIN_DROP_ACCEPT_GUARD);
+    }
+
+    /**
      * Get API enabled setting
      *
      * @return bool
@@ -866,6 +882,7 @@ class UserContext {
             'contactStatusSyncOnPing' => Constants::CONTACT_STATUS_SYNC_ON_PING,
             'autoChainDropPropose' => Constants::AUTO_CHAIN_DROP_PROPOSE,
             'autoChainDropAccept' => Constants::AUTO_CHAIN_DROP_ACCEPT,
+            'autoChainDropAcceptGuard' => Constants::AUTO_CHAIN_DROP_ACCEPT_GUARD,
             'apiEnabled' => Constants::API_ENABLED,
             'apiCorsAllowedOrigins' => Constants::API_CORS_ALLOWED_ORIGINS,
             'rateLimitEnabled' => Constants::RATE_LIMIT_ENABLED,

@@ -1939,11 +1939,14 @@ when sync detects mutual gaps. The `ContactStatusService` calls `proposeChainDro
 `Constants::isAutoChainDropProposeEnabled()` (env: `EIOU_AUTO_CHAIN_DROP_PROPOSE`, default: `true`).
 
 **Auto-Accept:** Incoming proposals can be auto-accepted when `Constants::isAutoChainDropAcceptEnabled()`
-is true (env: `EIOU_AUTO_CHAIN_DROP_ACCEPT`, default: `false` for safety). A **balance guard** runs
-before auto-accepting: it compares stored balances (from `BalanceRepository`) against balances
-calculated from existing transactions. If the missing transactions include net payments TO us
-(`net_missing > 0`), auto-accept is blocked and the proposal requires manual review. This prevents
-a malicious proposer from erasing debt by forcing a chain drop on transactions where they owed us money.
+is true (env: `EIOU_AUTO_CHAIN_DROP_ACCEPT`, default: `false` for safety). A **balance guard** can
+optionally run before auto-accepting, controlled by `Constants::isAutoChainDropAcceptGuardEnabled()`
+(env: `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`). When the guard is enabled, it compares
+stored balances (from `BalanceRepository`) against balances calculated from existing transactions.
+If the missing transactions include net payments TO us (`net_missing > 0`), auto-accept is blocked
+and the proposal requires manual review. This prevents a malicious proposer from erasing debt by
+forcing a chain drop on transactions where they owed us money. When the guard is disabled
+(`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=false`), auto-accept proceeds unconditionally.
 
 **Post-Drop Actions:** After successful execution, `ChainDropService` recalculates the contact
 balance (via `SyncTriggerInterface::syncContactBalance()`) and updates `valid_chain` in the

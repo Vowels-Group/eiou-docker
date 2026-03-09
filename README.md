@@ -174,6 +174,7 @@ Increase these for WSL2 or resource-constrained environments.
 | `EIOU_BACKUP_AUTO_ENABLED` | `true` | Automatic encrypted database backups at midnight. Keeps 3 most recent |
 | `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | Auto-propose chain drops when mutual gaps are detected that sync cannot repair |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | Auto-accept chain drop proposals (with balance guard). Default is off — proposals require manual review |
+| `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | Balance guard for auto-accept: compares stored vs calculated balances before accepting. Set to `false` to accept unconditionally |
 
 ### Volume Mounts
 

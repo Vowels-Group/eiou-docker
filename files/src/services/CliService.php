@@ -341,6 +341,11 @@ class CliService implements CliServiceInterface {
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autochaindropacceptguard'){
+                $key = 'autoChainDropAcceptGuard';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'apienabled'){
                 $key = 'apiEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -505,34 +510,35 @@ class CliService implements CliServiceInterface {
             echo "\t18. Contact status sync on ping\n";
             echo "\t19. Auto chain drop propose\n";
             echo "\t20. Auto chain drop accept\n";
-            echo "\t21. API enabled\n";
-            echo "\t22. API CORS allowed origins\n";
-            echo "\t23. Rate limiting enabled\n";
+            echo "\t21. Auto chain drop accept guard\n";
+            echo "\t22. API enabled\n";
+            echo "\t23. API CORS allowed origins\n";
+            echo "\t24. Rate limiting enabled\n";
             echo "\n  Backup & Logging:\n";
-            echo "\t24. Auto-backup database\n";
-            echo "\t25. Backup retention count\n";
-            echo "\t26. Backup schedule hour\n";
-            echo "\t27. Backup schedule minute\n";
-            echo "\t28. Log level\n";
-            echo "\t29. Log max entries\n";
+            echo "\t25. Auto-backup database\n";
+            echo "\t26. Backup retention count\n";
+            echo "\t27. Backup schedule hour\n";
+            echo "\t28. Backup schedule minute\n";
+            echo "\t29. Log level\n";
+            echo "\t30. Log max entries\n";
             echo "\n  Data Retention:\n";
-            echo "\t30. Delivery retention days\n";
-            echo "\t31. DLQ retention days\n";
-            echo "\t32. Held TX retention days\n";
-            echo "\t33. RP2P retention days\n";
-            echo "\t34. Metrics retention days\n";
+            echo "\t31. Delivery retention days\n";
+            echo "\t32. DLQ retention days\n";
+            echo "\t33. Held TX retention days\n";
+            echo "\t34. RP2P retention days\n";
+            echo "\t35. Metrics retention days\n";
             echo "\n  Rate Limiting:\n";
-            echo "\t35. P2P rate limit per minute\n";
-            echo "\t36. Rate limit max attempts\n";
-            echo "\t37. Rate limit window seconds\n";
-            echo "\t38. Rate limit block duration\n";
+            echo "\t36. P2P rate limit per minute\n";
+            echo "\t37. Rate limit max attempts\n";
+            echo "\t38. Rate limit window seconds\n";
+            echo "\t39. Rate limit block duration\n";
             echo "\n  Display:\n";
-            echo "\t39. Maximum lines of balance/transaction output\n";
-            echo "\t40. Date format\n";
-            echo "\t41. Currency decimals\n";
-            echo "\t42. Recent transactions limit\n";
+            echo "\t40. Maximum lines of balance/transaction output\n";
+            echo "\t41. Date format\n";
+            echo "\t42. Currency decimals\n";
+            echo "\t43. Recent transactions limit\n";
             echo "\n  Currency Management:\n";
-            echo "\t43. Allowed currencies\n";
+            echo "\t44. Allowed currencies\n";
             echo "\n\t0. Cancel\n";
 
             // Read user input
@@ -758,6 +764,17 @@ class CliService implements CliServiceInterface {
                     break;
 
                 case '21':
+                    echo "Enable auto chain drop accept balance guard? (yes/no): ";
+                    $key = 'autoChainDropAcceptGuard';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '22':
                     echo "Enable API? (yes/no): ";
                     $key = 'apiEnabled';
                     $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
@@ -768,13 +785,13 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '22':
+                case '23':
                     echo "Enter API CORS allowed origins (empty to clear): ";
                     $key = 'apiCorsAllowedOrigins';
                     $value = trim(fgets(STDIN));
                     break;
 
-                case '23':
+                case '24':
                     echo "Enable rate limiting? (yes/no): ";
                     $key = 'rateLimitEnabled';
                     $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
@@ -786,7 +803,7 @@ class CliService implements CliServiceInterface {
                     break;
 
                 // Backup & Logging
-                case '24':
+                case '25':
                     echo "Enable automatic daily database backups? (yes/no): ";
                     $key = 'autoBackupEnabled';
                     $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
@@ -797,7 +814,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '25':
+                case '26':
                     echo "Enter backup retention count (minimum 1): ";
                     $key = 'backupRetentionCount';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -808,7 +825,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '26':
+                case '27':
                     echo "Enter backup schedule hour (0-23): ";
                     $key = 'backupCronHour';
                     $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 23, 'Backup hour');
@@ -819,7 +836,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '27':
+                case '28':
                     echo "Enter backup schedule minute (0-59): ";
                     $key = 'backupCronMinute';
                     $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 59, 'Backup minute');
@@ -830,7 +847,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '28':
+                case '29':
                     echo "Enter log level (debug, info, warning, error): ";
                     $key = 'logLevel';
                     $validation = InputValidator::validateLogLevel(trim(fgets(STDIN)));
@@ -841,7 +858,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '29':
+                case '30':
                     echo "Enter log max entries (minimum 10): ";
                     $key = 'logMaxEntries';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 10);
@@ -853,7 +870,7 @@ class CliService implements CliServiceInterface {
                     break;
 
                 // Data Retention
-                case '30':
+                case '31':
                     echo "Enter delivery retention days (minimum 1): ";
                     $key = 'cleanupDeliveryRetentionDays';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -864,7 +881,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '31':
+                case '32':
                     echo "Enter DLQ retention days (minimum 1): ";
                     $key = 'cleanupDlqRetentionDays';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -875,7 +892,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '32':
+                case '33':
                     echo "Enter held TX retention days (minimum 1): ";
                     $key = 'cleanupHeldTxRetentionDays';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -886,7 +903,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '33':
+                case '34':
                     echo "Enter RP2P retention days (minimum 1): ";
                     $key = 'cleanupRp2pRetentionDays';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -897,7 +914,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '34':
+                case '35':
                     echo "Enter metrics retention days (minimum 1): ";
                     $key = 'cleanupMetricsRetentionDays';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -909,7 +926,7 @@ class CliService implements CliServiceInterface {
                     break;
 
                 // Rate Limiting
-                case '35':
+                case '36':
                     echo "Enter P2P rate limit per minute (minimum 1): ";
                     $key = 'p2pRateLimitPerMinute';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -920,7 +937,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '36':
+                case '37':
                     echo "Enter rate limit max attempts (minimum 1): ";
                     $key = 'rateLimitMaxAttempts';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -931,7 +948,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '37':
+                case '38':
                     echo "Enter rate limit window in seconds (minimum 1): ";
                     $key = 'rateLimitWindowSeconds';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -942,7 +959,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '38':
+                case '39':
                     echo "Enter rate limit block duration in seconds (minimum 1): ";
                     $key = 'rateLimitBlockSeconds';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -954,7 +971,7 @@ class CliService implements CliServiceInterface {
                     break;
 
                 // Display
-                case '39':
+                case '40':
                     echo "Enter new maximum of balance/transaction output lines to display (0 = unlimited): ";
                     $key = 'maxOutput';
                     $read = trim(fgets(STDIN));
@@ -965,7 +982,7 @@ class CliService implements CliServiceInterface {
                     $value = intval($read);
                     break;
 
-                case '40':
+                case '41':
                     echo "Enter date format (e.g., Y-m-d H:i:s): ";
                     $key = 'displayDateFormat';
                     $validation = InputValidator::validateDateFormat(trim(fgets(STDIN)));
@@ -976,7 +993,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '41':
+                case '42':
                     echo "Enter currency decimals (0-8): ";
                     $key = 'displayCurrencyDecimals';
                     $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 8, 'Currency decimals');
@@ -987,7 +1004,7 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
-                case '42':
+                case '43':
                     echo "Enter recent transactions limit (minimum 1): ";
                     $key = 'displayRecentTransactionsLimit';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
@@ -999,7 +1016,7 @@ class CliService implements CliServiceInterface {
                     break;
 
                 // Currency Management
-                case '43':
+                case '44':
                     echo "Current allowed currencies: " . implode(', ', UserContext::getInstance()->getAllowedCurrencies()) . "\n";
                     echo "Enter currencies (comma-separated, e.g., USD,EUR): ";
                     $key = 'allowedCurrencies';
@@ -1106,6 +1123,7 @@ class CliService implements CliServiceInterface {
             'contact_status_sync_on_ping' => $this->currentUser->getContactStatusSyncOnPing(),
             'auto_chain_drop_propose' => $this->currentUser->getAutoChainDropPropose(),
             'auto_chain_drop_accept' => $this->currentUser->getAutoChainDropAccept(),
+            'auto_chain_drop_accept_guard' => $this->currentUser->getAutoChainDropAcceptGuard(),
             'api_enabled' => $this->currentUser->getApiEnabled(),
             'api_cors_allowed_origins' => $this->currentUser->getApiCorsAllowedOrigins(),
             'rate_limit_enabled' => $this->currentUser->getRateLimitEnabled(),
@@ -1165,6 +1183,7 @@ class CliService implements CliServiceInterface {
             echo "\tContact status sync on ping: " . ($settings['contact_status_sync_on_ping'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop propose: " . ($settings['auto_chain_drop_propose'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop accept: " . ($settings['auto_chain_drop_accept'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto chain drop accept guard: " . ($settings['auto_chain_drop_accept_guard'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAPI enabled: " . ($settings['api_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAPI CORS origins: " . ($settings['api_cors_allowed_origins'] ?: '(none)') . "\n";
             echo "\tRate limiting: " . ($settings['rate_limit_enabled'] ? 'enabled' : 'disabled') . "\n";
@@ -1480,6 +1499,7 @@ class CliService implements CliServiceInterface {
                     'contactStatusSyncOnPing' => 'Enable contact status sync on ping (true/false)',
                     'autoChainDropPropose' => 'Enable auto chain drop propose (true/false)',
                     'autoChainDropAccept' => 'Enable auto chain drop accept (true/false)',
+                    'autoChainDropAcceptGuard' => 'Enable auto chain drop accept balance guard (true/false)',
                     'apiEnabled' => 'Enable API access (true/false)',
                     'apiCorsAllowedOrigins' => 'API CORS allowed origins',
                     'rateLimitEnabled' => 'Enable rate limiting (true/false)',

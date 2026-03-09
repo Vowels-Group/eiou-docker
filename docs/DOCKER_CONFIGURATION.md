@@ -42,6 +42,7 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 | `EIOU_BACKUP_AUTO_ENABLED` | `true` | No | Enable/disable automatic daily backups |
 | `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | No | Auto-propose chain drops when mutual gaps detected |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming chain drop proposals (with balance guard) |
+| `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | No | Balance guard for auto-accept: blocks if missing txs erase debt owed to us |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates for P2P HTTPS connections. Set to `false` for self-signed certs |
 | `P2P_CA_CERT` | (none) | No | Path to CA certificate file for P2P SSL verification |
 
@@ -241,6 +242,22 @@ environment:
 - When enabled, the balance guard blocks auto-accept if `net_missing > 0` (missing transactions include net payments to us that would be erased)
 - Blocked proposals remain pending for manual review
 - The guard compares stored balance (from `balances` table) with balance calculated from existing transactions; if they match, `net_missing = 0` and auto-accept proceeds
+
+#### EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD
+
+Controls whether the balance guard runs before auto-accepting chain drop proposals. When disabled, auto-accept proceeds unconditionally (no balance comparison).
+
+```yaml
+environment:
+  - EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=true   # Enable (default) — check balances before accepting
+  - EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=false  # Disable — accept unconditionally
+```
+
+**Notes:**
+- Only relevant when `EIOU_AUTO_CHAIN_DROP_ACCEPT=true`
+- Default is ON — the balance guard runs before every auto-accept
+- Set to `false` if you want truly unconditional auto-accept behavior
+- Can also be toggled per-node via CLI (`changesettings autoChainDropAcceptGuard`), GUI, or API
 
 ---
 

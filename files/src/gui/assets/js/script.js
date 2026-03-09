@@ -4030,6 +4030,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('contactStatusSyncOnPing', 'contactStatusSyncOnPingStatus');
     initToggleSwitch('autoChainDropPropose', 'autoChainDropProposeStatus');
     initToggleSwitch('autoChainDropAccept', 'autoChainDropAcceptStatus');
+    initToggleSwitch('autoChainDropAcceptGuard', 'autoChainDropAcceptGuardStatus');
     initToggleSwitch('apiEnabled', 'apiEnabledStatus');
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initSyncTimeoutDynamicMax();
