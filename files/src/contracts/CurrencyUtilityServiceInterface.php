@@ -39,11 +39,11 @@ interface CurrencyUtilityServiceInterface
     /**
      * Calculate fee amount from percentage
      *
-     * @param float $amount Base amount
-     * @param float $feePercent Fee percentage (e.g., 2.5 for 2.5%)
-     * @param float $minumFee Fee amount (e.g., 0.01 for 1 cent)
+     * @param float $amount Base amount in minor units (e.g. cents, satoshi)
+     * @param float $feePercent Fee as raw percentage (e.g., 0.01 for 0.01%, 2.5 for 2.5%)
+     * @param float $minumFee Minimum fee in major units (e.g., 0.01 for $0.01)
      * @param string $currency Currency code (default: USD)
-     * @return int Fee amount in cents
+     * @return int Fee amount in minor units
      */
     public function calculateFee(float $amount, float $feePercent, float $minumFee, string $currency = 'USD'): int;
 

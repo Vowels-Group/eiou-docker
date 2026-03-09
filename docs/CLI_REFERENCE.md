@@ -922,7 +922,7 @@ eiou changesettings [setting] [value]
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
-| `defaultFee` | Default fee percentage | `1.0` |
+| `defaultFee` | Default fee percentage | `0.01` |
 | `defaultCreditLimit` | Default credit limit for new contacts | `100` |
 | `defaultCurrency` | Default currency code | `USD` |
 | `minFee` | Minimum fee amount | `0.01` |

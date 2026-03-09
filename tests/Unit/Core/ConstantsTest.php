@@ -266,7 +266,7 @@ class ConstantsTest extends TestCase
      */
     public function testContactManagementConstantsAreDefined(): void
     {
-        $this->assertEquals(0.1, Constants::CONTACT_DEFAULT_FEE_PERCENT);
+        $this->assertEquals(0.01, Constants::CONTACT_DEFAULT_FEE_PERCENT);
         $this->assertEquals(5, Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX);
         $this->assertEquals(1000, Constants::CONTACT_DEFAULT_CREDIT_LIMIT);
         $this->assertEquals(255, Constants::CONTACT_MAX_NAME_LENGTH);
@@ -347,7 +347,42 @@ class ConstantsTest extends TestCase
     }
 
     /**
-     * Test getConversionFactor returns correct value for known currency
+     * Test BTC conversion factor is defined when BTC is enabled
+     */
+    public function testBtcConversionFactorDefined(): void
+    {
+        if (!isset(Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
+        }
+        $this->assertEquals(100000000, Constants::CONVERSION_FACTORS['BTC']);
+        $this->assertEquals(100000000, Constants::getConversionFactor('BTC'));
+    }
+
+    /**
+     * Test currency decimals constants are defined
+     */
+    public function testCurrencyDecimalsAreDefined(): void
+    {
+        $this->assertEquals(2, Constants::CURRENCY_DECIMALS['USD']);
+        $this->assertEquals(2, Constants::getCurrencyDecimals('USD'));
+        // Unknown currency falls back to DISPLAY_CURRENCY_DECIMALS
+        $this->assertEquals(Constants::DISPLAY_CURRENCY_DECIMALS, Constants::getCurrencyDecimals('EUR'));
+    }
+
+    /**
+     * Test BTC currency decimals when BTC is enabled
+     */
+    public function testBtcCurrencyDecimalsDefined(): void
+    {
+        if (!isset(Constants::CURRENCY_DECIMALS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CURRENCY_DECIMALS');
+        }
+        $this->assertEquals(8, Constants::CURRENCY_DECIMALS['BTC']);
+        $this->assertEquals(8, Constants::getCurrencyDecimals('BTC'));
+    }
+
+    /**
+     * Test getConversionFactor returns correct value for known currencies
      */
     public function testGetConversionFactorReturnsValueForKnownCurrency(): void
     {

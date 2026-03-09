@@ -178,7 +178,7 @@ Integration tests validate the complete system behavior using Docker containers.
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
-| **CurrencyUtilityServiceTest.php** | 15 | Cents/dollars conversion, currency formatting, fee percent calculations, rounding, large amounts |
+| **CurrencyUtilityServiceTest.php** | 27 | Cents/dollars conversion, currency formatting, fee calculations, minimum fee floor, rounding, large amounts, unknown currency exceptions |
 | **TimeUtilityServiceTest.php** | 11 | Microtime conversion, expiration checking, TTL calculations, timestamp precision |
 | **GeneralUtilityServiceTest.php** | 15+ | Address truncation, string manipulation |
 | **TransportUtilityServiceTest.php** | 25+ | Transport detection, address types, jitter function |

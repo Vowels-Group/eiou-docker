@@ -2180,7 +2180,7 @@ HELP;
                 foreach ($earningsRows as $row) {
                     $totalEarnings[] = [
                         'currency' => $row['currency'],
-                        'total_earnings' => number_format(((int)($row['total_amount'] ?? 0)) / Constants::CONVERSION_FACTORS[$row['currency']], 2)
+                        'total_earnings' => number_format(((int)($row['total_amount'] ?? 0)) / Constants::CONVERSION_FACTORS[$row['currency']], Constants::getCurrencyDecimals($row['currency']))
                     ];
                 }
             } catch (\Exception $e) {
@@ -2196,7 +2196,7 @@ HELP;
                 foreach ($creditRows as $row) {
                     $totalAvailableCredit[] = [
                         'currency' => $row['currency'],
-                        'total_available_credit' => number_format($row['total_available_credit'] / Constants::CONVERSION_FACTORS[$row['currency']], 2)
+                        'total_available_credit' => number_format($row['total_available_credit'] / Constants::CONVERSION_FACTORS[$row['currency']], Constants::getCurrencyDecimals($row['currency']))
                     ];
                 }
             } catch (\Exception $e) {
@@ -2224,7 +2224,7 @@ HELP;
                 foreach($balances as $balance){
                     $balanceData = [
                         'currency' => $balance['currency'],
-                        'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
+                        'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency'])),
                         'received' => [],
                         'sent' => []
                     ];
@@ -2338,7 +2338,7 @@ HELP;
                 $balances = $this->balanceRepository->getUserBalance();
                 if(isset($balances)){
                     foreach($balances as $balance){
-                        printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2));
+                        printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency'])));
                         $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactions(PHP_INT_MAX, $balance['currency']), $displayLimit);
                         $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactions(PHP_INT_MAX, $balance['currency']), $displayLimit);
                     }
@@ -2489,7 +2489,7 @@ HELP;
             foreach ($balances as $balance) {
                 $overviewData['balances'][] = [
                     'currency' => $balance['currency'],
-                    'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2)
+                    'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency']))
                 ];
             }
         }
@@ -2570,7 +2570,7 @@ HELP;
                         str_pad($date, 20),
                         str_pad($tx['type'], 10),
                         str_pad($contactDisplay, 25),
-                        str_pad(number_format($tx['amount'], 2), 10),
+                        str_pad(number_format($tx['amount'], Constants::getCurrencyDecimals($tx['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)), 10),
                         $tx['currency']
                     );
                 }
@@ -2597,12 +2597,12 @@ HELP;
         echo "\t\tBalance $direction $where:\n";
         $countrows = 1;
         foreach ($results as $res) {
-            printf("\t\t\t%s %s %s (%s), %.2f %s\n", 
+            printf("\t\t\t%s %s %s (%s), %s %s\n",
                     $res['date'],
                     "|",
-                    $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($res['counterparty']),$res['counterparty']), 
-                    $this->generalUtility->truncateAddress($res['counterparty'],30), 
-                    $res['amount'], 
+                    $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($res['counterparty']),$res['counterparty']),
+                    $this->generalUtility->truncateAddress($res['counterparty'],30),
+                    number_format($res['amount'], Constants::getCurrencyDecimals($res['currency'])),
                     $res['currency']);
             if($displayLimit > 0 && ($countrows >= $displayLimit)){
                 break;
@@ -2672,22 +2672,22 @@ HELP;
                         }
                         $balanceData['user']['balances'][] = [
                             'currency' => $balance['currency'],
-                            'contact_balance' => number_format($contactNetBalance / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
-                            'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2)
+                            'contact_balance' => number_format($contactNetBalance / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency'])),
+                            'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency']))
                         ];
                         foreach($contactBalances as $contactBalance){
                             $balanceData['contacts'][] = [
                                 'name' => $contactResult['name'],
                                 'address' => $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'currency' => $contactBalance['currency'],
-                                'received' => number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
-                                'sent' => number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2)
+                                'received' => number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency'])),
+                                'sent' => number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency']))
                             ];
                         }
                     } else {
                         $balanceData['user']['balances'][] = [
                             'currency' => $balance['currency'],
-                            'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2)
+                            'total_balance' => number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency']))
                         ];
                         if(isset($contacts)){
                             foreach($contacts as $contact){
@@ -2697,8 +2697,8 @@ HELP;
                                         'name' => $contact['name'],
                                         'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                         'currency' => $contactBalance['currency'],
-                                        'received' => number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
-                                        'sent' => number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2)
+                                        'received' => number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency'])),
+                                        'sent' => number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], Constants::getCurrencyDecimals($balance['currency']))
                                     ];
                                 }
                             }
@@ -2722,21 +2722,23 @@ HELP;
                         foreach($contactBalances as $contactBalance){
                             $contactNetBalance += ($contactBalance['received'] - $contactBalance['sent']);
                         }
-                        printf("%s %s, Balance %s with %s: %.2f\n", 'me', $additionalInfo, $balance['currency'], $contactResult['name'], number_format($contactNetBalance / Constants::CONVERSION_FACTORS[$balance['currency']], 2));
+                        $decimals = Constants::getCurrencyDecimals($balance['currency']);
+                        printf("%s %s, Balance %s with %s: %s\n", 'me', $additionalInfo, $balance['currency'], $contactResult['name'], number_format($contactNetBalance / Constants::CONVERSION_FACTORS[$balance['currency']], $decimals));
                         foreach($contactBalances as $contactBalance){
-                            printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
+                            printf("\t%s (%s), Balance (%s | %s): %s | %s %s\n",
                                 $contactResult['name'],
                                 $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'received',
                                 'sent',
-                                number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
-                                number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
+                                number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], $decimals),
+                                number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], $decimals),
                                 $contactBalance['currency']
                             );
                         }
                         return;
                     } else{
-                        printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2));
+                        $decimals = Constants::getCurrencyDecimals($balance['currency']);
+                        printf("%s %s, Balance %s : %s\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']], $decimals));
                         if(!isset($contacts) || !$contacts){
                             echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
                             continue;
@@ -2744,13 +2746,13 @@ HELP;
                             foreach($contacts as $contact){
                                 $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
                                 foreach($contactBalances as $contactBalance){
-                                    printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
+                                    printf("\t%s (%s), Balance (%s | %s): %s | %s %s\n",
                                         $contact['name'],
                                         $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                         'received',
                                         'sent',
-                                        number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
-                                        number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], 2),
+                                        number_format($contactBalance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']], $decimals),
+                                        number_format($contactBalance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']], $decimals),
                                         $contactBalance['currency']
                                     );
                                 }

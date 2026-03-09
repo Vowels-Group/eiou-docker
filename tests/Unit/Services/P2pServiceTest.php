@@ -346,8 +346,11 @@ class P2pServiceTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
 
+        $this->contactCurrencyRepository->method('getFeePercent')
+            ->willReturn(100); // 1% stored as 100 (scaled by FEE_CONVERSION_FACTOR=100)
+
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 1.0, 10)
+            ->with(10000, 1.0, 10) // 100 / FEE_CONVERSION_FACTOR = 1.0 (raw percentage)
             ->willReturn(100);
 
         $result = $this->service->calculateRequestedAmount($request);
@@ -374,10 +377,10 @@ class P2pServiceTest extends TestCase
 
         $this->contactCurrencyRepository->method('getFeePercent')
             ->with('test_hash', 'DER')
-            ->willReturn(30); // 0.3% stored as integer
+            ->willReturn(30); // 0.3% stored as 30 (scaled by FEE_CONVERSION_FACTOR=100)
 
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 30, 10)
+            ->with(10000, 0.3, 10) // 30 / FEE_CONVERSION_FACTOR = 0.3 (raw percentage)
             ->willReturn(300);
 
         $result = $this->service->calculateRequestedAmount($request);
@@ -1348,11 +1351,11 @@ class P2pServiceTest extends TestCase
             ->willReturn(['pubkey_hash' => 'test_hash']);
 
         $this->contactCurrencyRepository->method('getFeePercent')
-            ->willReturn(1.5);
+            ->willReturn(150); // 1.5% stored as 150 (scaled by FEE_CONVERSION_FACTOR=100)
 
         // Fee calculation: 10000 * 1.5% = 150 (with minimum fee of 10)
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 1.5, 10)
+            ->with(10000, 1.5, 10) // 150 / FEE_CONVERSION_FACTOR = 1.5 (raw percentage)
             ->willReturn(150);
 
         $result = $this->service->calculateRequestedAmount($request);
@@ -1377,10 +1380,12 @@ class P2pServiceTest extends TestCase
         $baseAmount = 10000;
 
         // Test each hop's fee calculation
-        $feeRates = [1.0, 1.5, 2.0];
+        // DB stores fee_percent scaled by FEE_CONVERSION_FACTOR (100): 1% → 100, 1.5% → 150, 2% → 200
+        $dbFeeRates = [100, 150, 200];
+        $rawPercentages = [1.0, 1.5, 2.0]; // After dividing by FEE_CONVERSION_FACTOR
         $expectedFees = [100, 150, 200];
 
-        foreach ($feeRates as $index => $feeRate) {
+        foreach ($dbFeeRates as $index => $dbFeeRate) {
             $request = [
                 'senderAddress' => 'http://hop' . ($index + 1) . '.test',
                 'amount' => $baseAmount,
@@ -1397,11 +1402,11 @@ class P2pServiceTest extends TestCase
 
             $this->contactCurrencyRepository->expects($this->atLeastOnce())
                 ->method('getFeePercent')
-                ->willReturn($feeRate);
+                ->willReturn($dbFeeRate);
 
             $this->currencyUtility->expects($this->atLeastOnce())
                 ->method('calculateFee')
-                ->with($baseAmount, $feeRate, 10)
+                ->with($baseAmount, $rawPercentages[$index], 10) // DB value / FEE_CONVERSION_FACTOR
                 ->willReturn($expectedFees[$index]);
 
             $result = $this->service->calculateRequestedAmount($request);
@@ -1694,12 +1699,12 @@ class P2pServiceTest extends TestCase
             ->willReturn(['pubkey_hash' => 'test_hash']);
 
         $this->contactCurrencyRepository->method('getFeePercent')
-            ->willReturn(2.0);
+            ->willReturn(200); // 2% stored as 200 (scaled by FEE_CONVERSION_FACTOR=100)
 
         // Fee calculation: 10000 * 2% = 200
         $expectedFee = 200;
         $this->currencyUtility->method('calculateFee')
-            ->with(self::TEST_AMOUNT, 2.0, 10)
+            ->with(self::TEST_AMOUNT, 2.0, 10) // 200 / FEE_CONVERSION_FACTOR = 2.0 (raw percentage)
             ->willReturn($expectedFee);
 
         // Expect P2P to be inserted with calculated fee

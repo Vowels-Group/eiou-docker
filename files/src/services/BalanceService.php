@@ -162,7 +162,8 @@ class BalanceService implements BalanceServiceInterface
         // Sum all currency balances (typically just USD)
         // Balance is already in minor units from BalanceRepository
         $totalMinorUnits = 0;
-        $maxMinorUnits = (int) (PHP_INT_MAX / 100);
+        $currency = !empty($balances) ? ($balances[0]['currency'] ?? 'USD') : 'USD';
+        $maxMinorUnits = (int) (PHP_INT_MAX / Constants::getConversionFactor($currency));
         foreach ($balances as $balance) {
             $totalMinorUnits += (int) ($balance['total_balance'] ?? 0);
         }

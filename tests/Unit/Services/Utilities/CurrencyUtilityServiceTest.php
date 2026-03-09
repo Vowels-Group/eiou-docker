@@ -214,4 +214,109 @@ class CurrencyUtilityServiceTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->service->convertMajorToMinor(1.00, 'XYZ');
     }
+
+    /**
+     * Test BTC conversion: satoshi to BTC
+     */
+    public function testConvertMinorToMajorBtc(): void
+    {
+        if (!isset(\Eiou\Core\Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
+        }
+        $this->assertEquals(1.0, $this->service->convertMinorToMajor(100000000, 'BTC'));
+        $this->assertEquals(0.00000001, $this->service->convertMinorToMajor(1, 'BTC'));
+        $this->assertEquals(0.001, $this->service->convertMinorToMajor(100000, 'BTC'));
+    }
+
+    /**
+     * Test BTC conversion: BTC to satoshi
+     */
+    public function testConvertMajorToMinorBtc(): void
+    {
+        if (!isset(\Eiou\Core\Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
+        }
+        $this->assertEquals(100000000, $this->service->convertMajorToMinor(1.0, 'BTC'));
+        $this->assertEquals(1, $this->service->convertMajorToMinor(0.00000001, 'BTC'));
+        $this->assertEquals(100000, $this->service->convertMajorToMinor(0.001, 'BTC'));
+    }
+
+    /**
+     * Test BTC formatting uses 8 decimal places
+     */
+    public function testFormatCurrencyBtc(): void
+    {
+        if (!isset(\Eiou\Core\Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
+        }
+        $this->assertEquals('1.00000000 BTC', $this->service->formatCurrency(100000000, 'BTC'));
+        $this->assertEquals('0.00000001 BTC', $this->service->formatCurrency(1, 'BTC'));
+        $this->assertEquals('0.00100000 BTC', $this->service->formatCurrency(100000, 'BTC'));
+    }
+
+    /**
+     * Test fee calculation with BTC
+     */
+    public function testCalculateFeeBtc(): void
+    {
+        if (!isset(\Eiou\Core\Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
+        }
+        // 10% fee on 100000000 satoshi (1 BTC) = 0.1 BTC = 10000000 satoshi
+        $fee = $this->service->calculateFee(100000000, 10.0, 0.00000001, 'BTC');
+        $this->assertEquals(10000000, $fee);
+
+        // 0.01% fee on 100000000 satoshi (1 BTC) = 0.0001 BTC = 10000 satoshi
+        $fee = $this->service->calculateFee(100000000, 0.01, 0.00000001, 'BTC');
+        $this->assertEquals(10000, $fee);
+    }
+
+    /**
+     * Test fee calculation rounds to minimum fee when fee is too small
+     */
+    public function testCalculateFeeMinimumFeeFloor(): void
+    {
+        // 0.01% of $1.00 (100 cents) = 0.01 cents → rounds to 0 → minimum fee (1 cent)
+        $fee = $this->service->calculateFee(100, 0.01, 0.01, 'USD');
+        $this->assertEquals(1, $fee);
+
+        // 0.01% of $10.00 (1000 cents) = 0.1 cents → rounds to 0 → minimum fee (1 cent)
+        $fee = $this->service->calculateFee(1000, 0.01, 0.01, 'USD');
+        $this->assertEquals(1, $fee);
+    }
+
+    /**
+     * Test fee calculation is currency-independent (same percentage gives proportional results)
+     */
+    public function testCalculateFeeCurrencyIndependent(): void
+    {
+        if (!isset(\Eiou\Core\Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
+        }
+        // 1% fee on $100 (10000 cents) = 100 cents
+        $usdFee = $this->service->calculateFee(10000, 1.0, 0.01, 'USD');
+        $this->assertEquals(100, $usdFee);
+
+        // 1% fee on 1 BTC (100000000 satoshi) = 1000000 satoshi
+        $btcFee = $this->service->calculateFee(100000000, 1.0, 0.00000001, 'BTC');
+        $this->assertEquals(1000000, $btcFee);
+    }
+
+    /**
+     * Test fee calculation with various percentages
+     */
+    public function testCalculateFeeVariousPercentages(): void
+    {
+        // 1% fee on $100 (10000 cents) = 100 cents
+        $fee = $this->service->calculateFee(10000, 1.0, 0.01, 'USD');
+        $this->assertEquals(100, $fee);
+
+        // 0.1% fee on $1000 (100000 cents) = 100 cents
+        $fee = $this->service->calculateFee(100000, 0.1, 0.01, 'USD');
+        $this->assertEquals(100, $fee);
+
+        // 0.01% fee on $10000 (1000000 cents) = 100 cents
+        $fee = $this->service->calculateFee(1000000, 0.01, 0.01, 'USD');
+        $this->assertEquals(100, $fee);
+    }
 }

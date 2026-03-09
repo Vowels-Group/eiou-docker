@@ -55,7 +55,7 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $amount = round($amount, Constants::DISPLAY_CURRENCY_DECIMALS);
+        $amount = round($amount, Constants::getCurrencyDecimals($currency));
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
@@ -66,7 +66,7 @@ class InputValidator {
      * @param mixed $amount Amount to validate
      * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
      */
-    public static function validateAmountFee($amount): array {
+    public static function validateAmountFee($amount, $currency = 'USD'): array {
         // Check if amount is numeric
         if (!is_numeric($amount)) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be a number'];
@@ -80,7 +80,7 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $amount = round($amount, Constants::DISPLAY_CURRENCY_DECIMALS);
+        $amount = round($amount, Constants::getCurrencyDecimals($currency));
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
@@ -300,7 +300,7 @@ class InputValidator {
      * @param mixed $credit Credit limit to validate
      * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
      */
-    public static function validateCreditLimit($credit): array {
+    public static function validateCreditLimit($credit, $currency = 'USD'): array {
         if (!is_numeric($credit)) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit must be a number'];
         }
@@ -318,7 +318,7 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $credit = round($credit, Constants::DISPLAY_CURRENCY_DECIMALS);
+        $credit = round($credit, Constants::getCurrencyDecimals($currency));
 
         return ['valid' => true, 'value' => $credit, 'error' => null];
     }

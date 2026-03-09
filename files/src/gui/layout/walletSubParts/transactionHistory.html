@@ -77,7 +77,7 @@
                     <div class="tx-in-progress-details tx-ip-details">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
                         <?php if (!empty($ipTx['fee_amount'])): ?>
-                        <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
+                        <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -100,8 +100,8 @@
                         <!-- Single rp2p (fast mode): existing approval UI -->
                         <?php if (!empty($ipTx['rp2p_amount'])): ?>
                         <div class="p2p-approval-callout">
-                            <div>Route Fee: <?php echo number_format(($ipTx['rp2p_amount'] - $ipTx['amount']) / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
-                            <div><strong>Total Cost: <?php echo number_format($ipTx['rp2p_amount'] / 100, 2); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
+                            <div>Route Fee: <?php echo number_format(($ipTx['rp2p_amount'] - $ipTx['amount']) / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
+                            <div><strong>Total Cost: <?php echo number_format($ipTx['rp2p_amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex gap-sm">
@@ -123,7 +123,7 @@
                 </div>
                 <?php if (($ipTx['phase'] ?? '') !== 'awaiting_approval'): ?>
                 <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
-                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
+                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo number_format($ipTx['amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
                 </div>
                 <?php endif; ?>
             </div>
@@ -196,7 +196,7 @@
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], 2); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], \Eiou\Core\Constants::getCurrencyDecimals($tx['currency'])); ?> <?php echo htmlspecialchars($tx['currency']); ?>
                         <i class="fas fa-chevron-right chevron-indicator"></i>
                     </div>
                 </div>
