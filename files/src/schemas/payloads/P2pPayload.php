@@ -31,10 +31,11 @@ class P2pPayload extends BasePayload
         // Force fast mode if our resolved address is Tor — transport index cascading
         // means the entire P2P chain will propagate over Tor, making best-fee mode
         // impractical due to per-hop Tor latency (~5s × 6 Tor relays per EIOU hop).
+        // Disabled when EIOU_TOR_FORCE_FAST=false (for testing best-fee over Tor).
         $isTorRoute = $this->transportUtility->isTorAddress($data['receiverAddress'])
             || $this->transportUtility->isTorAddress($userAddress);
 
-        if ($isTorRoute && !($data['fast'] ?? true)) {
+        if (Constants::isTorForceFast() && $isTorRoute && !($data['fast'] ?? true)) {
             $data['fast'] = 1;
         }
 

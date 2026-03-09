@@ -165,7 +165,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
     protected function getMessageTransport(array $message): string {
         $address = $message['sender_address'] ?? '';
         $transport = AddressValidator::getTransportType($address);
-        return $transport ?? Constants::DEFAULT_TRANSPORT_MODE;
+        return $transport ?? Constants::getDefaultTransportMode();
     }
 
     /**

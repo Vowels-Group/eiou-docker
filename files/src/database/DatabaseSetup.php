@@ -91,6 +91,10 @@ function freshInstall(){
                 $dbConn->exec(getP2pSendersTableSchema());
                 $dbConn->exec(getP2pRelayedContactsTableSchema());
 
+                // Capacity Reservations & Route Cancellations
+                $dbConn->exec(getCapacityReservationsTableSchema());
+                $dbConn->exec(getRouteCancellationsTableSchema());
+
                 // Message Delivery
                 $dbConn->exec(getMessageDeliveryTableSchema());
                 $dbConn->exec(getDeadLetterQueueTableSchema());

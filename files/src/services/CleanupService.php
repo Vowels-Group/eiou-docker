@@ -12,6 +12,8 @@ use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\RouteCancellationRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -112,6 +114,16 @@ class CleanupService implements CleanupServiceInterface {
     private ?P2pServiceInterface $p2pService = null;
 
     /**
+     * @var CapacityReservationRepository|null Capacity reservation repository
+     */
+    private ?CapacityReservationRepository $capacityReservationRepository = null;
+
+    /**
+     * @var RouteCancellationRepository|null Route cancellation repository
+     */
+    private ?RouteCancellationRepository $routeCancellationRepository = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -210,6 +222,14 @@ class CleanupService implements CleanupServiceInterface {
         $this->p2pService = $p2pService;
     }
 
+    public function setCapacityReservationRepository(CapacityReservationRepository $repo): void {
+        $this->capacityReservationRepository = $repo;
+    }
+
+    public function setRouteCancellationRepository(RouteCancellationRepository $repo): void {
+        $this->routeCancellationRepository = $repo;
+    }
+
     /**
      * Check if there are any messages that will expire and process them
      *
@@ -285,6 +305,24 @@ class CleanupService implements CleanupServiceInterface {
             }
         } catch (Exception $e) {
             Logger::getInstance()->error("Error cleaning up P2P relayed contact records", ['error' => $e->getMessage()]);
+        }
+
+        // Release capacity reservations for expired/cancelled P2Ps (natural fallback)
+        try {
+            if ($this->capacityReservationRepository !== null) {
+                $this->capacityReservationRepository->deleteOldRecords(7);
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error cleaning up capacity reservations", ['error' => $e->getMessage()]);
+        }
+
+        // Clean up old route cancellation audit records
+        try {
+            if ($this->routeCancellationRepository !== null) {
+                $this->routeCancellationRepository->deleteOldRecords(7);
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error cleaning up route cancellation records", ['error' => $e->getMessage()]);
         }
 
         // Originator fallback: select best route for expired originator P2Ps
@@ -429,6 +467,7 @@ class CleanupService implements CleanupServiceInterface {
 
         // Step 3: No completion evidence found - proceed with expiration
         $this->p2pRepository->updateStatus($hash, Constants::STATUS_EXPIRED);
+        $this->capacityReservationRepository?->releaseByHash($hash, 'expired');
         if (function_exists('output') && function_exists('outputP2pExpired')) {
             output(outputP2pExpired($message), 'SILENT');
         }

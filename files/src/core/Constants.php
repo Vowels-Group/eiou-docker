@@ -139,6 +139,57 @@ class Constants {
     const CONTACT_STATUS_ADAPTIVE_POLLING = true;
     const CONTACT_STATUS_SYNC_ON_PING = true;           // Whether to trigger sync check on ping
 
+    // Tor force-fast configuration
+    // When true (default), P2P routing over Tor always uses fast mode because
+    // per-hop Tor latency (~5s × 6 Tor relays) makes best-fee candidate
+    // collection impractical. Set to false via EIOU_TOR_FORCE_FAST env variable
+    // to allow best-fee mode over Tor (useful for testing).
+    const TOR_FORCE_FAST = true;
+
+    // Hop budget randomization
+    // When true (default), P2P routing uses a geometric distribution (30% stop
+    // probability per hop) to randomize the hop budget, preventing traffic
+    // analysis attacks based on observed hop counts.
+    // Set to false via EIOU_HOP_BUDGET_RANDOMIZED env variable to use the full
+    // maxP2pLevel deterministically (required for predictable test behavior).
+    const HOP_BUDGET_RANDOMIZED = true;
+    // Minimum hop budget as a fraction of maxP2pLevel (e.g. 0.5 = half).
+    // Ensures routing always has meaningful depth — a budget of 1 hop would
+    // only reach direct contacts, defeating the purpose of P2P routing.
+    // Floor is applied: for maxP2pLevel=6 and ratio=0.5, minHops=3.
+    const HOP_BUDGET_MIN_RATIO = 0.5;
+
+    /**
+     * Check if Tor routes should force fast mode
+     * Supports runtime override via EIOU_TOR_FORCE_FAST env variable
+     *
+     * @return bool Whether Tor routes force fast mode
+     */
+    public static function isTorForceFast(): bool {
+        $envValue = getenv('EIOU_TOR_FORCE_FAST');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::TOR_FORCE_FAST;
+    }
+
+    /**
+     * Check if hop budget randomization is enabled
+     * Supports runtime override via EIOU_HOP_BUDGET_RANDOMIZED env variable
+     *
+     * When disabled, the hop budget equals maxP2pLevel (deterministic),
+     * which is needed for tests that assert specific routing depths.
+     *
+     * @return bool Whether hop budget randomization is enabled
+     */
+    public static function isHopBudgetRandomized(): bool {
+        $envValue = getenv('EIOU_HOP_BUDGET_RANDOMIZED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::HOP_BUDGET_RANDOMIZED;
+    }
+
     // Transaction Recovery configuration
     const RECOVERY_SENDING_TIMEOUT_SECONDS = 120; // Transactions stuck in 'sending' for this long are recovered
     const RECOVERY_MAX_RETRY_COUNT = 3; // Max times a transaction can be recovered before manual review
@@ -156,8 +207,25 @@ class Constants {
     const HASH_ALGORITHM = 'sha256'; // Do not change
 
     // Network
+    // Default transport when sending to a contact name instead of an address.
+    // Can be overridden by EIOU_DEFAULT_TRANSPORT_MODE env variable (http, https, tor).
+    // Production defaults to 'tor' for privacy; tests can set to 'http' to avoid
+    // Tor's force-fast behavior when testing best-fee mode.
     const DEFAULT_TRANSPORT_MODE = 'tor';
     const VALID_TRANSPORT_INDICES = ['http', 'https', 'tor'];
+
+    /**
+     * Get the default transport mode, with env override support
+     *
+     * @return string Transport mode ('http', 'https', or 'tor')
+     */
+    public static function getDefaultTransportMode(): string {
+        $envValue = getenv('EIOU_DEFAULT_TRANSPORT_MODE');
+        if ($envValue !== false && in_array($envValue, self::VALID_TRANSPORT_INDICES, true)) {
+            return $envValue;
+        }
+        return self::DEFAULT_TRANSPORT_MODE;
+    }
 
     // P2P Network Configuration
     // These constants control the peer-to-peer transaction routing system

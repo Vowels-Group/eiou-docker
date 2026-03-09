@@ -314,8 +314,9 @@ if ($container->has(ContactServiceInterface::class)) {
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
 | `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection, creates capacity reservations on relay, broadcasts full cancel downstream to all contacts via `broadcastFullCancelForHash()` | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, CapacityReservationRepo, TransportUtility, MessageDeliveryService |
+| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup, triggers route cancellation for unselected candidates | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface), RouteCancellationService |
+| `RouteCancellationService` | Actively cancels unselected P2P routes after best-fee selection; releases capacity reservations, sends `route_cancel` messages; handles incoming cancellations with two modes: partial (acknowledge only, multi-route safe) and full cancel (cancel P2P, release reservation, propagate downstream); randomized hop budget via geometric distribution (integrated into P2pService originator hop calculation via static `computeHopBudget()`); controllable via `EIOU_HOP_BUDGET_RANDOMIZED` env var | P2pService (via P2pServiceInterface), CapacityReservationRepo, RouteCancellationRepo, P2pRepo |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -325,7 +326,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
 | `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
-| `CleanupService` | Expired message/proposal cleanup | P2pRepo, Rp2pRepo, TransactionRepo, ChainDropService |
+| `CleanupService` | Expired message/proposal cleanup; releases expired capacity reservations, prunes old cancellation records | P2pRepo, Rp2pRepo, TransactionRepo, ChainDropService, CapacityReservationRepo, RouteCancellationRepo |
 | `BackupService` | Encrypted backup and restore | TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
 | `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService |
@@ -432,6 +433,7 @@ coupling and makes circular dependencies easier to break.
 | `ChainOperationsInterface` | Chain verification and repair | `ChainOperationsService` |
 | `LockingServiceInterface` | Distributed locking | `DatabaseLockingService` |
 | `EventDispatcherInterface` | Event-driven communication | `EventDispatcher` |
+| `RouteCancellationServiceInterface` | Route cancellation and hop budget | `RouteCancellationService` |
 
 **Example - SyncTriggerInterface:**
 
@@ -1065,6 +1067,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
 | `contact_credit` | Per-contact, per-currency available credit received from pong (UNIQUE on `pubkey_hash, currency`) |
 | `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing` = who initiated the relationship) |
+| `capacity_reservations` | Credit reserved at each relay hop during P2P routing (base_amount and total_amount including fees), status: active/released/committed |
+| `route_cancellations` | Audit trail for route cancellation messages sent to unselected P2P candidates after best-fee selection |
 
 ### Repository Pattern
 
@@ -1224,7 +1228,7 @@ no direct connection exists. The system supports two routing modes:
 | Mode | Flag | Internal | Behavior |
 |------|------|----------|----------|
 | **Fast** (default) | None | `fast=1` | First RP2P response wins; lowest latency |
-| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee (HTTP/HTTPS only — forced to fast for Tor) |
+| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee (forced to fast for Tor unless `EIOU_TOR_FORCE_FAST=false`) |
 
 ```
       ALICE                   BOB                    CAROL                   EVE
@@ -1274,6 +1278,30 @@ level = abs(rand(300,700) - rand(200,500)) + rand(1,10)
 This produces unpredictable but bounded values, preventing attackers from correlating
 request patterns.
 
+### Hop Budget Randomization
+
+The **hop budget** controls how many relay hops a P2P request can traverse. It is set
+once by the originator as `maxRequestLevel = minRequestLevel + hopBudget`.
+
+```php
+// Computed by RouteCancellationService::computeHopBudget(minHops, maxHops)
+$maxP2pLevel = $user->getMaxP2pLevel();                // default: 6
+$minHops = max(1, floor($maxP2pLevel * HOP_BUDGET_MIN_RATIO)); // default ratio 0.5 → 3
+$hopBudget = computeHopBudget($minHops, $maxP2pLevel); // range: [3, 6]
+
+// Geometric distribution (30% stop probability per hop beyond minHops):
+//   3 hops: 30%
+//   4 hops: 21%
+//   5 hops: 15%
+//   6 hops: 34% (remainder)
+```
+
+**Key properties:**
+- Only set on the originator — relays inherit `maxRequestLevel` unchanged
+- `HOP_BUDGET_MIN_RATIO` (default: 0.5) prevents uselessly low budgets (1 hop = direct contacts only)
+- When `EIOU_HOP_BUDGET_RANDOMIZED=false` (test default), returns `maxP2pLevel` for deterministic behavior
+- Dead-end behavior: when `requestLevel >= maxRequestLevel`, the relay stores as cancelled and sends `sendCancelNotificationForHash()` upstream immediately
+
 ### P2P Message Flow
 
 **Outbound (P2pService):**
@@ -1314,6 +1342,7 @@ No candidate storage or selection logic is involved.
   generates excessive relay traffic and Tor's ~5s/hop latency amplifies the wait overhead.
   Enforced on both sender side (`prepareP2pRequestData`) and receiver side
   (`handleP2pRequest`) to prevent remote nodes from forcing best-fee over Tor.
+  Can be disabled via `EIOU_TOR_FORCE_FAST=false` env variable for testing.
 - **Rejection counting:** When `handleRp2pRequest()` returns false (fee too high or
   relay can't afford), `checkRp2pPossible()` increments `contacts_responded_count` for
   the sender. When all contacts have responded (all rejected or cancelled), the node
@@ -1365,6 +1394,22 @@ If a candidate fails validation (fee exceeds originator's `maxFee`, or relay
 node can't afford the amount), the next candidate is tried. If all candidates
 fail, the P2P is cancelled and a cancel notification is sent upstream.
 All candidates are deleted after the loop completes regardless of outcome.
+
+After successful selection, `RouteCancellationService::cancelUnselectedRoutes()`
+sends `route_cancel` messages to all unselected candidates' contacts, releasing
+their capacity reservations immediately rather than waiting for CleanupService
+TTL expiry. Each cancellation is recorded in the `route_cancellations` audit
+table. Receiving nodes acknowledge the partial `route_cancel` without cancelling
+their own P2P or releasing reservations — this is safe for diamond topologies
+where a node may be part of both selected and unselected routes.
+
+When the originator rejects a P2P (via CLI `p2p reject` or API), a full cancel
+is broadcast downstream via `P2pService::broadcastFullCancelForHash()`. This
+sends `route_cancel` with `full_cancel=true` to all accepted contacts. Relay
+nodes receiving a full cancel: (1) mark their local P2P as cancelled, (2) release
+their capacity reservation, and (3) propagate the full cancel further downstream
+to their own contacts — creating a cascade that frees resources through the
+entire route chain. CleanupService TTL expiry remains as a natural fallback.
 
 **Phase 3a — Two-Phase Relay Selection (Mesh Deadlock Prevention):**
 

@@ -44,6 +44,8 @@ Integration tests validate the complete system behavior using Docker containers.
 
 **Best-fee routing tests** (`bestFeeRoutingTest.sh`): 11 tests covering single-node, 4-node line, and 12-node collision topologies. Includes fast vs best-fee timing comparison, path analysis with randomized fee structures, and dead-end cascade cancel validation.
 
+**Route cancellation tests** (`routeCancellationTest.sh`): 13 tests covering route cancellation service wiring, capacity reservation table existence, hop budget distribution, capacity reservation creation during relay, release after best-fee selection, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` flag propagation, cancel timing vs passive expiry, and relay status propagation. Best with collisions or collisionscluster topologies.
+
 ## Unit Test Inventory
 
 ### Security Tests (`tests/Unit/Security/`)
@@ -97,6 +99,8 @@ Integration tests validate the complete system behavior using Docker containers.
 | **DatabaseSchemaTest.php** | 67 | Schema validation for all 14 tables, column types, constraints, indexes |
 | **DatabaseSetupTest.php** | 15+ | Migration execution, column migrations, idempotency |
 | **P2pSenderRepositoryTest.php** | 20+ | Multi-path upstream sender tracking for RP2P forwarding |
+| **CapacityReservationRepositoryTest.php** | 12 | Capacity reservation CRUD, total reserved queries, release/commit by hash, TTL cleanup |
+| **RouteCancellationRepositoryTest.php** | 8 | Route cancellation audit trail, acknowledgment, hash queries, TTL cleanup |
 | **PdoConnectionTest.php** | 10+ | Connection creation, DSN format, PDO options |
 
 ### Processors Tests (`tests/Unit/Processors/`)
@@ -156,8 +160,9 @@ Integration tests validate the complete system behavior using Docker containers.
 | **CliServiceTest.php** | 25+ | CLI command handling, output formatting |
 | **DebugServiceTest.php** | 15+ | Debug context, error logging setup |
 | **MessageServiceTest.php** | 25+ | Message processing, validation, routing |
-| **P2pServiceTest.php** | 30+ | P2P routing logic, fund availability, matching |
+| **P2pServiceTest.php** | 63 | P2P routing logic, fund availability via capacity reservations, matching, fee calculation |
 | **Rp2pServiceTest.php** | 46 | RP2P relay logic, fee calculation, two-phase relay selection, race condition coverage |
+| **RouteCancellationServiceTest.php** | 18 | Route cancellation for unselected candidates, partial route_cancel (multi-route safe acknowledge), full cancel (P2P cancel + reservation release + downstream propagation), hop budget (geometric distribution), capacity reservation release |
 | **SendOperationServiceTest.php** | 20+ | Send operations with locking, message delivery |
 | **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
 | **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |
@@ -339,6 +344,22 @@ cd eiou-docker/tests
 ./run-all-tests.sh --help
 ```
 
+### Integration Test Environment Variables
+
+All buildfiles pass these env vars to containers (with test defaults):
+
+| Variable | Test Default | Purpose |
+|----------|-------------|---------|
+| `EIOU_CONTACT_STATUS_ENABLED` | `true` | Enable/disable contact status pinging |
+| `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode for Tor routes |
+| `EIOU_DEFAULT_TRANSPORT_MODE` | `http` | Transport mode (`http`/`https`/`tor`). Tests use `http` to avoid Tor's force-fast overriding best-fee mode |
+| `EIOU_HOP_BUDGET_RANDOMIZED` | `false` | Disable hop budget randomization for deterministic routing depth assertions |
+
+Override from the parent shell:
+```bash
+EIOU_HOP_BUDGET_RANDOMIZED=true ./run-all-tests.sh http4
+```
+
 ## Test Structure
 
 ```
@@ -357,8 +378,10 @@ tests/
 │   │   ├── ConstantsTest.php
 │   │   └── ErrorCodesTest.php
 │   ├── Database/
+│   │   ├── CapacityReservationRepositoryTest.php
 │   │   ├── DatabaseSchemaTest.php
-│   │   └── P2pSenderRepositoryTest.php
+│   │   ├── P2pSenderRepositoryTest.php
+│   │   └── RouteCancellationRepositoryTest.php
 │   ├── Events/
 │   │   ├── EventDispatcherTest.php
 │   │   └── SyncEventsTest.php
@@ -426,6 +449,7 @@ tests/
 │   │   ├── MessageServiceTest.php
 │   │   ├── P2pServiceTest.php
 │   │   ├── RateLimiterServiceTest.php
+│   │   ├── RouteCancellationServiceTest.php
 │   │   ├── Rp2pServiceTest.php
 │   │   ├── SendOperationServiceTest.php
 │   │   ├── ServiceContainerTest.php

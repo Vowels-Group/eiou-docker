@@ -16,7 +16,27 @@ The project is currently in **ALPHA** status.
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
+### Added
+- Route cancellation service: actively cancels unselected P2P routes after best-fee selection to immediately release reserved credit capacity. CleanupService TTL expiry remains as natural fallback
+- Capacity reservation table (`capacity_reservations`): dedicated table tracking credit reserved at each relay hop with base_amount and total_amount (including fees), replacing implicit credit hold calculation from P2P table
+- Route cancellation audit table (`route_cancellations`): tracks cancellation messages sent to unselected routes
+- Randomized hop budget: geometric distribution (30% stop probability per hop) for hop budget initialization preventing traffic analysis attacks. Integrated into P2pService originator hop calculation via `RouteCancellationService::computeHopBudget()`. Minimum hop budget enforced via `HOP_BUDGET_MIN_RATIO` (default 0.5) to prevent uselessly low budgets
+- New `route_cancel` message type for inter-node route cancellation delivery
+- Full cancel downstream propagation: `broadcastFullCancelForHash()` on P2pService broadcasts `route_cancel` with `full_cancel=true` to all accepted contacts, enabling originator and relay cancellation to propagate through the entire route chain
+- `EIOU_DEFAULT_TRANSPORT_MODE` env variable: overrides the default transport mode (`tor` in production) used when sending to a contact name. Test buildfiles default to `http` so best-fee tests don't silently use Tor's force-fast mode
+- `EIOU_TOR_FORCE_FAST` env variable: when set to `false`, disables the automatic fast-mode override for Tor routes, allowing best-fee mode testing over Tor topologies
+- `EIOU_HOP_BUDGET_RANDOMIZED` env variable: when set to `false`, disables geometric distribution and returns `maxP2pLevel` deterministically. Test buildfiles default to `false` for predictable routing depth assertions
+- Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
+
+### Fixed
+- Originator cancel now propagates downstream: `CliService::rejectP2p()` calls `broadcastFullCancelForHash()` instead of `sendCancelNotificationForHash()` which exited early for originator nodes
+- Multi-route cancel safety (diamond topology): regular `route_cancel` from best-fee selection now just acknowledges without cancelling P2P or releasing reservation, preventing incorrect resource freeing when a node is part of both selected and unselected routes
+- `handleIncomingCancellation` now propagates `full_cancel` downstream to relay contacts, enabling cancel cascade through the full route chain instead of being local-only
+- `P2pService::sendP2pMessage` visibility changed from private to public and added to `P2pServiceInterface`, fixing runtime error when called from `RouteCancellationService::cancelUnselectedRoutes`
+
 ### Changed
+- Credit hold calculation in `checkAvailableFunds` now uses `capacity_reservations` table (Option 1: single source of truth) with fallback to legacy `getCreditInP2p` method
+- `P2pServiceTest` updated to mock `CapacityReservationRepository::getTotalReservedForPubkey` instead of legacy `P2pRepository::getCreditInP2p`, testing the new capacity reservation path as primary
 - Letsencrypt volume mount changed from optional (commented out) to always-created named volume to prevent dangling anonymous volumes on container rebuilds. Safe to comment out if you will never use Let's Encrypt
 - Legacy demo/test compose files updated with letsencrypt named volumes for consistency
 - Legacy demo sleep timers increased from 5s/10s to 15s to account for longer container boot times
