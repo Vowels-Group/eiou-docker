@@ -8,11 +8,11 @@ namespace Eiou\Contracts;
  * Cancels unselected P2P routes to immediately release reserved credit capacity,
  * and generates randomized hop budgets for traffic analysis prevention.
  *
- * Patent Claim 16: After the payer selects the best route, transmit cancellation
- * messages along each unselected route to release reserved credit capacity.
+ * After the payer selects the best route, transmit cancellation messages along
+ * each unselected route to release reserved credit capacity.
  *
- * Patent Claim 5: Hop budget values use a non-uniform (geometric) distribution
- * to prevent traffic analysis attacks based on observed hop counts.
+ * Hop budget values use a non-uniform (geometric) distribution to prevent
+ * traffic analysis attacks based on observed hop counts.
  */
 interface RouteCancellationServiceInterface
 {

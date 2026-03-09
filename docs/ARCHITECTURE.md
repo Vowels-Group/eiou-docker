@@ -316,7 +316,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
 | `P2pService` | Peer-to-peer message routing; mega-batch broadcast via `sendMultiBatch()` with coalesce delay, handles fast/best-fee mode (fast forced for Tor), tracks multi-path senders, currency-filtered contact selection, creates capacity reservations on relay, broadcasts full cancel downstream to all contacts via `broadcastFullCancelForHash()` | ContactRepo, P2pRepo, P2pSenderRepo, ContactCurrencyRepo, CapacityReservationRepo, TransportUtility, MessageDeliveryService |
 | `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection with fallback iteration, rejection counting in fast mode, per-currency fee lookup, triggers route cancellation for unselected candidates | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, ContactCurrencyRepo, SendOperationService (via P2pTransactionSenderInterface), RouteCancellationService |
-| `RouteCancellationService` | Actively cancels unselected P2P routes after best-fee selection (Patent Claim 16); releases capacity reservations, sends `route_cancel` messages; handles incoming cancellations with two modes: partial (acknowledge only, multi-route safe) and full cancel (cancel P2P, release reservation, propagate downstream); randomized hop budget (Patent Claim 5) via geometric distribution | P2pService (via P2pServiceInterface), CapacityReservationRepo, RouteCancellationRepo, P2pRepo |
+| `RouteCancellationService` | Actively cancels unselected P2P routes after best-fee selection; releases capacity reservations, sends `route_cancel` messages; handles incoming cancellations with two modes: partial (acknowledge only, multi-route safe) and full cancel (cancel P2P, release reservation, propagate downstream); randomized hop budget via geometric distribution (integrated into P2pService originator hop calculation via static `computeHopBudget()`); controllable via `EIOU_HOP_BUDGET_RANDOMIZED` env var | P2pService (via P2pServiceInterface), CapacityReservationRepo, RouteCancellationRepo, P2pRepo |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -1277,6 +1277,30 @@ level = abs(rand(300,700) - rand(200,500)) + rand(1,10)
 
 This produces unpredictable but bounded values, preventing attackers from correlating
 request patterns.
+
+### Hop Budget Randomization
+
+The **hop budget** controls how many relay hops a P2P request can traverse. It is set
+once by the originator as `maxRequestLevel = minRequestLevel + hopBudget`.
+
+```php
+// Computed by RouteCancellationService::computeHopBudget(minHops, maxHops)
+$maxP2pLevel = $user->getMaxP2pLevel();                // default: 6
+$minHops = max(1, floor($maxP2pLevel * HOP_BUDGET_MIN_RATIO)); // default ratio 0.5 → 3
+$hopBudget = computeHopBudget($minHops, $maxP2pLevel); // range: [3, 6]
+
+// Geometric distribution (30% stop probability per hop beyond minHops):
+//   3 hops: 30%
+//   4 hops: 21%
+//   5 hops: 15%
+//   6 hops: 34% (remainder)
+```
+
+**Key properties:**
+- Only set on the originator — relays inherit `maxRequestLevel` unchanged
+- `HOP_BUDGET_MIN_RATIO` (default: 0.5) prevents uselessly low budgets (1 hop = direct contacts only)
+- When `EIOU_HOP_BUDGET_RANDOMIZED=false` (test default), returns `maxP2pLevel` for deterministic behavior
+- Dead-end behavior: when `requestLevel >= maxRequestLevel`, the relay stores as cancelled and sends `sendCancelNotificationForHash()` upstream immediately
 
 ### P2P Message Flow
 

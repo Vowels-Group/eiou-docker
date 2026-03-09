@@ -333,16 +333,19 @@ class RouteCancellationServiceTest extends TestCase
     }
 
     // =========================================================================
-    // generateRandomizedHopBudget() Tests
+    // generateRandomizedHopBudget() / computeHopBudget() Tests
     // =========================================================================
 
     /**
-     * Test generateRandomizedHopBudget always returns within bounds
+     * Test generateRandomizedHopBudget always returns within bounds (randomized mode)
      *
      * Run 100 times to verify statistical property: all results must be within [min, max].
      */
     public function testGenerateRandomizedHopBudgetReturnsWithinBounds(): void
     {
+        // Ensure randomization is enabled for this test
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=true');
+
         $minHops = 2;
         $maxHops = 8;
 
@@ -351,6 +354,8 @@ class RouteCancellationServiceTest extends TestCase
             $this->assertGreaterThanOrEqual($minHops, $result, "Iteration $i: result $result below min $minHops");
             $this->assertLessThanOrEqual($maxHops, $result, "Iteration $i: result $result above max $maxHops");
         }
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
     }
 
     /**
@@ -358,11 +363,15 @@ class RouteCancellationServiceTest extends TestCase
      */
     public function testGenerateRandomizedHopBudgetClampsNegativeMin(): void
     {
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=true');
+
         for ($i = 0; $i < 50; $i++) {
             $result = $this->service->generateRandomizedHopBudget(-5, 3);
             $this->assertGreaterThanOrEqual(0, $result, "Result $result should not be negative");
             $this->assertLessThanOrEqual(3, $result, "Result $result exceeds max of 3");
         }
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
     }
 
     /**
@@ -376,6 +385,104 @@ class RouteCancellationServiceTest extends TestCase
 
         // maxHops is clamped to minHops (5), so result should be exactly 5
         $this->assertEquals(5, $result);
+    }
+
+    // =========================================================================
+    // EIOU_HOP_BUDGET_RANDOMIZED env var Tests
+    // =========================================================================
+
+    /**
+     * Test computeHopBudget returns maxHops when randomization is disabled
+     *
+     * When EIOU_HOP_BUDGET_RANDOMIZED=false, the hop budget should always
+     * equal maxHops for deterministic test behavior.
+     */
+    public function testComputeHopBudgetReturnsDeterministicWhenDisabled(): void
+    {
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=false');
+
+        for ($i = 0; $i < 50; $i++) {
+            $result = RouteCancellationService::computeHopBudget(1, 6);
+            $this->assertEquals(6, $result, "Iteration $i: deterministic mode should always return maxHops");
+        }
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+    }
+
+    /**
+     * Test computeHopBudget returns varied results when randomization is enabled
+     *
+     * With enough iterations the geometric distribution (30% stop probability)
+     * should produce at least two distinct values over 200 samples.
+     */
+    public function testComputeHopBudgetReturnsVariedWhenEnabled(): void
+    {
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=true');
+
+        $results = [];
+        for ($i = 0; $i < 200; $i++) {
+            $results[] = RouteCancellationService::computeHopBudget(1, 10);
+        }
+
+        $unique = array_unique($results);
+        $this->assertGreaterThan(1, count($unique), 'Randomized mode should produce varied results over 200 iterations');
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+    }
+
+    /**
+     * Test generateRandomizedHopBudget delegates to computeHopBudget correctly
+     *
+     * The instance method should respect the env var just like the static method.
+     */
+    public function testInstanceMethodRespectsEnvVar(): void
+    {
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=false');
+
+        $result = $this->service->generateRandomizedHopBudget(1, 8);
+        $this->assertEquals(8, $result, 'Instance method should return maxHops when randomization disabled');
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+    }
+
+    /**
+     * Test computeHopBudget deterministic mode with edge cases
+     */
+    public function testComputeHopBudgetDeterministicEdgeCases(): void
+    {
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=false');
+
+        // min=0, max=0: should return 0
+        $this->assertEquals(0, RouteCancellationService::computeHopBudget(0, 0));
+
+        // min=max: should return that value
+        $this->assertEquals(5, RouteCancellationService::computeHopBudget(5, 5));
+
+        // max < min: clamped to min
+        $this->assertEquals(5, RouteCancellationService::computeHopBudget(5, 2));
+
+        // negative min clamped to 0
+        $this->assertEquals(3, RouteCancellationService::computeHopBudget(-5, 3));
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+    }
+
+    /**
+     * Test computeHopBudget defaults to randomized (constant is true)
+     *
+     * Without the env var set, the constant HOP_BUDGET_RANDOMIZED=true applies.
+     * We verify the method still returns within bounds (randomized behavior).
+     */
+    public function testComputeHopBudgetDefaultIsRandomized(): void
+    {
+        // Clear env var to fall back on constant
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+
+        for ($i = 0; $i < 100; $i++) {
+            $result = RouteCancellationService::computeHopBudget(1, 6);
+            $this->assertGreaterThanOrEqual(1, $result);
+            $this->assertLessThanOrEqual(6, $result);
+        }
     }
 
     // =========================================================================

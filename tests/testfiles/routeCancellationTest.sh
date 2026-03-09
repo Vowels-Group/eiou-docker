@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ######################### Route Cancellation Test ##############################
-# Tests route cancellation and capacity reservation system (Patent Claims 5, 16)
+# Tests route cancellation and capacity reservation system
 #
 # Verifies:
 # - RouteCancellationService methods exist and are wired
@@ -169,7 +169,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# ==================== Test 7: Randomized Hop Budget (Patent Claim 5) ====================
+# ==================== Test 7: Randomized Hop Budget ====================
 echo -e "\n[Test 7: Randomized hop budget generates values in valid range]"
 
 totaltests=$(( totaltests + 1 ))

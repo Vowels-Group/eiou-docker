@@ -233,7 +233,15 @@ printf "\n"
 # Disable contact status pinging during tests to prevent interference with sync tests
 # The ping feature is tested separately in pingTestSuite.sh which re-enables it
 export EIOU_CONTACT_STATUS_ENABLED=false
-printf "${YELLOW}Note: Contact status pinging disabled during test suite${NC}\n"
+# Disable hop budget randomization for deterministic routing depth in tests
+export EIOU_HOP_BUDGET_RANDOMIZED="${EIOU_HOP_BUDGET_RANDOMIZED:-false}"
+
+# Display active test environment settings
+printf "${YELLOW}Environment:${NC}\n"
+printf "  Contact status pinging:   ${YELLOW}disabled${NC}\n"
+printf "  Default transport mode:   ${YELLOW}${EIOU_DEFAULT_TRANSPORT_MODE:-http}${NC}\n"
+printf "  Tor force-fast:           ${YELLOW}${EIOU_TOR_FORCE_FAST:-true}${NC}\n"
+printf "  Hop budget randomized:    ${YELLOW}${EIOU_HOP_BUDGET_RANDOMIZED}${NC}\n"
 printf "\n"
 
 # Step 1: Build the topology

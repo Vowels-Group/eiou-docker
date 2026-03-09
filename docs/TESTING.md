@@ -344,6 +344,22 @@ cd eiou-docker/tests
 ./run-all-tests.sh --help
 ```
 
+### Integration Test Environment Variables
+
+All buildfiles pass these env vars to containers (with test defaults):
+
+| Variable | Test Default | Purpose |
+|----------|-------------|---------|
+| `EIOU_CONTACT_STATUS_ENABLED` | `true` | Enable/disable contact status pinging |
+| `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode for Tor routes |
+| `EIOU_DEFAULT_TRANSPORT_MODE` | `http` | Transport mode (`http`/`https`/`tor`). Tests use `http` to avoid Tor's force-fast overriding best-fee mode |
+| `EIOU_HOP_BUDGET_RANDOMIZED` | `false` | Disable hop budget randomization for deterministic routing depth assertions |
+
+Override from the parent shell:
+```bash
+EIOU_HOP_BUDGET_RANDOMIZED=true ./run-all-tests.sh http4
+```
+
 ## Test Structure
 
 ```

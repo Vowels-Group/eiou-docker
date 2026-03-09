@@ -146,6 +146,19 @@ class Constants {
     // to allow best-fee mode over Tor (useful for testing).
     const TOR_FORCE_FAST = true;
 
+    // Hop budget randomization
+    // When true (default), P2P routing uses a geometric distribution (30% stop
+    // probability per hop) to randomize the hop budget, preventing traffic
+    // analysis attacks based on observed hop counts.
+    // Set to false via EIOU_HOP_BUDGET_RANDOMIZED env variable to use the full
+    // maxP2pLevel deterministically (required for predictable test behavior).
+    const HOP_BUDGET_RANDOMIZED = true;
+    // Minimum hop budget as a fraction of maxP2pLevel (e.g. 0.5 = half).
+    // Ensures routing always has meaningful depth — a budget of 1 hop would
+    // only reach direct contacts, defeating the purpose of P2P routing.
+    // Floor is applied: for maxP2pLevel=6 and ratio=0.5, minHops=3.
+    const HOP_BUDGET_MIN_RATIO = 0.5;
+
     /**
      * Check if Tor routes should force fast mode
      * Supports runtime override via EIOU_TOR_FORCE_FAST env variable
@@ -158,6 +171,23 @@ class Constants {
             return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
         }
         return self::TOR_FORCE_FAST;
+    }
+
+    /**
+     * Check if hop budget randomization is enabled
+     * Supports runtime override via EIOU_HOP_BUDGET_RANDOMIZED env variable
+     *
+     * When disabled, the hop budget equals maxP2pLevel (deterministic),
+     * which is needed for tests that assert specific routing depths.
+     *
+     * @return bool Whether hop budget randomization is enabled
+     */
+    public static function isHopBudgetRandomized(): bool {
+        $envValue = getenv('EIOU_HOP_BUDGET_RANDOMIZED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::HOP_BUDGET_RANDOMIZED;
     }
 
     // Transaction Recovery configuration

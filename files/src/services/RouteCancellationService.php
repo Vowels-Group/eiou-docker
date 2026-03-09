@@ -154,12 +154,27 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
         echo json_encode(['status' => 'acknowledged', 'message' => 'Full cancel processed']);
     }
 
-    public function generateRandomizedHopBudget(int $minHops, int $maxHops): int {
+    /**
+     * Compute a hop budget, optionally randomized via geometric distribution.
+     *
+     * Static so P2pService can call it without an instance (avoids circular dependency).
+     * When EIOU_HOP_BUDGET_RANDOMIZED=false, returns maxHops for deterministic tests.
+     *
+     * @param int $minHops Minimum hop budget
+     * @param int $maxHops Maximum hop budget
+     * @return int Hop budget within [$minHops, $maxHops]
+     */
+    public static function computeHopBudget(int $minHops, int $maxHops): int {
         if ($minHops < 0) {
             $minHops = 0;
         }
         if ($maxHops < $minHops) {
             $maxHops = $minHops;
+        }
+
+        // When randomization is disabled (tests), use full hop range
+        if (!Constants::isHopBudgetRandomized()) {
+            return $maxHops;
         }
 
         // Geometric distribution: 30% chance of stopping at each hop beyond minHops.
@@ -170,6 +185,10 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
         }
 
         return $budget;
+    }
+
+    public function generateRandomizedHopBudget(int $minHops, int $maxHops): int {
+        return self::computeHopBudget($minHops, $maxHops);
     }
 
     public function decrementHopBudget(int $currentBudget): int {
