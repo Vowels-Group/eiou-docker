@@ -5,19 +5,19 @@ docker network create -d bridge demo-net
 docker rm -f http0 http1 http2 http3
 
 # Remove associated volumes (if any)
-docker volume rm http0-mysql-data http0-files http0-index http0-eiou http0-backups
-docker volume rm http1-mysql-data http1-files http1-index http1-eiou http1-backups
-docker volume rm http2-mysql-data http2-files http2-index http2-eiou http2-backups
-docker volume rm http3-mysql-data http3-files http3-index http3-eiou http3-backups
+docker volume rm http0-mysql-data http0-files http0-backups http0-letsencrypt
+docker volume rm http1-mysql-data http1-files http1-backups http1-letsencrypt
+docker volume rm http2-mysql-data http2-files http2-backups http2-letsencrypt
+docker volume rm http3-mysql-data http3-files http3-backups http3-letsencrypt
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name http0 -v "http0-mysql-data:/var/lib/mysql" -v "http0-files:/etc/eiou/" -v "http0-backups:/var/lib/eiou/backups" -e QUICKSTART=http0 eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name http1 -v "http1-mysql-data:/var/lib/mysql" -v "http1-files:/etc/eiou/" -v "http1-backups:/var/lib/eiou/backups" -e QUICKSTART=http1 eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name http2 -v "http2-mysql-data:/var/lib/mysql" -v "http2-files:/etc/eiou/" -v "http2-backups:/var/lib/eiou/backups" -e QUICKSTART=http2 eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name http3 -v "http3-mysql-data:/var/lib/mysql" -v "http3-files:/etc/eiou/" -v "http3-backups:/var/lib/eiou/backups" -e QUICKSTART=http3 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name http0 -v "http0-mysql-data:/var/lib/mysql" -v "http0-files:/etc/eiou/" -v "http0-backups:/var/lib/eiou/backups" -v "http0-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http0 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name http1 -v "http1-mysql-data:/var/lib/mysql" -v "http1-files:/etc/eiou/" -v "http1-backups:/var/lib/eiou/backups" -v "http1-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http1 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name http2 -v "http2-mysql-data:/var/lib/mysql" -v "http2-files:/etc/eiou/" -v "http2-backups:/var/lib/eiou/backups" -v "http2-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http2 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name http3 -v "http3-mysql-data:/var/lib/mysql" -v "http3-files:/etc/eiou/" -v "http3-backups:/var/lib/eiou/backups" -v "http3-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http3 eiou/eiou
 sleep 15
 
 # add contacts
