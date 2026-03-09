@@ -157,7 +157,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\t-> Checking route_cancel handler in entry point on ${testSender}"
 
 routeTypeCheck=$(docker exec ${testSender} php -r "
-    \$indexContent = file_get_contents('//root//www//eiou//index.html');
+    \$indexContent = file_get_contents('//etc//eiou//www//eiou//index.html');
     echo (strpos(\$indexContent, 'route_cancel') !== false) ? 'OK' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
