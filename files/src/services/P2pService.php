@@ -375,12 +375,14 @@ class P2pService implements P2pServiceInterface {
 
         // Fee is per-currency in contact_currencies table; the old contacts.fee_percent
         // column no longer exists. Look up from contact_currencies, fall back to user default.
+        // getDefaultFee() returns raw percentage (e.g. 0.01 for 0.01%).
+        // getFeePercent() returns DB-stored INT (scaled by FEE_CONVERSION_FACTOR), so divide to get raw %.
         $fee = $this->currentUser->getDefaultFee();
         if ($senderContact && isset($senderContact['pubkey_hash'])) {
             $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
             $feePercent = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
             if ($feePercent !== null) {
-                $fee = $feePercent;
+                $fee = $feePercent / Constants::FEE_CONVERSION_FACTOR;
             }
         }
 

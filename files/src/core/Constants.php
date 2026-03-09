@@ -71,9 +71,14 @@ class Constants {
     const TRANSACTION_MAX_AMOUNT = 999999999;
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
     const TRANSACTION_MINIMUM_FEE = 0.01;
-    // Currency conversion factors: base unit (cents) to display unit (dollars)
+    // Currency conversion factors: minor unit to major unit
+    // USD: 100 (cents → dollars). Add new currencies here as needed (e.g. BTC => 100000000).
     const CONVERSION_FACTORS = [
         'USD' => 100,
+    ];
+    // Currency decimal places for display and validation
+    const CURRENCY_DECIMALS = [
+        'USD' => 2,
     ];
     // Allowed currencies: only currencies with a CONVERSION_FACTORS entry are valid
     const ALLOWED_CURRENCIES = ['USD'];
@@ -91,6 +96,17 @@ class Constants {
             throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
         }
         return self::CONVERSION_FACTORS[$currency];
+    }
+
+    /**
+     * Get the number of decimal places for a given currency
+     *
+     * @param string $currency Currency code (e.g., 'USD')
+     * @return int Number of decimal places
+     */
+    public static function getCurrencyDecimals(string $currency): int
+    {
+        return self::CURRENCY_DECIMALS[$currency] ?? self::DISPLAY_CURRENCY_DECIMALS;
     }
 
     // Transaction processor polling intervals (milliseconds)
@@ -287,7 +303,7 @@ class Constants {
     const P2P_MIN_HOP_WAIT_SECONDS = self::HTTP_TRANSPORT_TIMEOUT_SECONDS;
 
     // Contact management
-    const CONTACT_DEFAULT_FEE_PERCENT = 0.1;
+    const CONTACT_DEFAULT_FEE_PERCENT = 0.01;
     const CONTACT_DEFAULT_FEE_PERCENT_MAX = 5;
     const CONTACT_DEFAULT_CREDIT_LIMIT = 1000;
     const CONTACT_MAX_NAME_LENGTH = 255;

@@ -631,8 +631,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                         if (isset($contact[$type])) echo "\t    " . ucfirst($type) . ": " . $contact[$type] . "\n";
                     }
                     echo "\t    Status: " . ($contact['status'] ?? 'N/A') . "\n";
-                    if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], 2) . "\n";
-                    if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], 2) . "\n";
+                    $contactCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                    if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], Constants::getCurrencyDecimals($contactCurrency)) . "\n";
+                    if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], Constants::getCurrencyDecimals($contactCurrency)) . "\n";
                 }
                 echo "\nFound " . count($results) . " contact(s)\n";
             }
@@ -763,11 +764,11 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $cur = $c['currency'];
                         $fee = $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR;
                         $credit = $c['credit_limit'] / Constants::getConversionFactor($cur);
-                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, 2) . "\n";
+                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getCurrencyDecimals($cur)) . "\n";
                     }
                 }
-                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, 2) . "\n";
-                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, 2) . "\n";
+                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, Constants::getCurrencyDecimals($creditCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
+                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, Constants::getCurrencyDecimals($firstCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
             }
         } else {
             $output->error("Contact not found", ErrorCodes::CONTACT_NOT_FOUND, 404, ['query' => $data[2] ?? null]);

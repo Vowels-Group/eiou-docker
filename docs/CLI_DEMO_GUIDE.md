@@ -477,7 +477,7 @@ docker exec alice eiou changesettings hostname http://alice
 
 | Setting | Description | Valid Values |
 |---------|-------------|--------------|
-| `defaultFee` | Default fee percentage for transactions | Decimal (e.g., `1.0`) |
+| `defaultFee` | Default fee percentage for transactions | Decimal (e.g., `0.01`) |
 | `defaultCreditLimit` | Default credit limit for new contacts | Integer (e.g., `100`) |
 | `defaultCurrency` | Default currency code | `USD` (only USD currently supported) |
 | `minFee` | Minimum fee amount | Decimal (e.g., `0.01`) |
@@ -670,7 +670,7 @@ Bob adds Alice     -->  Both sides become ACCEPTED
 |-----------|-------------|---------|
 | `address` | Node's network address | `http://bob` |
 | `name` | Display name | `Bob` |
-| `fee` | Transaction fee percentage | `0.1` (0.1%) |
+| `fee` | Transaction fee percentage | `0.01` (0.01%) |
 | `credit` | Maximum balance to extend | `1000` |
 | `currency` | Currency for credit limit | `USD` |
 
@@ -991,17 +991,19 @@ docker exec daniel eiou history
 
 Fees are **added to the sender's amount**, not deducted from the recipient. The P2P request travels forward to find a route, then on the return path (rp2p) the fees are calculated and communicated back to the sender.
 
-With 0.1% fee per hop, when Alice sends 100 USD to Daniel:
+With 0.01% fee per hop, when Alice sends 100 USD to Daniel:
 
-| Step | Description | Fee (0.1%) |
-|------|-------------|------------|
+| Step | Description | Fee (0.01%) |
+|------|-------------|-------------|
 | Alice -> Bob | Direct send (no relay fee) | 0.00 |
-| Bob -> Carol | Bob relays | 0.10 |
-| Carol -> Daniel | Carol relays | 0.10 |
-| | **Total fees** | **0.20** |
+| Bob -> Carol | Bob relays | 0.01 |
+| Carol -> Daniel | Carol relays | 0.01 |
+| | **Total fees** | **0.02** |
 
-**Alice sends: 100.20 USD** (100 + relay fees)
+**Alice sends: 100.02 USD** (100 + relay fees)
 **Daniel receives: 100.00 USD**
+
+> **Note:** With the default 0.01% fee on small amounts (under ~$10), the calculated fee rounds to zero and the minimum fee floor ($0.01) is applied instead.
 
 Only relay nodes charge fees. The sender's direct contact (Bob) and the recipient (Daniel) do not add relay fees.
 

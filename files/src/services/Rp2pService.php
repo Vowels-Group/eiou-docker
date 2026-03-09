@@ -396,13 +396,14 @@ class Rp2pService implements Rp2pServiceInterface {
                         ? $this->contactRepository->lookupByAddress($transportIndex, $senderAddress)
                         : null;
 
-                    // Fee is per-currency in contact_currencies table
+                    // Fee is per-currency in contact_currencies table.
+                    // defaultFee is raw percentage; DB getFeePercent() is scaled by FEE_CONVERSION_FACTOR.
                     $feePercent = $defaultFee;
                     if ($senderContact && isset($senderContact['pubkey_hash'])) {
                         $currency = $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                         $contactFee = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
                         if ($contactFee !== null) {
-                            $feePercent = $contactFee;
+                            $feePercent = $contactFee / Constants::FEE_CONVERSION_FACTOR;
                         }
                     }
                     $senderFee = $currencyUtility->calculateFee($p2p['amount'], $feePercent, $minimumFee);

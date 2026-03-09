@@ -17,6 +17,8 @@ The project is currently in **ALPHA** status.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
 ### Added
+- Multi-currency infrastructure: per-currency conversion factors (`CONVERSION_FACTORS`), decimal places (`CURRENCY_DECIMALS`), and helper methods `getConversionFactor()` / `getCurrencyDecimals()` in Constants. Currently USD-only; adding a new currency requires only adding map entries
+- Database amount columns changed from INT to BIGINT: `contact_credit.available_credit`, `contact_currencies.credit_limit`, `balances.received/sent`, `transactions.amount`, `p2p.amount/my_fee_amount/rp2p_amount`, `rp2p.amount`, `rp2p_candidates.amount/fee_amount`, `capacity_reservations.base_amount/total_amount`. Supports large-value currencies without overflow
 - Route cancellation service: actively cancels unselected P2P routes after best-fee selection to immediately release reserved credit capacity. CleanupService TTL expiry remains as natural fallback
 - Capacity reservation table (`capacity_reservations`): dedicated table tracking credit reserved at each relay hop with base_amount and total_amount (including fees), replacing implicit credit hold calculation from P2P table
 - Route cancellation audit table (`route_cancellations`): tracks cancellation messages sent to unselected routes
@@ -30,12 +32,15 @@ The project is currently in **ALPHA** status.
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
 
 ### Fixed
+- Fee calculation formula in `CurrencyUtilityService::calculateFee()` was currency-dependent — used `conversionFactor` in the formula which only produced correct results for USD (factor=100). Replaced with currency-independent formula `amount * feePercent / 100`. Also fixed inconsistent fee scale: `getDefaultFee()` returned raw percentage while DB `getFeePercent()` returned a scaled INT — callers now normalize DB values before passing to `calculateFee()`
 - Originator cancel now propagates downstream: `CliService::rejectP2p()` calls `broadcastFullCancelForHash()` instead of `sendCancelNotificationForHash()` which exited early for originator nodes
 - Multi-route cancel safety (diamond topology): regular `route_cancel` from best-fee selection now just acknowledges without cancelling P2P or releasing reservation, preventing incorrect resource freeing when a node is part of both selected and unselected routes
 - `handleIncomingCancellation` now propagates `full_cancel` downstream to relay contacts, enabling cancel cascade through the full route chain instead of being local-only
 - `P2pService::sendP2pMessage` visibility changed from private to public and added to `P2pServiceInterface`, fixing runtime error when called from `RouteCancellationService::cancelUnselectedRoutes`
 
 ### Changed
+- Default fee percentage reduced from 0.1% to 0.01% (`CONTACT_DEFAULT_FEE_PERCENT`). The minimum fee floor (`TRANSACTION_MINIMUM_FEE = 0.01`) ensures fees never round to zero on small amounts
+- All hardcoded currency display patterns (`/ 100`, `number_format(..., 2)`) replaced with `Constants::getConversionFactor()` and `Constants::getCurrencyDecimals()` across GUI templates, CLI, and services — display is now per-currency aware
 - Credit hold calculation in `checkAvailableFunds` now uses `capacity_reservations` table (Option 1: single source of truth) with fallback to legacy `getCreditInP2p` method
 - `P2pServiceTest` updated to mock `CapacityReservationRepository::getTotalReservedForPubkey` instead of legacy `P2pRepository::getCreditInP2p`, testing the new capacity reservation path as primary
 - Letsencrypt volume mount changed from optional (commented out) to always-created named volume to prevent dangling anonymous volumes on container rebuilds. Safe to comment out if you will never use Let's Encrypt
