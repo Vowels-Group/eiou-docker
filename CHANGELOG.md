@@ -26,6 +26,7 @@ The project is currently in **ALPHA** status.
 - `EIOU_DEFAULT_TRANSPORT_MODE` env variable: overrides the default transport mode (`tor` in production) used when sending to a contact name. Test buildfiles default to `http` so best-fee tests don't silently use Tor's force-fast mode
 - `EIOU_TOR_FORCE_FAST` env variable: when set to `false`, disables the automatic fast-mode override for Tor routes, allowing best-fee mode testing over Tor topologies
 - `EIOU_HOP_BUDGET_RANDOMIZED` env variable: when set to `false`, disables geometric distribution and returns `maxP2pLevel` deterministically. Test buildfiles default to `false` for predictable routing depth assertions
+- `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` env variable and per-node setting: separate toggle for the balance guard that runs before auto-accepting chain drop proposals. Default `true` (guard enabled). Set to `false` for unconditional auto-accept when `EIOU_AUTO_CHAIN_DROP_ACCEPT=true`. Configurable via CLI (`changesettings autoChainDropAcceptGuard`), GUI settings toggle, and REST API
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
 
 ### Fixed

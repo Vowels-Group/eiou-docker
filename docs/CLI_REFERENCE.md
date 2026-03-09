@@ -1278,7 +1278,7 @@ All detection is local — no transaction lists are sent over the wire.
 1. Contact A detects chain gap (`send` or `ping` auto-proposes, or `sync` reveals the gap)
 2. Sync attempts backup recovery on both sides (automatic, no user action needed)
 3. If recovery fails and auto-propose is enabled (`EIOU_AUTO_CHAIN_DROP_PROPOSE=true`, default), a chain drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
-4. If auto-accept is enabled (`EIOU_AUTO_CHAIN_DROP_ACCEPT=true`, default OFF), Contact B's node auto-accepts the proposal if the balance guard passes (missing transactions don't include net payments owed to us). If the guard blocks or auto-accept is disabled, the proposal requires manual review.
+4. If auto-accept is enabled (`EIOU_AUTO_CHAIN_DROP_ACCEPT=true`, default OFF), Contact B's node auto-accepts the proposal. If the balance guard is enabled (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=true`, default), it first checks that missing transactions don't include net payments owed to us. If the guard blocks or auto-accept is disabled, the proposal requires manual review.
 5. Contact B checks incoming proposals: `eiou chaindrop list` (or sees GUI notification banner)
 6. Contact B runs: `eiou chaindrop accept <proposal_id>` (or accepts via GUI)
 7. Both chains are repaired, balances recalculated, and transactions can resume
@@ -1363,7 +1363,7 @@ Reject (success):
 - Rate limited: 10 chain drop operations per minute
 - Auto-propose controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` env var (default: `true`)
 - Auto-accept controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` env var (default: `false` — requires manual accept)
-- When auto-accept is enabled, a balance guard blocks acceptance if missing transactions include net payments owed to us (prevents debt erasure)
+- Balance guard controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` env var (default: `true`). When enabled, blocks auto-accept if missing transactions include net payments owed to us. Set to `false` for unconditional auto-accept.
 
 ---
 

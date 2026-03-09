@@ -419,14 +419,18 @@ class ChainDropService implements ChainDropServiceInterface
                     'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...'
                 ]);
 
-                // Auto-accept with balance guard
+                // Auto-accept: when enabled, optionally check balance guard first
                 if ($this->currentUser->getAutoChainDropAccept()) {
-                    if ($this->isAutoAcceptSafe($contactPubkeyHash, $senderPubkey)) {
+                    $guardEnabled = $this->currentUser->getAutoChainDropAcceptGuard();
+                    $safe = !$guardEnabled || $this->isAutoAcceptSafe($contactPubkeyHash, $senderPubkey);
+
+                    if ($safe) {
                         try {
                             $acceptResult = $this->acceptProposal($proposalId);
                             if ($acceptResult['success']) {
                                 Logger::getInstance()->info("Chain drop proposal auto-accepted", [
-                                    'proposal_id' => $proposalId
+                                    'proposal_id' => $proposalId,
+                                    'guard_enabled' => $guardEnabled
                                 ]);
                             } else {
                                 Logger::getInstance()->warning("Chain drop auto-accept failed", [

@@ -205,6 +205,7 @@ class SettingsController
         $settings['contactStatusSyncOnPing'] = isset($_POST['contactStatusSyncOnPing']) && $_POST['contactStatusSyncOnPing'] === '1';
         $settings['autoChainDropPropose'] = isset($_POST['autoChainDropPropose']) && $_POST['autoChainDropPropose'] === '1';
         $settings['autoChainDropAccept'] = isset($_POST['autoChainDropAccept']) && $_POST['autoChainDropAccept'] === '1';
+        $settings['autoChainDropAcceptGuard'] = isset($_POST['autoChainDropAcceptGuard']) && $_POST['autoChainDropAcceptGuard'] === '1';
         $settings['apiEnabled'] = isset($_POST['apiEnabled']) && $_POST['apiEnabled'] === '1';
 
         // API CORS — textarea value (newline-separated), normalize to comma-separated

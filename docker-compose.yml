@@ -206,6 +206,13 @@ services:
       # Default: false (all proposals require manual review)
       # - EIOU_AUTO_CHAIN_DROP_ACCEPT=false
 
+      # EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD (optional)
+      # Balance guard for auto-accept. When enabled, compares stored vs
+      # calculated balances before accepting. Set to false for unconditional
+      # auto-accept. Only relevant when EIOU_AUTO_CHAIN_DROP_ACCEPT=true.
+      # Default: true (guard enabled)
+      # - EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=true
+
     # =========================================================================
     # VOLUME MOUNTS
     # =========================================================================

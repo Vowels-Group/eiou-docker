@@ -1072,6 +1072,7 @@ Get system settings.
             "contact_status_sync_on_ping": true,
             "auto_chain_drop_propose": true,
             "auto_chain_drop_accept": false,
+            "auto_chain_drop_accept_guard": true,
             "api_enabled": true,
             "api_cors_allowed_origins": "",
             "rate_limit_enabled": true,
@@ -1122,6 +1123,7 @@ Get system settings.
 - `contact_status_sync_on_ping`: Whether to sync contact status during ping
 - `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
 - `auto_chain_drop_accept`: Whether to auto-accept chain-drop proposals
+- `auto_chain_drop_accept_guard`: Whether to run balance guard before auto-accepting
 - `api_enabled`: Whether the REST API endpoint is enabled
 - `api_cors_allowed_origins`: Allowed CORS origins for API (empty = none)
 - `rate_limit_enabled`: Whether rate limiting is active (configurable via CLI/API only — not exposed in GUI)
@@ -1186,6 +1188,7 @@ Update system settings.
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
 | `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
+| `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
 | `rate_limit_enabled` | boolean | Enable/disable rate limiting (CLI/API only — not exposed in GUI) |
@@ -1352,7 +1355,7 @@ Start background processors by removing the shutdown flag. The watchdog process 
 
 ## Chain Drop Endpoints
 
-Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions). Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`); when enabled, a balance guard blocks acceptance if missing transactions include net payments owed to us.
+Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions). Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`). The balance guard (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`) can be disabled for unconditional auto-accept.
 
 ### GET /api/v1/chaindrop
 
