@@ -186,6 +186,7 @@ These named volumes persist your data across container restarts and rebuilds. Vo
 | `{NODE_NAME}-mysql-data` | `/var/lib/mysql` | Transaction history, contacts, balances | **Critical** |
 | `{NODE_NAME}-files` | `/etc/eiou/` | Wallet private keys, encryption keys, configuration | **Critical** |
 | `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
+| `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if you will never use Let's Encrypt | Low |
 
 To completely reset and start fresh: `docker compose down -v`
 
@@ -195,7 +196,6 @@ Uncomment these in `docker-compose.yml` as needed:
 
 | Volume | Container Path | When to Use |
 |--------|----------------|-------------|
-| `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | With `LETSENCRYPT_EMAIL` — persists certificates across restarts |
 | `./my-certs` | `/ssl-certs:ro` | External SSL certificates (server.crt, server.key, optional ca-chain.crt) |
 | `./ssl-ca` | `/ssl-ca:ro` | Local CA for development. Generate with `./scripts/create-ssl-ca.sh ./ssl-ca` |
 | `/path/to/seed.txt` | `/restore/seed:ro` | **Temporary** — wallet restoration only. Use with `RESTORE_FILE=/restore/seed`. Remove this mount and delete the seed file from disk after successful restoration. Never leave seed phrases on persistent storage |

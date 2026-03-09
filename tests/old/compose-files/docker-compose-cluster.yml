@@ -65,6 +65,7 @@ services:
       - cluster-a0-mysql-data:/var/lib/mysql
       - cluster-a0-files:/etc/eiou/
       - cluster-a0-backups:/var/lib/eiou/backups
+      - cluster-a0-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -111,6 +112,7 @@ services:
       - cluster-a1-mysql-data:/var/lib/mysql
       - cluster-a1-files:/etc/eiou/
       - cluster-a1-backups:/var/lib/eiou/backups
+      - cluster-a1-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -156,6 +158,7 @@ services:
       - cluster-a2-mysql-data:/var/lib/mysql
       - cluster-a2-files:/etc/eiou/
       - cluster-a2-backups:/var/lib/eiou/backups
+      - cluster-a2-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -201,6 +204,7 @@ services:
       - cluster-a3-mysql-data:/var/lib/mysql
       - cluster-a3-files:/etc/eiou/
       - cluster-a3-backups:/var/lib/eiou/backups
+      - cluster-a3-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -246,6 +250,7 @@ services:
       - cluster-a4-mysql-data:/var/lib/mysql
       - cluster-a4-files:/etc/eiou/
       - cluster-a4-backups:/var/lib/eiou/backups
+      - cluster-a4-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -292,6 +297,7 @@ services:
       - cluster-a11-mysql-data:/var/lib/mysql
       - cluster-a11-files:/etc/eiou/
       - cluster-a11-backups:/var/lib/eiou/backups
+      - cluster-a11-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -337,6 +343,7 @@ services:
       - cluster-a12-mysql-data:/var/lib/mysql
       - cluster-a12-files:/etc/eiou/
       - cluster-a12-backups:/var/lib/eiou/backups
+      - cluster-a12-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -382,6 +389,7 @@ services:
       - cluster-a21-mysql-data:/var/lib/mysql
       - cluster-a21-files:/etc/eiou/
       - cluster-a21-backups:/var/lib/eiou/backups
+      - cluster-a21-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -427,6 +435,7 @@ services:
       - cluster-a22-mysql-data:/var/lib/mysql
       - cluster-a22-files:/etc/eiou/
       - cluster-a22-backups:/var/lib/eiou/backups
+      - cluster-a22-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -472,6 +481,7 @@ services:
       - cluster-a31-mysql-data:/var/lib/mysql
       - cluster-a31-files:/etc/eiou/
       - cluster-a31-backups:/var/lib/eiou/backups
+      - cluster-a31-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -517,6 +527,7 @@ services:
       - cluster-a32-mysql-data:/var/lib/mysql
       - cluster-a32-files:/etc/eiou/
       - cluster-a32-backups:/var/lib/eiou/backups
+      - cluster-a32-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -562,6 +573,7 @@ services:
       - cluster-a41-mysql-data:/var/lib/mysql
       - cluster-a41-files:/etc/eiou/
       - cluster-a41-backups:/var/lib/eiou/backups
+      - cluster-a41-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -607,6 +619,7 @@ services:
       - cluster-a42-mysql-data:/var/lib/mysql
       - cluster-a42-files:/etc/eiou/
       - cluster-a42-backups:/var/lib/eiou/backups
+      - cluster-a42-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -648,6 +661,8 @@ volumes:
     name: cluster-a0-files
   cluster-a0-backups:
     name: cluster-a0-backups
+  cluster-a0-letsencrypt:
+    name: cluster-a0-letsencrypt
 
   cluster-a1-mysql-data:
     name: cluster-a1-mysql-data
@@ -655,6 +670,8 @@ volumes:
     name: cluster-a1-files
   cluster-a1-backups:
     name: cluster-a1-backups
+  cluster-a1-letsencrypt:
+    name: cluster-a1-letsencrypt
 
   cluster-a2-mysql-data:
     name: cluster-a2-mysql-data
@@ -662,6 +679,8 @@ volumes:
     name: cluster-a2-files
   cluster-a2-backups:
     name: cluster-a2-backups
+  cluster-a2-letsencrypt:
+    name: cluster-a2-letsencrypt
 
   cluster-a3-mysql-data:
     name: cluster-a3-mysql-data
@@ -669,6 +688,8 @@ volumes:
     name: cluster-a3-files
   cluster-a3-backups:
     name: cluster-a3-backups
+  cluster-a3-letsencrypt:
+    name: cluster-a3-letsencrypt
 
   cluster-a4-mysql-data:
     name: cluster-a4-mysql-data
@@ -676,6 +697,8 @@ volumes:
     name: cluster-a4-files
   cluster-a4-backups:
     name: cluster-a4-backups
+  cluster-a4-letsencrypt:
+    name: cluster-a4-letsencrypt
 
   cluster-a11-mysql-data:
     name: cluster-a11-mysql-data
@@ -683,6 +706,8 @@ volumes:
     name: cluster-a11-files
   cluster-a11-backups:
     name: cluster-a11-backups
+  cluster-a11-letsencrypt:
+    name: cluster-a11-letsencrypt
 
   cluster-a12-mysql-data:
     name: cluster-a12-mysql-data
@@ -690,6 +715,8 @@ volumes:
     name: cluster-a12-files
   cluster-a12-backups:
     name: cluster-a12-backups
+  cluster-a12-letsencrypt:
+    name: cluster-a12-letsencrypt
 
   cluster-a21-mysql-data:
     name: cluster-a21-mysql-data
@@ -697,6 +724,8 @@ volumes:
     name: cluster-a21-files
   cluster-a21-backups:
     name: cluster-a21-backups
+  cluster-a21-letsencrypt:
+    name: cluster-a21-letsencrypt
 
   cluster-a22-mysql-data:
     name: cluster-a22-mysql-data
@@ -704,6 +733,8 @@ volumes:
     name: cluster-a22-files
   cluster-a22-backups:
     name: cluster-a22-backups
+  cluster-a22-letsencrypt:
+    name: cluster-a22-letsencrypt
 
   cluster-a31-mysql-data:
     name: cluster-a31-mysql-data
@@ -711,6 +742,8 @@ volumes:
     name: cluster-a31-files
   cluster-a31-backups:
     name: cluster-a31-backups
+  cluster-a31-letsencrypt:
+    name: cluster-a31-letsencrypt
 
   cluster-a32-mysql-data:
     name: cluster-a32-mysql-data
@@ -718,6 +751,8 @@ volumes:
     name: cluster-a32-files
   cluster-a32-backups:
     name: cluster-a32-backups
+  cluster-a32-letsencrypt:
+    name: cluster-a32-letsencrypt
 
   cluster-a41-mysql-data:
     name: cluster-a41-mysql-data
@@ -725,6 +760,8 @@ volumes:
     name:  cluster-a41-files
   cluster-a41-backups:
     name: cluster-a41-backups
+  cluster-a41-letsencrypt:
+    name: cluster-a41-letsencrypt
 
   cluster-a42-mysql-data:
     name: cluster-a42-mysql-data
@@ -732,3 +769,5 @@ volumes:
     name: cluster-a42-files
   cluster-a42-backups:
     name: cluster-a42-backups
+  cluster-a42-letsencrypt:
+    name: cluster-a42-letsencrypt

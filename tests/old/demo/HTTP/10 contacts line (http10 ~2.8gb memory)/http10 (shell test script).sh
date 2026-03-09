@@ -102,7 +102,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 5
+sleep 15
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -124,7 +124,7 @@ docker exec httpA eiou send ${containerAddresses[httpG]} 100 USD
 docker exec httpA eiou send ${containerAddresses[httpH]} 100 USD # payment should fail - too far
 
 echo -e "\nSleeping for 5 seconds for proper transaction completion..."
-sleep 5
+sleep 15
 
 echo -e "\nChecking errors..."
 docker exec httpA cat /var/log/php_errors.log

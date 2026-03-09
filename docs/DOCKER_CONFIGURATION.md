@@ -255,6 +255,7 @@ All EIOU containers use named volumes for data persistence:
 | `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
 | `{node}-files` | `/etc/eiou/` | Config: wallet keys, config/userconfig.json, encryption data | **CRITICAL** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
+| `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
 
 **Example:**
 ```yaml

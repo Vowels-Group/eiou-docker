@@ -84,7 +84,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 5
+sleep 15
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -103,7 +103,7 @@ docker exec httpA eiou send ${containerAddresses[httpC]} 100 USD
 docker exec httpA eiou send ${containerAddresses[httpD]} 100 USD # first complicated path
 
 echo -e "\nSleeping for 5 seconds for proper transaction completion..."
-sleep 5
+sleep 15
 
 echo -e "\nTesting other functions..."
 

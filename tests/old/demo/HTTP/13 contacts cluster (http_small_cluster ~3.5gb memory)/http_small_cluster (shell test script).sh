@@ -111,7 +111,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 5
+sleep 15
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -131,7 +131,7 @@ docker exec A0 eiou send ${containerAddresses[A31]} 100 USD
 docker exec A0 eiou send ${containerAddresses[A2]} 100 USD
 
 echo -e "\nSleeping for 5 seconds for proper transaction completion..."
-sleep 5
+sleep 15
 
 echo -e "\nTesting other functions..."
 
@@ -141,7 +141,7 @@ docker exec A0 eiou viewcontact ${containerAddresses[A4]}
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
 echo -e "\nSleeping for 5 seconds..."
-sleep 5 
+sleep 15 
 
 # View balances
 echo -e "\nViewing balances..."

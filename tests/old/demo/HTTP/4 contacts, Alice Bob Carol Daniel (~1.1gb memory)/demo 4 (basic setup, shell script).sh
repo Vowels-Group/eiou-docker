@@ -84,7 +84,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 5
+sleep 15
 
 # Add friends
 echo -e "\nAdding friends..."

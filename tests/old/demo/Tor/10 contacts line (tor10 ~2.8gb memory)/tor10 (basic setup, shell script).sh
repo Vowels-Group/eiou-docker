@@ -96,7 +96,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."
-sleep 5
+sleep 15
 
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (Tor)

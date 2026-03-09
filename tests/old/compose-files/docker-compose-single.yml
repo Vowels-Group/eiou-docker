@@ -109,9 +109,9 @@ services:
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
       - eiou-backups:/var/lib/eiou/backups
 
-      # OPTIONAL: Let's Encrypt certificate persistence
-      # Required when using LETSENCRYPT_EMAIL to persist certs across restarts:
-      # - eiou-letsencrypt:/etc/letsencrypt
+      # Let's Encrypt certificate persistence
+      # Keeps certificates across container restarts and rebuilds.
+      - eiou-letsencrypt:/etc/letsencrypt
 
       # OPTIONAL: External SSL certificates (Let's Encrypt wildcard, commercial CA, etc.)
       # Use with scripts/create-ssl-letsencrypt.sh for multi-node wildcard certs:
@@ -178,3 +178,5 @@ volumes:
   # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
   eiou-backups:
     name: eiou-backups
+  eiou-letsencrypt:
+    name: eiou-letsencrypt

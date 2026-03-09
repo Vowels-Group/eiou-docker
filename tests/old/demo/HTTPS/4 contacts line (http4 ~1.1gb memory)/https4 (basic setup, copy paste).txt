@@ -18,7 +18,7 @@ docker run -d --restart unless-stopped  --network=demo-net --name https0 -v "htt
 docker run -d --restart unless-stopped  --network=demo-net --name https1 -v "https1-mysql-data:/var/lib/mysql" -v "https1-files:/etc/eiou/" -v "https1-backups:/var/lib/eiou/backups" -e QUICKSTART=https1 eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name https2 -v "https2-mysql-data:/var/lib/mysql" -v "https2-files:/etc/eiou/" -v "https2-backups:/var/lib/eiou/backups" -e QUICKSTART=https2 eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name https3 -v "https3-mysql-data:/var/lib/mysql" -v "https3-files:/etc/eiou/" -v "https3-backups:/var/lib/eiou/backups" -e QUICKSTART=https3 eiou/eiou
-sleep 5
+sleep 15
 
 # add contacts
 docker exec https0 eiou add https://https1 https1 0.1 1000 USD

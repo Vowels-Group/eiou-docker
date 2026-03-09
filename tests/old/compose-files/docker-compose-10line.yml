@@ -52,6 +52,7 @@ services:
       - node-a-mysql-data:/var/lib/mysql
       - node-a-files:/etc/eiou/
       - node-a-backups:/var/lib/eiou/backups
+      - node-a-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -102,6 +103,7 @@ services:
       - node-b-mysql-data:/var/lib/mysql
       - node-b-files:/etc/eiou/
       - node-b-backups:/var/lib/eiou/backups
+      - node-b-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -152,6 +154,7 @@ services:
       - node-c-mysql-data:/var/lib/mysql
       - node-c-files:/etc/eiou/
       - node-c-backups:/var/lib/eiou/backups
+      - node-c-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -202,6 +205,7 @@ services:
       - node-d-mysql-data:/var/lib/mysql
       - node-d-files:/etc/eiou/
       - node-d-backups:/var/lib/eiou/backups
+      - node-d-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -252,6 +256,7 @@ services:
       - node-e-mysql-data:/var/lib/mysql
       - node-e-files:/etc/eiou/
       - node-e-backups:/var/lib/eiou/backups
+      - node-e-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -302,6 +307,7 @@ services:
       - node-f-mysql-data:/var/lib/mysql
       - node-f-files:/etc/eiou/
       - node-f-backups:/var/lib/eiou/backups
+      - node-f-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -352,6 +358,7 @@ services:
       - node-g-mysql-data:/var/lib/mysql
       - node-g-files:/etc/eiou/
       - node-g-backups:/var/lib/eiou/backups
+      - node-g-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -402,6 +409,7 @@ services:
       - node-h-mysql-data:/var/lib/mysql
       - node-h-files:/etc/eiou/
       - node-h-backups:/var/lib/eiou/backups
+      - node-h-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -452,6 +460,7 @@ services:
       - node-i-mysql-data:/var/lib/mysql
       - node-i-files:/etc/eiou/
       - node-i-backups:/var/lib/eiou/backups
+      - node-i-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -502,6 +511,7 @@ services:
       - node-j-mysql-data:/var/lib/mysql
       - node-j-files:/etc/eiou/
       - node-j-backups:/var/lib/eiou/backups
+      - node-j-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -548,6 +558,8 @@ volumes:
     name: node-a-files
   node-a-backups:
     name: node-a-backups
+  node-a-letsencrypt:
+    name: node-a-letsencrypt
 
   node-b-mysql-data:
     name: node-b-mysql-data
@@ -555,6 +567,8 @@ volumes:
     name: node-b-files
   node-b-backups:
     name: node-b-backups
+  node-b-letsencrypt:
+    name: node-b-letsencrypt
 
   node-c-mysql-data:
     name: node-c-mysql-data
@@ -562,6 +576,8 @@ volumes:
     name: node-c-files
   node-c-backups:
     name: node-c-backups
+  node-c-letsencrypt:
+    name: node-c-letsencrypt
 
   node-d-mysql-data:
     name: node-d-mysql-data
@@ -569,6 +585,8 @@ volumes:
     name: node-d-files
   node-d-backups:
     name: node-d-backups
+  node-d-letsencrypt:
+    name: node-d-letsencrypt
 
   node-e-mysql-data:
     name: node-e-mysql-data
@@ -576,6 +594,8 @@ volumes:
     name: node-e-files
   node-e-backups:
     name: node-e-backups
+  node-e-letsencrypt:
+    name: node-e-letsencrypt
 
   node-f-mysql-data:
     name: node-f-mysql-data
@@ -583,6 +603,8 @@ volumes:
     name: node-f-files
   node-f-backups:
     name: node-f-backups
+  node-f-letsencrypt:
+    name: node-f-letsencrypt
 
   node-g-mysql-data:
     name: node-g-mysql-data
@@ -590,6 +612,8 @@ volumes:
     name: node-g-files
   node-g-backups:
     name: node-g-backups
+  node-g-letsencrypt:
+    name: node-g-letsencrypt
 
   node-h-mysql-data:
     name: node-h-mysql-data
@@ -597,6 +621,8 @@ volumes:
     name: node-h-files
   node-h-backups:
     name: node-h-backups
+  node-h-letsencrypt:
+    name: node-h-letsencrypt
 
   node-i-mysql-data:
     name: node-i-mysql-data
@@ -604,6 +630,8 @@ volumes:
     name: node-i-files
   node-i-backups:
     name: node-i-backups
+  node-i-letsencrypt:
+    name: node-i-letsencrypt
 
   node-j-mysql-data:
     name: node-j-mysql-data
@@ -611,3 +639,5 @@ volumes:
     name: node-j-files
   node-j-backups:
     name: node-j-backups
+  node-j-letsencrypt:
+    name: node-j-letsencrypt
