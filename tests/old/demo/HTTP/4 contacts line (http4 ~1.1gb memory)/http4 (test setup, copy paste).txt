@@ -18,7 +18,7 @@ docker run -d --restart unless-stopped  --network=demo-net --name http0 -v "http
 docker run -d --restart unless-stopped  --network=demo-net --name http1 -v "http1-mysql-data:/var/lib/mysql" -v "http1-files:/etc/eiou/" -v "http1-backups:/var/lib/eiou/backups" -e QUICKSTART=http1 eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name http2 -v "http2-mysql-data:/var/lib/mysql" -v "http2-files:/etc/eiou/" -v "http2-backups:/var/lib/eiou/backups" -e QUICKSTART=http2 eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name http3 -v "http3-mysql-data:/var/lib/mysql" -v "http3-files:/etc/eiou/" -v "http3-backups:/var/lib/eiou/backups" -e QUICKSTART=http3 eiou/eiou
-sleep 5
+sleep 15
 
 # add contacts
 docker exec http0 eiou add http://http1 http1 0.1 1000 USD

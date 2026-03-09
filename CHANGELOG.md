@@ -17,6 +17,9 @@ The project is currently in **ALPHA** status.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
 ### Changed
+- Letsencrypt volume mount changed from optional (commented out) to always-created named volume to prevent dangling anonymous volumes on container rebuilds. Safe to comment out if you will never use Let's Encrypt
+- Legacy demo/test compose files updated with letsencrypt named volumes for consistency
+- Legacy demo sleep timers increased from 5s/10s to 15s to account for longer container boot times
 - Interactive `changesettings` menu expanded from 16 to 43 options, now covering all available settings organized by category (Transaction, P2P & Network, Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Display, Currency Management)
 - `viewsettings` display now includes all changeable settings: added `name`, `direct_tx_expiration`, `allowed_currencies`; removed duplicate autoRefresh and autoBackup entries that appeared in two sections
 - Added newline separator between `viewsettings` output and the interactive menu prompt for readability

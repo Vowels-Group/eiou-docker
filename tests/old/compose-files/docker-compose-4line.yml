@@ -57,6 +57,7 @@ services:
       - alice-mysql-data:/var/lib/mysql
       - alice-files:/etc/eiou/
       - alice-backups:/var/lib/eiou/backups
+      - alice-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -107,6 +108,7 @@ services:
       - bob-mysql-data:/var/lib/mysql
       - bob-files:/etc/eiou/
       - bob-backups:/var/lib/eiou/backups
+      - bob-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -157,6 +159,7 @@ services:
       - carol-mysql-data:/var/lib/mysql
       - carol-files:/etc/eiou/
       - carol-backups:/var/lib/eiou/backups
+      - carol-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -207,6 +210,7 @@ services:
       - daniel-mysql-data:/var/lib/mysql
       - daniel-files:/etc/eiou/
       - daniel-backups:/var/lib/eiou/backups
+      - daniel-letsencrypt:/etc/letsencrypt
     cap_drop:
       - ALL
     cap_add:
@@ -253,6 +257,8 @@ volumes:
     name: alice-files
   alice-backups:
     name: alice-backups
+  alice-letsencrypt:
+    name: alice-letsencrypt
 
   bob-mysql-data:
     name: bob-mysql-data
@@ -260,6 +266,8 @@ volumes:
     name: bob-files
   bob-backups:
     name: bob-backups
+  bob-letsencrypt:
+    name: bob-letsencrypt
 
   carol-mysql-data:
     name: carol-mysql-data
@@ -267,6 +275,8 @@ volumes:
     name: carol-files
   carol-backups:
     name: carol-backups
+  carol-letsencrypt:
+    name: carol-letsencrypt
 
   daniel-mysql-data:
     name: daniel-mysql-data
@@ -274,3 +284,5 @@ volumes:
     name: daniel-files
   daniel-backups:
     name: daniel-backups
+  daniel-letsencrypt:
+    name: daniel-letsencrypt

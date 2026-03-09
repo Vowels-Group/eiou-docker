@@ -36,7 +36,7 @@ docker run -d --restart unless-stopped --network=demo-net --name A32 -v "A32-mys
 docker run -d --restart unless-stopped --network=demo-net --name A4 -v "A4-mysql-data:/var/lib/mysql" -v "A4-files:/etc/eiou/" -v "A4-backups:/var/lib/eiou/backups" -e QUICKSTART=A4 eiou/eiou
 docker run -d --restart unless-stopped --network=demo-net --name A41 -v "A41-mysql-data:/var/lib/mysql" -v "A41-files:/etc/eiou/" -v "A41-backups:/var/lib/eiou/backups" -e QUICKSTART=A41 eiou/eiou
 docker run -d --restart unless-stopped --network=demo-net --name A42 -v "A42-mysql-data:/var/lib/mysql" -v "A42-files:/etc/eiou/" -v "A42-backups:/var/lib/eiou/backups" -e QUICKSTART=A42 eiou/eiou
-sleep 5
+sleep 15
 
 # Add friends (NOTE that names are NOT arbitrary)
 docker exec A0 eiou add http://A1 A1 0.1 1000 USD

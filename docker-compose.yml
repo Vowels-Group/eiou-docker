@@ -233,11 +233,12 @@ services:
       # Off-site storage recommended for disaster recovery.
       - backups:/var/lib/eiou/backups
 
-      # OPTIONAL: Let's Encrypt certificate persistence
-      # Required when using LETSENCRYPT_EMAIL so certificates survive restarts.
-      # If you uncomment this, also uncomment letsencrypt in the volumes
-      # section at the bottom of this file.
-      # - letsencrypt:/etc/letsencrypt
+      # Let's Encrypt certificate persistence
+      # Keeps certificates across container restarts and rebuilds.
+      # Pre-created so certbot state is always tied to a named volume
+      # (avoids dangling anonymous volumes from the Dockerfile VOLUME directive).
+      # Safe to comment out if you will never use Let's Encrypt.
+      - letsencrypt:/etc/letsencrypt
 
       # OPTIONAL: External SSL certificates (Let's Encrypt wildcard, commercial CA)
       # Mount a directory containing server.crt and server.key (PEM format).
@@ -324,6 +325,5 @@ volumes:
     name: ${NODE_NAME:-eiou-node}-files
   backups:
     name: ${NODE_NAME:-eiou-node}-backups
-  # Uncomment if using LETSENCRYPT_EMAIL:
-  # letsencrypt:
-  #   name: ${NODE_NAME:-eiou-node}-letsencrypt
+  letsencrypt:
+    name: ${NODE_NAME:-eiou-node}-letsencrypt

@@ -18,7 +18,7 @@ docker run -d --restart unless-stopped  --network=demo-net --name Alice -v "Alic
 docker run -d --restart unless-stopped  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-files:/etc/eiou/" -v "Bob-backups:/var/lib/eiou/backups" -e QUICKSTART=Bob eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-files:/etc/eiou/" -v "Carol-backups:/var/lib/eiou/backups" -e QUICKSTART=Carol eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-files:/etc/eiou/" -v "Daniel-backups:/var/lib/eiou/backups" -e QUICKSTART=Daniel eiou/eiou
-sleep 5
+sleep 15
 
 # add contacts
 docker exec Alice eiou add http://Bob Bob 0.1 1000 USD
