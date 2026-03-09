@@ -44,6 +44,8 @@ Integration tests validate the complete system behavior using Docker containers.
 
 **Best-fee routing tests** (`bestFeeRoutingTest.sh`): 11 tests covering single-node, 4-node line, and 12-node collision topologies. Includes fast vs best-fee timing comparison, path analysis with randomized fee structures, and dead-end cascade cancel validation.
 
+**Route cancellation tests** (`routeCancellationTest.sh`): 13 tests covering route cancellation service wiring, capacity reservation table existence, hop budget distribution, capacity reservation creation during relay, release after best-fee selection, cancel timing vs passive expiry, relay status propagation, and gap documentation for originator downstream cancel and multi-hop cancel propagation. Best with collisions or collisionscluster topologies.
+
 ## Unit Test Inventory
 
 ### Security Tests (`tests/Unit/Security/`)

@@ -22,6 +22,7 @@ The project is currently in **ALPHA** status.
 - Route cancellation audit table (`route_cancellations`): tracks cancellation messages sent to unselected routes
 - Randomized hop budget (Patent Claim 5): geometric distribution for hop budget initialization preventing traffic analysis attacks
 - New `route_cancel` message type for inter-node route cancellation delivery
+- Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, gap documentation for originator downstream cancel and multi-hop cancel propagation
 
 ### Changed
 - Credit hold calculation in `checkAvailableFunds` now uses `capacity_reservations` table (Option 1: single source of truth) with fallback to legacy `getCreditInP2p` method

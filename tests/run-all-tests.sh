@@ -449,6 +449,7 @@ nodeIdentityTest
 bestFeeRoutingTest
 cascadeCancelTest
 maxLevelCancelTest
+routeCancellationTest
 parallelBroadcastTest
 performanceBaseline
 "
@@ -537,6 +538,7 @@ addContactsTest
 bestFeeRoutingTest
 cascadeCancelTest
 maxLevelCancelTest
+routeCancellationTest
 parallelBroadcastTest
 "
 
