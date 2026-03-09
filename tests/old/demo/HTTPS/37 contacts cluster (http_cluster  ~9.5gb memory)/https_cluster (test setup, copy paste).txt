@@ -5,85 +5,85 @@ docker network create -d bridge demo-net
 docker rm -f A0 A1 A11 A111 A112 A113 A12 A121 A122 A123 A2 A21 A211 A212 A213 A22 A221 A222 A223 A3 A31 A311 A312 A313 A32 A321 A322 A323 A4 A41 A411 A412 A413 A42 A421 A422 A423
 
 # Remove associated volumes (if any)
-docker volume rm A0-mysql-data A0-files A0-index A0-eiou A0-backups
-docker volume rm A1-mysql-data A1-files A1-index A1-eiou A1-backups
-docker volume rm A11-mysql-data A11-files A11-index A11-eiou A11-backups
-docker volume rm A111-mysql-data A111-files A111-index A111-eiou A111-backups
-docker volume rm A112-mysql-data A112-files A112-index A112-eiou A112-backups
-docker volume rm A113-mysql-data A113-files A113-index A113-eiou A113-backups
-docker volume rm A12-mysql-data A12-files A12-index A12-eiou A12-backups
-docker volume rm A121-mysql-data A121-files A121-index A121-eiou A121-backups
-docker volume rm A122-mysql-data A122-files A122-index A122-eiou A122-backups
-docker volume rm A123-mysql-data A123-files A123-index A123-eiou A123-backups
-docker volume rm A2-mysql-data A2-files A2-index A2-eiou A2-backups
-docker volume rm A21-mysql-data A21-files A21-index A21-eiou A21-backups
-docker volume rm A211-mysql-data A211-files A211-index A211-eiou A211-backups
-docker volume rm A212-mysql-data A212-files A212-index A212-eiou A212-backups
-docker volume rm A213-mysql-data A213-files A213-index A213-eiou A213-backups
-docker volume rm A22-mysql-data A22-files A22-index A22-eiou A22-backups
-docker volume rm A221-mysql-data A221-files A221-index A221-eiou A221-backups
-docker volume rm A222-mysql-data A222-files A222-index A222-eiou A222-backups
-docker volume rm A223-mysql-data A223-files A223-index A223-eiou A223-backups
-docker volume rm A3-mysql-data A3-files A3-index A3-eiou A3-backups
-docker volume rm A31-mysql-data A31-files A31-index A31-eiou A31-backups
-docker volume rm A311-mysql-data A311-files A311-index A311-eiou A311-backups
-docker volume rm A312-mysql-data A312-files A312-index A312-eiou A312-backups
-docker volume rm A313-mysql-data A313-files A313-index A313-eiou A313-backups
-docker volume rm A32-mysql-data A32-files A32-index A32-eiou A32-backups
-docker volume rm A321-mysql-data A321-files A321-index A321-eiou A321-backups
-docker volume rm A322-mysql-data A322-files A322-index A322-eiou A322-backups
-docker volume rm A323-mysql-data A323-files A323-index A323-eiou A323-backups
-docker volume rm A4-mysql-data A4-files A4-index A4-eiou A4-backups
-docker volume rm A41-mysql-data A41-files A41-index A41-eiou A41-backups
-docker volume rm A411-mysql-data A411-files A411-index A411-eiou A411-backups
-docker volume rm A412-mysql-data A412-files A412-index A412-eiou A412-backups
-docker volume rm A413-mysql-data A413-files A413-index A413-eiou A413-backups
-docker volume rm A42-mysql-data A42-files A42-index A42-eiou A42-backups
-docker volume rm A421-mysql-data A421-files A421-index A421-eiou A421-backups
-docker volume rm A422-mysql-data A422-files A422-index A422-eiou A422-backups
-docker volume rm A423-mysql-data A423-files A423-index A423-eiou A423-backups
+docker volume rm A0-mysql-data A0-files A0-backups A0-letsencrypt
+docker volume rm A1-mysql-data A1-files A1-backups A1-letsencrypt
+docker volume rm A11-mysql-data A11-files A11-backups A11-letsencrypt
+docker volume rm A111-mysql-data A111-files A111-backups A111-letsencrypt
+docker volume rm A112-mysql-data A112-files A112-backups A112-letsencrypt
+docker volume rm A113-mysql-data A113-files A113-backups A113-letsencrypt
+docker volume rm A12-mysql-data A12-files A12-backups A12-letsencrypt
+docker volume rm A121-mysql-data A121-files A121-backups A121-letsencrypt
+docker volume rm A122-mysql-data A122-files A122-backups A122-letsencrypt
+docker volume rm A123-mysql-data A123-files A123-backups A123-letsencrypt
+docker volume rm A2-mysql-data A2-files A2-backups A2-letsencrypt
+docker volume rm A21-mysql-data A21-files A21-backups A21-letsencrypt
+docker volume rm A211-mysql-data A211-files A211-backups A211-letsencrypt
+docker volume rm A212-mysql-data A212-files A212-backups A212-letsencrypt
+docker volume rm A213-mysql-data A213-files A213-backups A213-letsencrypt
+docker volume rm A22-mysql-data A22-files A22-backups A22-letsencrypt
+docker volume rm A221-mysql-data A221-files A221-backups A221-letsencrypt
+docker volume rm A222-mysql-data A222-files A222-backups A222-letsencrypt
+docker volume rm A223-mysql-data A223-files A223-backups A223-letsencrypt
+docker volume rm A3-mysql-data A3-files A3-backups A3-letsencrypt
+docker volume rm A31-mysql-data A31-files A31-backups A31-letsencrypt
+docker volume rm A311-mysql-data A311-files A311-backups A311-letsencrypt
+docker volume rm A312-mysql-data A312-files A312-backups A312-letsencrypt
+docker volume rm A313-mysql-data A313-files A313-backups A313-letsencrypt
+docker volume rm A32-mysql-data A32-files A32-backups A32-letsencrypt
+docker volume rm A321-mysql-data A321-files A321-backups A321-letsencrypt
+docker volume rm A322-mysql-data A322-files A322-backups A322-letsencrypt
+docker volume rm A323-mysql-data A323-files A323-backups A323-letsencrypt
+docker volume rm A4-mysql-data A4-files A4-backups A4-letsencrypt
+docker volume rm A41-mysql-data A41-files A41-backups A41-letsencrypt
+docker volume rm A411-mysql-data A411-files A411-backups A411-letsencrypt
+docker volume rm A412-mysql-data A412-files A412-backups A412-letsencrypt
+docker volume rm A413-mysql-data A413-files A413-backups A413-letsencrypt
+docker volume rm A42-mysql-data A42-files A42-backups A42-letsencrypt
+docker volume rm A421-mysql-data A421-files A421-backups A421-letsencrypt
+docker volume rm A422-mysql-data A422-files A422-backups A422-letsencrypt
+docker volume rm A423-mysql-data A423-files A423-backups A423-letsencrypt
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped --network=demo-net --name A0 -v "A0-mysql-data:/var/lib/mysql" -v "A0-files:/etc/eiou/" -v "A0-backups:/var/lib/eiou/backups" -e QUICKSTART=A0 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A1 -v "A1-mysql-data:/var/lib/mysql" -v "A1-files:/etc/eiou/" -v "A1-backups:/var/lib/eiou/backups" -e QUICKSTART=A1 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A11 -v "A11-mysql-data:/var/lib/mysql" -v "A11-files:/etc/eiou/" -v "A11-backups:/var/lib/eiou/backups" -e QUICKSTART=A11 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A111 -v "A111-mysql-data:/var/lib/mysql" -v "A111-files:/etc/eiou/" -v "A111-backups:/var/lib/eiou/backups" -e QUICKSTART=A111 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A112 -v "A112-mysql-data:/var/lib/mysql" -v "A112-files:/etc/eiou/" -v "A112-backups:/var/lib/eiou/backups" -e QUICKSTART=A112 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A113 -v "A113-mysql-data:/var/lib/mysql" -v "A113-files:/etc/eiou/" -v "A113-backups:/var/lib/eiou/backups" -e QUICKSTART=A113 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A12 -v "A12-mysql-data:/var/lib/mysql" -v "A12-files:/etc/eiou/" -v "A12-backups:/var/lib/eiou/backups" -e QUICKSTART=A12 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A121 -v "A121-mysql-data:/var/lib/mysql" -v "A121-files:/etc/eiou/" -v "A121-backups:/var/lib/eiou/backups" -e QUICKSTART=A121 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A122 -v "A122-mysql-data:/var/lib/mysql" -v "A122-files:/etc/eiou/" -v "A122-backups:/var/lib/eiou/backups" -e QUICKSTART=A122 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A123 -v "A123-mysql-data:/var/lib/mysql" -v "A123-files:/etc/eiou/" -v "A123-backups:/var/lib/eiou/backups" -e QUICKSTART=A123 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A2 -v "A2-mysql-data:/var/lib/mysql" -v "A2-files:/etc/eiou/" -v "A2-backups:/var/lib/eiou/backups" -e QUICKSTART=A2 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A21 -v "A21-mysql-data:/var/lib/mysql" -v "A21-files:/etc/eiou/" -v "A21-backups:/var/lib/eiou/backups" -e QUICKSTART=A21 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A211 -v "A211-mysql-data:/var/lib/mysql" -v "A211-files:/etc/eiou/" -v "A211-backups:/var/lib/eiou/backups" -e QUICKSTART=A211 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A212 -v "A212-mysql-data:/var/lib/mysql" -v "A212-files:/etc/eiou/" -v "A212-backups:/var/lib/eiou/backups" -e QUICKSTART=A212 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A213 -v "A213-mysql-data:/var/lib/mysql" -v "A213-files:/etc/eiou/" -v "A213-backups:/var/lib/eiou/backups" -e QUICKSTART=A213 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A22 -v "A22-mysql-data:/var/lib/mysql" -v "A22-files:/etc/eiou/" -v "A22-backups:/var/lib/eiou/backups" -e QUICKSTART=A22 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A221 -v "A221-mysql-data:/var/lib/mysql" -v "A221-files:/etc/eiou/" -v "A221-backups:/var/lib/eiou/backups" -e QUICKSTART=A221 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A222 -v "A222-mysql-data:/var/lib/mysql" -v "A222-files:/etc/eiou/" -v "A222-backups:/var/lib/eiou/backups" -e QUICKSTART=A222 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A223 -v "A223-mysql-data:/var/lib/mysql" -v "A223-files:/etc/eiou/" -v "A223-backups:/var/lib/eiou/backups" -e QUICKSTART=A223 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A3 -v "A3-mysql-data:/var/lib/mysql" -v "A3-files:/etc/eiou/" -v "A3-backups:/var/lib/eiou/backups" -e QUICKSTART=A3 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A31 -v "A31-mysql-data:/var/lib/mysql" -v "A31-files:/etc/eiou/" -v "A31-backups:/var/lib/eiou/backups" -e QUICKSTART=A31 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A311 -v "A311-mysql-data:/var/lib/mysql" -v "A311-files:/etc/eiou/" -v "A311-backups:/var/lib/eiou/backups" -e QUICKSTART=A311 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A312 -v "A312-mysql-data:/var/lib/mysql" -v "A312-files:/etc/eiou/" -v "A312-backups:/var/lib/eiou/backups" -e QUICKSTART=A312 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A313 -v "A313-mysql-data:/var/lib/mysql" -v "A313-files:/etc/eiou/" -v "A313-backups:/var/lib/eiou/backups" -e QUICKSTART=A313 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A32 -v "A32-mysql-data:/var/lib/mysql" -v "A32-files:/etc/eiou/" -v "A32-backups:/var/lib/eiou/backups" -e QUICKSTART=A32 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A321 -v "A321-mysql-data:/var/lib/mysql" -v "A321-files:/etc/eiou/" -v "A321-backups:/var/lib/eiou/backups" -e QUICKSTART=A321 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A322 -v "A322-mysql-data:/var/lib/mysql" -v "A322-files:/etc/eiou/" -v "A322-backups:/var/lib/eiou/backups" -e QUICKSTART=A322 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A323 -v "A323-mysql-data:/var/lib/mysql" -v "A323-files:/etc/eiou/" -v "A323-backups:/var/lib/eiou/backups" -e QUICKSTART=A323 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A4 -v "A4-mysql-data:/var/lib/mysql" -v "A4-files:/etc/eiou/" -v "A4-backups:/var/lib/eiou/backups" -e QUICKSTART=A4 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A41 -v "A41-mysql-data:/var/lib/mysql" -v "A41-files:/etc/eiou/" -v "A41-backups:/var/lib/eiou/backups" -e QUICKSTART=A41 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A411 -v "A411-mysql-data:/var/lib/mysql" -v "A411-files:/etc/eiou/" -v "A411-backups:/var/lib/eiou/backups" -e QUICKSTART=A411 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A412 -v "A412-mysql-data:/var/lib/mysql" -v "A412-files:/etc/eiou/" -v "A412-backups:/var/lib/eiou/backups" -e QUICKSTART=A412 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A413 -v "A413-mysql-data:/var/lib/mysql" -v "A413-files:/etc/eiou/" -v "A413-backups:/var/lib/eiou/backups" -e QUICKSTART=A413 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A42 -v "A42-mysql-data:/var/lib/mysql" -v "A42-files:/etc/eiou/" -v "A42-backups:/var/lib/eiou/backups" -e QUICKSTART=A42 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A421 -v "A421-mysql-data:/var/lib/mysql" -v "A421-files:/etc/eiou/" -v "A421-backups:/var/lib/eiou/backups" -e QUICKSTART=A421 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A422 -v "A422-mysql-data:/var/lib/mysql" -v "A422-files:/etc/eiou/" -v "A422-backups:/var/lib/eiou/backups" -e QUICKSTART=A422 eiou/eiou
-docker run -d --restart unless-stopped --network=demo-net --name A423 -v "A423-mysql-data:/var/lib/mysql" -v "A423-files:/etc/eiou/" -v "A423-backups:/var/lib/eiou/backups" -e QUICKSTART=A423 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A0 -v "A0-mysql-data:/var/lib/mysql" -v "A0-files:/etc/eiou/" -v "A0-backups:/var/lib/eiou/backups" -v "A0-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A0 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A1 -v "A1-mysql-data:/var/lib/mysql" -v "A1-files:/etc/eiou/" -v "A1-backups:/var/lib/eiou/backups" -v "A1-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A1 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A11 -v "A11-mysql-data:/var/lib/mysql" -v "A11-files:/etc/eiou/" -v "A11-backups:/var/lib/eiou/backups" -v "A11-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A11 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A111 -v "A111-mysql-data:/var/lib/mysql" -v "A111-files:/etc/eiou/" -v "A111-backups:/var/lib/eiou/backups" -v "A111-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A111 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A112 -v "A112-mysql-data:/var/lib/mysql" -v "A112-files:/etc/eiou/" -v "A112-backups:/var/lib/eiou/backups" -v "A112-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A112 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A113 -v "A113-mysql-data:/var/lib/mysql" -v "A113-files:/etc/eiou/" -v "A113-backups:/var/lib/eiou/backups" -v "A113-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A113 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A12 -v "A12-mysql-data:/var/lib/mysql" -v "A12-files:/etc/eiou/" -v "A12-backups:/var/lib/eiou/backups" -v "A12-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A12 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A121 -v "A121-mysql-data:/var/lib/mysql" -v "A121-files:/etc/eiou/" -v "A121-backups:/var/lib/eiou/backups" -v "A121-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A121 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A122 -v "A122-mysql-data:/var/lib/mysql" -v "A122-files:/etc/eiou/" -v "A122-backups:/var/lib/eiou/backups" -v "A122-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A122 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A123 -v "A123-mysql-data:/var/lib/mysql" -v "A123-files:/etc/eiou/" -v "A123-backups:/var/lib/eiou/backups" -v "A123-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A123 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A2 -v "A2-mysql-data:/var/lib/mysql" -v "A2-files:/etc/eiou/" -v "A2-backups:/var/lib/eiou/backups" -v "A2-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A2 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A21 -v "A21-mysql-data:/var/lib/mysql" -v "A21-files:/etc/eiou/" -v "A21-backups:/var/lib/eiou/backups" -v "A21-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A21 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A211 -v "A211-mysql-data:/var/lib/mysql" -v "A211-files:/etc/eiou/" -v "A211-backups:/var/lib/eiou/backups" -v "A211-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A211 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A212 -v "A212-mysql-data:/var/lib/mysql" -v "A212-files:/etc/eiou/" -v "A212-backups:/var/lib/eiou/backups" -v "A212-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A212 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A213 -v "A213-mysql-data:/var/lib/mysql" -v "A213-files:/etc/eiou/" -v "A213-backups:/var/lib/eiou/backups" -v "A213-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A213 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A22 -v "A22-mysql-data:/var/lib/mysql" -v "A22-files:/etc/eiou/" -v "A22-backups:/var/lib/eiou/backups" -v "A22-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A22 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A221 -v "A221-mysql-data:/var/lib/mysql" -v "A221-files:/etc/eiou/" -v "A221-backups:/var/lib/eiou/backups" -v "A221-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A221 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A222 -v "A222-mysql-data:/var/lib/mysql" -v "A222-files:/etc/eiou/" -v "A222-backups:/var/lib/eiou/backups" -v "A222-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A222 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A223 -v "A223-mysql-data:/var/lib/mysql" -v "A223-files:/etc/eiou/" -v "A223-backups:/var/lib/eiou/backups" -v "A223-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A223 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A3 -v "A3-mysql-data:/var/lib/mysql" -v "A3-files:/etc/eiou/" -v "A3-backups:/var/lib/eiou/backups" -v "A3-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A3 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A31 -v "A31-mysql-data:/var/lib/mysql" -v "A31-files:/etc/eiou/" -v "A31-backups:/var/lib/eiou/backups" -v "A31-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A31 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A311 -v "A311-mysql-data:/var/lib/mysql" -v "A311-files:/etc/eiou/" -v "A311-backups:/var/lib/eiou/backups" -v "A311-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A311 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A312 -v "A312-mysql-data:/var/lib/mysql" -v "A312-files:/etc/eiou/" -v "A312-backups:/var/lib/eiou/backups" -v "A312-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A312 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A313 -v "A313-mysql-data:/var/lib/mysql" -v "A313-files:/etc/eiou/" -v "A313-backups:/var/lib/eiou/backups" -v "A313-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A313 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A32 -v "A32-mysql-data:/var/lib/mysql" -v "A32-files:/etc/eiou/" -v "A32-backups:/var/lib/eiou/backups" -v "A32-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A32 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A321 -v "A321-mysql-data:/var/lib/mysql" -v "A321-files:/etc/eiou/" -v "A321-backups:/var/lib/eiou/backups" -v "A321-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A321 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A322 -v "A322-mysql-data:/var/lib/mysql" -v "A322-files:/etc/eiou/" -v "A322-backups:/var/lib/eiou/backups" -v "A322-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A322 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A323 -v "A323-mysql-data:/var/lib/mysql" -v "A323-files:/etc/eiou/" -v "A323-backups:/var/lib/eiou/backups" -v "A323-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A323 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A4 -v "A4-mysql-data:/var/lib/mysql" -v "A4-files:/etc/eiou/" -v "A4-backups:/var/lib/eiou/backups" -v "A4-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A4 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A41 -v "A41-mysql-data:/var/lib/mysql" -v "A41-files:/etc/eiou/" -v "A41-backups:/var/lib/eiou/backups" -v "A41-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A41 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A411 -v "A411-mysql-data:/var/lib/mysql" -v "A411-files:/etc/eiou/" -v "A411-backups:/var/lib/eiou/backups" -v "A411-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A411 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A412 -v "A412-mysql-data:/var/lib/mysql" -v "A412-files:/etc/eiou/" -v "A412-backups:/var/lib/eiou/backups" -v "A412-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A412 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A413 -v "A413-mysql-data:/var/lib/mysql" -v "A413-files:/etc/eiou/" -v "A413-backups:/var/lib/eiou/backups" -v "A413-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A413 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A42 -v "A42-mysql-data:/var/lib/mysql" -v "A42-files:/etc/eiou/" -v "A42-backups:/var/lib/eiou/backups" -v "A42-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A42 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A421 -v "A421-mysql-data:/var/lib/mysql" -v "A421-files:/etc/eiou/" -v "A421-backups:/var/lib/eiou/backups" -v "A421-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A421 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A422 -v "A422-mysql-data:/var/lib/mysql" -v "A422-files:/etc/eiou/" -v "A422-backups:/var/lib/eiou/backups" -v "A422-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A422 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A423 -v "A423-mysql-data:/var/lib/mysql" -v "A423-files:/etc/eiou/" -v "A423-backups:/var/lib/eiou/backups" -v "A423-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A423 eiou/eiou
 sleep 15
 
 # Add friends (NOTE that names are NOT arbitrary)
