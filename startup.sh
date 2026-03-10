@@ -99,10 +99,26 @@ graceful_shutdown() {
     SHUTDOWN_START=$(date +%s)
 
     # Step 0: Create automatic pre-shutdown backup (for safe upgrades)
-    # Only attempt if MariaDB is still running and the backup system is available
+    # Always runs regardless of EIOU_BACKUP_AUTO_ENABLED — this is a safety
+    # backup for upgrades, not a scheduled backup. Uses BackupService directly
+    # instead of backup-cron.php (which skips when auto-backup is disabled).
+    # Cleanup runs after to maintain the max backup count.
     if mysqladmin ping -h localhost --silent 2>/dev/null; then
         echo "[Shutdown] Creating automatic pre-shutdown backup..."
-        if timeout 15 runuser -u www-data -- php /etc/eiou/scripts/backup-cron.php 2>/dev/null; then
+        if timeout 20 runuser -u www-data -- php -r '
+            chdir("/etc/eiou");
+            require_once "/etc/eiou/src/bootstrap.php";
+            $app = \Eiou\Core\Application::getInstance();
+            $bs = $app->services->getBackupService();
+            $r = $bs->createBackup();
+            if ($r["success"]) {
+                echo "Backup created: " . $r["filename"] . "\n";
+                $bs->cleanupOldBackups();
+            } else {
+                echo "Backup failed: " . ($r["error"] ?? "unknown") . "\n";
+                exit(1);
+            }
+        ' 2>/dev/null; then
             echo "[Shutdown] Pre-shutdown backup created successfully"
         else
             echo "[Shutdown] Pre-shutdown backup failed (non-critical, continuing shutdown)"
