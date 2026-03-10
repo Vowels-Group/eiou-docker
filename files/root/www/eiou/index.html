@@ -83,6 +83,29 @@ if (!$addressValidation['valid']) {
 // Decode the message content (separate from transport metadata)
 $messageContent = json_decode($envelope['message'], true);
 
+// E2E decryption: if message contains an 'encrypted' block, decrypt it
+// to restore the original plaintext fields (amount, currency, txid, etc.)
+// The signature was verified above against the encrypted content — this is
+// encrypt-then-sign, so verification works without decryption.
+if (isset($messageContent['encrypted']) && is_array($messageContent['encrypted'])) {
+    $currentUser = $app->getCurrentUser();
+    $privateKey = $currentUser->getPrivateKey();
+
+    if (!empty($privateKey)) {
+        $decryptedFields = \Eiou\Security\PayloadEncryption::decryptFromSender(
+            $messageContent['encrypted'],
+            $privateKey
+        );
+        // Merge decrypted fields back and remove encrypted block
+        $messageContent = array_merge($messageContent, $decryptedFields);
+        unset($messageContent['encrypted']);
+    }
+
+    // Store the raw signed message for sync signature verification
+    // (sync needs the original signed content, which includes the encrypted block)
+    $messageContent['signedMessageContent'] = $envelope['message'];
+}
+
 // Build the full request by merging transport metadata with message content
 // This provides backward compatibility with services expecting senderAddress/senderPublicKey/signature
 // Description is in envelope (not in signed message) for privacy during P2P routing

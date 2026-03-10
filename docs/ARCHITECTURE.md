@@ -2377,6 +2377,7 @@ TorKeyDerivation
 |-----------|------|---------|
 | `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation |
 | `KeyEncryption` | `/src/security/KeyEncryption.php` | AES-256-GCM encryption/decryption for private keys and auth codes |
+| `PayloadEncryption` | `/src/security/PayloadEncryption.php` | ECDH + AES-256-GCM end-to-end encryption for direct transaction payloads |
 | `TorKeyDerivation` | `/src/security/TorKeyDerivation.php` | Derives Ed25519 keypairs from secp256k1 keys for Tor v3 hidden service addresses |
 
 ### Encrypted Storage
@@ -2387,6 +2388,18 @@ TorKeyDerivation
 | Auth Code | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
 | Mnemonic | AES-256-GCM | Displayed once, not stored |
 
+### Payload Encryption (E2E)
+
+Direct transactions between established contacts are end-to-end encrypted using
+ephemeral ECDH key agreement + AES-256-GCM. Encrypted fields: `amount`, `currency`,
+`txid`, `previousTxid`, `memo`. Encryption happens in `TransportUtilityService::signWithCapture()`
+(encrypt-then-sign), decryption in `index.html` before message routing.
+
+P2P relay transactions are NOT encrypted — relay nodes need cleartext `amount` and
+`currency` for fee calculation and capacity checks.
+
+See [PAYLOAD_ENCRYPTION_ANALYSIS.md](PAYLOAD_ENCRYPTION_ANALYSIS.md) for full design details.
+
 ### Transport Security
 
 | Layer | Protection |
@@ -2394,6 +2407,7 @@ TorKeyDerivation
 | HTTPS | TLS 1.2+ with auto-generated or custom certificates |
 | Tor | Onion routing for IP anonymization |
 | Message Signing | secp256k1 ECDSA signatures on all messages |
+| E2E Encryption | ECDH + AES-256-GCM for direct transaction payloads |
 
 **SSL Certificate Priority Chain:**
 

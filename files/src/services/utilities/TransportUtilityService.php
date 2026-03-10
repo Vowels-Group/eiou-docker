@@ -9,6 +9,7 @@ use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Utils\AddressValidator;
 use Eiou\Services\ServiceContainer;
+use Eiou\Security\PayloadEncryption;
 
 /**
  * Transport Utility Service
@@ -789,6 +790,30 @@ class TransportUtilityService implements TransportServiceInterface
         // signature verification during chain sync recovery
         $description = $messageContent['description'] ?? null;
         unset($messageContent['description']);
+
+        // E2E encrypt sensitive fields for direct transactions
+        // Only applies to type=send with memo=standard (direct to known contact)
+        // P2P relay transactions are NOT encrypted (relays need cleartext amount for fee calculation)
+        if (($messageContent['type'] ?? '') === 'send'
+            && ($messageContent['memo'] ?? '') === 'standard'
+            && !empty($messageContent['receiverPublicKey'])
+            && PayloadEncryption::isAvailable()
+        ) {
+            $sensitiveFields = [];
+            foreach (PayloadEncryption::ENCRYPTED_FIELDS as $field) {
+                if (array_key_exists($field, $messageContent)) {
+                    $sensitiveFields[$field] = $messageContent[$field];
+                    unset($messageContent[$field]);
+                }
+            }
+
+            if (!empty($sensitiveFields)) {
+                $messageContent['encrypted'] = PayloadEncryption::encryptForRecipient(
+                    $sensitiveFields,
+                    $messageContent['receiverPublicKey']
+                );
+            }
+        }
 
         // Add cryptographic nonce for replay protection (128-bit hex string)
         $nonce = bin2hex(random_bytes(16));

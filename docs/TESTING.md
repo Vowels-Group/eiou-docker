@@ -54,6 +54,7 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **BIP39Test.php** | 22 | Mnemonic generation (12/24 words), validation, seed derivation, key pair generation, auth code derivation |
 | **KeyEncryptionTest.php** | 9 | AES-256-GCM encryption availability, info, secure clear, error handling |
+| **PayloadEncryptionTest.php** | 17 | ECDH + AES-256-GCM E2E encryption: round-trip, tampering detection, wrong-key rejection, cross-node simulation, encrypt-then-sign workflow, secp256k1 compatibility |
 | **TorKeyDerivationTest.php** | 10 | Ed25519 key derivation, .onion address generation, deterministic keys |
 
 ### Utils Tests (`tests/Unit/Utils/`)
@@ -430,6 +431,7 @@ tests/
 │   ├── Security/
 │   │   ├── BIP39Test.php
 │   │   ├── KeyEncryptionTest.php
+│   │   ├── PayloadEncryptionTest.php
 │   │   └── TorKeyDerivationTest.php
 │   ├── Services/
 │   │   ├── ApiAuthServiceTest.php
@@ -595,7 +597,7 @@ Ensure these extensions are enabled in `php.ini`:
 | `dom` | PHPUnit XML parsing |
 | `mbstring` | String handling |
 | `sodium` | TorKeyDerivation tests |
-| `openssl` | KeyEncryption, BIP39 tests |
+| `openssl` | KeyEncryption, PayloadEncryption, BIP39 tests |
 
 ## Troubleshooting
 
