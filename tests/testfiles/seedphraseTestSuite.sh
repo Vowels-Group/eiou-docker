@@ -1808,6 +1808,28 @@ else
 fi
 
 ##################################################################
+#                    CLEANUP: RESTORE HOSTNAME
+##################################################################
+
+# After multiple wallet delete/restore cycles, the testContainer lost its
+# hostname/hostname_secure because restoreWallet() only saves cryptographic
+# fields. Re-apply the hostname so subsequent tests (bestFeeRoutingTest, etc.)
+# can use HTTP transport instead of falling back to Tor.
+echo -e "\n[Cleanup: Restoring hostname on ${testContainer}]"
+docker exec ${testContainer} php -r '
+    $path = "'"${USERCONFIG}"'";
+    $json = json_decode(file_get_contents($path), true);
+    if ($json && !isset($json["hostname"])) {
+        $json["hostname"] = "http://'"${testContainer}"'";
+        $json["hostname_secure"] = "https://'"${testContainer}"'";
+        file_put_contents($path, json_encode($json), LOCK_EX);
+        echo "hostname restored: http://'"${testContainer}"'";
+    } else {
+        echo "hostname already set or config missing";
+    }
+' 2>&1
+
+##################################################################
 #                    FINAL SUMMARY
 ##################################################################
 

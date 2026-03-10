@@ -1336,6 +1336,71 @@ done
 
 printf "\t   Test data cleaned up ${GREEN}DONE${NC}\n"
 
+############################ RESTORE LINE TOPOLOGY ############################
+
+# This test adds A↔C contacts for ping testing, but the http4 line topology is
+# A-B-C-D (A↔B, B↔C, C↔D only). Wipe all contacts and re-add just the
+# topology ones so subsequent routing tests use the correct topology.
+echo -e "\n[Restoring line topology: wiping contacts and re-adding topology links]"
+
+# Wipe all contacts on every container
+for container in "${containers[@]}"; do
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$pdo->exec('DELETE FROM contact_currencies');
+        \$pdo->exec('DELETE FROM contacts');
+        \$pdo->exec('DELETE FROM addresses');
+    " 2>/dev/null || true
+done
+printf "\t   All contacts wiped\n"
+
+# Re-add topology contacts from containersLinks (defined in buildfile)
+for link in "${!containersLinks[@]}"; do
+    IFS=',' read -r from to <<< "$link"
+    linkParams="${containersLinks[$link]}"
+    IFS=' ' read -r fee credit currency <<< "$linkParams"
+    if [[ "$MODE" == "http" ]] || [[ "$MODE" == "https" ]]; then
+        toAddr="${containerAddresses[${to}]}"
+    else
+        toAddr=$(get_tor_address "${to}")
+    fi
+    docker exec ${from} eiou add ${toAddr} ${to} ${fee} ${credit} ${currency} 2>&1 > /dev/null || true
+done
+
+# Process queues to establish contacts
+for container in "${containers[@]}"; do
+    wait_for_queue_processed ${container}
+done
+
+# Wait for mutual acceptance
+sleep 5
+for container in "${containers[@]}"; do
+    wait_for_queue_processed ${container}
+done
+
+printf "\t   Topology contacts re-established ${GREEN}DONE${NC}\n"
+
+############################ RESTORE HOSTNAME ON CONTAINERB ############################
+
+# Section 3 deletes and restores containerB's wallet, which wipes hostname/hostname_secure.
+# Re-apply it so subsequent tests can use HTTP transport.
+echo -e "\n[Restoring hostname on ${containerB} after wallet restore]"
+docker exec ${containerB} php -r '
+    $path = "'"${USERCONFIG}"'";
+    $json = json_decode(file_get_contents($path), true);
+    if ($json && !isset($json["hostname"])) {
+        $json["hostname"] = "http://'"${containerB}"'";
+        $json["hostname_secure"] = "https://'"${containerB}"'";
+        file_put_contents($path, json_encode($json), LOCK_EX);
+        echo "hostname restored: http://'"${containerB}"'";
+    } else {
+        echo "hostname already set or config missing";
+    }
+' 2>&1
+printf "\t   Hostname restored on ${containerB}\n"
+
 ##################################################################
 #                    FINAL SUMMARY
 ##################################################################
