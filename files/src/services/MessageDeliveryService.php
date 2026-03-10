@@ -379,7 +379,8 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $response = $sendResult['response'];
             $signingData = [
                 'signature' => $sendResult['signature'],
-                'nonce' => $sendResult['nonce']
+                'nonce' => $sendResult['nonce'],
+                'signed_message' => $sendResult['signed_message'] ?? null
             ];
             $decodedResponse = json_decode($response, true);
 
@@ -525,7 +526,8 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $response = $transportResult['response'];
             $signingData = [
                 'signature' => $transportResult['signature'],
-                'nonce' => $transportResult['nonce']
+                'nonce' => $transportResult['nonce'],
+                'signed_message' => $transportResult['signed_message'] ?? null
             ];
 
             $decodedResponse = json_decode($response, true);
@@ -724,7 +726,8 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                 $response = $sendResult['response'];
                 $signingData = [
                     'signature' => $sendResult['signature'],
-                    'nonce' => $sendResult['nonce']
+                    'nonce' => $sendResult['nonce'],
+                    'signed_message' => $sendResult['signed_message'] ?? null
                 ];
                 $decodedResponse = json_decode($response, true);
 

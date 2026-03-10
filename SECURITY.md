@@ -245,6 +245,7 @@ EIOU Docker implements security at multiple layers. This section provides a brie
 | Tor identity | Ed25519 | Hidden service authentication |
 | Private key storage | AES-256-GCM | Encryption at rest for private keys and auth codes |
 | Backup encryption | AES-256-GCM | Encrypted MariaDB database backups |
+| Payload E2E encryption | ECDH + AES-256-GCM | End-to-end encryption for all contact message payloads (ephemeral keys, forward secrecy) |
 | API authentication | HMAC-SHA256 | Request signing with 5-minute timestamp window |
 
 ### Application Security

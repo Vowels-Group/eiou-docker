@@ -179,6 +179,7 @@ hopBudgetCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getRouteCancellationService();
+    \$randomized = \Eiou\Core\Constants::isHopBudgetRandomized();
     \$min = 1; \$max = 6;
     \$results = [];
     for (\$i = 0; \$i < 100; \$i++) {
@@ -190,11 +191,20 @@ hopBudgetCheck=$(docker exec ${testSender} php -r "
         \$results[] = \$budget;
     }
     \$unique = count(array_unique(\$results));
-    // With 30% stop probability and 100 samples, we should see at least 2 distinct values
-    echo \$unique >= 2 ? 'OK:' . \$unique . '_distinct,min=' . min(\$results) . ',max=' . max(\$results) : 'LOW_VARIANCE:' . \$unique;
+    if (!\$randomized) {
+        // Randomization disabled: deterministic mode always returns maxHops
+        echo (\$unique === 1 && \$results[0] === \$max) ? 'OK_DETERMINISTIC:all=' . \$max : 'WRONG_DETERMINISTIC:' . \$unique . '_distinct,val=' . \$results[0];
+    } else {
+        // With 30% stop probability and 100 samples, we should see at least 2 distinct values
+        echo \$unique >= 2 ? 'OK:' . \$unique . '_distinct,min=' . min(\$results) . ',max=' . max(\$results) : 'LOW_VARIANCE:' . \$unique;
+    }
 " 2>/dev/null || echo "ERROR")
 
-if [[ "$hopBudgetCheck" == OK:* ]]; then
+if [[ "$hopBudgetCheck" == OK_DETERMINISTIC:* ]]; then
+    detail=$(echo "$hopBudgetCheck" | cut -d: -f2)
+    printf "\t   Hop budget distribution ${GREEN}PASSED${NC} (deterministic: %s)\n" "$detail"
+    passed=$(( passed + 1 ))
+elif [[ "$hopBudgetCheck" == OK:* ]]; then
     detail=$(echo "$hopBudgetCheck" | cut -d: -f2)
     printf "\t   Hop budget distribution ${GREEN}PASSED${NC} (%s)\n" "$detail"
     passed=$(( passed + 1 ))

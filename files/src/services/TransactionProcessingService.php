@@ -503,7 +503,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
         $signingData = $sendResult['signing_data'] ?? null;
         if ($signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
-            $this->transactionRepository->updateSignatureData($txid, $signingData['signature'], $signingData['nonce']);
+            $this->transactionRepository->updateSignatureData(
+                $txid, $signingData['signature'], $signingData['nonce'],
+                $signingData['signed_message'] ?? null
+            );
         }
 
         if (isset($response['recipientSignature'])) {

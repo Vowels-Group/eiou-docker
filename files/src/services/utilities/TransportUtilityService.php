@@ -267,7 +267,7 @@ class TransportUtilityService implements TransportServiceInterface
      * @return string|array The response from the recipient, or array with response and signing data if $returnSigningData is true
      */
     public function send(string $recipient, array $payload, bool $returnSigningData = false, bool $allowTransportFallback = false): string|array {
-        $signingResult = $this->signWithCapture($payload);
+        $signingResult = $this->signWithCapture($payload, $recipient);
         $signedPayload = json_encode($signingResult['envelope']);
 
         // Determine if tor address, else send by http
@@ -296,7 +296,8 @@ class TransportUtilityService implements TransportServiceInterface
             return [
                 'response' => $response,
                 'signature' => $signingResult['signature'],
-                'nonce' => $signingResult['nonce']
+                'nonce' => $signingResult['nonce'],
+                'signed_message' => $signingResult['signed_message'] ?? null
             ];
         }
 
@@ -583,9 +584,9 @@ class TransportUtilityService implements TransportServiceInterface
         $handles = [];     // recipient => CurlHandle
         $signingData = []; // recipient => ['signature' => ..., 'nonce' => ...]
 
-        // Sign and create handles for each recipient
+        // Sign and create handles for each recipient (each gets uniquely encrypted content)
         foreach ($recipients as $recipient) {
-            $signingResult = $this->signWithCapture($payload);
+            $signingResult = $this->signWithCapture($payload, $recipient);
             if ($signingResult === false) {
                 Logger::getInstance()->warning("Failed to sign payload for batch recipient", [
                     'recipient' => $recipient
@@ -596,7 +597,8 @@ class TransportUtilityService implements TransportServiceInterface
             $signedPayload = json_encode($signingResult['envelope']);
             $signingData[$recipient] = [
                 'signature' => $signingResult['signature'],
-                'nonce' => $signingResult['nonce']
+                'nonce' => $signingResult['nonce'],
+                'signed_message' => $signingResult['signed_message'] ?? null
             ];
 
             $handles[$recipient] = $this->createCurlHandle($recipient, $signedPayload);
@@ -633,7 +635,8 @@ class TransportUtilityService implements TransportServiceInterface
             $results[$recipient] = [
                 'response' => $response,
                 'signature' => $signingData[$recipient]['signature'] ?? '',
-                'nonce' => $signingData[$recipient]['nonce'] ?? ''
+                'nonce' => $signingData[$recipient]['nonce'] ?? '',
+                'signed_message' => $signingData[$recipient]['signed_message'] ?? null
             ];
 
             curl_close($ch);
@@ -665,7 +668,7 @@ class TransportUtilityService implements TransportServiceInterface
             $recipient = $send['recipient'];
             $payload = $send['payload'];
 
-            $signingResult = $this->signWithCapture($payload);
+            $signingResult = $this->signWithCapture($payload, $recipient);
             if ($signingResult === false) {
                 Logger::getInstance()->warning("Failed to sign payload for multi-batch send", [
                     'key' => $key,
@@ -677,7 +680,8 @@ class TransportUtilityService implements TransportServiceInterface
             $signedPayload = json_encode($signingResult['envelope']);
             $signingData[$key] = [
                 'signature' => $signingResult['signature'],
-                'nonce' => $signingResult['nonce']
+                'nonce' => $signingResult['nonce'],
+                'signed_message' => $signingResult['signed_message'] ?? null
             ];
 
             $handles[$key] = $this->createCurlHandle($recipient, $signedPayload);
@@ -713,7 +717,8 @@ class TransportUtilityService implements TransportServiceInterface
             $results[$key] = [
                 'response' => $response,
                 'signature' => $signingData[$key]['signature'] ?? '',
-                'nonce' => $signingData[$key]['nonce'] ?? ''
+                'nonce' => $signingData[$key]['nonce'] ?? '',
+                'signed_message' => $signingData[$key]['signed_message'] ?? null
             ];
 
             curl_close($ch);
@@ -801,7 +806,7 @@ class TransportUtilityService implements TransportServiceInterface
      * @param array $payload The payload to sign
      * @return array|false Array with 'envelope', 'signature', and 'nonce' keys, or false on failure
      */
-    public function signWithCapture(array $payload): array|false {
+    public function signWithCapture(array $payload, ?string $recipientAddress = null): array|false {
         // Remove transport metadata from payload content (will be at top level)
         $messageContent = $payload;
         unset($messageContent['senderAddress']);
@@ -816,31 +821,46 @@ class TransportUtilityService implements TransportServiceInterface
         $description = $messageContent['description'] ?? null;
         unset($messageContent['description']);
 
-        // E2E encrypt sensitive fields for direct transactions
-        // Only applies to type=send with memo=standard (direct to known contact)
-        // P2P relay transactions are NOT encrypted (relays need cleartext amount for fee calculation)
-        if (($messageContent['type'] ?? '') === 'send'
-            && ($messageContent['memo'] ?? '') === 'standard'
-            && !empty($messageContent['receiverPublicKey'])
+        // Capture debug info before encryption hides the fields
+        $messageType = $messageContent['type'] ?? '';
+        $txidForLog = $messageContent['txid'] ?? 'unknown';
+        $wasEncrypted = false;
+
+        // E2E encrypt ALL message fields for contact messages
+        // Excluded: types in TYPES_EXCLUDED_FROM_ENCRYPTION (e.g., 'create' — recipient not a contact)
+        // The signed message becomes: {encrypted: {...}, nonce: "..."} — all types look identical on wire
+        if (!in_array($messageType, PayloadEncryption::TYPES_EXCLUDED_FROM_ENCRYPTION, true)
             && PayloadEncryption::isAvailable()
         ) {
-            $sensitiveFields = [];
-            foreach (PayloadEncryption::ENCRYPTED_FIELDS as $field) {
-                if (array_key_exists($field, $messageContent)) {
-                    $sensitiveFields[$field] = $messageContent[$field];
-                    unset($messageContent[$field]);
+            // Resolve recipient's public key:
+            // 1. From payload (direct transactions include receiverPublicKey)
+            // 2. From contact database lookup by recipient address
+            $recipientPublicKey = $messageContent['receiverPublicKey'] ?? null;
+
+            if ($recipientPublicKey === null && $recipientAddress !== null) {
+                $transportType = $this->determineTransportType($recipientAddress);
+                if ($transportType !== null) {
+                    $recipientPublicKey = $this->container->getContactRepository()
+                        ->getPublicKeyFromAddress($transportType, $recipientAddress);
                 }
             }
 
-            if (!empty($sensitiveFields)) {
-                $messageContent['encrypted'] = PayloadEncryption::encryptForRecipient(
-                    $sensitiveFields,
-                    $messageContent['receiverPublicKey']
-                );
+            if ($recipientPublicKey !== null) {
+                // Encrypt ALL message content fields into the encrypted block
+                // After this, $messageContent is just {encrypted: {...}} — type, amount,
+                // hash, currency etc. are all inside the ciphertext
+                $messageContent = [
+                    'encrypted' => PayloadEncryption::encryptForRecipient(
+                        $messageContent,
+                        $recipientPublicKey
+                    ),
+                ];
+                $wasEncrypted = true;
             }
         }
 
         // Add cryptographic nonce for replay protection (128-bit hex string)
+        // Added AFTER encryption so it stays in cleartext (not sensitive)
         $nonce = bin2hex(random_bytes(16));
         $messageContent['nonce'] = $nonce;
 
@@ -848,9 +868,9 @@ class TransportUtilityService implements TransportServiceInterface
         $message = json_encode($messageContent);
 
         // Debug: Log the message being signed for sync verification troubleshooting
-        if (isset($messageContent['type']) && $messageContent['type'] === 'send') {
+        if ($messageType === 'send') {
             Logger::getInstance()->debug("Signing transaction message", [
-                'txid' => $messageContent['txid'] ?? 'unknown',
+                'txid' => $txidForLog,
                 'signed_message' => $message,
                 'nonce' => $nonce
             ]);
@@ -860,7 +880,7 @@ class TransportUtilityService implements TransportServiceInterface
         $signature = '';
         if (!openssl_sign($message, $signature, openssl_pkey_get_private($this->currentUser->getPrivateKey()))) {
             Logger::getInstance()->error("Failed to sign message", [
-                'txid' => $messageContent['txid'] ?? 'unknown'
+                'txid' => $txidForLog
             ]);
             return false;
         }
@@ -887,7 +907,12 @@ class TransportUtilityService implements TransportServiceInterface
             'envelope' => $envelope,
             'signature' => $base64Signature,
             'nonce' => $nonce,
-            'description' => $description
+            'description' => $description,
+            // For E2E encrypted messages, include the signed message so the sender
+            // can store it for future sync signature verification. Without this,
+            // signature reconstruction from plaintext DB fields would fail because
+            // the signature was over the encrypted content.
+            'signed_message' => $wasEncrypted ? $message : null
         ];
     }
 
@@ -901,8 +926,8 @@ class TransportUtilityService implements TransportServiceInterface
      * @param array $payload The payload to sign
      * @return array|false The signed payload with clean structure, or false on failure
      */
-    public function sign(array $payload): array|false {
-        $result = $this->signWithCapture($payload);
+    public function sign(array $payload, ?string $recipientAddress = null): array|false {
+        $result = $this->signWithCapture($payload, $recipientAddress);
         return $result ? $result['envelope'] : false;
     }
 }

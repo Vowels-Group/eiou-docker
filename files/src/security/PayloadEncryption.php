@@ -10,13 +10,20 @@ use RuntimeException;
 /**
  * Payload Encryption Service
  *
- * Provides end-to-end encryption for transaction payloads using ECDH + AES-256-GCM.
+ * Provides end-to-end encryption for all contact message payloads using ECDH + AES-256-GCM.
+ * Every message sent to a known contact (P2P, RP2P, transactions, pings, etc.) is encrypted.
+ * Only contact requests (type=create) are excluded since the recipient may not be a contact yet.
+ *
+ * Cleartext fallback (recipient public key unavailable):
+ * - Transaction inquiry to P2P end-recipient (not necessarily a direct contact)
+ * - Contact acceptance inquiry to pending contacts (public key not yet known)
+ * - Any message where ContactRepository::getPublicKeyFromAddress() returns null
  *
  * Encryption Flow:
  * 1. Generate ephemeral EC key pair (same curve as recipient)
  * 2. Derive shared secret via ECDH(ephemeral_private, recipient_public)
  * 3. Derive symmetric key via HKDF-SHA256
- * 4. Encrypt sensitive fields with AES-256-GCM
+ * 4. Encrypt all message fields with AES-256-GCM
  * 5. Include ephemeral public key in output for recipient to derive same secret
  *
  * Decryption Flow:
@@ -34,9 +41,16 @@ class PayloadEncryption
     private const HKDF_KEY_LENGTH = 32;
 
     /**
-     * Fields that are encrypted in direct transaction payloads
+     * Fields that were encrypted in the legacy direct-transaction-only E2E mode.
+     * Kept for test compatibility. New code encrypts ALL message content fields.
      */
     public const ENCRYPTED_FIELDS = ['amount', 'currency', 'txid', 'previousTxid', 'memo'];
+
+    /**
+     * Message types excluded from E2E encryption.
+     * - 'create': contact requests — recipient may not be a contact yet (no public key available)
+     */
+    public const TYPES_EXCLUDED_FROM_ENCRYPTION = ['create'];
 
     /**
      * Encrypt sensitive fields for a recipient using ECDH + AES-256-GCM
