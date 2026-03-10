@@ -88,15 +88,11 @@ $messageContent = json_decode($envelope['message'], true);
 // The signature was verified above against the encrypted content — this is
 // encrypt-then-sign, so verification works without decryption.
 if (isset($messageContent['encrypted']) && is_array($messageContent['encrypted'])) {
-    $currentUser = $app->getCurrentUser();
-    $privateKey = $currentUser->getPrivateKey();
+    $decryptedFields = \Eiou\Security\PayloadEncryption::decryptFromSender(
+        $messageContent['encrypted']
+    );
 
-    if (!empty($privateKey)) {
-        $decryptedFields = \Eiou\Security\PayloadEncryption::decryptFromSender(
-            $messageContent['encrypted'],
-            $privateKey
-        );
-        // Merge decrypted fields back and remove encrypted block
+    if (!empty($decryptedFields)) {
         $messageContent = array_merge($messageContent, $decryptedFields);
         unset($messageContent['encrypted']);
     }

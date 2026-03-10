@@ -3,6 +3,7 @@
 
 namespace Eiou\Security;
 
+use Eiou\Core\UserContext;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -133,13 +134,16 @@ class PayloadEncryption
     /**
      * Decrypt payload encrypted by encryptForRecipient
      *
+     * Retrieves the recipient's private key internally from UserContext
+     * so that key material never leaves the Security namespace.
+     *
      * @param array $encryptedData {ciphertext, iv, tag, ephemeralKey} (all base64)
-     * @param string $recipientPrivateKeyPem Recipient's EC private key in PEM format
+     * @param string|null $privateKeyPem Private key override (testing only)
      * @return array Decrypted sensitive fields
-     * @throws RuntimeException If decryption fails
+     * @throws RuntimeException If decryption fails or private key unavailable
      * @throws InvalidArgumentException If inputs are invalid
      */
-    public static function decryptFromSender(array $encryptedData, string $recipientPrivateKeyPem): array
+    public static function decryptFromSender(array $encryptedData, ?string $privateKeyPem = null): array
     {
         $requiredFields = ['ciphertext', 'iv', 'tag', 'ephemeralKey'];
         foreach ($requiredFields as $field) {
@@ -148,7 +152,12 @@ class PayloadEncryption
             }
         }
 
-        // Load recipient's private key
+        // Use provided key (testing) or retrieve from UserContext (production)
+        $recipientPrivateKeyPem = $privateKeyPem ?? UserContext::getInstance()->getPrivateKey();
+        if (empty($recipientPrivateKeyPem)) {
+            throw new RuntimeException('Private key unavailable for decryption');
+        }
+
         $recipientKey = openssl_pkey_get_private($recipientPrivateKeyPem);
         if ($recipientKey === false) {
             throw new RuntimeException('Invalid recipient private key: ' . openssl_error_string());
