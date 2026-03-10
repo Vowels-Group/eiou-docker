@@ -93,32 +93,47 @@ Because `/etc/eiou/` is both a volume and the location for application code, old
 
 `Application.php` calls `DatabaseSetup::runMigrations()` on every startup. This adds any new tables or columns required by the updated code without affecting existing data.
 
+### 5. Automatic Pre-Shutdown Backup
+
+When the container receives SIGTERM (from `docker compose up -d --build` or `docker compose down`), `graceful_shutdown()` creates an encrypted database backup before stopping any processors or services. This ensures a recent backup exists even if the user forgot to run `eiou backup create` manually. The backup is stored on the `{node}-backups` volume, which is preserved across container recreations.
+
+### 6. Maintenance Mode During Startup
+
+On startup, `startup.sh` creates a lockfile (`/tmp/eiou_maintenance.lock`) before beginning source file sync and database migrations. While this lockfile exists, all HTTP entry points (API, GUI, P2P transport) return `503 Service Unavailable` with a `Retry-After: 30` header. This prevents:
+- PHP executing against partially-synced source files
+- Requests hitting a mid-migration database schema
+- Incoming P2P messages being processed before the node is fully initialized
+
+The lockfile is removed after all initialization is complete (source sync, composer install, migrations, processor startup).
+
 ### Visual Flow
 
 ```
-Old Container (running v1)
-  ├── /var/lib/mysql          ← volume: {node}-mysql-data
-  ├── /etc/eiou/              ← volume: {node}-files
-  │   ├── config/             ← YOUR DATA (wallet, keys, settings)
-  │   └── src/, www/, ...     ← v1 code
-  └── /var/lib/eiou/backups   ← volume: {node}-backups
+Old Container (running v1) — receives SIGTERM:
+  1. Pre-shutdown backup   — encrypted backup saved to {node}-backups volume
+  2. Processor shutdown    — SIGTERM to all PHP processors, wait for completion
+  3. Service shutdown      — web server, MariaDB, Tor, cron stopped in order
+  4. Lockfile cleanup      — processor lockfiles and shutdown flag removed
 
-         │  docker-compose up -d --build
-         │  (container removed, volumes kept, new image built)
+         │  container removed, volumes kept, new image built
          ▼
 
 New Container (running v2) — startup.sh runs:
-  1. Config migration    — moves legacy config files to /etc/eiou/config/ if needed
-  2. Source file sync    — copies v2 code from image into volume
-  3. Composer install    — installs new dependencies, regenerates autoloader
-  4. Database migrations — adds new tables/columns as needed
+  1. Maintenance mode ON   — /tmp/eiou_maintenance.lock created (HTTP → 503)
+  2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
+  3. Source file sync      — copies v2 code from image into volume
+  4. Composer install      — installs new dependencies, regenerates autoloader
+  5. Services start        — web server, MariaDB, Tor, cron
+  6. Database migrations   — adds new tables/columns as needed
+  7. Maintenance mode OFF  — lockfile removed, HTTP requests accepted
+  8. Processors start      — P2P, Transaction, Cleanup, ContactStatus
 
 Result:
   ├── /var/lib/mysql          ← same volume reattached (data intact)
   ├── /etc/eiou/              ← same volume reattached
   │   ├── config/             ← YOUR DATA (unchanged, migrated if needed)
   │   └── src/, www/, ...     ← v2 code (synced from /app/eiou-src-backup/)
-  └── /var/lib/eiou/backups   ← same volume reattached (backups intact)
+  └── /var/lib/eiou/backups   ← same volume reattached (backups + pre-shutdown backup)
 ```
 
 ---
@@ -144,12 +159,17 @@ docker-compose -f <compose-file>.yml up -d --build
 
 **What happens:**
 1. Docker builds a new image from the updated source
-2. Docker Compose detects the image changed and recreates the container
-3. Named volumes are reattached to the new container
-4. `startup.sh` syncs the new code into the `/etc/eiou/` volume
-5. Composer regenerates the autoloader
-6. Database migrations run if needed
-7. Services start normally
+2. Docker Compose sends SIGTERM to the running container
+3. **Automatic pre-shutdown backup** is created (encrypted, stored on `{node}-backups` volume)
+4. PHP processors receive SIGTERM and finish their current work gracefully
+5. Services stop in reverse order (web server, MariaDB, Tor, cron)
+6. Container is removed, named volumes are kept
+7. New container starts with **maintenance mode** enabled (HTTP requests return 503)
+8. `startup.sh` syncs new code into the `/etc/eiou/` volume
+9. Composer regenerates the autoloader
+10. Database migrations run if needed
+11. Maintenance mode is released — HTTP requests are accepted again
+12. Background processors start normally
 
 ### Method 2: Docker Hub Pull
 
