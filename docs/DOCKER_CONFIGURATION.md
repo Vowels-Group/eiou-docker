@@ -1128,6 +1128,44 @@ For tests:
 EIOU_INIT_TIMEOUT=180 ./run-all-tests.sh http4
 ```
 
+### Slow GUI or API Under Load
+
+**Cause:** PHP-FPM's default pool size (`pm.max_children = 5`) limits how many PHP requests can execute simultaneously. If more than 5 requests arrive at the same time, the extras queue until a worker frees up.
+
+This is separate from P2P worker processes — outbound P2P messages are handled by independent PHP CLI processes (up to 50 for HTTP, 50 for HTTPS, 5 for Tor), controlled by the `EIOU_P2P_MAX_WORKERS` setting. Inbound P2P requests from other nodes do go through PHP-FPM.
+
+**How the request pipeline works:**
+
+| Layer | Process | Concurrency | Scaling |
+|-------|---------|-------------|---------|
+| nginx workers | Accept connections, rate limit, route | 2 workers handle thousands of connections each (event-driven) | No tuning needed |
+| PHP-FPM workers | Execute PHP for GUI, API, and inbound P2P | `pm.max_children` (default: 5) | Increase if GUI/API feels slow under load |
+| P2P outbound workers | Send messages to other nodes | `EIOU_P2P_MAX_WORKERS` (default: 50 HTTP, 50 HTTPS, 5 Tor) | Independent of PHP-FPM |
+
+**Solution:** Increase `pm.max_children` inside the container:
+
+```bash
+# Check current PHP-FPM pool settings
+docker exec <container> grep -E "^pm" /etc/php/*/fpm/pool.d/www.conf
+
+# Increase max concurrent PHP workers from 5 to 10
+docker exec <container> bash -c "sed -i 's|^pm.max_children = 5|pm.max_children = 10|' /etc/php/*/fpm/pool.d/www.conf"
+
+# Reload PHP-FPM to apply (no downtime)
+docker exec <container> bash -c 'service $(basename /etc/init.d/php*-fpm) reload'
+```
+
+Each PHP-FPM worker uses ~30-40MB of memory. With the default 512MB container memory limit, 10 workers is a safe maximum. If you increase beyond that, also increase the memory limit in `docker-compose.yml`:
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 768M   # Increase from 512M for more PHP-FPM workers
+```
+
+**Note:** This change does not persist across container restarts. To make it permanent, add a `sed` command to `eiou.dockerfile` or override the PHP-FPM pool config via a bind mount.
+
 ### Common Log Locations
 
 | Log | Location | Purpose |
