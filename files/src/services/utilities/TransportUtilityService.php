@@ -8,6 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Utils\AddressValidator;
+use Eiou\Utils\TorCircuitHealth;
 use Eiou\Services\ServiceContainer;
 use Eiou\Security\PayloadEncryption;
 
@@ -273,13 +274,18 @@ class TransportUtilityService implements TransportServiceInterface
         if ($this->isTorAddress($recipient)) {
             $response = $this->sendByTor($recipient, $signedPayload);
 
-            // If TOR delivery failed and fallback is allowed, attempt HTTP/HTTPS
-            // Fallback is restricted to contact requests only — transactions must
-            // respect the user's chosen transport to preserve privacy.
-            if ($allowTransportFallback && $this->isTorFailure($response)) {
-                $fallbackResponse = $this->attemptFallbackDelivery($recipient, $signedPayload);
-                if ($fallbackResponse !== null) {
-                    $response = $fallbackResponse;
+            // If TOR delivery failed, attempt HTTP/HTTPS fallback when:
+            // 1. Caller explicitly allows it ($allowTransportFallback, e.g. contact requests), OR
+            // 2. User has the torFailureTransportFallback setting enabled (default: true)
+            if ($this->isTorFailure($response)) {
+                $shouldFallback = $allowTransportFallback
+                    || $this->currentUser->isTorFailureTransportFallback();
+
+                if ($shouldFallback) {
+                    $fallbackResponse = $this->attemptFallbackDelivery($recipient, $signedPayload);
+                    if ($fallbackResponse !== null) {
+                        $response = $fallbackResponse;
+                    }
                 }
             }
         } else {
@@ -433,6 +439,18 @@ class TransportUtilityService implements TransportServiceInterface
      * @return string The response from the recipient, or JSON error on failure
     */
     public function sendByTor (string $recipient, string $signedPayload): string {
+        // Check if this .onion address is in cooldown from repeated failures
+        if (!TorCircuitHealth::isAvailable($recipient)) {
+            Logger::getInstance()->info("Tor address in cooldown, skipping delivery", [
+                'recipient' => $recipient,
+            ]);
+            return json_encode([
+                'status' => 'error',
+                'message' => 'TOR request failed: address in cooldown after repeated failures',
+                'error_code' => 'TOR_COOLDOWN'
+            ]);
+        }
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -451,6 +469,9 @@ class TransportUtilityService implements TransportServiceInterface
             $curlError = curl_error($ch);
             $curlErrno = curl_errno($ch);
             curl_close($ch);
+
+            // Track per-address failure for circuit health cooldown
+            TorCircuitHealth::recordFailure($recipient, $curlError);
 
             // Log the error for debugging
             Logger::getInstance()->warning("TOR request failed", [
@@ -485,6 +506,10 @@ class TransportUtilityService implements TransportServiceInterface
         }
 
         curl_close($ch);
+
+        // Successful delivery — clear any failure state for this address
+        TorCircuitHealth::recordSuccess($recipient);
+
         // Return the response from the recipient
         return $response;
     }

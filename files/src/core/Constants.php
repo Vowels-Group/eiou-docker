@@ -292,6 +292,12 @@ class Constants {
     const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
     const TOR_TRANSPORT_TIMEOUT_SECONDS = 30;  // Max time for one TOR request between nodes
 
+    // Tor circuit health tracking
+    // When a specific .onion address times out repeatedly, stop retrying and enter cooldown.
+    const TOR_CIRCUIT_MAX_FAILURES = 2;           // Consecutive Tor failures before cooldown (default: 2)
+    const TOR_CIRCUIT_COOLDOWN_SECONDS = 300;     // Cooldown duration in seconds (default: 300 = 5 min)
+    const TOR_FAILURE_TRANSPORT_FALLBACK = true;  // Fall back to HTTPS/HTTP when Tor fails (default: true)
+
     // Transaction sync chunking
     // 50 txns * ~3KB = ~150KB per chunk — well within PHP post_max_size and transport timeouts
     const SYNC_CHUNK_SIZE = 50;          // Max transactions per sync response

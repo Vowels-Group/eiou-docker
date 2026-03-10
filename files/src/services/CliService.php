@@ -443,6 +443,21 @@ class CliService implements CliServiceInterface {
                 $validation = InputValidator::validateIntRange($argv[3] ?? '', 10, 300, 'Tor timeout');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'torcircuitmaxfailures'){
+                $key = 'torCircuitMaxFailures';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 1, 10, 'Tor circuit max failures');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'torcircuitcooldownseconds'){
+                $key = 'torCircuitCooldownSeconds';
+                $validation = InputValidator::validateIntRange($argv[3] ?? '', 60, 3600, 'Tor circuit cooldown');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'torfailuretransportfallback'){
+                $key = 'torFailureTransportFallback';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             // Display
             } elseif(strtolower($argv[2]) === 'displaydateformat'){
                 $key = 'displayDateFormat';
@@ -1198,6 +1213,9 @@ class CliService implements CliServiceInterface {
             // Network
             'http_transport_timeout_seconds' => $this->currentUser->getHttpTransportTimeoutSeconds(),
             'tor_transport_timeout_seconds' => $this->currentUser->getTorTransportTimeoutSeconds(),
+            'tor_circuit_max_failures' => $this->currentUser->getTorCircuitMaxFailures(),
+            'tor_circuit_cooldown_seconds' => $this->currentUser->getTorCircuitCooldownSeconds(),
+            'tor_failure_transport_fallback' => $this->currentUser->isTorFailureTransportFallback(),
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_currency_decimals' => $this->currentUser->getDisplayCurrencyDecimals(),
@@ -1223,6 +1241,9 @@ class CliService implements CliServiceInterface {
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
             echo "\tHTTP transport timeout: " . $settings['http_transport_timeout_seconds'] . "s\n";
             echo "\tTor transport timeout: " . $settings['tor_transport_timeout_seconds'] . "s\n";
+            echo "\tTor circuit max failures: " . $settings['tor_circuit_max_failures'] . "\n";
+            echo "\tTor circuit cooldown: " . $settings['tor_circuit_cooldown_seconds'] . "s\n";
+            echo "\tTor failure transport fallback: " . ($settings['tor_failure_transport_fallback'] ? 'enabled' : 'disabled') . "\n";
             if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tTrusted proxies: " . ($settings['trusted_proxies'] ?: '(none)') . "\n";
@@ -1540,6 +1561,9 @@ class CliService implements CliServiceInterface {
                     'defaultTransportMode' => 'Default transport type: http, https, or tor',
                     'httpTransportTimeoutSeconds' => 'HTTP transport timeout in seconds (5-120)',
                     'torTransportTimeoutSeconds' => 'Tor transport timeout in seconds (10-300)',
+                    'torCircuitMaxFailures' => 'Consecutive Tor failures before cooldown (1-10)',
+                    'torCircuitCooldownSeconds' => 'Tor circuit cooldown duration in seconds (60-3600)',
+                    'torFailureTransportFallback' => 'Fall back to HTTP/HTTPS when Tor fails (true/false)',
                     'hostname' => 'Node hostname (e.g., http://alice). Automatically derives HTTPS version and regenerates SSL cert',
                     'trustedProxies' => 'Trusted proxy IPs (comma-separated)',
                     'autoAcceptTransaction' => 'Auto-accept P2P transactions when route found (true/false)',
