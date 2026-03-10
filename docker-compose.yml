@@ -34,14 +34,20 @@ services:
     networks:
       - eiou-network
     ports:
-      # Bind to 0.0.0.0 (all interfaces) so the node can accept incoming P2P
-      # connections from other EIOU nodes on the internet.
-      # If running behind a reverse proxy, change to 127.0.0.1 to restrict
-      # access to localhost only:
-      #   - "127.0.0.1:80:80"
-      #   - "127.0.0.1:443:443"
+      # Bind to all interfaces so the node accepts incoming P2P connections
+      # from other EIOU nodes on the internet. The built-in nginx provides
+      # connection-level rate limiting, connection limits, and timeouts.
       - "80:80"
       - "443:443"
+      #
+      # REVERSE PROXY SETUP: If running behind an external reverse proxy
+      # (Traefik, Caddy, nginx, etc.), restrict ports to localhost only.
+      # Replace the two lines above with:
+      #   - "127.0.0.1:80:80"
+      #   - "127.0.0.1:443:443"
+      #
+      # For docker run, use the same syntax with -p:
+      #   docker run -p 127.0.0.1:80:80 -p 127.0.0.1:443:443 ...
 
     # =========================================================================
     # ENVIRONMENT VARIABLES
