@@ -102,12 +102,13 @@ interface TransportServiceInterface
     public function sendMultiBatch(array $sends): array;
 
     /**
-     * Sign a payload for transport.
+     * Sign a payload for transport with optional E2E encryption.
      *
      * @param array $payload The payload to sign
+     * @param string|null $recipientAddress Optional recipient address for E2E encryption key lookup
      * @return array|false The signed payload data or false on failure
      */
-    public function sign(array $payload): array|false;
+    public function sign(array $payload, ?string $recipientAddress = null): array|false;
 
     /**
      * Resolve a user address for transport purposes.
