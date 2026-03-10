@@ -1059,20 +1059,30 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Update signature data for a transaction
      *
-     * Updates the sender_signature and signature_nonce fields for a transaction.
-     * This is used after a transaction is successfully sent to store the signing
-     * data for future verification during sync operations.
+     * Updates the sender_signature, signature_nonce, and optionally signed_message_content
+     * fields for a transaction. This is used after a transaction is successfully sent to
+     * store the signing data for future verification during sync operations.
+     *
+     * For E2E encrypted transactions, $signedMessageContent contains the raw signed JSON
+     * (which includes the encrypted block). Without this, signature verification during
+     * sync would fail because reconstruction from plaintext DB fields produces a different
+     * message than what was originally signed.
      *
      * @param string $txid Transaction ID
      * @param string $signature Base64-encoded signature
      * @param string $nonce Signature nonce
+     * @param string|null $signedMessageContent Raw signed JSON for E2E encrypted transactions
      * @return bool Success status
      */
-    public function updateSignatureData(string $txid, string $signature, string $nonce): bool {
-        $affectedRows = $this->update([
+    public function updateSignatureData(string $txid, string $signature, string $nonce, ?string $signedMessageContent = null): bool {
+        $data = [
             'sender_signature' => $signature,
             'signature_nonce' => $nonce
-        ], 'txid', $txid);
+        ];
+        if ($signedMessageContent !== null) {
+            $data['signed_message_content'] = $signedMessageContent;
+        }
+        $affectedRows = $this->update($data, 'txid', $txid);
         return $affectedRows >= 0;
     }
 

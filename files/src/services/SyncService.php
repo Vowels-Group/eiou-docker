@@ -855,7 +855,8 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         'signature' => $tx['sender_signature'] ?? null,
                         'nonce' => $tx['signature_nonce'] ?? null,
                         'recipientSignature' => $tx['recipient_signature'] ?? null,
-                        'time' => $tx['time'] ?? null
+                        'time' => $tx['time'] ?? null,
+                        'signedMessageContent' => $tx['signed_message_content'] ?? null
                     ];
 
                     // Determine type based on sender
@@ -1394,7 +1395,8 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             'status' => $tx['status'],
             'sender_signature' => $tx['sender_signature'] ?? null,
             'signature_nonce' => $tx['signature_nonce'] ?? null,
-            'recipient_signature' => $tx['recipient_signature'] ?? null
+            'recipient_signature' => $tx['recipient_signature'] ?? null,
+            'signed_message_content' => $tx['signed_message_content'] ?? null
         ];
 
         // Privacy: Only include description for contact or standard (direct) transactions

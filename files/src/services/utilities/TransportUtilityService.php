@@ -290,7 +290,8 @@ class TransportUtilityService implements TransportServiceInterface
             return [
                 'response' => $response,
                 'signature' => $signingResult['signature'],
-                'nonce' => $signingResult['nonce']
+                'nonce' => $signingResult['nonce'],
+                'signed_message' => $signingResult['signed_message'] ?? null
             ];
         }
 
@@ -571,7 +572,8 @@ class TransportUtilityService implements TransportServiceInterface
             $signedPayload = json_encode($signingResult['envelope']);
             $signingData[$recipient] = [
                 'signature' => $signingResult['signature'],
-                'nonce' => $signingResult['nonce']
+                'nonce' => $signingResult['nonce'],
+                'signed_message' => $signingResult['signed_message'] ?? null
             ];
 
             $handles[$recipient] = $this->createCurlHandle($recipient, $signedPayload);
@@ -608,7 +610,8 @@ class TransportUtilityService implements TransportServiceInterface
             $results[$recipient] = [
                 'response' => $response,
                 'signature' => $signingData[$recipient]['signature'] ?? '',
-                'nonce' => $signingData[$recipient]['nonce'] ?? ''
+                'nonce' => $signingData[$recipient]['nonce'] ?? '',
+                'signed_message' => $signingData[$recipient]['signed_message'] ?? null
             ];
 
             curl_close($ch);
@@ -652,7 +655,8 @@ class TransportUtilityService implements TransportServiceInterface
             $signedPayload = json_encode($signingResult['envelope']);
             $signingData[$key] = [
                 'signature' => $signingResult['signature'],
-                'nonce' => $signingResult['nonce']
+                'nonce' => $signingResult['nonce'],
+                'signed_message' => $signingResult['signed_message'] ?? null
             ];
 
             $handles[$key] = $this->createCurlHandle($recipient, $signedPayload);
@@ -688,7 +692,8 @@ class TransportUtilityService implements TransportServiceInterface
             $results[$key] = [
                 'response' => $response,
                 'signature' => $signingData[$key]['signature'] ?? '',
-                'nonce' => $signingData[$key]['nonce'] ?? ''
+                'nonce' => $signingData[$key]['nonce'] ?? '',
+                'signed_message' => $signingData[$key]['signed_message'] ?? null
             ];
 
             curl_close($ch);
@@ -794,6 +799,7 @@ class TransportUtilityService implements TransportServiceInterface
         // Capture debug info before encryption hides the fields
         $messageType = $messageContent['type'] ?? '';
         $txidForLog = $messageContent['txid'] ?? 'unknown';
+        $wasEncrypted = false;
 
         // E2E encrypt ALL message fields for contact messages
         // Excluded: types in TYPES_EXCLUDED_FROM_ENCRYPTION (e.g., 'create' — recipient not a contact)
@@ -824,6 +830,7 @@ class TransportUtilityService implements TransportServiceInterface
                         $recipientPublicKey
                     ),
                 ];
+                $wasEncrypted = true;
             }
         }
 
@@ -875,7 +882,12 @@ class TransportUtilityService implements TransportServiceInterface
             'envelope' => $envelope,
             'signature' => $base64Signature,
             'nonce' => $nonce,
-            'description' => $description
+            'description' => $description,
+            // For E2E encrypted messages, include the signed message so the sender
+            // can store it for future sync signature verification. Without this,
+            // signature reconstruction from plaintext DB fields would fail because
+            // the signature was over the encrypted content.
+            'signed_message' => $wasEncrypted ? $message : null
         ];
     }
 
