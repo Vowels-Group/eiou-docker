@@ -18,6 +18,9 @@ The project is currently in **ALPHA** status.
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
+### Changed
+- Interactive `changesettings` menu refactored from flat 44-item numbered list to two-level grouped navigation: select a category (1-8), then select a setting within that category. Press 0 to go back or cancel. All validation logic unchanged
+
 ### Added
 - Multi-currency infrastructure: per-currency conversion factors (`CONVERSION_FACTORS`), decimal places (`CURRENCY_DECIMALS`), and helper methods `getConversionFactor()` / `getCurrencyDecimals()` in Constants. Currently USD-only; adding a new currency requires only adding map entries
 - Database amount columns changed from INT to BIGINT: `contact_credit.available_credit`, `contact_currencies.credit_limit`, `balances.received/sent`, `transactions.amount`, `p2p.amount/my_fee_amount/rp2p_amount`, `rp2p.amount`, `rp2p_candidates.amount/fee_amount`, `capacity_reservations.base_amount/total_amount`. Supports large-value currencies without overflow

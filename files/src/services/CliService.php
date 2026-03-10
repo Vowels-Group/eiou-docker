@@ -485,64 +485,115 @@ class CliService implements CliServiceInterface {
             // Display current settings
             $this->displayCurrentSettings($output);
 
-            // Prompt user for which setting they want to change
-            echo "\nSelect the setting you want to change:\n";
-            echo "\n  Transaction Settings:\n";
-            echo "\t1. Default currency\n";
-            echo "\t2. Minimum fee amount\n";
-            echo "\t3. Default fee percentage\n";
-            echo "\t4. Maximum fee percentage\n";
-            echo "\t5. Default credit limit\n";
-            echo "\n  P2P & Network:\n";
-            echo "\t6. Maximum peer to peer Level\n";
-            echo "\t7. Default peer to peer Expiration\n";
-            echo "\t8. Direct transaction delivery expiration\n";
-            echo "\t9. Default transport type\n";
-            echo "\t10. HTTP transport timeout\n";
-            echo "\t11. Tor transport timeout\n";
-            echo "\t12. Hostname\n";
-            echo "\t13. Trusted proxy IPs\n";
-            echo "\t14. Auto-accept P2P transactions\n";
-            echo "\n  Feature Toggles:\n";
-            echo "\t15. Display name\n";
-            echo "\t16. Auto-refresh transactions\n";
-            echo "\t17. Contact status pinging\n";
-            echo "\t18. Contact status sync on ping\n";
-            echo "\t19. Auto chain drop propose\n";
-            echo "\t20. Auto chain drop accept\n";
-            echo "\t21. Auto chain drop accept guard\n";
-            echo "\t22. API enabled\n";
-            echo "\t23. API CORS allowed origins\n";
-            echo "\t24. Rate limiting enabled\n";
-            echo "\n  Backup & Logging:\n";
-            echo "\t25. Auto-backup database\n";
-            echo "\t26. Backup retention count\n";
-            echo "\t27. Backup schedule hour\n";
-            echo "\t28. Backup schedule minute\n";
-            echo "\t29. Log level\n";
-            echo "\t30. Log max entries\n";
-            echo "\n  Data Retention:\n";
-            echo "\t31. Delivery retention days\n";
-            echo "\t32. DLQ retention days\n";
-            echo "\t33. Held TX retention days\n";
-            echo "\t34. RP2P retention days\n";
-            echo "\t35. Metrics retention days\n";
-            echo "\n  Rate Limiting:\n";
-            echo "\t36. P2P rate limit per minute\n";
-            echo "\t37. Rate limit max attempts\n";
-            echo "\t38. Rate limit window seconds\n";
-            echo "\t39. Rate limit block duration\n";
-            echo "\n  Display:\n";
-            echo "\t40. Maximum lines of balance/transaction output\n";
-            echo "\t41. Date format\n";
-            echo "\t42. Currency decimals\n";
-            echo "\t43. Recent transactions limit\n";
-            echo "\n  Currency Management:\n";
-            echo "\t44. Allowed currencies\n";
-            echo "\n\t0. Cancel\n";
+            // Two-level interactive settings menu
+            $categories = [
+                'Transaction Settings' => [
+                    ['num' => '1', 'label' => 'Default currency'],
+                    ['num' => '2', 'label' => 'Minimum fee amount'],
+                    ['num' => '3', 'label' => 'Default fee percentage'],
+                    ['num' => '4', 'label' => 'Maximum fee percentage'],
+                    ['num' => '5', 'label' => 'Default credit limit'],
+                ],
+                'P2P & Network' => [
+                    ['num' => '6', 'label' => 'Maximum peer to peer Level'],
+                    ['num' => '7', 'label' => 'Default peer to peer Expiration'],
+                    ['num' => '8', 'label' => 'Direct transaction delivery expiration'],
+                    ['num' => '9', 'label' => 'Default transport type'],
+                    ['num' => '10', 'label' => 'HTTP transport timeout'],
+                    ['num' => '11', 'label' => 'Tor transport timeout'],
+                    ['num' => '12', 'label' => 'Hostname'],
+                    ['num' => '13', 'label' => 'Trusted proxy IPs'],
+                    ['num' => '14', 'label' => 'Auto-accept P2P transactions'],
+                ],
+                'Feature Toggles' => [
+                    ['num' => '15', 'label' => 'Display name'],
+                    ['num' => '16', 'label' => 'Auto-refresh transactions'],
+                    ['num' => '17', 'label' => 'Contact status pinging'],
+                    ['num' => '18', 'label' => 'Contact status sync on ping'],
+                    ['num' => '19', 'label' => 'Auto chain drop propose'],
+                    ['num' => '20', 'label' => 'Auto chain drop accept'],
+                    ['num' => '21', 'label' => 'Auto chain drop accept guard'],
+                    ['num' => '22', 'label' => 'API enabled'],
+                    ['num' => '23', 'label' => 'API CORS allowed origins'],
+                    ['num' => '24', 'label' => 'Rate limiting enabled'],
+                ],
+                'Backup & Logging' => [
+                    ['num' => '25', 'label' => 'Auto-backup database'],
+                    ['num' => '26', 'label' => 'Backup retention count'],
+                    ['num' => '27', 'label' => 'Backup schedule hour'],
+                    ['num' => '28', 'label' => 'Backup schedule minute'],
+                    ['num' => '29', 'label' => 'Log level'],
+                    ['num' => '30', 'label' => 'Log max entries'],
+                ],
+                'Data Retention' => [
+                    ['num' => '31', 'label' => 'Delivery retention days'],
+                    ['num' => '32', 'label' => 'DLQ retention days'],
+                    ['num' => '33', 'label' => 'Held TX retention days'],
+                    ['num' => '34', 'label' => 'RP2P retention days'],
+                    ['num' => '35', 'label' => 'Metrics retention days'],
+                ],
+                'Rate Limiting' => [
+                    ['num' => '36', 'label' => 'P2P rate limit per minute'],
+                    ['num' => '37', 'label' => 'Rate limit max attempts'],
+                    ['num' => '38', 'label' => 'Rate limit window seconds'],
+                    ['num' => '39', 'label' => 'Rate limit block duration'],
+                ],
+                'Display' => [
+                    ['num' => '40', 'label' => 'Maximum lines of balance/transaction output'],
+                    ['num' => '41', 'label' => 'Date format'],
+                    ['num' => '42', 'label' => 'Currency decimals'],
+                    ['num' => '43', 'label' => 'Recent transactions limit'],
+                ],
+                'Currency Management' => [
+                    ['num' => '44', 'label' => 'Allowed currencies'],
+                ],
+            ];
 
-            // Read user input
-            $setting_choice = trim(fgets(STDIN));
+            $setting_choice = null;
+            while (true) {
+                // Level 1: Category selection
+                echo "\nSelect a category:\n";
+                $catNames = array_keys($categories);
+                foreach ($catNames as $i => $catName) {
+                    $count = count($categories[$catName]);
+                    echo "\t" . ($i + 1) . ". {$catName} ({$count})\n";
+                }
+                echo "\n\t0. Cancel\n";
+
+                $catChoice = trim(fgets(STDIN));
+                if ($catChoice === '0') {
+                    echo "Setting change cancelled.\n";
+                    return;
+                }
+                $catIndex = intval($catChoice) - 1;
+                if ($catIndex < 0 || $catIndex >= count($catNames)) {
+                    echo "Invalid category. Please try again.\n";
+                    continue;
+                }
+
+                $selectedCat = $catNames[$catIndex];
+                $catSettings = $categories[$selectedCat];
+
+                // Level 2: Setting selection within category
+                echo "\n  {$selectedCat}:\n";
+                foreach ($catSettings as $i => $setting) {
+                    echo "\t" . ($i + 1) . ". " . $setting['label'] . "\n";
+                }
+                echo "\n\t0. Back\n";
+
+                $settingChoice = trim(fgets(STDIN));
+                if ($settingChoice === '0') {
+                    continue; // Back to category menu
+                }
+                $settingIndex = intval($settingChoice) - 1;
+                if ($settingIndex < 0 || $settingIndex >= count($catSettings)) {
+                    echo "Invalid setting. Please try again.\n";
+                    continue;
+                }
+
+                $setting_choice = $catSettings[$settingIndex]['num'];
+                break;
+            }
 
             switch($setting_choice) {
                 // Transaction Settings
