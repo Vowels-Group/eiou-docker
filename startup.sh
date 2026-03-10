@@ -98,6 +98,17 @@ graceful_shutdown() {
 
     SHUTDOWN_START=$(date +%s)
 
+    # Step 0: Create automatic pre-shutdown backup (for safe upgrades)
+    # Only attempt if MariaDB is still running and the backup system is available
+    if mysqladmin ping -h localhost --silent 2>/dev/null; then
+        echo "[Shutdown] Creating automatic pre-shutdown backup..."
+        if timeout 15 runuser -u www-data -- php /etc/eiou/scripts/backup-cron.php 2>/dev/null; then
+            echo "[Shutdown] Pre-shutdown backup created successfully"
+        else
+            echo "[Shutdown] Pre-shutdown backup failed (non-critical, continuing shutdown)"
+        fi
+    fi
+
     # Step 1: Signal PHP processors to stop (they handle SIGTERM gracefully)
     echo "[Shutdown] Stopping PHP message processors..."
 
@@ -122,8 +133,14 @@ graceful_shutdown() {
         pids_to_wait="$pids_to_wait $CLEANUP_PID"
     fi
 
+    if [ -n "$CONTACT_STATUS_PID" ] && kill -0 "$CONTACT_STATUS_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to ContactStatus processor (PID: $CONTACT_STATUS_PID)"
+        kill -TERM "$CONTACT_STATUS_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $CONTACT_STATUS_PID"
+    fi
+
     # Also check for any PHP processors by their lockfiles
-    for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid; do
+    for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid /tmp/contact_status.pid; do
         if [ -f "$lockfile" ]; then
             local pid=$(cat "$lockfile" 2>/dev/null)
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -203,7 +220,9 @@ graceful_shutdown() {
     rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
     rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
     rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
+    rm -f /tmp/contact_status.pid 2>/dev/null
     rm -f "$SHUTDOWN_FLAG" 2>/dev/null
+    rm -f "$MAINTENANCE_LOCKFILE" 2>/dev/null
 
     SHUTDOWN_END=$(date +%s)
     SHUTDOWN_DURATION=$((SHUTDOWN_END - SHUTDOWN_START))
@@ -540,6 +559,19 @@ SSLEOF
 elif [ "$SSL_CERT_INSTALLED" = "false" ]; then
     echo "Existing SSL certificate found, skipping generation."
 fi
+
+# =============================================================================
+# MAINTENANCE MODE (Upgrade Lock)
+# =============================================================================
+# Create a maintenance lockfile before source sync and migrations. Any HTTP
+# requests that reach PHP while the lockfile exists get a 503 response,
+# preventing partial code execution against mid-sync source files or a
+# mid-migration database schema. The lockfile is removed after all
+# initialization is complete and processors are started.
+# =============================================================================
+MAINTENANCE_LOCKFILE="/tmp/eiou_maintenance.lock"
+echo "Entering maintenance mode (upgrade lock)..."
+echo "$(date +%s)" > "$MAINTENANCE_LOCKFILE"
 
 # =============================================================================
 # SOURCE FILE SYNC (Docker Volume Update)
@@ -1201,6 +1233,13 @@ fi
 
 # Clear any stale shutdown flag from previous runs
 rm -f "$SHUTDOWN_FLAG" 2>/dev/null
+
+# Exit maintenance mode — all initialization, migrations, and sync are complete.
+# HTTP requests will now be processed normally.
+if [ -f "$MAINTENANCE_LOCKFILE" ]; then
+    rm -f "$MAINTENANCE_LOCKFILE"
+    echo "Maintenance mode ended (upgrade lock released)"
+fi
 
 # ========================
 # Drop Privileges for PHP Processors (M-22)

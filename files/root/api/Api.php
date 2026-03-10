@@ -1,6 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+// Block requests during startup/upgrade (source sync, migrations)
+require_once dirname(__DIR__) . '/src/startup/MaintenanceCheck.php';
+
 // Load Composer autoloader
 require_once dirname(__DIR__) . '/src/bootstrap.php';
 
