@@ -37,7 +37,8 @@ class TransactionRepository extends AbstractRepository {
         'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
-        'sending_started_at', 'recovery_count', 'needs_manual_review', 'expires_at'
+        'sending_started_at', 'recovery_count', 'needs_manual_review', 'expires_at',
+        'signed_message_content'
     ];
 
     /**
