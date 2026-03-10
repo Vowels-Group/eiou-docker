@@ -59,7 +59,6 @@ The project is currently in **ALPHA** status.
 - API PUT `/api/v1/system/settings` now accepts `direct_tx_expiration` and `trusted_proxies`
 
 ### Docs
-- Add `PAYLOAD_ENCRYPTION_ANALYSIS.md`: design analysis for E2E payload encryption covering threat model, four options evaluated, implementation details, and Phase 2 findings (RP2P E2E not feasible, currency removal premature)
 - `update` CLI help now documents the required `currency` parameter for `fee` and `credit` fields, and optional currency for `all`. Usage, arguments, examples, and note all updated to reflect the actual command syntax.
 
 ### Fixed

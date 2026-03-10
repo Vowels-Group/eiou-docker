@@ -2398,8 +2398,6 @@ ephemeral ECDH key agreement + AES-256-GCM. Encrypted fields: `amount`, `currenc
 P2P relay transactions are NOT encrypted — relay nodes need cleartext `amount` and
 `currency` for fee calculation and capacity checks.
 
-See [PAYLOAD_ENCRYPTION_ANALYSIS.md](PAYLOAD_ENCRYPTION_ANALYSIS.md) for full design details.
-
 ### Transport Security
 
 | Layer | Protection |
