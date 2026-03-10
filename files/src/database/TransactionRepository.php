@@ -37,7 +37,8 @@ class TransactionRepository extends AbstractRepository {
         'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
-        'sending_started_at', 'recovery_count', 'needs_manual_review', 'expires_at'
+        'sending_started_at', 'recovery_count', 'needs_manual_review', 'expires_at',
+        'signed_message_content'
     ];
 
     /**
@@ -712,7 +713,8 @@ class TransactionRepository extends AbstractRepository {
                 'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'time' => $request['time'] ?? null, // microtime used for P2P/RP2P hash or transaction creation
                 'memo' => $request['memo'],
-                'description' => $request['description'] ?? null
+                'description' => $request['description'] ?? null,
+                'signed_message_content' => $request['signedMessageContent'] ?? null
                 // NOTE: end_recipient_address and initial_sender_address are NOT included here
                 // They are local tracking fields added via updateTrackingFields() after insert
                 // to avoid including them in the signed message (sync partners don't have this info)

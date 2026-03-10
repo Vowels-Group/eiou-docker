@@ -151,6 +151,9 @@ function getTransactionsTableSchema() {
                                                           P2P transactions set to p2p_expiry + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS.
                                                           Direct transactions set only if user configures directTxExpiration > 0.
                                                           CleanupService cancels transactions past this time that are still pending/sending. */
+        signed_message_content TEXT DEFAULT NULL,      /* Raw signed JSON for E2E encrypted transactions.
+                                                          Stored verbatim so sync signature verification can use it
+                                                          directly instead of reconstructing from plaintext fields. */
         INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),

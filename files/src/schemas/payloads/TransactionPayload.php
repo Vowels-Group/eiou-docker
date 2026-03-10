@@ -204,31 +204,37 @@ class TransactionPayload extends BasePayload
      */
     public function generateRecipientSignature(array $request): ?string
     {
-        // Reconstruct the message content that was signed by the sender
-        // This ensures consistency in what both parties sign
-        $messageContent = [
-            'type' => 'send',
-        ];
-
-        // Include 'time' field in same position as sender signature
-        if (isset($request['time']) && $request['time'] !== null) {
-            $messageContent['time'] = (int)$request['time'];
+        // For E2E encrypted transactions, the sender signed the encrypted content.
+        // Use the stored signed message directly instead of reconstructing from plaintext.
+        if (!empty($request['signedMessageContent'])) {
+            $message = $request['signedMessageContent'];
         } else {
-            $messageContent['time'] = null;
+            // Reconstruct the message content that was signed by the sender
+            // This ensures consistency in what both parties sign
+            $messageContent = [
+                'type' => 'send',
+            ];
+
+            // Include 'time' field in same position as sender signature
+            if (isset($request['time']) && $request['time'] !== null) {
+                $messageContent['time'] = (int)$request['time'];
+            } else {
+                $messageContent['time'] = null;
+            }
+
+            $messageContent['receiverAddress'] = $request['receiverAddress'] ?? null;
+            $messageContent['receiverPublicKey'] = $request['receiverPublicKey'] ?? null;
+            $messageContent['amount'] = (int)($request['amount'] ?? 0);
+            $messageContent['currency'] = $request['currency'] ?? 'USD';
+            $messageContent['txid'] = $request['txid'] ?? null;
+            $messageContent['previousTxid'] = $request['previousTxid'] ?? null;
+            $messageContent['memo'] = $request['memo'] ?? 'standard';
+
+            // Use the same nonce that was used by the sender
+            $messageContent['nonce'] = $request['nonce'] ?? $request['signatureNonce'] ?? bin2hex(random_bytes(16));
+
+            $message = json_encode($messageContent);
         }
-
-        $messageContent['receiverAddress'] = $request['receiverAddress'] ?? null;
-        $messageContent['receiverPublicKey'] = $request['receiverPublicKey'] ?? null;
-        $messageContent['amount'] = (int)($request['amount'] ?? 0);
-        $messageContent['currency'] = $request['currency'] ?? 'USD';
-        $messageContent['txid'] = $request['txid'] ?? null;
-        $messageContent['previousTxid'] = $request['previousTxid'] ?? null;
-        $messageContent['memo'] = $request['memo'] ?? 'standard';
-
-        // Use the same nonce that was used by the sender
-        $messageContent['nonce'] = $request['nonce'] ?? $request['signatureNonce'] ?? bin2hex(random_bytes(16));
-
-        $message = json_encode($messageContent);
 
         // Sign with recipient's private key
         $privateKey = $this->currentUser->getPrivateKey();

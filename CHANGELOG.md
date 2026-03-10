@@ -13,6 +13,8 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Security
+- End-to-end payload encryption for direct transactions using ECDH + AES-256-GCM. Sensitive fields (amount, currency, txid, previousTxid, memo) are encrypted with the recipient's EC public key before signing. Uses ephemeral key pairs for forward secrecy. Encrypt-then-sign design allows signature verification without decryption. New `PayloadEncryption` class, with decryption in `index.html` and encryption in `TransportUtilityService::signWithCapture()`. P2P relay transactions remain unencrypted (relays need cleartext amount for fee calculation)
+- Add `signed_message_content` column to transactions table for E2E encrypted transaction sync signature verification (signature was over encrypted content, not plaintext)
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
@@ -32,6 +34,8 @@ The project is currently in **ALPHA** status.
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
 
 ### Fixed
+- `DatabaseSchemaTest`: Update column type assertions from INT/INTEGER to BIGINT for `transactions.amount`, `balances.received/sent`, `p2p.amount/my_fee_amount`, `rp2p.amount`. Remove obsolete `contacts.currency/fee_percent/credit_limit` assertions (moved to `contact_currencies` table). Add `signed_message_content` assertion for transactions table
+- `DatabaseSetupTest`: Replace two obsolete `online_status` enum migration tests with single test verifying no enum migration runs (schema already includes 'partial' on fresh install)
 - Fee calculation formula in `CurrencyUtilityService::calculateFee()` was currency-dependent — used `conversionFactor` in the formula which only produced correct results for USD (factor=100). Replaced with currency-independent formula `amount * feePercent / 100`. Also fixed inconsistent fee scale: `getDefaultFee()` returned raw percentage while DB `getFeePercent()` returned a scaled INT — callers now normalize DB values before passing to `calculateFee()`
 - Originator cancel now propagates downstream: `CliService::rejectP2p()` calls `broadcastFullCancelForHash()` instead of `sendCancelNotificationForHash()` which exited early for originator nodes
 - Multi-route cancel safety (diamond topology): regular `route_cancel` from best-fee selection now just acknowledges without cancelling P2P or releasing reservation, preventing incorrect resource freeing when a node is part of both selected and unselected routes

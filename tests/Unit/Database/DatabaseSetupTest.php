@@ -204,9 +204,10 @@ class DatabaseSetupTest extends TestCase
     /**
      * Test ENUM migration adds 'partial' to contacts.online_status
      */
-    public function testEnumMigrationAddsPartialToOnlineStatus(): void
+    public function testEnumMigrationNoEnumUpdatesNeeded(): void
     {
-        // Simulate column exists but lacks 'partial'
+        // The online_status ENUM already includes 'partial' in the CREATE TABLE schema,
+        // so the enumUpdates array is empty and no enum migration runs.
         $this->mockPdo->expects($this->any())
             ->method('query')
             ->willReturn($this->mockStatement);
@@ -215,35 +216,6 @@ class DatabaseSetupTest extends TestCase
             ->method('rowCount')
             ->willReturn(1);
 
-        // Return an ENUM type that does NOT contain 'partial'
-        $this->mockStatement->expects($this->any())
-            ->method('fetch')
-            ->willReturn(['Type' => "enum('online','offline','unknown')"]);
-
-        $this->mockPdo->expects($this->atLeastOnce())
-            ->method('exec');
-
-        $result = runColumnMigrations($this->mockPdo);
-
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('contacts.online_status_enum', $result);
-        $this->assertEquals('updated', $result['contacts.online_status_enum']);
-    }
-
-    /**
-     * Test ENUM migration skips when 'partial' already exists
-     */
-    public function testEnumMigrationSkipsWhenPartialAlreadyExists(): void
-    {
-        $this->mockPdo->expects($this->any())
-            ->method('query')
-            ->willReturn($this->mockStatement);
-
-        $this->mockStatement->expects($this->any())
-            ->method('rowCount')
-            ->willReturn(1);
-
-        // Return an ENUM type that already contains 'partial'
         $this->mockStatement->expects($this->any())
             ->method('fetch')
             ->willReturn(['Type' => "enum('online','partial','offline','unknown')"]);
@@ -251,8 +223,8 @@ class DatabaseSetupTest extends TestCase
         $result = runColumnMigrations($this->mockPdo);
 
         $this->assertIsArray($result);
-        $this->assertArrayHasKey('contacts.online_status_enum', $result);
-        $this->assertEquals('already_updated', $result['contacts.online_status_enum']);
+        // No enum keys in result since enumUpdates is empty (schema already correct)
+        $this->assertArrayNotHasKey('contacts.online_status_enum', $result);
     }
 
     /**

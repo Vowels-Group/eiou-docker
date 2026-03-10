@@ -1446,15 +1446,22 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return false;
         }
 
-        // Reconstruct the signed message based on transaction type
-        // Contact transactions use ContactPayload::build() -> {'type': 'create', ...}
-        // Regular transactions use TransactionPayload::build() -> {'type': 'send', ...}
-        // Note: tx_type is not included in sync response, so we use memo to detect contact transactions
-        $memo = $tx['memo'] ?? null;
-        if ($memo === 'contact') {
-            $messageContent = $this->reconstructContactSignedMessage($tx);
+        // For E2E encrypted transactions, use the stored signed message content directly.
+        // The signature was over the encrypted payload, so reconstruction from plaintext
+        // DB fields would produce a different message and fail verification.
+        if (!empty($tx['signed_message_content'])) {
+            $messageContent = $tx['signed_message_content'];
         } else {
-            $messageContent = $this->reconstructSignedMessage($tx);
+            // Reconstruct the signed message based on transaction type
+            // Contact transactions use ContactPayload::build() -> {'type': 'create', ...}
+            // Regular transactions use TransactionPayload::build() -> {'type': 'send', ...}
+            // Note: tx_type is not included in sync response, so we use memo to detect contact transactions
+            $memo = $tx['memo'] ?? null;
+            if ($memo === 'contact') {
+                $messageContent = $this->reconstructContactSignedMessage($tx);
+            } else {
+                $messageContent = $this->reconstructSignedMessage($tx);
+            }
         }
 
         if ($messageContent === null) {
@@ -1558,13 +1565,18 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return false;
         }
 
-        // Reconstruct the message that was signed
-        // Contact transactions use {'type':'create','nonce':N} format
-        // Regular transactions use {'type':'send',...} format
-        if ($memo === 'contact') {
-            $messageContent = $this->reconstructContactSignedMessage($tx);
+        // For E2E encrypted transactions, use stored signed message content
+        if (!empty($tx['signed_message_content'])) {
+            $messageContent = $tx['signed_message_content'];
         } else {
-            $messageContent = $this->reconstructSignedMessage($tx);
+            // Reconstruct the message that was signed
+            // Contact transactions use {'type':'create','nonce':N} format
+            // Regular transactions use {'type':'send',...} format
+            if ($memo === 'contact') {
+                $messageContent = $this->reconstructContactSignedMessage($tx);
+            } else {
+                $messageContent = $this->reconstructSignedMessage($tx);
+            }
         }
         if ($messageContent === null) {
             Logger::getInstance()->debug("Could not reconstruct message for recipient signature verification", [
