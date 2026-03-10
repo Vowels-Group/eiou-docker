@@ -96,7 +96,12 @@ RUN mkdir -p /etc/nginx/ssl
 # Configure PHP-FPM to use a version-independent socket path
 # The default socket path includes the PHP version (e.g., php8.2-fpm.sock).
 # Using a fixed path keeps the nginx config stable across PHP version upgrades.
-RUN sed -i 's|^listen = .*|listen = /run/php/php-fpm.sock|' /etc/php/*/fpm/pool.d/www.conf
+# Override socket path and allow .html files to be processed by PHP-FPM.
+# EIOU uses PHP inside .html files (GUI templates) — equivalent to Apache's
+# AddType application/x-httpd-php .html. Without this, PHP-FPM blocks .html
+# with "Access denied (see security.limit_extensions)".
+RUN sed -i 's|^listen = .*|listen = /run/php/php-fpm.sock|' /etc/php/*/fpm/pool.d/www.conf && \
+    sed -i 's|^;security.limit_extensions = .*|security.limit_extensions = .php .html|' /etc/php/*/fpm/pool.d/www.conf
 
 # Configure nginx: global settings for rate limiting and security
 # Rate limiting zones must be in the http block (nginx.conf), not server blocks.
