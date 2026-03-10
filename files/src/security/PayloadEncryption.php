@@ -14,6 +14,11 @@ use RuntimeException;
  * Every message sent to a known contact (P2P, RP2P, transactions, pings, etc.) is encrypted.
  * Only contact requests (type=create) are excluded since the recipient may not be a contact yet.
  *
+ * Cleartext fallback (recipient public key unavailable):
+ * - Transaction inquiry to P2P end-recipient (not necessarily a direct contact)
+ * - Contact acceptance inquiry to pending contacts (public key not yet known)
+ * - Any message where ContactRepository::getPublicKeyFromAddress() returns null
+ *
  * Encryption Flow:
  * 1. Generate ephemeral EC key pair (same curve as recipient)
  * 2. Derive shared secret via ECDH(ephemeral_private, recipient_public)

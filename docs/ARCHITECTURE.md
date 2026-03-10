@@ -2377,7 +2377,7 @@ TorKeyDerivation
 |-----------|------|---------|
 | `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation |
 | `KeyEncryption` | `/src/security/KeyEncryption.php` | AES-256-GCM encryption/decryption for private keys and auth codes |
-| `PayloadEncryption` | `/src/security/PayloadEncryption.php` | ECDH + AES-256-GCM end-to-end encryption for direct transaction payloads |
+| `PayloadEncryption` | `/src/security/PayloadEncryption.php` | ECDH + AES-256-GCM end-to-end encryption for all contact message payloads |
 | `TorKeyDerivation` | `/src/security/TorKeyDerivation.php` | Derives Ed25519 keypairs from secp256k1 keys for Tor v3 hidden service addresses |
 
 ### Encrypted Storage
@@ -2390,13 +2390,23 @@ TorKeyDerivation
 
 ### Payload Encryption (E2E)
 
-Direct transactions between established contacts are end-to-end encrypted using
-ephemeral ECDH key agreement + AES-256-GCM. Encrypted fields: `amount`, `currency`,
-`txid`, `previousTxid`, `memo`. Encryption happens in `TransportUtilityService::signWithCapture()`
+All messages sent to known contacts are end-to-end encrypted using ephemeral ECDH
+key agreement + AES-256-GCM. Every content field — including `type` — is encrypted,
+making all message types (P2P, RP2P, transactions, pings, route cancellations, etc.)
+indistinguishable on the wire. Encryption happens in `TransportUtilityService::signWithCapture()`
 (encrypt-then-sign), decryption in `index.html` before message routing.
 
-P2P relay transactions are NOT encrypted — relay nodes need cleartext `amount` and
-`currency` for fee calculation and capacity checks.
+**Excluded from encryption:**
+- `create` (contact requests) — recipient may not be a contact yet (no public key)
+
+**Graceful cleartext fallback** (recipient public key unavailable):
+- Transaction inquiry to P2P end-recipient — not necessarily a direct contact
+- Contact acceptance inquiry to pending contacts — public key not yet known
+- Any message where `ContactRepository::getPublicKeyFromAddress()` returns null
+
+The signed message structure is `{encrypted: {ciphertext, iv, tag, ephemeralKey}, nonce}`
+when encrypted, or `{...fields..., nonce}` when falling back to cleartext. The receiver
+decrypts the `encrypted` block (if present) before type-based routing.
 
 ### Transport Security
 
@@ -2405,7 +2415,7 @@ P2P relay transactions are NOT encrypted — relay nodes need cleartext `amount`
 | HTTPS | TLS 1.2+ with auto-generated or custom certificates |
 | Tor | Onion routing for IP anonymization |
 | Message Signing | secp256k1 ECDSA signatures on all messages |
-| E2E Encryption | ECDH + AES-256-GCM for direct transaction payloads |
+| E2E Encryption | ECDH + AES-256-GCM for all contact message payloads (type-indistinguishable) |
 
 **SSL Certificate Priority Chain:**
 
