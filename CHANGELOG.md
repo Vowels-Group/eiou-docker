@@ -20,6 +20,7 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - Interactive `changesettings` menu refactored from flat 44-item numbered list to two-level grouped navigation: select a category (1-8), then select a setting within that category. Press 0 to go back or cancel. All validation logic unchanged
+- Tor circuit health settings (max failures, cooldown duration, transport fallback) added to API (GET/PUT `/api/v1/system/settings`), GUI settings panel, and grouped interactive CLI menu
 
 ### Added
 - Tor circuit health tracking (`TorCircuitHealth`): per-.onion address failure tracking with cooldown. After consecutive Tor timeouts to the same address (default: 2), further attempts are skipped for a cooldown period (default: 5 min) to avoid wasted retries and Tor circuit overload. File-based in `/tmp` so state clears on container restart

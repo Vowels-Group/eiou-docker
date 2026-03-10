@@ -519,6 +519,9 @@ class CliService implements CliServiceInterface {
                     ['num' => '12', 'label' => 'Hostname'],
                     ['num' => '13', 'label' => 'Trusted proxy IPs'],
                     ['num' => '14', 'label' => 'Auto-accept P2P transactions'],
+                    ['num' => '45', 'label' => 'Tor circuit max failures before cooldown'],
+                    ['num' => '46', 'label' => 'Tor circuit cooldown duration (seconds)'],
+                    ['num' => '47', 'label' => 'Tor failure transport fallback'],
                 ],
                 'Feature Toggles' => [
                     ['num' => '15', 'label' => 'Display name'],
@@ -1096,6 +1099,40 @@ class CliService implements CliServiceInterface {
                         }
                     }
                     $value = implode(',', $currencies);
+                    break;
+
+                // Tor Circuit Health
+                case '45':
+                    echo "Enter consecutive Tor failures before cooldown (1-10): ";
+                    $key = 'torCircuitMaxFailures';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 1, 10, 'Tor circuit max failures');
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '46':
+                    echo "Enter Tor circuit cooldown duration in seconds (60-3600): ";
+                    $key = 'torCircuitCooldownSeconds';
+                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 60, 3600, 'Tor circuit cooldown');
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '47':
+                    echo "Fall back to HTTP/HTTPS when Tor fails? (yes/no): ";
+                    $key = 'torFailureTransportFallback';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
                     break;
 
                 case '0':
