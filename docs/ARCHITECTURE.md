@@ -2408,6 +2408,11 @@ The signed message structure is `{encrypted: {ciphertext, iv, tag, ephemeralKey}
 when encrypted, or `{...fields..., nonce}` when falling back to cleartext. The receiver
 decrypts the `encrypted` block (if present) before type-based routing.
 
+**Sync compatibility:** Because the signature covers the encrypted content (not the plaintext),
+the raw signed JSON is stored in the `signed_message_content` column of the transactions table.
+During chain sync recovery, `verifyTransactionSignature()` uses this stored content instead of
+reconstructing from plaintext DB fields, which would produce a different hash.
+
 ### Transport Security
 
 | Layer | Protection |
