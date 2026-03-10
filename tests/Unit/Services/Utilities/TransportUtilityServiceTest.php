@@ -839,4 +839,27 @@ class TransportUtilityServiceTest extends TestCase
         $result = $reflection->invoke($this->service, 'contact.onion', '{"test":"data"}');
         $this->assertNull($result);
     }
+
+    /**
+     * Test attemptFallbackDelivery excludes HTTP when torFallbackRequireEncrypted is true
+     */
+    public function testAttemptFallbackDeliveryExcludesHttpWhenRequireEncrypted(): void
+    {
+        $reflection = new \ReflectionMethod($this->service, 'attemptFallbackDelivery');
+        $reflection->setAccessible(true);
+
+        $this->addressRepository->method('getContactPubkeyHash')
+            ->willReturn('hash123');
+
+        // Contact has only HTTP (no HTTPS) — should return null when require encrypted
+        $this->addressRepository->method('lookupByPubkeyHash')
+            ->willReturn(['tor' => 'contact.onion', 'http' => 'http://contact.com']);
+
+        $this->addressRepository->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // torFallbackRequireEncrypted defaults to true in Constants
+        $result = $reflection->invoke($this->service, 'contact.onion', '{"test":"data"}');
+        $this->assertNull($result);
+    }
 }

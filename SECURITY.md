@@ -144,9 +144,12 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 
 | Layer | Configuration | Notes |
 |-------|---------------|-------|
+| E2E encryption | All contact messages encrypted (ECDH + AES-256-GCM) | Forward secrecy, type-indistinguishable on wire |
 | Tor | Enabled by default | Provides IP anonymization via onion routing |
+| Tor circuit health | Per-address failure tracking with cooldown | Prevents wasted retries; configurable fallback to HTTPS (HTTP excluded by default via `torFallbackRequireEncrypted`) |
 | TLS | TLS 1.2+ with auto-generated or custom certificates | Self-signed by default; use Let's Encrypt or mount external certs for production |
 | Transport priority | Tor > HTTPS > HTTP | System prefers the most secure transport available |
+| Transport fallback | Automatic on Tor failure | Falls back to HTTPS when `torFailureTransportFallback=true` (default). `torFallbackRequireEncrypted=true` (default) restricts fallback to HTTPS only |
 | Internal network | Docker bridge network | Containers communicate over an isolated Docker network |
 
 **Recommendations:**
@@ -155,6 +158,8 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 - Use Let's Encrypt certificates for production deployments, or mount your own CA-signed certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section)
 - Avoid exposing container ports directly to the public internet without a reverse proxy or firewall
 - The HTTP transport mode is intended for local Docker network testing only
+- The `torFailureTransportFallback` setting can be disabled for Tor-only operation where privacy is paramount
+- The `torFallbackRequireEncrypted` setting (default: enabled) ensures Tor fallback only goes to HTTPS, never plain HTTP. Disable only if you explicitly need HTTP fallback in a trusted local network
 
 ### Container Security
 
@@ -240,13 +245,44 @@ EIOU Docker implements security at multiple layers. This section provides a brie
 
 | Component | Algorithm | Purpose |
 |-----------|-----------|---------|
-| Wallet seed | BIP39 (24 words) | Deterministic key derivation |
+| Wallet seed | BIP39 (24 words) | Deterministic key derivation — all keys, Tor identity, and master encryption key derived from seed |
 | Signing keys | secp256k1 (ECDSA) | Message signing and identity verification |
-| Tor identity | Ed25519 | Hidden service authentication |
-| Private key storage | AES-256-GCM | Encryption at rest for private keys and auth codes |
+| Tor identity | Ed25519 | Hidden service authentication (derived from secp256k1 keys) |
+| Master encryption key | HKDF-SHA256 from BIP39 seed | Deterministic master key for at-rest encryption. Recoverable via seed phrase restore |
+| Private key storage | AES-256-GCM | Encryption at rest for private keys, auth codes, and mnemonics |
 | Backup encryption | AES-256-GCM | Encrypted MariaDB database backups |
-| Payload E2E encryption | ECDH + AES-256-GCM | End-to-end encryption for all contact message payloads (ephemeral keys, forward secrecy) |
+| Payload E2E encryption | ECDH + AES-256-GCM | End-to-end encryption for **all** contact message payloads. Uses ephemeral key pairs for forward secrecy. Encrypt-then-sign design allows signature verification without decryption |
 | API authentication | HMAC-SHA256 | Request signing with 5-minute timestamp window |
+
+### End-to-End Encryption
+
+All messages sent to known contacts are encrypted using ephemeral ECDH key agreement + AES-256-GCM. This includes P2P requests, RP2P responses, relay transactions, pings, route cancellations, and text messages. Every content field — including the message `type` — is inside the encrypted block, making all message types indistinguishable on the wire.
+
+| Property | Detail |
+|----------|--------|
+| Cipher | AES-256-GCM with HKDF-SHA256 key derivation |
+| Key agreement | Ephemeral ECDH (same curve as recipient's signing key) |
+| Forward secrecy | New ephemeral key pair per message |
+| Design | Encrypt-then-sign: signature covers ciphertext, verification does not require decryption |
+| Excluded | `create` (contact requests) — recipient's public key may not be known yet |
+| Fallback | Graceful cleartext when recipient public key is unavailable (e.g., transaction inquiry to P2P end-recipient) |
+
+**Sync compatibility:** The signature covers the encrypted content. The raw signed JSON is stored in the `signed_message_content` column so chain sync recovery can verify signatures without re-encrypting.
+
+### Tor Circuit Health Tracking
+
+Per-`.onion` address failure tracking with automatic cooldown prevents wasted retries and Tor circuit overload when a hidden service is temporarily unreachable.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `torCircuitMaxFailures` | `2` | Consecutive failures before cooldown |
+| `torCircuitCooldownSeconds` | `300` (5 min) | Duration to skip the address |
+| `torFailureTransportFallback` | `true` | Fall back to HTTP/HTTPS when Tor fails |
+| `torFallbackRequireEncrypted` | `true` | Restrict Tor fallback to HTTPS only (never plain HTTP). Preserves transport encryption when Tor is unavailable |
+
+State is file-based in `/tmp/tor-circuit-health/` (clears on container restart). Configurable via CLI (`eiou changesettings`), GUI settings panel, and REST API.
+
+**Privacy note:** When `torFallbackRequireEncrypted` is enabled (default), a Tor delivery failure will only fall back to HTTPS. If the contact has no HTTPS address, delivery fails gracefully rather than downgrading to unencrypted HTTP. This prevents accidental privacy leaks when Tor is the preferred transport.
 
 ### Application Security
 
@@ -263,10 +299,12 @@ EIOU Docker implements security at multiple layers. This section provides a brie
 
 | Layer | Protection |
 |-------|------------|
+| E2E encryption | ECDH + AES-256-GCM for all contact message payloads (type-indistinguishable on wire) |
 | HTTPS | TLS 1.2+ with configurable certificate sources (Let's Encrypt, CA-signed, or self-signed) |
-| Tor | Onion routing for network-level anonymity |
+| Tor | Onion routing for network-level anonymity with circuit health tracking and transport fallback |
 | Message signing | All P2P messages signed with secp256k1 ECDSA signatures |
 | Replay prevention | API timestamps validated within a 5-minute window |
+| Hop budget randomization | Geometric distribution prevents traffic analysis of routing depth |
 
 ---
 

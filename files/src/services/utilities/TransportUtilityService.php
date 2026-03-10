@@ -344,6 +344,11 @@ class TransportUtilityService implements TransportServiceInterface
         // Remove TOR from candidates so we only try HTTP/HTTPS
         unset($contactAddresses['tor']);
 
+        // If torFallbackRequireEncrypted is enabled, also remove HTTP to preserve privacy
+        if (UserContext::getInstance()->isTorFallbackRequireEncrypted()) {
+            unset($contactAddresses['http']);
+        }
+
         $fallbackAddress = $this->fallbackTransportAddress($contactAddresses);
         if ($fallbackAddress === null) {
             return null;

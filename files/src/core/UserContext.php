@@ -813,6 +813,20 @@ class UserContext {
         return (bool) $val;
     }
 
+    /**
+     * Whether Tor fallback requires encrypted transport (HTTPS only, no HTTP).
+     * When true, falling back from Tor to plain HTTP is blocked for privacy.
+     *
+     * @return bool
+     */
+    public function isTorFallbackRequireEncrypted(): bool {
+        $val = $this->get('torFallbackRequireEncrypted');
+        if ($val === null) {
+            return Constants::TOR_FALLBACK_REQUIRE_ENCRYPTED;
+        }
+        return (bool) $val;
+    }
+
     // =========================================================================
     // SYNC GETTERS
     // =========================================================================
@@ -946,6 +960,7 @@ class UserContext {
             'torCircuitMaxFailures' => Constants::TOR_CIRCUIT_MAX_FAILURES,
             'torCircuitCooldownSeconds' => Constants::TOR_CIRCUIT_COOLDOWN_SECONDS,
             'torFailureTransportFallback' => Constants::TOR_FAILURE_TRANSPORT_FALLBACK,
+            'torFallbackRequireEncrypted' => Constants::TOR_FALLBACK_REQUIRE_ENCRYPTED,
 
             // Sync
             'syncChunkSize' => Constants::SYNC_CHUNK_SIZE,

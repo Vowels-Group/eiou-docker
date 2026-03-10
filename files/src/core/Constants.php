@@ -297,6 +297,7 @@ class Constants {
     const TOR_CIRCUIT_MAX_FAILURES = 2;           // Consecutive Tor failures before cooldown (default: 2)
     const TOR_CIRCUIT_COOLDOWN_SECONDS = 300;     // Cooldown duration in seconds (default: 300 = 5 min)
     const TOR_FAILURE_TRANSPORT_FALLBACK = true;  // Fall back to HTTPS/HTTP when Tor fails (default: true)
+    const TOR_FALLBACK_REQUIRE_ENCRYPTED = true; // Only fall back to HTTPS (not HTTP) for privacy (default: true)
 
     // Transaction sync chunking
     // 50 txns * ~3KB = ~150KB per chunk — well within PHP post_max_size and transport timeouts

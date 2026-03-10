@@ -5,11 +5,13 @@ Run an EIOU node with a single `docker compose` command. The container includes 
 ## Key Features
 
 - **Web GUI Dashboard** — manage contacts, transactions, and node settings from your browser
-- **P2P Transactions** — automatic multi-hop payment routing through trust networks
-- **Multi-Transport** — HTTP, HTTPS, and Tor (.onion) support out of the box
+- **P2P Transactions** — automatic multi-hop payment routing through trust networks with best-fee selection and cascade cancel
+- **End-to-End Encryption** — all contact messages encrypted with ECDH + AES-256-GCM (ephemeral keys, forward secrecy). All message types are indistinguishable on the wire
+- **Multi-Transport** — HTTP, HTTPS, and Tor (.onion) with automatic failover and Tor circuit health tracking
 - **REST API** — full API with HMAC-SHA256 authentication
 - **CLI Interface** — complete command-line management via `eiou` commands
 - **Encrypted Backups** — automatic daily database backups encrypted with AES-256-GCM
+- **Deterministic Key Recovery** — all cryptographic material (wallet keys, Tor identity, encryption master key) derived from BIP39 seed phrase
 - **Persistent Storage** — named Docker volumes keep your data across restarts and rebuilds
 
 ## Prerequisites
@@ -175,6 +177,10 @@ Increase these for WSL2 or resource-constrained environments.
 | `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | Auto-propose chain drops when mutual gaps are detected that sync cannot repair |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | Auto-accept chain drop proposals (with balance guard). Default is off — proposals require manual review |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | Balance guard for auto-accept: compares stored vs calculated balances before accepting. Set to `false` to accept unconditionally |
+| `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | Default transport when sending to a contact by name. Options: `tor`, `http`, `https` |
+| `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode (first response wins) for Tor routes. Set to `false` to allow best-fee mode over Tor |
+| `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | Randomize P2P hop budget with geometric distribution. Set to `false` for deterministic routing depth |
+| `EIOU_P2P_MAX_WORKERS` | *(per-transport)* | Override max concurrent P2P worker processes. Defaults: HTTP=50, HTTPS=50, Tor=5 |
 
 ### Volume Mounts
 
@@ -324,3 +330,4 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 | [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
+| [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |

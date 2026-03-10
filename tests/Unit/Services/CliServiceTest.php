@@ -1375,6 +1375,28 @@ class CliServiceTest extends TestCase
     }
 
     /**
+     * Test changeSettings accepts valid torFallbackRequireEncrypted
+     */
+    public function testChangeSettingsAcceptsValidTorFallbackRequireEncrypted(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'torFallbackRequireEncrypted'
+                        && $data['value'] === false;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'torFallbackRequireEncrypted', 'false'], $this->outputManager);
+    }
+
+    /**
      * Test changeSettings is case-insensitive for tor settings
      */
     public function testChangeSettingsTorSettingsCaseInsensitive(): void

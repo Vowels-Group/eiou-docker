@@ -27,7 +27,8 @@ The project is currently in **ALPHA** status.
 ### Added
 - Tor circuit health tracking (`TorCircuitHealth`): per-.onion address failure tracking with cooldown. After consecutive Tor timeouts to the same address (default: 2), further attempts are skipped for a cooldown period (default: 5 min) to avoid wasted retries and Tor circuit overload. File-based in `/tmp` so state clears on container restart
 - Transport fallback on Tor failure: when a Tor delivery fails and the contact has an HTTP/HTTPS address, automatically fall back to an alternative transport. Controlled by `torFailureTransportFallback` setting (default: enabled). Can be disabled via `eiou changesettings torFailureTransportFallback false` for Tor-only operation
-- New configurable settings: `torCircuitMaxFailures` (1-10), `torCircuitCooldownSeconds` (60-3600), `torFailureTransportFallback` (true/false). Available via `eiou changesettings` and displayed in `eiou settings`
+- `torFallbackRequireEncrypted` setting (default: `true`): restricts Tor failure fallback to HTTPS only, never plain HTTP. When enabled, if a contact has no HTTPS address, delivery fails gracefully rather than downgrading to unencrypted HTTP. Preserves transport encryption when Tor is unavailable. Configurable via CLI (`eiou changesettings`), GUI settings panel, and REST API
+- New configurable settings: `torCircuitMaxFailures` (1-10), `torCircuitCooldownSeconds` (60-3600), `torFailureTransportFallback` (true/false), `torFallbackRequireEncrypted` (true/false). Available via `eiou changesettings` and displayed in `eiou settings`
 - Multi-currency infrastructure: per-currency conversion factors (`CONVERSION_FACTORS`), decimal places (`CURRENCY_DECIMALS`), and helper methods `getConversionFactor()` / `getCurrencyDecimals()` in Constants. Currently USD-only; adding a new currency requires only adding map entries
 - Database amount columns changed from INT to BIGINT: `contact_credit.available_credit`, `contact_currencies.credit_limit`, `balances.received/sent`, `transactions.amount`, `p2p.amount/my_fee_amount/rp2p_amount`, `rp2p.amount`, `rp2p_candidates.amount/fee_amount`, `capacity_reservations.base_amount/total_amount`. Supports large-value currencies without overflow
 - Route cancellation service: actively cancels unselected P2P routes after best-fee selection to immediately release reserved credit capacity. CleanupService TTL expiry remains as natural fallback
@@ -43,6 +44,7 @@ The project is currently in **ALPHA** status.
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
 
 ### Fixed
+- RP2P fee calculation changed from additive to multiplicative (compounding): each relay now recalculates its fee on the **accumulated RP2P total** (base + all downstream fees) instead of the original base amount. The exact rounded fee is saved to `my_fee_amount` during RP2P backtracking and added to the forwarded amount, ensuring `TransactionService::removeTransactionFee()` subtracts the identical value with no rounding discrepancies. New `calculateFeeForP2p()` helper in `Rp2pService` handles per-contact fee lookup and calculation
 - `routeCancellationTest` hop budget test: now checks `Constants::isHopBudgetRandomized()` and accepts deterministic output (constant `maxHops`) when randomization is disabled via `EIOU_HOP_BUDGET_RANDOMIZED=false`, instead of always requiring variance across 100 samples
 - `DatabaseSchemaTest`: Update column type assertions from INT/INTEGER to BIGINT for `transactions.amount`, `balances.received/sent`, `p2p.amount/my_fee_amount`, `rp2p.amount`. Remove obsolete `contacts.currency/fee_percent/credit_limit` assertions (moved to `contact_currencies` table). Add `signed_message_content` assertion for transactions table
 - `DatabaseSetupTest`: Replace two obsolete `online_status` enum migration tests with single test verifying no enum migration runs (schema already includes 'partial' on fresh install)
@@ -69,6 +71,13 @@ The project is currently in **ALPHA** status.
 - API PUT `/api/v1/system/settings` now accepts `direct_tx_expiration` and `trusted_proxies`
 
 ### Docs
+- ARCHITECTURE.md: Add credit reservation lifecycle section — explains `base_amount` vs `total_amount`, three release paths (cancel/commit/expiry), and status transitions with diagram
+- ARCHITECTURE.md: Add fee accumulation through relays section — shows multiplicative/compounding per-hop fee calculation, two-phase process (estimate on outbound, authoritative recalculation on RP2P return), multi-route example with best-fee selection, and `rp2p_candidates` table schema
+- ARCHITECTURE.md: Add coalesce delay and mega-batch section — explains `P2P_QUEUE_COALESCE_MS`, when mega-batch is used vs inline sends, and compound key mapping
+- ARCHITECTURE.md: Add message delivery and dead letter queue section — documents retry policy, exponential backoff schedule, Tor cooldown handling, DLQ operations (retry/abandon/resolve), and atomic claiming
+- ARCHITECTURE.md: Add distributed locking section — explains MariaDB advisory locks, atomic claiming pattern, and where locks are used
+- ARCHITECTURE.md: Add ping/pong credit exchange section — documents ping payload, pong response fields, available credit synchronization, chain validation, sync trigger, and online status determination
+- ARCHITECTURE.md: Add proactive vs reactive sync comparison table to sync flow section
 - `update` CLI help now documents the required `currency` parameter for `fee` and `credit` fields, and optional currency for `all`. Usage, arguments, examples, and note all updated to reflect the actual command syntax.
 
 ### Fixed

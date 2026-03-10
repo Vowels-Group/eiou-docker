@@ -300,6 +300,7 @@ class ConstantsTest extends TestCase
         $this->assertSame(2, Constants::TOR_CIRCUIT_MAX_FAILURES);
         $this->assertSame(300, Constants::TOR_CIRCUIT_COOLDOWN_SECONDS);
         $this->assertTrue(Constants::TOR_FAILURE_TRANSPORT_FALLBACK);
+        $this->assertTrue(Constants::TOR_FALLBACK_REQUIRE_ENCRYPTED);
     }
 
     /**

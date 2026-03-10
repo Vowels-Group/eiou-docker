@@ -506,6 +506,17 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="torFallbackRequireEncrypted">Tor Fallback Require Encrypted:</label>
+                            <select id="torFallbackRequireEncrypted" name="torFallbackRequireEncrypted" class="default-value">
+                                <option value="true" <?php echo $user->isTorFallbackRequireEncrypted() ? 'selected' : ''; ?>>Enabled</option>
+                                <option value="false" <?php echo !$user->isTorFallbackRequireEncrypted() ? 'selected' : ''; ?>>Disabled</option>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When Tor fails, only fall back to HTTPS (never plain HTTP)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
                             <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
                                 $corsOrigins = array_filter(array_map('trim', explode(',', $user->getApiCorsAllowedOrigins())));

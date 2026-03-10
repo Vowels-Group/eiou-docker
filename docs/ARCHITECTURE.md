@@ -702,6 +702,16 @@ public function wireCircularDependencies(): void {
     // CliService - repositories for info command display (fee earnings, available credit)
     $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
     $this->services['CliService']->setP2pRepository($this->getP2pRepository());
+
+    // Route cancellation system
+    $this->services['RouteCancellationService']->setCapacityReservationRepository(...);
+    $this->services['RouteCancellationService']->setRouteCancellationRepository(...);
+    $this->services['RouteCancellationService']->setP2pRepository(...);
+    $this->services['RouteCancellationService']->setP2pService($this->services['P2pService']);
+    $this->services['Rp2pService']->setRouteCancellationService($this->services['RouteCancellationService']);
+    $this->services['P2pService']->setCapacityReservationRepository(...);
+    $this->services['CleanupService']->setCapacityReservationRepository(...);
+    $this->services['CleanupService']->setRouteCancellationRepository(...);
 }
 ```
 
@@ -1037,6 +1047,116 @@ The shutdown flag (`/tmp/eiou_shutdown.flag`) coordinates between the PHP CLI co
 | Tor Restart Cooldown | 300 seconds |
 | Tor Max Restarts | 5 |
 
+### Message Delivery & Dead Letter Queue
+
+The `MessageDeliveryService` provides reliable message delivery with automatic retries
+and exponential backoff. When all retries are exhausted, messages move to the Dead Letter
+Queue (DLQ) for manual intervention.
+
+**Retry Policy:**
+
+| Parameter | Value | Constant |
+|-----------|-------|----------|
+| Max retries | 5 (6 total attempts) | `DELIVERY_MAX_RETRIES` |
+| Base delay | 2 seconds | `DELIVERY_BASE_DELAY_SECONDS` |
+| Jitter factor | ±20% | `DELIVERY_JITTER_FACTOR` |
+| Max delay cap | 300 seconds (5 min) | `MAX_RETRY_DELAY_SECONDS` |
+
+**Exponential backoff formula:**
+
+```
+delay = baseDelay × 2^retryCount × (1 ± jitterFactor × random)
+delay = min(delay, 300s)
+```
+
+| Attempt | Base Delay | With Jitter (±20%) |
+|---------|------------|---------------------|
+| 1 | 2s | 1.6–2.4s |
+| 2 | 4s | 3.2–4.8s |
+| 3 | 8s | 6.4–9.6s |
+| 4 | 16s | 12.8–19.2s |
+| 5 | 32s | 25.6–38.4s |
+| 6 (final) | 64s | 51.2–76.8s |
+
+**Total worst-case retry window:** ~2.5 minutes before DLQ entry.
+
+**Special cases:**
+- **Tor cooldown (`TOR_COOLDOWN`):** When `TorCircuitHealth` marks an address as cooled
+  down, the delivery is deferred without consuming a retry attempt. The message re-enters
+  the queue and is retried after the cooldown period expires.
+- **Rejected messages:** Messages receiving an explicit rejection response are NOT retried
+  — the rejection is final and the message is recorded as failed.
+
+**Dead Letter Queue flow:**
+
+```
+Message send attempt
+     |
+     +-- Success? → done
+     |
+     +-- Failure → retry with backoff
+     |      |
+     |      +-- Retry 1..5 → attempt again
+     |      |
+     |      +-- All retries exhausted
+     |             |
+     |             v
+     |      +-------------+
+     |      | Dead Letter |
+     |      | Queue       |
+     |      +------+------+
+     |             |
+     +-------------+-------------+
+     |             |             |
+     v             v             v
+  Retry       Abandon       Resolve
+ (manual)   (give up)    (auto on success)
+```
+
+**DLQ operations:**
+
+| Operation | Method | Description |
+|-----------|--------|-------------|
+| `returnToPending` | Manual retry | Returns message to pending queue for reprocessing |
+| `markAbandoned` | Give up | Marks message as permanently failed with optional reason |
+| `markResolved` | Auto/manual | Marks message as successfully reprocessed |
+
+**DLQ background processing:** `processRetryQueue()` uses atomic claiming
+(`claimForRetry()`) to prevent parallel workers from processing the same DLQ entry.
+Claimed entries are re-sent through the normal delivery pipeline.
+
+### Distributed Locking
+
+The `DatabaseLockingService` uses MariaDB advisory locks (`GET_LOCK`/`RELEASE_LOCK`)
+to coordinate exclusive access between concurrent PHP workers.
+
+| Parameter | Value |
+|-----------|-------|
+| Lock timeout | 30 seconds (`DB_LOCK_TIMEOUT_SECONDS`) |
+| Lock prefix | `eiou_` |
+| Scope | Per-connection (auto-released on disconnect) |
+
+**Where distributed locks are used:**
+
+| Operation | Purpose |
+|-----------|---------|
+| Message delivery retry | Prevents `processRetryQueue()` from claiming a delivery that another worker is actively retrying during its backoff sleep window |
+| Transaction claiming | Atomic `PENDING → SENDING` transition prevents two workers from processing the same outgoing transaction simultaneously |
+
+**Atomic claiming pattern** (used throughout the codebase):
+
+```php
+// TransactionRecoveryRepository::claimPendingTransaction()
+// Returns true only if this worker wins the race
+UPDATE transactions SET status = 'sending'
+WHERE txid = ? AND status = 'pending'
+// rowCount() == 1 → claimed; 0 → another worker got it first
+```
+
+This pattern is used by `TransactionProcessingService` for both direct transactions
+(`processOutgoingDirect`) and P2P transactions (`processP2pTransaction`). It eliminates
+double-sends without requiring external lock infrastructure.
+
 ---
 
 ## Data Layer
@@ -1215,6 +1335,7 @@ application:
 | `InputValidator` | General-purpose input sanitization and validation for CLI and API inputs |
 | `Security` | Cryptographic helpers — message signing, signature verification, hash generation using secp256k1 ECDSA |
 | `SecureSeedphraseDisplay` | Secure terminal output for seed phrases — clears screen, displays temporarily, handles clipboard-safe formatting |
+| `TorCircuitHealth` | Per-`.onion` address failure tracking with configurable cooldown. File-based in `/tmp/tor-circuit-health/` (shared across workers, clears on restart). Prevents repeated timeouts to unreachable hidden services. Integrated into `TransportUtilityService::send()` for automatic skip and optional HTTPS fallback (controlled by `torFallbackRequireEncrypted` — defaults to HTTPS-only, never plain HTTP) |
 
 ---
 
@@ -1257,6 +1378,50 @@ no direct connection exists. The system supports two routing modes:
       |  (completed)          |                       |                       |
       |<----------------------|                       |                       |
 ```
+
+### Dead-End Cascade Cancel
+
+When a P2P reaches a dead end (no route to recipient), cancel notifications propagate
+back upstream, freeing resources through the entire chain:
+
+```
+      ALICE                   BOB                    CAROL                DEAD END
+   (Sender)              (Relay)                (Relay)              (No contacts)
+      |                       |                       |                       |
+      |   P2P Request         |                       |                       |
+      |  (fast=0, --best)     |                       |                       |
+      |---------------------->|                       |                       |
+      |                       |   P2P Request         |                       |
+      |                       |---------------------->|                       |
+      |                       |                       |   P2P Request         |
+      |                       |                       |---------------------->|
+      |                       |                       |                       |
+      |                       |                       |   (no contacts to     |
+      |                       |                       |    forward — cancel)  |
+      |                       |                       |                       |
+      |                       |                       |  Cancel Notification  |
+      |                       |                       |<----------------------|
+      |                       |                       |                       |
+      |                       |  Cancel Notification  | (P2P cancelled,       |
+      |                       |  (all contacts        |  reservation released)|
+      |                       |  responded/cancelled) |                       |
+      |                       |<----------------------|                       |
+      |                       |                       |                       |
+      |  Cancel Notification  | (P2P cancelled,       |                       |
+      |  (P2P status →        |  reservation released)|                       |
+      |   cancelled)          |                       |                       |
+      |<----------------------|                       |                       |
+      |                       |                       |                       |
+  [P2P resolved: cancelled, ~5-10s instead of 300s expiration timeout]
+```
+
+**Cancel propagation modes:**
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| **Dead-end cancel** | No contacts to broadcast to, or all contacts responded | `sendCancelNotificationForHash()` notifies upstream sender |
+| **Best-fee unselected** | After best-fee selection picks cheapest route | `cancelUnselectedRoutes()` sends partial `route_cancel` to unselected candidates (multi-route safe) |
+| **Full cancel** | Originator reject (`p2p reject`) or complete cascade | `broadcastFullCancelForHash()` sends `route_cancel` with `full_cancel=true` to all contacts, propagating downstream |
 
 ### Request Level Randomization
 
@@ -1314,6 +1479,31 @@ $hopBudget = computeHopBudget($minHops, $maxP2pLevel); // range: [3, 6]
 6. Concurrency-limited sliding window caps simultaneous connections per protocol
 7. Each relay node queues, coalesces, and broadcasts to its own contacts (level++)
 8. Process continues until recipient found or level exceeds maxRequestLevel
+
+**Coalesce Delay & Mega-Batch:**
+
+When the P2pMessageProcessor picks up queued P2P messages, it applies a **coalesce delay**
+(`P2P_QUEUE_COALESCE_MS = 2000ms`) before sending. If fewer messages than the batch size
+are queued, it waits 2 seconds for additional P2Ps to accumulate, then sends them all in
+a single `sendMultiBatch()` call.
+
+```
+P2P queued (T=0)  ─┐
+P2P queued (T=0.5) ─┤── coalesce (2s) ──> mega-batch send via curl_multi
+P2P queued (T=1.2) ─┘
+```
+
+The mega-batch collects all sends from all queued P2Ps into a flat array keyed by
+`{p2pHash}|{contactAddress}`. A single `curl_multi` call sends everything in parallel
+(with per-protocol concurrency limits). Results are mapped back to individual P2Ps using
+the compound key.
+
+**Why coalesce:** Without it, each P2P would trigger its own broadcast cycle. When
+multiple contacts send P2P requests through the same relay simultaneously, coalescing
+reduces the number of `curl_multi` rounds and TCP connection setups.
+
+**When mega-batch is NOT used:** Direct contact matches (recipient is a contact of the
+relay) are handled inline without batching — the P2P is resolved immediately.
 
 **Inbound Response (Rp2pService):**
 
@@ -1571,6 +1761,154 @@ the in-progress best-fee delivery. The `getExpiredP2p()` query excludes
 
 This ensures that even partial responses produce a usable route.
 
+### Credit Reservation Lifecycle
+
+When a relay node accepts and forwards a P2P request, it creates a **capacity reservation**
+to track the credit being held for that route. This prevents the relay from over-committing
+credit across concurrent P2P requests.
+
+**Creation** — When `P2pService::handleP2pRequest()` processes an incoming P2P:
+
+```php
+$baseAmount = (int) $request['amount'];                    // Original amount without relay fee
+$totalAmount = $this->calculateRequestedAmount($request);  // Amount + relay fee
+$this->capacityReservationRepository->createReservation(
+    $request['hash'], $senderPubkeyHash, $baseAmount, $totalAmount, $currency
+);
+// Status: 'active'
+```
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `hash` | P2P request identifier | `abc123...` |
+| `base_amount` | Original requested amount (no relay fees) | `1000` |
+| `total_amount` | Amount + this relay's fee (what the relay owes upstream) | `1020` |
+| `contact_pubkey_hash` | SHA-256 of upstream sender's public key | `de7f...` |
+| `currency` | Transaction currency | `USD` |
+| `status` | Reservation state: `active` → `released` or `committed` | `active` |
+
+**How reservations affect available credit:** Reservations are tracked separately from
+the `contact_credit` table. Available credit is exchanged via ping/pong (see
+[Ping/Pong Credit Exchange](#pingpong-credit-exchange)). When validating whether a relay
+can afford a P2P, the system checks balance and credit limit against the request amount.
+Active reservations can be queried via `getTotalReservedForPubkey()` to see total committed
+capacity per contact.
+
+**Three release paths:**
+
+```
+                    +--------+
+                    | active |
+                    +---+----+
+                        |
+          +-------------+-------------+
+          |             |             |
+          v             v             v
+    +-----------+  +-----------+  +-----------+
+    | released  |  | committed |  | released  |
+    | (cancel)  |  | (success) |  | (expired) |
+    +-----------+  +-----------+  +-----------+
+          |             |             |
+          +-------------+-------------+
+                        |
+                        v
+                  (deleted after 7 days)
+```
+
+| Path | Trigger | Method | Status |
+|------|---------|--------|--------|
+| **Cancel** | Route not selected (best-fee), upstream cancel, or dead-end | `releaseByHashAndContact()` | `released` (reason: `cancelled`) |
+| **Commit** | Transaction successfully sent along this route | `commitByHash()` | `committed` (reason: `committed`) |
+| **Expiry** | P2P expires before completion (CleanupService) | `releaseByHash()` | `released` (reason: `expired`) |
+| **Cleanup** | Released/committed records older than 7 days | `deleteOldRecords(7)` | Deleted permanently |
+
+### Fee Accumulation Through Relays
+
+Fee calculation uses a **multiplicative (compounding)** model: each relay charges its
+fee on the **accumulated total** (including all downstream relay fees), not on the
+original base amount. This means fees compound through the chain — a relay charging 2%
+on $101 (which already includes $1 of downstream fees) charges $2.02, not $2.00.
+
+Fee calculation happens in two phases:
+
+**Phase 1 — Outbound P2P (fee pre-calculation / estimate):**
+
+When a relay receives a P2P, `P2pService::calculateRequestedAmount()` computes a fee
+estimate based on `$request['amount']` (the original base amount, unchanged during
+outbound propagation). This estimate is stored as `my_fee_amount` for capacity
+reservation purposes but is **not authoritative** — the actual fee is recalculated
+during the RP2P return when the accumulated downstream total is known.
+
+```php
+// P2pService::calculateRequestedAmount() — outbound P2P (estimate only)
+$feeAmount = calculateFee($request['amount'], $feePercent, $minimumFee);
+// Stored in DB as my_fee_amount (estimate); P2P forwarded with original amount
+```
+
+**Phase 2 — Inbound RP2P (authoritative fee on accumulated total):**
+
+When the RP2P response returns from the recipient, each relay **recalculates** its fee
+on the accumulated RP2P amount (which includes all downstream relay fees). The exact
+rounded fee is saved to `my_fee_amount`, replacing the Phase 1 estimate, and then added
+to the RP2P amount before forwarding upstream. This ensures `TransactionService::removeTransactionFee()`
+subtracts the identical value — preventing rounding discrepancies.
+
+```php
+// Rp2pService::handleRp2pRequest() — inbound RP2P (authoritative)
+$recalculatedFee = calculateFeeForP2p($p2p, $request['amount']);  // fee on accumulated total
+updateFeeAmount($hash, $recalculatedFee);  // save exact rounded fee to DB
+$request['amount'] += $recalculatedFee;    // add to accumulated total
+
+// Per-sender relay back (each sender may have a different fee rate):
+$baseAmount = $request['amount'] - $recalculatedFee;  // accumulated downstream total
+$senderFee = calculateFee($baseAmount, $perSenderFeePercent, $minimumFee);
+$senderRequest['amount'] = $baseAmount + $senderFee;
+```
+
+**Result:** Fees are **multiplicative/compounding**. Each relay's fee is calculated on
+the accumulated total (base + all downstream fees), producing a compound effect through
+the chain.
+
+**Example — $100 USD through 3 relay paths:**
+
+```
+Originator: "Send $100 to Eve"
+     |
+     +----> Route A: Bob (2%) → Carol (1%) → Eve
+     |        Eve responds: $100
+     |        Carol adds 1% of $100.00 = $1.00 → $101.00
+     |        Bob adds 2% of $101.00 = $2.02 → $103.02
+     |
+     +----> Route B: Dan (3%) → Eve
+     |        Eve responds: $100
+     |        Dan adds 3% of $100.00 = $3.00 → $103.00
+     |
+     +----> Route C: Frank (0.5%) → Grace (0.5%) → Eve
+              Eve responds: $100
+              Grace adds 0.5% of $100.00 = $0.50 → $100.50
+              Frank adds 0.5% of $100.50 = $0.50 → $101.00
+
+RP2P candidates at originator (sorted by amount ASC):
+  Route C: $101.00 ← selected (cheapest)
+  Route B: $103.00
+  Route A: $103.02  (compounding makes multi-hop slightly more expensive)
+```
+
+**RP2P candidate storage** (`rp2p_candidates` table):
+
+| Field | Description |
+|-------|-------------|
+| `hash` | P2P request identifier |
+| `amount` | Total cost through this route (base + all relay fees) |
+| `fee_amount` | This relay's fee contribution |
+| `sender_public_key` | Upstream contact's public key |
+| `sender_address` | Upstream contact's address |
+| `sender_signature` | Cryptographic proof of route |
+
+**Selection:** `ORDER BY amount ASC` — cheapest route wins. If the cheapest fails
+validation (relay can't afford or fee exceeds originator's `maxFee`), the next
+cheapest is tried. All candidates are deleted after selection regardless of outcome.
+
 ### Multi-Path Sender Tracking
 
 In a mesh network, a relay node may receive the same P2P request from multiple
@@ -1825,8 +2163,15 @@ check, then remote backup request via `missingTxids`, then chain drop as last re
 
 ### Sync Flow (SyncService)
 
-Transaction chain synchronization repairs chain gaps between two contacts. The flow
-includes bilateral backup recovery so both sides can self-repair in a single round trip:
+Transaction chain synchronization repairs chain gaps between two contacts. Sync can be
+triggered in two ways:
+
+| Type | Trigger | Blocking? | Context |
+|------|---------|-----------|---------|
+| **Proactive** | Chain mismatch during incoming transaction validation (`checkPreviousTxid`) | Yes — blocks validation until sync completes | Incoming transaction has unknown `previousTxid`; sync repairs chain, then transaction is re-validated and processed inline |
+| **Reactive** | Manual request (GUI/CLI/API), contact status ping, or send command | No — runs independently | User or `ContactStatusProcessor` initiates sync; `SyncEvents::SYNC_COMPLETED` event unblocks any held transactions |
+
+The flow includes bilateral backup recovery so both sides can self-repair in a single round trip:
 
 ```
 syncTransactionChain(contactAddress, contactPublicKey)
@@ -2009,6 +2354,51 @@ currency's chain heads don't match.
     +-- Update contact to 'accepted'              |
     +-- Complete contact transaction              |
 ```
+
+### Ping/Pong Credit Exchange
+
+The `ContactStatusProcessor` periodically pings accepted contacts (one per 5-minute cycle).
+The ping/pong exchange serves three purposes: online status detection, chain validation,
+and available credit synchronization.
+
+**Ping payload** (sent by `ContactStatusProcessor::pingContact()`):
+
+| Field | Description |
+|-------|-------------|
+| `receiverAddress` | Contact's address |
+| `prevTxidsByCurrency` | Per-currency latest transaction chain heads for validation |
+| `requestSync` | Boolean flag requesting chain sync |
+
+**Pong response** (returned by recipient's ping handler):
+
+| Field | Description |
+|-------|-------------|
+| `status` | `'pong'` (required) |
+| `processorsRunning` | Count of active background processors |
+| `processorsTotal` | Expected total processors |
+| `availableCreditByCurrency` | `{currency: amount}` — how much credit the contact has available for us |
+| `chainStatusByCurrency` | Per-currency chain validity flags |
+
+**Available credit update:** On receiving a pong, the processor calls
+`saveAvailableCreditFromPong()` which upserts each currency's credit into the
+`contact_credit` table via `ContactCreditRepository::upsertAvailableCredit()`. This
+is the **only mechanism** that updates available credit — it is not calculated from
+transactions but explicitly reported by the contact during pong.
+
+**Chain validation and sync trigger:** The processor compares `prevTxidsByCurrency`
+from the pong against local chain heads. If any currency's chain heads don't match,
+sync is triggered automatically. This is controlled by the `contactStatusSyncOnPing`
+setting (default: `true`). When disabled, chain mismatches are logged but not
+auto-repaired.
+
+**Online status determination:**
+
+| Status | Condition |
+|--------|-----------|
+| `online` | Pong received, all processors running |
+| `partial` | Pong received, but `processorsRunning < processorsTotal` |
+| `offline` | Ping failed (connection error, timeout) |
+| `unknown` | Never pinged (default) |
 
 ### Error Handling
 
@@ -2351,18 +2741,20 @@ BIP39::mnemonicToSeed()
         v
    Seed (512 bits)
         |
-        v
-BIP39::seedToKeyPair()
-        |
-        v
-+-------------------+
-| secp256k1 Keypair |
-| - Private Key     |
-| - Public Key      |
-+-------------------+
-        |
-        v
-TorKeyDerivation
+        +----------------------------+
+        |                            |
+        v                            v
+BIP39::seedToKeyPair()      HKDF-SHA256 (context:
+        |                    "eiou-master-key")
+        v                            |
++-------------------+                v
+| secp256k1 Keypair |     +---------------------+
+| - Private Key     |     | Master Encryption   |
+| - Public Key      |     | Key (256 bits)      |
++-------------------+     | - At-rest encryption|
+        |                 | - Recoverable via   |
+        v                 |   seed restore      |
+TorKeyDerivation          +---------------------+
         |
         v
 +-------------------+
@@ -2412,6 +2804,41 @@ decrypts the `encrypted` block (if present) before type-based routing.
 the raw signed JSON is stored in the `signed_message_content` column of the transactions table.
 During chain sync recovery, `verifyTransactionSignature()` uses this stored content instead of
 reconstructing from plaintext DB fields, which would produce a different hash.
+
+**E2E Message Flow:**
+
+```
+  SENDER                                              RECIPIENT
+    |                                                     |
+    |  1. Build message payload                           |
+    |     {type, amount, currency, ...}                   |
+    |                                                     |
+    |  2. Lookup recipient public key                     |
+    |     ContactRepo::getPublicKeyFromAddress()          |
+    |                                                     |
+    |  3. Encrypt ALL fields (if public key found)        |
+    |     PayloadEncryption::encryptForRecipient()        |
+    |     - Generate ephemeral EC keypair                 |
+    |     - ECDH(ephemeral_private, recipient_public)     |
+    |     - HKDF-SHA256 → symmetric key                  |
+    |     - AES-256-GCM encrypt                           |
+    |     → {encrypted: {ciphertext, iv, tag,             |
+    |        ephemeralKey}}                                |
+    |                                                     |
+    |  4. Sign encrypted payload (encrypt-then-sign)      |
+    |     Security::signMessage()                         |
+    |     → {encrypted: {...}, nonce, signature}           |
+    |                                                     |
+    |  5. Send via HTTP/HTTPS/Tor                         |
+    |---------------------------------------------------->|
+    |                                                     |
+    |                    6. Verify signature (no decrypt)  |
+    |                    7. Decrypt with own private key   |
+    |                       PayloadEncryption::            |
+    |                         decryptFromSender()          |
+    |                    8. Route by decrypted type        |
+    |                                                     |
+```
 
 ### Transport Security
 
