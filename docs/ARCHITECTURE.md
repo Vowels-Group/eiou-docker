@@ -702,6 +702,16 @@ public function wireCircularDependencies(): void {
     // CliService - repositories for info command display (fee earnings, available credit)
     $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
     $this->services['CliService']->setP2pRepository($this->getP2pRepository());
+
+    // Route cancellation system
+    $this->services['RouteCancellationService']->setCapacityReservationRepository(...);
+    $this->services['RouteCancellationService']->setRouteCancellationRepository(...);
+    $this->services['RouteCancellationService']->setP2pRepository(...);
+    $this->services['RouteCancellationService']->setP2pService($this->services['P2pService']);
+    $this->services['Rp2pService']->setRouteCancellationService($this->services['RouteCancellationService']);
+    $this->services['P2pService']->setCapacityReservationRepository(...);
+    $this->services['CleanupService']->setCapacityReservationRepository(...);
+    $this->services['CleanupService']->setRouteCancellationRepository(...);
 }
 ```
 
@@ -1215,6 +1225,7 @@ application:
 | `InputValidator` | General-purpose input sanitization and validation for CLI and API inputs |
 | `Security` | Cryptographic helpers — message signing, signature verification, hash generation using secp256k1 ECDSA |
 | `SecureSeedphraseDisplay` | Secure terminal output for seed phrases — clears screen, displays temporarily, handles clipboard-safe formatting |
+| `TorCircuitHealth` | Per-`.onion` address failure tracking with configurable cooldown. File-based in `/tmp/tor-circuit-health/` (shared across workers, clears on restart). Prevents repeated timeouts to unreachable hidden services. Integrated into `TransportUtilityService::send()` for automatic skip and optional HTTP/HTTPS fallback |
 
 ---
 
@@ -1257,6 +1268,50 @@ no direct connection exists. The system supports two routing modes:
       |  (completed)          |                       |                       |
       |<----------------------|                       |                       |
 ```
+
+### Dead-End Cascade Cancel
+
+When a P2P reaches a dead end (no route to recipient), cancel notifications propagate
+back upstream, freeing resources through the entire chain:
+
+```
+      ALICE                   BOB                    CAROL                DEAD END
+   (Sender)              (Relay)                (Relay)              (No contacts)
+      |                       |                       |                       |
+      |   P2P Request         |                       |                       |
+      |  (fast=0, --best)     |                       |                       |
+      |---------------------->|                       |                       |
+      |                       |   P2P Request         |                       |
+      |                       |---------------------->|                       |
+      |                       |                       |   P2P Request         |
+      |                       |                       |---------------------->|
+      |                       |                       |                       |
+      |                       |                       |   (no contacts to     |
+      |                       |                       |    forward — cancel)  |
+      |                       |                       |                       |
+      |                       |                       |  Cancel Notification  |
+      |                       |                       |<----------------------|
+      |                       |                       |                       |
+      |                       |  Cancel Notification  | (P2P cancelled,       |
+      |                       |  (all contacts        |  reservation released)|
+      |                       |  responded/cancelled) |                       |
+      |                       |<----------------------|                       |
+      |                       |                       |                       |
+      |  Cancel Notification  | (P2P cancelled,       |                       |
+      |  (P2P status →        |  reservation released)|                       |
+      |   cancelled)          |                       |                       |
+      |<----------------------|                       |                       |
+      |                       |                       |                       |
+  [P2P resolved: cancelled, ~5-10s instead of 300s expiration timeout]
+```
+
+**Cancel propagation modes:**
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| **Dead-end cancel** | No contacts to broadcast to, or all contacts responded | `sendCancelNotificationForHash()` notifies upstream sender |
+| **Best-fee unselected** | After best-fee selection picks cheapest route | `cancelUnselectedRoutes()` sends partial `route_cancel` to unselected candidates (multi-route safe) |
+| **Full cancel** | Originator reject (`p2p reject`) or complete cascade | `broadcastFullCancelForHash()` sends `route_cancel` with `full_cancel=true` to all contacts, propagating downstream |
 
 ### Request Level Randomization
 
@@ -2351,18 +2406,20 @@ BIP39::mnemonicToSeed()
         v
    Seed (512 bits)
         |
-        v
-BIP39::seedToKeyPair()
-        |
-        v
-+-------------------+
-| secp256k1 Keypair |
-| - Private Key     |
-| - Public Key      |
-+-------------------+
-        |
-        v
-TorKeyDerivation
+        +----------------------------+
+        |                            |
+        v                            v
+BIP39::seedToKeyPair()      HKDF-SHA256 (context:
+        |                    "eiou-master-key")
+        v                            |
++-------------------+                v
+| secp256k1 Keypair |     +---------------------+
+| - Private Key     |     | Master Encryption   |
+| - Public Key      |     | Key (256 bits)      |
++-------------------+     | - At-rest encryption|
+        |                 | - Recoverable via   |
+        v                 |   seed restore      |
+TorKeyDerivation          +---------------------+
         |
         v
 +-------------------+
@@ -2412,6 +2469,41 @@ decrypts the `encrypted` block (if present) before type-based routing.
 the raw signed JSON is stored in the `signed_message_content` column of the transactions table.
 During chain sync recovery, `verifyTransactionSignature()` uses this stored content instead of
 reconstructing from plaintext DB fields, which would produce a different hash.
+
+**E2E Message Flow:**
+
+```
+  SENDER                                              RECIPIENT
+    |                                                     |
+    |  1. Build message payload                           |
+    |     {type, amount, currency, ...}                   |
+    |                                                     |
+    |  2. Lookup recipient public key                     |
+    |     ContactRepo::getPublicKeyFromAddress()          |
+    |                                                     |
+    |  3. Encrypt ALL fields (if public key found)        |
+    |     PayloadEncryption::encryptForRecipient()        |
+    |     - Generate ephemeral EC keypair                 |
+    |     - ECDH(ephemeral_private, recipient_public)     |
+    |     - HKDF-SHA256 → symmetric key                  |
+    |     - AES-256-GCM encrypt                           |
+    |     → {encrypted: {ciphertext, iv, tag,             |
+    |        ephemeralKey}}                                |
+    |                                                     |
+    |  4. Sign encrypted payload (encrypt-then-sign)      |
+    |     Security::signMessage()                         |
+    |     → {encrypted: {...}, nonce, signature}           |
+    |                                                     |
+    |  5. Send via HTTP/HTTPS/Tor                         |
+    |---------------------------------------------------->|
+    |                                                     |
+    |                    6. Verify signature (no decrypt)  |
+    |                    7. Decrypt with own private key   |
+    |                       PayloadEncryption::            |
+    |                         decryptFromSender()          |
+    |                    8. Route by decrypted type        |
+    |                                                     |
+```
 
 ### Transport Security
 
