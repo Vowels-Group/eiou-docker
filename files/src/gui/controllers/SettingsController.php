@@ -325,6 +325,11 @@ class SettingsController
             if ($validation['valid']) { $settings['torFailureTransportFallback'] = $validation['value']; }
             else { $errors[] = 'Invalid Tor failure fallback: ' . $validation['error']; }
         }
+        if (isset($_POST['torFallbackRequireEncrypted'])) {
+            $validation = InputValidator::validateBoolean($_POST['torFallbackRequireEncrypted']);
+            if ($validation['valid']) { $settings['torFallbackRequireEncrypted'] = $validation['value']; }
+            else { $errors[] = 'Invalid Tor fallback require encrypted: ' . $validation['error']; }
+        }
 
         // Sync settings
         if (isset($_POST['syncChunkSize'])) {

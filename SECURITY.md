@@ -146,10 +146,10 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 |-------|---------------|-------|
 | E2E encryption | All contact messages encrypted (ECDH + AES-256-GCM) | Forward secrecy, type-indistinguishable on wire |
 | Tor | Enabled by default | Provides IP anonymization via onion routing |
-| Tor circuit health | Per-address failure tracking with cooldown | Prevents wasted retries; configurable fallback to HTTP/HTTPS |
+| Tor circuit health | Per-address failure tracking with cooldown | Prevents wasted retries; configurable fallback to HTTPS (HTTP excluded by default via `torFallbackRequireEncrypted`) |
 | TLS | TLS 1.2+ with auto-generated or custom certificates | Self-signed by default; use Let's Encrypt or mount external certs for production |
 | Transport priority | Tor > HTTPS > HTTP | System prefers the most secure transport available |
-| Transport fallback | Automatic on Tor failure | Falls back to HTTP/HTTPS when `torFailureTransportFallback=true` (default) |
+| Transport fallback | Automatic on Tor failure | Falls back to HTTPS when `torFailureTransportFallback=true` (default). `torFallbackRequireEncrypted=true` (default) restricts fallback to HTTPS only |
 | Internal network | Docker bridge network | Containers communicate over an isolated Docker network |
 
 **Recommendations:**
@@ -159,6 +159,7 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 - Avoid exposing container ports directly to the public internet without a reverse proxy or firewall
 - The HTTP transport mode is intended for local Docker network testing only
 - The `torFailureTransportFallback` setting can be disabled for Tor-only operation where privacy is paramount
+- The `torFallbackRequireEncrypted` setting (default: enabled) ensures Tor fallback only goes to HTTPS, never plain HTTP. Disable only if you explicitly need HTTP fallback in a trusted local network
 
 ### Container Security
 
@@ -277,8 +278,11 @@ Per-`.onion` address failure tracking with automatic cooldown prevents wasted re
 | `torCircuitMaxFailures` | `2` | Consecutive failures before cooldown |
 | `torCircuitCooldownSeconds` | `300` (5 min) | Duration to skip the address |
 | `torFailureTransportFallback` | `true` | Fall back to HTTP/HTTPS when Tor fails |
+| `torFallbackRequireEncrypted` | `true` | Restrict Tor fallback to HTTPS only (never plain HTTP). Preserves transport encryption when Tor is unavailable |
 
 State is file-based in `/tmp/tor-circuit-health/` (clears on container restart). Configurable via CLI (`eiou changesettings`), GUI settings panel, and REST API.
+
+**Privacy note:** When `torFallbackRequireEncrypted` is enabled (default), a Tor delivery failure will only fall back to HTTPS. If the contact has no HTTPS address, delivery fails gracefully rather than downgrading to unencrypted HTTP. This prevents accidental privacy leaks when Tor is the preferred transport.
 
 ### Application Security
 

@@ -458,6 +458,11 @@ class CliService implements CliServiceInterface {
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'torfallbackrequireencrypted'){
+                $key = 'torFallbackRequireEncrypted';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             // Display
             } elseif(strtolower($argv[2]) === 'displaydateformat'){
                 $key = 'displayDateFormat';
@@ -522,6 +527,7 @@ class CliService implements CliServiceInterface {
                     ['num' => '45', 'label' => 'Tor circuit max failures before cooldown'],
                     ['num' => '46', 'label' => 'Tor circuit cooldown duration (seconds)'],
                     ['num' => '47', 'label' => 'Tor failure transport fallback'],
+                    ['num' => '48', 'label' => 'Tor fallback require encrypted (HTTPS only)'],
                 ],
                 'Feature Toggles' => [
                     ['num' => '15', 'label' => 'Display name'],
@@ -1135,6 +1141,17 @@ class CliService implements CliServiceInterface {
                     $value = $validation['value'];
                     break;
 
+                case '48':
+                    echo "Require encrypted (HTTPS) fallback when Tor fails? (yes/no): ";
+                    $key = 'torFallbackRequireEncrypted';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -1253,6 +1270,7 @@ class CliService implements CliServiceInterface {
             'tor_circuit_max_failures' => $this->currentUser->getTorCircuitMaxFailures(),
             'tor_circuit_cooldown_seconds' => $this->currentUser->getTorCircuitCooldownSeconds(),
             'tor_failure_transport_fallback' => $this->currentUser->isTorFailureTransportFallback(),
+            'tor_fallback_require_encrypted' => $this->currentUser->isTorFallbackRequireEncrypted(),
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_currency_decimals' => $this->currentUser->getDisplayCurrencyDecimals(),
@@ -1281,6 +1299,7 @@ class CliService implements CliServiceInterface {
             echo "\tTor circuit max failures: " . $settings['tor_circuit_max_failures'] . "\n";
             echo "\tTor circuit cooldown: " . $settings['tor_circuit_cooldown_seconds'] . "s\n";
             echo "\tTor failure transport fallback: " . ($settings['tor_failure_transport_fallback'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tTor fallback require encrypted: " . ($settings['tor_fallback_require_encrypted'] ? 'enabled' : 'disabled') . "\n";
             if ($settings['hostname']) echo "\tHostname: " . $settings['hostname'] . "\n";
             if ($settings['hostname_secure']) echo "\tHostname (secure): " . $settings['hostname_secure'] . "\n";
             echo "\tTrusted proxies: " . ($settings['trusted_proxies'] ?: '(none)') . "\n";
@@ -1601,6 +1620,7 @@ class CliService implements CliServiceInterface {
                     'torCircuitMaxFailures' => 'Consecutive Tor failures before cooldown (1-10)',
                     'torCircuitCooldownSeconds' => 'Tor circuit cooldown duration in seconds (60-3600)',
                     'torFailureTransportFallback' => 'Fall back to HTTP/HTTPS when Tor fails (true/false)',
+                    'torFallbackRequireEncrypted' => 'Restrict Tor fallback to HTTPS only, never plain HTTP (true/false)',
                     'hostname' => 'Node hostname (e.g., http://alice). Automatically derives HTTPS version and regenerates SSL cert',
                     'trustedProxies' => 'Trusted proxy IPs (comma-separated)',
                     'autoAcceptTransaction' => 'Auto-accept P2P transactions when route found (true/false)',

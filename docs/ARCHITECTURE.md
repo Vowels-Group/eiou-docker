@@ -1225,7 +1225,7 @@ application:
 | `InputValidator` | General-purpose input sanitization and validation for CLI and API inputs |
 | `Security` | Cryptographic helpers — message signing, signature verification, hash generation using secp256k1 ECDSA |
 | `SecureSeedphraseDisplay` | Secure terminal output for seed phrases — clears screen, displays temporarily, handles clipboard-safe formatting |
-| `TorCircuitHealth` | Per-`.onion` address failure tracking with configurable cooldown. File-based in `/tmp/tor-circuit-health/` (shared across workers, clears on restart). Prevents repeated timeouts to unreachable hidden services. Integrated into `TransportUtilityService::send()` for automatic skip and optional HTTP/HTTPS fallback |
+| `TorCircuitHealth` | Per-`.onion` address failure tracking with configurable cooldown. File-based in `/tmp/tor-circuit-health/` (shared across workers, clears on restart). Prevents repeated timeouts to unreachable hidden services. Integrated into `TransportUtilityService::send()` for automatic skip and optional HTTPS fallback (controlled by `torFallbackRequireEncrypted` — defaults to HTTPS-only, never plain HTTP) |
 
 ---
 

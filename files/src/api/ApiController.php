@@ -1402,6 +1402,7 @@ class ApiController {
                 'tor_circuit_max_failures' => $currentUser->getTorCircuitMaxFailures(),
                 'tor_circuit_cooldown_seconds' => $currentUser->getTorCircuitCooldownSeconds(),
                 'tor_failure_transport_fallback' => $currentUser->isTorFailureTransportFallback(),
+                'tor_fallback_require_encrypted' => $currentUser->isTorFallbackRequireEncrypted(),
                 // Display
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
                 'display_currency_decimals' => $currentUser->getDisplayCurrencyDecimals(),
@@ -1479,6 +1480,7 @@ class ApiController {
             'tor_circuit_max_failures' => ['key' => 'torCircuitMaxFailures', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [1, 10]],
             'tor_circuit_cooldown_seconds' => ['key' => 'torCircuitCooldownSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [60, 3600]],
             'tor_failure_transport_fallback' => ['key' => 'torFailureTransportFallback', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'tor_fallback_require_encrypted' => ['key' => 'torFallbackRequireEncrypted', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Sync
             'sync_chunk_size' => ['key' => 'syncChunkSize', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 500]],
             'sync_max_chunks' => ['key' => 'syncMaxChunks', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 1000]],

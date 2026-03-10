@@ -1149,6 +1149,27 @@ class UserContextTest extends TestCase
         $this->assertFalse($instance->isTorFailureTransportFallback());
     }
 
+    public function testIsTorFallbackRequireEncryptedDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertTrue($instance->isTorFallbackRequireEncrypted());
+    }
+
+    public function testIsTorFallbackRequireEncryptedFromConfigTrue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torFallbackRequireEncrypted' => true]);
+        $this->assertTrue($instance->isTorFallbackRequireEncrypted());
+    }
+
+    public function testIsTorFallbackRequireEncryptedFromConfigFalse(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torFallbackRequireEncrypted' => false]);
+        $this->assertFalse($instance->isTorFallbackRequireEncrypted());
+    }
+
     // =========================================================================
     // SYNC GETTERS
     // =========================================================================
