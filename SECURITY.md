@@ -164,6 +164,63 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 - The `torFailureTransportFallback` setting can be disabled for Tor-only operation where privacy is paramount
 - The `torFallbackRequireEncrypted` setting (default: enabled) ensures Tor fallback only goes to HTTPS, never plain HTTP. Disable only if you explicitly need HTTP fallback in a trusted local network
 
+### Running Behind an External Reverse Proxy
+
+The built-in nginx provides connection-level rate limiting, connection limits, and timeouts — so the container is safe to expose directly. However, if you already run a reverse proxy (Traefik, Caddy, nginx, HAProxy) for centralized SSL management, domain routing, or multiple services on the same host, you can place the EIOU container behind it.
+
+**Step 1: Restrict container ports to localhost**
+
+In `docker-compose.yml`, change the port binding so only the reverse proxy (running on the same host) can reach the container:
+
+```yaml
+ports:
+  - "127.0.0.1:80:80"
+  - "127.0.0.1:443:443"
+```
+
+With `docker run`:
+
+```bash
+docker run -p 127.0.0.1:80:80 -p 127.0.0.1:443:443 ...
+```
+
+This prevents direct access from the internet — all traffic must go through the reverse proxy.
+
+**Step 2: Configure the external reverse proxy**
+
+Point the proxy at `127.0.0.1:443` (HTTPS) or `127.0.0.1:80` (HTTP). Example for nginx as an external proxy:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name wallet.example.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    location / {
+        proxy_pass https://127.0.0.1:443;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Step 3: If the proxy terminates SSL, use HTTP internally**
+
+If your reverse proxy handles SSL and forwards plain HTTP to the container, point it at port 80 instead. The container's built-in nginx serves content on both ports. Note that `.onion` requests and `/eiou` P2P requests are served directly on port 80 without redirect, so HTTP forwarding works without issues.
+
+**What the two layers handle:**
+
+| Layer | Responsibility |
+|-------|----------------|
+| External proxy | Domain routing, centralized SSL for multiple services, load balancing, IP allowlisting |
+| Built-in nginx | Application-specific rate limiting (30r/s general, 10r/s API, 20r/s P2P), per-IP connection limits (50), timeouts (10s), PHP-FPM routing, static file serving |
+
+The two layers complement each other. The external proxy handles infrastructure concerns; the built-in nginx handles application-level protections. Both rate limiters operate independently — the external proxy may enforce its own limits before traffic reaches the container.
+
 ### Container Security
 
 | Setting | Default | Purpose |
