@@ -780,6 +780,39 @@ class UserContext {
         return max(10, min(300, $val));
     }
 
+    /**
+     * Get max consecutive Tor failures before cooldown
+     *
+     * @return int
+     */
+    public function getTorCircuitMaxFailures(): int {
+        $val = (int) ($this->get('torCircuitMaxFailures') ?? Constants::TOR_CIRCUIT_MAX_FAILURES);
+        return max(1, min(10, $val));
+    }
+
+    /**
+     * Get Tor circuit cooldown duration in seconds
+     *
+     * @return int
+     */
+    public function getTorCircuitCooldownSeconds(): int {
+        $val = (int) ($this->get('torCircuitCooldownSeconds') ?? Constants::TOR_CIRCUIT_COOLDOWN_SECONDS);
+        return max(60, min(3600, $val));
+    }
+
+    /**
+     * Get whether transport fallback is enabled when Tor fails
+     *
+     * @return bool
+     */
+    public function isTorFailureTransportFallback(): bool {
+        $val = $this->get('torFailureTransportFallback');
+        if ($val === null) {
+            return Constants::TOR_FAILURE_TRANSPORT_FALLBACK;
+        }
+        return (bool) $val;
+    }
+
     // =========================================================================
     // SYNC GETTERS
     // =========================================================================
@@ -910,6 +943,9 @@ class UserContext {
             // Network
             'httpTransportTimeoutSeconds' => Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS,
             'torTransportTimeoutSeconds' => Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
+            'torCircuitMaxFailures' => Constants::TOR_CIRCUIT_MAX_FAILURES,
+            'torCircuitCooldownSeconds' => Constants::TOR_CIRCUIT_COOLDOWN_SECONDS,
+            'torFailureTransportFallback' => Constants::TOR_FAILURE_TRANSPORT_FALLBACK,
 
             // Sync
             'syncChunkSize' => Constants::SYNC_CHUNK_SIZE,

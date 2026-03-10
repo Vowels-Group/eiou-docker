@@ -1073,6 +1073,83 @@ class UserContextTest extends TestCase
     }
 
     // =========================================================================
+    // TOR CIRCUIT HEALTH GETTERS
+    // =========================================================================
+
+    public function testGetTorCircuitMaxFailuresDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::TOR_CIRCUIT_MAX_FAILURES, $instance->getTorCircuitMaxFailures());
+    }
+
+    public function testGetTorCircuitMaxFailuresFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torCircuitMaxFailures' => 5]);
+        $this->assertSame(5, $instance->getTorCircuitMaxFailures());
+    }
+
+    public function testGetTorCircuitMaxFailuresClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torCircuitMaxFailures' => 0]);
+        $this->assertSame(1, $instance->getTorCircuitMaxFailures());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torCircuitMaxFailures' => 20]);
+        $this->assertSame(10, $instance->getTorCircuitMaxFailures());
+    }
+
+    public function testGetTorCircuitCooldownSecondsDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::TOR_CIRCUIT_COOLDOWN_SECONDS, $instance->getTorCircuitCooldownSeconds());
+    }
+
+    public function testGetTorCircuitCooldownSecondsFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torCircuitCooldownSeconds' => 600]);
+        $this->assertSame(600, $instance->getTorCircuitCooldownSeconds());
+    }
+
+    public function testGetTorCircuitCooldownSecondsClamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torCircuitCooldownSeconds' => 10]);
+        $this->assertSame(60, $instance->getTorCircuitCooldownSeconds());
+
+        $this->resetSingleton();
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torCircuitCooldownSeconds' => 5000]);
+        $this->assertSame(3600, $instance->getTorCircuitCooldownSeconds());
+    }
+
+    public function testIsTorFailureTransportFallbackDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::TOR_FAILURE_TRANSPORT_FALLBACK, $instance->isTorFailureTransportFallback());
+    }
+
+    public function testIsTorFailureTransportFallbackFromConfigTrue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torFailureTransportFallback' => true]);
+        $this->assertTrue($instance->isTorFailureTransportFallback());
+    }
+
+    public function testIsTorFailureTransportFallbackFromConfigFalse(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['torFailureTransportFallback' => false]);
+        $this->assertFalse($instance->isTorFailureTransportFallback());
+    }
+
+    // =========================================================================
     // SYNC GETTERS
     // =========================================================================
 

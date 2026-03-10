@@ -19,6 +19,9 @@ The project is currently in **ALPHA** status.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
 ### Added
+- Tor circuit health tracking (`TorCircuitHealth`): per-.onion address failure tracking with cooldown. After consecutive Tor timeouts to the same address (default: 2), further attempts are skipped for a cooldown period (default: 5 min) to avoid wasted retries and Tor circuit overload. File-based in `/tmp` so state clears on container restart
+- Transport fallback on Tor failure: when a Tor delivery fails and the contact has an HTTP/HTTPS address, automatically fall back to an alternative transport. Controlled by `torFailureTransportFallback` setting (default: enabled). Can be disabled via `eiou changesettings torFailureTransportFallback false` for Tor-only operation
+- New configurable settings: `torCircuitMaxFailures` (1-10), `torCircuitCooldownSeconds` (60-3600), `torFailureTransportFallback` (true/false). Available via `eiou changesettings` and displayed in `eiou settings`
 - Multi-currency infrastructure: per-currency conversion factors (`CONVERSION_FACTORS`), decimal places (`CURRENCY_DECIMALS`), and helper methods `getConversionFactor()` / `getCurrencyDecimals()` in Constants. Currently USD-only; adding a new currency requires only adding map entries
 - Database amount columns changed from INT to BIGINT: `contact_credit.available_credit`, `contact_currencies.credit_limit`, `balances.received/sent`, `transactions.amount`, `p2p.amount/my_fee_amount/rp2p_amount`, `rp2p.amount`, `rp2p_candidates.amount/fee_amount`, `capacity_reservations.base_amount/total_amount`. Supports large-value currencies without overflow
 - Route cancellation service: actively cancels unselected P2P routes after best-fee selection to immediately release reserved credit capacity. CleanupService TTL expiry remains as natural fallback
