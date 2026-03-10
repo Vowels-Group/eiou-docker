@@ -70,6 +70,13 @@ The project is currently in **ALPHA** status.
 - API PUT `/api/v1/system/settings` now accepts `direct_tx_expiration` and `trusted_proxies`
 
 ### Docs
+- ARCHITECTURE.md: Add credit reservation lifecycle section — explains `base_amount` vs `total_amount`, three release paths (cancel/commit/expiry), and status transitions with diagram
+- ARCHITECTURE.md: Add fee accumulation through relays section — shows per-hop fee calculation formula, multi-route example with best-fee selection, and `rp2p_candidates` table schema
+- ARCHITECTURE.md: Add coalesce delay and mega-batch section — explains `P2P_QUEUE_COALESCE_MS`, when mega-batch is used vs inline sends, and compound key mapping
+- ARCHITECTURE.md: Add message delivery and dead letter queue section — documents retry policy, exponential backoff schedule, Tor cooldown handling, DLQ operations (retry/abandon/resolve), and atomic claiming
+- ARCHITECTURE.md: Add distributed locking section — explains MariaDB advisory locks, atomic claiming pattern, and where locks are used
+- ARCHITECTURE.md: Add ping/pong credit exchange section — documents ping payload, pong response fields, available credit synchronization, chain validation, sync trigger, and online status determination
+- ARCHITECTURE.md: Add proactive vs reactive sync comparison table to sync flow section
 - `update` CLI help now documents the required `currency` parameter for `fee` and `credit` fields, and optional currency for `all`. Usage, arguments, examples, and note all updated to reflect the actual command syntax.
 
 ### Fixed
