@@ -1824,40 +1824,50 @@ capacity per contact.
 
 ### Fee Accumulation Through Relays
 
-Fee calculation happens in two phases: during outbound P2P propagation, each relay
-pre-calculates its fee on the **original base amount** and stores it as `my_fee_amount`.
-During the inbound RP2P return, each relay adds its pre-calculated fee on top of the
-accumulated downstream fees.
+Fee calculation uses a **multiplicative (compounding)** model: each relay charges its
+fee on the **accumulated total** (including all downstream relay fees), not on the
+original base amount. This means fees compound through the chain — a relay charging 2%
+on $101 (which already includes $1 of downstream fees) charges $2.02, not $2.00.
 
-**Phase 1 — Outbound P2P (fee pre-calculation):**
+Fee calculation happens in two phases:
 
-When a relay receives a P2P, `P2pService::calculateRequestedAmount()` computes the fee
-based on `$request['amount']` — which is the **original base amount** (unchanged during
-outbound propagation). The relay stores this as `my_fee_amount` but does NOT modify the
-P2P amount when forwarding to downstream contacts.
+**Phase 1 — Outbound P2P (fee pre-calculation / estimate):**
+
+When a relay receives a P2P, `P2pService::calculateRequestedAmount()` computes a fee
+estimate based on `$request['amount']` (the original base amount, unchanged during
+outbound propagation). This estimate is stored as `my_fee_amount` for capacity
+reservation purposes but is **not authoritative** — the actual fee is recalculated
+during the RP2P return when the accumulated downstream total is known.
 
 ```php
-// P2pService::calculateRequestedAmount() — outbound P2P
+// P2pService::calculateRequestedAmount() — outbound P2P (estimate only)
 $feeAmount = calculateFee($request['amount'], $feePercent, $minimumFee);
-// feeAmount = max(amount * feePercent / 100, minimumFee)
-// Stored in DB as my_fee_amount; P2P forwarded with original amount
+// Stored in DB as my_fee_amount (estimate); P2P forwarded with original amount
 ```
 
-**Phase 2 — Inbound RP2P (fee stacking):**
+**Phase 2 — Inbound RP2P (authoritative fee on accumulated total):**
 
-When the RP2P response returns from the recipient, each relay adds its pre-calculated
-fee to the accumulated total. Per-sender fees are recalculated from the original P2P
-amount (`$p2p['amount']`) to support per-contact fee rates:
+When the RP2P response returns from the recipient, each relay **recalculates** its fee
+on the accumulated RP2P amount (which includes all downstream relay fees). The exact
+rounded fee is saved to `my_fee_amount`, replacing the Phase 1 estimate, and then added
+to the RP2P amount before forwarding upstream. This ensures `TransactionService::removeTransactionFee()`
+subtracts the identical value — preventing rounding discrepancies.
 
 ```php
-// Rp2pService::handleRp2pRequest() — inbound RP2P
-$baseAmount = $request['amount'] - ($p2p['my_fee_amount'] ?? 0);  // strip own fee
-$senderFee = calculateFee($p2p['amount'], $perSenderFeePercent, $minimumFee);
-$senderRequest['amount'] = $baseAmount + $senderFee;  // downstream fees + per-sender fee
+// Rp2pService::handleRp2pRequest() — inbound RP2P (authoritative)
+$recalculatedFee = calculateFeeForP2p($p2p, $request['amount']);  // fee on accumulated total
+updateFeeAmount($hash, $recalculatedFee);  // save exact rounded fee to DB
+$request['amount'] += $recalculatedFee;    // add to accumulated total
+
+// Per-sender relay back (each sender may have a different fee rate):
+$baseAmount = $request['amount'] - $recalculatedFee;  // accumulated downstream total
+$senderFee = calculateFee($baseAmount, $perSenderFeePercent, $minimumFee);
+$senderRequest['amount'] = $baseAmount + $senderFee;
 ```
 
-**Result:** Fees are additive, not compounding. Each relay's fee is calculated on the
-original amount, then stacked on top of all downstream relay fees.
+**Result:** Fees are **multiplicative/compounding**. Each relay's fee is calculated on
+the accumulated total (base + all downstream fees), producing a compound effect through
+the chain.
 
 **Example — $100 USD through 3 relay paths:**
 
@@ -1866,22 +1876,22 @@ Originator: "Send $100 to Eve"
      |
      +----> Route A: Bob (2%) → Carol (1%) → Eve
      |        Eve responds: $100
-     |        Carol adds 1% of $100 = $1 → $101
-     |        Bob adds 2% of $100 = $2 → $103
+     |        Carol adds 1% of $100.00 = $1.00 → $101.00
+     |        Bob adds 2% of $101.00 = $2.02 → $103.02
      |
      +----> Route B: Dan (3%) → Eve
      |        Eve responds: $100
-     |        Dan adds 3% of $100 = $3 → $103
+     |        Dan adds 3% of $100.00 = $3.00 → $103.00
      |
      +----> Route C: Frank (0.5%) → Grace (0.5%) → Eve
               Eve responds: $100
-              Grace adds 0.5% of $100 = $0.50 → $100.50
-              Frank adds 0.5% of $100 = $0.50 → $101
+              Grace adds 0.5% of $100.00 = $0.50 → $100.50
+              Frank adds 0.5% of $100.50 = $0.50 → $101.00
 
 RP2P candidates at originator (sorted by amount ASC):
   Route C: $101.00 ← selected (cheapest)
-  Route A: $103.00
   Route B: $103.00
+  Route A: $103.02  (compounding makes multi-hop slightly more expensive)
 ```
 
 **RP2P candidate storage** (`rp2p_candidates` table):

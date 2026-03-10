@@ -297,8 +297,13 @@ class Rp2pService implements Rp2pServiceInterface {
             throw new Exception('P2P request was not found for the given hash.');
         }
 
-        // Add users fee to request
-        $request['amount'] += $p2p['my_fee_amount'];
+        // Recalculate fee on the accumulated RP2P amount (multiplicative/compounding fees).
+        // Each relay charges its fee on the total including downstream fees, not the original base.
+        // The exact rounded fee is saved to my_fee_amount so TransactionService::removeTransactionFee()
+        // subtracts the identical value — preventing rounding discrepancies.
+        $recalculatedFee = $this->calculateFeeForP2p($p2p, $request['amount']);
+        $this->p2pRepository->updateFeeAmount($request['hash'], $recalculatedFee);
+        $request['amount'] += $recalculatedFee;
 
         //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
         if(!isset($p2p['destination_address'])) {
@@ -347,9 +352,10 @@ class Rp2pService implements Rp2pServiceInterface {
                 // Send rp2p back to ALL upstream senders (multi-path support)
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
 
-                // Base amount before this node's fee — used for per-sender fee calculation.
-                // Each sender may have a different fee relationship with this node.
-                $baseAmount = $request['amount'] - ($p2p['my_fee_amount'] ?? 0);
+                // Base amount before this node's fee — the accumulated downstream total.
+                // Each sender may have a different fee relationship with this node,
+                // so per-sender fees are recalculated on this accumulated base.
+                $baseAmount = $request['amount'] - $recalculatedFee;
 
                 // Get all senders from p2p_senders table (multi-path tracking)
                 $senders = $this->p2pSenderRepository
@@ -406,7 +412,7 @@ class Rp2pService implements Rp2pServiceInterface {
                             $feePercent = $contactFee / Constants::FEE_CONVERSION_FACTOR;
                         }
                     }
-                    $senderFee = $currencyUtility->calculateFee($p2p['amount'], $feePercent, $minimumFee);
+                    $senderFee = $currencyUtility->calculateFee($baseAmount, $feePercent, $minimumFee);
 
                     // Build per-sender RP2P payload with the correct fee
                     $senderRequest = $request;
@@ -606,8 +612,10 @@ class Rp2pService implements Rp2pServiceInterface {
             return;
         }
 
-        // Add user's fee to the rp2p amount (same as handleRp2pRequest)
-        $feeAmount = $p2p['my_fee_amount'] ?? 0;
+        // Recalculate fee on the accumulated RP2P amount (multiplicative/compounding fees).
+        // Same logic as handleRp2pRequest — fee is based on accumulated total, not original base.
+        $feeAmount = $this->calculateFeeForP2p($p2p, $request['amount']);
+        $this->p2pRepository->updateFeeAmount($request['hash'], $feeAmount);
         $request['amount'] += $feeAmount;
 
         // Check if previous sender can afford the rp2p amount (same validation as handleRp2pRequest)
@@ -1086,6 +1094,45 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Clean up all candidates for this hash
         $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
+    }
+
+    /**
+     * Calculate the fee this node charges for a P2P relay
+     *
+     * Looks up the per-contact fee rate for the P2P sender (falling back to
+     * the user's default fee) and calculates the fee on the given accumulated
+     * amount. Used during RP2P backtracking for multiplicative/compounding fees —
+     * each relay charges its fee on the total including downstream fees, not the
+     * original base amount.
+     *
+     * @param array $p2p The P2P record from database
+     * @param int $amount The accumulated RP2P amount (downstream total) to calculate fee on
+     * @return int The calculated fee in minor currency units (rounded)
+     */
+    private function calculateFeeForP2p(array $p2p, int $amount): int {
+        $currencyUtility = $this->utilityContainer->getCurrencyUtility();
+        $defaultFee = $this->currentUser->getDefaultFee();
+        $minimumFee = $this->currentUser->getMinimumFee();
+
+        // Look up per-contact fee for the P2P sender
+        $feePercent = $defaultFee;
+        $senderAddress = $p2p['sender_address'] ?? null;
+        if ($senderAddress) {
+            $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+            $senderContact = ($transportIndex !== null)
+                ? $this->contactRepository->lookupByAddress($transportIndex, $senderAddress)
+                : null;
+
+            if ($senderContact && isset($senderContact['pubkey_hash'])) {
+                $currency = $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $contactFee = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
+                if ($contactFee !== null) {
+                    $feePercent = $contactFee / Constants::FEE_CONVERSION_FACTOR;
+                }
+            }
+        }
+
+        return $currencyUtility->calculateFee($amount, $feePercent, $minimumFee);
     }
 
     /**

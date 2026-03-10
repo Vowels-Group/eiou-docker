@@ -44,6 +44,7 @@ The project is currently in **ALPHA** status.
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
 
 ### Fixed
+- RP2P fee calculation changed from additive to multiplicative (compounding): each relay now recalculates its fee on the **accumulated RP2P total** (base + all downstream fees) instead of the original base amount. The exact rounded fee is saved to `my_fee_amount` during RP2P backtracking and added to the forwarded amount, ensuring `TransactionService::removeTransactionFee()` subtracts the identical value with no rounding discrepancies. New `calculateFeeForP2p()` helper in `Rp2pService` handles per-contact fee lookup and calculation
 - `routeCancellationTest` hop budget test: now checks `Constants::isHopBudgetRandomized()` and accepts deterministic output (constant `maxHops`) when randomization is disabled via `EIOU_HOP_BUDGET_RANDOMIZED=false`, instead of always requiring variance across 100 samples
 - `DatabaseSchemaTest`: Update column type assertions from INT/INTEGER to BIGINT for `transactions.amount`, `balances.received/sent`, `p2p.amount/my_fee_amount`, `rp2p.amount`. Remove obsolete `contacts.currency/fee_percent/credit_limit` assertions (moved to `contact_currencies` table). Add `signed_message_content` assertion for transactions table
 - `DatabaseSetupTest`: Replace two obsolete `online_status` enum migration tests with single test verifying no enum migration runs (schema already includes 'partial' on fresh install)
@@ -71,7 +72,7 @@ The project is currently in **ALPHA** status.
 
 ### Docs
 - ARCHITECTURE.md: Add credit reservation lifecycle section — explains `base_amount` vs `total_amount`, three release paths (cancel/commit/expiry), and status transitions with diagram
-- ARCHITECTURE.md: Add fee accumulation through relays section — shows per-hop fee calculation formula, multi-route example with best-fee selection, and `rp2p_candidates` table schema
+- ARCHITECTURE.md: Add fee accumulation through relays section — shows multiplicative/compounding per-hop fee calculation, two-phase process (estimate on outbound, authoritative recalculation on RP2P return), multi-route example with best-fee selection, and `rp2p_candidates` table schema
 - ARCHITECTURE.md: Add coalesce delay and mega-batch section — explains `P2P_QUEUE_COALESCE_MS`, when mega-batch is used vs inline sends, and compound key mapping
 - ARCHITECTURE.md: Add message delivery and dead letter queue section — documents retry policy, exponential backoff schedule, Tor cooldown handling, DLQ operations (retry/abandon/resolve), and atomic claiming
 - ARCHITECTURE.md: Add distributed locking section — explains MariaDB advisory locks, atomic claiming pattern, and where locks are used
