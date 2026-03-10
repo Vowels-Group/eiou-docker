@@ -309,6 +309,22 @@ class SettingsController
             if ($validation['valid']) { $settings['torTransportTimeoutSeconds'] = $validation['value']; }
             else { $errors[] = 'Invalid Tor timeout: ' . $validation['error']; }
         }
+        // Tor circuit health
+        if (isset($_POST['torCircuitMaxFailures'])) {
+            $validation = InputValidator::validateIntRange($_POST['torCircuitMaxFailures'], 1, 10, 'Tor circuit max failures');
+            if ($validation['valid']) { $settings['torCircuitMaxFailures'] = $validation['value']; }
+            else { $errors[] = 'Invalid Tor circuit max failures: ' . $validation['error']; }
+        }
+        if (isset($_POST['torCircuitCooldownSeconds'])) {
+            $validation = InputValidator::validateIntRange($_POST['torCircuitCooldownSeconds'], 60, 3600, 'Tor circuit cooldown');
+            if ($validation['valid']) { $settings['torCircuitCooldownSeconds'] = $validation['value']; }
+            else { $errors[] = 'Invalid Tor circuit cooldown: ' . $validation['error']; }
+        }
+        if (isset($_POST['torFailureTransportFallback'])) {
+            $validation = InputValidator::validateBoolean($_POST['torFailureTransportFallback']);
+            if ($validation['valid']) { $settings['torFailureTransportFallback'] = $validation['value']; }
+            else { $errors[] = 'Invalid Tor failure fallback: ' . $validation['error']; }
+        }
 
         // Sync settings
         if (isset($_POST['syncChunkSize'])) {

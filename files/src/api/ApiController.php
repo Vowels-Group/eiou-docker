@@ -1398,6 +1398,10 @@ class ApiController {
                 // Network
                 'http_transport_timeout_seconds' => $currentUser->getHttpTransportTimeoutSeconds(),
                 'tor_transport_timeout_seconds' => $currentUser->getTorTransportTimeoutSeconds(),
+                // Tor circuit health
+                'tor_circuit_max_failures' => $currentUser->getTorCircuitMaxFailures(),
+                'tor_circuit_cooldown_seconds' => $currentUser->getTorCircuitCooldownSeconds(),
+                'tor_failure_transport_fallback' => $currentUser->isTorFailureTransportFallback(),
                 // Display
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
                 'display_currency_decimals' => $currentUser->getDisplayCurrencyDecimals(),
@@ -1471,6 +1475,10 @@ class ApiController {
             // Network
             'http_transport_timeout_seconds' => ['key' => 'httpTransportTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [5, 120]],
             'tor_transport_timeout_seconds' => ['key' => 'torTransportTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 300]],
+            // Tor circuit health
+            'tor_circuit_max_failures' => ['key' => 'torCircuitMaxFailures', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [1, 10]],
+            'tor_circuit_cooldown_seconds' => ['key' => 'torCircuitCooldownSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [60, 3600]],
+            'tor_failure_transport_fallback' => ['key' => 'torFailureTransportFallback', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Sync
             'sync_chunk_size' => ['key' => 'syncChunkSize', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 500]],
             'sync_max_chunks' => ['key' => 'syncMaxChunks', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [10, 1000]],
