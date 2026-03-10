@@ -293,6 +293,16 @@ class ConstantsTest extends TestCase
     }
 
     /**
+     * Test Tor circuit health constants are defined
+     */
+    public function testTorCircuitHealthConstantsAreDefined(): void
+    {
+        $this->assertSame(2, Constants::TOR_CIRCUIT_MAX_FAILURES);
+        $this->assertSame(300, Constants::TOR_CIRCUIT_COOLDOWN_SECONDS);
+        $this->assertTrue(Constants::TOR_FAILURE_TRANSPORT_FALLBACK);
+    }
+
+    /**
      * Test UI/Display constants are defined
      */
     public function testUIDisplayConstantsAreDefined(): void

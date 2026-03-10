@@ -1275,6 +1275,128 @@ class CliServiceTest extends TestCase
     }
 
     // =========================================================================
+    // Tor Circuit Health Settings Tests
+    // =========================================================================
+
+    /**
+     * Test changeSettings accepts valid torCircuitMaxFailures
+     */
+    public function testChangeSettingsAcceptsValidTorCircuitMaxFailures(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'torCircuitMaxFailures'
+                        && $data['value'] === 5;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'torCircuitMaxFailures', '5'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects out-of-range torCircuitMaxFailures
+     */
+    public function testChangeSettingsRejectsInvalidTorCircuitMaxFailures(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('torCircuitMaxFailures', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'torCircuitMaxFailures', '0'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid torCircuitCooldownSeconds
+     */
+    public function testChangeSettingsAcceptsValidTorCircuitCooldownSeconds(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'torCircuitCooldownSeconds'
+                        && $data['value'] === 600;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'torCircuitCooldownSeconds', '600'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings rejects out-of-range torCircuitCooldownSeconds
+     */
+    public function testChangeSettingsRejectsInvalidTorCircuitCooldownSeconds(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('validationError')
+            ->with('torCircuitCooldownSeconds', $this->anything());
+
+        $this->service->changeSettings(['eiou', 'changesettings', 'torCircuitCooldownSeconds', '10'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings accepts valid torFailureTransportFallback
+     */
+    public function testChangeSettingsAcceptsValidTorFailureTransportFallback(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'torFailureTransportFallback'
+                        && $data['value'] === false;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'torFailureTransportFallback', 'false'], $this->outputManager);
+    }
+
+    /**
+     * Test changeSettings is case-insensitive for tor settings
+     */
+    public function testChangeSettingsTorSettingsCaseInsensitive(): void
+    {
+        $this->outputManager->method('isJsonMode')
+            ->willReturn(true);
+
+        $this->outputManager->expects($this->once())
+            ->method('success')
+            ->with(
+                'Setting updated successfully.',
+                $this->callback(function ($data) {
+                    return $data['setting'] === 'torCircuitMaxFailures'
+                        && $data['value'] === 3;
+                }),
+                $this->anything()
+            );
+
+        @$this->service->changeSettings(['eiou', 'changesettings', 'TORCIRCUITMAXFAILURES', '3'], $this->outputManager);
+    }
+
+    // =========================================================================
     // displayUserInfo() Tests
     // =========================================================================
 
