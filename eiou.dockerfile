@@ -100,8 +100,21 @@ RUN mkdir -p /etc/nginx/ssl
 # EIOU uses PHP inside .html files (GUI templates) — equivalent to Apache's
 # AddType application/x-httpd-php .html. Without this, PHP-FPM blocks .html
 # with "Access denied (see security.limit_extensions)".
+# PHP-FPM pool tuning:
+# - Fixed socket path (version-independent, keeps nginx config stable)
+# - Allow .html (EIOU GUI templates contain PHP)
+# - pm = ondemand: spawn workers only on request, kill after 10s idle.
+#   Better than "dynamic" for containers with intermittent traffic — avoids
+#   keeping idle workers alive. max_children=5 caps peak PHP concurrency.
 RUN sed -i 's|^listen = .*|listen = /run/php/php-fpm.sock|' /etc/php/*/fpm/pool.d/www.conf && \
-    sed -i 's|^;security.limit_extensions = .*|security.limit_extensions = .php .html|' /etc/php/*/fpm/pool.d/www.conf
+    sed -i 's|^;security.limit_extensions = .*|security.limit_extensions = .php .html|' /etc/php/*/fpm/pool.d/www.conf && \
+    sed -i 's|^pm = dynamic|pm = ondemand|' /etc/php/*/fpm/pool.d/www.conf && \
+    sed -i 's|^;pm.process_idle_timeout = .*|pm.process_idle_timeout = 10s|' /etc/php/*/fpm/pool.d/www.conf
+
+# Fix nginx worker count: "auto" uses host CPU count (not container limit),
+# so a 32-core host spawns 32 workers inside a 1-CPU container. Set to 2:
+# one for active requests, one spare for SSL handshakes.
+RUN sed -i 's|^worker_processes auto;|worker_processes 2;|' /etc/nginx/nginx.conf
 
 # Configure nginx: global settings for rate limiting and security
 # Rate limiting zones must be in the http block (nginx.conf), not server blocks.
