@@ -479,7 +479,7 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 | App Logs | Debug entries from database |
 | EIOU Log | `/var/log/eiou/app.log` |
 | PHP Logs | PHP error log |
-| Apache Logs | Apache error log |
+| nginx Logs | nginx error log |
 | System Info | PHP version, extensions, config files, constants |
 
 **Debug Report:**

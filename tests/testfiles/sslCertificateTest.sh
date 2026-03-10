@@ -16,7 +16,7 @@ passed=0
 failure=0
 
 # Define SSL paths with double slashes for Windows Git Bash compatibility
-SSL_DIR="//etc//apache2//ssl"
+SSL_DIR="//etc//nginx//ssl"
 SSL_CERT="${SSL_DIR}//server.crt"
 SSL_KEY="${SSL_DIR}//server.key"
 
@@ -137,21 +137,21 @@ done
 
 ############################ TEST SSL MODULE ENABLED ############################
 
-echo -e "\n[Apache SSL Module Tests]"
+echo -e "\n[nginx SSL Configuration Tests]"
 
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Checking Apache SSL module enabled on ${container}"
+    echo -e "\n\t-> Checking nginx SSL configuration on ${container}"
 
-    # Check if mod_ssl is loaded
-    sslModLoaded=$(docker exec ${container} apache2ctl -M 2>/dev/null | grep -c "ssl_module" || echo "0")
+    # Check if nginx has SSL configured (ssl_certificate directive in enabled site)
+    sslConfigured=$(docker exec ${container} nginx -T 2>/dev/null | grep -c "ssl_certificate" || echo "0")
 
-    if [[ "$sslModLoaded" -ge "1" ]]; then
-        printf "\t   Apache SSL module enabled ${GREEN}PASSED${NC}\n"
+    if [[ "$sslConfigured" -ge "1" ]]; then
+        printf "\t   nginx SSL configured ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
-        printf "\t   Apache SSL module ${RED}FAILED${NC}\n"
-        printf "\t   mod_ssl not loaded\n"
+        printf "\t   nginx SSL configuration ${RED}FAILED${NC}\n"
+        printf "\t   ssl_certificate not found in nginx config\n"
         failure=$(( failure + 1 ))
     fi
 done
@@ -164,7 +164,7 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Checking port 443 is listening on ${container}"
 
-    # Check if Apache is listening on port 443
+    # Check if nginx is listening on port 443
     port443Listening=$(docker exec ${container} ss -tlnp 2>/dev/null | grep -c ":443" || echo "0")
 
     if [[ "$port443Listening" -ge "1" ]]; then
@@ -495,7 +495,7 @@ if [[ ${#containers[@]} -ge 1 ]]; then
 
     changeResult=$(docker exec ${testContainer} eiou changesettings hostname "${newHostname}" 2>&1)
 
-    # Wait a moment for Apache to reload
+    # Wait a moment for nginx to reload
     sleep 2
 
     # Get new certificate details

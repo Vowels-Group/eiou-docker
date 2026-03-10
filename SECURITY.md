@@ -168,7 +168,7 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | CPU limit | 1.0 core | Prevents resource exhaustion |
 | Memory limit | 512MB | Prevents unbounded memory consumption |
 | Memory reservation | 256MB | Guarantees minimum available memory |
-| Privilege dropping | Apache as `www-data`, MariaDB as `mysql`, Tor as `debian-tor`, PHP processors as `www-data` | Limits blast radius of service compromise |
+| Privilege dropping | nginx workers as `www-data`, PHP-FPM workers as `www-data`, MariaDB as `mysql`, Tor as `debian-tor`, PHP processors as `www-data` | Limits blast radius of service compromise |
 
 **Recommendations:**
 

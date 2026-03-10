@@ -3057,7 +3057,7 @@ HELP;
      *
      * This method removes the existing SSL certificate and triggers regeneration
      * with the new hostname as CN and in the SANs. The certificate is regenerated
-     * on the next Apache restart or can be done immediately.
+     * on the next nginx reload or can be done immediately.
      *
      * @param string $newHostname The new hostname to use for the certificate
      * @param CliOutputManager|null $output Optional output manager for status messages
@@ -3065,8 +3065,8 @@ HELP;
     private function regenerateSslCertificate(string $newHostname, ?CliOutputManager $output = null): void
     {
         $output = $output ?? CliOutputManager::getInstance();
-        $sslCertPath = '/etc/apache2/ssl/server.crt';
-        $sslKeyPath = '/etc/apache2/ssl/server.key';
+        $sslCertPath = '/etc/nginx/ssl/server.crt';
+        $sslKeyPath = '/etc/nginx/ssl/server.key';
 
         // Check if we're using externally provided certificates (don't regenerate those)
         if (file_exists('/ssl-certs/server.crt')) {
@@ -3181,11 +3181,11 @@ extendedKeyUsage = serverAuth
             chmod($sslCertPath, 0644);
         }
 
-        // Reload Apache to use new certificate
-        shell_exec('apache2ctl graceful 2>/dev/null');
+        // Reload nginx to use new certificate
+        shell_exec('nginx -s reload 2>/dev/null');
 
         if (!$output->isJsonMode()) {
-            echo "Apache reloaded to use new certificate.\n";
+            echo "nginx reloaded to use new certificate.\n";
         }
     }
 

@@ -41,7 +41,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying services running before stop"
 
 preServicesRunning=0
-if docker exec ${testContainer} sh -c "service apache2 status 2>&1 | grep -q 'running'" 2>/dev/null; then
+if docker exec ${testContainer} sh -c "service nginx status 2>&1 | grep -q 'running'" 2>/dev/null; then
     preServicesRunning=$((preServicesRunning + 1))
 fi
 if docker exec ${testContainer} sh -c "service mariadb status 2>&1 | grep -q 'running\|Uptime'" 2>/dev/null; then
@@ -125,18 +125,18 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 6: Shutdown log shows all service stops (Apache, MariaDB, Tor, Cron)
+# Test 6: Shutdown log shows all service stops (nginx, PHP-FPM, MariaDB, Tor, Cron)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Checking all services were stopped in shutdown"
 
 serviceStopCount=0
-for svc in "Stopping Apache" "Stopping MariaDB" "Stopping Tor" "Stopping Cron"; do
+for svc in "Stopping nginx" "Stopping PHP-FPM" "Stopping MariaDB" "Stopping Tor" "Stopping Cron"; do
     if echo "$shutdownLogs" | grep -q "$svc"; then
         serviceStopCount=$((serviceStopCount + 1))
     fi
 done
 
-if [ "$serviceStopCount" -eq 4 ]; then
+if [ "$serviceStopCount" -eq 5 ]; then
     printf "\t   All 4 service stops logged ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -184,14 +184,14 @@ echo -e "\n\t-> Verifying services running after restart"
 
 # Wait for both core services to start
 wait_for_condition \
-    "docker exec ${testContainer} sh -c \"service apache2 status 2>&1 | grep -q 'running'\"" \
-    30 3 "Apache to start"
+    "docker exec ${testContainer} sh -c \"service nginx status 2>&1 | grep -q 'running'\"" \
+    30 3 "nginx to start"
 wait_for_condition \
     "docker exec ${testContainer} sh -c \"service mariadb status 2>&1 | grep -q 'running\|Uptime'\"" \
     30 3 "MariaDB to start"
 
 postServicesRunning=0
-if docker exec ${testContainer} sh -c "service apache2 status 2>&1 | grep -q 'running'" 2>/dev/null; then
+if docker exec ${testContainer} sh -c "service nginx status 2>&1 | grep -q 'running'" 2>/dev/null; then
     postServicesRunning=$((postServicesRunning + 1))
 fi
 if docker exec ${testContainer} sh -c "service mariadb status 2>&1 | grep -q 'running\|Uptime'" 2>/dev/null; then

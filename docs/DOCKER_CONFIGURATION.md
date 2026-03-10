@@ -372,7 +372,7 @@ curl https://bob/api/status   # HTTPS with self-signed cert
 
 EIOU containers automatically configure Tor hidden services:
 - Hidden service directory: `/var/lib/tor/hidden_service/`
-- Hidden service port: Maps external port 80 to internal Apache
+- Hidden service port: Maps external port 80 to internal nginx
 - Tor SOCKS proxy: Available at `127.0.0.1:9050` inside the container
 
 ---
@@ -531,7 +531,7 @@ services:
   # ... repeat for all nodes (only port number changes)
 ```
 
-Every container receives the same certificate file. Each node's Apache listens on 443 internally; Docker maps that to the unique external port. Only one DNS A record is needed — `wallet.example.com → <server IP>`.
+Every container receives the same certificate file. Each node's nginx listens on 443 internally; Docker maps that to the unique external port. Only one DNS A record is needed — `wallet.example.com → <server IP>`.
 
 **Step 4: Set up automatic renewal (host crontab):**
 
@@ -827,7 +827,8 @@ EIOU containers run as root during initialization, then services drop privileges
 
 | Service | Runtime User | Purpose |
 |---------|--------------|---------|
-| Apache | `www-data` | Web server and API |
+| nginx | `www-data` | Web server (reverse proxy) |
+| PHP-FPM | `www-data` | PHP application processing |
 | MariaDB | `mysql` | Database operations |
 | Tor | `debian-tor` | Tor hidden service |
 | PHP processors | `www-data` | Background message processing (via `runuser`) |
@@ -839,7 +840,7 @@ EIOU containers run as root during initialization, then services drop privileges
 | `/etc/eiou/` | 755 (dir) / 644 (files) | www-data | Configuration |
 | `/var/lib/mysql/` | 700 | mysql | Database files |
 | `/var/lib/tor/hidden_service/` | 700 | debian-tor | Tor keys |
-| `/etc/apache2/ssl/server.key` | 600 | root | SSL private key |
+| `/etc/nginx/ssl/server.key` | 600 | root | SSL private key |
 
 ### Container Security Hardening
 
@@ -881,7 +882,7 @@ For `docker run` users or daemon-level configuration, add to `/etc/docker/daemon
 }
 ```
 
-Application logs (Apache, PHP) inside the container are rotated by `logrotate` (weekly, 4 rotations, compressed).
+Application logs (nginx, PHP) inside the container are rotated by `logrotate` (weekly, 4 rotations, compressed).
 
 ### Base Image Pinning
 
@@ -1131,14 +1132,14 @@ EIOU_INIT_TIMEOUT=180 ./run-all-tests.sh http4
 
 | Log | Location | Purpose |
 |-----|----------|---------|
-| Apache access | `/var/log/apache2/access.log` | HTTP requests |
-| Apache error | `/var/log/apache2/error.log` | Web server errors |
+| nginx access | `/var/log/nginx/access.log` | HTTP requests |
+| nginx error | `/var/log/nginx/error.log` | Web server errors |
 | PHP errors | `/var/log/php_errors.log` | Application errors |
 | Tor | `/var/log/tor/log` | Tor network status |
 
 ```bash
 # View logs inside container
-docker exec <container> tail -f /var/log/apache2/error.log
+docker exec <container> tail -f /var/log/nginx/error.log
 docker exec <container> tail -f /var/log/php_errors.log
 ```
 

@@ -62,7 +62,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 
 | Data | Container Path | Notes |
 |------|----------------|-------|
-| SSL certificates | `/etc/apache2/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
+| SSL certificates | `/etc/nginx/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
 | Tor hidden service keys | `/var/lib/tor/hidden_service/` | Deterministically derived from wallet seed phrase |
 
 **Tor address is stable**: The `.onion` address is derived deterministically from your BIP39 seed phrase. A new container will produce the same Tor address as long as the wallet data (in the `{node}-files` volume) is present.

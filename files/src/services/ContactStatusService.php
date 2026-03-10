@@ -494,7 +494,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
     /**
      * Update contact's online status when they ping us and record last ping time
      *
-     * We know the sender's Apache is up (they sent us a ping), but we don't know
+     * We know the sender's web server is up (they sent us a ping), but we don't know
      * their processor health — that info only comes in pong responses. So we check
      * our own processor health as a proxy: if the ping arrived through a non-processor
      * path, we can only confirm the node is reachable, not fully operational.
@@ -503,7 +503,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     private function updateContactOnlineStatus(string $pubkey): void {
         try {
-            // We know the contact's Apache is up, but not their processor health.
+            // We know the contact's web server is up, but not their processor health.
             // Check our own processors to determine if we'd report partial to them —
             // but for the sender's status, just record that they're reachable.
             // The next ping/pong cycle will set the accurate online/partial status.

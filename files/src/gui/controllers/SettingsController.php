@@ -492,18 +492,18 @@ class SettingsController
                 }
             }
 
-            // Get Apache config path and contents
-            $apacheConfigPath = '/etc/apache2/apache2.conf';
-            $systemInfo['apache_config_path'] = file_exists($apacheConfigPath) ? $apacheConfigPath : 'N/A';
-            $systemInfo['apache_config_content'] = 'N/A';
-            if (file_exists($apacheConfigPath) && is_readable($apacheConfigPath)) {
-                $fileSize = filesize($apacheConfigPath);
+            // Get nginx config path and contents
+            $nginxConfigPath = '/etc/nginx/nginx.conf';
+            $systemInfo['nginx_config_path'] = file_exists($nginxConfigPath) ? $nginxConfigPath : 'N/A';
+            $systemInfo['nginx_config_content'] = 'N/A';
+            if (file_exists($nginxConfigPath) && is_readable($nginxConfigPath)) {
+                $fileSize = filesize($nginxConfigPath);
                 if ($fileSize > 51200) { // 50KB
-                    $content = file_get_contents($apacheConfigPath, false, null, 0, 51200);
+                    $content = file_get_contents($nginxConfigPath, false, null, 0, 51200);
                     $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
-                    $systemInfo['apache_config_content'] = $content;
+                    $systemInfo['nginx_config_content'] = $content;
                 } else {
-                    $systemInfo['apache_config_content'] = file_get_contents($apacheConfigPath);
+                    $systemInfo['nginx_config_content'] = file_get_contents($nginxConfigPath);
                 }
             }
 
@@ -541,11 +541,11 @@ class SettingsController
                 }
             }
 
-            // Collect Apache error log (last 50 lines)
-            $apacheLogContent = '';
-            $apacheLogPath = '/var/log/apache2/error.log';
-            if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
-                $apacheLogContent = shell_exec("tail -50 " . escapeshellarg($apacheLogPath));
+            // Collect nginx error log (last 50 lines)
+            $nginxLogContent = '';
+            $nginxLogPath = '/var/log/nginx/error.log';
+            if (file_exists($nginxLogPath) && is_readable($nginxLogPath)) {
+                $nginxLogContent = shell_exec("tail -50 " . escapeshellarg($nginxLogPath));
             }
 
             // Collect EIOU app log (last 50 lines)
@@ -561,7 +561,7 @@ class SettingsController
                 'system_info' => $systemInfo,
                 'debug_entries' => $debugEntries,
                 'php_errors' => $phpLogContent,
-                'apache_errors' => $apacheLogContent,
+                'nginx_errors' => $nginxLogContent,
                 'eiou_app_log' => $eiouLogContent
             ];
 
@@ -581,8 +581,8 @@ class SettingsController
             if (isset($report['php_errors'])) {
                 $report['php_errors'] = $sanitizeUtf8($report['php_errors'] ?? '');
             }
-            if (isset($report['apache_errors'])) {
-                $report['apache_errors'] = $sanitizeUtf8($report['apache_errors'] ?? '');
+            if (isset($report['nginx_errors'])) {
+                $report['nginx_errors'] = $sanitizeUtf8($report['nginx_errors'] ?? '');
             }
             if (isset($report['eiou_app_log'])) {
                 $report['eiou_app_log'] = $sanitizeUtf8($report['eiou_app_log'] ?? '');
@@ -733,18 +733,18 @@ class SettingsController
                 }
             }
 
-            // Get Apache config path and contents
-            $apacheConfigPath = '/etc/apache2/apache2.conf';
-            $systemInfo['apache_config_path'] = file_exists($apacheConfigPath) ? $apacheConfigPath : 'N/A';
-            $systemInfo['apache_config_content'] = 'N/A';
-            if (file_exists($apacheConfigPath) && is_readable($apacheConfigPath)) {
-                $fileSize = filesize($apacheConfigPath);
+            // Get nginx config path and contents
+            $nginxConfigPath = '/etc/nginx/nginx.conf';
+            $systemInfo['nginx_config_path'] = file_exists($nginxConfigPath) ? $nginxConfigPath : 'N/A';
+            $systemInfo['nginx_config_content'] = 'N/A';
+            if (file_exists($nginxConfigPath) && is_readable($nginxConfigPath)) {
+                $fileSize = filesize($nginxConfigPath);
                 if ($fileSize > 51200) { // 50KB
-                    $content = file_get_contents($apacheConfigPath, false, null, 0, 51200);
+                    $content = file_get_contents($nginxConfigPath, false, null, 0, 51200);
                     $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
-                    $systemInfo['apache_config_content'] = $content;
+                    $systemInfo['nginx_config_content'] = $content;
                 } else {
-                    $systemInfo['apache_config_content'] = file_get_contents($apacheConfigPath);
+                    $systemInfo['nginx_config_content'] = file_get_contents($nginxConfigPath);
                 }
             }
 
@@ -785,7 +785,7 @@ class SettingsController
                         break;
                     }
                 }
-                $apacheLogContent = $this->readFullLogFile('/var/log/apache2/error.log');
+                $nginxLogContent = $this->readFullLogFile('/var/log/nginx/error.log');
                 $eiouLogContent = $this->readFullLogFile('/var/log/eiou/app.log');
             } else {
                 // Limited mode: same as GUI display (last 50 lines)
@@ -795,10 +795,10 @@ class SettingsController
                         break;
                     }
                 }
-                $apacheLogPath = '/var/log/apache2/error.log';
-                $apacheLogContent = '';
-                if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
-                    $apacheLogContent = shell_exec("tail -50 " . escapeshellarg($apacheLogPath));
+                $nginxLogPath = '/var/log/nginx/error.log';
+                $nginxLogContent = '';
+                if (file_exists($nginxLogPath) && is_readable($nginxLogPath)) {
+                    $nginxLogContent = shell_exec("tail -50 " . escapeshellarg($nginxLogPath));
                 }
                 $eiouLogPath = '/var/log/eiou/app.log';
                 $eiouLogContent = '';
@@ -814,7 +814,7 @@ class SettingsController
                 'debug_entries' => $debugEntries,
                 'debug_entries_count' => count($debugEntries),
                 'php_errors' => $phpLogContent,
-                'apache_errors' => $apacheLogContent,
+                'nginx_errors' => $nginxLogContent,
                 'eiou_app_log' => $eiouLogContent,
                 'report_type' => $isFullReport ? 'full' : 'limited'
             ];
@@ -833,8 +833,8 @@ class SettingsController
             if (isset($report['php_errors'])) {
                 $report['php_errors'] = $sanitizeUtf8($report['php_errors'] ?? '');
             }
-            if (isset($report['apache_errors'])) {
-                $report['apache_errors'] = $sanitizeUtf8($report['apache_errors'] ?? '');
+            if (isset($report['nginx_errors'])) {
+                $report['nginx_errors'] = $sanitizeUtf8($report['nginx_errors'] ?? '');
             }
             if (isset($report['eiou_app_log'])) {
                 $report['eiou_app_log'] = $sanitizeUtf8($report['eiou_app_log'] ?? '');

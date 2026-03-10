@@ -3,7 +3,7 @@
 # EIOU Docker Compose
 # =============================================================================
 #
-# Runs a single EIOU node with all services (Apache, MariaDB, Tor, PHP).
+# Runs a single EIOU node with all services (nginx, PHP-FPM, MariaDB, Tor).
 #
 # Quick start:
 #   docker compose up -d --build
@@ -276,7 +276,7 @@ services:
     #   DAC_OVERRIDE   - read/write files owned by service users during startup
     #   FOWNER         - chmod on files not owned by root (Tor HS keys, PHP logs)
     #   KILL           - watchdog sends SIGTERM to crashed processors; graceful shutdown
-    #   NET_BIND_SERVICE - bind Apache to ports 80/443
+    #   NET_BIND_SERVICE - bind nginx to ports 80/443
     #   SETGID         - runuser/service switch to www-data, debian-tor, mysql groups
     #   SETUID         - runuser/service switch to www-data, debian-tor, mysql users
     # =========================================================================
