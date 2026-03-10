@@ -1,6 +1,6 @@
 # EIOU Docker
 
-Run an EIOU node with a single `docker compose` command. The container includes everything needed: Apache, MariaDB, Tor, PHP processors, and the web GUI.
+Run an EIOU node with a single `docker compose` command. The container includes everything needed: nginx, PHP-FPM, MariaDB, Tor, PHP processors, and the web GUI.
 
 ## Key Features
 
@@ -286,13 +286,13 @@ environment:
 
 | Log | Path |
 |-----|------|
-| Apache access | `/var/log/apache2/access.log` |
-| Apache errors | `/var/log/apache2/error.log` |
+| nginx access | `/var/log/nginx/access.log` |
+| nginx errors | `/var/log/nginx/error.log` |
 | PHP errors | `/var/log/php_errors.log` |
 | Tor | `/var/log/tor/log` |
 
 ```bash
-docker exec eiou-node tail -f /var/log/apache2/error.log
+docker exec eiou-node tail -f /var/log/nginx/error.log
 docker exec eiou-node tail -f /var/log/php_errors.log
 ```
 

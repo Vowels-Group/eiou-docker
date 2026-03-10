@@ -2541,8 +2541,8 @@ class ApiController {
      * Regenerate SSL certificate for a new hostname
      */
     private function regenerateSslForHostname(string $newHostname): void {
-        $sslCertPath = '/etc/apache2/ssl/server.crt';
-        $sslKeyPath = '/etc/apache2/ssl/server.key';
+        $sslCertPath = '/etc/nginx/ssl/server.crt';
+        $sslKeyPath = '/etc/nginx/ssl/server.key';
 
         // Check if we're using externally provided certificates (don't regenerate those)
         if (file_exists('/ssl-certs/server.crt')) {

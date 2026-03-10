@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Security
+- Replace Apache with nginx + PHP-FPM: connection-level rate limiting (`limit_req_zone` per-IP: 30r/s general, 10r/s API, 20r/s P2P), concurrent connection limits (50/IP via `limit_conn`), and aggressive timeouts (10s header/body) enforce network-layer protection before PHP executes. Apache's only rate limiting was the application-level PHP `RateLimiterService` which ran after full request processing. SSL paths moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`, PHP-FPM communicates via unix socket at `/run/php/php-fpm.sock`
 - E2E encryption expanded to all contact messages. Every message sent to a known contact (P2P, RP2P, relay transactions, pings, route cancellations, messages) is now fully encrypted — ALL content fields including `type` are inside the encrypted block, making all message types indistinguishable on the wire. Only contact requests (`type=create`) are excluded since the recipient may not be a contact yet. Messages to non-contacts (e.g. transaction inquiry to P2P end-recipient, contact acceptance inquiry to pending contacts) gracefully fall back to cleartext when the recipient's public key is unavailable. Updated `signWithCapture()`, `send()`, `sendBatch()`, `sendMultiBatch()` to pass recipient address for contact public key lookup
 - End-to-end payload encryption for direct transactions using ECDH + AES-256-GCM. Sensitive fields (amount, currency, txid, previousTxid, memo) are encrypted with the recipient's EC public key before signing. Uses ephemeral key pairs for forward secrecy. Encrypt-then-sign design allows signature verification without decryption. New `PayloadEncryption` class, with decryption in `index.html` and encryption in `TransportUtilityService::signWithCapture()`. P2P relay transactions remain unencrypted (relays need cleartext amount for fee calculation)
 - Add `signed_message_content` column to transactions table for E2E encrypted transaction sync signature verification (signature was over encrypted content, not plaintext)
@@ -21,6 +22,7 @@ The project is currently in **ALPHA** status.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
 ### Changed
+- Web server replaced from Apache (mod_php) to nginx + PHP-FPM. nginx handles connections, SSL termination, rate limiting, and static files; PHP-FPM executes PHP via unix socket. All SSL cert paths moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`. Log paths changed from `/var/log/apache2/` to `/var/log/nginx/`. GUI debug panel updated from "Apache Logs" to "nginx Logs". Service reload command changed from `apache2ctl graceful` to `nginx -s reload`
 - Interactive `changesettings` menu refactored from flat 44-item numbered list to two-level grouped navigation: select a category (1-8), then select a setting within that category. Press 0 to go back or cancel. All validation logic unchanged
 - Tor circuit health settings (max failures, cooldown duration, transport fallback) added to API (GET/PUT `/api/v1/system/settings`), GUI settings panel, and grouped interactive CLI menu
 

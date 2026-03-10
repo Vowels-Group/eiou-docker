@@ -1,8 +1,9 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
-# SECURITY NOTE: This container starts as root to manage multiple services (Apache, MariaDB, Tor, cron).
+# SECURITY NOTE: This container starts as root to manage multiple services (nginx, PHP-FPM, MariaDB, Tor, cron).
 # Each service drops privileges to its appropriate user after startup:
-#   - Apache: runs as www-data
+#   - nginx: master runs as root (binds ports 80/443), workers run as www-data
+#   - PHP-FPM: master runs as root, workers run as www-data
 #   - MariaDB: runs as mysql
 #   - Tor: runs as debian-tor
 #   - PHP message processors: run as www-data (via runuser)
@@ -17,39 +18,48 @@
 # EIOU Node Docker Image
 # =============================================================================
 # Builds a complete EIOU node with:
-# - Apache2 web server for GUI and API
+# - nginx web server + PHP-FPM for GUI, API, and P2P transport
 # - MariaDB database for transactions and contacts
 # - Tor for anonymous .onion addressing
 # - PHP runtime for application logic
+#
+# nginx provides network-level protections that Apache lacked:
+# - Per-IP rate limiting (limit_req_zone) at the connection level
+# - Per-IP connection limits (limit_conn_zone)
+# - Slow/abusive connection timeouts (client_body_timeout, client_header_timeout)
+# - Event-driven architecture (handles thousands of connections with minimal memory)
 # =============================================================================
 
 FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 # Install required packages:
-# - apache2: Web server for GUI and REST API endpoints
+# - nginx: Web server and reverse proxy for PHP-FPM, SSL termination, rate limiting
+# - php-fpm: FastCGI Process Manager for PHP (separate process pool, more efficient than mod_php)
+# - php-cli: PHP command-line interpreter for CLI commands and message processors
 # - cron: Scheduled task execution for maintenance jobs
 # - curl: HTTP client for peer-to-peer communication
 # - mariadb-server: Database for wallet, transactions, contacts
 # - certbot: Let's Encrypt ACME client for automatic SSL certificates
 # - openssl: SSL certificate generation and cryptography
-# - php, php-*: PHP runtime with required extensions
+# - php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
 #   - php-xml: DOM extension required for Composer dependency resolution
 # - tini: Minimal init system for proper signal forwarding and zombie reaping
 # - tor: Anonymous network for .onion addresses
 # - unzip: Required by Composer for package installation
 RUN apt-get update && apt-get install -y \
-    apache2 \
     certbot \
     cron \
     curl \
+    logrotate \
     mariadb-server \
+    nginx \
     openssl \
-    php \
+    php-cli \
     php-curl \
+    php-fpm \
     php-mbstring \
     php-mysql \
     php-xml \
-    logrotate \
     tini \
     tor \
     unzip \
@@ -66,7 +76,7 @@ RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
 
 # Configure Tor hidden service:
 # - HiddenServiceDir: Directory for Tor identity keys and hostname
-# - HiddenServicePort: Maps port 80 to internal Apache
+# - HiddenServicePort: Maps Tor port 80 to internal nginx
 RUN chmod o+w /etc/tor/torrc && \
     echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc && \
     echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc && \
@@ -76,83 +86,69 @@ RUN chmod o+w /etc/tor/torrc && \
 EXPOSE 80
 EXPOSE 443
 
-# Set up Apache2 to accept php in .html files
-RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.conf
-
-# Set ServerName to suppress Apache warning
-RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
-
-# Enable mod_rewrite for API routing, mod_ssl for HTTPS, mod_headers for HSTS
-RUN a2enmod rewrite ssl headers
+# =============================================================================
+# NGINX + PHP-FPM CONFIGURATION
+# =============================================================================
 
 # Create SSL certificate directory
-RUN mkdir -p /etc/apache2/ssl
+RUN mkdir -p /etc/nginx/ssl
 
-# Configure Apache HTTP VirtualHost
-# DocumentRoot stays at /var/www/html (Debian default, already has Require all granted).
-# Symlinks in /var/www/html point to actual files under /etc/eiou/ (the persistent volume).
-# This avoids needing a /var/www/html volume — it only contains symlinks in the container layer.
-RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.conf && \
-    echo 'Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '<Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    Options -Indexes' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '<Directory /var/www/html>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    AllowOverride All' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    RewriteEngine On' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    RewriteCond %{REQUEST_FILENAME} !-f' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    RewriteCond %{REQUEST_FILENAME} !-d' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf
+# Configure PHP-FPM to use a version-independent socket path
+# The default socket path includes the PHP version (e.g., php8.2-fpm.sock).
+# Using a fixed path keeps the nginx config stable across PHP version upgrades.
+# Override socket path and allow .html files to be processed by PHP-FPM.
+# EIOU uses PHP inside .html files (GUI templates) — equivalent to Apache's
+# AddType application/x-httpd-php .html. Without this, PHP-FPM blocks .html
+# with "Access denied (see security.limit_extensions)".
+# PHP-FPM pool tuning:
+# - Fixed socket path (version-independent, keeps nginx config stable)
+# - Allow .html (EIOU GUI templates contain PHP)
+# - pm = ondemand: spawn workers only on request, kill after 10s idle.
+#   Better than "dynamic" for containers with intermittent traffic — avoids
+#   keeping idle workers alive. max_children=5 caps peak PHP concurrency.
+RUN sed -i 's|^listen = .*|listen = /run/php/php-fpm.sock|' /etc/php/*/fpm/pool.d/www.conf && \
+    sed -i 's|^;security.limit_extensions = .*|security.limit_extensions = .php .html|' /etc/php/*/fpm/pool.d/www.conf && \
+    sed -i 's|^pm = dynamic|pm = ondemand|' /etc/php/*/fpm/pool.d/www.conf && \
+    sed -i 's|^;pm.process_idle_timeout = .*|pm.process_idle_timeout = 10s|' /etc/php/*/fpm/pool.d/www.conf
 
-# HTTP to HTTPS redirect
-# Exceptions:
-#   - /eiou transport endpoint: P2P backward compatibility (nodes may still use HTTP)
-#   - .onion hosts: Tor hidden services are already end-to-end encrypted;
-#     HTTPS is unnecessary and port 443 is not mapped through the hidden service
-RUN sed -i '/<\/VirtualHost>/i \    RewriteEngine On\n    RewriteCond %{HTTPS} off\n    RewriteCond %{HTTP_HOST} !\\.onion$ [NC]\n    RewriteCond %{REQUEST_URI} !^/eiou\n    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]' /etc/apache2/sites-available/000-default.conf
+# Fix nginx worker count: "auto" uses host CPU count (not container limit),
+# so a 32-core host spawns 32 workers inside a 1-CPU container. Set to 2:
+# one for active requests, one spare for SSL handshakes.
+RUN sed -i 's|^worker_processes auto;|worker_processes 2;|' /etc/nginx/nginx.conf
 
-# Suppress server version information in responses (L-29)
-RUN echo 'ServerTokens Prod' >> /etc/apache2/conf-available/security.conf && \
-    echo 'ServerSignature Off' >> /etc/apache2/conf-available/security.conf && \
-    (a2enconf security 2>/dev/null || true) && \
-    for dir in /etc/php/*/apache2/conf.d /etc/php/*/cli/conf.d; do \
+# Configure nginx: global settings for rate limiting and security
+# Rate limiting zones must be in the http block (nginx.conf), not server blocks.
+# These zones are referenced by the server config in eiou.conf.
+RUN sed -i '/http {/a \
+    # --- EIOU rate limiting zones ---\n\
+    # Per-IP request rate limiting at the connection level (before PHP runs)\n\
+    limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;\n\
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n\
+    limit_req_zone $binary_remote_addr zone=p2p:10m rate=20r/s;\n\
+    # Per-IP concurrent connection limit\n\
+    limit_conn_zone $binary_remote_addr zone=addr:10m;\n\
+    # Return 429 Too Many Requests (not 503) when rate limited\n\
+    limit_req_status 429;\n\
+    limit_conn_status 429;\n\
+    # Hide nginx version in Server header and error pages\n\
+    server_tokens off;' /etc/nginx/nginx.conf
+
+# Copy nginx server configuration (server blocks, location routing, SSL)
+COPY nginx/eiou.conf /etc/nginx/sites-available/eiou.conf
+COPY nginx/eiou-locations.conf /etc/nginx/eiou-locations.conf
+
+# Enable EIOU site, disable default site
+RUN rm -f /etc/nginx/sites-enabled/default && \
+    ln -s /etc/nginx/sites-available/eiou.conf /etc/nginx/sites-enabled/eiou.conf
+
+# Suppress PHP version in response headers
+RUN for dir in /etc/php/*/fpm/conf.d /etc/php/*/cli/conf.d; do \
         [ -d "$dir" ] && echo 'expose_php = Off' > "$dir/security-headers.ini"; \
     done
 
-# Create SSL VirtualHost configuration
-RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    ServerAdmin webmaster@localhost' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    DocumentRoot /var/www/html' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    SSLEngine on' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    SSLCipherSuite HIGH:!aNULL:!MD5:!3DES:!RC4' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    SSLHonorCipherOrder on' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    Header always set Strict-Transport-Security "max-age=31536000"' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    <Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        Options -Indexes' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    <Directory /var/www/html>' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        AllowOverride All' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        RewriteEngine On' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        RewriteCond %{REQUEST_FILENAME} !-f' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        RewriteCond %{REQUEST_FILENAME} !-d' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    ErrorLog ${APACHE_LOG_DIR}/error.log' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    CustomLog ${APACHE_LOG_DIR}/access.log combined' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '</VirtualHost>' >> /etc/apache2/sites-available/default-ssl.conf
-
-# Enable SSL site (will be activated after certificate is generated in startup.sh)
-RUN a2ensite default-ssl
+# =============================================================================
+# APPLICATION DEPLOYMENT
+# =============================================================================
 
 # Copy root files to /etc/eiou/ (includes api/, cli/, processors/, www/)
 COPY files/root/ /etc/eiou/
@@ -197,16 +193,16 @@ RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
 RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
 
 # Create symlinks in /var/www/html pointing to files under /etc/eiou/
-# This keeps DocumentRoot at /var/www/html (standard Apache access policy)
+# This keeps the web root at /var/www/html (standard nginx/Debian convention)
 # while actual files live in the /etc/eiou volume for persistence and sync
-RUN rm -f /var/www/html/index.html && \
+RUN rm -f /var/www/html/index.nginx-debian.html && \
     ln -s /etc/eiou/www/gui /var/www/html/gui && \
     ln -s /etc/eiou/www/eiou /var/www/html/eiou && \
     mkdir -p /var/www/html/api && \
     ln -s /etc/eiou/api/Api.php /var/www/html/api/index.php
 
 # Enable PHP error logging
-RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
+RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/fpm/php.ini
 RUN touch /var/log/php_errors.log && \
     chown www-data:www-data /var/log/php_errors.log && \
     chmod 640 /var/log/php_errors.log
@@ -214,8 +210,8 @@ RUN touch /var/log/php_errors.log && \
 # MariaDB security hardening: bind to localhost only, disable symbolic links
 RUN printf '[mysqld]\nbind-address=127.0.0.1\nskip-symbolic-links\n' > /etc/mysql/conf.d/security.cnf
 
-# Log rotation for Apache and PHP application logs
-RUN printf '/var/log/apache2/*.log {\n    weekly\n    rotate 4\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 640 root adm\n    sharedscripts\n    postrotate\n        if [ -f /var/run/apache2/apache2.pid ]; then\n            /usr/sbin/apachectl graceful > /dev/null 2>&1 || true\n        fi\n    endscript\n}\n' > /etc/logrotate.d/apache2-eiou && \
+# Log rotation for nginx and PHP application logs
+RUN printf '/var/log/nginx/*.log {\n    weekly\n    rotate 4\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 640 www-data adm\n    sharedscripts\n    postrotate\n        if [ -f /var/run/nginx.pid ]; then\n            kill -USR1 $(cat /var/run/nginx.pid) 2>/dev/null || true\n        fi\n    endscript\n}\n' > /etc/logrotate.d/nginx-eiou && \
     printf '/var/log/php_errors.log {\n    weekly\n    rotate 4\n    compress\n    delaycompress\n    missingok\n    notifempty\n    create 640 www-data www-data\n}\n' > /etc/logrotate.d/php-eiou
 
 # Persistent volumes:
@@ -247,7 +243,7 @@ COPY files/composer.lock /app/eiou-src-backup/composer.lock
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
 
-# Health check to verify Apache is responding
+# Health check to verify nginx + PHP-FPM is responding
 # - interval: Check every 30 seconds
 # - timeout: Allow 20 seconds for check to complete
 # - start-period: Wait 120 seconds before first check (MariaDB needs 30-60s to initialize)

@@ -87,8 +87,8 @@ Nodes provide three interfaces for interaction:
                     +-------------+-------------+
                                   |
                     +-------------v-------------+
-                    |         Apache2           |
-                    |    (SSL/HTTPS + Mod_PHP)  |
+                    |          nginx            |
+                    |   (SSL/HTTPS + PHP-FPM)   |
                     +-------------+-------------+
                                   |
                     +-------------v-------------+
@@ -2437,7 +2437,7 @@ review rather than being silently dropped.
    - Fall back to self-signed
          |
          v
-4. Start services: cron -> tor -> apache2 -> mariadb
+4. Start services: cron -> tor -> nginx + php-fpm -> mariadb
          |
          v
 5. Wait for MariaDB readiness (mysqladmin ping)

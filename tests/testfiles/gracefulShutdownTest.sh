@@ -50,8 +50,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing services are running"
 servicesRunning=0
 
-# Check Apache
-if docker exec ${testContainer} sh -c "service apache2 status 2>&1 | grep -q 'running'" 2>/dev/null; then
+# Check nginx
+if docker exec ${testContainer} sh -c "service nginx status 2>&1 | grep -q 'running'" 2>/dev/null; then
     servicesRunning=$((servicesRunning + 1))
 fi
 

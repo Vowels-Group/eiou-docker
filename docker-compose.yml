@@ -3,7 +3,7 @@
 # EIOU Docker Compose
 # =============================================================================
 #
-# Runs a single EIOU node with all services (Apache, MariaDB, Tor, PHP).
+# Runs a single EIOU node with all services (nginx, PHP-FPM, MariaDB, Tor).
 #
 # Quick start:
 #   docker compose up -d --build
@@ -34,14 +34,20 @@ services:
     networks:
       - eiou-network
     ports:
-      # Bind to 0.0.0.0 (all interfaces) so the node can accept incoming P2P
-      # connections from other EIOU nodes on the internet.
-      # If running behind a reverse proxy, change to 127.0.0.1 to restrict
-      # access to localhost only:
-      #   - "127.0.0.1:80:80"
-      #   - "127.0.0.1:443:443"
+      # Bind to all interfaces so the node accepts incoming P2P connections
+      # from other EIOU nodes on the internet. The built-in nginx provides
+      # connection-level rate limiting, connection limits, and timeouts.
       - "80:80"
       - "443:443"
+      #
+      # REVERSE PROXY SETUP: If running behind an external reverse proxy
+      # (Traefik, Caddy, nginx, etc.), restrict ports to localhost only.
+      # Replace the two lines above with:
+      #   - "127.0.0.1:80:80"
+      #   - "127.0.0.1:443:443"
+      #
+      # For docker run, use the same syntax with -p:
+      #   docker run -p 127.0.0.1:80:80 -p 127.0.0.1:443:443 ...
 
     # =========================================================================
     # ENVIRONMENT VARIABLES
@@ -276,7 +282,7 @@ services:
     #   DAC_OVERRIDE   - read/write files owned by service users during startup
     #   FOWNER         - chmod on files not owned by root (Tor HS keys, PHP logs)
     #   KILL           - watchdog sends SIGTERM to crashed processors; graceful shutdown
-    #   NET_BIND_SERVICE - bind Apache to ports 80/443
+    #   NET_BIND_SERVICE - bind nginx to ports 80/443
     #   SETGID         - runuser/service switch to www-data, debian-tor, mysql groups
     #   SETUID         - runuser/service switch to www-data, debian-tor, mysql users
     # =========================================================================

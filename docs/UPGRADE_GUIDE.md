@@ -62,7 +62,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 
 | Data | Container Path | Notes |
 |------|----------------|-------|
-| SSL certificates | `/etc/apache2/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
+| SSL certificates | `/etc/nginx/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
 | Tor hidden service keys | `/var/lib/tor/hidden_service/` | Deterministically derived from wallet seed phrase |
 
 **Tor address is stable**: The `.onion` address is derived deterministically from your BIP39 seed phrase. A new container will produce the same Tor address as long as the wallet data (in the `{node}-files` volume) is present.
@@ -325,6 +325,17 @@ Your 24-word BIP39 mnemonic is displayed only once during initial wallet generat
 ### Back Up Before Every Upgrade
 
 Always run `eiou backup create` before upgrading. The encrypted backup file can be used to restore your database if anything goes wrong. Backup files are stored on the `{node}-backups` volume, which is preserved across upgrades.
+
+### Web Server Changed from Apache to nginx
+
+The web server has been replaced from Apache (mod_php) to nginx + PHP-FPM. This is transparent for most users — the upgrade is automatic. Key changes to be aware of:
+
+- **SSL certificate path** moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`. Self-signed certificates are regenerated automatically. If you mount external certificates at `/ssl-certs/`, no change is needed (they are copied to the new path on startup)
+- **Log paths** changed from `/var/log/apache2/` to `/var/log/nginx/`
+- **GUI debug panel** now shows "nginx Logs" instead of "Apache Logs"
+- **Connection-level rate limiting** is now enforced by nginx before PHP runs (30r/s general, 10r/s API, 20r/s P2P per IP). The application-level PHP `RateLimiterService` continues to operate as before for finer-grained per-endpoint limits
+
+No user action is required — the upgrade is handled automatically by rebuilding the container.
 
 ### Master Key Is Derived from Seed
 

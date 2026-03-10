@@ -4,5 +4,5 @@ docker exec eiou0http php /etc/eiou/processors/P2pMessages.php
 # check php errors
 docker exec eiou0http cat /var/log/php_errors.log
 
-# check apache2 errors
-docker exec eiou0http cat /var/log/apache2/error.log
+# check nginx errors
+docker exec eiou0http cat /var/log/nginx/error.log

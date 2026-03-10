@@ -150,16 +150,76 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | TLS | TLS 1.2+ with auto-generated or custom certificates | Self-signed by default; use Let's Encrypt or mount external certs for production |
 | Transport priority | Tor > HTTPS > HTTP | System prefers the most secure transport available |
 | Transport fallback | Automatic on Tor failure | Falls back to HTTPS when `torFailureTransportFallback=true` (default). `torFallbackRequireEncrypted=true` (default) restricts fallback to HTTPS only |
+| Connection-level rate limiting | nginx `limit_req_zone` per-IP: 30r/s general, 10r/s API, 20r/s P2P | Enforced before PHP executes — drops floods at the web server level |
+| Connection limits | nginx `limit_conn` 50 concurrent connections per IP | Prevents single-IP resource exhaustion |
+| Connection timeouts | 10s header/body timeout | Drops slow/incomplete connections before they consume PHP-FPM workers |
 | Internal network | Docker bridge network | Containers communicate over an isolated Docker network |
 
 **Recommendations:**
 
 - Use HTTPS or Tor for all inter-node communication in non-testing environments
 - Use Let's Encrypt certificates for production deployments, or mount your own CA-signed certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section)
-- Avoid exposing container ports directly to the public internet without a reverse proxy or firewall
+- If running behind an external reverse proxy, bind ports to localhost only (`127.0.0.1:80:80`) in `docker-compose.yml`. The built-in nginx already provides rate limiting, connection limits, and timeouts for direct exposure
 - The HTTP transport mode is intended for local Docker network testing only
 - The `torFailureTransportFallback` setting can be disabled for Tor-only operation where privacy is paramount
 - The `torFallbackRequireEncrypted` setting (default: enabled) ensures Tor fallback only goes to HTTPS, never plain HTTP. Disable only if you explicitly need HTTP fallback in a trusted local network
+
+### Running Behind an External Reverse Proxy
+
+The built-in nginx provides connection-level rate limiting, connection limits, and timeouts — so the container is safe to expose directly. However, if you already run a reverse proxy (Traefik, Caddy, nginx, HAProxy) for centralized SSL management, domain routing, or multiple services on the same host, you can place the EIOU container behind it.
+
+**Step 1: Restrict container ports to localhost**
+
+In `docker-compose.yml`, change the port binding so only the reverse proxy (running on the same host) can reach the container:
+
+```yaml
+ports:
+  - "127.0.0.1:80:80"
+  - "127.0.0.1:443:443"
+```
+
+With `docker run`:
+
+```bash
+docker run -p 127.0.0.1:80:80 -p 127.0.0.1:443:443 ...
+```
+
+This prevents direct access from the internet — all traffic must go through the reverse proxy.
+
+**Step 2: Configure the external reverse proxy**
+
+Point the proxy at `127.0.0.1:443` (HTTPS) or `127.0.0.1:80` (HTTP). Example for nginx as an external proxy:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name wallet.example.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    location / {
+        proxy_pass https://127.0.0.1:443;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Step 3: If the proxy terminates SSL, use HTTP internally**
+
+If your reverse proxy handles SSL and forwards plain HTTP to the container, point it at port 80 instead. The container's built-in nginx serves content on both ports. Note that `.onion` requests and `/eiou` P2P requests are served directly on port 80 without redirect, so HTTP forwarding works without issues.
+
+**What the two layers handle:**
+
+| Layer | Responsibility |
+|-------|----------------|
+| External proxy | Domain routing, centralized SSL for multiple services, load balancing, IP allowlisting |
+| Built-in nginx | Application-specific rate limiting (30r/s general, 10r/s API, 20r/s P2P), per-IP connection limits (50), timeouts (10s), PHP-FPM routing, static file serving |
+
+The two layers complement each other. The external proxy handles infrastructure concerns; the built-in nginx handles application-level protections. Both rate limiters operate independently — the external proxy may enforce its own limits before traffic reaches the container.
 
 ### Container Security
 
@@ -168,7 +228,7 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | CPU limit | 1.0 core | Prevents resource exhaustion |
 | Memory limit | 512MB | Prevents unbounded memory consumption |
 | Memory reservation | 256MB | Guarantees minimum available memory |
-| Privilege dropping | Apache as `www-data`, MariaDB as `mysql`, Tor as `debian-tor`, PHP processors as `www-data` | Limits blast radius of service compromise |
+| Privilege dropping | nginx workers as `www-data`, PHP-FPM workers as `www-data`, MariaDB as `mysql`, Tor as `debian-tor`, PHP processors as `www-data` | Limits blast radius of service compromise |
 
 **Recommendations:**
 

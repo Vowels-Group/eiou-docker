@@ -10,7 +10,7 @@
 #   1. Configure output buffering for real-time logging
 #   2. Register signal handlers for graceful shutdown (SIGTERM, SIGINT, SIGHUP)
 #   3. Generate or install SSL certificates
-#   4. Start services (cron, tor, apache2, mariadb)
+#   4. Start services (cron, tor, nginx, php-fpm, mariadb)
 #   5. Wait for MariaDB readiness
 #   6. Generate wallet or restore from seed phrase
 #   7. Restart Tor to load hidden service keys
@@ -51,6 +51,9 @@ if [ -f "/app/scripts/banner.sh" ]; then
     show_alpha_warning
 fi
 
+# Detect PHP-FPM service name (version-independent, e.g., php8.2-fpm)
+PHP_FPM_SERVICE=$(basename /etc/init.d/php*-fpm 2>/dev/null || echo "php-fpm")
+
 # Graceful shutdown configuration
 SHUTDOWN_TIMEOUT=30  # Maximum seconds to wait for processes to terminate
 SHUTDOWN_IN_PROGRESS=false
@@ -68,7 +71,7 @@ CLEANUP_PID=""
 #   1. Stop watchdog to prevent process respawning during shutdown
 #   2. Send SIGTERM to PHP message processors and wait for completion
 #   3. Force kill any processors that exceed timeout (SHUTDOWN_TIMEOUT)
-#   4. Stop services in reverse startup order (apache2, mariadb, tor, cron)
+#   4. Stop services in reverse startup order (nginx, php-fpm, mariadb, tor, cron)
 #   5. Clean up lockfiles to prevent stale state on next startup
 # -----------------------------------------------------------------------------
 graceful_shutdown() {
@@ -178,8 +181,11 @@ graceful_shutdown() {
     # shutdown above may have used up to 30s, so service stops must be quick.
     echo "[Shutdown] Stopping services in reverse order..."
 
-    echo "[Shutdown] Stopping Apache..."
-    timeout 5 service apache2 stop 2>/dev/null || true
+    echo "[Shutdown] Stopping nginx..."
+    timeout 5 nginx -s quit 2>/dev/null || timeout 3 service nginx stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping PHP-FPM..."
+    timeout 5 service "$PHP_FPM_SERVICE" stop 2>/dev/null || true
 
     echo "[Shutdown] Stopping MariaDB..."
     timeout 5 service mariadb stop 2>/dev/null || true
@@ -294,15 +300,15 @@ SSL_CERT_INSTALLED=false
 if [ -f /ssl-certs/server.crt ] && [ -f /ssl-certs/server.key ]; then
     echo "Installing externally provided SSL certificates..."
 
-    cp /ssl-certs/server.crt /etc/apache2/ssl/server.crt
-    cp /ssl-certs/server.key /etc/apache2/ssl/server.key
-    chmod 600 /etc/apache2/ssl/server.key
-    chmod 644 /etc/apache2/ssl/server.crt
+    cp /ssl-certs/server.crt /etc/nginx/ssl/server.crt
+    cp /ssl-certs/server.key /etc/nginx/ssl/server.key
+    chmod 600 /etc/nginx/ssl/server.key
+    chmod 644 /etc/nginx/ssl/server.crt
 
     # Handle certificate chain if provided (for Let's Encrypt fullchain, etc.)
     if [ -f /ssl-certs/ca-chain.crt ]; then
-        cp /ssl-certs/ca-chain.crt /etc/apache2/ssl/ca-chain.crt
-        chmod 644 /etc/apache2/ssl/ca-chain.crt
+        cp /ssl-certs/ca-chain.crt /etc/nginx/ssl/ca-chain.crt
+        chmod 644 /etc/nginx/ssl/ca-chain.crt
         echo "  Certificate chain installed."
     fi
 
@@ -330,14 +336,14 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
            openssl x509 -checkend 86400 -noout -in "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" 2>/dev/null; then
 
             echo "  Existing Let's Encrypt certificate is still valid."
-            cp "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" /etc/apache2/ssl/server.crt
-            cp "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" /etc/apache2/ssl/server.key
-            chmod 600 /etc/apache2/ssl/server.key
-            chmod 644 /etc/apache2/ssl/server.crt
+            cp "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" /etc/nginx/ssl/server.crt
+            cp "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" /etc/nginx/ssl/server.key
+            chmod 600 /etc/nginx/ssl/server.key
+            chmod 644 /etc/nginx/ssl/server.crt
             SSL_CERT_INSTALLED=true
         else
             # Request new certificate using certbot standalone mode
-            # Standalone runs its own HTTP server on port 80 (Apache hasn't started yet)
+            # Standalone runs its own HTTP server on port 80 (nginx hasn't started yet)
             echo "  Requesting certificate from Let's Encrypt..."
             CERTBOT_CMD="certbot certonly --standalone --non-interactive --agree-tos"
             CERTBOT_CMD="$CERTBOT_CMD --email $LETSENCRYPT_EMAIL -d $LE_DOMAIN"
@@ -349,10 +355,10 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
 
             if $CERTBOT_CMD 2>&1; then
                 echo "  Let's Encrypt certificate obtained successfully for $LE_DOMAIN"
-                cp "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" /etc/apache2/ssl/server.crt
-                cp "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" /etc/apache2/ssl/server.key
-                chmod 600 /etc/apache2/ssl/server.key
-                chmod 644 /etc/apache2/ssl/server.crt
+                cp "/etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem" /etc/nginx/ssl/server.crt
+                cp "/etc/letsencrypt/live/$LE_DOMAIN/privkey.pem" /etc/nginx/ssl/server.key
+                chmod 600 /etc/nginx/ssl/server.key
+                chmod 644 /etc/nginx/ssl/server.crt
                 SSL_CERT_INSTALLED=true
             else
                 echo "  WARNING: Let's Encrypt certificate request failed."
@@ -366,7 +372,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
 
         # Set up automatic renewal cron job (runs daily at 3am, renews if < 30 days left)
         if [ "$SSL_CERT_INSTALLED" = "true" ]; then
-            LE_RENEW_HOOK="cp /etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem /etc/apache2/ssl/server.crt && cp /etc/letsencrypt/live/$LE_DOMAIN/privkey.pem /etc/apache2/ssl/server.key && chmod 600 /etc/apache2/ssl/server.key && chmod 644 /etc/apache2/ssl/server.crt && apache2ctl graceful"
+            LE_RENEW_HOOK="cp /etc/letsencrypt/live/$LE_DOMAIN/fullchain.pem /etc/nginx/ssl/server.crt && cp /etc/letsencrypt/live/$LE_DOMAIN/privkey.pem /etc/nginx/ssl/server.key && chmod 600 /etc/nginx/ssl/server.key && chmod 644 /etc/nginx/ssl/server.crt && nginx -s reload"
             # Append to crontab without duplicating (remove any existing certbot line first)
             (crontab -l 2>/dev/null | grep -v 'certbot renew'; echo "0 3 * * * certbot renew --quiet --deploy-hook '$LE_RENEW_HOOK' >> /var/log/letsencrypt-renew.log 2>&1") | crontab -
             echo "  Automatic renewal cron job installed (daily at 3:00 AM)."
@@ -382,7 +388,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
 fi
 
 # --- Priority 3/4: Generate certificate (CA-signed or self-signed) ---
-if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/apache2/ssl/server.crt ]; then
+if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/nginx/ssl/server.crt ]; then
     echo "Generating SSL certificate..."
 
     # Determine primary CN
@@ -468,7 +474,7 @@ SSLEOF
 
         # Generate private key and CSR
         if ! openssl req -new -nodes -newkey rsa:4096 \
-            -keyout /etc/apache2/ssl/server.key \
+            -keyout /etc/nginx/ssl/server.key \
             -out /tmp/server.csr \
             -config /tmp/openssl-san.cnf \
             2>&1; then
@@ -481,7 +487,7 @@ SSLEOF
             -CA /ssl-ca/ca.crt \
             -CAkey /ssl-ca/ca.key \
             -CAserial /tmp/ca.srl -CAcreateserial \
-            -out /etc/apache2/ssl/server.crt \
+            -out /etc/nginx/ssl/server.crt \
             -days 365 \
             -sha256 \
             -extfile /tmp/openssl-san.cnf \
@@ -495,16 +501,16 @@ SSLEOF
 
         if [ "$CA_SIGN_OK" = true ]; then
             # Copy CA cert for client verification
-            cp /ssl-ca/ca.crt /etc/apache2/ssl/ca.crt
-            chmod 644 /etc/apache2/ssl/ca.crt
+            cp /ssl-ca/ca.crt /etc/nginx/ssl/ca.crt
+            chmod 644 /etc/nginx/ssl/ca.crt
             echo "  CA-signed certificate generated successfully."
         else
             echo "  WARNING: CA-signed certificate generation failed. Falling back to self-signed."
-            rm -f /etc/apache2/ssl/server.key /etc/apache2/ssl/server.crt
+            rm -f /etc/nginx/ssl/server.key /etc/nginx/ssl/server.crt
 
             openssl req -x509 -nodes -days 365 -newkey rsa:4096 \
-                -keyout /etc/apache2/ssl/server.key \
-                -out /etc/apache2/ssl/server.crt \
+                -keyout /etc/nginx/ssl/server.key \
+                -out /etc/nginx/ssl/server.crt \
                 -config /tmp/openssl-san.cnf \
                 2>&1
 
@@ -515,8 +521,8 @@ SSLEOF
         echo "  Generating self-signed certificate..."
 
         openssl req -x509 -nodes -days 365 -newkey rsa:4096 \
-            -keyout /etc/apache2/ssl/server.key \
-            -out /etc/apache2/ssl/server.crt \
+            -keyout /etc/nginx/ssl/server.key \
+            -out /etc/nginx/ssl/server.crt \
             -config /tmp/openssl-san.cnf \
             2>/dev/null
 
@@ -527,8 +533,8 @@ SSLEOF
     fi
 
     rm -f /tmp/openssl-san.cnf
-    chmod 600 /etc/apache2/ssl/server.key
-    chmod 644 /etc/apache2/ssl/server.crt
+    chmod 600 /etc/nginx/ssl/server.key
+    chmod 644 /etc/nginx/ssl/server.crt
 
 # --- Existing certificate found (from volume persistence) ---
 elif [ "$SSL_CERT_INSTALLED" = "false" ]; then
@@ -654,7 +660,8 @@ fi
 # Start services
 service cron start
 service tor start
-service apache2 start
+service "$PHP_FPM_SERVICE" start
+service nginx start
 service mariadb start
 
 # Wait for MariaDB to be ready

@@ -633,8 +633,8 @@
         <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="php-logs">
             <i class="fab fa-php"></i> PHP Logs
         </button>
-        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="apache-logs">
-            <i class="fas fa-server"></i> Apache Logs
+        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="nginx-logs">
+            <i class="fas fa-server"></i> nginx Logs
         </button>
         <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="system-info">
             <i class="fas fa-info-circle"></i> System Info
@@ -753,28 +753,28 @@
         </div>
     </div>
 
-    <!-- Apache Logs -->
-    <div id="apache-logs" class="debug-content">
+    <!-- nginx Logs -->
+    <div id="nginx-logs" class="debug-content">
         <div class="debug-header">
-            <span class="debug-count">Apache Error Log</span>
+            <span class="debug-count">nginx Error Log</span>
         </div>
         <div class="debug-search-container">
-            <input type="text" id="apache-logs-search" class="debug-search-input" placeholder="Search Apache logs..." data-action-input="filterDebugLogs" data-target="apache-logs-entries">
+            <input type="text" id="nginx-logs-search" class="debug-search-input" placeholder="Search nginx logs..." data-action-input="filterDebugLogs" data-target="nginx-logs-entries">
         </div>
-        <div id="apache-logs-entries" class="debug-log-container">
+        <div id="nginx-logs-entries" class="debug-log-container">
             <?php
-            $apacheLogPath = '/var/log/apache2/error.log';
-            $apacheLogContent = '';
-            if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
-                $apacheLogContent = shell_exec("tail -100 " . escapeshellarg($apacheLogPath));
+            $nginxLogPath = '/var/log/nginx/error.log';
+            $nginxLogContent = '';
+            if (file_exists($nginxLogPath) && is_readable($nginxLogPath)) {
+                $nginxLogContent = shell_exec("tail -100 " . escapeshellarg($nginxLogPath));
             }
             ?>
-            <?php if (empty(trim($apacheLogContent))): ?>
-                <p class="debug-empty">No Apache errors logged or log not accessible.</p>
+            <?php if (empty(trim($nginxLogContent))): ?>
+                <p class="debug-empty">No nginx errors logged or log not accessible.</p>
             <?php else: ?>
                 <p class="debug-no-results">No entries match your search.</p>
                 <div class="debug-search-info"></div>
-                <pre class="debug-pre"><?php echo htmlspecialchars($apacheLogContent); ?></pre>
+                <pre class="debug-pre"><?php echo htmlspecialchars($nginxLogContent); ?></pre>
             <?php endif; ?>
         </div>
     </div>
@@ -830,12 +830,12 @@
             }
             $phpExtensionsFormatted = implode("\n", $phpExtensionsWithVersions);
 
-            // Apache config path and contents
-            $apacheMainConfigPath = '/etc/apache2/apache2.conf';
-            $apacheMainConfig = file_exists($apacheMainConfigPath) ? $apacheMainConfigPath : 'N/A';
-            $apacheConfigContent = 'N/A';
-            if (file_exists($apacheMainConfigPath) && is_readable($apacheMainConfigPath)) {
-                $apacheConfigContent = file_get_contents($apacheMainConfigPath);
+            // nginx config path and contents
+            $nginxMainConfigPath = '/etc/nginx/nginx.conf';
+            $nginxMainConfig = file_exists($nginxMainConfigPath) ? $nginxMainConfigPath : 'N/A';
+            $nginxConfigContent = 'N/A';
+            if (file_exists($nginxMainConfigPath) && is_readable($nginxMainConfigPath)) {
+                $nginxConfigContent = file_get_contents($nginxMainConfigPath);
             }
             ?>
             <table class="debug-info-table">
@@ -870,13 +870,13 @@
                 <pre id="phpini-content" class="debug-pre debug-scrollable-md d-none"><?php echo htmlspecialchars($phpIniContent); ?></pre>
             </div>
 
-            <!-- apache2.conf Contents (Collapsible) -->
+            <!-- nginx.conf Contents (Collapsible) -->
             <div class="mt-lg">
-                <h4 class="debug-section-heading" data-action="toggleConfigSection" data-section="apache-content" data-arrow="apache-arrow">
-                    <i class="fas fa-server"></i> apache2.conf Contents
-                    <i id="apache-arrow" class="fas fa-chevron-down settings-collapsible-arrow"></i>
+                <h4 class="debug-section-heading" data-action="toggleConfigSection" data-section="nginx-content" data-arrow="nginx-arrow">
+                    <i class="fas fa-server"></i> nginx.conf Contents
+                    <i id="nginx-arrow" class="fas fa-chevron-down settings-collapsible-arrow"></i>
                 </h4>
-                <pre id="apache-content" class="debug-pre debug-scrollable-md d-none"><?php echo htmlspecialchars($apacheConfigContent); ?></pre>
+                <pre id="nginx-content" class="debug-pre debug-scrollable-md d-none"><?php echo htmlspecialchars($nginxConfigContent); ?></pre>
             </div>
 
             <!-- Constants.php Values (Collapsible) -->
