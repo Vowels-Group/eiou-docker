@@ -150,13 +150,16 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | TLS | TLS 1.2+ with auto-generated or custom certificates | Self-signed by default; use Let's Encrypt or mount external certs for production |
 | Transport priority | Tor > HTTPS > HTTP | System prefers the most secure transport available |
 | Transport fallback | Automatic on Tor failure | Falls back to HTTPS when `torFailureTransportFallback=true` (default). `torFallbackRequireEncrypted=true` (default) restricts fallback to HTTPS only |
+| Connection-level rate limiting | nginx `limit_req_zone` per-IP: 30r/s general, 10r/s API, 20r/s P2P | Enforced before PHP executes — drops floods at the web server level |
+| Connection limits | nginx `limit_conn` 50 concurrent connections per IP | Prevents single-IP resource exhaustion |
+| Connection timeouts | 10s header/body timeout | Drops slow/incomplete connections before they consume PHP-FPM workers |
 | Internal network | Docker bridge network | Containers communicate over an isolated Docker network |
 
 **Recommendations:**
 
 - Use HTTPS or Tor for all inter-node communication in non-testing environments
 - Use Let's Encrypt certificates for production deployments, or mount your own CA-signed certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section)
-- Avoid exposing container ports directly to the public internet without a reverse proxy or firewall
+- If running behind an external reverse proxy, bind ports to localhost only (`127.0.0.1:80:80`) in `docker-compose.yml`. The built-in nginx already provides rate limiting, connection limits, and timeouts for direct exposure
 - The HTTP transport mode is intended for local Docker network testing only
 - The `torFailureTransportFallback` setting can be disabled for Tor-only operation where privacy is paramount
 - The `torFallbackRequireEncrypted` setting (default: enabled) ensures Tor fallback only goes to HTTPS, never plain HTTP. Disable only if you explicitly need HTTP fallback in a trusted local network

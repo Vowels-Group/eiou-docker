@@ -22,6 +22,7 @@ The project is currently in **ALPHA** status.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
 
 ### Changed
+- Web server replaced from Apache (mod_php) to nginx + PHP-FPM. nginx handles connections, SSL termination, rate limiting, and static files; PHP-FPM executes PHP via unix socket. All SSL cert paths moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`. Log paths changed from `/var/log/apache2/` to `/var/log/nginx/`. GUI debug panel updated from "Apache Logs" to "nginx Logs". Service reload command changed from `apache2ctl graceful` to `nginx -s reload`
 - Interactive `changesettings` menu refactored from flat 44-item numbered list to two-level grouped navigation: select a category (1-8), then select a setting within that category. Press 0 to go back or cancel. All validation logic unchanged
 - Tor circuit health settings (max failures, cooldown duration, transport fallback) added to API (GET/PUT `/api/v1/system/settings`), GUI settings panel, and grouped interactive CLI menu
 
