@@ -764,6 +764,38 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         ];
                     }
 
+                    // Tor cooldown — don't burn a retry, defer to processRetryQueue
+                    if (($decodedResponse['error_code'] ?? null) === 'TOR_COOLDOWN') {
+                        $cooldownSeconds = $this->currentUser->getTorCircuitCooldownSeconds();
+
+                        // Use lockForProcessing to defer without incrementing retry_count.
+                        // This sets next_retry_at so processRetryQueue picks it up after
+                        // the cooldown expires, without counting against max retries.
+                        $this->deliveryRepository->lockForProcessing(
+                            $messageType,
+                            $messageId,
+                            $cooldownSeconds
+                        );
+
+                        $this->log('info', "Delivery deferred: Tor address in cooldown", [
+                            'message_type' => $messageType,
+                            'message_id' => $messageId,
+                            'attempt' => $attempt + 1,
+                            'cooldown_seconds' => $cooldownSeconds,
+                        ]);
+
+                        // Break out of retry loop — processRetryQueue will pick it up
+                        // after the cooldown expires (next_retry_at set above)
+                        return [
+                            'success' => false,
+                            'stage' => 'deferred',
+                            'message' => 'Tor address in cooldown, delivery deferred',
+                            'retry' => true,
+                            'attempts' => $attempt + 1,
+                            'deferred_seconds' => $cooldownSeconds
+                        ];
+                    }
+
                     // Transport error - extract specific error message for retry
                     if ($status === 'error') {
                         $lastError = $decodedResponse['message'] ?? 'Transport error';
