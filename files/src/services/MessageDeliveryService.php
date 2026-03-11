@@ -11,6 +11,8 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Events\DeliveryEvents;
+use Eiou\Events\EventDispatcher;
 use Eiou\Utils\Logger;
 use Exception;
 
@@ -1247,6 +1249,19 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
 
             if ($result['success']) {
                 $results['succeeded']++;
+
+                // Dispatch delivery completed event for post-delivery processing.
+                // This allows message-type-specific services (e.g., ContactSyncService)
+                // to run post-delivery logic when a retried message succeeds.
+                EventDispatcher::getInstance()->dispatch(DeliveryEvents::RETRY_DELIVERY_COMPLETED, [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'recipient_address' => $recipient,
+                    'response' => $result['response'] ?? [],
+                    'signing_data' => $result['signing_data'] ?? null,
+                    'stored_payload' => $payload,
+                ]);
+
                 $results['details'][] = [
                     'message_id' => $messageId,
                     'status' => 'success',

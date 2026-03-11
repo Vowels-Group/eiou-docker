@@ -17,6 +17,8 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Events\DeliveryEvents;
+use Eiou\Events\EventDispatcher;
 use Eiou\Utils\Logger;
 use Eiou\Core\UserContext;
 use Eiou\Schemas\Payloads\ContactPayload;
@@ -218,6 +220,189 @@ class ContactSyncService implements ContactSyncServiceInterface {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+
+        // Subscribe to delivery retry completion events so we can run
+        // post-delivery logic when a queued contact create succeeds
+        EventDispatcher::getInstance()->subscribe(
+            DeliveryEvents::RETRY_DELIVERY_COMPLETED,
+            [$this, 'handleRetryDeliveryCompleted']
+        );
+    }
+
+    // =========================================================================
+    // RETRY DELIVERY COMPLETION HANDLER
+    // =========================================================================
+
+    /**
+     * Handle successful delivery of a retried message
+     *
+     * Called via EventDispatcher when processRetryQueue() successfully delivers
+     * a message that was previously queued for retry. For contact creates, this
+     * runs the post-delivery logic (contact insertion, balance init, etc.) that
+     * couldn't run when the original send was deferred due to maintenance mode.
+     *
+     * @param array $eventData Event data from DeliveryEvents::RETRY_DELIVERY_COMPLETED
+     */
+    public function handleRetryDeliveryCompleted(array $eventData): void {
+        // Only handle contact message types
+        if (($eventData['message_type'] ?? '') !== 'contact') {
+            return;
+        }
+
+        $messageId = $eventData['message_id'] ?? '';
+        $address = $eventData['recipient_address'] ?? '';
+        $responseData = $eventData['response'] ?? [];
+        $signingData = $eventData['signing_data'] ?? null;
+        $storedPayload = $eventData['stored_payload'] ?? [];
+
+        // Extract contact creation params stored in the payload metadata
+        $contactParams = $storedPayload['_contact_params'] ?? null;
+        if ($contactParams === null) {
+            Logger::getInstance()->info("Retry delivery completed for contact but no _contact_params in payload", [
+                'message_id' => $messageId,
+                'recipient_address' => $address
+            ]);
+            return;
+        }
+
+        $name = $contactParams['name'];
+        $fee = (float) $contactParams['fee'];
+        $credit = (float) $contactParams['credit'];
+        $currency = $contactParams['currency'];
+
+        $status = $responseData['status'] ?? null;
+        $senderPublicKey = $responseData['senderPublicKey'] ?? null;
+
+        if ($senderPublicKey === null || $status === null) {
+            Logger::getInstance()->warning("Retry delivery completed for contact but response missing senderPublicKey or status", [
+                'message_id' => $messageId,
+                'status' => $status,
+                'has_pubkey' => $senderPublicKey !== null
+            ]);
+            return;
+        }
+
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);
+
+        // Check if contact was already created (e.g., by the remote sending us a request
+        // while our retry was pending, or by a duplicate retry)
+        $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+        if ($existingContact) {
+            Logger::getInstance()->info("Contact already exists after retry delivery, skipping insertion", [
+                'message_id' => $messageId,
+                'pubkey_hash' => $senderPublicKeyHash,
+                'existing_status' => $existingContact['status']
+            ]);
+
+            // Still update the address with potentially new transport info
+            $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+            if ($this->messageDeliveryService !== null) {
+                $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+            }
+            return;
+        }
+
+        Logger::getInstance()->info("Processing contact creation after retry delivery succeeded", [
+            'message_id' => $messageId,
+            'status' => $status,
+            'recipient_address' => $address,
+            'contact_name' => $name
+        ]);
+
+        // Handle response based on status — same logic as handleNewContact() inline processing
+        if ($status === Constants::DELIVERY_RECEIVED) {
+            // Standard case: contact request was received, pending acceptance
+            if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                // Store additional addresses if present
+                if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                }
+
+                $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                // Track outgoing currency request
+                if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                        $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                    );
+                }
+
+                // Insert contact transaction
+                $txid = $responseData['txid'] ?? null;
+                $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+
+                // Store signature data
+                if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                    $this->transactionRepository->updateSignatureData(
+                        $txid,
+                        $signingData['signature'],
+                        $signingData['nonce']
+                    );
+                }
+
+                // Update delivery stage to completed
+                if ($this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                }
+
+                Logger::getInstance()->info("Contact created successfully after retry delivery", [
+                    'pubkey_hash' => $senderPublicKeyHash,
+                    'name' => $name,
+                    'currency' => $currency
+                ]);
+            } else {
+                Logger::getInstance()->error("Failed to insert contact after retry delivery", [
+                    'message_id' => $messageId,
+                    'pubkey_hash' => $senderPublicKeyHash
+                ]);
+            }
+        } elseif ($status === Constants::STATUS_ACCEPTED) {
+            // Mutual request: remote auto-accepted because they already had us as pending
+            if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                }
+
+                $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
+
+                if (!$this->contactTransactionExists($senderPublicKey)) {
+                    $txid = $responseData['txid'] ?? null;
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+
+                    if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                        $this->transactionRepository->updateSignatureData(
+                            $txid,
+                            $signingData['signature'],
+                            $signingData['nonce']
+                        );
+                    }
+                }
+
+                $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
+
+                if ($this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                }
+
+                Logger::getInstance()->info("Contact mutually accepted after retry delivery", [
+                    'pubkey_hash' => $senderPublicKeyHash,
+                    'name' => $name
+                ]);
+            }
+        } else {
+            // Other statuses (updated, warning, rejected) — log for investigation
+            Logger::getInstance()->warning("Unhandled contact response status after retry delivery", [
+                'message_id' => $messageId,
+                'status' => $status,
+                'recipient_address' => $address
+            ]);
+        }
     }
 
     // =========================================================================
@@ -834,6 +1019,17 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Build the payload array (include currency so receiver knows sender's preference)
         $payload = $this->contactPayload->buildCreateRequest($address, $currency);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
+
+        // Store contact creation params as metadata in the payload.
+        // If the first delivery attempt fails and the message is queued for retry,
+        // these params are needed when the retry succeeds to complete contact insertion.
+        // The remote node ignores unknown keys in the payload.
+        $payload['_contact_params'] = [
+            'name' => $name,
+            'fee' => $fee,
+            'credit' => $credit,
+            'currency' => $currency
+        ];
 
         // Generate unique message ID for contact creation tracking
         // Message ID format: create-{hash} (message_type 'contact' provides context)
