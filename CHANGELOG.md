@@ -13,6 +13,11 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Security
+- Default `APP_DEBUG` to `false` (secure-by-default). Debug mode now requires explicit opt-in via `APP_DEBUG=true` environment variable. Updated `DebugService`, `Security`, and GUI settings to use `Constants::isDebug()` for env var override support
+- Fix TOCTOU race condition in `BackupService` credential temp file creation: set restrictive umask before `tempnam()` so the file is created with `0600` permissions atomically, instead of chmod after creation
+- Add logging to silent catch blocks across database repositories, services, and utilities. Previously, exceptions in `TransactionRepository`, `TransactionContactRepository`, `QueryBuilder`, `TorCircuitHealth`, `ContactSyncService`, and `ConfigCheck` were swallowed without any logging, masking potential database and configuration failures
+
+### Security
 - Replace `exec()` SSL certificate generation with PHP native `openssl_pkey_new()`/`openssl_csr_sign()` functions, eliminating command injection risk via OpenSSL config file. Add strict hostname validation (alphanumeric, dots, hyphens only)
 - Fix N+1 query pattern in contact search: batch-load credits and balances in 2 queries instead of 2*N individual queries per search result
 - Add `set -u` (undefined variable protection) and `set -o pipefail` to startup.sh entrypoint for fail-fast on undefined variables and pipe failures

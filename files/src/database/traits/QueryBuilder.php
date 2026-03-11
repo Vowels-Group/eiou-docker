@@ -3,6 +3,7 @@
 
 namespace Eiou\Database\Traits;
 
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -78,6 +79,7 @@ trait QueryBuilder
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('executeSelectAll query failed: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -97,6 +99,7 @@ trait QueryBuilder
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('executeSelectOne query failed: ' . $e->getMessage(), 'WARNING');
             return null;
         }
 

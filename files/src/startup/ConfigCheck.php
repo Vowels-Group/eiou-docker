@@ -15,5 +15,6 @@ try{
     } 
     return;
 } catch(Exception $e){
+    error_log('ConfigCheck failed: ' . $e->getMessage());
     return;
 }

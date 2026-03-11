@@ -94,8 +94,8 @@ class DebugService implements DebugServiceInterface {
     }
 
     public function output($message, $level = 'ECHO') {
-        // Check if debug mode is enabled
-        if (Constants::get('APP_DEBUG')) {
+        // Check if debug mode is enabled (supports env var override)
+        if (Constants::isDebug()) {
             $data = [
                 'level' => $level,
                 'message' => trim($message),

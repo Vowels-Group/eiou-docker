@@ -17,6 +17,7 @@ namespace Eiou\Utils;
 
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Utils\Logger;
 
 class TorCircuitHealth
 {
@@ -237,6 +238,7 @@ class TorCircuitHealth
         try {
             return UserContext::getInstance()->getTorCircuitMaxFailures();
         } catch (\Exception $e) {
+            Logger::getInstance()->log('Failed to read TorCircuitMaxFailures config, using default: ' . $e->getMessage(), 'DEBUG');
             return Constants::TOR_CIRCUIT_MAX_FAILURES;
         }
     }
@@ -249,6 +251,7 @@ class TorCircuitHealth
         try {
             return UserContext::getInstance()->getTorCircuitCooldownSeconds();
         } catch (\Exception $e) {
+            Logger::getInstance()->log('Failed to read TorCircuitCooldownSeconds config, using default: ' . $e->getMessage(), 'DEBUG');
             return Constants::TOR_CIRCUIT_COOLDOWN_SECONDS;
         }
     }
