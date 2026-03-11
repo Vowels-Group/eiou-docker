@@ -6,7 +6,7 @@
  * Automated Database Backup Cron Script
  *
  * Run via cron to perform scheduled backups with cleanup.
- * Usage: php /etc/eiou/scripts/backup-cron.php
+ * Usage: php /app/eiou/scripts/backup-cron.php
  *
  * Exit Codes:
  *   0 - Success
@@ -16,10 +16,10 @@
  */
 
 // Change to the eiou directory
-chdir('/etc/eiou');
+chdir('/app/eiou');
 
 // Load application bootstrap (Composer autoloader)
-require_once '/etc/eiou/src/bootstrap.php';
+require_once '/app/eiou/src/bootstrap.php';
 
 use Eiou\Core\Application;
 use Eiou\Utils\Logger;

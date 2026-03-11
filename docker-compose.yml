@@ -245,6 +245,7 @@ services:
 
       # Config: wallet private keys, encryption keys, userconfig.json
       # Without this, your wallet identity is lost — back this up.
+      # Note: Source code lives in /app/eiou/ (image filesystem, not this volume).
       - files:/etc/eiou/
 
       # Backups: encrypted daily database backups (AES-256-GCM)

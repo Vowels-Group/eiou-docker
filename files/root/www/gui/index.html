@@ -1,8 +1,8 @@
 <?php
 // Copyright 2025-2026 Vowels Group, LLC
 // GUI Entry Point - Web interface for wallet authentication and dashboard
-require_once '/etc/eiou/src/startup/MaintenanceCheck.php';
-require_once '/etc/eiou/Functions.php';
+require_once '/app/eiou/src/startup/MaintenanceCheck.php';
+require_once '/app/eiou/Functions.php';
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
@@ -105,7 +105,7 @@ if (!$secureSession->isAuthenticated()) {
     }
     // Show authentication form for normal page loads
     header('Content-Type: text/html; charset=UTF-8');
-    require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
+    require_once("/app/eiou/src/gui/layout/authenticationForm.html");
     exit;
 }
 
@@ -132,10 +132,10 @@ if (!$secureSession->checkSessionTimeout()) {
 $csrfToken = $secureSession->getCSRFToken();
 
 // This file handles wallet interaction with the eIOU network
-require_once("/etc/eiou/src/gui/functions/Functions.php");
+require_once("/app/eiou/src/gui/functions/Functions.php");
 
 // Set content type for HTML
 header('Content-Type: text/html; charset=UTF-8');
-require_once("/etc/eiou/src/gui/layout/wallet.html");
+require_once("/app/eiou/src/gui/layout/wallet.html");
 ?>
 

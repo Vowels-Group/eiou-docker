@@ -30,7 +30,7 @@ define('EIOU_BASE_PATH', dirname(__DIR__));
 $autoloadPath = EIOU_BASE_PATH . '/vendor/autoload.php';
 if (!file_exists($autoloadPath)) {
     error_log("FATAL: Composer autoload not found at: $autoloadPath");
-    error_log("Run 'composer install' in the /etc/eiou directory");
+    error_log("Run 'composer install' in the /app/eiou directory");
     die("Autoloader not found. See error log.\n");
 }
 

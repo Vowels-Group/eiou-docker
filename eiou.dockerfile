@@ -159,11 +159,35 @@ RUN for dir in /etc/php/*/fpm/conf.d /etc/php/*/cli/conf.d; do \
 # =============================================================================
 # APPLICATION DEPLOYMENT
 # =============================================================================
+# Source code lives in /app/eiou/ (image filesystem — updates with each build).
+# User data lives in /etc/eiou/config/ (Docker volume — persists across upgrades).
+# This separation eliminates the need for source file sync at startup.
+# =============================================================================
 
-# Copy root files to /etc/eiou/ (includes api/, cli/, processors/, www/)
-COPY files/root/ /etc/eiou/
+# Copy root files (api/, cli/, processors/, www/, *.php)
+COPY files/root/ /app/eiou/
 
-# Create config directory for wallet configuration files
+# Copy src folder (namespaced PHP classes)
+COPY files/src/ /app/eiou/src/
+
+# Copy scripts (backup-cron, validate-autoload)
+COPY files/scripts/ /app/eiou/scripts/
+
+# Copy composer files and install dependencies
+COPY files/composer.json /app/eiou/composer.json
+RUN cd /app/eiou && composer install --no-dev --optimize-autoloader --no-interaction
+
+# Set permissions on application code
+RUN chown www-data:www-data /app/eiou/SecurityInit.php \
+    /app/eiou/Functions.php \
+    /app/eiou/processors/P2pMessages.php \
+    /app/eiou/processors/TransactionMessages.php \
+    /app/eiou/processors/CleanupMessages.php \
+    /app/eiou/processors/ContactStatusMessages.php
+RUN find /app/eiou/ -type d -exec chmod 755 "{}" \;
+RUN find /app/eiou/ -type f -exec chmod 644 "{}" \;
+
+# Create config directory for wallet configuration files (volume-backed)
 RUN mkdir -p /etc/eiou/config
 
 # Create CLI wrapper in PATH (waits for MariaDB before running commands)
@@ -178,38 +202,16 @@ while ! mysqladmin ping -h localhost --silent >/dev/null 2>&1; do\n\
     fi\n\
     sleep 1\n\
 done\n\
-php /etc/eiou/cli/Eiou.php "$@"\n' > /usr/local/bin/eiou && \
+php /app/eiou/cli/Eiou.php "$@"\n' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou
 
-# Copy src folder to /etc/eiou/src
-COPY files/src/ /etc/eiou/src/
-
-# Copy composer.json and generate PSR-4 autoloader
-# This creates vendor/autoload.php for namespace-based class loading
-COPY files/composer.json /etc/eiou/composer.json
-RUN cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interaction
-
-RUN chown www-data:www-data /etc/eiou/SecurityInit.php \
-    /etc/eiou/Functions.php \
-    /etc/eiou/processors/P2pMessages.php \
-    /etc/eiou/processors/TransactionMessages.php \
-    /etc/eiou/processors/CleanupMessages.php \
-    /etc/eiou/processors/ContactStatusMessages.php
-
-# Set _directories_ in the /etc/eiou/ directory to 755
-RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
-
-# Set _files_ in the /etc/eiou/ directory and its subdirectories to 644
-RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
-
-# Create symlinks in /var/www/html pointing to files under /etc/eiou/
-# This keeps the web root at /var/www/html (standard nginx/Debian convention)
-# while actual files live in the /etc/eiou volume for persistence and sync
+# Create symlinks in /var/www/html pointing to application code
+# Keeps the web root at /var/www/html (standard nginx/Debian convention)
 RUN rm -f /var/www/html/index.nginx-debian.html && \
-    ln -s /etc/eiou/www/gui /var/www/html/gui && \
-    ln -s /etc/eiou/www/eiou /var/www/html/eiou && \
+    ln -s /app/eiou/www/gui /var/www/html/gui && \
+    ln -s /app/eiou/www/eiou /var/www/html/eiou && \
     mkdir -p /var/www/html/api && \
-    ln -s /etc/eiou/api/Api.php /var/www/html/api/index.php
+    ln -s /app/eiou/api/Api.php /var/www/html/api/index.php
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/fpm/php.ini
@@ -226,28 +228,17 @@ RUN printf '/var/log/nginx/*.log {\n    weekly\n    rotate 4\n    compress\n    
 
 # Persistent volumes:
 # - /var/lib/mysql: Database files (transactions, contacts, balances)
-# - /etc/eiou: Wallet configuration, encryption keys, and web files (www/)
+# - /etc/eiou/config: Wallet configuration, encryption keys
 # - /var/lib/eiou/backups: Encrypted database backups
 # - /etc/letsencrypt: Let's Encrypt certificates and renewal state
-VOLUME ["/var/lib/mysql", "/etc/eiou", "/var/lib/eiou/backups", "/etc/letsencrypt"]
+#
+# Source code is NOT in a volume — it lives in /app/eiou/ (image filesystem)
+# and updates automatically with each new image build.
+VOLUME ["/var/lib/mysql", "/etc/eiou/config", "/var/lib/eiou/backups", "/etc/letsencrypt"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/
 RUN chmod +x /app/scripts/*.sh
-
-# =============================================================================
-# SOURCE FILE BACKUP FOR VOLUME SYNC
-# =============================================================================
-# The /etc/eiou directory is a Docker volume. When existing containers are
-# updated, the volume retains old files. We create a backup of source files
-# in /app/eiou-src-backup/ that startup.sh will use to sync to the volume.
-# This ensures users always get the latest code without losing their data.
-# =============================================================================
-RUN mkdir -p /app/eiou-src-backup
-COPY files/src/ /app/eiou-src-backup/src/
-COPY files/root/ /app/eiou-src-backup/root/
-COPY files/composer.json /app/eiou-src-backup/composer.json
-COPY files/composer.lock /app/eiou-src-backup/composer.lock
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh
@@ -258,8 +249,8 @@ RUN chmod +x /startup.sh
 # - timeout: Allow 20 seconds for check to complete
 # - start-period: Wait 120 seconds before first check (MariaDB needs 30-60s to initialize)
 # - retries: Mark unhealthy after 5 consecutive failures
-HEALTHCHECK --interval=30s --timeout=20s --start-period=120s --retries=5 \
-    CMD curl -f http://localhost/gui/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+    CMD curl -sf http://localhost/api/health || exit 1
 
 # Ensure Docker sends SIGTERM for graceful shutdown (startup.sh traps this)
 STOPSIGNAL SIGTERM

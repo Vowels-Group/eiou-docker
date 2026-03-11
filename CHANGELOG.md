@@ -20,6 +20,7 @@ The project is currently in **ALPHA** status.
 - Add input validation for QUICKSTART, EIOU_HOST, EIOU_NAME, and EIOU_PORT environment variables in startup.sh to prevent injection via crafted values (DOCK-08)
 
 ### Changed
+- Separate source code from user data in Docker layout (DOCK-05): code moves from `/etc/eiou/` volume to `/app/eiou/` image filesystem. Config data stays at `/etc/eiou/config/` (volume). Eliminates startup source file sync, composer autoloader regeneration, and `/app/eiou-src-backup` duplication. Image upgrades now apply code immediately without boot-time sync. Includes one-time migration to clean stale code from existing volumes
 - Refactor `CliService` God Class (3,784 → 1,136 lines, 70% reduction) by extracting four focused sub-services (ARCH-04): `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines), `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines). CliService delegates to sub-services for backward compatibility
 - Modernize `array()` syntax to short `[]` syntax in `TransportUtilityService.php` (callable and literal array forms)
 - Fix misspelled function names: `outputAdressContactIssue` → `outputAddressContactIssue`, `outputAdressOrContactIssue` → `outputAddressOrContactIssue`, `outputContactSuccesfullysynced` → `outputContactSuccessfullySynced`. Updated all call sites in `P2pService`, `SyncService`, and tests
