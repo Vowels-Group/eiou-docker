@@ -7,11 +7,11 @@ use Eiou\Core\Constants;
 // CONTACT SERVICE OUTPUT FUNCTIONS
 // ============================================================================
 
-function outputAdressContactIssue($address){
+function outputAddressContactIssue($address){
     return "[Contact] No contact with supplied address: " . $address." exists \n";
 }
 
-function outputAdressOrContactIssue($data){
+function outputAddressOrContactIssue($data){
     return "[Contact] Not an address nor existing contact with name: " . $data[2]."\n";
 }
 
@@ -23,7 +23,7 @@ function outputContactMatched($contactHash){
     return "[Contact] Matched with hash: " . $contactHash."\n";
 }
 
-function outputContactSuccesfullysynced($address){
+function outputContactSuccessfullySynced($address){
     return "[Contact] " . $address . " was successfully synced.\n";
 }
 

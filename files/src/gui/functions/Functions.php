@@ -2,6 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 use Eiou\Gui\Helpers\ContactDataBuilder;
+use Eiou\Gui\Includes\SessionKeys;
 
 /**
  * GUI Request Router and View Data Initializer
@@ -117,10 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_updates'])) {
 
 // Get message from session flash messages (set by controllers, read-once)
 // Flash messages are cleared after reading so they don't re-appear on refresh
-if (isset($_SESSION['message'])) {
-    $messageForDisplay = $_SESSION['message'];
-    $messageTypeForDisplay = $_SESSION['message_type'] ?? 'info';
-    unset($_SESSION['message'], $_SESSION['message_type']);
+if (isset($_SESSION[SessionKeys::MESSAGE])) {
+    $messageForDisplay = $_SESSION[SessionKeys::MESSAGE];
+    $messageTypeForDisplay = $_SESSION[SessionKeys::MESSAGE_TYPE] ?? 'info';
+    unset($_SESSION[SessionKeys::MESSAGE], $_SESSION[SessionKeys::MESSAGE_TYPE]);
 } else {
     $messageForDisplay = '';
     $messageTypeForDisplay = '';
@@ -218,7 +219,7 @@ if (file_exists($torGuiStatusFile)) {
 
 // Track completed transactions for notifications (sent transactions)
 // Get previously known in-progress txids from session
-$prevInProgressTxids = $_SESSION['in_progress_txids'] ?? [];
+$prevInProgressTxids = $_SESSION[SessionKeys::IN_PROGRESS_TXIDS] ?? [];
 
 // Get current in-progress transaction IDs
 $currentInProgressTxids = array_column($inProgressTransactions ?? [], 'txid');
@@ -239,13 +240,13 @@ foreach ($completedTxids as $txid) {
 }
 
 // Store current in-progress txids for next comparison
-$_SESSION['in_progress_txids'] = $currentInProgressTxids;
+$_SESSION[SessionKeys::IN_PROGRESS_TXIDS] = $currentInProgressTxids;
 
 // Track received transactions for notifications
 // Received transactions bypass in-progress tracking (they arrive completed),
 // so we detect them by comparing known txids across page loads
 $currentTxids = array_column($transactions ?? [], 'txid');
-$prevKnownTxids = $_SESSION['known_txids'] ?? null;
+$prevKnownTxids = $_SESSION[SessionKeys::KNOWN_TXIDS] ?? null;
 $newlyReceivedTransactions = [];
 
 // Only detect new transactions if we have a previous baseline (skip first page load)
@@ -261,7 +262,7 @@ if ($prevKnownTxids !== null) {
     }
 }
 
-$_SESSION['known_txids'] = $currentTxids;
+$_SESSION[SessionKeys::KNOWN_TXIDS] = $currentTxids;
 
 // Contact data
 $allContacts = $contactService->getAllContacts();
@@ -475,7 +476,7 @@ try {
     $currentDlqItems = $dlqRepository->getPendingItems(50);
 
     // Get previously known DLQ item IDs from session
-    $prevDlqIds = $_SESSION['known_dlq_ids'] ?? [];
+    $prevDlqIds = $_SESSION[SessionKeys::KNOWN_DLQ_IDS] ?? [];
 
     // Find items that are new (not previously seen)
     $currentDlqIds = array_column($currentDlqItems, 'id');
@@ -486,7 +487,7 @@ try {
     }
 
     // Update session with current DLQ IDs
-    $_SESSION['known_dlq_ids'] = $currentDlqIds;
+    $_SESSION[SessionKeys::KNOWN_DLQ_IDS] = $currentDlqIds;
 } catch (Exception $e) {
     // Silently fail - DLQ notification is non-critical
     $newlyAddedToDlq = [];

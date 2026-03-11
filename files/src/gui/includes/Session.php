@@ -4,6 +4,7 @@
 namespace Eiou\Gui\Includes;
 
 use Eiou\Core\ErrorCodes;
+use Eiou\Gui\Includes\SessionKeys;
 
 /**
  *
@@ -50,11 +51,11 @@ class Session
      */
     private function checkSessionRegeneration(): void
     {
-        if (!isset($_SESSION['last_regeneration'])) {
-            $_SESSION['last_regeneration'] = time();
-        } elseif (time() - $_SESSION['last_regeneration'] > 300) { // Regenerate every 5 minutes
+        if (!isset($_SESSION[SessionKeys::LAST_REGENERATION])) {
+            $_SESSION[SessionKeys::LAST_REGENERATION] = time();
+        } elseif (time() - $_SESSION[SessionKeys::LAST_REGENERATION] > 300) { // Regenerate every 5 minutes
             session_regenerate_id(true);
-            $_SESSION['last_regeneration'] = time();
+            $_SESSION[SessionKeys::LAST_REGENERATION] = time();
         }
     }
 
@@ -65,7 +66,7 @@ class Session
      */
     public function isAuthenticated(): bool
     {
-        return isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true;
+        return isset($_SESSION[SessionKeys::AUTHENTICATED]) && $_SESSION[SessionKeys::AUTHENTICATED] === true;
     }
 
     /**
@@ -79,9 +80,9 @@ class Session
     {
         // Use constant-time comparison to prevent timing attacks
         if (hash_equals($userAuthCode, $authCode)) {
-            $_SESSION['authenticated'] = true;
-            $_SESSION['auth_time'] = time();
-            $_SESSION['last_activity'] = time();
+            $_SESSION[SessionKeys::AUTHENTICATED] = true;
+            $_SESSION[SessionKeys::AUTH_TIME] = time();
+            $_SESSION[SessionKeys::LAST_ACTIVITY] = time();
 
             // Regenerate session ID on successful authentication
             session_regenerate_id(true);
@@ -99,8 +100,8 @@ class Session
      */
     public function checkSessionTimeout(): bool
     {
-        if (isset($_SESSION['last_activity'])) {
-            $inactive = time() - $_SESSION['last_activity'];
+        if (isset($_SESSION[SessionKeys::LAST_ACTIVITY])) {
+            $inactive = time() - $_SESSION[SessionKeys::LAST_ACTIVITY];
             $timeout = 1800; // 30 minutes
 
             if ($inactive >= $timeout) {
@@ -109,7 +110,7 @@ class Session
             }
         }
 
-        $_SESSION['last_activity'] = time();
+        $_SESSION[SessionKeys::LAST_ACTIVITY] = time();
         return true;
     }
 
@@ -157,11 +158,11 @@ class Session
      */
     public function generateCSRFToken(): string
     {
-        if (!isset($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-            $_SESSION['csrf_token_time'] = time();
+        if (!isset($_SESSION[SessionKeys::CSRF_TOKEN])) {
+            $_SESSION[SessionKeys::CSRF_TOKEN] = bin2hex(random_bytes(32));
+            $_SESSION[SessionKeys::CSRF_TOKEN_TIME] = time();
         }
-        return $_SESSION['csrf_token'];
+        return $_SESSION[SessionKeys::CSRF_TOKEN];
     }
 
     /**
@@ -184,23 +185,23 @@ class Session
     public function validateCSRFToken(string $token, bool $rotate = true): bool
     {
         // Check if token exists
-        if (!isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time'])) {
+        if (!isset($_SESSION[SessionKeys::CSRF_TOKEN]) || !isset($_SESSION[SessionKeys::CSRF_TOKEN_TIME])) {
             return false;
         }
 
         // Check token age (1 hour max)
-        if (time() - $_SESSION['csrf_token_time'] > 3600) {
+        if (time() - $_SESSION[SessionKeys::CSRF_TOKEN_TIME] > 3600) {
             // Token expired, regenerate
-            unset($_SESSION['csrf_token']);
-            unset($_SESSION['csrf_token_time']);
+            unset($_SESSION[SessionKeys::CSRF_TOKEN]);
+            unset($_SESSION[SessionKeys::CSRF_TOKEN_TIME]);
             return false;
         }
 
         // Validate token using constant-time comparison
-        if (hash_equals($_SESSION['csrf_token'], $token)) {
+        if (hash_equals($_SESSION[SessionKeys::CSRF_TOKEN], $token)) {
             if ($rotate) {
                 // Rotate token after successful validation to prevent reuse
-                unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+                unset($_SESSION[SessionKeys::CSRF_TOKEN], $_SESSION[SessionKeys::CSRF_TOKEN_TIME]);
             }
             return true;
         }
@@ -246,12 +247,12 @@ class Session
      */
     public function getMessage(): ?array
     {
-        if (isset($_SESSION['message'])) {
+        if (isset($_SESSION[SessionKeys::MESSAGE])) {
             $message = [
-                'text' => $_SESSION['message'],
-                'type' => $_SESSION['message_type'] ?? 'info'
+                'text' => $_SESSION[SessionKeys::MESSAGE],
+                'type' => $_SESSION[SessionKeys::MESSAGE_TYPE] ?? 'info'
             ];
-            unset($_SESSION['message'], $_SESSION['message_type']);
+            unset($_SESSION[SessionKeys::MESSAGE], $_SESSION[SessionKeys::MESSAGE_TYPE]);
             return $message;
         }
         return null;
@@ -266,8 +267,8 @@ class Session
      */
     public function setMessage(string $message, string $type = 'success'): void
     {
-        $_SESSION['message'] = $message;
-        $_SESSION['message_type'] = $type;
+        $_SESSION[SessionKeys::MESSAGE] = $message;
+        $_SESSION[SessionKeys::MESSAGE_TYPE] = $type;
     }
 
     /**

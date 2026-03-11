@@ -349,7 +349,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 // Complete the contact transaction (update status from 'sent' to 'completed')
                 $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
 
-                output(outputContactSuccesfullySynced($contactAddress),$echo);
+                output(outputContactSuccessfullySynced($contactAddress),$echo);
 
                 // Dispatch contact synced event
                 EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [
@@ -374,7 +374,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     if(isset($inquiryResponse['status']) && $inquiryResponse['status'] === Constants::STATUS_ACCEPTED){
                         $inquiryPubkey = $inquiryResponse['senderPublicKey'];
                         $this->contactRepository->updateStatus($inquiryPubkey, Constants::STATUS_ACCEPTED);
-                        output(outputContactSuccesfullySynced($contactAddress),$echo);
+                        output(outputContactSuccessfullySynced($contactAddress),$echo);
 
                         // Dispatch contact synced event
                         EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [

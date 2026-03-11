@@ -1268,7 +1268,7 @@ class P2pService implements P2pServiceInterface {
                     $data[2] = $address;
                 }     
             } else{
-                output(outputAdressOrContactIssue($data),'SILENT');
+                output(outputAddressOrContactIssue($data),'SILENT');
                 throw new \InvalidArgumentException("Not an address nor existing contact with name: " . $data[2]);
             }
         }

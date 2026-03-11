@@ -14,11 +14,11 @@ use PHPUnit\Framework\Attributes\CoversFunction;
 $filesRoot = defined('EIOU_FILES_ROOT') ? EIOU_FILES_ROOT : dirname(__DIR__, 3) . '/files';
 require_once $filesRoot . '/src/schemas/OutputSchema.php';
 
-#[CoversFunction('outputAdressContactIssue')]
-#[CoversFunction('outputAdressOrContactIssue')]
+#[CoversFunction('outputAddressContactIssue')]
+#[CoversFunction('outputAddressOrContactIssue')]
 #[CoversFunction('outputCalculatedContactHash')]
 #[CoversFunction('outputContactMatched')]
-#[CoversFunction('outputContactSuccesfullysynced')]
+#[CoversFunction('outputContactSuccessfullySynced')]
 #[CoversFunction('outputContactNoResponseSync')]
 #[CoversFunction('outputContactNoNeedSync')]
 #[CoversFunction('outputContactNotFoundTryP2p')]
@@ -64,12 +64,12 @@ class OutputSchemaTest extends TestCase
     // =========================================================================
 
     /**
-     * Test outputAdressContactIssue includes address
+     * Test outputAddressContactIssue includes address
      */
-    public function testOutputAdressContactIssueIncludesAddress(): void
+    public function testOutputAddressContactIssueIncludesAddress(): void
     {
         $address = 'http://example.onion';
-        $result = outputAdressContactIssue($address);
+        $result = outputAddressContactIssue($address);
 
         $this->assertIsString($result);
         $this->assertStringContainsString('[Contact]', $result);
@@ -78,12 +78,12 @@ class OutputSchemaTest extends TestCase
     }
 
     /**
-     * Test outputAdressOrContactIssue includes data
+     * Test outputAddressOrContactIssue includes data
      */
-    public function testOutputAdressOrContactIssueIncludesData(): void
+    public function testOutputAddressOrContactIssueIncludesData(): void
     {
         $data = ['cmd', 'action', 'testname'];
-        $result = outputAdressOrContactIssue($data);
+        $result = outputAddressOrContactIssue($data);
 
         $this->assertIsString($result);
         $this->assertStringContainsString('[Contact]', $result);
@@ -119,12 +119,12 @@ class OutputSchemaTest extends TestCase
     }
 
     /**
-     * Test outputContactSuccesfullysynced includes address
+     * Test outputContactSuccessfullySynced includes address
      */
-    public function testOutputContactSuccesfullysyncedIncludesAddress(): void
+    public function testOutputContactSuccessfullySyncedIncludesAddress(): void
     {
         $address = 'http://example.onion';
-        $result = outputContactSuccesfullysynced($address);
+        $result = outputContactSuccessfullySynced($address);
 
         $this->assertIsString($result);
         $this->assertStringContainsString('[Contact]', $result);
