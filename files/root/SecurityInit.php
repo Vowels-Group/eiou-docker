@@ -37,6 +37,7 @@ use Eiou\Utils\Logger;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Services\RateLimiterService;
 use Eiou\Gui\Helpers\MessageHelper;
+use Eiou\Gui\Includes\SessionKeys;
 
 // Initialize secure logging
 Logger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
@@ -64,11 +65,11 @@ if (php_sapi_name() !== 'cli') {
         session_start();
 
         // Regenerate session ID periodically
-        if (!isset($_SESSION['last_regeneration'])) {
-            $_SESSION['last_regeneration'] = time();
-        } elseif (time() - $_SESSION['last_regeneration'] > 300) { // 5 minutes
+        if (!isset($_SESSION[SessionKeys::LAST_REGENERATION])) {
+            $_SESSION[SessionKeys::LAST_REGENERATION] = time();
+        } elseif (time() - $_SESSION[SessionKeys::LAST_REGENERATION] > 300) { // 5 minutes
             session_regenerate_id(true);
-            $_SESSION['last_regeneration'] = time();
+            $_SESSION[SessionKeys::LAST_REGENERATION] = time();
         }
     }
 

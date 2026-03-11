@@ -270,6 +270,35 @@ EIOU_NAME=${EIOU_NAME:-false}
 EIOU_HOST=${EIOU_HOST:-false}
 EIOU_PORT=${EIOU_PORT:-false}
 
+# Validate environment variable values to prevent injection or naming errors.
+# Hostnames: alphanumeric, dots, and hyphens only (valid DNS characters).
+# Names: alphanumeric, spaces, hyphens, underscores, and dots only.
+# Port: numeric only.
+validate_hostname() {
+    local val="$1" varname="$2"
+    if [ "$val" != "false" ] && ! echo "$val" | grep -qE '^[a-zA-Z0-9._-]+$'; then
+        echo "ERROR: $varname contains invalid characters: '$val'"
+        echo "       Only alphanumeric characters, dots, hyphens, and underscores are allowed."
+        exit 1
+    fi
+}
+validate_name() {
+    local val="$1" varname="$2"
+    if [ "$val" != "false" ] && ! echo "$val" | grep -qE '^[a-zA-Z0-9 ._-]+$'; then
+        echo "ERROR: $varname contains invalid characters: '$val'"
+        echo "       Only alphanumeric characters, spaces, dots, hyphens, and underscores are allowed."
+        exit 1
+    fi
+}
+
+validate_hostname "$QUICKSTART" "QUICKSTART"
+validate_hostname "$EIOU_HOST" "EIOU_HOST"
+validate_name "$EIOU_NAME" "EIOU_NAME"
+if [ "$EIOU_PORT" != "false" ] && ! echo "$EIOU_PORT" | grep -qE '^[0-9]+$'; then
+    echo "ERROR: EIOU_PORT must be numeric, got: '$EIOU_PORT'"
+    exit 1
+fi
+
 # Resolve the effective address host:
 # Priority: EIOU_HOST > QUICKSTART (for address construction)
 if [ "$EIOU_HOST" != "false" ]; then

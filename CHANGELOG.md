@@ -16,12 +16,14 @@ The project is currently in **ALPHA** status.
 - Default `APP_DEBUG` to `false` (secure-by-default). Debug mode now requires explicit opt-in via `APP_DEBUG=true` environment variable. Updated `DebugService`, `Security`, and GUI settings to use `Constants::isDebug()` for env var override support
 - Fix TOCTOU race condition in `BackupService` credential temp file creation: set restrictive umask before `tempnam()` so the file is created with `0600` permissions atomically, instead of chmod after creation
 - Add logging to silent catch blocks across database repositories, services, and utilities. Previously, exceptions in `TransactionRepository`, `TransactionContactRepository`, `QueryBuilder`, `TorCircuitHealth`, `ContactSyncService`, and `ConfigCheck` were swallowed without any logging, masking potential database and configuration failures
+- Fix insecure SSL temp files in `CliSettingsService::regenerateSslCertificate()`: use `tempnam()` with `/dev/shm` for unique file names, set restrictive umask for 0600 permissions at creation, wrap in try/finally for guaranteed cleanup (SEC-04)
+- Add input validation for QUICKSTART, EIOU_HOST, EIOU_NAME, and EIOU_PORT environment variables in startup.sh to prevent injection via crafted values (DOCK-08)
 
 ### Changed
 - Refactor `CliService` God Class (3,784 → 1,136 lines, 70% reduction) by extracting four focused sub-services (ARCH-04): `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines), `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines). CliService delegates to sub-services for backward compatibility
 - Modernize `array()` syntax to short `[]` syntax in `TransportUtilityService.php` (callable and literal array forms)
 - Fix misspelled function names: `outputAdressContactIssue` → `outputAddressContactIssue`, `outputAdressOrContactIssue` → `outputAddressOrContactIssue`, `outputContactSuccesfullysynced` → `outputContactSuccessfullySynced`. Updated all call sites in `P2pService`, `SyncService`, and tests
-- Extract session key magic strings to `SessionKeys` constants class (`Session.php`, `Functions.php`, `MessageHelper.php`)
+- Extract session key magic strings to `SessionKeys` constants class (`Session.php`, `Functions.php`, `MessageHelper.php`, `SecurityInit.php`)
 - Replace all `print_r()` calls (29 occurrences) in output functions with `json_encode()` for consistent structured logging. Prevents internal data structure exposure in debug output (`OutputSchema.php`, `MessagePayload.php`, `Rp2pPayload.php`)
 - Remove all `@` error suppression operators (33 occurrences across 11 files) with proper error handling: `file_exists()` checks before `unlink()`, return value checks for `file_get_contents()`/`fopen()`, and direct calls where `is_dir()` guards exist
 - Increase container resource limits from 512MB/256MB to 1024MB/512MB (memory limit/reservation) and from 1.0 to 2.0 CPU cores to prevent OOM kills under load with nginx + PHP-FPM + MariaDB + Tor
@@ -33,6 +35,7 @@ The project is currently in **ALPHA** status.
 - `.env.example` template documenting all configurable environment variables with defaults
 - Extended `.gitignore` with OS artifacts, sensitive files, logs, and database patterns
 - OCI labels in Dockerfile (title, description, source, vendor, license, base image)
+- Unauthenticated `/api/health` endpoint for Docker healthcheck and load balancers — checks database connectivity and message processor status, returns JSON with `ok`/`degraded` status (ARCH-10). Docker healthcheck updated from `/gui/` to `/api/health`
 
 ### Security
 - Replace `exec()` SSL certificate generation with PHP native `openssl_pkey_new()`/`openssl_csr_sign()` functions, eliminating command injection risk via OpenSSL config file. Add strict hostname validation (alphanumeric, dots, hyphens only)

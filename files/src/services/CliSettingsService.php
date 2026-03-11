@@ -1279,36 +1279,44 @@ keyUsage = critical, digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
 ";
 
-        $configPath = '/tmp/openssl-san.cnf';
+        // Use /dev/shm (RAM-backed) if available, fall back to sys_get_temp_dir()
+        $tmpDir = is_dir('/dev/shm') ? '/dev/shm' : sys_get_temp_dir();
+        $oldUmask = umask(0177);
+        $configPath = tempnam($tmpDir, 'ssl_');
+        umask($oldUmask);
         file_put_contents($configPath, $opensslConfig);
 
-        // Check if CA is available for CA-signed certificate
-        if (file_exists('/ssl-ca/ca.crt') && file_exists('/ssl-ca/ca.key')) {
-            // Generate CA-signed certificate
-            $csrPath = '/tmp/server.csr';
+        try {
+            // Check if CA is available for CA-signed certificate
+            if (file_exists('/ssl-ca/ca.crt') && file_exists('/ssl-ca/ca.key')) {
+                // Generate CA-signed certificate
+                $oldUmask = umask(0177);
+                $csrPath = tempnam($tmpDir, 'csr_');
+                umask($oldUmask);
 
-            // Generate key and CSR
-            shell_exec("openssl req -new -nodes -newkey rsa:2048 -keyout {$sslKeyPath} -out {$csrPath} -config {$configPath} 2>/dev/null");
+                // Generate key and CSR
+                shell_exec("openssl req -new -nodes -newkey rsa:2048 -keyout {$sslKeyPath} -out {$csrPath} -config {$configPath} 2>/dev/null");
 
-            // Sign with CA
-            shell_exec("openssl x509 -req -in {$csrPath} -CA /ssl-ca/ca.crt -CAkey /ssl-ca/ca.key -CAcreateserial -out {$sslCertPath} -days 365 -sha256 -extfile {$configPath} -extensions v3_ext 2>/dev/null");
+                // Sign with CA
+                shell_exec("openssl x509 -req -in {$csrPath} -CA /ssl-ca/ca.crt -CAkey /ssl-ca/ca.key -CAcreateserial -out {$sslCertPath} -days 365 -sha256 -extfile {$configPath} -extensions v3_ext 2>/dev/null");
 
-            if (file_exists($csrPath)) { unlink($csrPath); }
+                if (file_exists($csrPath)) { unlink($csrPath); }
 
-            if (!$output->isJsonMode()) {
-                echo "SSL certificate regenerated (CA-signed) for hostname: {$domain}\n";
+                if (!$output->isJsonMode()) {
+                    echo "SSL certificate regenerated (CA-signed) for hostname: {$domain}\n";
+                }
+            } else {
+                // Generate self-signed certificate
+                shell_exec("openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {$sslKeyPath} -out {$sslCertPath} -config {$configPath} 2>/dev/null");
+
+                if (!$output->isJsonMode()) {
+                    echo "SSL certificate regenerated (self-signed) for hostname: {$domain}\n";
+                    echo "Note: Browsers will show warnings for self-signed certificates.\n";
+                }
             }
-        } else {
-            // Generate self-signed certificate
-            shell_exec("openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {$sslKeyPath} -out {$sslCertPath} -config {$configPath} 2>/dev/null");
-
-            if (!$output->isJsonMode()) {
-                echo "SSL certificate regenerated (self-signed) for hostname: {$domain}\n";
-                echo "Note: Browsers will show warnings for self-signed certificates.\n";
-            }
+        } finally {
+            if (file_exists($configPath)) { unlink($configPath); }
         }
-
-        if (file_exists($configPath)) { unlink($configPath); }
 
         // Set proper permissions
         if (file_exists($sslKeyPath)) {

@@ -25,6 +25,47 @@ use Eiou\Services\ApiAuthService;
 // Set JSON content type
 header('Content-Type: application/json; charset=utf-8');
 
+// Unauthenticated health check endpoint for Docker healthcheck / load balancers.
+// Returns basic status without exposing internal details.
+$requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+if ($requestPath === '/api/health') {
+    $health = ['status' => 'ok', 'timestamp' => date('c')];
+    $httpCode = 200;
+
+    // Check database connectivity
+    try {
+        $pdo = new PDO(
+            'mysql:host=127.0.0.1;dbname=eiou',
+            'eiou',
+            trim(file_get_contents('/run/secrets/db_password') ?: (getenv('DB_PASSWORD') ?: 'eiou')),
+            [PDO::ATTR_TIMEOUT => 3]
+        );
+        $pdo->query('SELECT 1');
+        $health['database'] = 'healthy';
+    } catch (\Exception $e) {
+        $health['database'] = 'unhealthy';
+        $health['status'] = 'degraded';
+        $httpCode = 503;
+    }
+
+    // Check message processors (PID files)
+    $processors = ['p2pmessages' => 'p2p', 'transactionmessages' => 'transaction', 'cleanupmessages' => 'cleanup', 'contact_status' => 'contact_status'];
+    $health['processors'] = [];
+    foreach ($processors as $pidFile => $name) {
+        $pidPath = "/tmp/{$pidFile}_lock.pid";
+        $running = false;
+        if (file_exists($pidPath)) {
+            $pid = trim(file_get_contents($pidPath));
+            $running = $pid && file_exists("/proc/{$pid}");
+        }
+        $health['processors'][$name] = $running;
+    }
+
+    http_response_code($httpCode);
+    echo json_encode($health, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 // Set CORS headers for API access (configurable per user via defaultconfig.json)
 try {
     $corsOrigins = \Eiou\Core\UserContext::getInstance()->getApiCorsAllowedOrigins();
