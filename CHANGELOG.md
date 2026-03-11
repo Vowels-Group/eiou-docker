@@ -37,6 +37,7 @@ The project is currently in **ALPHA** status.
 - Extended `.gitignore` with OS artifacts, sensitive files, logs, and database patterns
 - OCI labels in Dockerfile (title, description, source, vendor, license, base image)
 - Unauthenticated `/api/health` endpoint for Docker healthcheck and load balancers — checks database connectivity and message processor status, returns JSON with `ok`/`degraded` status (ARCH-10). Docker healthcheck updated from `/gui/` to `/api/health`
+- Environment variable overrides for PHP-FPM and Nginx service tuning: `PHP_FPM_PM`, `PHP_FPM_MAX_CHILDREN`, `PHP_FPM_MAX_REQUESTS`, `NGINX_WORKER_PROCESSES`, `NGINX_WORKER_CONNECTIONS`, `NGINX_RATE_LIMIT_*`, `NGINX_CONN_LIMIT`, `NGINX_CLIENT_MAX_BODY`. Applied at boot by startup.sh — no volume mount needed, configure via docker-compose.yml environment variables
 
 ### Security
 - Replace `exec()` SSL certificate generation with PHP native `openssl_pkey_new()`/`openssl_csr_sign()` functions, eliminating command injection risk via OpenSSL config file. Add strict hostname validation (alphanumeric, dots, hyphens only)

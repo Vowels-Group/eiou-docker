@@ -37,6 +37,22 @@
 #   EIOU_TEST_MODE      - Enable test mode for manual message processing
 #   EIOU_CONTACT_STATUS_ENABLED - Enable contact status ping feature
 #
+# Service Tuning (applied at boot, no volume mount needed):
+#   NGINX_WORKER_PROCESSES   - Nginx worker threads (default: 2, match to CPU allocation)
+#   NGINX_WORKER_CONNECTIONS - Max connections per worker (default: 768)
+#   NGINX_CLIENT_MAX_BODY    - Max request body size (default: 10m)
+#   NGINX_RATE_LIMIT_GENERAL - General rate limit (default: 30r/s)
+#   NGINX_RATE_LIMIT_API     - API rate limit (default: 10r/s)
+#   NGINX_RATE_LIMIT_P2P     - P2P rate limit (default: 20r/s)
+#   NGINX_CONN_LIMIT         - Max concurrent connections per IP (default: 50)
+#   PHP_FPM_PM               - Process manager mode: ondemand|dynamic|static (default: ondemand)
+#   PHP_FPM_MAX_CHILDREN     - Max PHP worker processes (default: 5, ~20-30MB RAM each)
+#   PHP_FPM_START_SERVERS    - Initial workers on startup (dynamic mode only, default: 2)
+#   PHP_FPM_MIN_SPARE        - Min idle workers (dynamic mode only, default: 1)
+#   PHP_FPM_MAX_SPARE        - Max idle workers (dynamic mode only, default: 3)
+#   PHP_FPM_IDLE_TIMEOUT     - Kill idle workers after N seconds (ondemand only, default: 10s)
+#   PHP_FPM_MAX_REQUESTS     - Recycle worker after N requests to prevent memory leaks (default: 0/unlimited)
+#
 # =============================================================================
 
 # Enable unbuffered output for real-time docker logs
@@ -623,6 +639,70 @@ fi
 # =============================================================================
 echo "Entering maintenance mode (upgrade lock)..."
 echo "$(date +%s)" > "$MAINTENANCE_LOCKFILE"
+
+# =============================================================================
+# SERVICE TUNING (env var overrides applied at boot)
+# =============================================================================
+# These modify the Dockerfile defaults before services start. Settings persist
+# across container restarts via docker-compose.yml environment variables.
+# =============================================================================
+
+# --- PHP-FPM tuning ---
+PHP_FPM_CONF=$(ls /etc/php/*/fpm/pool.d/www.conf 2>/dev/null | head -1)
+if [ -n "$PHP_FPM_CONF" ]; then
+    if [ -n "${PHP_FPM_PM:-}" ]; then
+        sed -i "s|^pm = .*|pm = $PHP_FPM_PM|" "$PHP_FPM_CONF"
+        echo "PHP-FPM: pm=$PHP_FPM_PM"
+    fi
+    if [ -n "${PHP_FPM_MAX_CHILDREN:-}" ]; then
+        sed -i "s|^;*pm.max_children = .*|pm.max_children = $PHP_FPM_MAX_CHILDREN|" "$PHP_FPM_CONF"
+        echo "PHP-FPM: max_children=$PHP_FPM_MAX_CHILDREN"
+    fi
+    if [ -n "${PHP_FPM_START_SERVERS:-}" ]; then
+        sed -i "s|^;*pm.start_servers = .*|pm.start_servers = $PHP_FPM_START_SERVERS|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_MIN_SPARE:-}" ]; then
+        sed -i "s|^;*pm.min_spare_servers = .*|pm.min_spare_servers = $PHP_FPM_MIN_SPARE|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_MAX_SPARE:-}" ]; then
+        sed -i "s|^;*pm.max_spare_servers = .*|pm.max_spare_servers = $PHP_FPM_MAX_SPARE|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_IDLE_TIMEOUT:-}" ]; then
+        sed -i "s|^;*pm.process_idle_timeout = .*|pm.process_idle_timeout = $PHP_FPM_IDLE_TIMEOUT|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_MAX_REQUESTS:-}" ]; then
+        sed -i "s|^;*pm.max_requests = .*|pm.max_requests = $PHP_FPM_MAX_REQUESTS|" "$PHP_FPM_CONF"
+    fi
+fi
+
+# --- Nginx tuning ---
+NGINX_CONF="/etc/nginx/nginx.conf"
+if [ -n "${NGINX_WORKER_PROCESSES:-}" ]; then
+    sed -i "s|^worker_processes .*;|worker_processes $NGINX_WORKER_PROCESSES;|" "$NGINX_CONF"
+    echo "Nginx: worker_processes=$NGINX_WORKER_PROCESSES"
+fi
+if [ -n "${NGINX_WORKER_CONNECTIONS:-}" ]; then
+    sed -i "s|worker_connections .*;|worker_connections $NGINX_WORKER_CONNECTIONS;|" "$NGINX_CONF"
+    echo "Nginx: worker_connections=$NGINX_WORKER_CONNECTIONS"
+fi
+if [ -n "${NGINX_RATE_LIMIT_GENERAL:-}" ]; then
+    sed -i "s|zone=general:10m rate=[^;]*;|zone=general:10m rate=$NGINX_RATE_LIMIT_GENERAL;|" "$NGINX_CONF"
+fi
+if [ -n "${NGINX_RATE_LIMIT_API:-}" ]; then
+    sed -i "s|zone=api:10m rate=[^;]*;|zone=api:10m rate=$NGINX_RATE_LIMIT_API;|" "$NGINX_CONF"
+fi
+if [ -n "${NGINX_RATE_LIMIT_P2P:-}" ]; then
+    sed -i "s|zone=p2p:10m rate=[^;]*;|zone=p2p:10m rate=$NGINX_RATE_LIMIT_P2P;|" "$NGINX_CONF"
+fi
+
+# Apply per-server-block settings (client_max_body_size, limit_conn)
+EIOU_CONF="/etc/nginx/sites-available/eiou.conf"
+if [ -n "${NGINX_CLIENT_MAX_BODY:-}" ]; then
+    sed -i "s|client_max_body_size .*;|client_max_body_size $NGINX_CLIENT_MAX_BODY;|" "$EIOU_CONF"
+fi
+if [ -n "${NGINX_CONN_LIMIT:-}" ]; then
+    sed -i "s|limit_conn addr .*;|limit_conn addr $NGINX_CONN_LIMIT;|" "$EIOU_CONF"
+fi
 
 # Start services
 service cron start
