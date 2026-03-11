@@ -289,14 +289,100 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // while our retry was pending, or by a duplicate retry)
         $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
         if ($existingContact) {
-            Logger::getInstance()->info("Contact already exists after retry delivery, skipping insertion", [
-                'message_id' => $messageId,
-                'pubkey_hash' => $senderPublicKeyHash,
-                'existing_status' => $existingContact['status']
-            ]);
-
-            // Still update the address with potentially new transport info
+            // Update address with potentially new transport info
             $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+            // If contact is pending without a name, it was created by their incoming request
+            // (addPendingContact sets name=NULL). Our retry response has the actual name and
+            // may indicate acceptance — process it like handleNewContact() does.
+            if ($existingContact['status'] === Constants::CONTACT_STATUS_PENDING && $existingContact['name'] === null) {
+                Logger::getInstance()->info("Existing pending contact (name=NULL) found after retry delivery, completing setup", [
+                    'message_id' => $messageId,
+                    'pubkey_hash' => $senderPublicKeyHash,
+                    'response_status' => $status
+                ]);
+
+                if ($status === Constants::STATUS_ACCEPTED) {
+                    // Remote auto-accepted (mutual request) — accept on our end too
+                    // Check currency match with pending incoming currencies
+                    $pendingIncomingCurrencies = [];
+                    if ($this->contactCurrencyRepository !== null) {
+                        $pendingIncomingCurrencies = array_column(
+                            $this->contactCurrencyRepository->getPendingCurrencies($senderPublicKeyHash, 'incoming'),
+                            'currency'
+                        );
+                    }
+
+                    $currencyMatches = in_array($currency, $pendingIncomingCurrencies);
+
+                    if ($currencyMatches) {
+                        // Currency matches — accept the contact
+                        if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                            if ($this->contactCurrencyRepository !== null) {
+                                $this->contactCurrencyRepository->updateCurrencyConfig($senderPublicKeyHash, $currency, [
+                                    'fee_percent' => (int) $fee,
+                                    'credit_limit' => (int) $credit,
+                                    'status' => 'accepted',
+                                ]);
+                            }
+
+                            $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
+                            $this->completeReceivedContactTransaction($senderPublicKey);
+
+                            Logger::getInstance()->info("Contact accepted (mutual) after retry delivery", [
+                                'pubkey_hash' => $senderPublicKeyHash,
+                                'name' => $name
+                            ]);
+                        }
+                    } else {
+                        // Currency mismatch — update name, keep pending, store outgoing currency
+                        $this->contactRepository->updateContactFields($senderPublicKey, ['name' => $name]);
+
+                        if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                            if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                                $this->contactCurrencyRepository->insertCurrencyConfig(
+                                    $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                );
+                            }
+                        }
+
+                        Logger::getInstance()->info("Contact name updated after retry delivery (currency mismatch, still pending)", [
+                            'pubkey_hash' => $senderPublicKeyHash,
+                            'name' => $name,
+                            'currency' => $currency,
+                            'pending_incoming' => $pendingIncomingCurrencies
+                        ]);
+                    }
+                } elseif ($status === Constants::DELIVERY_RECEIVED) {
+                    // Remote received our request — update name, store outgoing currency
+                    $this->contactRepository->updateContactFields($senderPublicKey, ['name' => $name]);
+
+                    if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                            $this->contactCurrencyRepository->insertCurrencyConfig(
+                                $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                            );
+                        }
+                    }
+
+                    // Initialize balance for this currency if not already done
+                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    Logger::getInstance()->info("Contact name updated after retry delivery (received)", [
+                        'pubkey_hash' => $senderPublicKeyHash,
+                        'name' => $name
+                    ]);
+                } else {
+                    // Other status — just update the name
+                    $this->contactRepository->updateContactFields($senderPublicKey, ['name' => $name]);
+                }
+            } else {
+                Logger::getInstance()->info("Contact already exists after retry delivery, skipping", [
+                    'message_id' => $messageId,
+                    'pubkey_hash' => $senderPublicKeyHash,
+                    'existing_status' => $existingContact['status']
+                ]);
+            }
 
             if ($this->messageDeliveryService !== null) {
                 $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
