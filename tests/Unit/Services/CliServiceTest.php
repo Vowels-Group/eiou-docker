@@ -18,6 +18,8 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Eiou\Services\CliService;
+use Eiou\Services\CliSettingsService;
+use Eiou\Services\CliHelpService;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
@@ -72,6 +74,10 @@ class CliServiceTest extends TestCase
             $this->utilityContainer,
             $this->userContext
         );
+
+        // Inject sub-services for delegation (ARCH-04)
+        $this->service->setSettingsService(new CliSettingsService($this->userContext));
+        $this->service->setHelpService(new CliHelpService());
     }
 
     // =========================================================================

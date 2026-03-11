@@ -879,6 +879,81 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get CliP2pApprovalService instance
+     *
+     * Extracted from CliService (ARCH-04) to handle P2P approval CLI commands.
+     * Dependencies are setter-injected in wireCircularDependencies().
+     *
+     * @return CliP2pApprovalService
+     */
+    public function getCliP2pApprovalService(): CliP2pApprovalService {
+        if (!isset($this->services['CliP2pApprovalService'])) {
+            $service = new CliP2pApprovalService(
+                $this->getUtilityContainer()->getCurrencyUtility()
+            );
+            $service->setP2pRepository($this->getP2pRepository());
+            $service->setP2pApprovalDependencies(
+                $this->getRp2pRepository(),
+                $this->getRp2pCandidateRepository(),
+                $this->getSendOperationService(),
+                $this->getP2pService()
+            );
+            $this->services['CliP2pApprovalService'] = $service;
+        }
+        return $this->services['CliP2pApprovalService'];
+    }
+
+    /**
+     * Get CliDlqService instance
+     *
+     * Extracted from CliService (ARCH-04) to handle DLQ management CLI commands.
+     * Dependencies are setter-injected in wireCircularDependencies().
+     *
+     * @return CliDlqService
+     */
+    public function getCliDlqService(): CliDlqService {
+        if (!isset($this->services['CliDlqService'])) {
+            $service = new CliDlqService(
+                $this->getUtilityContainer()->getTransportUtility(),
+                $this->getTransactionRepository()
+            );
+            $service->setDeadLetterQueueRepository($this->getDeadLetterQueueRepository());
+            $this->services['CliDlqService'] = $service;
+        }
+        return $this->services['CliDlqService'];
+    }
+
+    /**
+     * Get CliSettingsService instance
+     *
+     * Extracted from CliService (ARCH-04) to handle settings management CLI commands.
+     *
+     * @return CliSettingsService
+     */
+    public function getCliSettingsService(): CliSettingsService {
+        if (!isset($this->services['CliSettingsService'])) {
+            $this->services['CliSettingsService'] = new CliSettingsService(
+                $this->currentUser
+            );
+        }
+        return $this->services['CliSettingsService'];
+    }
+
+    /**
+     * Get CliHelpService instance
+     *
+     * Extracted from CliService (ARCH-04) to handle help display CLI commands.
+     *
+     * @return CliHelpService
+     */
+    public function getCliHelpService(): CliHelpService {
+        if (!isset($this->services['CliHelpService'])) {
+            $this->services['CliHelpService'] = new CliHelpService();
+        }
+        return $this->services['CliHelpService'];
+    }
+
+    /**
      * Get RateLimiterService instance
      *
      * @return RateLimiterService
@@ -1398,21 +1473,18 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ChainDropService']->setBalanceRepository($this->getBalanceRepository());
         }
 
-        // Wire CliService -> ContactCreditRepository, P2pRepository, P2P approval dependencies
+        // Wire CliService -> ContactCreditRepository, P2P approval service, DLQ service
         // Reason: CliService displays total available credit and fee earnings in user info,
-        // and provides CLI commands for P2P transaction approval/rejection
+        // and delegates P2P approval and DLQ management to extracted sub-services (ARCH-04)
         // IMPORTANT: CliService must be initialized in wireAllServices() before this runs,
         // otherwise these setter injections are silently skipped (isset check fails)
         if (isset($this->services['CliService'])) {
             $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
             $this->services['CliService']->setP2pRepository($this->getP2pRepository());
-            $this->services['CliService']->setP2pApprovalDependencies(
-                $this->getRp2pRepository(),
-                $this->getRp2pCandidateRepository(),
-                $this->getSendOperationService(),
-                $this->getP2pService()
-            );
-            $this->services['CliService']->setDeadLetterQueueRepository($this->getDeadLetterQueueRepository());
+            $this->services['CliService']->setP2pApprovalService($this->getCliP2pApprovalService());
+            $this->services['CliService']->setDlqService($this->getCliDlqService());
+            $this->services['CliService']->setSettingsService($this->getCliSettingsService());
+            $this->services['CliService']->setHelpService($this->getCliHelpService());
         }
 
         // =========================================================================
