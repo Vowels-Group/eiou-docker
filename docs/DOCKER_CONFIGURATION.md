@@ -1186,7 +1186,7 @@ These warnings appear during normal operation and do not indicate a problem:
 
 | Warning | When | Why |
 |---------|------|-----|
-| `dbconfig.json encryption migration deferred` | First boot only | The database password encryption runs before the wallet is generated. The plaintext password still works. Migration completes automatically on the next container restart after the wallet exists. |
+| `dbconfig.json encryption migration deferred — will complete during wallet setup` | First boot only | The Application constructor attempts to encrypt the database password before the wallet (master key) exists. This is harmless — wallet generation encrypts the password immediately after initializing the master key. Look for the follow-up message `dbconfig.json: plaintext password encrypted successfully` confirming completion. |
 | `Contact status polling disabled, stopping processor` | When `EIOU_CONTACT_STATUS_ENABLED=false` | Normal — the contact status processor exits cleanly when disabled. |
 | `Hidden service hostname file not ready` | Boot (Tor mode) | Tor is still building circuits. Wait for `EIOU_HS_TIMEOUT` (default 60s) or increase if on slow networks. |
 

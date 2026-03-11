@@ -5,6 +5,7 @@ namespace Eiou\Core;
 
 use Eiou\Cli\CliOutputManager;
 use Eiou\Utils\SecureSeedphraseDisplay;
+use Eiou\Utils\Logger;
 use Eiou\Security\KeyEncryption;
 use Eiou\Security\BIP39;
 use Eiou\Security\TorKeyDerivation;
@@ -100,6 +101,10 @@ class Wallet{
         // Derive and initialize the master encryption key from seed (M-13)
         // This ensures the master key can be recovered from the seed phrase
         KeyEncryption::initMasterKeyFromSeed($seed);
+
+        // Now that the master key exists, encrypt the plaintext DB password
+        // that freshInstall() wrote before the wallet was generated.
+        self::migrateDbConfigEncryption();
 
         // Clear seed from memory
         BIP39::secureClear($seed);
@@ -277,6 +282,10 @@ class Wallet{
         // Derive and initialize the master encryption key from seed (M-13)
         // This restores the SAME master key as the original wallet
         KeyEncryption::initMasterKeyFromSeed($seed);
+
+        // Now that the master key exists, encrypt the plaintext DB password
+        // that freshInstall() wrote before the wallet was generated.
+        self::migrateDbConfigEncryption();
 
         // Clear seed from memory
         BIP39::secureClear($seed);
@@ -554,5 +563,57 @@ class Wallet{
             echo "\n";
         }
         // If TTY method was used, the display is already complete
+    }
+
+    /**
+     * Encrypt plaintext dbPass in dbconfig.json now that the master key exists.
+     *
+     * freshInstall() writes the DB password in plaintext because the master key
+     * isn't available yet (it depends on the wallet seed). This method runs
+     * immediately after initMasterKeyFromSeed() to close that window — the
+     * plaintext password never survives past wallet generation.
+     *
+     * Idempotent: skips if dbconfig.json is missing, unreadable, or already encrypted.
+     */
+    private static function migrateDbConfigEncryption(): void {
+        $configPath = '/etc/eiou/config/dbconfig.json';
+        if (!file_exists($configPath)) {
+            return;
+        }
+
+        $raw = file_get_contents($configPath);
+        if ($raw === false) {
+            return;
+        }
+        $config = json_decode($raw, true);
+        if (!is_array($config) || !isset($config['dbPass'])) {
+            return; // Already encrypted or invalid — nothing to do
+        }
+
+        try {
+            $encrypted = KeyEncryption::encrypt($config['dbPass']);
+            $config['dbPassEncrypted'] = $encrypted;
+            unset($config['dbPass']);
+
+            $oldUmask = umask(0027);
+            file_put_contents($configPath, json_encode($config), LOCK_EX);
+            umask($oldUmask);
+            chmod($configPath, 0640);
+            if (posix_getuid() === 0) {
+                chgrp($configPath, 'www-data');
+            }
+
+            // Reload DatabaseContext so subsequent reads use encrypted version
+            DatabaseContext::getInstance()->setdatabaseData($config);
+
+            Logger::getInstance()->info(
+                "dbconfig.json: plaintext password encrypted successfully"
+            );
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning(
+                "dbconfig.json encryption migration failed during wallet setup",
+                ['error' => $e->getMessage()]
+            );
+        }
     }
 }
