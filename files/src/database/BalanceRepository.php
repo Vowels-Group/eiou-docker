@@ -168,10 +168,15 @@ class BalanceRepository extends AbstractRepository {
             return [];
         }
 
-        $placeholders = implode(',', array_fill(0, count($pubkeyHashes), '?'));
-        $params = array_values($pubkeyHashes);
-        $params[] = $currency;
-        $query = "SELECT {$this->primaryKey}, received, sent FROM {$this->tableName} WHERE {$this->primaryKey} IN ({$placeholders}) AND currency = ?";
+        $params = [];
+        $placeholders = [];
+        foreach (array_values($pubkeyHashes) as $i => $hash) {
+            $key = ':hash_' . $i;
+            $placeholders[] = $key;
+            $params[$key] = $hash;
+        }
+        $params[':currency'] = $currency;
+        $query = "SELECT {$this->primaryKey}, received, sent FROM {$this->tableName} WHERE {$this->primaryKey} IN (" . implode(',', $placeholders) . ") AND currency = :currency";
         $stmt = $this->execute($query, $params);
 
         if (!$stmt) {

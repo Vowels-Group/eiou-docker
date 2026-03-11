@@ -146,9 +146,15 @@ class ContactCreditRepository extends AbstractRepository {
             return [];
         }
 
-        $placeholders = implode(',', array_fill(0, count($pubkeyHashes), '?'));
-        $query = "SELECT pubkey_hash, available_credit, currency FROM {$this->tableName} WHERE pubkey_hash IN ({$placeholders})";
-        $stmt = $this->execute($query, array_values($pubkeyHashes));
+        $params = [];
+        $placeholders = [];
+        foreach (array_values($pubkeyHashes) as $i => $hash) {
+            $key = ':hash_' . $i;
+            $placeholders[] = $key;
+            $params[$key] = $hash;
+        }
+        $query = "SELECT pubkey_hash, available_credit, currency FROM {$this->tableName} WHERE pubkey_hash IN (" . implode(',', $placeholders) . ")";
+        $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
             return [];
