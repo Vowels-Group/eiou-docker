@@ -714,7 +714,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         $response = json_decode($rawResponse, true);
 
         return [
-            'success' => $response !== null && isset($response['status']),
+            'success' => $response !== null && in_array($response['status'] ?? null, Constants::DELIVERY_SUCCESS_STATUSES, true),
             'response' => $response,
             'raw' => $rawResponse,
             'messageId' => $messageId

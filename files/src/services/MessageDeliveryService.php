@@ -45,7 +45,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * Success response statuses that indicate delivery was successful
      * Includes contact-specific statuses: 'warning' (contact already exists), 'updated' (address updated)
      */
-    private const SUCCESS_STATUSES = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'];
+    private const SUCCESS_STATUSES = Constants::DELIVERY_SUCCESS_STATUSES;
 
     /**
      * Message types that complete on 'inserted' or 'forwarded' status

@@ -389,6 +389,15 @@ class Constants {
     const DELIVERY_MAINTENANCE = 'maintenance';
     const DELIVERY_ERROR = 'error';
 
+    /**
+     * Statuses that indicate a successful delivery response from a remote node.
+     * Any status NOT in this list should be treated as a failure/retry.
+     */
+    const DELIVERY_SUCCESS_STATUSES = [
+        'received', 'inserted', 'forwarded', 'accepted',
+        'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'
+    ];
+
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
     const DISPLAY_CURRENCY_DECIMALS = 2;

@@ -418,7 +418,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
 
         $rawResponse = $this->transportUtility->send($address, $payload);
         $response = json_decode($rawResponse, true);
-        return ['success' => $response !== null && isset($response['status']), 'response' => $response, 'raw' => $rawResponse, 'messageId' => $messageId];
+        return ['success' => $response !== null && in_array($response['status'] ?? null, Constants::DELIVERY_SUCCESS_STATUSES, true), 'response' => $response, 'raw' => $rawResponse, 'messageId' => $messageId];
     }
 
     private function prepareStandardTransactionData(array $request, array $contactInfo): array {
