@@ -11,6 +11,8 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Events\DeliveryEvents;
+use Eiou\Events\EventDispatcher;
 use Eiou\Utils\Logger;
 use Exception;
 
@@ -45,7 +47,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * Success response statuses that indicate delivery was successful
      * Includes contact-specific statuses: 'warning' (contact already exists), 'updated' (address updated)
      */
-    private const SUCCESS_STATUSES = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'];
+    private const SUCCESS_STATUSES = Constants::DELIVERY_SUCCESS_STATUSES;
 
     /**
      * Message types that complete on 'inserted' or 'forwarded' status
@@ -421,9 +423,11 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                     ];
                 }
 
-                // Transport error - mark for retry with specific error message
-                if ($status === 'error') {
-                    $lastError = $decodedResponse['message'] ?? 'Transport error';
+                // Transport error or maintenance mode - mark for retry with specific error message
+                if ($status === Constants::DELIVERY_ERROR || $status === Constants::DELIVERY_MAINTENANCE) {
+                    $lastError = $decodedResponse['error']['message']
+                        ?? $decodedResponse['message']
+                        ?? ($status === Constants::DELIVERY_MAINTENANCE ? 'Recipient node in maintenance mode' : 'Transport error');
                 } else {
                     // Unknown status - mark for background retry
                     $lastError = 'Unknown response status: ' . ($status ?? 'null');
@@ -587,9 +591,13 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         continue;
                     }
 
-                    $lastError = ($status === 'error')
-                        ? ($decodedResponse['message'] ?? 'Transport error')
-                        : 'Unknown response status: ' . ($status ?? 'null');
+                    if ($status === Constants::DELIVERY_ERROR || $status === Constants::DELIVERY_MAINTENANCE) {
+                        $lastError = $decodedResponse['error']['message']
+                            ?? $decodedResponse['message']
+                            ?? ($status === Constants::DELIVERY_MAINTENANCE ? 'Recipient node in maintenance mode' : 'Transport error');
+                    } else {
+                        $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                    }
                 } else {
                     $lastError = 'No response received from recipient';
                 }
@@ -799,9 +807,11 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         ];
                     }
 
-                    // Transport error - extract specific error message for retry
-                    if ($status === 'error') {
-                        $lastError = $decodedResponse['message'] ?? 'Transport error';
+                    // Transport error or maintenance mode - extract specific error message for retry
+                    if ($status === Constants::DELIVERY_ERROR || $status === Constants::DELIVERY_MAINTENANCE) {
+                        $lastError = $decodedResponse['error']['message']
+                            ?? $decodedResponse['message']
+                            ?? ($status === Constants::DELIVERY_MAINTENANCE ? 'Recipient node in maintenance mode' : 'Transport error');
                     } else {
                         // Unknown status - treat as failure, may retry
                         $lastError = 'Unknown response status: ' . ($status ?? 'null');
@@ -830,7 +840,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             // waking up and calling incrementRetry again on the next iteration).
             // Without the buffer, next_retry_at would expire during the delivery attempt,
             // allowing processRetryQueue to claim and duplicate the retry chain.
-            $deliveryBuffer = Constants::TOR_TRANSPORT_TIMEOUT_SECONDS * 2; // 60s worst-case delivery
+            $deliveryBuffer = Constants::TOR_TRANSPORT_TIMEOUT_SECONDS * 2; // 90s worst-case delivery
             $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay + $deliveryBuffer, $lastError);
 
             // If we haven't exhausted retries, wait and try again
@@ -1239,6 +1249,19 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
 
             if ($result['success']) {
                 $results['succeeded']++;
+
+                // Dispatch delivery completed event for post-delivery processing.
+                // This allows message-type-specific services (e.g., ContactSyncService)
+                // to run post-delivery logic when a retried message succeeds.
+                EventDispatcher::getInstance()->dispatch(DeliveryEvents::RETRY_DELIVERY_COMPLETED, [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'recipient_address' => $recipient,
+                    'response' => $result['response'] ?? [],
+                    'signing_data' => $result['signing_data'] ?? null,
+                    'stored_payload' => $payload,
+                ]);
+
                 $results['details'][] = [
                     'message_id' => $messageId,
                     'status' => 'success',

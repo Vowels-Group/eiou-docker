@@ -43,6 +43,10 @@
 exec 1> >(stdbuf -oL cat)
 exec 2> >(stdbuf -oL cat >&2)
 
+# Shell safety: catch undefined variables and pipe failures
+set -u
+set -o pipefail
+
 # Source the banner script for warning messages
 # This file can be edited to update the warning banners without modifying startup.sh
 if [ -f "/app/scripts/banner.sh" ]; then
@@ -55,14 +59,17 @@ fi
 PHP_FPM_SERVICE=$(basename /etc/init.d/php*-fpm 2>/dev/null || echo "php-fpm")
 
 # Graceful shutdown configuration
-SHUTDOWN_TIMEOUT=30  # Maximum seconds to wait for processes to terminate
+SHUTDOWN_TIMEOUT="${EIOU_SHUTDOWN_TIMEOUT:-30}"  # Configurable via env, default 30s
 SHUTDOWN_IN_PROGRESS=false
-SHUTDOWN_FLAG="/tmp/eiou_shutdown.flag"  # Flag file to signal intentional shutdown to watchdog
+SHUTDOWN_FLAG="/tmp/eiou_shutdown.flag"  # Shared with PHP (ApiController, Application)
+MAINTENANCE_LOCKFILE="/tmp/eiou_maintenance.lock"  # Must be set before signal handler can fire
 
 # Store background process PIDs
 P2P_PID=""
 TRANSACTION_PID=""
 CLEANUP_PID=""
+CONTACT_STATUS_PID=""
+WATCHDOG_PID=""
 
 # -----------------------------------------------------------------------------
 # graceful_shutdown() - Signal handler for clean container termination
@@ -465,7 +472,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/nginx/ssl/server.crt ]; th
 
     # Add user-specified extra SANs
     # Example: SSL_EXTRA_SANS="DNS:node1.example.com,DNS:node1.local,IP:10.0.0.50"
-    if [ -n "$SSL_EXTRA_SANS" ]; then
+    if [ -n "${SSL_EXTRA_SANS:-}" ]; then
         SAN_LIST="$SAN_LIST,$SSL_EXTRA_SANS"
     fi
 
@@ -585,7 +592,6 @@ fi
 # mid-migration database schema. The lockfile is removed after all
 # initialization is complete and processors are started.
 # =============================================================================
-MAINTENANCE_LOCKFILE="/tmp/eiou_maintenance.lock"
 echo "Entering maintenance mode (upgrade lock)..."
 echo "$(date +%s)" > "$MAINTENANCE_LOCKFILE"
 
@@ -1206,11 +1212,11 @@ elif [[ "$authcode_file" == seedfile:* ]]; then
     # First wallet creation — seedphrase file already contains the authcode
     seedfile_path="${authcode_file#seedfile:}"
     echo -e "\t Seedphrase & Auth Code: (stored in secure temp file)"
-    echo -e "\t   View: docker exec $(hostname) cat $seedfile_path"
+    echo -e "\t   View: docker exec \"$(hostname)\" cat \"$seedfile_path\""
     echo -e "\t   Auto-deletes in 300 seconds"
 elif [ -n "$authcode_file" ]; then
     echo -e "\t Authentication Code: (stored in secure temp file)"
-    echo -e "\t   View: docker exec $(hostname) cat $authcode_file"
+    echo -e "\t   View: docker exec \"$(hostname)\" cat \"$authcode_file\""
     echo -e "\t   Auto-deletes in 300 seconds"
 else
     echo -e "\t Authentication Code: (unavailable - see 'eiou info --show-auth')"

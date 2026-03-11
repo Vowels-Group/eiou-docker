@@ -26,24 +26,25 @@ class TransactionRepositoryExpiryTest extends TestCase
     // =========================================================================
 
     /**
-     * DIRECT_TX_DELIVERY_EXPIRATION_SECONDS constant is defined
+     * DIRECT_TX_DELIVERY_EXPIRATION_SECONDS constant is defined with expected value
      */
     public function testDirectTxDeliveryExpirationConstantIsDefined(): void
     {
         $this->assertSame(
-            60,
+            180,
             Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS,
-            'Default delivery window should be 60s (one Tor round-trip)'
+            'Default delivery window should be 180s (two Tor round-trips: 4 × TOR_TRANSPORT_TIMEOUT_SECONDS)'
         );
     }
 
     /**
-     * DIRECT_TX_DELIVERY_EXPIRATION_SECONDS is exactly twice TOR_TRANSPORT_TIMEOUT_SECONDS
+     * DIRECT_TX_DELIVERY_EXPIRATION_SECONDS is exactly 4× TOR_TRANSPORT_TIMEOUT_SECONDS
+     * (two Tor round-trips: send + receive × connect + transfer)
      */
-    public function testDirectTxExpirationIsDoubleTorTimeout(): void
+    public function testDirectTxExpirationIsFourTimesTorTimeout(): void
     {
         $this->assertSame(
-            2 * Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
+            4 * Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
             Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS
         );
     }

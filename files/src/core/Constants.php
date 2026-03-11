@@ -212,12 +212,12 @@ class Constants {
     const RECOVERY_LOCK_TIMEOUT_SECONDS = 300; // Lock timeout for processor exclusive access
 
     // Transaction delivery expiry
-    // Direct transaction: two Tor round-trips (4 × TOR_TRANSPORT_TIMEOUT_SECONDS = 120s).
+    // Direct transaction: two Tor round-trips (4 × TOR_TRANSPORT_TIMEOUT_SECONDS = 180s).
     // P2P transaction: P2P_DEFAULT_EXPIRATION_SECONDS + DIRECT_TX_DELIVERY_EXPIRATION_SECONDS
     //   (gives the in-flight transaction a delivery window after the P2P routing request itself expires).
     // The P2P and transaction expiries are decoupled so a transaction being propagated when its
     // parent P2P expires is not cancelled mid-flight; it gets the extra delivery window to complete.
-    const DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 120; // Max time for a direct Tor delivery (4× TOR_TRANSPORT_TIMEOUT_SECONDS; two round-trips)
+    const DIRECT_TX_DELIVERY_EXPIRATION_SECONDS = 180; // Max time for a direct Tor delivery (4× TOR_TRANSPORT_TIMEOUT_SECONDS; two round-trips)
 
     // Crypto/Security
     const HASH_ALGORITHM = 'sha256'; // Do not change
@@ -290,11 +290,12 @@ class Constants {
 
     // Transport timeouts (single HTTP/TOR request to a node)
     const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
-    const TOR_TRANSPORT_TIMEOUT_SECONDS = 30;  // Max time for one TOR request between nodes
+    const TOR_TRANSPORT_TIMEOUT_SECONDS = 45;  // Max time for one TOR request between nodes (overall: connect + transfer)
+    const TOR_CONNECT_TIMEOUT_SECONDS = 20;    // Max time for Tor SOCKS5 circuit establishment + hidden service connect
 
     // Tor circuit health tracking
     // When a specific .onion address times out repeatedly, stop retrying and enter cooldown.
-    const TOR_CIRCUIT_MAX_FAILURES = 2;           // Consecutive Tor failures before cooldown (default: 2)
+    const TOR_CIRCUIT_MAX_FAILURES = 3;           // Consecutive Tor failures before cooldown (default: 3)
     const TOR_CIRCUIT_COOLDOWN_SECONDS = 300;     // Cooldown duration in seconds (default: 300 = 5 min)
     const TOR_FAILURE_TRANSPORT_FALLBACK = true;  // Fall back to HTTPS/HTTP when Tor fails (default: true)
     const TOR_FALLBACK_REQUIRE_ENCRYPTED = true; // Only fall back to HTTPS (not HTTP) for privacy (default: true)
@@ -386,6 +387,17 @@ class Constants {
     const DELIVERY_WARNING = 'warning';
     const DELIVERY_UPDATED = 'updated';
     const DELIVERY_REJECTED = 'rejected';
+    const DELIVERY_MAINTENANCE = 'maintenance';
+    const DELIVERY_ERROR = 'error';
+
+    /**
+     * Statuses that indicate a successful delivery response from a remote node.
+     * Any status NOT in this list should be treated as a failure/retry.
+     */
+    const DELIVERY_SUCCESS_STATUSES = [
+        'received', 'inserted', 'forwarded', 'accepted',
+        'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'
+    ];
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';

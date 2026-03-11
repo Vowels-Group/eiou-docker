@@ -572,35 +572,57 @@ class ContactManagementService implements ContactManagementServiceInterface
         if ($results = $this->contactRepository->searchContacts($searchTerm)) {
             $addressTypes = $this->getAllAddressTypes();
 
-            // Compute available credit for each search result
+            // Collect all pubkey hashes for batch lookup (avoids N+1 queries)
+            $hashToCurrency = [];
+            foreach ($results as $result) {
+                $hash = $result['pubkey_hash'] ?? '';
+                if ($hash) {
+                    $hashToCurrency[$hash] = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                }
+            }
+            $allHashes = array_keys($hashToCurrency);
+
+            // Batch load credits and balances in 2 queries instead of 2*N
+            $creditsByHash = [];
+            if ($this->contactCreditRepository !== null && !empty($allHashes)) {
+                try {
+                    $creditsByHash = $this->contactCreditRepository->getAvailableCreditsForHashes($allHashes);
+                } catch (\Exception $e) {
+                    $this->secureLogger->warning("Batch credit lookup failed: " . $e->getMessage());
+                }
+            }
+
+            // Group hashes by currency for batch balance lookup
+            $currencyGroups = [];
+            foreach ($hashToCurrency as $hash => $currency) {
+                $currencyGroups[$currency][] = $hash;
+            }
+            $balancesByHash = [];
+            foreach ($currencyGroups as $currency => $hashes) {
+                try {
+                    $balancesByHash += $this->balanceRepository->getBalancesForPubkeyHashes($hashes, $currency);
+                } catch (\Exception $e) {
+                    $this->secureLogger->warning("Batch balance lookup failed: " . $e->getMessage());
+                }
+            }
+
+            // Enrich results from pre-loaded data
             foreach ($results as &$result) {
                 $result['my_available_credit'] = null;
                 $result['their_available_credit'] = null;
                 $hash = $result['pubkey_hash'] ?? '';
                 if ($hash) {
                     // My available credit (from contact_credit table, received via pong)
-                    if ($this->contactCreditRepository !== null) {
-                        try {
-                            $creditData = $this->contactCreditRepository->getAvailableCredit($hash);
-                            if ($creditData !== null) {
-                                $resultCurrency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                            $result['my_available_credit'] = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$resultCurrency];
-                            }
-                        } catch (\Exception $e) {
-                            // Non-critical
-                        }
+                    if (isset($creditsByHash[$hash])) {
+                        $resultCurrency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                        $result['my_available_credit'] = $creditsByHash[$hash]['available_credit'] / Constants::CONVERSION_FACTORS[$resultCurrency];
                     }
                     // Their available credit (calculated: sent - received + credit_limit)
-                    try {
+                    if (isset($balancesByHash[$hash])) {
+                        $b = $balancesByHash[$hash];
                         $currency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $balanceData = $this->balanceRepository->getContactBalanceByPubkeyHash($hash, $currency);
-                        if ($balanceData && count($balanceData) > 0) {
-                            $b = $balanceData[0];
-                            $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($result['credit_limit'] ?? 0));
-                            $result['their_available_credit'] = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
-                        }
-                    } catch (\Exception $e) {
-                        // Non-critical
+                        $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($result['credit_limit'] ?? 0));
+                        $result['their_available_credit'] = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
                     }
                 }
             }

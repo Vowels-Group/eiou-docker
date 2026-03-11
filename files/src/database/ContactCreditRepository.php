@@ -136,6 +136,41 @@ class ContactCreditRepository extends AbstractRepository {
     }
 
     /**
+     * Get available credits for multiple contacts in a single query
+     *
+     * @param array $pubkeyHashes Array of pubkey hashes to look up
+     * @return array Associative array keyed by pubkey_hash => ['available_credit' => int, 'currency' => string]
+     */
+    public function getAvailableCreditsForHashes(array $pubkeyHashes): array {
+        if (empty($pubkeyHashes)) {
+            return [];
+        }
+
+        $params = [];
+        $placeholders = [];
+        foreach (array_values($pubkeyHashes) as $i => $hash) {
+            $key = ':hash_' . $i;
+            $placeholders[] = $key;
+            $params[$key] = $hash;
+        }
+        $query = "SELECT pubkey_hash, available_credit, currency FROM {$this->tableName} WHERE pubkey_hash IN (" . implode(',', $placeholders) . ")";
+        $stmt = $this->execute($query, $params);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $results = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $results[$row['pubkey_hash']] = [
+                'available_credit' => $row['available_credit'],
+                'currency' => $row['currency'],
+            ];
+        }
+        return $results;
+    }
+
+    /**
      * Delete credit entry by pubkey hash
      *
      * @param string $pubkeyHash Contact's public key hash

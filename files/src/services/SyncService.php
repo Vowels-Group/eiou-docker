@@ -331,8 +331,12 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             // If the contact is still pending then inquire with contact
             $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
             $syncResponse = json_decode($this->transportUtility->send($contactAddress, $messagePayload),true);
-            $status = $syncResponse['status'];
+            $status = $syncResponse['status'] ?? null;
             $reason = $syncResponse['reason'] ?? NULL;
+            if ($status === null) {
+                output("Unable to sync contact: no response from $contactAddress", $echo);
+                return false;
+            }
             if($status === Constants::STATUS_ACCEPTED){
                 $senderPublicKey = $syncResponse['senderPublicKey'];
                 $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);

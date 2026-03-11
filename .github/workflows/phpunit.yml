@@ -53,6 +53,10 @@ jobs:
         working-directory: files
         run: composer install --no-interaction --prefer-dist
 
+      - name: "Audit Composer dependencies for known vulnerabilities"
+        working-directory: files
+        run: composer audit --format=plain
+
       - name: "Prepare test environment"
         run: |
           cp tests/phpunit.xml.dist tests/phpunit.xml
