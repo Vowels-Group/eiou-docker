@@ -491,12 +491,12 @@ class TransportUtilityService implements TransportServiceInterface
             if (str_contains($curlError, 'SOCKS5') || $curlErrno === 7) {
                 $signalFile = '/tmp/tor-restart-requested';
                 if (!file_exists($signalFile)) {
-                    @file_put_contents($signalFile, (string)time());
+                    file_put_contents($signalFile, (string)time());
                     Logger::getInstance()->warning("SOCKS5 proxy failure detected, signaling watchdog for immediate Tor restart");
                 }
 
                 // Write GUI-readable status so the wallet UI can display a notification
-                @file_put_contents('/tmp/tor-gui-status', json_encode([
+                file_put_contents('/tmp/tor-gui-status', json_encode([
                     'status' => 'issue',
                     'timestamp' => time(),
                     'message' => 'Tor connectivity issue detected — automatic restart in progress'

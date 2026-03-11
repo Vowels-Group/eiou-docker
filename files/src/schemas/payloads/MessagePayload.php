@@ -156,7 +156,7 @@ class MessagePayload extends BasePayload
             'typeMessage' => 'transaction', // type of message
             'status' => Constants::STATUS_COMPLETED,
             'hash' => $hash,
-            'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient',
+            'message' => 'Transaction with hash ' . $hash . ' was received succesfully by end-recipient',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);

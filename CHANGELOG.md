@@ -17,6 +17,18 @@ The project is currently in **ALPHA** status.
 - Fix TOCTOU race condition in `BackupService` credential temp file creation: set restrictive umask before `tempnam()` so the file is created with `0600` permissions atomically, instead of chmod after creation
 - Add logging to silent catch blocks across database repositories, services, and utilities. Previously, exceptions in `TransactionRepository`, `TransactionContactRepository`, `QueryBuilder`, `TorCircuitHealth`, `ContactSyncService`, and `ConfigCheck` were swallowed without any logging, masking potential database and configuration failures
 
+### Changed
+- Replace all `print_r()` calls (29 occurrences) in output functions with `json_encode()` for consistent structured logging. Prevents internal data structure exposure in debug output (`OutputSchema.php`, `MessagePayload.php`, `Rp2pPayload.php`)
+- Remove all `@` error suppression operators (33 occurrences across 11 files) with proper error handling: `file_exists()` checks before `unlink()`, return value checks for `file_get_contents()`/`fopen()`, and direct calls where `is_dir()` guards exist
+- Increase container resource limits from 512MB/256MB to 1024MB/512MB (memory limit/reservation) and from 1.0 to 2.0 CPU cores to prevent OOM kills under load with nginx + PHP-FPM + MariaDB + Tor
+
+### Added
+- PHPStan static analysis at level 1 with CI workflow (`.github/workflows/phpstan.yml`, `phpstan.neon`)
+- Container image vulnerability scanning via Trivy in integration tests workflow
+- Dependabot configuration for Composer and GitHub Actions dependency updates (`.github/dependabot.yml`)
+- `.env.example` template documenting all configurable environment variables with defaults
+- Extended `.gitignore` with OS artifacts, sensitive files, logs, and database patterns
+
 ### Security
 - Replace `exec()` SSL certificate generation with PHP native `openssl_pkey_new()`/`openssl_csr_sign()` functions, eliminating command injection risk via OpenSSL config file. Add strict hostname validation (alphanumeric, dots, hyphens only)
 - Fix N+1 query pattern in contact search: batch-load credits and balances in 2 queries instead of 2*N individual queries per search result

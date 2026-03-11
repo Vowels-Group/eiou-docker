@@ -72,7 +72,7 @@ class SecureSeedphraseDisplay
         }
 
         // Try to open /dev/tty directly
-        $tty = @fopen('/dev/tty', 'w');
+        $tty = fopen('/dev/tty', 'w');
         if (!$tty) {
             return ['success' => false, 'method' => 'tty', 'reason' => 'Cannot open /dev/tty'];
         }
@@ -156,7 +156,7 @@ class SecureSeedphraseDisplay
             }
 
             // Clear the screen after acknowledgment
-            $tty = @fopen('/dev/tty', 'w');
+            $tty = fopen('/dev/tty', 'w');
             if ($tty) {
                 fwrite($tty, "\033[2J\033[H"); // Clear screen
                 fwrite($tty, "Secure information display cleared for security.\n\n");
@@ -235,7 +235,7 @@ class SecureSeedphraseDisplay
 
         // Write with restrictive permissions
         $oldUmask = umask(0077);
-        $written = @file_put_contents($filename, $content, LOCK_EX);
+        $written = file_put_contents($filename, $content, LOCK_EX);
         umask($oldUmask);
 
         if ($written === false) {
@@ -373,7 +373,7 @@ class SecureSeedphraseDisplay
             $files = glob($pattern);
 
             foreach ($files as $file) {
-                if (@unlink($file)) {
+                if (file_exists($file) && unlink($file)) {
                     $count++;
                 }
             }
@@ -417,7 +417,7 @@ class SecureSeedphraseDisplay
         }
 
         // Try to open /dev/tty directly
-        $tty = @fopen('/dev/tty', 'w');
+        $tty = fopen('/dev/tty', 'w');
         if (!$tty) {
             return ['success' => false, 'method' => 'tty', 'reason' => 'Cannot open /dev/tty'];
         }
@@ -486,7 +486,7 @@ class SecureSeedphraseDisplay
 
         // Write with restrictive permissions
         $oldUmask = umask(0077);
-        $written = @file_put_contents($filename, $content, LOCK_EX);
+        $written = file_put_contents($filename, $content, LOCK_EX);
         umask($oldUmask);
 
         if ($written === false) {

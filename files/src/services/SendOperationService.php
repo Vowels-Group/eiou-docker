@@ -112,11 +112,11 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         }
 
         $lockFile = sys_get_temp_dir() . '/eiou_send_lock_' . $contactPubkeyHash . '.lock';
-        $lockHandle = @fopen($lockFile, 'c');
+        $lockHandle = fopen($lockFile, 'c');
 
         if (!$lockHandle && file_exists($lockFile)) {
-            @unlink($lockFile);
-            $lockHandle = @fopen($lockFile, 'c');
+            unlink($lockFile);
+            $lockHandle = fopen($lockFile, 'c');
         }
 
         if (!$lockHandle) {
@@ -127,7 +127,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             return false;
         }
 
-        @chmod($lockFile, 0600);
+        chmod($lockFile, 0600);
 
         $startTime = time();
         while (!flock($lockHandle, LOCK_EX | LOCK_NB)) {

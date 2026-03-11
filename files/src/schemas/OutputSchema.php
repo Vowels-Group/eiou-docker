@@ -36,7 +36,7 @@ function outputContactNoNeedSync($address){
 }
 
 function outputContactNotFoundTryP2p($request){
-    return "[Contact] Not found, trying p2p with data: " . print_r($request, true)."\n";
+    return "[Contact] Not found, trying p2p with data: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputContactRequestWasAccepted($address){
@@ -76,11 +76,11 @@ function outputFailedContactInteraction(){
 }
 
 function outputFailedContactRequest($payload){
-    return "[Contact] Failed request payload: ". print_r($payload, true)."\n";
+    return "[Contact] Failed request payload: ". json_encode($payload, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputLookedUpContactInfo($contactInfo){
-    return "[Contact] Looked up info: " . print_r($contactInfo, true)."\n";
+    return "[Contact] Looked up info: " . json_encode($contactInfo, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputSendContactAcceptedSuccesfullyMessage($address){
@@ -96,11 +96,11 @@ function outputSyncContactDueToPendingStatus($address){
 // ============================================================================
 
 function outputBuildingTransactionPayload($data){
-    return "[Transaction] Building payload: " . print_r($data, true)."\n";
+    return "[Transaction] Building payload: " . json_encode($data, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputEiouSend($request){
-    return "[Transaction] Getting ready to send eIOU with request: " . print_r($request, true)."\n";
+    return "[Transaction] Getting ready to send eIOU with request: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputFeeInformation($feePercent,$request,$maxFee){
@@ -116,15 +116,15 @@ function outputHandleTransactionMessageResponse($decodedMessage){
 }
 
 function outputInsertedTransactionMemo($request){
-    return "[Transaction] Inserted with memo: " .print_r($request['memo'],true)."\n";
+    return "[Transaction] Inserted with memo: " .json_encode($request['memo'], JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputInsertedTransactionTxid($request){
-    return "[Transaction] Inserted with txid: " .print_r($request['txid'],true)."\n";
+    return "[Transaction] Inserted with txid: " .json_encode($request['txid'], JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputIssueTransactionTryP2p($response){
-    return "[Transaction] Direct not succesfull, trying P2P. Error: " . print_r($response,true)."\n";
+    return "[Transaction] Direct not succesfull, trying P2P. Error: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputNoViableTransportAddress(){
@@ -140,11 +140,11 @@ function outputNoContactsForTransaction($request){
 }
 
 function outputPrepareSendData($request){
-    return "[Transaction] Prepare send data: " . print_r($request, true)."\n";
+    return "[Transaction] Prepare send data: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputReceiverAddressNotSet($request){
-    return "[Transaction] $request[2] (receiverAddress) is not set: " . print_r($request, true)."\n";
+    return "[Transaction] $request[2] (receiverAddress) is not set: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime){
@@ -160,7 +160,7 @@ function outputSendTransactionCompletionMessageMemo($message){
 }
 
 function outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$senderAddress){
-    return "[Transaction] Sending completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . $senderAddress."\n";
+    return "[Transaction] Sending completion message onwards " . json_encode($payloadTransactionCompleted, JSON_UNESCAPED_SLASHES) . " to " . $senderAddress."\n";
 }
 
 function outputSendTransactionCompletionMessageTxid($message){
@@ -180,11 +180,11 @@ function outputTransactionExpired($message){
 }
 
 function outputTransactionInsertion($insertTransactionResponse){
-    return "[Transaction] Inserting response: " . print_r($insertTransactionResponse, true)."\n";
+    return "[Transaction] Inserting response: " . json_encode($insertTransactionResponse, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputTransactionInquiryResponse($response){
-    return "[Transaction] Inquiry response: " . print_r($response, true)."\n";
+    return "[Transaction] Inquiry response: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputTransactionP2pSentSuccesfully($p2p){
@@ -204,7 +204,7 @@ function outputTransactionStatusUpdated($status,$typeTransaction,$memo){
 }
 
 function outputTransactionResponse($response){
-    return "[Transaction] Received message response: " . print_r($response,true)."\n";
+    return "[Transaction] Received message response: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 // ============================================================================
@@ -212,7 +212,7 @@ function outputTransactionResponse($response){
 // ============================================================================
 
 function outputBuildingP2pPayload($data){
-    return "[P2P] Building payload: " . print_r($data, true)."\n";
+    return "[P2P] Building payload: " . json_encode($data, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputGeneratedP2pHash($hash){
@@ -220,7 +220,7 @@ function outputGeneratedP2pHash($hash){
 }
 
 function outputInsertedP2p($request){
-    return "[P2P] Inserted with hash: " .print_r($request['hash'],true)."\n";
+    return "[P2P] Inserted with hash: " .json_encode($request['hash'], JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputInsertingP2pRequest($address){
@@ -232,7 +232,7 @@ function outputNoViableRouteP2p($hash){
 }
 
 function outputPrepareP2pData($request){
-    return "[P2P] Prepare send data: " . print_r($request, true)."\n";
+    return "[P2P] Prepare send data: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputP2pComponents($data){
@@ -240,7 +240,7 @@ function outputP2pComponents($data){
 }
 
 function outputP2pEiouSend($request){
-    return "[P2P] Getting ready to send eIOU with hash: " . print_r($request['hash'], true)."\n";
+    return "[P2P] Getting ready to send eIOU with hash: " . json_encode($request['hash'], JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputP2pExpired($message){
@@ -248,11 +248,11 @@ function outputP2pExpired($message){
 }
 
 function outputP2pResponse($response){
-    return "[P2P] Received message response: " . print_r($response,true)."\n";
+    return "[P2P] Received message response: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputP2pSendResult($response){
-    return "[P2P] Send result for matched contact: " . print_r($response,true)."\n";
+    return "[P2P] Send result for matched contact: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputP2pStatusUpdated($status,$hash){
@@ -276,7 +276,7 @@ function outputSendP2p($request){
 // ============================================================================
 
 function outputBuildingRp2pPayload($data){
-    return "[RP2P] Building payload: " . print_r($data, true)."\n";
+    return "[RP2P] Building payload: " . json_encode($data, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputFoundRp2pMatch($message){
@@ -284,23 +284,23 @@ function outputFoundRp2pMatch($message){
 }
 
 function outputInsertedRp2p($request){
-    return "[RP2P] Inserted with hash: " .print_r($request['hash'],true)."\n";
+    return "[RP2P] Inserted with hash: " .json_encode($request['hash'], JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputP2pUnableToAffordRp2p($result,$request){
-    return "[RP2P] P2P sender cannot afford with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . print_r($request, true)."\n";
+    return "[RP2P] P2P sender cannot afford with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputRp2pInsertionFailure($request){
-    return "[RP2P] Failed to insert request: " . print_r($request, true)."\n";
+    return "[RP2P] Failed to insert request: " . json_encode($request, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputRp2pTransactionResponse($response){
-    return "[RP2P] Transaction send response: " . print_r($response, true)."\n";
+    return "[RP2P] Transaction send response: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputRp2pResponse($response){
-    return "[RP2P] Response: " . print_r($response,true)."\n";
+    return "[RP2P] Response: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
 function outputUpdatedTxid($txid,$which_txid,$hash){

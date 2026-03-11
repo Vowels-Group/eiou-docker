@@ -324,7 +324,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
 
         // Send SIGTERM to all workers
         foreach ($this->activeWorkers as $pid => $worker) {
-            @posix_kill($pid, SIGTERM);
+            posix_kill($pid, SIGTERM);
         }
 
         // Wait up to 10 seconds for workers to exit
@@ -338,7 +338,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
 
         // Force-kill any remaining workers
         foreach ($this->activeWorkers as $pid => $worker) {
-            @posix_kill($pid, SIGKILL);
+            posix_kill($pid, SIGKILL);
             foreach ($worker['pipes'] as $pipe) {
                 if (is_resource($pipe)) {
                     fclose($pipe);

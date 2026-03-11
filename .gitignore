@@ -24,3 +24,22 @@ tests/phpunit.xml
 # Composer dependencies and lock file (in files/ directory)
 files/vendor/
 files/composer.lock
+
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Sensitive files
+.env
+*.pem
+*.key
+*.crt
+*.p12
+
+# Logs and databases
+*.log
+*.db
+*.sqlite

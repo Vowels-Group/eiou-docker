@@ -3156,7 +3156,7 @@ extendedKeyUsage = serverAuth
             // Sign with CA
             shell_exec("openssl x509 -req -in {$csrPath} -CA /ssl-ca/ca.crt -CAkey /ssl-ca/ca.key -CAcreateserial -out {$sslCertPath} -days 365 -sha256 -extfile {$configPath} -extensions v3_ext 2>/dev/null");
 
-            @unlink($csrPath);
+            if (file_exists($csrPath)) { unlink($csrPath); }
 
             if (!$output->isJsonMode()) {
                 echo "SSL certificate regenerated (CA-signed) for hostname: {$domain}\n";
@@ -3171,7 +3171,7 @@ extendedKeyUsage = serverAuth
             }
         }
 
-        @unlink($configPath);
+        if (file_exists($configPath)) { unlink($configPath); }
 
         // Set proper permissions
         if (file_exists($sslKeyPath)) {

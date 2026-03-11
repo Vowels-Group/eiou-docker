@@ -696,7 +696,7 @@ class P2pRepository extends AbstractRepository {
         $workerPid = (int) ($p2p['sending_worker_pid'] ?? 0);
 
         // If worker PID is set and still alive, don't recover — it's still working
-        if ($workerPid > 0 && @posix_kill($workerPid, 0)) {
+        if ($workerPid > 0 && posix_kill($workerPid, 0)) {
             return false;
         }
 

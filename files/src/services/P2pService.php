@@ -1042,7 +1042,7 @@ class P2pService implements P2pServiceInterface {
 
             // Cancel the message due to no viable contacts to send to (user is dead-end)
             if($sentMessages === 0){
-                output(outputNoViableRouteP2p($p2pHash,'SILENT'));
+                output(outputNoViableRouteP2p($p2pHash), 'SILENT');
                 $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
                 $p2p = $this->p2pRepository->getByHash($p2pHash);
                 if ($p2p) {
@@ -1200,7 +1200,7 @@ class P2pService implements P2pServiceInterface {
 
             // Dead-end: no contacts accepted
             if ($sentMessages === 0) {
-                output(outputNoViableRouteP2p($p2pHash, 'SILENT'));
+                output(outputNoViableRouteP2p($p2pHash), 'SILENT');
                 $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
                 $p2p = $this->p2pRepository->getByHash($p2pHash);
                 if ($p2p) {

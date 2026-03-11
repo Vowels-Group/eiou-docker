@@ -66,6 +66,15 @@ jobs:
       - name: "Build Docker image"
         run: docker build -f eiou.dockerfile -t eiou/eiou .
 
+      - name: "Scan Docker image for vulnerabilities"
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'eiou/eiou'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
       - name: "Run integration tests"
         working-directory: tests
         env:
