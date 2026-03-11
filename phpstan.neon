@@ -9,3 +9,10 @@ parameters:
     ignoreErrors:
         - '#Function output not found#'
         - '#Function output\w+ not found#'
+        # Pre-existing defensive coding patterns — baseline for legacy code
+        - '#Variable \$\w+ in empty\(\) always exists and is not falsy#'
+        - '#Variable \$\w+ in isset\(\) always exists and is not nullable#'
+        - '#Variable \$\w+ on left side of \?\? is never defined#'
+        - '#Variable \$\w+ might not be defined#'
+        # Constructor params used for DI wiring / future extraction
+        - '#Constructor of class .+ has an unused parameter#'

@@ -49,6 +49,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private TimeUtilityService $timeUtility;
     private UserContext $currentUser;
     private Logger $secureLogger;
+    private ?UtilityServiceContainer $utilityContainer = null;
     private ?MessageDeliveryService $messageDeliveryService;
     /**
      * @var SyncTriggerInterface|null Sync trigger for conflict resolution

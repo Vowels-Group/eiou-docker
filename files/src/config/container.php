@@ -91,7 +91,7 @@ use Eiou\Services\HeldTransactionService;
 use Eiou\Services\TransactionRecoveryService;
 use Eiou\Services\CliService;
 use Eiou\Services\RateLimiterService;
-use Eiou\Services\LockingService;
+use Eiou\Services\DatabaseLockingService;
 use Eiou\Services\ContactStatusService;
 use Eiou\Services\ApiAuthService;
 use Eiou\Services\ApiKeyService;
@@ -110,6 +110,7 @@ use Eiou\Utils\InputValidator;
 use Eiou\Utils\Logger;
 use Eiou\Utils\Security;
 use Eiou\Schemas\Payloads\TransactionPayload;
+use PDO;
 
 /**
  * Build and return the PHP-DI container
@@ -229,7 +230,7 @@ function buildContainer(
         TransactionRecoveryServiceInterface::class => get(TransactionRecoveryService::class),
         CliServiceInterface::class => get(CliService::class),
         RateLimiterServiceInterface::class => get(RateLimiterService::class),
-        LockingServiceInterface::class => get(LockingService::class),
+        LockingServiceInterface::class => get(DatabaseLockingService::class),
         ContactStatusServiceInterface::class => get(ContactStatusService::class),
         ApiAuthServiceInterface::class => get(ApiAuthService::class),
         ApiKeyServiceInterface::class => get(ApiKeyService::class),
