@@ -164,12 +164,12 @@ abstract class AbstractMessageProcessor {
      */
     protected function checkSingleInstance(): void {
         if (file_exists($this->lockfile)) {
-            $pidContent = @file_get_contents($this->lockfile);
+            $pidContent = file_get_contents($this->lockfile);
 
             // Handle empty or unreadable lockfile
             if ($pidContent === false || trim($pidContent) === '') {
                 Logger::getInstance()->info("Removing empty/unreadable lockfile", ['lockfile' => $this->lockfile]);
-                @unlink($this->lockfile);
+                if (file_exists($this->lockfile)) { unlink($this->lockfile); }
             } else {
                 $pid = trim($pidContent);
 
@@ -179,15 +179,15 @@ abstract class AbstractMessageProcessor {
                         'lockfile' => $this->lockfile,
                         'invalid_pid' => $pid
                     ]);
-                    @unlink($this->lockfile);
+                    if (file_exists($this->lockfile)) { unlink($this->lockfile); }
                 } else {
                     $pid = (int)$pid;
 
                     // Use posix_kill with signal 0 to check if process exists
                     // Signal 0 doesn't actually send a signal, just checks process existence
-                    if (@posix_kill($pid, 0)) {
+                    if (posix_kill($pid, 0)) {
                         // Process exists, verify it's actually a PHP process (prevent PID reuse issues)
-                        $cmdline = @file_get_contents("/proc/$pid/cmdline");
+                        $cmdline = file_get_contents("/proc/$pid/cmdline");
                         if ($cmdline !== false && stripos($cmdline, 'php') !== false) {
                             $message = "Another instance is already running (PID: $pid)";
                             Logger::getInstance()->warning($message, ['lockfile' => $this->lockfile, 'pid' => $pid]);
@@ -199,11 +199,11 @@ abstract class AbstractMessageProcessor {
                             'lockfile' => $this->lockfile,
                             'old_pid' => $pid
                         ]);
-                        @unlink($this->lockfile);
+                        if (file_exists($this->lockfile)) { unlink($this->lockfile); }
                     } else {
                         // Process doesn't exist - stale lockfile
                         Logger::getInstance()->info("Removing stale lockfile", ['lockfile' => $this->lockfile, 'old_pid' => $pid]);
-                        @unlink($this->lockfile);
+                        if (file_exists($this->lockfile)) { unlink($this->lockfile); }
                     }
                 }
             }
@@ -494,7 +494,7 @@ abstract class AbstractMessageProcessor {
             return false;
         }
 
-        $pidContent = @file_get_contents($pidFile);
+        $pidContent = file_get_contents($pidFile);
         if ($pidContent === false || trim($pidContent) === '') {
             return false;
         }
@@ -506,7 +506,7 @@ abstract class AbstractMessageProcessor {
 
         $pid = (int)$pid;
 
-        if (!@posix_kill($pid, 0)) {
+        if (!posix_kill($pid, 0)) {
             // EPERM (errno 1) means "process exists but caller lacks permission to signal it"
             // This happens when PHP-FPM (www-data) checks a root-owned processor
             if (posix_get_last_error() !== 1) {
@@ -514,7 +514,7 @@ abstract class AbstractMessageProcessor {
             }
         }
 
-        $cmdline = @file_get_contents("/proc/$pid/cmdline");
+        $cmdline = file_get_contents("/proc/$pid/cmdline");
         if ($cmdline === false || stripos($cmdline, 'php') === false) {
             return false;
         }

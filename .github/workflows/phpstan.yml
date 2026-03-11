@@ -1,0 +1,51 @@
+# Copyright 2025-2026 Vowels Group, LLC
+#
+# Runs PHPStan static analysis on every pull request and push to main.
+# Catches type errors, undefined methods, and other bugs before runtime.
+
+name: PHPStan Static Analysis
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'files/src/**'
+      - 'files/composer.json'
+      - 'phpstan.neon'
+      - '.github/workflows/phpstan.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'files/src/**'
+      - 'files/composer.json'
+      - 'phpstan.neon'
+      - '.github/workflows/phpstan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phpstan:
+    name: PHPStan Level 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Set up PHP 8.2"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql, pdo_sqlite, mbstring, curl, xml, json, posix
+          coverage: none
+
+      - name: "Install Composer dependencies"
+        working-directory: files
+        run: composer install --no-interaction --prefer-dist
+
+      - name: "Run PHPStan"
+        working-directory: files
+        run: vendor/bin/phpstan analyse --configuration ../phpstan.neon --error-format=github --no-progress

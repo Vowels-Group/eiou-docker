@@ -154,7 +154,7 @@ function freshInstall(){
         }
 
         // Mark schema as current — fresh installs have all tables, no migrations needed
-        @file_put_contents('/etc/eiou/config/.schema_version', (string) \Eiou\Core\Constants::SCHEMA_VERSION);
+        file_put_contents('/etc/eiou/config/.schema_version', (string) \Eiou\Core\Constants::SCHEMA_VERSION);
     }
 }
 
@@ -223,7 +223,7 @@ function runMigrations(PDO $pdo): array {
     }
 
     if (!$hasErrors) {
-        @file_put_contents($versionFile, (string) $schemaVersion);
+        file_put_contents($versionFile, (string) $schemaVersion);
     }
 
     return $results;

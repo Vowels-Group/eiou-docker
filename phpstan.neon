@@ -1,0 +1,11 @@
+parameters:
+    level: 1
+    paths:
+        - files/src
+    excludePaths:
+        - files/src/gui
+        - files/src/schemas/OutputSchema.php
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        - '#Function output not found#'
+        - '#Function output\w+ not found#'

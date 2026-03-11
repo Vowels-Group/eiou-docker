@@ -56,7 +56,7 @@ class SecureLogger {
         // Create log directory if it doesn't exist
         $dir = dirname(self::$logFile);
         if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
+            mkdir($dir, 0755, true);
         }
     }
 
@@ -95,7 +95,7 @@ class SecureLogger {
 
         // Write to file
         if (self::$logFile) {
-            @file_put_contents(self::$logFile, $logEntry, FILE_APPEND | LOCK_EX);
+            file_put_contents(self::$logFile, $logEntry, FILE_APPEND | LOCK_EX);
 
             // Prune old entries occasionally (1 in 10 chance to avoid performance overhead)
             if (rand(1, 10) === 1) {
@@ -240,13 +240,13 @@ class SecureLogger {
 
         $keepLines = $keepLines ?? Constants::LOG_MAX_ENTRIES;
 
-        $lines = @file(self::$logFile, FILE_IGNORE_NEW_LINES);
+        $lines = file(self::$logFile, FILE_IGNORE_NEW_LINES);
         if ($lines === false || count($lines) <= $keepLines) {
             return;
         }
 
         // Keep only the last N lines
         $linesToKeep = array_slice($lines, -$keepLines);
-        @file_put_contents(self::$logFile, implode(PHP_EOL, $linesToKeep) . PHP_EOL, LOCK_EX);
+        file_put_contents(self::$logFile, implode(PHP_EOL, $linesToKeep) . PHP_EOL, LOCK_EX);
     }
 }

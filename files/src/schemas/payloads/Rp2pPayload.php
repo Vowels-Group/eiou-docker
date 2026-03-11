@@ -94,7 +94,7 @@ class Rp2pPayload extends BasePayload
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
             'status' => Constants::DELIVERY_RECEIVED,
-            'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P received by ' . print_r($receiver, true),
+            'message' => 'hash ' . $request['hash'] . ' for RP2P received by ' . $receiver,
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);

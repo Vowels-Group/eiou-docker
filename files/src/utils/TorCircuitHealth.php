@@ -97,7 +97,7 @@ class TorCircuitHealth
     {
         $filePath = self::getFilePath($onionAddress);
         if (file_exists($filePath)) {
-            @unlink($filePath);
+            unlink($filePath);
         }
     }
 
@@ -141,7 +141,7 @@ class TorCircuitHealth
         }
 
         foreach ($files as $file) {
-            $content = @file_get_contents($file);
+            $content = file_get_contents($file);
             if ($content === false) {
                 continue;
             }
@@ -182,7 +182,9 @@ class TorCircuitHealth
         }
 
         foreach ($files as $file) {
-            @unlink($file);
+            if (file_exists($file)) {
+                unlink($file);
+            }
         }
     }
 
@@ -207,7 +209,7 @@ class TorCircuitHealth
             return null;
         }
 
-        $content = @file_get_contents($filePath);
+        $content = file_get_contents($filePath);
         if ($content === false) {
             return null;
         }
@@ -223,11 +225,11 @@ class TorCircuitHealth
     {
         $dir = self::HEALTH_DIR;
         if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
+            mkdir($dir, 0755, true);
         }
 
         $filePath = self::getFilePath($onionAddress);
-        @file_put_contents($filePath, json_encode($data), LOCK_EX);
+        file_put_contents($filePath, json_encode($data), LOCK_EX);
     }
 
     /**
