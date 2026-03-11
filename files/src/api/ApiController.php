@@ -2557,37 +2557,109 @@ class ApiController {
             unlink($sslKeyPath);
         }
 
-        // Extract domain from hostname URL
+        // Extract and validate domain from hostname URL
         $domain = preg_replace('#^https?://#', '', $newHostname);
         $domain = rtrim($domain, '/');
 
-        $sanList = "DNS:localhost,DNS:{$domain}";
-
-        $containerHostname = gethostname();
-        if ($containerHostname && $containerHostname !== $domain) {
-            $sanList .= ",DNS:{$containerHostname}";
+        // Strict hostname validation: only allow valid domain characters
+        if (!preg_match('/^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$/', $domain)) {
+            throw new \InvalidArgumentException("Invalid hostname: contains disallowed characters");
         }
-
-        // Add IP addresses
-        $sanList .= ",IP:127.0.0.1";
-        $containerIp = gethostbyname($containerHostname ?: 'localhost');
-        if ($containerIp && $containerIp !== '127.0.0.1' && $containerIp !== $containerHostname) {
-            $sanList .= ",IP:{$containerIp}";
-        }
-
-        $opensslConf = tempnam('/tmp', 'ssl_');
-        file_put_contents($opensslConf, "[req]\ndefault_bits=2048\nprompt=no\ndefault_md=sha256\nx509_extensions=v3_ca\ndistinguished_name=dn\n[dn]\nCN={$domain}\n[v3_ca]\nsubjectAltName={$sanList}\n");
 
         $sslDir = dirname($sslCertPath);
         if (!is_dir($sslDir)) {
             mkdir($sslDir, 0755, true);
         }
 
-        exec("openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {$sslKeyPath} -out {$sslCertPath} -config {$opensslConf} 2>/dev/null");
+        // Build Subject Alternative Names array
+        $sanDns = ["DNS:localhost", "DNS:{$domain}"];
+        $sanIp = ["IP:127.0.0.1"];
 
-        if (file_exists($opensslConf)) {
-            unlink($opensslConf);
+        $containerHostname = gethostname();
+        if ($containerHostname && $containerHostname !== $domain) {
+            $sanDns[] = "DNS:{$containerHostname}";
         }
+
+        $containerIp = gethostbyname($containerHostname ?: 'localhost');
+        if ($containerIp && $containerIp !== '127.0.0.1' && $containerIp !== $containerHostname) {
+            $sanIp[] = "IP:{$containerIp}";
+        }
+
+        $sanList = implode(',', array_merge($sanDns, $sanIp));
+
+        // Use PHP openssl functions instead of exec() to avoid command injection
+        $privateKey = openssl_pkey_new([
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+        ]);
+
+        if ($privateKey === false) {
+            throw new \RuntimeException("Failed to generate SSL private key");
+        }
+
+        $csr = openssl_csr_new(
+            ['commonName' => $domain],
+            $privateKey,
+            [
+                'digest_alg' => 'sha256',
+                'x509_extensions' => 'v3_ca',
+                'config' => $this->createSslConfig($sanList),
+            ]
+        );
+
+        if ($csr === false) {
+            throw new \RuntimeException("Failed to generate SSL CSR");
+        }
+
+        $x509 = openssl_csr_sign($csr, null, $privateKey, 365, [
+            'digest_alg' => 'sha256',
+            'x509_extensions' => 'v3_ca',
+            'config' => $this->createSslConfig($sanList),
+        ]);
+
+        if ($x509 === false) {
+            throw new \RuntimeException("Failed to sign SSL certificate");
+        }
+
+        openssl_x509_export_to_file($x509, $sslCertPath);
+        openssl_pkey_export_to_file($privateKey, $sslKeyPath);
+
+        chmod($sslCertPath, 0644);
+        chmod($sslKeyPath, 0600);
+    }
+
+    /**
+     * Create a temporary OpenSSL config file for SAN support
+     *
+     * @param string $sanList Comma-separated SAN entries (already validated)
+     * @return string Path to temporary config file
+     */
+    private function createSslConfig(string $sanList): string {
+        $tmpDir = is_dir('/dev/shm') ? '/dev/shm' : sys_get_temp_dir();
+        $configPath = tempnam($tmpDir, 'ssl_');
+        chmod($configPath, 0600);
+
+        $config = "[req]\n"
+            . "default_bits = 2048\n"
+            . "prompt = no\n"
+            . "default_md = sha256\n"
+            . "x509_extensions = v3_ca\n"
+            . "distinguished_name = dn\n"
+            . "[dn]\n"
+            . "CN = localhost\n"
+            . "[v3_ca]\n"
+            . "subjectAltName = {$sanList}\n";
+
+        file_put_contents($configPath, $config);
+
+        // Register cleanup to ensure temp file is always removed
+        register_shutdown_function(function () use ($configPath) {
+            if (file_exists($configPath)) {
+                unlink($configPath);
+            }
+        });
+
+        return $configPath;
     }
 
     /**

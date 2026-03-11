@@ -157,6 +157,38 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
+     * Get balances for multiple contacts by pubkey hash in a single query
+     *
+     * @param array $pubkeyHashes Array of pubkey hashes to look up
+     * @param string $currency Currency to filter by
+     * @return array Associative array keyed by pubkey_hash => ['received' => int, 'sent' => int]
+     */
+    public function getBalancesForPubkeyHashes(array $pubkeyHashes, string $currency = 'USD'): array {
+        if (empty($pubkeyHashes)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($pubkeyHashes), '?'));
+        $params = array_values($pubkeyHashes);
+        $params[] = $currency;
+        $query = "SELECT {$this->primaryKey}, received, sent FROM {$this->tableName} WHERE {$this->primaryKey} IN ({$placeholders}) AND currency = ?";
+        $stmt = $this->execute($query, $params);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $results = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $results[$row[$this->primaryKey]] = [
+                'received' => $row['received'],
+                'sent' => $row['sent'],
+            ];
+        }
+        return $results;
+    }
+
+    /**
      * Lookup contact balances subsetted on currency (both ways)
      *
      * @param string $pubkey Contact pubkey
