@@ -3054,7 +3054,7 @@ echo -e "\n\t-> Testing recipient_signature field in sync response"
 
 syncResponseFieldCheck=$(docker exec ${sender} php -r "
     // Check that handleTransactionSyncRequest includes recipient_signature
-    \$syncServiceFile = file_get_contents('/etc/eiou/src/services/SyncService.php');
+    \$syncServiceFile = file_get_contents('/app/eiou/src/services/SyncService.php');
 
     // Check for recipient_signature in sync response data construction
     if (strpos(\$syncServiceFile, \"'recipient_signature' => \\\$tx['recipient_signature']\") !== false) {

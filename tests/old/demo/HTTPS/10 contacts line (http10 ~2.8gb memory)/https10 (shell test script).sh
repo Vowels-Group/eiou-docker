@@ -90,7 +90,7 @@ docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container eiou/eiou
+    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container eiou/eiou
 done
 
 # Save container Addresses in the associative array containerAddresses
@@ -131,6 +131,6 @@ docker exec httpsA cat /var/log/php_errors.log
 echo -e "\nVerifying state..."
 docker exec -it httpsA mysql -u root -e "SELECT hash, time, currency, amount, sender_address FROM eiou.rp2p;"
 
-docker exec -it httpsA /usr/bin/php /etc/eiou/processors/P2pMessages.php
+docker exec -it httpsA /usr/bin/php /app/eiou/processors/P2pMessages.php
 
 echo -e "\nScript completed successfully."

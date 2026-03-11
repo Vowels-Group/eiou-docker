@@ -3146,29 +3146,29 @@ public function testSearchContactsWithInvalidName(): void
 
 | Component | Path |
 |-----------|------|
-| Application | `/etc/eiou/src/core/Application.php` |
-| ServiceContainer | `/etc/eiou/src/services/ServiceContainer.php` |
-| DI Container Config | `/etc/eiou/src/config/container.php` |
-| ErrorHandler | `/etc/eiou/src/core/ErrorHandler.php` |
-| Exceptions | `/etc/eiou/src/exceptions/` |
-| Processors | `/etc/eiou/src/processors/` |
-| Repositories | `/etc/eiou/src/database/` |
-| Repository Traits | `/etc/eiou/src/database/traits/` |
-| Services | `/etc/eiou/src/services/` |
-| Service Proxies | `/etc/eiou/src/services/proxies/` |
-| Formatters | `/etc/eiou/src/formatters/` |
-| Utility Services | `/etc/eiou/src/services/utilities/` |
-| Utils (Logging, Validation) | `/etc/eiou/src/utils/` |
-| Security (BIP39, Encryption) | `/etc/eiou/src/security/` |
-| Contracts (Interfaces) | `/etc/eiou/src/contracts/` |
-| Events | `/etc/eiou/src/events/` |
-| Payload Schemas | `/etc/eiou/src/schemas/payloads/` |
-| CLI | `/etc/eiou/src/cli/` |
-| GUI Controllers | `/etc/eiou/src/gui/controllers/` |
-| GUI Templates | `/etc/eiou/src/gui/layout/` |
-| GUI Helpers | `/etc/eiou/src/gui/helpers/` |
-| Startup Checks | `/etc/eiou/src/startup/` |
-| API Controller | `/etc/eiou/src/api/ApiController.php` |
+| Application | `/app/eiou/src/core/Application.php` |
+| ServiceContainer | `/app/eiou/src/services/ServiceContainer.php` |
+| DI Container Config | `/app/eiou/src/config/container.php` |
+| ErrorHandler | `/app/eiou/src/core/ErrorHandler.php` |
+| Exceptions | `/app/eiou/src/exceptions/` |
+| Processors | `/app/eiou/src/processors/` |
+| Repositories | `/app/eiou/src/database/` |
+| Repository Traits | `/app/eiou/src/database/traits/` |
+| Services | `/app/eiou/src/services/` |
+| Service Proxies | `/app/eiou/src/services/proxies/` |
+| Formatters | `/app/eiou/src/formatters/` |
+| Utility Services | `/app/eiou/src/services/utilities/` |
+| Utils (Logging, Validation) | `/app/eiou/src/utils/` |
+| Security (BIP39, Encryption) | `/app/eiou/src/security/` |
+| Contracts (Interfaces) | `/app/eiou/src/contracts/` |
+| Events | `/app/eiou/src/events/` |
+| Payload Schemas | `/app/eiou/src/schemas/payloads/` |
+| CLI | `/app/eiou/src/cli/` |
+| GUI Controllers | `/app/eiou/src/gui/controllers/` |
+| GUI Templates | `/app/eiou/src/gui/layout/` |
+| GUI Helpers | `/app/eiou/src/gui/helpers/` |
+| Startup Checks | `/app/eiou/src/startup/` |
+| API Controller | `/app/eiou/src/api/ApiController.php` |
 
 ---
 

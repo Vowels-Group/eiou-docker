@@ -408,7 +408,7 @@ class Constants {
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
     // File paths (relative to project root)
-    const PATH_CONFIG_DIR = '/etc/eiou/';
+    const PATH_CONFIG_DIR = '/etc/eiou/config/';
 
     const LOG_FILE_APP = '/var/log/eiou/app.log';
     const LOG_LEVEL = 'INFO';

@@ -50,7 +50,7 @@ services:
       # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
     volumes:
       - node-a-mysql-data:/var/lib/mysql
-      - node-a-files:/etc/eiou/
+      - node-a-config:/etc/eiou/config
       - node-a-backups:/var/lib/eiou/backups
       - node-a-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -101,7 +101,7 @@ services:
       - QUICKSTART=node-b
     volumes:
       - node-b-mysql-data:/var/lib/mysql
-      - node-b-files:/etc/eiou/
+      - node-b-config:/etc/eiou/config
       - node-b-backups:/var/lib/eiou/backups
       - node-b-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -152,7 +152,7 @@ services:
       - QUICKSTART=node-c
     volumes:
       - node-c-mysql-data:/var/lib/mysql
-      - node-c-files:/etc/eiou/
+      - node-c-config:/etc/eiou/config
       - node-c-backups:/var/lib/eiou/backups
       - node-c-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -203,7 +203,7 @@ services:
       - QUICKSTART=node-d
     volumes:
       - node-d-mysql-data:/var/lib/mysql
-      - node-d-files:/etc/eiou/
+      - node-d-config:/etc/eiou/config
       - node-d-backups:/var/lib/eiou/backups
       - node-d-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -254,7 +254,7 @@ services:
       - QUICKSTART=node-e
     volumes:
       - node-e-mysql-data:/var/lib/mysql
-      - node-e-files:/etc/eiou/
+      - node-e-config:/etc/eiou/config
       - node-e-backups:/var/lib/eiou/backups
       - node-e-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -305,7 +305,7 @@ services:
       - QUICKSTART=node-f
     volumes:
       - node-f-mysql-data:/var/lib/mysql
-      - node-f-files:/etc/eiou/
+      - node-f-config:/etc/eiou/config
       - node-f-backups:/var/lib/eiou/backups
       - node-f-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -356,7 +356,7 @@ services:
       - QUICKSTART=node-g
     volumes:
       - node-g-mysql-data:/var/lib/mysql
-      - node-g-files:/etc/eiou/
+      - node-g-config:/etc/eiou/config
       - node-g-backups:/var/lib/eiou/backups
       - node-g-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -407,7 +407,7 @@ services:
       - QUICKSTART=node-h
     volumes:
       - node-h-mysql-data:/var/lib/mysql
-      - node-h-files:/etc/eiou/
+      - node-h-config:/etc/eiou/config
       - node-h-backups:/var/lib/eiou/backups
       - node-h-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -458,7 +458,7 @@ services:
       - QUICKSTART=node-i
     volumes:
       - node-i-mysql-data:/var/lib/mysql
-      - node-i-files:/etc/eiou/
+      - node-i-config:/etc/eiou/config
       - node-i-backups:/var/lib/eiou/backups
       - node-i-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -509,7 +509,7 @@ services:
       - QUICKSTART=node-j
     volumes:
       - node-j-mysql-data:/var/lib/mysql
-      - node-j-files:/etc/eiou/
+      - node-j-config:/etc/eiou/config
       - node-j-backups:/var/lib/eiou/backups
       - node-j-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -554,8 +554,8 @@ networks:
 volumes:
   node-a-mysql-data:
     name: node-a-mysql-data
-  node-a-files:
-    name: node-a-files
+  node-a-config:
+    name: node-a-config
   node-a-backups:
     name: node-a-backups
   node-a-letsencrypt:
@@ -563,8 +563,8 @@ volumes:
 
   node-b-mysql-data:
     name: node-b-mysql-data
-  node-b-files:
-    name: node-b-files
+  node-b-config:
+    name: node-b-config
   node-b-backups:
     name: node-b-backups
   node-b-letsencrypt:
@@ -572,8 +572,8 @@ volumes:
 
   node-c-mysql-data:
     name: node-c-mysql-data
-  node-c-files:
-    name: node-c-files
+  node-c-config:
+    name: node-c-config
   node-c-backups:
     name: node-c-backups
   node-c-letsencrypt:
@@ -581,8 +581,8 @@ volumes:
 
   node-d-mysql-data:
     name: node-d-mysql-data
-  node-d-files:
-    name: node-d-files
+  node-d-config:
+    name: node-d-config
   node-d-backups:
     name: node-d-backups
   node-d-letsencrypt:
@@ -590,8 +590,8 @@ volumes:
 
   node-e-mysql-data:
     name: node-e-mysql-data
-  node-e-files:
-    name: node-e-files
+  node-e-config:
+    name: node-e-config
   node-e-backups:
     name: node-e-backups
   node-e-letsencrypt:
@@ -599,8 +599,8 @@ volumes:
 
   node-f-mysql-data:
     name: node-f-mysql-data
-  node-f-files:
-    name: node-f-files
+  node-f-config:
+    name: node-f-config
   node-f-backups:
     name: node-f-backups
   node-f-letsencrypt:
@@ -608,8 +608,8 @@ volumes:
 
   node-g-mysql-data:
     name: node-g-mysql-data
-  node-g-files:
-    name: node-g-files
+  node-g-config:
+    name: node-g-config
   node-g-backups:
     name: node-g-backups
   node-g-letsencrypt:
@@ -617,8 +617,8 @@ volumes:
 
   node-h-mysql-data:
     name: node-h-mysql-data
-  node-h-files:
-    name: node-h-files
+  node-h-config:
+    name: node-h-config
   node-h-backups:
     name: node-h-backups
   node-h-letsencrypt:
@@ -626,8 +626,8 @@ volumes:
 
   node-i-mysql-data:
     name: node-i-mysql-data
-  node-i-files:
-    name: node-i-files
+  node-i-config:
+    name: node-i-config
   node-i-backups:
     name: node-i-backups
   node-i-letsencrypt:
@@ -635,8 +635,8 @@ volumes:
 
   node-j-mysql-data:
     name: node-j-mysql-data
-  node-j-files:
-    name: node-j-files
+  node-j-config:
+    name: node-j-config
   node-j-backups:
     name: node-j-backups
   node-j-letsencrypt:

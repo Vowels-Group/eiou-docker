@@ -246,7 +246,7 @@ services:
       # Config: wallet private keys, encryption keys, userconfig.json
       # Without this, your wallet identity is lost — back this up.
       # Note: Source code lives in /app/eiou/ (image filesystem, not this volume).
-      - files:/etc/eiou/
+      - config:/etc/eiou/config
 
       # Backups: encrypted daily database backups (AES-256-GCM)
       # Off-site storage recommended for disaster recovery.
@@ -340,8 +340,8 @@ networks:
 volumes:
   mysql-data:
     name: ${NODE_NAME:-eiou-node}-mysql-data
-  files:
-    name: ${NODE_NAME:-eiou-node}-files
+  config:
+    name: ${NODE_NAME:-eiou-node}-config
   backups:
     name: ${NODE_NAME:-eiou-node}-backups
   letsencrypt:

@@ -159,9 +159,9 @@ if [ "$runningCount" -lt 3 ] || [ "$lockfileCount" -lt 3 ]; then
     docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
     wait_for_process_stop ${testContainer} "Messages.php" 5 || true
 
-    docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
-    docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
-    docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
+    docker exec ${testContainer} sh -c "nohup php /app/eiou/processors/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
+    docker exec ${testContainer} sh -c "nohup php /app/eiou/processors/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
+    docker exec ${testContainer} sh -c "nohup php /app/eiou/processors/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
 
     # Wait for manual start using polling
     wait_for_process_start ${testContainer} "Messages.php" 15 || true

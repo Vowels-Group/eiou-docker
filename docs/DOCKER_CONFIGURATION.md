@@ -270,7 +270,7 @@ All EIOU containers use named volumes for data persistence:
 | Volume | Container Path | Purpose | Backup Priority |
 |--------|----------------|---------|-----------------|
 | `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
-| `{node}-files` | `/etc/eiou/` | Config: wallet keys, config/userconfig.json, encryption data | **CRITICAL** |
+| `{node}-config` | `/etc/eiou/config` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
 | `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
 
@@ -278,7 +278,7 @@ All EIOU containers use named volumes for data persistence:
 ```yaml
 volumes:
   - alice-mysql-data:/var/lib/mysql     # Transaction history, contacts
-  - alice-files:/etc/eiou/              # Wallet keys, configuration
+  - alice-config:/etc/eiou/config       # Wallet keys, configuration
 ```
 
 ### Optional Volumes
@@ -837,7 +837,8 @@ EIOU containers run as root during initialization, then services drop privileges
 
 | Path | Permissions | Owner | Purpose |
 |------|-------------|-------|---------|
-| `/etc/eiou/` | 755 (dir) / 644 (files) | www-data | Configuration |
+| `/etc/eiou/config/` | 755 (dir) / 644 (files) | www-data | Configuration |
+| `/app/eiou/` | 755 (dir) / 644 (files) | www-data | Source code |
 | `/var/lib/mysql/` | 700 | mysql | Database files |
 | `/var/lib/tor/hidden_service/` | 700 | debian-tor | Tor keys |
 | `/etc/nginx/ssl/server.key` | 600 | root | SSL private key |
@@ -944,7 +945,7 @@ docker exec <container> eiou backup cleanup
 
 **Must backup:**
 - `{node}-mysql-data` - Contains all transaction history and contact relationships
-- `{node}-files` - Contains wallet private keys and encryption keys
+- `{node}-config` - Contains wallet private keys and encryption keys
 - `{node}-backups` - Contains encrypted database backups
 
 **Optional backup:**
@@ -959,8 +960,8 @@ For complete disaster recovery, back up Docker volumes directly:
 docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
   alpine tar czf /backup/alice-mysql-data.tar.gz -C /data .
 
-docker run --rm -v alice-files:/data -v /backup:/backup \
-  alpine tar czf /backup/alice-files.tar.gz -C /data .
+docker run --rm -v alice-config:/data -v /backup:/backup \
+  alpine tar czf /backup/alice-config.tar.gz -C /data .
 
 docker run --rm -v alice-backups:/data -v /backup:/backup \
   alpine tar czf /backup/alice-backups.tar.gz -C /data .
@@ -973,8 +974,8 @@ docker run --rm -v alice-backups:/data -v /backup:/backup \
 docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
   alpine sh -c "cd /data && tar xzf /backup/alice-mysql-data.tar.gz"
 
-docker run --rm -v alice-files:/data -v /backup:/backup \
-  alpine sh -c "cd /data && tar xzf /backup/alice-files.tar.gz"
+docker run --rm -v alice-config:/data -v /backup:/backup \
+  alpine sh -c "cd /data && tar xzf /backup/alice-config.tar.gz"
 
 docker run --rm -v alice-backups:/data -v /backup:/backup \
   alpine sh -c "cd /data && tar xzf /backup/alice-backups.tar.gz"
@@ -1022,7 +1023,7 @@ docker compose down -v
 docker logs <container_name>
 
 # Verify volume permissions
-docker run --rm -v mynode-files:/data alpine ls -la /data
+docker run --rm -v mynode-config:/data alpine ls -la /data
 
 # Reset and rebuild
 docker-compose -f <config>.yml down -v

@@ -63,7 +63,7 @@ services:
       # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
     volumes:
       - cluster-a0-mysql-data:/var/lib/mysql
-      - cluster-a0-files:/etc/eiou/
+      - cluster-a0-config:/etc/eiou/config
       - cluster-a0-backups:/var/lib/eiou/backups
       - cluster-a0-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -110,7 +110,7 @@ services:
       - QUICKSTART=cluster-a1
     volumes:
       - cluster-a1-mysql-data:/var/lib/mysql
-      - cluster-a1-files:/etc/eiou/
+      - cluster-a1-config:/etc/eiou/config
       - cluster-a1-backups:/var/lib/eiou/backups
       - cluster-a1-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -156,7 +156,7 @@ services:
       - QUICKSTART=cluster-a2
     volumes:
       - cluster-a2-mysql-data:/var/lib/mysql
-      - cluster-a2-files:/etc/eiou/
+      - cluster-a2-config:/etc/eiou/config
       - cluster-a2-backups:/var/lib/eiou/backups
       - cluster-a2-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -202,7 +202,7 @@ services:
       - QUICKSTART=cluster-a3
     volumes:
       - cluster-a3-mysql-data:/var/lib/mysql
-      - cluster-a3-files:/etc/eiou/
+      - cluster-a3-config:/etc/eiou/config
       - cluster-a3-backups:/var/lib/eiou/backups
       - cluster-a3-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -248,7 +248,7 @@ services:
       - QUICKSTART=cluster-a4
     volumes:
       - cluster-a4-mysql-data:/var/lib/mysql
-      - cluster-a4-files:/etc/eiou/
+      - cluster-a4-config:/etc/eiou/config
       - cluster-a4-backups:/var/lib/eiou/backups
       - cluster-a4-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -295,7 +295,7 @@ services:
       - QUICKSTART=cluster-a11
     volumes:
       - cluster-a11-mysql-data:/var/lib/mysql
-      - cluster-a11-files:/etc/eiou/
+      - cluster-a11-config:/etc/eiou/config
       - cluster-a11-backups:/var/lib/eiou/backups
       - cluster-a11-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -341,7 +341,7 @@ services:
       - QUICKSTART=cluster-a12
     volumes:
       - cluster-a12-mysql-data:/var/lib/mysql
-      - cluster-a12-files:/etc/eiou/
+      - cluster-a12-config:/etc/eiou/config
       - cluster-a12-backups:/var/lib/eiou/backups
       - cluster-a12-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -387,7 +387,7 @@ services:
       - QUICKSTART=cluster-a21
     volumes:
       - cluster-a21-mysql-data:/var/lib/mysql
-      - cluster-a21-files:/etc/eiou/
+      - cluster-a21-config:/etc/eiou/config
       - cluster-a21-backups:/var/lib/eiou/backups
       - cluster-a21-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -433,7 +433,7 @@ services:
       - QUICKSTART=cluster-a22
     volumes:
       - cluster-a22-mysql-data:/var/lib/mysql
-      - cluster-a22-files:/etc/eiou/
+      - cluster-a22-config:/etc/eiou/config
       - cluster-a22-backups:/var/lib/eiou/backups
       - cluster-a22-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -479,7 +479,7 @@ services:
       - QUICKSTART=cluster-a31
     volumes:
       - cluster-a31-mysql-data:/var/lib/mysql
-      - cluster-a31-files:/etc/eiou/
+      - cluster-a31-config:/etc/eiou/config
       - cluster-a31-backups:/var/lib/eiou/backups
       - cluster-a31-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -525,7 +525,7 @@ services:
       - QUICKSTART=cluster-a32
     volumes:
       - cluster-a32-mysql-data:/var/lib/mysql
-      - cluster-a32-files:/etc/eiou/
+      - cluster-a32-config:/etc/eiou/config
       - cluster-a32-backups:/var/lib/eiou/backups
       - cluster-a32-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -571,7 +571,7 @@ services:
       - QUICKSTART=cluster-a41
     volumes:
       - cluster-a41-mysql-data:/var/lib/mysql
-      - cluster-a41-files:/etc/eiou/
+      - cluster-a41-config:/etc/eiou/config
       - cluster-a41-backups:/var/lib/eiou/backups
       - cluster-a41-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -617,7 +617,7 @@ services:
       - QUICKSTART=cluster-a42
     volumes:
       - cluster-a42-mysql-data:/var/lib/mysql
-      - cluster-a42-files:/etc/eiou/
+      - cluster-a42-config:/etc/eiou/config
       - cluster-a42-backups:/var/lib/eiou/backups
       - cluster-a42-letsencrypt:/etc/letsencrypt
     cap_drop:
@@ -657,8 +657,8 @@ networks:
 volumes:
   cluster-a0-mysql-data:
     name: cluster-a0-mysql-data
-  cluster-a0-files:
-    name: cluster-a0-files
+  cluster-a0-config:
+    name: cluster-a0-config
   cluster-a0-backups:
     name: cluster-a0-backups
   cluster-a0-letsencrypt:
@@ -666,8 +666,8 @@ volumes:
 
   cluster-a1-mysql-data:
     name: cluster-a1-mysql-data
-  cluster-a1-files:
-    name: cluster-a1-files
+  cluster-a1-config:
+    name: cluster-a1-config
   cluster-a1-backups:
     name: cluster-a1-backups
   cluster-a1-letsencrypt:
@@ -675,8 +675,8 @@ volumes:
 
   cluster-a2-mysql-data:
     name: cluster-a2-mysql-data
-  cluster-a2-files:
-    name: cluster-a2-files
+  cluster-a2-config:
+    name: cluster-a2-config
   cluster-a2-backups:
     name: cluster-a2-backups
   cluster-a2-letsencrypt:
@@ -684,8 +684,8 @@ volumes:
 
   cluster-a3-mysql-data:
     name: cluster-a3-mysql-data
-  cluster-a3-files:
-    name: cluster-a3-files
+  cluster-a3-config:
+    name: cluster-a3-config
   cluster-a3-backups:
     name: cluster-a3-backups
   cluster-a3-letsencrypt:
@@ -693,8 +693,8 @@ volumes:
 
   cluster-a4-mysql-data:
     name: cluster-a4-mysql-data
-  cluster-a4-files:
-    name: cluster-a4-files
+  cluster-a4-config:
+    name: cluster-a4-config
   cluster-a4-backups:
     name: cluster-a4-backups
   cluster-a4-letsencrypt:
@@ -702,8 +702,8 @@ volumes:
 
   cluster-a11-mysql-data:
     name: cluster-a11-mysql-data
-  cluster-a11-files:
-    name: cluster-a11-files
+  cluster-a11-config:
+    name: cluster-a11-config
   cluster-a11-backups:
     name: cluster-a11-backups
   cluster-a11-letsencrypt:
@@ -711,8 +711,8 @@ volumes:
 
   cluster-a12-mysql-data:
     name: cluster-a12-mysql-data
-  cluster-a12-files:
-    name: cluster-a12-files
+  cluster-a12-config:
+    name: cluster-a12-config
   cluster-a12-backups:
     name: cluster-a12-backups
   cluster-a12-letsencrypt:
@@ -720,8 +720,8 @@ volumes:
 
   cluster-a21-mysql-data:
     name: cluster-a21-mysql-data
-  cluster-a21-files:
-    name: cluster-a21-files
+  cluster-a21-config:
+    name: cluster-a21-config
   cluster-a21-backups:
     name: cluster-a21-backups
   cluster-a21-letsencrypt:
@@ -729,8 +729,8 @@ volumes:
 
   cluster-a22-mysql-data:
     name: cluster-a22-mysql-data
-  cluster-a22-files:
-    name: cluster-a22-files
+  cluster-a22-config:
+    name: cluster-a22-config
   cluster-a22-backups:
     name: cluster-a22-backups
   cluster-a22-letsencrypt:
@@ -738,8 +738,8 @@ volumes:
 
   cluster-a31-mysql-data:
     name: cluster-a31-mysql-data
-  cluster-a31-files:
-    name: cluster-a31-files
+  cluster-a31-config:
+    name: cluster-a31-config
   cluster-a31-backups:
     name: cluster-a31-backups
   cluster-a31-letsencrypt:
@@ -747,8 +747,8 @@ volumes:
 
   cluster-a32-mysql-data:
     name: cluster-a32-mysql-data
-  cluster-a32-files:
-    name: cluster-a32-files
+  cluster-a32-config:
+    name: cluster-a32-config
   cluster-a32-backups:
     name: cluster-a32-backups
   cluster-a32-letsencrypt:
@@ -756,8 +756,8 @@ volumes:
 
   cluster-a41-mysql-data:
     name: cluster-a41-mysql-data
-  cluster-a41-files:
-    name:  cluster-a41-files
+  cluster-a41-config:
+    name:  cluster-a41-config
   cluster-a41-backups:
     name: cluster-a41-backups
   cluster-a41-letsencrypt:
@@ -765,8 +765,8 @@ volumes:
 
   cluster-a42-mysql-data:
     name: cluster-a42-mysql-data
-  cluster-a42-files:
-    name: cluster-a42-files
+  cluster-a42-config:
+    name: cluster-a42-config
   cluster-a42-backups:
     name: cluster-a42-backups
   cluster-a42-letsencrypt:

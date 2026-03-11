@@ -612,7 +612,7 @@ class Application {
      * @return string
      */
     public function getConfigPath(): string {
-        return Constants::PATH_CONFIG_DIR ?: '/etc/eiou';
+        return Constants::PATH_CONFIG_DIR ?: '/etc/eiou/config';
     }
 
     /**

@@ -104,7 +104,7 @@ services:
       - eiou-mysql-data:/var/lib/mysql
 
       # Config: wallet keys, config/ directory (userconfig, dbconfig, etc.) (CRITICAL)
-      - eiou-files:/etc/eiou/
+      - eiou-config:/etc/eiou/config
 
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
       - eiou-backups:/var/lib/eiou/backups
@@ -173,8 +173,8 @@ networks:
 volumes:
   eiou-mysql-data:
     name: eiou-mysql-data
-  eiou-files:
-    name: eiou-files
+  eiou-config:
+    name: eiou-config
   # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
   eiou-backups:
     name: eiou-backups

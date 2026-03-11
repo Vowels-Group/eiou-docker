@@ -195,7 +195,7 @@ Use for errors where:
 throw new FatalServiceException(
     "Database configuration not found",
     ErrorCodes::DB_CONFIG_NOT_FOUND,
-    ['config_path' => '/etc/eiou/db.conf']
+    ['config_path' => '/etc/eiou/config/db.conf']
 );
 
 // Security violation

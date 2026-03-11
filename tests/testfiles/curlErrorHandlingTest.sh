@@ -60,7 +60,7 @@ totaltests=$(( totaltests + 1 ))
 
 # Resolve HTTP timeout from Constants (source uses Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, not a literal)
 timeoutCheck=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Constants.php');
+    require_once('/app/eiou/src/core/Constants.php');
     echo \Eiou\Core\Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS;
 " 2>/dev/null || echo "0")
 
@@ -79,7 +79,7 @@ echo -e "\n[Test 3: HTTP Connect Timeout Configuration]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-connectTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function sendByTor/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_CONNECTTIMEOUT' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
+connectTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function sendByTor/p' /app/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_CONNECTTIMEOUT' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
 
 if [[ "$connectTimeoutCheck" == "5" ]]; then
     printf "\t   HTTP connect timeout is 5 seconds ${GREEN}PASSED${NC}\n"
@@ -98,7 +98,7 @@ totaltests=$(( totaltests + 1 ))
 
 # Resolve Tor timeout from Constants (source uses Constants::TOR_TRANSPORT_TIMEOUT_SECONDS, not a literal)
 torTimeoutCheck=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Constants.php');
+    require_once('/app/eiou/src/core/Constants.php');
     echo \Eiou\Core\Constants::TOR_TRANSPORT_TIMEOUT_SECONDS;
 " 2>/dev/null || echo "0")
 
@@ -118,7 +118,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 # Use tighter function boundary (sendByTor to createCurlHandle) to avoid capturing createCurlHandle's values
-torConnectTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByTor/,/function createCurlHandle/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_CONNECTTIMEOUT' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
+torConnectTimeoutCheck=$(docker exec ${container} sh -c "sed -n '/function sendByTor/,/function createCurlHandle/p' /app/eiou/src/services/utilities/TransportUtilityService.php | grep 'CURLOPT_CONNECTTIMEOUT' | grep -o '[0-9]*'" 2>/dev/null || echo "0")
 
 if [[ "$torConnectTimeoutCheck" == "10" ]]; then
     printf "\t   Tor connect timeout is 10 seconds ${GREEN}PASSED${NC}\n"
@@ -135,7 +135,7 @@ echo -e "\n[Test 6: Curl Error Handling in sendByHttp]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-errorHandlingCheck=$(docker exec ${container} sh -c "grep -c 'curl_error' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
+errorHandlingCheck=$(docker exec ${container} sh -c "grep -c 'curl_error' /app/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
 
 if [[ "$errorHandlingCheck" -ge "2" ]]; then
     printf "\t   Curl error handling exists (${errorHandlingCheck} occurrences) ${GREEN}PASSED${NC}\n"
@@ -152,7 +152,7 @@ echo -e "\n[Test 7: Structured Error Response Format]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-errorFormatCheck=$(docker exec ${container} sh -c "grep -c \"'status' => 'error'\" /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
+errorFormatCheck=$(docker exec ${container} sh -c "grep -c \"'status' => 'error'\" /app/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
 
 if [[ "$errorFormatCheck" -ge "2" ]]; then
     printf "\t   Structured error response format exists ${GREEN}PASSED${NC}\n"
@@ -209,7 +209,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 # Check that MessageDeliveryService code handles 'error' status
-errorStatusCheck=$(docker exec ${container} sh -c "grep -c \"status === 'error'\" /etc/eiou/src/services/MessageDeliveryService.php" 2>/dev/null || echo "0")
+errorStatusCheck=$(docker exec ${container} sh -c "grep -c \"status === 'error'\" /app/eiou/src/services/MessageDeliveryService.php" 2>/dev/null || echo "0")
 
 if [[ "$errorStatusCheck" -ge "2" ]]; then
     printf "\t   MessageDeliveryService handles error status ${GREEN}PASSED${NC}\n"
@@ -226,7 +226,7 @@ echo -e "\n[Test 10: Logger Integration for HTTP Errors]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-loggerCheck=$(docker exec ${container} sh -c "grep -c 'Logger::getInstance()->warning.*HTTP request failed' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
+loggerCheck=$(docker exec ${container} sh -c "grep -c 'Logger::getInstance()->warning.*HTTP request failed' /app/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
 
 if [[ "$loggerCheck" -ge "1" ]]; then
     printf "\t   Logger integration for HTTP errors ${GREEN}PASSED${NC}\n"
@@ -243,7 +243,7 @@ echo -e "\n[Test 11: Logger Integration for Tor Errors]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-torLoggerCheck=$(docker exec ${container} sh -c "grep -c 'Logger::getInstance()->warning.*TOR request failed' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
+torLoggerCheck=$(docker exec ${container} sh -c "grep -c 'Logger::getInstance()->warning.*TOR request failed' /app/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
 
 if [[ "$torLoggerCheck" -ge "1" ]]; then
     printf "\t   Logger integration for Tor errors ${GREEN}PASSED${NC}\n"
@@ -429,7 +429,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 # Check that transport error status triggers the retry path (lastError assignment)
-retryLogicCheck=$(docker exec ${container} sh -c "grep -A2 \"status === 'error'\" /etc/eiou/src/services/MessageDeliveryService.php | grep -c 'lastError'" 2>/dev/null || echo "0")
+retryLogicCheck=$(docker exec ${container} sh -c "grep -A2 \"status === 'error'\" /app/eiou/src/services/MessageDeliveryService.php | grep -c 'lastError'" 2>/dev/null || echo "0")
 
 if [[ "$retryLogicCheck" -ge "2" ]]; then
     printf "\t   Transport error triggers retry logic ${GREEN}PASSED${NC}\n"
@@ -447,7 +447,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 # Verify curl_close is called in error path (restrict to sendByHttp/sendByTor, use -B35 for Tor's wider gap due to SOCKS5 restart signal code)
-cleanupCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function createCurlHandle/p' /etc/eiou/src/services/utilities/TransportUtilityService.php | grep -B35 \"'status' => 'error'\" | grep -c 'curl_close'" 2>/dev/null || echo "0")
+cleanupCheck=$(docker exec ${container} sh -c "sed -n '/function sendByHttp/,/function createCurlHandle/p' /app/eiou/src/services/utilities/TransportUtilityService.php | grep -B35 \"'status' => 'error'\" | grep -c 'curl_close'" 2>/dev/null || echo "0")
 
 if [[ "$cleanupCheck" -ge "2" ]]; then
     printf "\t   Curl handle properly closed on error ${GREEN}PASSED${NC}\n"

@@ -624,23 +624,6 @@ fi
 echo "Entering maintenance mode (upgrade lock)..."
 echo "$(date +%s)" > "$MAINTENANCE_LOCKFILE"
 
-# =============================================================================
-# VOLUME MIGRATION (one-time cleanup of old layout)
-# =============================================================================
-# Prior to this version, source code lived in /etc/eiou/ alongside config
-# data. Source code now lives in /app/eiou/ (image filesystem). Clean up
-# stale code files from the config volume to save space.
-# =============================================================================
-if [ -d /etc/eiou/src ]; then
-    echo "Migrating: removing stale code from config volume..."
-    rm -rf /etc/eiou/src /etc/eiou/api /etc/eiou/cli /etc/eiou/processors \
-           /etc/eiou/www /etc/eiou/vendor /etc/eiou/scripts
-    rm -f /etc/eiou/composer.json /etc/eiou/composer.lock \
-          /etc/eiou/Functions.php /etc/eiou/SecurityInit.php \
-          /etc/eiou/bootstrap.php
-    echo "  Migration complete. Code now served from /app/eiou/ (image)."
-fi
-
 # Start services
 service cron start
 service tor start

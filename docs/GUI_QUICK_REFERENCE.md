@@ -18,13 +18,13 @@ Quick lookup card for the EIOU Wallet web interface.
 
 | Component | Inside Container | Outside Container |
 |-----------|------------------|-------------------|
-| Entry point | `/etc/eiou/www/gui/index.html` | `files/root/www/gui/index.html` |
-| GUI source | `/etc/eiou/src/gui/` | `files/src/gui/` |
-| Controllers | `/etc/eiou/src/gui/controllers/` | `files/src/gui/controllers/` |
-| Helpers | `/etc/eiou/src/gui/helpers/` | `files/src/gui/helpers/` |
-| Layout | `/etc/eiou/src/gui/layout/` | `files/src/gui/layout/` |
-| JavaScript | `/etc/eiou/src/gui/assets/js/script.js` | `files/src/gui/assets/js/script.js` |
-| CSS | `/etc/eiou/src/gui/assets/css/page.css` | `files/src/gui/assets/css/page.css` |
+| Entry point | `/app/eiou/www/gui/index.html` | `files/root/www/gui/index.html` |
+| GUI source | `/app/eiou/src/gui/` | `files/src/gui/` |
+| Controllers | `/app/eiou/src/gui/controllers/` | `files/src/gui/controllers/` |
+| Helpers | `/app/eiou/src/gui/helpers/` | `files/src/gui/helpers/` |
+| Layout | `/app/eiou/src/gui/layout/` | `files/src/gui/layout/` |
+| JavaScript | `/app/eiou/src/gui/assets/js/script.js` | `files/src/gui/assets/js/script.js` |
+| CSS | `/app/eiou/src/gui/assets/css/page.css` | `files/src/gui/assets/css/page.css` |
 | User config | `/etc/eiou/config/defaultconfig.json` | N/A (generated at runtime) |
 
 ---

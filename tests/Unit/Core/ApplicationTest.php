@@ -43,7 +43,7 @@ class ApplicationTest extends TestCase
     public function testGetInstanceReturnsSameInstance(): void
     {
         // Skip if not in Docker environment where config files exist
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -80,7 +80,7 @@ class ApplicationTest extends TestCase
      */
     public function testWakeupThrowsException(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -99,7 +99,7 @@ class ApplicationTest extends TestCase
      */
     public function testCurrentPdoLoadedReturnsBool(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -114,7 +114,7 @@ class ApplicationTest extends TestCase
      */
     public function testCurrentDatabaseLoadedReturnsBool(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -129,7 +129,7 @@ class ApplicationTest extends TestCase
      */
     public function testCurrentUserLoadedReturnsBool(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -144,7 +144,7 @@ class ApplicationTest extends TestCase
      */
     public function testIsCliReturnsCorrectValue(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -160,7 +160,7 @@ class ApplicationTest extends TestCase
      */
     public function testIsDevelopmentReturnsBool(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -175,7 +175,7 @@ class ApplicationTest extends TestCase
      */
     public function testIsDebugReturnsBool(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -190,7 +190,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetRootPathReturnsString(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -206,7 +206,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetConfigPathReturnsString(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -222,7 +222,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetLoggerReturnsLogger(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -237,7 +237,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetLoggerReturnsSameInstance(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -253,7 +253,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetInputValidatorReturnsInputValidator(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -268,7 +268,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetInputValidatorReturnsSameInstance(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -284,7 +284,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetSecurityReturnsSecurity(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -299,7 +299,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetSecurityReturnsSameInstance(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -315,7 +315,7 @@ class ApplicationTest extends TestCase
      */
     public function testLoggerLoadedReturnsBool(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -330,7 +330,7 @@ class ApplicationTest extends TestCase
      */
     public function testLoggerLoadedReturnsTrueAfterGetLogger(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -346,7 +346,7 @@ class ApplicationTest extends TestCase
      */
     public function testSetDatabaseSetsPdo(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -363,7 +363,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetPublicKeyReturnsNullWhenUserNotLoaded(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -384,7 +384,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetPublicKeyHashReturnsNullWhenUserNotLoaded(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -405,7 +405,7 @@ class ApplicationTest extends TestCase
      */
     public function testProcessorsArrayExists(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
@@ -419,7 +419,7 @@ class ApplicationTest extends TestCase
      */
     public function testUtilsArrayExists(): void
     {
-        if (!file_exists('/etc/eiou/')) {
+        if (!file_exists('/app/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 

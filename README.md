@@ -191,7 +191,7 @@ These named volumes persist your data across container restarts and rebuilds. Vo
 | Volume | Container Path | Contents | Backup Priority |
 |--------|----------------|----------|-----------------|
 | `{NODE_NAME}-mysql-data` | `/var/lib/mysql` | Transaction history, contacts, balances | **Critical** |
-| `{NODE_NAME}-files` | `/etc/eiou/` | Wallet private keys, encryption keys, configuration | **Critical** |
+| `{NODE_NAME}-config` | `/etc/eiou/config` | Wallet private keys, encryption keys, configuration | **Critical** |
 | `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
 | `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if you will never use Let's Encrypt | Low |
 

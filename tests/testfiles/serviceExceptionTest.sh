@@ -410,8 +410,8 @@ echo -e "\n[Section 5: Exception Handling in Entry Points]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing Eiou.php imports ServiceException classes"
 
-# CLI entry point is at /etc/eiou/cli/Eiou.php
-importsExist=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /etc/eiou/cli/Eiou.php 2>/dev/null || echo 0")
+# CLI entry point is at /app/eiou/cli/Eiou.php
+importsExist=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /app/eiou/cli/Eiou.php 2>/dev/null || echo 0")
 
 if [[ "$importsExist" -ge "1" ]]; then
     printf "\t   Eiou.php imports ServiceException ${GREEN}PASSED${NC}\n"
@@ -425,7 +425,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing Eiou.php has ServiceException catch blocks"
 
-catchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /etc/eiou/cli/Eiou.php 2>/dev/null || echo 0")
+catchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /app/eiou/cli/Eiou.php 2>/dev/null || echo 0")
 
 if [[ "$catchExists" -ge "1" ]]; then
     printf "\t   Eiou.php has ServiceException catch blocks ${GREEN}PASSED${NC}\n"
@@ -439,7 +439,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing ApiController.php imports ServiceException"
 
-apiImportExists=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /etc/eiou/src/api/ApiController.php 2>/dev/null || echo 0")
+apiImportExists=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /app/eiou/src/api/ApiController.php 2>/dev/null || echo 0")
 
 if [[ "$apiImportExists" -ge "1" ]]; then
     printf "\t   ApiController.php imports ServiceException ${GREEN}PASSED${NC}\n"
@@ -453,7 +453,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing ApiController.php has ServiceException catch block"
 
-apiCatchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /etc/eiou/src/api/ApiController.php 2>/dev/null || echo 0")
+apiCatchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /app/eiou/src/api/ApiController.php 2>/dev/null || echo 0")
 
 if [[ "$apiCatchExists" -ge "1" ]]; then
     printf "\t   ApiController.php has ServiceException catch block ${GREEN}PASSED${NC}\n"
@@ -471,7 +471,7 @@ echo -e "\n[Section 6: Service Methods Use Exceptions]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing ContactService uses ValidationServiceException"
 
-contactServiceUses=$(docker exec ${testContainer} sh -c "grep -c 'ValidationServiceException' /etc/eiou/src/services/ContactService.php 2>/dev/null || echo 0")
+contactServiceUses=$(docker exec ${testContainer} sh -c "grep -c 'ValidationServiceException' /app/eiou/src/services/ContactService.php 2>/dev/null || echo 0")
 
 if [[ "$contactServiceUses" -ge "1" ]]; then
     printf "\t   ContactService uses ValidationServiceException ${GREEN}PASSED${NC}\n"
@@ -485,7 +485,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing WalletService uses FatalServiceException"
 
-walletServiceUses=$(docker exec ${testContainer} sh -c "grep -c 'FatalServiceException' /etc/eiou/src/services/WalletService.php 2>/dev/null || echo 0")
+walletServiceUses=$(docker exec ${testContainer} sh -c "grep -c 'FatalServiceException' /app/eiou/src/services/WalletService.php 2>/dev/null || echo 0")
 
 if [[ "$walletServiceUses" -ge "1" ]]; then
     printf "\t   WalletService uses FatalServiceException ${GREEN}PASSED${NC}\n"
@@ -499,7 +499,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing MessageService uses FatalServiceException"
 
-messageServiceUses=$(docker exec ${testContainer} sh -c "grep -c 'FatalServiceException' /etc/eiou/src/services/MessageService.php 2>/dev/null || echo 0")
+messageServiceUses=$(docker exec ${testContainer} sh -c "grep -c 'FatalServiceException' /app/eiou/src/services/MessageService.php 2>/dev/null || echo 0")
 
 if [[ "$messageServiceUses" -ge "1" ]]; then
     printf "\t   MessageService uses FatalServiceException ${GREEN}PASSED${NC}\n"
@@ -513,7 +513,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing no exit() calls in service files"
 
-exitCalls=$(docker exec ${testContainer} sh -c "grep -l 'exit(' /etc/eiou/src/services/ContactService.php /etc/eiou/src/services/WalletService.php /etc/eiou/src/services/MessageService.php 2>/dev/null | wc -l")
+exitCalls=$(docker exec ${testContainer} sh -c "grep -l 'exit(' /app/eiou/src/services/ContactService.php /app/eiou/src/services/WalletService.php /app/eiou/src/services/MessageService.php 2>/dev/null | wc -l")
 
 if [[ "$exitCalls" == "0" ]]; then
     printf "\t   No exit() calls in service files ${GREEN}PASSED${NC}\n"

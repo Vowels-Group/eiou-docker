@@ -21,16 +21,16 @@ docker volume rm httpsJ-mysql-data httpsJ-files httpsJ-backups httpsJ-letsencryp
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name httpsA -v "httpsA-mysql-data:/var/lib/mysql" -v "httpsA-files:/etc/eiou/" -v "httpsA-backups:/var/lib/eiou/backups" -v "httpsA-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsA eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsB -v "httpsB-mysql-data:/var/lib/mysql" -v "httpsB-files:/etc/eiou/" -v "httpsB-backups:/var/lib/eiou/backups" -v "httpsB-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsB eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsC -v "httpsC-mysql-data:/var/lib/mysql" -v "httpsC-files:/etc/eiou/" -v "httpsC-backups:/var/lib/eiou/backups" -v "httpsC-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsC eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsD -v "httpsD-mysql-data:/var/lib/mysql" -v "httpsD-files:/etc/eiou/" -v "httpsD-backups:/var/lib/eiou/backups" -v "httpsD-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsD eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsE -v "httpsE-mysql-data:/var/lib/mysql" -v "httpsE-files:/etc/eiou/" -v "httpsE-backups:/var/lib/eiou/backups" -v "httpsE-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsE eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsF -v "httpsF-mysql-data:/var/lib/mysql" -v "httpsF-files:/etc/eiou/" -v "httpsF-backups:/var/lib/eiou/backups" -v "httpsF-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsF eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsG -v "httpsG-mysql-data:/var/lib/mysql" -v "httpsG-files:/etc/eiou/" -v "httpsG-backups:/var/lib/eiou/backups" -v "httpsG-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsG eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsH -v "httpsH-mysql-data:/var/lib/mysql" -v "httpsH-files:/etc/eiou/" -v "httpsH-backups:/var/lib/eiou/backups" -v "httpsH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsH eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsI -v "httpsI-mysql-data:/var/lib/mysql" -v "httpsI-files:/etc/eiou/" -v "httpsI-backups:/var/lib/eiou/backups" -v "httpsI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsI eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsJ -v "httpsJ-mysql-data:/var/lib/mysql" -v "httpsJ-files:/etc/eiou/" -v "httpsJ-backups:/var/lib/eiou/backups" -v "httpsJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsJ eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsA -v "httpsA-mysql-data:/var/lib/mysql" -v "httpsA-config:/etc/eiou/config" -v "httpsA-backups:/var/lib/eiou/backups" -v "httpsA-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsA eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsB -v "httpsB-mysql-data:/var/lib/mysql" -v "httpsB-config:/etc/eiou/config" -v "httpsB-backups:/var/lib/eiou/backups" -v "httpsB-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsB eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsC -v "httpsC-mysql-data:/var/lib/mysql" -v "httpsC-config:/etc/eiou/config" -v "httpsC-backups:/var/lib/eiou/backups" -v "httpsC-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsC eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsD -v "httpsD-mysql-data:/var/lib/mysql" -v "httpsD-config:/etc/eiou/config" -v "httpsD-backups:/var/lib/eiou/backups" -v "httpsD-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsD eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsE -v "httpsE-mysql-data:/var/lib/mysql" -v "httpsE-config:/etc/eiou/config" -v "httpsE-backups:/var/lib/eiou/backups" -v "httpsE-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsE eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsF -v "httpsF-mysql-data:/var/lib/mysql" -v "httpsF-config:/etc/eiou/config" -v "httpsF-backups:/var/lib/eiou/backups" -v "httpsF-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsF eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsG -v "httpsG-mysql-data:/var/lib/mysql" -v "httpsG-config:/etc/eiou/config" -v "httpsG-backups:/var/lib/eiou/backups" -v "httpsG-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsG eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsH -v "httpsH-mysql-data:/var/lib/mysql" -v "httpsH-config:/etc/eiou/config" -v "httpsH-backups:/var/lib/eiou/backups" -v "httpsH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsH eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsI -v "httpsI-mysql-data:/var/lib/mysql" -v "httpsI-config:/etc/eiou/config" -v "httpsI-backups:/var/lib/eiou/backups" -v "httpsI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsI eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsJ -v "httpsJ-mysql-data:/var/lib/mysql" -v "httpsJ-config:/etc/eiou/config" -v "httpsJ-backups:/var/lib/eiou/backups" -v "httpsJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsJ eiou/eiou
 sleep 15
 
 # add contacts
