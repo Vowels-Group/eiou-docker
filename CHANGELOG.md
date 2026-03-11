@@ -18,7 +18,7 @@ The project is currently in **ALPHA** status.
 - Add logging to silent catch blocks across database repositories, services, and utilities. Previously, exceptions in `TransactionRepository`, `TransactionContactRepository`, `QueryBuilder`, `TorCircuitHealth`, `ContactSyncService`, and `ConfigCheck` were swallowed without any logging, masking potential database and configuration failures
 
 ### Changed
-- Extract P2P approval logic from `CliService` into dedicated `CliP2pApprovalService` (~414 lines) and DLQ management into `CliDlqService` (~285 lines), reducing God Class complexity (ARCH-04). CliService delegates to sub-services for backward compatibility
+- Refactor `CliService` God Class (3,784 → 1,136 lines, 70% reduction) by extracting four focused sub-services (ARCH-04): `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines), `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines). CliService delegates to sub-services for backward compatibility
 - Modernize `array()` syntax to short `[]` syntax in `TransportUtilityService.php` (callable and literal array forms)
 - Fix misspelled function names: `outputAdressContactIssue` → `outputAddressContactIssue`, `outputAdressOrContactIssue` → `outputAddressOrContactIssue`, `outputContactSuccesfullysynced` → `outputContactSuccessfullySynced`. Updated all call sites in `P2pService`, `SyncService`, and tests
 - Extract session key magic strings to `SessionKeys` constants class (`Session.php`, `Functions.php`, `MessageHelper.php`)

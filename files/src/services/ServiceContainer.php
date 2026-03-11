@@ -924,6 +924,36 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get CliSettingsService instance
+     *
+     * Extracted from CliService (ARCH-04) to handle settings management CLI commands.
+     *
+     * @return CliSettingsService
+     */
+    public function getCliSettingsService(): CliSettingsService {
+        if (!isset($this->services['CliSettingsService'])) {
+            $this->services['CliSettingsService'] = new CliSettingsService(
+                $this->currentUser
+            );
+        }
+        return $this->services['CliSettingsService'];
+    }
+
+    /**
+     * Get CliHelpService instance
+     *
+     * Extracted from CliService (ARCH-04) to handle help display CLI commands.
+     *
+     * @return CliHelpService
+     */
+    public function getCliHelpService(): CliHelpService {
+        if (!isset($this->services['CliHelpService'])) {
+            $this->services['CliHelpService'] = new CliHelpService();
+        }
+        return $this->services['CliHelpService'];
+    }
+
+    /**
      * Get RateLimiterService instance
      *
      * @return RateLimiterService
@@ -1453,6 +1483,8 @@ class ServiceContainer implements ContainerInterface {
             $this->services['CliService']->setP2pRepository($this->getP2pRepository());
             $this->services['CliService']->setP2pApprovalService($this->getCliP2pApprovalService());
             $this->services['CliService']->setDlqService($this->getCliDlqService());
+            $this->services['CliService']->setSettingsService($this->getCliSettingsService());
+            $this->services['CliService']->setHelpService($this->getCliHelpService());
         }
 
         // =========================================================================
