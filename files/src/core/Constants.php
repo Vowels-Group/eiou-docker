@@ -386,6 +386,8 @@ class Constants {
     const DELIVERY_WARNING = 'warning';
     const DELIVERY_UPDATED = 'updated';
     const DELIVERY_REJECTED = 'rejected';
+    const DELIVERY_MAINTENANCE = 'maintenance';
+    const DELIVERY_ERROR = 'error';
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';

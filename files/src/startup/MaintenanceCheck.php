@@ -20,7 +20,7 @@ if (file_exists('/tmp/eiou_maintenance.lock')) {
     header('Retry-After: 30');
     echo json_encode([
         'success' => false,
-        'status' => 'error',
+        'status' => 'maintenance',
         'error' => [
             'message' => 'Node is starting up or upgrading. Please try again shortly.',
             'code' => 'maintenance_mode'

@@ -421,9 +421,11 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                     ];
                 }
 
-                // Transport error - mark for retry with specific error message
-                if ($status === 'error') {
-                    $lastError = $decodedResponse['message'] ?? 'Transport error';
+                // Transport error or maintenance mode - mark for retry with specific error message
+                if ($status === Constants::DELIVERY_ERROR || $status === Constants::DELIVERY_MAINTENANCE) {
+                    $lastError = $decodedResponse['error']['message']
+                        ?? $decodedResponse['message']
+                        ?? ($status === Constants::DELIVERY_MAINTENANCE ? 'Recipient node in maintenance mode' : 'Transport error');
                 } else {
                     // Unknown status - mark for background retry
                     $lastError = 'Unknown response status: ' . ($status ?? 'null');
@@ -587,9 +589,13 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         continue;
                     }
 
-                    $lastError = ($status === 'error')
-                        ? ($decodedResponse['message'] ?? 'Transport error')
-                        : 'Unknown response status: ' . ($status ?? 'null');
+                    if ($status === Constants::DELIVERY_ERROR || $status === Constants::DELIVERY_MAINTENANCE) {
+                        $lastError = $decodedResponse['error']['message']
+                            ?? $decodedResponse['message']
+                            ?? ($status === Constants::DELIVERY_MAINTENANCE ? 'Recipient node in maintenance mode' : 'Transport error');
+                    } else {
+                        $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                    }
                 } else {
                     $lastError = 'No response received from recipient';
                 }
@@ -799,9 +805,11 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                         ];
                     }
 
-                    // Transport error - extract specific error message for retry
-                    if ($status === 'error') {
-                        $lastError = $decodedResponse['message'] ?? 'Transport error';
+                    // Transport error or maintenance mode - extract specific error message for retry
+                    if ($status === Constants::DELIVERY_ERROR || $status === Constants::DELIVERY_MAINTENANCE) {
+                        $lastError = $decodedResponse['error']['message']
+                            ?? $decodedResponse['message']
+                            ?? ($status === Constants::DELIVERY_MAINTENANCE ? 'Recipient node in maintenance mode' : 'Transport error');
                     } else {
                         // Unknown status - treat as failure, may retry
                         $lastError = 'Unknown response status: ' . ($status ?? 'null');
