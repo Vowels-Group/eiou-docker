@@ -39,7 +39,7 @@ LABEL org.opencontainers.image.title="eiou-node" \
       org.opencontainers.image.source="https://github.com/eiou-org/eiou-docker" \
       org.opencontainers.image.documentation="https://github.com/eiou-org/eiou-docker#readme" \
       org.opencontainers.image.vendor="Vowels Group, LLC" \
-      org.opencontainers.image.licenses="UNLICENSED" \
+      org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="debian:12-slim"
 
 # Install required packages:
