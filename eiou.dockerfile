@@ -32,6 +32,16 @@
 
 FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
+# OCI Image Labels — https://github.com/opencontainers/image-spec/blob/main/annotations.md
+LABEL org.opencontainers.image.title="eiou-node" \
+      org.opencontainers.image.description="EIOU peer-to-peer transaction node with GUI, API, Tor, and MariaDB" \
+      org.opencontainers.image.url="https://eiou.org" \
+      org.opencontainers.image.source="https://github.com/eiou-org/eiou-docker" \
+      org.opencontainers.image.documentation="https://github.com/eiou-org/eiou-docker#readme" \
+      org.opencontainers.image.vendor="Vowels Group, LLC" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.base.name="debian:12-slim"
+
 # Install required packages:
 # - nginx: Web server and reverse proxy for PHP-FPM, SSL termination, rate limiting
 # - php-fpm: FastCGI Process Manager for PHP (separate process pool, more efficient than mod_php)

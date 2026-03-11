@@ -50,9 +50,9 @@ class TransportUtilityService implements TransportServiceInterface
     */
     public function countTorAndHttpAddresses(array $data): array {
         $result = [
-            'tor' => count(array_filter($data, array($this,'isTorAddress'))),
-            'https' => count(array_filter($data, array($this,'isHttpsAddress'))),
-            'http' => count(array_filter($data, array($this,'isHttpAddress'))),
+            'tor' => count(array_filter($data, [$this, 'isTorAddress'])),
+            'https' => count(array_filter($data, [$this, 'isHttpsAddress'])),
+            'http' => count(array_filter($data, [$this, 'isHttpAddress'])),
             'total' => count($data)
         ];
         return $result;
@@ -383,7 +383,7 @@ class TransportUtilityService implements TransportServiceInterface
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getHttpTransportTimeoutSeconds());
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // Prevent payload leakage on redirects
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
 
@@ -465,7 +465,7 @@ class TransportUtilityService implements TransportServiceInterface
         curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
         curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
         $response = curl_exec($ch);
@@ -564,7 +564,7 @@ class TransportUtilityService implements TransportServiceInterface
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $signedPayload);
 

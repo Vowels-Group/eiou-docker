@@ -3,6 +3,8 @@
 
 namespace Eiou\Gui\Helpers;
 
+use Eiou\Gui\Includes\SessionKeys;
+
 /**
  * Message Helper
  *
@@ -136,8 +138,8 @@ class MessageHelper
 
         // Store message in session as a flash message (read-once, auto-cleared)
         // This prevents messages from re-appearing on page refresh
-        $_SESSION['message'] = $message;
-        $_SESSION['message_type'] = $messageType;
+        $_SESSION[SessionKeys::MESSAGE] = $message;
+        $_SESSION[SessionKeys::MESSAGE_TYPE] = $messageType;
         header('Location: ' . $url);
         exit;
     }
