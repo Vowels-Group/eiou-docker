@@ -156,7 +156,7 @@ else
         --network=eiou-network \
         --name nodeIdTest \
         -v "nodeIdTest-mysql-data:/var/lib/mysql" \
-        -v "nodeIdTest-files:/etc/eiou/" \
+        -v "nodeIdTest-config:/etc/eiou/config" \
         -v "nodeIdTest-backups:/var/lib/eiou/backups" \
         -e QUICKSTART=nodeIdTest \
         -e EIOU_NAME="Production Node" \
@@ -269,7 +269,7 @@ else
         --network=eiou-network \
         --name nodeIdTest2 \
         -v "nodeIdTest2-mysql-data:/var/lib/mysql" \
-        -v "nodeIdTest2-files:/etc/eiou/" \
+        -v "nodeIdTest2-config:/etc/eiou/config" \
         -v "nodeIdTest2-backups:/var/lib/eiou/backups" \
         -e QUICKSTART=nodeIdTest2 \
         -e EIOU_HOST=192.168.1.50 \

@@ -202,9 +202,13 @@ class Application {
                 $this->getLogger()->info("Migrated dbconfig.json: plaintext dbPass encrypted");
             }
         } catch (Exception $e) {
-            // Non-fatal: plaintext password still works, encryption will retry next boot
+            // Non-fatal on first boot: the master key doesn't exist yet because
+            // the wallet hasn't been generated. Wallet::generateWallet() and
+            // Wallet::restoreWallet() handle this migration immediately after
+            // initMasterKeyFromSeed(), so the plaintext password is encrypted
+            // before the container becomes operational.
             if ($this->loggerLoaded()) {
-                $this->getLogger()->warning("dbconfig.json encryption migration deferred", [
+                $this->getLogger()->warning("dbconfig.json encryption migration deferred — will complete during wallet setup", [
                     'error' => $e->getMessage()
                 ]);
             }
@@ -612,7 +616,7 @@ class Application {
      * @return string
      */
     public function getConfigPath(): string {
-        return Constants::PATH_CONFIG_DIR ?: '/etc/eiou';
+        return Constants::PATH_CONFIG_DIR ?: '/etc/eiou/config';
     }
 
     /**

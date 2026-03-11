@@ -5,8 +5,8 @@
 # Verifies that self-signed SSL certificates are properly generated
 # and that HTTPS endpoints are accessible
 #
-# NOTE: All paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
-# from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
+# NOTE: All paths use double slashes (//app/eiou/, //etc/eiou/config/) to prevent
+# Git Bash on Windows from converting paths. This is safe on Linux too.
 
 echo -e "\nTesting SSL certificate and HTTPS functionality..."
 

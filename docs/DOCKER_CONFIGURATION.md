@@ -270,7 +270,7 @@ All EIOU containers use named volumes for data persistence:
 | Volume | Container Path | Purpose | Backup Priority |
 |--------|----------------|---------|-----------------|
 | `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
-| `{node}-files` | `/etc/eiou/` | Config: wallet keys, config/userconfig.json, encryption data | **CRITICAL** |
+| `{node}-config` | `/etc/eiou/config` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
 | `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
 
@@ -278,7 +278,7 @@ All EIOU containers use named volumes for data persistence:
 ```yaml
 volumes:
   - alice-mysql-data:/var/lib/mysql     # Transaction history, contacts
-  - alice-files:/etc/eiou/              # Wallet keys, configuration
+  - alice-config:/etc/eiou/config       # Wallet keys, configuration
 ```
 
 ### Optional Volumes
@@ -837,7 +837,8 @@ EIOU containers run as root during initialization, then services drop privileges
 
 | Path | Permissions | Owner | Purpose |
 |------|-------------|-------|---------|
-| `/etc/eiou/` | 755 (dir) / 644 (files) | www-data | Configuration |
+| `/etc/eiou/config/` | 755 (dir) / 644 (files) | www-data | Configuration |
+| `/app/eiou/` | 755 (dir) / 644 (files) | www-data | Source code |
 | `/var/lib/mysql/` | 700 | mysql | Database files |
 | `/var/lib/tor/hidden_service/` | 700 | debian-tor | Tor keys |
 | `/etc/nginx/ssl/server.key` | 600 | root | SSL private key |
@@ -944,7 +945,7 @@ docker exec <container> eiou backup cleanup
 
 **Must backup:**
 - `{node}-mysql-data` - Contains all transaction history and contact relationships
-- `{node}-files` - Contains wallet private keys and encryption keys
+- `{node}-config` - Contains wallet private keys and encryption keys
 - `{node}-backups` - Contains encrypted database backups
 
 **Optional backup:**
@@ -959,8 +960,8 @@ For complete disaster recovery, back up Docker volumes directly:
 docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
   alpine tar czf /backup/alice-mysql-data.tar.gz -C /data .
 
-docker run --rm -v alice-files:/data -v /backup:/backup \
-  alpine tar czf /backup/alice-files.tar.gz -C /data .
+docker run --rm -v alice-config:/data -v /backup:/backup \
+  alpine tar czf /backup/alice-config.tar.gz -C /data .
 
 docker run --rm -v alice-backups:/data -v /backup:/backup \
   alpine tar czf /backup/alice-backups.tar.gz -C /data .
@@ -973,8 +974,8 @@ docker run --rm -v alice-backups:/data -v /backup:/backup \
 docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
   alpine sh -c "cd /data && tar xzf /backup/alice-mysql-data.tar.gz"
 
-docker run --rm -v alice-files:/data -v /backup:/backup \
-  alpine sh -c "cd /data && tar xzf /backup/alice-files.tar.gz"
+docker run --rm -v alice-config:/data -v /backup:/backup \
+  alpine sh -c "cd /data && tar xzf /backup/alice-config.tar.gz"
 
 docker run --rm -v alice-backups:/data -v /backup:/backup \
   alpine sh -c "cd /data && tar xzf /backup/alice-backups.tar.gz"
@@ -1022,7 +1023,7 @@ docker compose down -v
 docker logs <container_name>
 
 # Verify volume permissions
-docker run --rm -v mynode-files:/data alpine ls -la /data
+docker run --rm -v mynode-config:/data alpine ls -la /data
 
 # Reset and rebuild
 docker-compose -f <config>.yml down -v
@@ -1138,33 +1139,31 @@ This is separate from P2P worker processes — outbound P2P messages are handled
 
 | Layer | Process | Concurrency | Scaling |
 |-------|---------|-------------|---------|
-| nginx workers | Accept connections, rate limit, route | 2 workers handle thousands of connections each (event-driven) | No tuning needed |
-| PHP-FPM workers | Execute PHP for GUI, API, and inbound P2P | `pm.max_children` (default: 5) | Increase if GUI/API feels slow under load |
+| nginx workers | Accept connections, rate limit, route | 2 workers handle thousands of connections each (event-driven) | `NGINX_WORKER_PROCESSES` (default: 2) |
+| PHP-FPM workers | Execute PHP for GUI, API, and inbound P2P | `PHP_FPM_MAX_CHILDREN` (default: 5) | Increase if GUI/API feels slow under load |
 | P2P outbound workers | Send messages to other nodes | `EIOU_P2P_MAX_WORKERS` (default: 50 HTTP, 50 HTTPS, 5 Tor) | Independent of PHP-FPM |
 
-**Solution:** Increase `pm.max_children` inside the container:
+**Solution:** Add environment variables to `docker-compose.yml` (persists across restarts):
 
-```bash
-# Check current PHP-FPM pool settings
-docker exec <container> grep -E "^pm" /etc/php/*/fpm/pool.d/www.conf
-
-# Increase max concurrent PHP workers from 5 to 10
-docker exec <container> bash -c "sed -i 's|^pm.max_children = 5|pm.max_children = 10|' /etc/php/*/fpm/pool.d/www.conf"
-
-# Reload PHP-FPM to apply (no downtime)
-docker exec <container> bash -c 'service $(basename /etc/init.d/php*-fpm) reload'
+```yaml
+environment:
+  - PHP_FPM_MAX_CHILDREN=10    # Increase from default 5
+  - PHP_FPM_PM=dynamic         # Keep spare workers warm for faster response
+  - PHP_FPM_START_SERVERS=3
+  - PHP_FPM_MIN_SPARE=2
+  - PHP_FPM_MAX_SPARE=5
 ```
 
-Each PHP-FPM worker uses ~30-40MB of memory. With the default 512MB container memory limit, 10 workers is a safe maximum. If you increase beyond that, also increase the memory limit in `docker-compose.yml`:
+Each PHP-FPM worker uses ~20-30MB of memory. With the default 1024MB container memory limit, 15-20 workers is a safe maximum. If you increase beyond that, also increase the memory limit:
 
 ```yaml
 deploy:
   resources:
     limits:
-      memory: 768M   # Increase from 512M for more PHP-FPM workers
+      memory: 1536M   # Increase from 1024M for more PHP-FPM workers
 ```
 
-**Note:** This change does not persist across container restarts. To make it permanent, add a `sed` command to `eiou.dockerfile` or override the PHP-FPM pool config via a bind mount.
+See `.env.example` for the full list of tunable PHP-FPM and Nginx variables.
 
 ### Common Log Locations
 
@@ -1180,6 +1179,16 @@ deploy:
 docker exec <container> tail -f /var/log/nginx/error.log
 docker exec <container> tail -f /var/log/php_errors.log
 ```
+
+### Expected Warnings (Safe to Ignore)
+
+These warnings appear during normal operation and do not indicate a problem:
+
+| Warning | When | Why |
+|---------|------|-----|
+| `dbconfig.json encryption migration deferred — will complete during wallet setup` | First boot only | The Application constructor attempts to encrypt the database password before the wallet (master key) exists. This is harmless — wallet generation encrypts the password immediately after initializing the master key. Look for the follow-up message `dbconfig.json: plaintext password encrypted successfully` confirming completion. |
+| `Contact status polling disabled, stopping processor` | When `EIOU_CONTACT_STATUS_ENABLED=false` | Normal — the contact status processor exits cleanly when disabled. |
+| `Hidden service hostname file not ready` | Boot (Tor mode) | Tor is still building circuits. Wait for `EIOU_HS_TIMEOUT` (default 60s) or increase if on slow networks. |
 
 ---
 

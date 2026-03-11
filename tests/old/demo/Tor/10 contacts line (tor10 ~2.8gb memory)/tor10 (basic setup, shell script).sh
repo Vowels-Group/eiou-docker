@@ -91,7 +91,7 @@ docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" eiou/eiou
+    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" eiou/eiou
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."
@@ -101,7 +101,7 @@ sleep 15
 #       containerAddresses[containerName] = containerAddress (Tor)
 echo -e "\nGetting Tor addresses..."
 for container in "${containers[@]}"; do
-    containerAddresses[$container]=$(docker exec $container php -r 'echo json_decode(file_get_contents("/etc/eiou/userconfig.json"),true)["torAddress"];')
+    containerAddresses[$container]=$(docker exec $container php -r 'echo json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true)["torAddress"];')
 done
 
 echo -e "\nWaiting for 15 seconds due to the nature of Tor..."

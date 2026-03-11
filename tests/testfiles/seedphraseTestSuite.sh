@@ -8,8 +8,8 @@
 # - Authcode restoration from seedphrase
 # - Restore + QUICKSTART hostname application
 #
-# NOTE: All paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
-# from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
+# NOTE: All paths use double slashes (//app/eiou/, //etc/eiou/config/) to prevent
+# Git Bash on Windows from converting paths. This is safe on Linux too.
 
 echo -e "\n"
 echo -e "================================================================"
@@ -420,7 +420,7 @@ restoreContainer="httpRestoreSeedTest"
 docker rm -f ${restoreContainer} > /dev/null 2>&1
 docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
 
-restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
+restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-config:/etc/eiou/config" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
 # Container needs time for: MariaDB startup, startup.sh execution, wallet restoration
@@ -931,7 +931,7 @@ MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileCon
     -v "${hostSeedFile}:/restore/seed:ro" \
     -e RESTORE_FILE="/restore/seed" \
     -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
-    -v "${restoreFileContainer}-files:/etc/eiou/" \
+    -v "${restoreFileContainer}-config:/etc/eiou/config" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -1009,7 +1009,7 @@ restoreEnvContainer="httpRestoreEnvTest"
 docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -e RESTORE="${restoreEnvSeedPhrase}" \
     -v "${restoreEnvContainer}-mysql-data:/var/lib/mysql" \
-    -v "${restoreEnvContainer}-files:/etc/eiou/" \
+    -v "${restoreEnvContainer}-config:/etc/eiou/config" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -1348,14 +1348,14 @@ echo -e "\n\t-> Step 3.11: Testing authcode restoration in new container"
 
 # Create a completely new Container
 authcodeRestoreContainer="httpAuthcodeRestoreTest"
-authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
+authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-config:/etc/eiou/config" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
 echo -e "\t   Waiting for container initialization..."
 wait_for_container_initialized ${authcodeRestoreContainer} 60 || true
 
 newContainerAuthCodeResult=$(docker exec ${authcodeRestoreContainer} php -r '
-    require_once "/etc/eiou/src/bootstrap.php";
+    require_once "/app/eiou/src/bootstrap.php";
     $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1442,7 +1442,7 @@ docker run -d --network="${network}" --name "${restoreQsContainer}" \
     -e RESTORE="${restoreQsSeedPhrase}" \
     -e QUICKSTART="${restoreQsContainer}" \
     -v "${restoreQsContainer}-mysql-data:/var/lib/mysql" \
-    -v "${restoreQsContainer}-files:/etc/eiou/" \
+    -v "${restoreQsContainer}-config:/etc/eiou/config" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -1551,7 +1551,7 @@ MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileQsC
     -e RESTORE_FILE="/restore/seed" \
     -e QUICKSTART="${restoreFileQsContainer}" \
     -v "${restoreFileQsContainer}-mysql-data:/var/lib/mysql" \
-    -v "${restoreFileQsContainer}-files:/etc/eiou/" \
+    -v "${restoreFileQsContainer}-config:/etc/eiou/config" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."

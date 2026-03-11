@@ -13,8 +13,8 @@
 # Usage: Source this file at the start of test scripts
 #        source baseconfig/config.sh
 #
-# NOTE: Paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
-# from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
+# NOTE: Paths use double slashes (//app/eiou/, //etc/eiou/config/) to prevent
+# Git Bash on Windows from converting paths. This is safe on Linux too.
 ##################################################################################
 
 ############################### Base config #################################
@@ -50,12 +50,12 @@ TOR_HOSTNAME="${TOR_HIDDEN_SERVICE_DIR}//hostname"
 
 # Bootstrap path for Composer autoloading
 # The bootstrap file initializes Composer autoloader and must be included before using any classes
-BOOTSTRAP_PATH="//etc//eiou//src//bootstrap.php"
+BOOTSTRAP_PATH="//app//eiou//src//bootstrap.php"
 
 # Legacy paths (deprecated - use BOOTSTRAP_PATH with fully qualified class names)
 # Kept for reference only
-REL_APPLICATION=".//etc//eiou//src//core//Application.php"
-REL_FUNCTIONS=".//etc//eiou//Functions.php"
+REL_APPLICATION=".//app//eiou//src//core//Application.php"
+REL_FUNCTIONS=".//app//eiou//Functions.php"
 
 #############################################################################
 

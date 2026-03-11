@@ -677,14 +677,14 @@ During development, mount the source directory:
 
 ```yaml
 volumes:
-  - ./files/src:/etc/eiou/src:ro
+  - ./files/src:/app/eiou/src:ro
 ```
 
 ### File Paths
 
 | Context | Path Prefix |
 |---------|-------------|
-| Inside container | `/etc/eiou/src/gui/` |
+| Inside container | `/app/eiou/src/gui/` |
 | Outside container | `./files/src/gui/` |
 | Browser assets | `/gui/assets/` |
 

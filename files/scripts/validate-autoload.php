@@ -3,7 +3,7 @@
  * Validates that the Composer autoloader can load all critical classes.
  * Run this after any namespace changes to verify everything works.
  *
- * Usage: php /etc/eiou/scripts/validate-autoload.php
+ * Usage: php /app/eiou/scripts/validate-autoload.php
  */
 
 require_once dirname(__DIR__) . '/src/bootstrap.php';

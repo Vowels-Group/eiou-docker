@@ -409,7 +409,7 @@ echo -e "\n[Test 12: curl_multi functions used in sendBatch]"
 totaltests=$(( totaltests + 1 ))
 
 curlMultiCheck=$(docker exec ${testContainer} sh -c "
-    grep -c 'curl_multi_init\|curl_multi_exec\|curl_multi_select\|curl_multi_close\|curl_multi_add_handle\|curl_multi_remove_handle\|curl_multi_getcontent' /etc/eiou/src/services/utilities/TransportUtilityService.php
+    grep -c 'curl_multi_init\|curl_multi_exec\|curl_multi_select\|curl_multi_close\|curl_multi_add_handle\|curl_multi_remove_handle\|curl_multi_getcontent' /app/eiou/src/services/utilities/TransportUtilityService.php
 " 2>/dev/null || echo "0")
 
 # Should have at least 7 distinct curl_multi calls (init, exec, select, close, add, remove, getcontent)

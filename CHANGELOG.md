@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Security
+- Move dbconfig.json password encryption from startup.sh into `Wallet::generateWallet()` and `Wallet::restoreWallet()`, running immediately after master key initialization. Eliminates the window where plaintext DB password persisted on disk between Application constructor and next container restart. Success message logged for operator confirmation
 - Default `APP_DEBUG` to `false` (secure-by-default). Debug mode now requires explicit opt-in via `APP_DEBUG=true` environment variable. Updated `DebugService`, `Security`, and GUI settings to use `Constants::isDebug()` for env var override support
 - Fix TOCTOU race condition in `BackupService` credential temp file creation: set restrictive umask before `tempnam()` so the file is created with `0600` permissions atomically, instead of chmod after creation
 - Add logging to silent catch blocks across database repositories, services, and utilities. Previously, exceptions in `TransactionRepository`, `TransactionContactRepository`, `QueryBuilder`, `TorCircuitHealth`, `ContactSyncService`, and `ConfigCheck` were swallowed without any logging, masking potential database and configuration failures
@@ -20,6 +21,7 @@ The project is currently in **ALPHA** status.
 - Add input validation for QUICKSTART, EIOU_HOST, EIOU_NAME, and EIOU_PORT environment variables in startup.sh to prevent injection via crafted values (DOCK-08)
 
 ### Changed
+- Separate source code from user data in Docker layout (DOCK-05): code moves from `/etc/eiou/` volume to `/app/eiou/` image filesystem. Config data stays at `/etc/eiou/config/` (volume). Eliminates startup source file sync, composer autoloader regeneration, and `/app/eiou-src-backup` duplication. Image upgrades now apply code immediately without boot-time sync. Volume mounts, nginx config, test files, and documentation updated for new paths
 - Refactor `CliService` God Class (3,784 → 1,136 lines, 70% reduction) by extracting four focused sub-services (ARCH-04): `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines), `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines). CliService delegates to sub-services for backward compatibility
 - Modernize `array()` syntax to short `[]` syntax in `TransportUtilityService.php` (callable and literal array forms)
 - Fix misspelled function names: `outputAdressContactIssue` → `outputAddressContactIssue`, `outputAdressOrContactIssue` → `outputAddressOrContactIssue`, `outputContactSuccesfullysynced` → `outputContactSuccessfullySynced`. Updated all call sites in `P2pService`, `SyncService`, and tests
@@ -36,6 +38,7 @@ The project is currently in **ALPHA** status.
 - Extended `.gitignore` with OS artifacts, sensitive files, logs, and database patterns
 - OCI labels in Dockerfile (title, description, source, vendor, license, base image)
 - Unauthenticated `/api/health` endpoint for Docker healthcheck and load balancers — checks database connectivity and message processor status, returns JSON with `ok`/`degraded` status (ARCH-10). Docker healthcheck updated from `/gui/` to `/api/health`
+- Environment variable overrides for PHP-FPM and Nginx service tuning: `PHP_FPM_PM`, `PHP_FPM_MAX_CHILDREN`, `PHP_FPM_MAX_REQUESTS`, `NGINX_WORKER_PROCESSES`, `NGINX_WORKER_CONNECTIONS`, `NGINX_RATE_LIMIT_*`, `NGINX_CONN_LIMIT`, `NGINX_CLIENT_MAX_BODY`. Applied at boot by startup.sh — no volume mount needed, configure via docker-compose.yml environment variables
 
 ### Security
 - Replace `exec()` SSL certificate generation with PHP native `openssl_pkey_new()`/`openssl_csr_sign()` functions, eliminating command injection risk via OpenSSL config file. Add strict hostname validation (alphanumeric, dots, hyphens only)

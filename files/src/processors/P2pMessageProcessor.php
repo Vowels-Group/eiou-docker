@@ -87,7 +87,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
         $app = Application::getInstance();
         $this->p2pService = $app->services->getP2pService();
         $this->p2pRepository = new P2pRepository();
-        $this->workerScript = '/etc/eiou/processors/P2pWorker.php';
+        $this->workerScript = '/app/eiou/processors/P2pWorker.php';
         $this->lastRecoveryTime = microtime(true);
     }
 

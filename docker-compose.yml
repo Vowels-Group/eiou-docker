@@ -224,6 +224,23 @@ services:
       # Default: true (guard enabled)
       # - EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=true
 
+      # -----------------------------------------------------------------------
+      # SERVICE TUNING (advanced)
+      # -----------------------------------------------------------------------
+      # Override PHP-FPM and Nginx defaults for scaling. Applied at boot.
+      # See .env.example for full documentation of each variable.
+      #
+      # PHP-FPM:
+      # - PHP_FPM_PM=ondemand            # ondemand|dynamic|static
+      # - PHP_FPM_MAX_CHILDREN=5         # Max PHP workers (~20-30MB each)
+      # - PHP_FPM_MAX_REQUESTS=500       # Recycle after N requests (0=never)
+      #
+      # Nginx:
+      # - NGINX_WORKER_PROCESSES=2       # Match to CPU allocation
+      # - NGINX_WORKER_CONNECTIONS=768   # Max connections per worker
+      # - NGINX_RATE_LIMIT_P2P=20r/s     # P2P endpoint rate limit
+      # -----------------------------------------------------------------------
+
     # =========================================================================
     # VOLUME MOUNTS
     # =========================================================================
@@ -234,7 +251,7 @@ services:
     #
     # BACKUP PRIORITY:
     #   CRITICAL — mysql-data (transactions, contacts, balances)
-    #   CRITICAL — files (wallet keys, encryption keys, config)
+    #   CRITICAL — config (wallet keys, encryption keys, config)
     #   CRITICAL — backups (encrypted database backups)
     #
     # =========================================================================
@@ -245,7 +262,8 @@ services:
 
       # Config: wallet private keys, encryption keys, userconfig.json
       # Without this, your wallet identity is lost — back this up.
-      - files:/etc/eiou/
+      # Note: Source code lives in /app/eiou/ (image filesystem, not this volume).
+      - config:/etc/eiou/config
 
       # Backups: encrypted daily database backups (AES-256-GCM)
       # Off-site storage recommended for disaster recovery.
@@ -339,8 +357,8 @@ networks:
 volumes:
   mysql-data:
     name: ${NODE_NAME:-eiou-node}-mysql-data
-  files:
-    name: ${NODE_NAME:-eiou-node}-files
+  config:
+    name: ${NODE_NAME:-eiou-node}-config
   backups:
     name: ${NODE_NAME:-eiou-node}-backups
   letsencrypt:

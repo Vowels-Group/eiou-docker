@@ -92,5 +92,5 @@ TOR_FORCE_FAST_FLAG="${EIOU_TOR_FORCE_FAST:-true}"
 DEFAULT_TRANSPORT_FLAG="${EIOU_DEFAULT_TRANSPORT_MODE:-http}"
 HOP_BUDGET_RANDOMIZED_FLAG="${EIOU_HOP_BUDGET_RANDOMIZED:-false}"
 for container in "${containers[@]}"; do
-    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container -e EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_FLAG -e EIOU_TOR_FORCE_FAST=$TOR_FORCE_FAST_FLAG -e EIOU_DEFAULT_TRANSPORT_MODE=$DEFAULT_TRANSPORT_FLAG -e EIOU_HOP_BUDGET_RANDOMIZED=$HOP_BUDGET_RANDOMIZED_FLAG eiou/eiou
+    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container -e EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_FLAG -e EIOU_TOR_FORCE_FAST=$TOR_FORCE_FAST_FLAG -e EIOU_DEFAULT_TRANSPORT_MODE=$DEFAULT_TRANSPORT_FLAG -e EIOU_HOP_BUDGET_RANDOMIZED=$HOP_BUDGET_RANDOMIZED_FLAG eiou/eiou
 done

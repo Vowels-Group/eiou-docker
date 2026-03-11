@@ -8,36 +8,36 @@
     <title>₳ Wallet</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₳</text></svg>">
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
-    <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/etc/eiou/src/gui/assets/css/page.css");?></style>
+    <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/page.css");?></style>
     <script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>" src="/gui/assets/js/script.js"></script>
 </head>
 <body>
     <div class="container">
         <!-- Banner -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/banner.html");?>
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/banner.html");?>
         <!-- Header -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/header.html");?>  
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/header.html");?>  
         <!-- Notifications -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/notifications.html");?>  
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/notifications.html");?>  
         <!-- Quick Actions -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/quickActions.html");?>  
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/quickActions.html");?>  
         <!-- Wallet Dashboard -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>    
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>    
         <!-- Send eIOU Form -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>    
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>    
         <!-- Add Contact Form -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/contactForm.html");?>    
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactForm.html");?>    
         <!-- Contacts Section -->   
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/contactSection.html");?>   
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");?>   
         <!-- Transaction History -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/transactionHistory.html");?>
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/transactionHistory.html");?>
         <!-- Dead Letter Queue Section -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/dlqSection.html");?>
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/dlqSection.html");?>
         <!-- Settings Section -->
-        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/settingsSection.html");?>
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/settingsSection.html");?>
     </div>
     <!-- Floating Action Buttons -->
-    <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/floatingButtons.html");?>    
+    <?php require_once("/app/eiou/src/gui/layout/walletSubParts/floatingButtons.html");?>    
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner">

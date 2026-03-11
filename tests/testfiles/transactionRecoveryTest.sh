@@ -113,7 +113,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing database schema for recovery columns"
 schemaColumns=$(docker exec ${testContainer} php -r "
-    \$source = file_get_contents('/etc/eiou/src/database/DatabaseSchema.php');
+    \$source = file_get_contents('/app/eiou/src/database/DatabaseSchema.php');
     if (\$source === false) { echo '0'; exit; }
     \$count = 0;
     if (strpos(\$source, 'sending_started_at') !== false) \$count++;
@@ -135,7 +135,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing processPendingTransactions uses atomic claiming"
 atomicClaim=$(docker exec ${testContainer} php -r "
-    \$source = file_get_contents('/etc/eiou/src/services/TransactionProcessingService.php');
+    \$source = file_get_contents('/app/eiou/src/services/TransactionProcessingService.php');
     echo (strpos(\$source, 'claimPendingTransaction') !== false) ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
@@ -151,7 +151,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recovery integrated into startup"
 startupIntegration=$(docker exec ${testContainer} php -r "
-    \$source = file_get_contents('/etc/eiou/src/core/Application.php');
+    \$source = file_get_contents('/app/eiou/src/core/Application.php');
     echo (strpos(\$source, 'runTransactionRecovery') !== false) ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 

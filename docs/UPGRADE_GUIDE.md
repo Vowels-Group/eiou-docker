@@ -16,7 +16,7 @@ How to update your EIOU node to the latest version while preserving your wallet,
 
 ## Overview
 
-EIOU uses Docker named volumes to separate user data from application code. When you upgrade to a new image, the container is recreated with updated code while your three named volumes are reattached, preserving all wallet data. A source file sync mechanism in `startup.sh` ensures the volume-mounted code directory is updated to match the new image.
+EIOU uses Docker named volumes to separate user data from application code. Source code lives at `/app/eiou/` (baked into the image), while user data is persisted on named volumes. When you upgrade to a new image, the container is recreated with updated code while your three named volumes are reattached, preserving all wallet data.
 
 **The short version:**
 
@@ -42,21 +42,21 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 | Data | Volume | Container Path | Notes |
 |------|--------|----------------|-------|
 | Database (transactions, contacts, balances) | `{node}-mysql-data` | `/var/lib/mysql` | All structured data |
-| Wallet keys (encrypted) | `{node}-files` | `/etc/eiou/config/userconfig.json` | Public key, encrypted private key, mnemonic |
-| Master encryption key | `{node}-files` | `/etc/eiou/config/.master.key` | Derived from seed phrase; recoverable via restore |
-| Database credentials | `{node}-files` | `/etc/eiou/config/dbconfig.json` | Auto-generated username and password |
-| User settings | `{node}-files` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, etc. |
+| Wallet keys (encrypted) | `{node}-config` | `/etc/eiou/config/userconfig.json` | Public key, encrypted private key, mnemonic |
+| Master encryption key | `{node}-config` | `/etc/eiou/config/.master.key` | Derived from seed phrase; recoverable via restore |
+| Database credentials | `{node}-config` | `/etc/eiou/config/dbconfig.json` | Auto-generated username and password |
+| User settings | `{node}-config` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, etc. |
 | Encrypted backups | `{node}-backups` | `/var/lib/eiou/backups/*.eiou.enc` | AES-256-GCM encrypted database dumps |
 
 ### Updated automatically (overwritten by new image)
 
 | Data | Container Path | Notes |
 |------|----------------|-------|
-| PHP source code | `/etc/eiou/src/` | Synced from image on every startup |
-| Web GUI files | `/etc/eiou/www/` | Synced from image on every startup |
-| API/CLI entry points | `/etc/eiou/api/`, `/etc/eiou/cli/` | Synced from image on every startup |
-| Background processors | `/etc/eiou/processors/` | Synced from image on every startup |
-| Composer autoloader | `/etc/eiou/vendor/` | Regenerated on every startup |
+| PHP source code | `/app/eiou/src/` | Baked into image at build time |
+| Web GUI files | `/app/eiou/www/` | Baked into image at build time |
+| API/CLI entry points | `/app/eiou/api/`, `/app/eiou/cli/` | Baked into image at build time |
+| Background processors | `/app/eiou/processors/` | Baked into image at build time |
+| Composer autoloader | `/app/eiou/vendor/` | Baked into image at build time |
 
 ### Regenerated (not persisted across container recreation)
 
@@ -65,7 +65,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 | SSL certificates | `/etc/nginx/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
 | Tor hidden service keys | `/var/lib/tor/hidden_service/` | Deterministically derived from wallet seed phrase |
 
-**Tor address is stable**: The `.onion` address is derived deterministically from your BIP39 seed phrase. A new container will produce the same Tor address as long as the wallet data (in the `{node}-files` volume) is present.
+**Tor address is stable**: The `.onion` address is derived deterministically from your BIP39 seed phrase. A new container will produce the same Tor address as long as the wallet data (in the `{node}-config` volume) is present.
 
 ---
 
@@ -81,13 +81,13 @@ Docker named volumes persist independently of containers. When `docker-compose u
 
 Older images stored config files at `/etc/eiou/` (root level). Current images expect them at `/etc/eiou/config/`. On startup, `startup.sh` detects config files at the legacy location and migrates them to `/etc/eiou/config/` automatically. This ensures upgrades from any prior version work without manual intervention.
 
-### 3. Source File Sync on Startup
+### 3. Source/Data Separation
 
-Because `/etc/eiou/` is both a volume and the location for application code, old code would persist from the previous image if not handled. The solution:
+Source code and user data are stored in separate locations:
 
-- **At build time**: The Dockerfile copies source files into both `/etc/eiou/` (the volume target) and `/app/eiou-src-backup/` (a non-volume directory baked into the image layer).
-- **At startup**: `startup.sh` copies from `/app/eiou-src-backup/` into the `/etc/eiou/` volume, overwriting old source code while leaving the `config/` subdirectory untouched.
-- **After sync**: `composer install` runs to install any new dependencies and regenerate the autoloader.
+- **Source code** (`/app/eiou/`) is baked into the image at build time. When a new image is built, it contains the updated code. No runtime sync is needed.
+- **User data** (`/etc/eiou/config/`) is stored on the `{node}-config` named volume and is never overwritten by image updates.
+- **After startup**: `composer install` runs to install any new dependencies and regenerate the autoloader.
 
 ### 4. Database Migrations on Application Init
 
@@ -99,12 +99,11 @@ When the container receives SIGTERM (from `docker compose up -d --build` or `doc
 
 ### 6. Maintenance Mode During Startup
 
-On startup, `startup.sh` creates a lockfile (`/tmp/eiou_maintenance.lock`) before beginning source file sync and database migrations. While this lockfile exists, all HTTP entry points (API, GUI, P2P transport) return `503 Service Unavailable` with a `Retry-After: 30` header. This prevents:
-- PHP executing against partially-synced source files
+On startup, `startup.sh` creates a lockfile (`/tmp/eiou_maintenance.lock`) before beginning database migrations. While this lockfile exists, all HTTP entry points (API, GUI, P2P transport) return `503 Service Unavailable` with a `Retry-After: 30` header. This prevents:
 - Requests hitting a mid-migration database schema
 - Incoming P2P messages being processed before the node is fully initialized
 
-The lockfile is removed after all initialization is complete (source sync, composer install, migrations, processor startup).
+The lockfile is removed after all initialization is complete (composer install, migrations, processor startup).
 
 ### Visual Flow
 
@@ -121,18 +120,16 @@ Old Container (running v1) — receives SIGTERM:
 New Container (running v2) — startup.sh runs:
   1. Maintenance mode ON   — /tmp/eiou_maintenance.lock created (HTTP → 503)
   2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
-  3. Source file sync      — copies v2 code from image into volume
-  4. Composer install      — installs new dependencies, regenerates autoloader
-  5. Services start        — web server, MariaDB, Tor, cron
-  6. Database migrations   — adds new tables/columns as needed
-  7. Maintenance mode OFF  — lockfile removed, HTTP requests accepted
-  8. Processors start      — P2P, Transaction, Cleanup, ContactStatus
+  3. Composer install      — installs new dependencies, regenerates autoloader
+  4. Services start        — web server, MariaDB, Tor, cron
+  5. Database migrations   — adds new tables/columns as needed
+  6. Maintenance mode OFF  — lockfile removed, HTTP requests accepted
+  7. Processors start      — P2P, Transaction, Cleanup, ContactStatus
 
 Result:
   ├── /var/lib/mysql          ← same volume reattached (data intact)
-  ├── /etc/eiou/              ← same volume reattached
-  │   ├── config/             ← YOUR DATA (unchanged, migrated if needed)
-  │   └── src/, www/, ...     ← v2 code (synced from /app/eiou-src-backup/)
+  ├── /app/eiou/              ← v2 source code (baked into image)
+  ├── /etc/eiou/config/       ← same volume reattached (YOUR DATA, unchanged)
   └── /var/lib/eiou/backups   ← same volume reattached (backups + pre-shutdown backup)
 ```
 
@@ -165,7 +162,7 @@ docker-compose -f <compose-file>.yml up -d --build
 5. Services stop in reverse order (web server, MariaDB, Tor, cron)
 6. Container is removed, named volumes are kept
 7. New container starts with **maintenance mode** enabled (HTTP requests return 503)
-8. `startup.sh` syncs new code into the `/etc/eiou/` volume
+8. New source code is available at `/app/eiou/` (baked into the image)
 9. Composer regenerates the autoloader
 10. Database migrations run if needed
 11. Maintenance mode is released — HTTP requests are accepted again
@@ -208,7 +205,7 @@ docker-compose -f docker-compose-4line.yml exec daniel eiou backup create
 docker-compose -f docker-compose-4line.yml up -d --build
 ```
 
-Each node's named volumes (`alice-mysql-data`, `alice-files`, `alice-backups`, etc.) are reattached to their respective new containers.
+Each node's named volumes (`alice-mysql-data`, `alice-config`, `alice-backups`, etc.) are reattached to their respective new containers.
 
 ---
 
@@ -255,7 +252,7 @@ git checkout <commit-hash>
 docker-compose -f <compose-file>.yml up -d --build
 ```
 
-The source file sync will overwrite the volume code with the older version. Your data volumes remain untouched.
+The older image contains the previous source code at `/app/eiou/`. Your data volumes remain untouched.
 
 ### Option B: Restore from Backup
 
@@ -272,12 +269,6 @@ docker exec <container-name> eiou backup restore <backup-filename>
 ---
 
 ## Troubleshooting
-
-### "Backup directory /app/eiou-src-backup not found!"
-
-The image was not rebuilt with the `--build` flag. The container is running with a cached old image.
-
-**Fix**: `docker-compose -f <compose-file>.yml up -d --build`
 
 ### Container starts but wallet is gone
 
@@ -359,7 +350,7 @@ No user action is required — the upgrade is handled automatically by rebuildin
 
 ### Master Key Is Derived from Seed
 
-The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is deterministically derived from the BIP39 seed phrase. If the `{node}-files` volume is lost:
+The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is deterministically derived from the BIP39 seed phrase. If the `{node}-config` volume is lost:
 - Wallet keys, Tor address, auth code, and master key are all recoverable from the seed phrase
 - Encrypted backups remain decryptable after a seed restore (the same master key is re-derived)
 

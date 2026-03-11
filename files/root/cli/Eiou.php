@@ -35,10 +35,10 @@
  */
 
 // This file is how users interact with eiou
-require_once '/etc/eiou/Functions.php';
+require_once '/app/eiou/Functions.php';
 
 // Initialize security components for CLI
-require_once '/etc/eiou/SecurityInit.php';
+require_once '/app/eiou/SecurityInit.php';
 
 use Eiou\Core\Application;
 use Eiou\Core\ErrorCodes;

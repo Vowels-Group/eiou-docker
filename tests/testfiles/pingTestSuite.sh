@@ -643,7 +643,7 @@ echo -e "\n[3.6 Verify B has no contacts or transactions after fresh restore]"
 
 # Need to initialize the database first
 docker exec ${containerB} php -r "
-    require_once('/etc/eiou/Functions.php');
+    require_once('/app/eiou/Functions.php');
     \$app = \Eiou\Core\Application::getInstance();
 " 2>/dev/null
 # Brief pause for database initialization
@@ -685,7 +685,7 @@ echo -e "\n[3.7 A pings B - triggers auto-restore sync]"
 # transaction history from A. This is the core feature added by this PR.
 pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
     try {
-        require_once('/etc/eiou/Functions.php');
+        require_once('/app/eiou/Functions.php');
         \$app = \Eiou\Core\Application::getInstance();
         \$contactStatusService = \$app->services->getContactStatusService();
         \$result = \$contactStatusService->pingContact('${addressB}');
@@ -713,7 +713,7 @@ echo -e "\n[3.8 C pings B - triggers auto-restore sync]"
 # C pings B. Same flow: B doesn't know C, auto-creates pending contact, syncs.
 pingResultC=$(docker exec -e EIOU_TEST_MODE=true ${containerC} php -r "
     try {
-        require_once('/etc/eiou/Functions.php');
+        require_once('/app/eiou/Functions.php');
         \$app = \Eiou\Core\Application::getInstance();
         \$contactStatusService = \$app->services->getContactStatusService();
         \$result = \$contactStatusService->pingContact('${addressB}');
@@ -833,7 +833,7 @@ echo -e "\n[4.1 Test manual ping command: eiou ping]"
 pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
     // Test the eiou ping command logic directly
     try {
-        require_once('/etc/eiou/Functions.php');
+        require_once('/app/eiou/Functions.php');
         \$app = \Eiou\Core\Application::getInstance();
         \$contactStatusService = \$app->services->getContactStatusService();
         \$result = \$contactStatusService->pingContact('${addressB}');
@@ -862,7 +862,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[4.2 Test ping non-existent contact returns error]"
 
 pingNonExistent=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/Functions.php');
+    require_once('/app/eiou/Functions.php');
     \$app = \Eiou\Core\Application::getInstance();
     \$contactStatusService = \$app->services->getContactStatusService();
     \$result = \$contactStatusService->pingContact('nonexistent-contact-xyz');
@@ -899,7 +899,7 @@ if [[ -n "$contactNameB" ]]; then
     # Note: Require Functions.php to get output() wrapper function
     pingByName=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
         try {
-            require_once('/etc/eiou/Functions.php');
+            require_once('/app/eiou/Functions.php');
             \$app = \Eiou\Core\Application::getInstance();
             \$contactStatusService = \$app->services->getContactStatusService();
             \$result = \$contactStatusService->pingContact('${contactNameB}');

@@ -37,6 +37,22 @@
 #   EIOU_TEST_MODE      - Enable test mode for manual message processing
 #   EIOU_CONTACT_STATUS_ENABLED - Enable contact status ping feature
 #
+# Service Tuning (applied at boot, no volume mount needed):
+#   NGINX_WORKER_PROCESSES   - Nginx worker threads (default: 2, match to CPU allocation)
+#   NGINX_WORKER_CONNECTIONS - Max connections per worker (default: 768)
+#   NGINX_CLIENT_MAX_BODY    - Max request body size (default: 10m)
+#   NGINX_RATE_LIMIT_GENERAL - General rate limit (default: 30r/s)
+#   NGINX_RATE_LIMIT_API     - API rate limit (default: 10r/s)
+#   NGINX_RATE_LIMIT_P2P     - P2P rate limit (default: 20r/s)
+#   NGINX_CONN_LIMIT         - Max concurrent connections per IP (default: 50)
+#   PHP_FPM_PM               - Process manager mode: ondemand|dynamic|static (default: ondemand)
+#   PHP_FPM_MAX_CHILDREN     - Max PHP worker processes (default: 5, ~20-30MB RAM each)
+#   PHP_FPM_START_SERVERS    - Initial workers on startup (dynamic mode only, default: 2)
+#   PHP_FPM_MIN_SPARE        - Min idle workers (dynamic mode only, default: 1)
+#   PHP_FPM_MAX_SPARE        - Max idle workers (dynamic mode only, default: 3)
+#   PHP_FPM_IDLE_TIMEOUT     - Kill idle workers after N seconds (ondemand only, default: 10s)
+#   PHP_FPM_MAX_REQUESTS     - Recycle worker after N requests to prevent memory leaks (default: 0/unlimited)
+#
 # =============================================================================
 
 # Enable unbuffered output for real-time docker logs
@@ -113,8 +129,8 @@ graceful_shutdown() {
     if mysqladmin ping -h localhost --silent 2>/dev/null; then
         echo "[Shutdown] Creating automatic pre-shutdown backup..."
         if timeout 20 runuser -u www-data -- php -r '
-            chdir("/etc/eiou");
-            require_once "/etc/eiou/src/bootstrap.php";
+            chdir("/app/eiou");
+            require_once "/app/eiou/src/bootstrap.php";
             $app = \Eiou\Core\Application::getInstance();
             $bs = $app->services->getBackupService();
             $r = $bs->createBackup();
@@ -625,119 +641,67 @@ echo "Entering maintenance mode (upgrade lock)..."
 echo "$(date +%s)" > "$MAINTENANCE_LOCKFILE"
 
 # =============================================================================
-# SOURCE FILE SYNC (Docker Volume Update)
+# SERVICE TUNING (env var overrides applied at boot)
 # =============================================================================
-# The /etc/eiou directory is a Docker volume. When the image is updated, the
-# volume retains old files. This section syncs source files from a backup
-# location in the image to ensure the latest code is always used.
-#
-# Files synced: src/, root PHP files, composer.json
-# Files preserved: config/userconfig.json, config/dbconfig.json, config/ encryption keys
+# These modify the Dockerfile defaults before services start. Settings persist
+# across container restarts via docker-compose.yml environment variables.
 # =============================================================================
 
-# Debug: Show source backup status
-echo "Checking for source file backup..."
-if [ -d /app/eiou-src-backup ]; then
-    echo "  Backup directory found at /app/eiou-src-backup"
-    ls -la /app/eiou-src-backup/ 2>/dev/null | head -5
-else
-    echo "  WARNING: Backup directory /app/eiou-src-backup not found!"
-    echo "  This means the Docker image was not rebuilt with --build flag."
-    echo "  Run: docker-compose -f <compose-file>.yml up -d --build"
+# --- PHP-FPM tuning ---
+PHP_FPM_CONF=$(ls /etc/php/*/fpm/pool.d/www.conf 2>/dev/null | head -1)
+if [ -n "$PHP_FPM_CONF" ]; then
+    if [ -n "${PHP_FPM_PM:-}" ]; then
+        sed -i "s|^pm = .*|pm = $PHP_FPM_PM|" "$PHP_FPM_CONF"
+        echo "PHP-FPM: pm=$PHP_FPM_PM"
+    fi
+    if [ -n "${PHP_FPM_MAX_CHILDREN:-}" ]; then
+        sed -i "s|^;*pm.max_children = .*|pm.max_children = $PHP_FPM_MAX_CHILDREN|" "$PHP_FPM_CONF"
+        echo "PHP-FPM: max_children=$PHP_FPM_MAX_CHILDREN"
+    fi
+    if [ -n "${PHP_FPM_START_SERVERS:-}" ]; then
+        sed -i "s|^;*pm.start_servers = .*|pm.start_servers = $PHP_FPM_START_SERVERS|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_MIN_SPARE:-}" ]; then
+        sed -i "s|^;*pm.min_spare_servers = .*|pm.min_spare_servers = $PHP_FPM_MIN_SPARE|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_MAX_SPARE:-}" ]; then
+        sed -i "s|^;*pm.max_spare_servers = .*|pm.max_spare_servers = $PHP_FPM_MAX_SPARE|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_IDLE_TIMEOUT:-}" ]; then
+        sed -i "s|^;*pm.process_idle_timeout = .*|pm.process_idle_timeout = $PHP_FPM_IDLE_TIMEOUT|" "$PHP_FPM_CONF"
+    fi
+    if [ -n "${PHP_FPM_MAX_REQUESTS:-}" ]; then
+        sed -i "s|^;*pm.max_requests = .*|pm.max_requests = $PHP_FPM_MAX_REQUESTS|" "$PHP_FPM_CONF"
+    fi
 fi
 
-# Check if source backup exists (created during docker build)
-if [ -d /app/eiou-src-backup ]; then
-    echo "Syncing source files from image to volume..."
-
-    # Sync src directory (namespaced code)
-    if [ -d /app/eiou-src-backup/src ]; then
-        cp -r /app/eiou-src-backup/src/* /etc/eiou/src/ 2>/dev/null || true
-        echo "  Source code updated."
-    fi
-
-    # Sync root files to /etc/eiou/ (includes api/, cli/, processors/, www/, *.php)
-    if [ -d /app/eiou-src-backup/root ]; then
-        cp -r /app/eiou-src-backup/root/* /etc/eiou/ 2>/dev/null || true
-        echo "  Root files updated."
-    fi
-
-    # Sync composer.json and composer.lock
-    if [ -f /app/eiou-src-backup/composer.json ]; then
-        cp /app/eiou-src-backup/composer.json /etc/eiou/composer.json 2>/dev/null || true
-        echo "  Composer config updated."
-    fi
-    if [ -f /app/eiou-src-backup/composer.lock ]; then
-        cp /app/eiou-src-backup/composer.lock /etc/eiou/composer.lock 2>/dev/null || true
-        echo "  Composer lock file updated."
-    fi
-
-    # Reapply permissions after sync (mirroring dockerfile build steps)
-    find /etc/eiou/ -type d -exec chmod 755 "{}" \;
-    find /etc/eiou/ -type f -exec chmod 644 "{}" \;
-    chown www-data:www-data /etc/eiou/SecurityInit.php \
-        /etc/eiou/Functions.php \
-        /etc/eiou/processors/P2pMessages.php \
-        /etc/eiou/processors/TransactionMessages.php \
-        /etc/eiou/processors/CleanupMessages.php \
-        /etc/eiou/processors/ContactStatusMessages.php 2>/dev/null || true
-    echo "  Permissions reapplied."
-
-    echo "Source file sync completed."
+# --- Nginx tuning ---
+NGINX_CONF="/etc/nginx/nginx.conf"
+if [ -n "${NGINX_WORKER_PROCESSES:-}" ]; then
+    sed -i "s|^worker_processes .*;|worker_processes $NGINX_WORKER_PROCESSES;|" "$NGINX_CONF"
+    echo "Nginx: worker_processes=$NGINX_WORKER_PROCESSES"
+fi
+if [ -n "${NGINX_WORKER_CONNECTIONS:-}" ]; then
+    sed -i "s|worker_connections .*;|worker_connections $NGINX_WORKER_CONNECTIONS;|" "$NGINX_CONF"
+    echo "Nginx: worker_connections=$NGINX_WORKER_CONNECTIONS"
+fi
+if [ -n "${NGINX_RATE_LIMIT_GENERAL:-}" ]; then
+    sed -i "s|zone=general:10m rate=[^;]*;|zone=general:10m rate=$NGINX_RATE_LIMIT_GENERAL;|" "$NGINX_CONF"
+fi
+if [ -n "${NGINX_RATE_LIMIT_API:-}" ]; then
+    sed -i "s|zone=api:10m rate=[^;]*;|zone=api:10m rate=$NGINX_RATE_LIMIT_API;|" "$NGINX_CONF"
+fi
+if [ -n "${NGINX_RATE_LIMIT_P2P:-}" ]; then
+    sed -i "s|zone=p2p:10m rate=[^;]*;|zone=p2p:10m rate=$NGINX_RATE_LIMIT_P2P;|" "$NGINX_CONF"
 fi
 
-# =============================================================================
-# COMPOSER AUTOLOADER SETUP
-# =============================================================================
-# Ensure the Composer autoloader exists and is up-to-date.
-# =============================================================================
-
-# Always regenerate autoloader after source sync to ensure class map is current
-if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
-    echo "Generating Composer autoloader..."
-
-    # Ensure composer.json exists
-    if [ ! -f /etc/eiou/composer.json ]; then
-        echo "  Creating composer.json..."
-        cat > /etc/eiou/composer.json << 'COMPOSEREOF'
-{
-    "name": "eiou/node",
-    "description": "EIOU Node - Distributed IOU Network",
-    "type": "project",
-    "license": "proprietary",
-    "autoload": {
-        "classmap": ["src/"],
-        "files": [
-            "src/database/Pdo.php",
-            "src/database/DatabaseSetup.php",
-            "src/database/DatabaseSchema.php",
-            "src/services/ServiceWrappers.php",
-            "src/schemas/OutputSchema.php"
-        ]
-    },
-    "require": {
-        "php": ">=8.1"
-    },
-    "config": {
-        "optimize-autoloader": true,
-        "sort-packages": true
-    }
-}
-COMPOSEREOF
-    fi
-
-    # Run composer install to install/update dependencies and regenerate autoloader
-    cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | while read line; do
-        echo "  $line"
-    done
-
-    if [ -f /etc/eiou/vendor/autoload.php ]; then
-        echo "Composer autoloader generated successfully."
-    else
-        echo "ERROR: Failed to generate autoloader. PHP functionality may be impaired."
-    fi
-else
-    echo "Composer autoloader found."
+# Apply per-server-block settings (client_max_body_size, limit_conn)
+EIOU_CONF="/etc/nginx/sites-available/eiou.conf"
+if [ -n "${NGINX_CLIENT_MAX_BODY:-}" ]; then
+    sed -i "s|client_max_body_size .*;|client_max_body_size $NGINX_CLIENT_MAX_BODY;|" "$EIOU_CONF"
+fi
+if [ -n "${NGINX_CONN_LIMIT:-}" ]; then
+    sed -i "s|limit_conn addr .*;|limit_conn addr $NGINX_CONN_LIMIT;|" "$EIOU_CONF"
 fi
 
 # Start services
@@ -754,7 +718,7 @@ while ! mysqladmin ping -h localhost --silent; do
 done
 
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
-if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
+if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
     # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART
     if [ "$RESTORE_FILE" != "false" ]; then
         # Method 1: File-based restore (most secure)
@@ -1055,8 +1019,8 @@ else
         # Regenerate HS files from the encrypted mnemonic stored in userconfig.json
         # SECURITY: stderr suppressed to prevent stack traces from leaking decrypted mnemonic
         REGEN_RESULT=$(php -r '
-            require_once("/etc/eiou/vendor/autoload.php");
-            require_once("/etc/eiou/src/bootstrap.php");
+            require_once("/app/eiou/vendor/autoload.php");
+            require_once("/app/eiou/src/bootstrap.php");
             use Eiou\Security\TorKeyDerivation;
             use Eiou\Security\BIP39;
             use Eiou\Security\KeyEncryption;
@@ -1117,7 +1081,7 @@ fi
 # Check if all precursors to the message processors are available and working
 first=true
 while true; do
-    if [[ $(php -r 'require_once "/etc/eiou/src/startup/MessageCheck.php"; echo $passed;') ]]; then
+    if [[ $(php -r 'require_once "/app/eiou/src/startup/MessageCheck.php"; echo $passed;') ]]; then
         echo "Message processing check completed successfully."  
         # Display all user info for quick access
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
@@ -1128,8 +1092,8 @@ while true; do
         # On restart/restore, no seedphrase file exists so we create an authcode-only file.
         # SECURITY: The authcode never touches a bash variable — it stays inside the PHP process
         authcode_file=$(php -r '
-            require_once("/etc/eiou/vendor/autoload.php");
-            require_once("/etc/eiou/src/bootstrap.php");
+            require_once("/app/eiou/vendor/autoload.php");
+            require_once("/app/eiou/src/bootstrap.php");
             // Check if a seedphrase file already exists (first wallet creation)
             $seedFiles = glob("/dev/shm/eiou_wallet_info_*");
             if (empty($seedFiles)) { $seedFiles = glob("/tmp/eiou_wallet_info_*"); }
@@ -1272,7 +1236,7 @@ if [ "${EIOU_BACKUP_AUTO_ENABLED:-true}" = "true" ]; then
     service cron start 2>/dev/null || true
 
     # Install backup cron job (daily at midnight)
-    CRON_JOB="0 0 * * * runuser -u www-data -- /usr/bin/php /etc/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
+    CRON_JOB="0 0 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
 
     # Remove existing backup cron entry and add new one
     (crontab -l 2>/dev/null | grep -v "backup-cron.php"; echo "$CRON_JOB") | crontab -
@@ -1300,17 +1264,17 @@ fi
 chown -R www-data:www-data /etc/eiou/config
 
 # Start p2p message processing in background (as www-data)
-nohup runuser -u www-data -- php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
+nohup runuser -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
 P2P_PID=$!
 echo "P2p message processing started successfully (PID: $P2P_PID)"
 
 # Start transaction message processing in background (as www-data)
-nohup runuser -u www-data -- php /etc/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
+nohup runuser -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
 TRANSACTION_PID=$!
 echo "Transaction message processing started successfully (PID: $TRANSACTION_PID)"
 
 # Start cleanup message processing in background (as www-data)
-nohup runuser -u www-data -- php /etc/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
+nohup runuser -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
 CLEANUP_PID=$!
 echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
@@ -1318,7 +1282,7 @@ echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 # Check if contact status is enabled before starting (default: true if not set)
 CONTACT_STATUS_ENABLED="${EIOU_CONTACT_STATUS_ENABLED:-true}"
 if [ "$CONTACT_STATUS_ENABLED" = "true" ] || [ "$CONTACT_STATUS_ENABLED" = "1" ]; then
-    nohup runuser -u www-data -- php /etc/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
+    nohup runuser -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
     CONTACT_STATUS_PID=$!
     echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
 else
@@ -1408,7 +1372,7 @@ watchdog() {
                 P2P_RESTARTS=$((P2P_RESTARTS + 1))
                 P2P_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
-                nohup runuser -u www-data -- php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
+                nohup runuser -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
                 P2P_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
             elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -1423,7 +1387,7 @@ watchdog() {
                 TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
                 TRANSACTION_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
-                nohup runuser -u www-data -- php /etc/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
+                nohup runuser -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
                 TRANSACTION_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
             elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -1438,7 +1402,7 @@ watchdog() {
                 CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
                 CLEANUP_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
-                nohup runuser -u www-data -- php /etc/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
+                nohup runuser -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
                 CLEANUP_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
             elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -1454,7 +1418,7 @@ watchdog() {
                     CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
                     CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
-                    nohup runuser -u www-data -- php /etc/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
+                    nohup runuser -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
                     CONTACT_STATUS_PID=$!
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
                 elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then

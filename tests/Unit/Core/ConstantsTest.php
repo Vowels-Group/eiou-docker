@@ -319,7 +319,7 @@ class ConstantsTest extends TestCase
      */
     public function testFilePathConstantsAreDefined(): void
     {
-        $this->assertEquals('/etc/eiou/', Constants::PATH_CONFIG_DIR);
+        $this->assertEquals('/etc/eiou/config/', Constants::PATH_CONFIG_DIR);
         $this->assertEquals('/var/log/eiou/app.log', Constants::LOG_FILE_APP);
         $this->assertEquals('INFO', Constants::LOG_LEVEL);
         $this->assertEquals(100, Constants::LOG_MAX_ENTRIES);
