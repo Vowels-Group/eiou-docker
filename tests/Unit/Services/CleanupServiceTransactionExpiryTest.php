@@ -269,15 +269,15 @@ class CleanupServiceTransactionExpiryTest extends TestCase
     // =========================================================================
 
     /**
-     * DIRECT_TX_DELIVERY_EXPIRATION_SECONDS equals twice TOR_TRANSPORT_TIMEOUT_SECONDS
-     * (one round-trip: send + response)
+     * DIRECT_TX_DELIVERY_EXPIRATION_SECONDS equals 4× TOR_TRANSPORT_TIMEOUT_SECONDS
+     * (two round-trips: send + response × connect + transfer)
      */
-    public function testDirectTxDeliveryExpirationConstantIsTwoTorTimeouts(): void
+    public function testDirectTxDeliveryExpirationConstantIsFourTorTimeouts(): void
     {
         $this->assertSame(
-            2 * Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
+            4 * Constants::TOR_TRANSPORT_TIMEOUT_SECONDS,
             Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS,
-            'DIRECT_TX_DELIVERY_EXPIRATION_SECONDS should equal 2 × TOR_TRANSPORT_TIMEOUT_SECONDS'
+            'DIRECT_TX_DELIVERY_EXPIRATION_SECONDS should equal 4 × TOR_TRANSPORT_TIMEOUT_SECONDS'
         );
     }
 

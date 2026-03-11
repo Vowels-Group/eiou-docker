@@ -840,7 +840,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             // waking up and calling incrementRetry again on the next iteration).
             // Without the buffer, next_retry_at would expire during the delivery attempt,
             // allowing processRetryQueue to claim and duplicate the retry chain.
-            $deliveryBuffer = Constants::TOR_TRANSPORT_TIMEOUT_SECONDS * 2; // 60s worst-case delivery
+            $deliveryBuffer = Constants::TOR_TRANSPORT_TIMEOUT_SECONDS * 2; // 90s worst-case delivery
             $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay + $deliveryBuffer, $lastError);
 
             // If we haven't exhausted retries, wait and try again

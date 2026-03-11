@@ -461,7 +461,7 @@ class TransportUtilityService implements TransportServiceInterface
         curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, Constants::TOR_CONNECT_TIMEOUT_SECONDS);
         curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
         curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
@@ -536,7 +536,7 @@ class TransportUtilityService implements TransportServiceInterface
         if ($this->isTorAddress($recipient)) {
             curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
             curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, Constants::TOR_CONNECT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
             curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         } else {
