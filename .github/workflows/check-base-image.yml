@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: "\U0001F4E5 Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: "\U0001F50D Extract pinned digest from Dockerfile"
         id: pinned
