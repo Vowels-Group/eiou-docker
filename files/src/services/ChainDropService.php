@@ -20,6 +20,7 @@ use Eiou\Core\Constants;
 use Eiou\Events\ChainDropEvents;
 use Eiou\Events\EventDispatcher;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use PDOException;
@@ -65,26 +66,6 @@ class ChainDropService implements ChainDropServiceInterface
     }
 
     /**
-     * Set the sync trigger for balance recalculation after chain drops
-     *
-     * @param SyncTriggerInterface $syncTrigger Sync trigger
-     */
-    public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void
-    {
-        $this->syncTrigger = $syncTrigger;
-    }
-
-    /**
-     * Set the balance repository for auto-accept balance guard
-     *
-     * @param BalanceRepository $balanceRepository Balance repository
-     */
-    public function setBalanceRepository(BalanceRepository $balanceRepository): void
-    {
-        $this->balanceRepository = $balanceRepository;
-    }
-
-    /**
      * Constructor
      *
      * @param ChainDropProposalRepository $proposalRepository Proposal storage
@@ -100,7 +81,9 @@ class ChainDropService implements ChainDropServiceInterface
         TransactionRepository $transactionRepository,
         ContactRepository $contactRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        RepositoryFactory $repositoryFactory,
+        SyncTriggerInterface $syncTrigger
     ) {
         $this->proposalRepository = $proposalRepository;
         $this->transactionChainRepository = $transactionChainRepository;
@@ -111,6 +94,8 @@ class ChainDropService implements ChainDropServiceInterface
         $this->currentUser = $currentUser;
         $this->messagePayload = new MessagePayload($currentUser, $utilityContainer);
         $this->transactionPayload = new TransactionPayload($currentUser, $utilityContainer);
+        $this->balanceRepository = $repositoryFactory->get(\Eiou\Database\BalanceRepository::class);
+        $this->syncTrigger = $syncTrigger;
     }
 
     /**

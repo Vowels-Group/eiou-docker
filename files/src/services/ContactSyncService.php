@@ -19,6 +19,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Events\DeliveryEvents;
 use Eiou\Events\EventDispatcher;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Utils\Logger;
 use Eiou\Core\UserContext;
 use Eiou\Schemas\Payloads\ContactPayload;
@@ -144,7 +145,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         TransactionRepository $transactionRepository,
         TransactionContactRepository $transactionContactRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        RepositoryFactory $repositoryFactory,
+        SyncTriggerInterface $syncTrigger
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -158,38 +161,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
         $this->contactPayload = new ContactPayload($this->currentUser, $this->utilityContainer);
         $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
+        $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
+        $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $this->syncTrigger = $syncTrigger;
     }
 
     // =========================================================================
     // DEPENDENCY INJECTION
     // =========================================================================
-
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void {
-        $this->syncTrigger = $sync;
-    }
-
-    /**
-     * Set the contact credit repository for creating initial credit entries
-     *
-     * @param ContactCreditRepository $repo Contact credit repository
-     */
-    public function setContactCreditRepository(ContactCreditRepository $repo): void {
-        $this->contactCreditRepository = $repo;
-    }
-
-    /**
-     * Set the contact currency repository
-     *
-     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
-     */
-    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
-        $this->contactCurrencyRepository = $repo;
-    }
 
     /**
      * Get the sync trigger

@@ -19,6 +19,7 @@ use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\P2pRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
@@ -58,7 +59,8 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         P2pRepository $p2pRepository, TransactionPayload $transactionPayload,
         TransportUtilityService $transportUtility, TimeUtilityService $timeUtility,
         InputValidator $inputValidator, UserContext $currentUser, Logger $secureLogger,
-        ?MessageDeliveryService $messageDeliveryService = null, ?LockingServiceInterface $lockingService = null
+        ?MessageDeliveryService $messageDeliveryService = null, ?LockingServiceInterface $lockingService = null,
+        ?RepositoryFactory $repositoryFactory = null, ?SyncTriggerInterface $syncTrigger = null
     ) {
         $this->transactionRepository = $transactionRepository;
         $this->addressRepository = $addressRepository;
@@ -71,19 +73,18 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         $this->secureLogger = $secureLogger;
         $this->messageDeliveryService = $messageDeliveryService;
         $this->lockingService = $lockingService;
+        if ($repositoryFactory !== null) {
+            $this->transactionChainRepository = $repositoryFactory->get(\Eiou\Database\TransactionChainRepository::class);
+        }
+        if ($syncTrigger !== null) {
+            $this->syncTrigger = $syncTrigger;
+        }
     }
 
     // Dependency injection setters
     public function setContactService(ContactServiceInterface $contactService): void { $this->contactService = $contactService; }
     public function setP2pService(P2pServiceInterface $p2pService): void { $this->p2pService = $p2pService; }
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void { $this->syncTrigger = $sync; }
     public function setLockingService(LockingServiceInterface $lockingService): void { $this->lockingService = $lockingService; }
-    public function setTransactionChainRepository(TransactionChainRepository $repo): void { $this->transactionChainRepository = $repo; }
     public function setTransactionService(TransactionService $transactionService): void { $this->transactionService = $transactionService; }
     public function setChainDropService(ChainDropServiceInterface $chainDropService): void { $this->chainDropService = $chainDropService; }
 

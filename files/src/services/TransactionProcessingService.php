@@ -70,7 +70,8 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         TimeUtilityService $timeUtility,
         UserContext $currentUser,
         Logger $secureLogger,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?SyncTriggerInterface $syncTrigger = null
     ) {
         $this->transactionRepository = $transactionRepository;
         $this->transactionRecoveryRepository = $transactionRecoveryRepository;
@@ -84,16 +85,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         $this->currentUser = $currentUser;
         $this->secureLogger = $secureLogger;
         $this->messageDeliveryService = $messageDeliveryService;
-    }
-
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void
-    {
-        $this->syncTrigger = $sync;
+        $this->syncTrigger = $syncTrigger;
     }
 
     public function setP2pService(P2pServiceInterface $p2pService): void

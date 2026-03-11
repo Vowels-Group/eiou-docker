@@ -7,6 +7,7 @@ use Eiou\Utils\Logger;
 use Eiou\Contracts\RouteCancellationServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\RouteCancellationRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Core\Constants;
@@ -20,20 +21,15 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
     private ?RouteCancellationRepository $routeCancellationRepository = null;
     private ?P2pRepository $p2pRepository = null;
 
+    public function __construct(RepositoryFactory $repositoryFactory)
+    {
+        $this->capacityReservationRepository = $repositoryFactory->get(\Eiou\Database\CapacityReservationRepository::class);
+        $this->routeCancellationRepository = $repositoryFactory->get(\Eiou\Database\RouteCancellationRepository::class);
+        $this->p2pRepository = $repositoryFactory->get(\Eiou\Database\P2pRepository::class);
+    }
+
     public function setP2pService(P2pServiceInterface $service): void {
         $this->p2pService = $service;
-    }
-
-    public function setCapacityReservationRepository(CapacityReservationRepository $repo): void {
-        $this->capacityReservationRepository = $repo;
-    }
-
-    public function setRouteCancellationRepository(RouteCancellationRepository $repo): void {
-        $this->routeCancellationRepository = $repo;
-    }
-
-    public function setP2pRepository(P2pRepository $repo): void {
-        $this->p2pRepository = $repo;
     }
 
     public function cancelUnselectedRoutes(string $hash, string $selectedCandidateId, array $unselectedCandidates): array {

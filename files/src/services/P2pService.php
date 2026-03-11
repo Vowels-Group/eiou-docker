@@ -8,6 +8,7 @@ use Eiou\Utils\Logger;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
@@ -163,7 +164,8 @@ class P2pService implements P2pServiceInterface {
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null,
-        ?P2pSenderRepository $p2pSenderRepository = null
+        ?P2pSenderRepository $p2pSenderRepository = null,
+        RepositoryFactory $repositoryFactory
     ) {
         $this->contactService = $contactService;
         $this->balanceRepository = $balanceRepository;
@@ -182,6 +184,11 @@ class P2pService implements P2pServiceInterface {
         $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
         $this->rp2pPayload = new Rp2pPayload($this->currentUser, $this->utilityContainer);
         $this->utilPayload = new UtilPayload($this->currentUser, $this->utilityContainer);
+
+        $this->p2pRelayedContactRepository = $repositoryFactory->get(\Eiou\Database\P2pRelayedContactRepository::class);
+        $this->rp2pRepository = $repositoryFactory->get(\Eiou\Database\Rp2pRepository::class);
+        $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $this->capacityReservationRepository = $repositoryFactory->get(\Eiou\Database\CapacityReservationRepository::class);
     }
 
     /**
@@ -194,26 +201,6 @@ class P2pService implements P2pServiceInterface {
     }
 
     /**
-     * Set the P2pRelayedContactRepository for two-phase best-fee selection
-     *
-     * @param P2pRelayedContactRepository $repository
-     * @return void
-     */
-    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $repository): void {
-        $this->p2pRelayedContactRepository = $repository;
-    }
-
-    /**
-     * Set the Rp2pRepository for forwarding existing RP2P to late P2P senders
-     *
-     * @param Rp2pRepository $repository
-     * @return void
-     */
-    public function setRp2pRepository(Rp2pRepository $repository): void {
-        $this->rp2pRepository = $repository;
-    }
-
-    /**
      * Set the Rp2pService for re-checking best-fee selection after broadcast
      *
      * @param Rp2pService $service
@@ -221,25 +208,6 @@ class P2pService implements P2pServiceInterface {
      */
     public function setRp2pService(Rp2pService $service): void {
         $this->rp2pService = $service;
-    }
-
-    /**
-     * Set the ContactCurrencyRepository for per-currency fee lookup
-     *
-     * @param ContactCurrencyRepository $repository
-     * @return void
-     */
-    public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
-        $this->contactCurrencyRepository = $repository;
-    }
-
-    /**
-     * Set the CapacityReservationRepository
-     *
-     * @param CapacityReservationRepository $repo
-     */
-    public function setCapacityReservationRepository(CapacityReservationRepository $repo): void {
-        $this->capacityReservationRepository = $repo;
     }
 
     /**

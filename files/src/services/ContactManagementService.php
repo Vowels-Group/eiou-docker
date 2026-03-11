@@ -19,6 +19,7 @@ use Eiou\Exceptions\ValidationServiceException;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Utils\InputValidator;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Utils\Logger;
 
 /**
@@ -122,7 +123,9 @@ class ContactManagementService implements ContactManagementServiceInterface
         BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
-        UserContext $currentUser
+        UserContext $currentUser,
+        RepositoryFactory $repositoryFactory,
+        SyncTriggerInterface $syncTrigger
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -132,6 +135,9 @@ class ContactManagementService implements ContactManagementServiceInterface
         $this->currentUser = $currentUser;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
         $this->secureLogger = Logger::getInstance();
+        $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
+        $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $this->syncTrigger = $syncTrigger;
     }
 
     /**
@@ -143,39 +149,6 @@ class ContactManagementService implements ContactManagementServiceInterface
     public function setContactSyncService(ContactSyncServiceInterface $syncService): void
     {
         $this->contactSyncService = $syncService;
-    }
-
-    /**
-     * Set the sync trigger for balance recalculation (breaks circular dependency)
-     *
-     * @param SyncTriggerInterface $syncTrigger Sync trigger (proxy or actual service)
-     * @return void
-     */
-    public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void
-    {
-        $this->syncTrigger = $syncTrigger;
-    }
-
-    /**
-     * Set the contact credit repository for creating initial credit entries
-     *
-     * @param ContactCreditRepository $repo Contact credit repository
-     * @return void
-     */
-    public function setContactCreditRepository(ContactCreditRepository $repo): void
-    {
-        $this->contactCreditRepository = $repo;
-    }
-
-    /**
-     * Set the contact currency repository for multi-currency support
-     *
-     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
-     * @return void
-     */
-    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void
-    {
-        $this->contactCurrencyRepository = $repo;
     }
 
     /**

@@ -15,17 +15,6 @@ use Eiou\Exceptions\FatalServiceException;
 interface MessageServiceInterface
 {
     /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * Uses SyncTriggerInterface instead of concrete SyncService to break
-     * circular dependencies. Can be satisfied by SyncServiceProxy or SyncService.
-     *
-     * @param SyncTriggerInterface $sync Sync trigger instance
-     * @return void
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void;
-
-    /**
      * Set the message delivery service (for lazy initialization)
      *
      * @param MessageDeliveryService $service Message delivery service instance

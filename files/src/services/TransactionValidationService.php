@@ -114,7 +114,8 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         InputValidator $inputValidator,
         TransactionPayload $transactionPayload,
         UserContext $currentUser,
-        Logger $secureLogger
+        Logger $secureLogger,
+        SyncTriggerInterface $syncTrigger
     ) {
         $this->transactionRepository = $transactionRepository;
         $this->contactService = $contactService;
@@ -123,19 +124,10 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         $this->transactionPayload = $transactionPayload;
         $this->currentUser = $currentUser;
         $this->secureLogger = $secureLogger;
+        $this->syncTrigger = $syncTrigger;
 
         // Initialize TransactionChainRepository
         $this->transactionChainRepository = new TransactionChainRepository();
-    }
-
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void
-    {
-        $this->syncTrigger = $sync;
     }
 
     /**

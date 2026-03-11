@@ -13,6 +13,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\P2pRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -124,7 +125,8 @@ class CliService implements CliServiceInterface {
         BalanceRepository $balanceRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?RepositoryFactory $repositoryFactory = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -134,20 +136,10 @@ class CliService implements CliServiceInterface {
         $this->currencyUtility = $utilityContainer->getCurrencyUtility();
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->generalUtility = $utilityContainer->getGeneralUtility();
-    }
-
-    /**
-     * Set the contact credit repository (optional dependency)
-     */
-    public function setContactCreditRepository(ContactCreditRepository $contactCreditRepository): void {
-        $this->contactCreditRepository = $contactCreditRepository;
-    }
-
-    /**
-     * Set the P2P repository (optional, for fee earnings in user info)
-     */
-    public function setP2pRepository(P2pRepository $p2pRepository): void {
-        $this->p2pRepository = $p2pRepository;
+        if ($repositoryFactory !== null) {
+            $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
+            $this->p2pRepository = $repositoryFactory->get(\Eiou\Database\P2pRepository::class);
+        }
     }
 
     /**

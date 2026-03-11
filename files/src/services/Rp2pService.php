@@ -15,6 +15,7 @@ use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -166,16 +167,6 @@ class Rp2pService implements Rp2pServiceInterface {
     }
 
     /**
-     * Set the ContactCurrencyRepository for per-currency fee lookup
-     *
-     * @param ContactCurrencyRepository $repository
-     * @return void
-     */
-    public function setContactCurrencyRepository(ContactCurrencyRepository $repository): void {
-        $this->contactCurrencyRepository = $repository;
-    }
-
-    /**
      * Set the RouteCancellationService
      *
      * @param RouteCancellationServiceInterface $service
@@ -206,7 +197,8 @@ class Rp2pService implements Rp2pServiceInterface {
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null,
         ?Rp2pCandidateRepository $rp2pCandidateRepository = null,
-        ?P2pSenderRepository $p2pSenderRepository = null
+        ?P2pSenderRepository $p2pSenderRepository = null,
+        RepositoryFactory $repositoryFactory = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -222,6 +214,10 @@ class Rp2pService implements Rp2pServiceInterface {
         $this->p2pSenderRepository = $p2pSenderRepository;
 
         $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
+        if ($repositoryFactory !== null) {
+            $this->p2pRelayedContactRepository = $repositoryFactory->get(\Eiou\Database\P2pRelayedContactRepository::class);
+            $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        }
     }
 
     /**
@@ -231,16 +227,6 @@ class Rp2pService implements Rp2pServiceInterface {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
-    }
-
-    /**
-     * Set the P2pRelayedContactRepository for two-phase best-fee selection
-     *
-     * @param P2pRelayedContactRepository $repository
-     * @return void
-     */
-    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $repository): void {
-        $this->p2pRelayedContactRepository = $repository;
     }
 
     /**

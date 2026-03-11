@@ -345,7 +345,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getRepositoryFactory(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['ContactManagementService'];
@@ -364,7 +366,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->getTransactionRepository(),
                 $this->getTransactionContactRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getRepositoryFactory(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['ContactSyncService'];
@@ -413,7 +417,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getLogger(),
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
-                $this->getHeldTransactionService() // Set HeldTransactionService for handling invalid_previous_txid rejections
+                $this->getHeldTransactionService(),
+                $this->getSyncServiceProxy()
             );
             // Inject LockingService for distributed contact send locks
             $this->services['TransactionService']->setLockingService($this->getLockingService());
@@ -439,7 +444,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
-                $this->getP2pSenderRepository()
+                $this->getP2pSenderRepository(),
+                $this->getRepositoryFactory()
             );
         }
         return $this->services['P2pService'];
@@ -464,7 +470,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
                 $this->getRp2pCandidateRepository(),
-                $this->getP2pSenderRepository()
+                $this->getP2pSenderRepository(),
+                $this->getRepositoryFactory()
             );
         }
         return $this->services['Rp2pService'];
@@ -499,9 +506,10 @@ class ServiceContainer implements ContainerInterface {
                 $this->getTransactionContactRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getSyncServiceProxy(),
+                $this->getRepositoryFactory()
             );
-            $this->services['MessageService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
         }
         return $this->services['MessageService'];
     }
@@ -520,7 +528,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getRepositoryFactory()
             );
         }
         return $this->services['CleanupService'];
@@ -533,7 +542,9 @@ class ServiceContainer implements ContainerInterface {
      */
     public function getRouteCancellationService(): RouteCancellationServiceInterface {
         if (!isset($this->services['RouteCancellationService'])) {
-            $this->services['RouteCancellationService'] = new RouteCancellationService();
+            $this->services['RouteCancellationService'] = new RouteCancellationService(
+                $this->getRepositoryFactory()
+            );
         }
         return $this->services['RouteCancellationService'];
     }
@@ -645,7 +656,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getBalanceRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getRepositoryFactory()
             );
         }
         return $this->services['CliService'];
@@ -769,7 +781,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->getContactRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getRepositoryFactory(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['ContactStatusService'];
@@ -863,7 +877,8 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ChainVerificationService'] = new ChainVerificationService(
                 $this->getTransactionChainRepository(),
                 $this->currentUser,
-                $this->getLogger()
+                $this->getLogger(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['ChainVerificationService'];
@@ -888,7 +903,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getInputValidator(),
                 $this->getTransactionPayload(),
                 $this->currentUser,
-                $this->getLogger()
+                $this->getLogger(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['TransactionValidationService'];
@@ -917,7 +933,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getUtilityContainer()->getTimeUtility(),
                 $this->currentUser,
                 $this->getLogger(),
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['TransactionProcessingService'];
@@ -946,7 +963,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->currentUser,
                 $this->getLogger(),
                 $this->getMessageDeliveryService(),
-                $this->getLockingService()
+                $this->getLockingService(),
+                $this->getRepositoryFactory(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['SendOperationService'];
@@ -996,7 +1015,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->getTransactionRepository(),
                 $this->getContactRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getRepositoryFactory(),
+                $this->getSyncServiceProxy()
             );
         }
         return $this->services['ChainDropService'];
@@ -1149,77 +1170,34 @@ class ServiceContainer implements ContainerInterface {
      */
     public function wireCircularDependencies(): void {
         // =========================================================================
-        // Core sync-related dependencies
-        // Now using SyncTriggerInterface via proxy for loose coupling
+        // Service-to-service circular dependencies (ARCH-01)
+        //
+        // Only genuine circular or late-bound service deps remain here.
+        // Repository deps and SyncTriggerInterface are now constructor-injected.
         // =========================================================================
 
-        // Wire TransactionService -> SyncTriggerInterface (via proxy)
-        // Reason: TransactionService needs to trigger sync before sending (fallback path)
-        // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
-        if (isset($this->services['TransactionService'])) {
-            $this->services['TransactionService']->setSyncTrigger($this->getSyncServiceProxy());
-        }
-
-        // Wire SyncService <-> HeldTransactionService (one-way now - event-driven in reverse)
-        // Reason: SyncService creates held transactions and notifies HeldTransactionService via events
-        // Note: HeldTransactionService no longer has setSyncService() - it uses EventDispatcher
-        //       to listen for SyncEvents::SYNC_COMPLETED instead of direct dependency
+        // SyncService -> HeldTransactionService (one-way; reverse is event-driven)
         if (isset($this->services['SyncService']) && isset($this->services['HeldTransactionService'])) {
             $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
         }
 
-        // =========================================================================
-        // Contact and message service dependencies
-        // These now use SyncTriggerInterface via proxy for loose coupling
-        // =========================================================================
-
-        // Wire ContactManagementService with ContactSyncService, SyncTriggerInterface, and ContactCreditRepository
-        // Reason: ContactManagementService needs to trigger sync operations after contact changes,
-        //         recalculate balances after accepting contacts (wallet restore scenario),
-        //         and create initial contact credit entries on acceptance
-        if (isset($this->services['ContactManagementService'])) {
-            if (isset($this->services['ContactSyncService'])) {
-                $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
-            }
-            $this->services['ContactManagementService']->setSyncTrigger($this->getSyncServiceProxy());
-            $this->services['ContactManagementService']->setContactCreditRepository($this->getContactCreditRepository());
-            $this->services['ContactManagementService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
+        // SyncService -> BackupService
+        if (isset($this->services['SyncService'])) {
+            $this->services['SyncService']->setBackupService($this->getBackupService());
         }
 
-        // Wire ContactSyncService -> SyncTriggerInterface (via proxy), ContactCreditRepository
-        // Reason: ContactSyncService needs to trigger sync operations for contacts
-        //         and create initial contact credit entries on acceptance
-        if (isset($this->services['ContactSyncService'])) {
-            $this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
-            $this->services['ContactSyncService']->setContactCreditRepository($this->getContactCreditRepository());
-            $this->services['ContactSyncService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
+        // ContactManagementService -> ContactSyncService
+        if (isset($this->services['ContactManagementService']) && isset($this->services['ContactSyncService'])) {
+            $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
         }
 
-        // Wire ContactSyncService -> MessageDeliveryService
-        // Reason: ContactSyncService needs reliable message delivery for contact operations
+        // ContactSyncService -> MessageDeliveryService
         if (isset($this->services['ContactSyncService']) && isset($this->services['MessageDeliveryService'])) {
             $this->services['ContactSyncService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
         }
 
-        // Wire ContactService -> SyncTriggerInterface (via proxy) - backwards compatibility
-        // Reason: ContactService facade delegates to underlying services but may need sync trigger
-        // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
-        if (isset($this->services['ContactService'])) {
-            $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
-        }
-
-        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository, ChainDropService, AddressRepository,
-        //                              BalanceRepository, ContactCreditRepository
-        // Reason: ContactStatusService validates chains, needs rate limiting, detects internal gaps, auto-proposes chain drops,
-        //         auto-creates pending contacts from pings (wallet restore scenario), and calculates/stores available credit during ping
-        // Note: Uses SyncTriggerInterface for loose coupling
+        // ContactStatusService -> RateLimiterService, ChainDropService
         if (isset($this->services['ContactStatusService'])) {
-            $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
-            $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
-            $this->services['ContactStatusService']->setAddressRepository($this->getAddressRepository());
-            $this->services['ContactStatusService']->setBalanceRepository($this->getBalanceRepository());
-            $this->services['ContactStatusService']->setContactCreditRepository($this->getContactCreditRepository());
-            $this->services['ContactStatusService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
@@ -1228,50 +1206,39 @@ class ServiceContainer implements ContainerInterface {
             }
         }
 
-        // Wire MessageService -> SyncTriggerInterface (via proxy), ChainDropService
-        // Reason: MessageService handles incoming sync requests and chain drop messages
-        // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
-        if (isset($this->services['MessageService'])) {
-            $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
-            if (isset($this->services['ChainDropService'])) {
-                $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
-            }
+        // MessageService -> ChainDropService
+        if (isset($this->services['MessageService']) && isset($this->services['ChainDropService'])) {
+            $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
         }
 
-        // Wire ChainDropService -> SyncTriggerInterface (via proxy), BalanceRepository
-        // Reason: ChainDropService needs to recalculate balances after dropping transactions
-        // and needs BalanceRepository for auto-accept balance guard
+        // ChainDropService -> BackupService
         if (isset($this->services['ChainDropService'])) {
-            $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
-            $this->services['ChainDropService']->setBalanceRepository($this->getBalanceRepository());
+            $this->services['ChainDropService']->setBackupService($this->getBackupService());
         }
 
-        // Wire CliService -> ContactCreditRepository, P2P approval service, DLQ service
-        // Reason: CliService displays total available credit and fee earnings in user info,
-        // and delegates P2P approval and DLQ management to extracted sub-services (ARCH-04)
-        // IMPORTANT: CliService must be initialized in wireAllServices() before this runs,
-        // otherwise these setter injections are silently skipped (isset check fails)
+        // CliService -> sub-services (ARCH-04 delegation)
         if (isset($this->services['CliService'])) {
-            $this->services['CliService']->setContactCreditRepository($this->getContactCreditRepository());
-            $this->services['CliService']->setP2pRepository($this->getP2pRepository());
             $this->services['CliService']->setP2pApprovalService($this->getCliP2pApprovalService());
             $this->services['CliService']->setDlqService($this->getCliDlqService());
             $this->services['CliService']->setSettingsService($this->getCliSettingsService());
             $this->services['CliService']->setHelpService($this->getCliHelpService());
         }
 
+        // ChainOperationsService -> SyncService
+        if (isset($this->services['ChainOperationsService']) && isset($this->services['SyncService'])) {
+            $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
+        }
+
         // =========================================================================
         // Transaction-related circular dependencies
         // =========================================================================
 
-        // Wire Rp2pService -> SendOperationService (via P2pTransactionSenderInterface)
-        // Reason: RP2P operations complete transaction flows by calling sendP2pEiou()
-        // Note: Uses P2pTransactionSenderInterface to break circular dependency with TransactionService
+        // Rp2pService -> SendOperationService (via P2pTransactionSenderInterface)
         if (isset($this->services['Rp2pService']) && isset($this->services['SendOperationService'])) {
             $this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
         }
 
-        // Wire TransactionService -> P2pService, ContactService, and new refactored services
+        // TransactionService -> P2pService, ContactService, and refactored sub-services
         if (isset($this->services['TransactionService'])) {
             if (isset($this->services['P2pService'])) {
                 $this->services['TransactionService']->setP2pService($this->services['P2pService']);
@@ -1279,7 +1246,6 @@ class ServiceContainer implements ContainerInterface {
             if (isset($this->services['ContactService'])) {
                 $this->services['TransactionService']->setContactService($this->services['ContactService']);
             }
-            // Wire the 5 new refactored services to TransactionService facade
             if (isset($this->services['BalanceService'])) {
                 $this->services['TransactionService']->setBalanceService($this->services['BalanceService']);
             }
@@ -1297,30 +1263,13 @@ class ServiceContainer implements ContainerInterface {
             }
         }
 
-        // =========================================================================
-        // Refactored service dependencies (from God Class refactoring)
-        // These services now use SyncTriggerInterface via proxy for loose coupling
-        // =========================================================================
-
-        // Wire ChainVerificationService -> SyncTriggerInterface (via proxy)
-        // Reason: ChainVerificationService repairs chains via sync
-        if (isset($this->services['ChainVerificationService'])) {
-            $this->services['ChainVerificationService']->setSyncTrigger($this->getSyncServiceProxy());
+        // TransactionValidationService -> TransactionService (circular)
+        if (isset($this->services['TransactionValidationService']) && isset($this->services['TransactionService'])) {
+            $this->services['TransactionValidationService']->setTransactionService($this->services['TransactionService']);
         }
 
-        // Wire TransactionValidationService -> SyncTriggerInterface (via proxy), TransactionService
-        // Reason: Proactive sync before validation, transaction lookup for validation
-        if (isset($this->services['TransactionValidationService'])) {
-            $this->services['TransactionValidationService']->setSyncTrigger($this->getSyncServiceProxy());
-            if (isset($this->services['TransactionService'])) {
-                $this->services['TransactionValidationService']->setTransactionService($this->services['TransactionService']);
-            }
-        }
-
-        // Wire TransactionProcessingService -> SyncTriggerInterface (via proxy), P2pService, HeldTransactionService
-        // Reason: Chain sync after conflicts, P2P processing, held transaction handling
+        // TransactionProcessingService -> P2pService, HeldTransactionService
         if (isset($this->services['TransactionProcessingService'])) {
-            $this->services['TransactionProcessingService']->setSyncTrigger($this->getSyncServiceProxy());
             if (isset($this->services['P2pService'])) {
                 $this->services['TransactionProcessingService']->setP2pService($this->services['P2pService']);
             }
@@ -1329,8 +1278,7 @@ class ServiceContainer implements ContainerInterface {
             }
         }
 
-        // Wire SendOperationService -> ContactService, P2pService, SyncTriggerInterface (via proxy), TransactionService
-        // Reason: Contact lookup, P2P routing, pre-send sync, transaction creation
+        // SendOperationService -> ContactService, P2pService, TransactionService, ChainDropService
         if (isset($this->services['SendOperationService'])) {
             if (isset($this->services['ContactService'])) {
                 $this->services['SendOperationService']->setContactService($this->services['ContactService']);
@@ -1338,58 +1286,23 @@ class ServiceContainer implements ContainerInterface {
             if (isset($this->services['P2pService'])) {
                 $this->services['SendOperationService']->setP2pService($this->services['P2pService']);
             }
-            $this->services['SendOperationService']->setSyncTrigger($this->getSyncServiceProxy());
             if (isset($this->services['TransactionService'])) {
                 $this->services['SendOperationService']->setTransactionService($this->services['TransactionService']);
             }
-            // Set TransactionChainRepository for chain verification
-            $this->services['SendOperationService']->setTransactionChainRepository($this->getTransactionChainRepository());
-            // Set ChainDropService for auto-proposing chain drops when sync fails
             if (isset($this->services['ChainDropService'])) {
                 $this->services['SendOperationService']->setChainDropService($this->services['ChainDropService']);
             }
         }
 
         // =========================================================================
-        // New dependency injection pattern services
-        // These use setter injection to coordinate with SyncService
+        // P2P / RP2P / routing circular dependencies
         // =========================================================================
 
-        // Wire ChainOperationsService -> SyncService
-        // Reason: ChainOperationsService needs SyncService for chain repair via repairChainIfNeeded()
-        // Note: This is the new centralized chain operations service that can be used by other
-        //       services instead of them directly depending on SyncService for chain repair
-        if (isset($this->services['ChainOperationsService']) && isset($this->services['SyncService'])) {
-            $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
-        }
-
-        // Wire SyncService -> BackupService
-        // Reason: SyncService checks local/remote backups for missing transactions during sync exchange
-        if (isset($this->services['SyncService'])) {
-            $this->services['SyncService']->setBackupService($this->getBackupService());
-        }
-
-        // Wire ChainDropService -> BackupService
-        // Reason: ChainDropService checks backups as fallback safety net when sync-level recovery missed
-        if (isset($this->services['ChainDropService'])) {
-            $this->services['ChainDropService']->setBackupService($this->getBackupService());
-        }
-
-        // Wire CleanupService -> ChainDropService
-        // Reason: CleanupService needs to expire stale chain drop proposals
-        if (isset($this->services['CleanupService']) && isset($this->services['ChainDropService'])) {
-            $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
-        }
-
-        // Wire CleanupService -> Rp2pCandidateRepository, Rp2pService, P2pSenderRepository,
-        //                        P2pRelayedContactRepository, P2pService
-        // Reason: CleanupService needs to select best-fee route before expiring P2P with candidates,
-        //         clean up old P2P sender and relayed contact records,
-        //         and send cascade cancel notification on P2P expiration
+        // CleanupService -> ChainDropService, Rp2pService, P2pService
         if (isset($this->services['CleanupService'])) {
-            $this->services['CleanupService']->setRp2pCandidateRepository($this->getRp2pCandidateRepository());
-            $this->services['CleanupService']->setP2pSenderRepository($this->getP2pSenderRepository());
-            $this->services['CleanupService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            if (isset($this->services['ChainDropService'])) {
+                $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
+            }
             if (isset($this->services['Rp2pService'])) {
                 $this->services['CleanupService']->setRp2pService($this->services['Rp2pService']);
             }
@@ -1398,54 +1311,24 @@ class ServiceContainer implements ContainerInterface {
             }
         }
 
-        // Wire Rp2pService -> P2pRelayedContactRepository, P2pService
-        // Reason: Rp2pService needs relayed contacts for two-phase best-fee selection,
-        //         and P2pService for cascade cancel notification propagation
+        // Rp2pService -> P2pService, RouteCancellationService
         if (isset($this->services['Rp2pService'])) {
-            $this->services['Rp2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
-            $this->services['Rp2pService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
             if (isset($this->services['P2pService'])) {
                 $this->services['Rp2pService']->setP2pService($this->services['P2pService']);
             }
-        }
-
-        // Wire P2pService -> P2pRelayedContactRepository + Rp2pRepository + Rp2pService
-        // Reason: P2pService stores already_relayed contacts during broadcast for two-phase selection,
-        //         forwards existing RP2P to late P2P senders for better route discovery,
-        //         and re-checks best-fee selection after broadcast completes (race condition fix)
-        if (isset($this->services['P2pService'])) {
-            $this->services['P2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
-            $this->services['P2pService']->setRp2pRepository($this->getRp2pRepository());
-            $this->services['P2pService']->setContactCurrencyRepository($this->getContactCurrencyRepository());
-            if (isset($this->services['Rp2pService'])) {
-                $this->services['P2pService']->setRp2pService($this->services['Rp2pService']);
+            if (isset($this->services['RouteCancellationService'])) {
+                $this->services['Rp2pService']->setRouteCancellationService($this->services['RouteCancellationService']);
             }
         }
 
-        // Wire RouteCancellationService dependencies
-        if (isset($this->services['RouteCancellationService'])) {
-            $this->services['RouteCancellationService']->setCapacityReservationRepository($this->getCapacityReservationRepository());
-            $this->services['RouteCancellationService']->setRouteCancellationRepository($this->getRouteCancellationRepository());
-            $this->services['RouteCancellationService']->setP2pRepository($this->getP2pRepository());
-            if (isset($this->services['P2pService'])) {
-                $this->services['RouteCancellationService']->setP2pService($this->services['P2pService']);
-            }
+        // P2pService -> Rp2pService (circular)
+        if (isset($this->services['P2pService']) && isset($this->services['Rp2pService'])) {
+            $this->services['P2pService']->setRp2pService($this->services['Rp2pService']);
         }
 
-        // Wire Rp2pService -> RouteCancellationService
-        if (isset($this->services['Rp2pService']) && isset($this->services['RouteCancellationService'])) {
-            $this->services['Rp2pService']->setRouteCancellationService($this->services['RouteCancellationService']);
-        }
-
-        // Wire P2pService -> CapacityReservationRepository
-        if (isset($this->services['P2pService'])) {
-            $this->services['P2pService']->setCapacityReservationRepository($this->getCapacityReservationRepository());
-        }
-
-        // Wire CleanupService -> CapacityReservationRepository, RouteCancellationRepository
-        if (isset($this->services['CleanupService'])) {
-            $this->services['CleanupService']->setCapacityReservationRepository($this->getCapacityReservationRepository());
-            $this->services['CleanupService']->setRouteCancellationRepository($this->getRouteCancellationRepository());
+        // RouteCancellationService -> P2pService
+        if (isset($this->services['RouteCancellationService']) && isset($this->services['P2pService'])) {
+            $this->services['RouteCancellationService']->setP2pService($this->services['P2pService']);
         }
     }
 
@@ -1623,8 +1506,8 @@ class ServiceContainer implements ContainerInterface {
         if (isset($this->utils[$id])) {
             return $this->utils[$id];
         }
-        if (isset($this->repositories[$id])) {
-            return $this->repositories[$id];
+        if ($this->repositoryFactory !== null && is_subclass_of($id, \Eiou\Database\AbstractRepository::class)) {
+            return $this->repositoryFactory->get($id);
         }
 
         // Try to resolve via PHP-DI if available
@@ -1649,7 +1532,7 @@ class ServiceContainer implements ContainerInterface {
         }
 
         // Check registered services/utils/repos
-        if (isset($this->services[$id]) || isset($this->utils[$id]) || isset($this->repositories[$id])) {
+        if (isset($this->services[$id]) || isset($this->utils[$id]) || ($this->repositoryFactory !== null && is_subclass_of($id, \Eiou\Database\AbstractRepository::class))) {
             return true;
         }
 
