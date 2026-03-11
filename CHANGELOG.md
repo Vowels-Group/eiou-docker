@@ -21,6 +21,7 @@ The project is currently in **ALPHA** status.
 - Add input validation for QUICKSTART, EIOU_HOST, EIOU_NAME, and EIOU_PORT environment variables in startup.sh to prevent injection via crafted values (DOCK-08)
 
 ### Changed
+- Extract `RepositoryFactory` to centralize repository instantiation and caching (ARCH-05). Replaces 25 near-identical lazy-loading getter methods in `ServiceContainer` (~345 lines) with one-line delegations to the factory (~100 lines). All existing callers unchanged — typed getter methods preserved for backward compatibility. New `getRepositoryFactory()` method exposes the factory for direct use
 - Separate source code from user data in Docker layout (DOCK-05): code moves from `/etc/eiou/` volume to `/app/eiou/` image filesystem. Config data stays at `/etc/eiou/config/` (volume). Eliminates startup source file sync, composer autoloader regeneration, and `/app/eiou-src-backup` duplication. Image upgrades now apply code immediately without boot-time sync. Volume mounts, nginx config, test files, and documentation updated for new paths
 - Refactor `CliService` God Class (3,784 → 1,136 lines, 70% reduction) by extracting four focused sub-services (ARCH-04): `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines), `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines). CliService delegates to sub-services for backward compatibility
 - Modernize `array()` syntax to short `[]` syntax in `TransportUtilityService.php` (callable and literal array forms)

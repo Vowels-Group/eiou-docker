@@ -47,6 +47,7 @@ use Eiou\Services\Proxies\SyncServiceProxy;
 use Eiou\Services\ContactManagementService;
 use Eiou\Services\ContactSyncService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactRepository;
@@ -97,9 +98,9 @@ class ServiceContainer implements ContainerInterface {
     private ?ContainerInterface $phpdi = null;
 
     /**
-     * @var array Cached repository instances
+     * @var RepositoryFactory Centralized repository creation and caching (ARCH-05)
      */
-    private array $repositories = [];
+    private ?RepositoryFactory $repositoryFactory = null;
 
     /**
      * @var array Cached service instances
@@ -140,6 +141,10 @@ class ServiceContainer implements ContainerInterface {
             $this->pdo = $pdo;
         } else{
             $this->loadDatabase();
+        }
+
+        if ($this->pdo !== null) {
+            $this->repositoryFactory = new RepositoryFactory($this->pdo);
         }
     }
 
@@ -190,11 +195,13 @@ class ServiceContainer implements ContainerInterface {
     public function loadDatabase(): void {
         try {
             $this->pdo = createPDOConnection();
+            $this->repositoryFactory = new RepositoryFactory($this->pdo);
         } catch (RuntimeException $e) {
             // Log the error
             Logger::getInstance()->logException($e, [], 'CRITICAL');
             // Set PDO to null to indicate unavailability
             $this->pdo = null;
+            $this->repositoryFactory = null;
         }
     }
 
@@ -211,353 +218,119 @@ class ServiceContainer implements ContainerInterface {
         return $this->pdo;
     }
 
-    /**
-     * Get AddressRepository instance
-     *
-     * @return AddressRepository
-     */
+    // =========================================================================
+    // Repository Accessors
+    // =========================================================================
+    // Typed getters delegate to RepositoryFactory for lazy creation & caching.
+    // Adding a new repository: create the class, add a one-line getter here.
+    // =========================================================================
+
+    /** @return RepositoryFactory */
+    public function getRepositoryFactory(): RepositoryFactory {
+        if ($this->repositoryFactory === null) {
+            throw new RuntimeException('Database connection is not available — cannot create repositories');
+        }
+        return $this->repositoryFactory;
+    }
+
     public function getAddressRepository(): AddressRepository {
-        if (!isset($this->repositories['AddressRepository'])) {
-            $this->repositories['AddressRepository'] = new AddressRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['AddressRepository'];
+        return $this->getRepositoryFactory()->get(AddressRepository::class);
     }
 
-    /**
-     * Get BalanceRepository instance
-     *
-     * @return BalanceRepository
-     */
     public function getBalanceRepository(): BalanceRepository {
-        if (!isset($this->repositories['BalanceRepository'])) {
-            $this->repositories['BalanceRepository'] = new BalanceRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['BalanceRepository'];
+        return $this->getRepositoryFactory()->get(BalanceRepository::class);
     }
 
-    /**
-     * Get ContactRepository instance
-     *
-     * @return ContactRepository
-     */
     public function getContactRepository(): ContactRepository {
-        if (!isset($this->repositories['ContactRepository'])) {
-            $this->repositories['ContactRepository'] = new ContactRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['ContactRepository'];
+        return $this->getRepositoryFactory()->get(ContactRepository::class);
     }
 
-    /**
-     * Get P2pRepository instance
-     *
-     * @return P2pRepository
-     */
     public function getP2pRepository(): P2pRepository {
-        if (!isset($this->repositories['P2pRepository'])) {
-            $this->repositories['P2pRepository'] = new P2pRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['P2pRepository'];
+        return $this->getRepositoryFactory()->get(P2pRepository::class);
     }
 
-    /**
-     * Get Rp2pRepository instance
-     *
-     * @return Rp2pRepository
-     */
     public function getRp2pRepository(): Rp2pRepository {
-        if (!isset($this->repositories['Rp2pRepository'])) {
-            $this->repositories['Rp2pRepository'] = new Rp2pRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['Rp2pRepository'];
+        return $this->getRepositoryFactory()->get(Rp2pRepository::class);
     }
 
-    /**
-     * Get Rp2pCandidateRepository instance
-     *
-     * @return Rp2pCandidateRepository
-     */
     public function getRp2pCandidateRepository(): Rp2pCandidateRepository {
-        if (!isset($this->repositories['Rp2pCandidateRepository'])) {
-            $this->repositories['Rp2pCandidateRepository'] = new Rp2pCandidateRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['Rp2pCandidateRepository'];
+        return $this->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
     }
 
-    /**
-     * Get P2pSenderRepository instance
-     *
-     * @return P2pSenderRepository
-     */
     public function getP2pSenderRepository(): P2pSenderRepository {
-        if (!isset($this->repositories['P2pSenderRepository'])) {
-            $this->repositories['P2pSenderRepository'] = new P2pSenderRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['P2pSenderRepository'];
+        return $this->getRepositoryFactory()->get(P2pSenderRepository::class);
     }
 
-    /**
-     * Get P2pRelayedContactRepository instance
-     *
-     * @return P2pRelayedContactRepository
-     */
     public function getP2pRelayedContactRepository(): P2pRelayedContactRepository {
-        if (!isset($this->repositories['P2pRelayedContactRepository'])) {
-            $this->repositories['P2pRelayedContactRepository'] = new P2pRelayedContactRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['P2pRelayedContactRepository'];
+        return $this->getRepositoryFactory()->get(P2pRelayedContactRepository::class);
     }
 
-    /**
-     * Get TransactionRepository instance
-     *
-     * @return TransactionRepository
-     */
     public function getTransactionRepository(): TransactionRepository {
-        if (!isset($this->repositories['TransactionRepository'])) {
-            $this->repositories['TransactionRepository'] = new TransactionRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['TransactionRepository'];
+        return $this->getRepositoryFactory()->get(TransactionRepository::class);
     }
 
-    /**
-     * Get DebugRepository instance
-     *
-     * @return DebugRepository
-     */
     public function getDebugRepository(): DebugRepository {
-        if (!isset($this->repositories['DebugRepository'])) {
-            $this->repositories['DebugRepository'] = new DebugRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['DebugRepository'];
+        return $this->getRepositoryFactory()->get(DebugRepository::class);
     }
 
-    /**
-     * Get ApiKeyRepository instance
-     *
-     * @return ApiKeyRepository
-     */
     public function getApiKeyRepository(): ApiKeyRepository {
-        if (!isset($this->repositories['ApiKeyRepository'])) {
-            $this->repositories['ApiKeyRepository'] = new ApiKeyRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['ApiKeyRepository'];
+        return $this->getRepositoryFactory()->get(ApiKeyRepository::class);
     }
-    
-    /** Get MessageDeliveryRepository instance
-     *
-     * @return MessageDeliveryRepository
-     */
+
     public function getMessageDeliveryRepository(): MessageDeliveryRepository {
-        if (!isset($this->repositories['MessageDeliveryRepository'])) {
-            $this->repositories['MessageDeliveryRepository'] = new MessageDeliveryRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['MessageDeliveryRepository'];
+        return $this->getRepositoryFactory()->get(MessageDeliveryRepository::class);
     }
 
-    /**
-     * Get DeadLetterQueueRepository instance
-     *
-     * @return DeadLetterQueueRepository
-     */
     public function getDeadLetterQueueRepository(): DeadLetterQueueRepository {
-        if (!isset($this->repositories['DeadLetterQueueRepository'])) {
-            $this->repositories['DeadLetterQueueRepository'] = new DeadLetterQueueRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['DeadLetterQueueRepository'];
+        return $this->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
     }
 
-    /**
-     * Get DeliveryMetricsRepository instance
-     *
-     * @return DeliveryMetricsRepository
-     */
     public function getDeliveryMetricsRepository(): DeliveryMetricsRepository {
-        if (!isset($this->repositories['DeliveryMetricsRepository'])) {
-            $this->repositories['DeliveryMetricsRepository'] = new DeliveryMetricsRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['DeliveryMetricsRepository'];
+        return $this->getRepositoryFactory()->get(DeliveryMetricsRepository::class);
     }
 
-    /**
-     * Get HeldTransactionRepository instance
-     *
-     * @return HeldTransactionRepository
-     */
     public function getHeldTransactionRepository(): HeldTransactionRepository {
-        if (!isset($this->repositories['HeldTransactionRepository'])) {
-            $this->repositories['HeldTransactionRepository'] = new HeldTransactionRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['HeldTransactionRepository'];
+        return $this->getRepositoryFactory()->get(HeldTransactionRepository::class);
     }
 
-    /**
-     * Get ChainDropProposalRepository instance
-     *
-     * @return ChainDropProposalRepository
-     */
     public function getChainDropProposalRepository(): ChainDropProposalRepository {
-        if (!isset($this->repositories['ChainDropProposalRepository'])) {
-            $this->repositories['ChainDropProposalRepository'] = new ChainDropProposalRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['ChainDropProposalRepository'];
+        return $this->getRepositoryFactory()->get(ChainDropProposalRepository::class);
     }
 
-    /**
-     * Get ContactCreditRepository instance
-     *
-     * @return ContactCreditRepository
-     */
     public function getContactCreditRepository(): ContactCreditRepository {
-        if (!isset($this->repositories['ContactCreditRepository'])) {
-            $this->repositories['ContactCreditRepository'] = new ContactCreditRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['ContactCreditRepository'];
+        return $this->getRepositoryFactory()->get(ContactCreditRepository::class);
     }
 
-    /**
-     * Get ContactCurrencyRepository instance
-     *
-     * @return ContactCurrencyRepository
-     */
     public function getContactCurrencyRepository(): ContactCurrencyRepository {
-        if (!isset($this->repositories['ContactCurrencyRepository'])) {
-            $this->repositories['ContactCurrencyRepository'] = new ContactCurrencyRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['ContactCurrencyRepository'];
+        return $this->getRepositoryFactory()->get(ContactCurrencyRepository::class);
     }
 
-    /**
-     * Get RateLimiterRepository instance
-     *
-     * @return RateLimiterRepository
-     */
     public function getRateLimiterRepository(): RateLimiterRepository {
-        if (!isset($this->repositories['RateLimiterRepository'])) {
-            $this->repositories['RateLimiterRepository'] = new RateLimiterRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['RateLimiterRepository'];
+        return $this->getRepositoryFactory()->get(RateLimiterRepository::class);
     }
 
-    /**
-     * Get TransactionStatisticsRepository instance
-     *
-     * @return TransactionStatisticsRepository
-     */
     public function getTransactionStatisticsRepository(): TransactionStatisticsRepository {
-        if (!isset($this->repositories['TransactionStatisticsRepository'])) {
-            $this->repositories['TransactionStatisticsRepository'] = new TransactionStatisticsRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['TransactionStatisticsRepository'];
+        return $this->getRepositoryFactory()->get(TransactionStatisticsRepository::class);
     }
 
-    /**
-     * Get TransactionChainRepository instance
-     *
-     * @return TransactionChainRepository
-     */
     public function getTransactionChainRepository(): TransactionChainRepository {
-        if (!isset($this->repositories['TransactionChainRepository'])) {
-            $this->repositories['TransactionChainRepository'] = new TransactionChainRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['TransactionChainRepository'];
+        return $this->getRepositoryFactory()->get(TransactionChainRepository::class);
     }
 
-    /**
-     * Get TransactionRecoveryRepository instance
-     *
-     * @return TransactionRecoveryRepository
-     */
     public function getTransactionRecoveryRepository(): TransactionRecoveryRepository {
-        if (!isset($this->repositories['TransactionRecoveryRepository'])) {
-            $this->repositories['TransactionRecoveryRepository'] = new TransactionRecoveryRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['TransactionRecoveryRepository'];
+        return $this->getRepositoryFactory()->get(TransactionRecoveryRepository::class);
     }
 
-    /**
-     * Get TransactionContactRepository instance
-     *
-     * @return TransactionContactRepository
-     */
     public function getTransactionContactRepository(): TransactionContactRepository {
-        if (!isset($this->repositories['TransactionContactRepository'])) {
-            $this->repositories['TransactionContactRepository'] = new TransactionContactRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['TransactionContactRepository'];
+        return $this->getRepositoryFactory()->get(TransactionContactRepository::class);
     }
 
-    /**
-     * Get CapacityReservationRepository instance
-     *
-     * @return CapacityReservationRepository
-     */
     public function getCapacityReservationRepository(): CapacityReservationRepository {
-        if (!isset($this->repositories['CapacityReservationRepository'])) {
-            $this->repositories['CapacityReservationRepository'] = new CapacityReservationRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['CapacityReservationRepository'];
+        return $this->getRepositoryFactory()->get(CapacityReservationRepository::class);
     }
 
-    /**
-     * Get RouteCancellationRepository instance
-     *
-     * @return RouteCancellationRepository
-     */
     public function getRouteCancellationRepository(): RouteCancellationRepository {
-        if (!isset($this->repositories['RouteCancellationRepository'])) {
-            $this->repositories['RouteCancellationRepository'] = new RouteCancellationRepository(
-                $this->pdo
-            );
-        }
-        return $this->repositories['RouteCancellationRepository'];
+        return $this->getRepositoryFactory()->get(RouteCancellationRepository::class);
     }
 
     /**
