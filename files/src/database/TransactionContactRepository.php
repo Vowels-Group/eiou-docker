@@ -6,6 +6,7 @@ namespace Eiou\Database;
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use Eiou\Formatters\TransactionFormatter;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -79,6 +80,7 @@ class TransactionContactRepository extends AbstractRepository {
 
             return $received - $sent;
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get contact balance: ' . $e->getMessage(), 'WARNING');
             return 0;
         }
     }
@@ -153,6 +155,7 @@ class TransactionContactRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get all contact balances: ' . $e->getMessage(), 'WARNING');
             return array_fill_keys($contactPubkeys, []);
         }
 
@@ -222,6 +225,7 @@ class TransactionContactRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get contact transactions: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 

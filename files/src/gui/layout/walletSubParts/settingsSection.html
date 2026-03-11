@@ -845,7 +845,7 @@
                 <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
                 <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
                 <tr><td><strong>Server Software</strong></td><td><?php echo htmlspecialchars($_SERVER['SERVER_SOFTWARE'] ?? 'N/A'); ?></td></tr>
-                <tr><td><strong>App Debug Mode</strong></td><td><?php echo \Eiou\Core\Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
+                <tr><td><strong>App Debug Mode</strong></td><td><?php echo \Eiou\Core\Constants::isDebug() ? 'Enabled' : 'Disabled'; ?></td></tr>
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
                 <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>

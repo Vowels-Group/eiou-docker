@@ -1235,7 +1235,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         try {
                             $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
                         } catch (\Exception $e) {
-                            // Credit may already exist
+                            Logger::getInstance()->log('Credit may already exist for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                         }
                     }
 
@@ -1711,7 +1711,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             try {
                                 $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
                             } catch (\Exception $e) {
-                                // Credit may already exist
+                                Logger::getInstance()->log('Credit may already exist during acceptance for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                             }
                         }
 

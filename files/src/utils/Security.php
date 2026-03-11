@@ -165,7 +165,7 @@ class Security {
         Logger::getInstance()->logException($e, [], 'ERROR');
 
         // Return generic message to user
-        if ($debug && (Constants::get('APP_ENV') === 'development' || Constants::get('APP_DEBUG') === 'true')) {
+        if ($debug && (Constants::get('APP_ENV') === 'development' || Constants::isDebug())) {
             return "Error: " . $e->getMessage();
         }
 

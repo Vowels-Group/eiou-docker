@@ -179,6 +179,11 @@ services:
       # FEATURE FLAGS (optional)
       # -----------------------------------------------------------------------
 
+      # APP_DEBUG (optional)
+      # Enables debug logging to the database (visible in the GUI debug panel).
+      # Default: false (secure-by-default). Enable for development/testing.
+      # - APP_DEBUG=true
+
       # EIOU_TEST_MODE (optional)
       # Enables manual message processing (eiou in / eiou out commands)
       # and bypasses rate limiting. For development/testing ONLY.

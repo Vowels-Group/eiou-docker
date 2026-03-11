@@ -72,10 +72,13 @@ class BackupService implements BackupServiceInterface
         $dbPass = $dbConfig['dbPass'];
 
         // Create temporary MySQL config file for secure password passing
-        // Use /dev/shm (RAM-backed tmpfs) to avoid writing credentials to disk
+        // Use /dev/shm (RAM-backed tmpfs) to avoid writing credentials to disk.
+        // Set umask before tempnam() so the file is created with 0600 permissions
+        // atomically — eliminates the TOCTOU race between creation and chmod.
         $tmpDir = is_dir('/dev/shm') ? '/dev/shm' : '/tmp';
+        $oldUmask = umask(0177); // Only owner read/write (0600)
         $tempCnf = tempnam($tmpDir, 'mysql_');
-        chmod($tempCnf, 0600);
+        umask($oldUmask);
         file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
 
         try {

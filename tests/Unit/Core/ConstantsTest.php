@@ -280,7 +280,7 @@ class ConstantsTest extends TestCase
     {
         $this->assertEquals('development', Constants::APP_ENV);
         $this->assertEquals('0.0.1', Constants::APP_VERSION);
-        $this->assertTrue(Constants::APP_DEBUG);
+        $this->assertFalse(Constants::APP_DEBUG);
     }
 
     /**

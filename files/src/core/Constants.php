@@ -40,10 +40,12 @@ class Constants {
     }
 
     // Development/Production
-    // NOTE: Set APP_ENV to 'production' and APP_DEBUG to false for production deployments
+    // APP_DEBUG defaults to false (secure-by-default). Override via APP_DEBUG env var
+    // in development environments (e.g. docker-compose: APP_DEBUG=true).
+    // Use Constants::isDebug() to check debug state — it respects the env override.
     const APP_ENV = 'development';
     const APP_VERSION = '0.0.1';
-    const APP_DEBUG = true;
+    const APP_DEBUG = false;
 
     // Database schema version — bump this when adding new migrations in DatabaseSetup.php.
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)

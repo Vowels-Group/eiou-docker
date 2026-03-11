@@ -6,6 +6,7 @@ namespace Eiou\Database;
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use Eiou\Formatters\TransactionFormatter;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -240,6 +241,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to check new transactions: ' . $e->getMessage(), 'WARNING');
             return false;
         }
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -308,6 +310,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get sent transactions: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -346,6 +349,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get received transactions: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -386,6 +390,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get received transactions by address: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -427,6 +432,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get sent transactions by address: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -461,6 +467,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get transactions: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -533,6 +540,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
         } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get transaction history: ' . $e->getMessage(), 'WARNING');
             return [];
         }
 
@@ -723,6 +731,7 @@ class TransactionRepository extends AbstractRepository {
             $this->commit();
         } catch (PDOException $e) {
             $this->rollBack();
+            Logger::getInstance()->log('Failed to insert transaction: ' . $e->getMessage(), 'ERROR');
         }
                 
 
