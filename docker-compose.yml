@@ -319,9 +319,9 @@ services:
         reservations:
           memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
+      test: ["CMD", "curl", "-sf", "http://localhost/api/health"]
       interval: 30s
-      timeout: 20s
+      timeout: 10s
       retries: 5
       start_period: 120s
 
