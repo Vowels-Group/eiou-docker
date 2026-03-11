@@ -194,7 +194,7 @@ foreach ($results as &$result) {
 
 **Fix:** Break down using composition, strategy pattern, or command/handler pattern. Extract validation into dedicated validators.
 
-**CliService remediation:** Extracted `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines), `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines). Facade/delegation pattern maintains backward compatibility.
+**CliService remediation:** Extracted `CliP2pApprovalService` (414 lines), `CliDlqService` (285 lines), `CliSettingsService` (1,328 lines), `CliHelpService` (929 lines). CliService delegates to sub-services.
 
 ---
 
@@ -207,7 +207,7 @@ ServiceContainer contains 40+ repetitive repository getter methods. No factory o
 
 **Fix:** Implement `RepositoryFactory` class. Would reduce ServiceContainer size by ~50%.
 
-**Resolution:** Created `RepositoryFactory` class (`files/src/database/RepositoryFactory.php`) with generic `get(class-string)` method, validation, caching, `has()`, and `set()` (for testing). Replaced 25 near-identical lazy-loading repository getter methods in `ServiceContainer` (~345 lines of boilerplate) with one-line delegations to the factory (~100 lines). All typed getter methods preserved for backward compatibility. New `getRepositoryFactory()` method exposes the factory for direct use by services. Unit tests added (`tests/Unit/Database/RepositoryFactoryTest.php`, 9 tests, 26 assertions).
+**Resolution:** Created `RepositoryFactory` class (`files/src/database/RepositoryFactory.php`) with generic `get(class-string)` method, validation, caching, `has()`, and `set()` (for testing). Replaced 25 near-identical lazy-loading repository getter methods in `ServiceContainer` (~345 lines of boilerplate) with one-line delegations to the factory (~100 lines). New `getRepositoryFactory()` method exposes the factory for direct use by services. Unit tests added (`tests/Unit/Database/RepositoryFactoryTest.php`, 9 tests, 26 assertions).
 
 ---
 
