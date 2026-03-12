@@ -1,0 +1,46 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!-- Legal Notice — displayed below the login form.
+     Legal notice text is loaded from /app/scripts/legal-notice.txt (same file
+     used by the container startup banner), so a single edit updates both. -->
+<div class="login-notice">
+    <?php
+    $noticeFile = '/app/scripts/legal-notice.txt';
+    if (file_exists($noticeFile)):
+        $raw = trim(file_get_contents($noticeFile));
+        $allLines = explode("\n", $raw);
+        $noticeTitle = htmlspecialchars(trim($allLines[0]));
+        // Body starts after the title and any blank lines following it
+        $i = 1;
+        while ($i < count($allLines) && trim($allLines[$i]) === '') { $i++; }
+        $bodyText = implode("\n", array_slice($allLines, $i));
+        // Split into paragraphs on blank lines, then join hard-wrapped lines
+        $paragraphs = preg_split('/\n\s*\n/', trim($bodyText));
+    ?>
+    <details class="legal-notice">
+        <summary><?php echo $noticeTitle; ?></summary>
+        <div class="legal-notice-body">
+            <?php foreach ($paragraphs as $para):
+                $para = trim($para);
+                if ($para === '') continue;
+                // Join hard-wrapped lines but keep breaks before numbered items
+                $lines = explode("\n", $para);
+                $text = '';
+                foreach ($lines as $l) {
+                    $l = trim($l);
+                    if ($l === '') continue;
+                    if (preg_match('/^\d+\./', $l) && $text !== '') {
+                        $text .= "\n" . $l;
+                    } elseif ($text === '') {
+                        $text = $l;
+                    } else {
+                        $text .= ' ' . $l;
+                    }
+                }
+            ?>
+            <p><?php echo nl2br(htmlspecialchars($text)); ?></p>
+            <?php endforeach; ?>
+        </div>
+    </details>
+    <?php endif; ?>
+</div>

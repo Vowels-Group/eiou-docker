@@ -10,12 +10,30 @@
     <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/authentication-form.css");?></style>
 </head>
 <body>
+    <!-- Alpha Warning — loaded from /app/scripts/alpha-warning.txt -->
+    <?php
+    $warningFile = '/app/scripts/alpha-warning.txt';
+    if (file_exists($warningFile)):
+        $warnLines = explode("\n", trim(file_get_contents($warningFile)));
+        $warnTitle = htmlspecialchars(trim($warnLines[0]));
+        $warnBody = [];
+        for ($w = 1; $w < count($warnLines); $w++) {
+            $l = trim($warnLines[$w]);
+            if ($l !== '') { $warnBody[] = htmlspecialchars($l); }
+        }
+    ?>
+    <div class="alpha-warning">
+        <strong>&#9888; <?php echo $warnTitle; ?></strong>
+        <p><?php echo implode(' ', $warnBody); ?></p>
+    </div>
+    <?php endif; ?>
+
     <!-- Banner -->
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/banner.html");?>
     <div class="auth-container">
         <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
         <p>Please enter your authentication code to access your wallet</p>
-        
+
         <form class="auth-form" method="POST">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($secureSession->getCSRFToken()); ?>">
             <input type="password" name="authcode" class="auth-input" placeholder="Enter auth code" required autocomplete="off">
@@ -30,6 +48,10 @@
             </div>
         <?php endif; ?>
     </div>
+
+    <!-- Legal Notice (collapsible) -->
+    <?php require_once("/app/eiou/src/gui/layout/walletSubParts/loginNotice.html"); ?>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner">

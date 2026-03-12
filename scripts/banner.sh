@@ -22,17 +22,29 @@ box_rule() {
     printf '\033[0;31m%s\033[0m\n' "$_HR"
 }
 
-# Full alpha/testing warning banner - shown at container start
+# Full alpha/testing warning banner - loaded from separate file for easy editing.
 show_alpha_warning() {
+    local warning_file="/app/scripts/alpha-warning.txt"
+    if [ ! -f "$warning_file" ]; then
+        return 0
+    fi
+
+    local first_line=1
     echo ""
     box_rule
     echo ""
-    printf '\033[1;33m  WARNING: ALPHA/STAGING VERSION\033[0m\n'
-    echo ""
-    printf '  * This is an alpha/staging version of eIOU.\n'
-    printf '  * Do NOT use this for real financial transactions.\n'
-    printf '  * All data may be reset without notice.\n'
-    printf '  * For testing purposes only.\n'
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [ "$first_line" -eq 1 ]; then
+            printf '\033[1;33m  %s\033[0m\n' "$line"
+            first_line=0
+        elif [ -z "$line" ]; then
+            echo ""
+        else
+            printf '  %s\n' "$line"
+        fi
+    done < "$warning_file"
+
     echo ""
     box_rule
     echo ""

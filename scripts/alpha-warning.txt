@@ -1,0 +1,6 @@
+WARNING: ALPHA/STAGING VERSION
+
+This is an alpha/staging version of eIOU.
+Do NOT use this for real financial transactions.
+All data may be reset without notice.
+For testing purposes only.
