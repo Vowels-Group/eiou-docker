@@ -621,7 +621,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     contactName=$(docker exec ${sourceContainer} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${targetAddress}');
+        \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->lookupByAddress('${MODE}', '${targetAddress}');
         echo \$contact['name'] ?? '';
     " 2>/dev/null || echo "")
 

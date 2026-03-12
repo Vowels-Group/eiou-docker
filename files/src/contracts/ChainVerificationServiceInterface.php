@@ -36,15 +36,4 @@ interface ChainVerificationServiceInterface
      *   - error: string|null - Error message if failed
      */
     public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey, ?string $currency = null): array;
-
-    /**
-     * Set the sync trigger for chain repair operations (interface for loose coupling)
-     *
-     * Uses setter injection to avoid circular dependency between
-     * ChainVerificationService and SyncService.
-     *
-     * @param SyncTriggerInterface $sync The sync trigger interface
-     * @return void
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void;
 }

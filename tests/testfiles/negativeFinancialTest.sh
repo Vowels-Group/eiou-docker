@@ -306,7 +306,7 @@ echo -e "\n\t-> Testing send with amount exceeding credit limit (1000000 USD via
 currentBalance=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$balances = \$app->services->getBalanceRepository()->getAllBalances();
+    \$balances = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getAllBalances();
     \$total = 0;
     foreach (\$balances as \$b) {
         if (isset(\$b['received']) && isset(\$b['sent'])) {
@@ -343,7 +343,7 @@ else
         txStatus=$(docker exec ${testContainer} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            echo \$app->services->getTransactionRepository()->getStatusByTxid('${txid}') ?? 'unknown';
+            echo \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getStatusByTxid('${txid}') ?? 'unknown';
         " 2>/dev/null || echo "unknown")
         if [[ "$txStatus" == "rejected" || "$txStatus" == "failed" || "$txStatus" == "cancelled" ]]; then
             break
@@ -364,7 +364,7 @@ else
         rejectionReason=$(docker exec ${testContainer} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$txArray = \$app->services->getTransactionRepository()->getByTxid('${txid}');
+            \$txArray = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getByTxid('${txid}');
             \$tx = \$txArray[0] ?? [];
             echo \$tx['rejection_reason'] ?? \$tx['error'] ?? \$tx['message'] ?? '';
         " 2>/dev/null || echo "")

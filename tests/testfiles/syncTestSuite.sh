@@ -103,14 +103,14 @@ while [ $waitElapsed -lt 15 ]; do
     senderStatus=$(docker exec ${sender} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('${receiverTransportType}', '${receiverAddress}');
+        \$status = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${receiverTransportType}', '${receiverAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
     receiverStatus=$(docker exec ${receiver} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('${senderTransportType}', '${senderAddress}');
+        \$status = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${senderTransportType}', '${senderAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
@@ -134,7 +134,7 @@ fi
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -145,7 +145,7 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 receiverPubkeyHash=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -156,7 +156,7 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -167,7 +167,7 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 senderPubkeyHash=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -771,7 +771,7 @@ echo -e "\n\t-> Testing getTransactionsBetweenPubkeys includes cancelled"
 includeCancelledResult=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$transactionRepo = \$app->services->getTransactionRepository();
+    \$transactionRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
     // Verify method exists
     if (method_exists(\$transactionRepo, 'getTransactionsBetweenPubkeys')) {
@@ -1179,7 +1179,7 @@ echo -e "\n\t-> Testing getLocalTransactionByPreviousTxid method exists"
 conflictDetectionResult=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$transactionChainRepo = \$app->services->getTransactionChainRepository();
+    \$transactionChainRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class);
 
     if (method_exists(\$transactionChainRepo, 'getLocalTransactionByPreviousTxid')) {
         echo 'EXISTS';
@@ -1203,7 +1203,7 @@ echo -e "\n\t-> Testing getByPreviousTxid method exists"
 getByPrevTxidResult=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$transactionChainRepo = \$app->services->getTransactionChainRepository();
+    \$transactionChainRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class);
 
     if (method_exists(\$transactionChainRepo, 'getByPreviousTxid')) {
         echo 'EXISTS';
@@ -1398,7 +1398,7 @@ if [[ "$baseTxid" != "NOT_FOUND" ]] && [[ "$baseTxid" != "ERROR" ]]; then
         \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$userContext = \$app->services->getCurrentUser();
-        \$transactionRepo = \$app->services->getTransactionRepository();
+        \$transactionRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
         // Get sender and receiver pubkeys
         \$senderPubkey = \$userContext->getPublicKey();

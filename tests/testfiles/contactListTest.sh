@@ -46,10 +46,10 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     contactData=$(docker exec ${containerKeys[0]} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+        \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
         if (\$contact) {
             \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contact['pubkey']);
-            \$currencies = \$app->services->getContactCurrencyRepository()->getContactCurrencies(\$pubkeyHash);
+            \$currencies = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class)->getContactCurrencies(\$pubkeyHash);
             \$contact['currencies'] = \$currencies;
             echo json_encode(\$contact);
         } else {
@@ -65,10 +65,10 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         contactData=$(docker exec ${containerKeys[0]} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+            \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
             if (\$contact) {
                 \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contact['pubkey']);
-                \$currencies = \$app->services->getContactCurrencyRepository()->getContactCurrencies(\$pubkeyHash);
+                \$currencies = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class)->getContactCurrencies(\$pubkeyHash);
                 \$contact['currencies'] = \$currencies;
                 echo json_encode(\$contact);
             } else {
@@ -156,14 +156,14 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Check forward relationship
     forwardExists=$(docker exec ${containerKeys[0]} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+        if(\Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
     # Check reverse relationship
     reverseExists=$(docker exec ${containerKeys[1]} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+        if(\Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
@@ -176,13 +176,13 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         # Retry checks
         forwardExists=$(docker exec ${containerKeys[0]} php -r "
             require_once('${BOOTSTRAP_PATH}');
-            if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+            if(\Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
             echo '1';} else{ echo '0';}
         " 2>/dev/null || echo "0")
 
         reverseExists=$(docker exec ${containerKeys[1]} php -r "
             require_once('${BOOTSTRAP_PATH}');
-            if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+            if(\Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
             echo '1';} else{ echo '0';}
         " 2>/dev/null || echo "0")
     fi
@@ -210,7 +210,7 @@ for container in "${containers[@]}"; do
     # Get contact count from database
     contactCount=$(docker exec ${container} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->countAcceptedContacts();
+        echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->countAcceptedContacts();
     " 2>/dev/null || echo "0")
 
     if [[ "$contactCount" -gt "0" ]]; then

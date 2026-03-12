@@ -58,7 +58,7 @@ for routingPair in "${!routingTests[@]}"; do
             
             initialRelayBalances[$relay]=$(docker exec ${relay} php -r "
                 require_once('${BOOTSTRAP_PATH}');
-                \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                \$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
                 echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
             " 2>/dev/null || echo "0")
         done
@@ -73,7 +73,7 @@ for routingPair in "${!routingTests[@]}"; do
             firstRelay="${intermediates[0]}"
             relay_balance_cmd="php -r \"
                 require_once('${BOOTSTRAP_PATH}');
-                \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                \\\$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
                 echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
             \""
             wait_for_balance_change "$firstRelay" "${initialRelayBalances[$firstRelay]}" "$relay_balance_cmd" 20 "relay fee" > /dev/null 2>&1 || true
@@ -84,7 +84,7 @@ for routingPair in "${!routingTests[@]}"; do
         for relay in "${intermediates[@]}"; do
             newRelayBalance=$(docker exec ${relay} php -r "
                 require_once('${BOOTSTRAP_PATH}');
-                \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                \$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
                 echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
             " 2>/dev/null || echo "0")
 
@@ -106,7 +106,7 @@ for routingPair in "${!routingTests[@]}"; do
             for relay in "${intermediates[@]}"; do
                 newRelayBalance=$(docker exec ${relay} php -r "
                     require_once('${BOOTSTRAP_PATH}');
-                    \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                    \$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
                     echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
                 " 2>/dev/null || echo "0")
 

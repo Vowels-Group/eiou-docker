@@ -184,7 +184,7 @@ echo -e "\t-> Checking P2pRepository tracking methods on ${testSender}"
 p2pRepoCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getP2pRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\P2pRepository::class);
     \$methods = ['updateContactsSentCount', 'incrementContactsRespondedCount', 'getTrackingCounts'];
     \$missing = [];
     foreach (\$methods as \$m) {
@@ -210,7 +210,7 @@ echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} (default fast 
 # Get initial balance of receiver
 initialBalanceFast=$(docker exec ${testReceiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+    \$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
     echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
 " 2>/dev/null || echo "0")
 
@@ -224,7 +224,7 @@ fastTimeout=$( [[ "${MODE:-http}" == "tor" ]] && echo 90 || echo 30 )
 echo -e "\t   Waiting for fast mode routing (timeout: ${fastTimeout}s)..."
 balance_cmd="php -r \"
     require_once('${BOOTSTRAP_PATH}');
-    \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+    \\\$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
     echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
 \""
 
@@ -353,7 +353,7 @@ echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} with --best (b
 # Get initial balance of receiver
 initialBalanceBest=$(docker exec ${testReceiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+    \$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
     echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
 " 2>/dev/null || echo "0")
 

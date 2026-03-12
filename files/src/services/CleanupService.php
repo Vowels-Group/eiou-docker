@@ -9,6 +9,7 @@ use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\Rp2pServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
@@ -140,7 +141,8 @@ class CleanupService implements CleanupServiceInterface {
         BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
-        MessageDeliveryServiceInterface $messageDeliveryService
+        MessageDeliveryServiceInterface $messageDeliveryService,
+        RepositoryFactory $repositoryFactory
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
@@ -153,6 +155,12 @@ class CleanupService implements CleanupServiceInterface {
         $this->messageDeliveryService = $messageDeliveryService;
 
         $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
+
+        $this->rp2pCandidateRepository = $repositoryFactory->get(\Eiou\Database\Rp2pCandidateRepository::class);
+        $this->p2pSenderRepository = $repositoryFactory->get(\Eiou\Database\P2pSenderRepository::class);
+        $this->p2pRelayedContactRepository = $repositoryFactory->get(\Eiou\Database\P2pRelayedContactRepository::class);
+        $this->capacityReservationRepository = $repositoryFactory->get(\Eiou\Database\CapacityReservationRepository::class);
+        $this->routeCancellationRepository = $repositoryFactory->get(\Eiou\Database\RouteCancellationRepository::class);
     }
 
     /**
@@ -168,17 +176,6 @@ class CleanupService implements CleanupServiceInterface {
     }
 
     /**
-     * Set the Rp2pCandidateRepository for best-fee mode candidate handling
-     *
-     * @param Rp2pCandidateRepository $rp2pCandidateRepository
-     * @return void
-     */
-    public function setRp2pCandidateRepository(Rp2pCandidateRepository $rp2pCandidateRepository): void
-    {
-        $this->rp2pCandidateRepository = $rp2pCandidateRepository;
-    }
-
-    /**
      * Set the Rp2pService for best-fee route selection on expiration
      *
      * @param Rp2pServiceInterface $rp2pService
@@ -190,28 +187,6 @@ class CleanupService implements CleanupServiceInterface {
     }
 
     /**
-     * Set the P2pSenderRepository for cleaning up old sender records
-     *
-     * @param P2pSenderRepository $p2pSenderRepository
-     * @return void
-     */
-    public function setP2pSenderRepository(P2pSenderRepository $p2pSenderRepository): void
-    {
-        $this->p2pSenderRepository = $p2pSenderRepository;
-    }
-
-    /**
-     * Set the P2pRelayedContactRepository for cleaning up old relayed contact records
-     *
-     * @param P2pRelayedContactRepository $p2pRelayedContactRepository
-     * @return void
-     */
-    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $p2pRelayedContactRepository): void
-    {
-        $this->p2pRelayedContactRepository = $p2pRelayedContactRepository;
-    }
-
-    /**
      * Set the P2pService for cascade cancel notification on P2P expiration
      *
      * @param P2pServiceInterface $p2pService
@@ -220,14 +195,6 @@ class CleanupService implements CleanupServiceInterface {
     public function setP2pService(P2pServiceInterface $p2pService): void
     {
         $this->p2pService = $p2pService;
-    }
-
-    public function setCapacityReservationRepository(CapacityReservationRepository $repo): void {
-        $this->capacityReservationRepository = $repo;
-    }
-
-    public function setRouteCancellationRepository(RouteCancellationRepository $repo): void {
-        $this->routeCancellationRepository = $repo;
     }
 
     /**

@@ -68,17 +68,6 @@ interface TransactionProcessingServiceInterface
     public function processPendingTransactions(): int;
 
     /**
-     * Set the sync trigger (interface for loose coupling)
-     *
-     * Required for transaction chain synchronization when previous_txid
-     * validation fails.
-     *
-     * @param SyncTriggerInterface $sync Sync trigger interface
-     * @return void
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void;
-
-    /**
      * Set the P2P service (setter injection for circular dependency)
      *
      * Required for fallback to P2P when direct transaction is rejected.

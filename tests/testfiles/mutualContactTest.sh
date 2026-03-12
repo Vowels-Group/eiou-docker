@@ -107,7 +107,7 @@ echo -e "\t   Result: $(echo "${addResultA}" | head -1)"
 # Check A's contact status — should be 'pending' (waiting for B to accept)
 statusA_step1=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+    echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
         '${transportB}','${addressB}'
     );
 " 2>/dev/null || echo "error")
@@ -124,14 +124,14 @@ sleep 2
 # Check both sides — both should be 'accepted' now
 statusA=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+    echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
         '${transportB}','${addressB}'
     );
 " 2>/dev/null || echo "error")
 
 statusB=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+    echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
         '${transportA}','${addressA}'
     );
 " 2>/dev/null || echo "error")
@@ -151,14 +151,14 @@ else
 
     statusA=$(docker exec ${containerA} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+        echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
             '${transportB}','${addressB}'
         );
     " 2>/dev/null || echo "error")
 
     statusB=$(docker exec ${containerB} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+        echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
             '${transportA}','${addressA}'
         );
     " 2>/dev/null || echo "error")
@@ -182,7 +182,7 @@ countA=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     if (\$contact) {
         \$hash = hash('sha256', \$contact['pubkey']);
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM contacts WHERE pubkey_hash = '\" . \$hash . \"'\")->fetchColumn();
@@ -196,7 +196,7 @@ countB=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportA}', '${addressA}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportA}', '${addressA}');
     if (\$contact) {
         \$hash = hash('sha256', \$contact['pubkey']);
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM contacts WHERE pubkey_hash = '\" . \$hash . \"'\")->fetchColumn();
@@ -225,7 +225,7 @@ txCountA=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     if (\$contact) {
         \$hash = hash('sha256', \$contact['pubkey']);
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE memo = 'contact' AND (sender_public_key_hash = '\" . \$hash . \"' OR receiver_public_key_hash = '\" . \$hash . \"')\")->fetchColumn();
@@ -239,7 +239,7 @@ txCountB=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportA}', '${addressA}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportA}', '${addressA}');
     if (\$contact) {
         \$hash = hash('sha256', \$contact['pubkey']);
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE memo = 'contact' AND (sender_public_key_hash = '\" . \$hash . \"' OR receiver_public_key_hash = '\" . \$hash . \"')\")->fetchColumn();
@@ -266,13 +266,13 @@ totaltests=$((totaltests + 1))
 
 nameOnA=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    \$contact = \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contact = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact ? \$contact['name'] : 'NOT_FOUND';
 " 2>/dev/null || echo "error")
 
 nameOnB=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    \$contact = \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactByAddress('${transportA}', '${addressA}');
+    \$contact = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportA}', '${addressA}');
     echo \$contact ? \$contact['name'] : 'NOT_FOUND';
 " 2>/dev/null || echo "error")
 

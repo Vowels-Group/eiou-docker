@@ -7,6 +7,7 @@ use Eiou\Utils\Logger;
 use Eiou\Contracts\MessageServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\TransactionContactRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
@@ -117,23 +118,14 @@ class MessageService implements MessageServiceInterface {
     private TransactionContactRepository $transactionContactRepository;
 
     /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void {
-        $this->syncTrigger = $sync;
-    }
-
-    /**
-     * Get the sync trigger (must be injected via setSyncTrigger)
+     * Get the sync trigger (must be injected via constructor)
      *
      * @return SyncTriggerInterface
      * @throws RuntimeException If sync trigger was not injected
      */
     private function getSyncTrigger(): SyncTriggerInterface {
         if ($this->syncTrigger === null) {
-            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
+            throw new RuntimeException('SyncTrigger not injected. Pass $syncTrigger to constructor or ensure ServiceContainer properly injects the dependency.');
         }
         return $this->syncTrigger;
     }
@@ -158,7 +150,9 @@ class MessageService implements MessageServiceInterface {
         TransactionContactRepository $transactionContactRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?SyncTriggerInterface $syncTrigger = null,
+        ?RepositoryFactory $repositoryFactory = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -175,6 +169,12 @@ class MessageService implements MessageServiceInterface {
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
         $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
+        if ($syncTrigger !== null) {
+            $this->syncTrigger = $syncTrigger;
+        }
+        if ($repositoryFactory !== null) {
+            $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        }
     }
 
     /**
@@ -196,14 +196,6 @@ class MessageService implements MessageServiceInterface {
         $this->chainDropService = $service;
     }
 
-    /**
-     * Set the contact currency repository for direction-aware currency tracking
-     *
-     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
-     */
-    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
-        $this->contactCurrencyRepository = $repo;
-    }
 
     /**
      * Send a message with optional delivery tracking

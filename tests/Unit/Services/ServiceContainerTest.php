@@ -17,6 +17,18 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\ServiceContainer;
 use Eiou\Core\UserContext;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\ApiKeyRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\DeadLetterQueueRepository;
+use Eiou\Database\DebugRepository;
+use Eiou\Database\HeldTransactionRepository;
+use Eiou\Database\MessageDeliveryRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\TransactionRepository;
 use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
@@ -169,8 +181,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getAddressRepository();
-        $this->assertInstanceOf(\Eiou\Database\AddressRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(AddressRepository::class);
+        $this->assertInstanceOf(AddressRepository::class, $repo);
     }
 
     /**
@@ -180,8 +192,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo1 = $container->getAddressRepository();
-        $repo2 = $container->getAddressRepository();
+        $repo1 = $container->getRepositoryFactory()->get(AddressRepository::class);
+        $repo2 = $container->getRepositoryFactory()->get(AddressRepository::class);
 
         $this->assertSame($repo1, $repo2);
     }
@@ -193,8 +205,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getBalanceRepository();
-        $this->assertInstanceOf(\Eiou\Database\BalanceRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(BalanceRepository::class);
+        $this->assertInstanceOf(BalanceRepository::class, $repo);
     }
 
     /**
@@ -204,8 +216,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getContactRepository();
-        $this->assertInstanceOf(\Eiou\Database\ContactRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(ContactRepository::class);
+        $this->assertInstanceOf(ContactRepository::class, $repo);
     }
 
     /**
@@ -215,8 +227,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getP2pRepository();
-        $this->assertInstanceOf(\Eiou\Database\P2pRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(P2pRepository::class);
+        $this->assertInstanceOf(P2pRepository::class, $repo);
     }
 
     /**
@@ -226,8 +238,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getRp2pRepository();
-        $this->assertInstanceOf(\Eiou\Database\Rp2pRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(Rp2pRepository::class);
+        $this->assertInstanceOf(Rp2pRepository::class, $repo);
     }
 
     /**
@@ -237,8 +249,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getTransactionRepository();
-        $this->assertInstanceOf(\Eiou\Database\TransactionRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(TransactionRepository::class);
+        $this->assertInstanceOf(TransactionRepository::class, $repo);
     }
 
     /**
@@ -248,8 +260,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getDebugRepository();
-        $this->assertInstanceOf(\Eiou\Database\DebugRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(DebugRepository::class);
+        $this->assertInstanceOf(DebugRepository::class, $repo);
     }
 
     /**
@@ -259,8 +271,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getApiKeyRepository();
-        $this->assertInstanceOf(\Eiou\Database\ApiKeyRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(ApiKeyRepository::class);
+        $this->assertInstanceOf(ApiKeyRepository::class, $repo);
     }
 
     /**
@@ -270,8 +282,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getMessageDeliveryRepository();
-        $this->assertInstanceOf(\Eiou\Database\MessageDeliveryRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(MessageDeliveryRepository::class);
+        $this->assertInstanceOf(MessageDeliveryRepository::class, $repo);
     }
 
     /**
@@ -281,8 +293,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getDeadLetterQueueRepository();
-        $this->assertInstanceOf(\Eiou\Database\DeadLetterQueueRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
+        $this->assertInstanceOf(DeadLetterQueueRepository::class, $repo);
     }
 
     /**
@@ -292,8 +304,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getHeldTransactionRepository();
-        $this->assertInstanceOf(\Eiou\Database\HeldTransactionRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(HeldTransactionRepository::class);
+        $this->assertInstanceOf(HeldTransactionRepository::class, $repo);
     }
 
     /**
@@ -303,8 +315,8 @@ class ServiceContainerTest extends TestCase
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        $repo = $container->getTransactionChainRepository();
-        $this->assertInstanceOf(\Eiou\Database\TransactionChainRepository::class, $repo);
+        $repo = $container->getRepositoryFactory()->get(TransactionChainRepository::class);
+        $this->assertInstanceOf(TransactionChainRepository::class, $repo);
     }
 
     // =========================================================================

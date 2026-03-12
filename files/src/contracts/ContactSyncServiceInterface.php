@@ -29,14 +29,6 @@ interface ContactSyncServiceInterface
     // =========================================================================
 
     /**
-     * Set the sync trigger for chain synchronization operations.
-     *
-     * @param SyncTriggerInterface $sync The sync trigger implementation
-     * @return void
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void;
-
-    /**
      * Get the current sync trigger.
      *
      * @return SyncTriggerInterface|null The sync trigger or null if not set

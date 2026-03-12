@@ -4,6 +4,7 @@
 namespace Eiou\Services\Utilities;
 
 use Eiou\Contracts\ValidationUtilityServiceInterface;
+use Eiou\Database\BalanceRepository;
 use Eiou\Services\ServiceContainer;
 
 /**
@@ -84,7 +85,7 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
      */
     public function calculateAvailableFunds(array $request): int
     {
-        $balanceRepository = $this->container->getBalanceRepository();
+        $balanceRepository = $this->container->getRepositoryFactory()->get(BalanceRepository::class);
         $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
 
         $totalSent = $balanceRepository->getContactSentBalance($pubkey, $request['currency']);

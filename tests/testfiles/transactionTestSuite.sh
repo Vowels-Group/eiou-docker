@@ -84,7 +84,7 @@ echo -e "\n\t-> Testing getTransactionHistory method"
 historyMethodExists=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
     echo method_exists(\$repo, 'getTransactionHistory') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
@@ -103,7 +103,7 @@ echo -e "\n\t-> Testing getByTxid method"
 byTxidMethodExists=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
     echo method_exists(\$repo, 'getByTxid') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
@@ -122,7 +122,7 @@ echo -e "\n\t-> Testing getPreviousTxid method"
 prevTxidMethodExists=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
     echo method_exists(\$repo, 'getPreviousTxid') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
@@ -151,7 +151,7 @@ echo -e "\n\t-> Testing getStatusByMemo method"
 statusByMemoCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
     if (!method_exists(\$repo, 'getStatusByMemo')) {
         echo 'METHOD_NOT_FOUND';
@@ -181,7 +181,7 @@ echo -e "\n\t-> Testing getStatusByTxid method"
 statusByTxidCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
     if (!method_exists(\$repo, 'getStatusByTxid')) {
         echo 'METHOD_NOT_FOUND';
@@ -355,7 +355,7 @@ echo -e "\n\t-> Testing contactTransactionExistsForReceiver method"
 contactExistsCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$txContactRepo = \$app->services->getTransactionContactRepository();
+    \$txContactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
 
     // First check if method exists
     if (!method_exists(\$txContactRepo, 'contactTransactionExistsForReceiver')) {
@@ -384,7 +384,7 @@ echo -e "\n\t-> Testing completeContactTransaction method"
 completeContactCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$txContactRepo = \$app->services->getTransactionContactRepository();
+    \$txContactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
 
     if (method_exists(\$txContactRepo, 'completeContactTransaction')) {
         \$result = \$txContactRepo->completeContactTransaction('fake_public_key_' . time());
@@ -419,7 +419,7 @@ echo -e "\n\t-> Testing getPreviousTxid excludes cancelled"
 prevTxidExclusionCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
+    \$txRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
     // First check if method exists
     if (!method_exists(\$txRepo, 'getPreviousTxid')) {
@@ -452,7 +452,7 @@ echo -e "\n\t-> Testing getTransactionsBetweenPubkeys includes all"
 syncIncludesCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
+    \$txRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
     if (method_exists(\$txRepo, 'getTransactionsBetweenPubkeys')) {
         echo 'METHOD_EXISTS';
@@ -816,7 +816,7 @@ echo -e "\n\t-> Testing updateRecipientSignature method"
 updateRecipSigMethod=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
     echo method_exists(\$repo, 'updateRecipientSignature') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 

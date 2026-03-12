@@ -10,6 +10,8 @@ use Eiou\Utils\Logger;
 use Eiou\Utils\AddressValidator;
 use Eiou\Utils\TorCircuitHealth;
 use Eiou\Services\ServiceContainer;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\ContactRepository;
 use Eiou\Security\PayloadEncryption;
 
 /**
@@ -92,7 +94,7 @@ class TransportUtilityService implements TransportServiceInterface
         } 
         // If provided address/name did not result in a viable transport type 
         //  and default transport mode did not work to compensate, try finding the next possible
-        $transportModes = $this->container->getAddressRepository()->getAllAddressTypes();
+        $transportModes = $this->container->getRepositoryFactory()->get(AddressRepository::class)->getAllAddressTypes();
         unset($transportModes[array_search($transportIndex,$transportModes)]);
         $transportModes = array_values($transportModes);
         while($transportModes !== []){
@@ -112,7 +114,7 @@ class TransportUtilityService implements TransportServiceInterface
      * @return string|null The fallback address
      */
     public function fallbackTransportAddress(array $contactInfo): ?string {
-        $transportModes = $this->container->getAddressRepository()->getAllAddressTypes();
+        $transportModes = $this->container->getRepositoryFactory()->get(AddressRepository::class)->getAllAddressTypes();
         if($transportModes){
             while($transportModes !== []){
                 $transportIndex = array_shift($transportModes);
@@ -131,7 +133,7 @@ class TransportUtilityService implements TransportServiceInterface
      * @return array Array of address type names (e.g., ['http', 'tor'])
      */
     public function getAllAddressTypes(): array {
-        return $this->container->getAddressRepository()->getAllAddressTypes();
+        return $this->container->getRepositoryFactory()->get(AddressRepository::class)->getAllAddressTypes();
     }
 
     /**
@@ -327,7 +329,7 @@ class TransportUtilityService implements TransportServiceInterface
      * @return string|null The HTTP response on success, or null if no fallback available
      */
     private function attemptFallbackDelivery(string $torAddress, string $signedPayload): ?string {
-        $addressRepo = $this->container->getAddressRepository();
+        $addressRepo = $this->container->getRepositoryFactory()->get(AddressRepository::class);
 
         // Look up the recipient's pubkey hash from their TOR address
         $pubkeyHash = $addressRepo->getContactPubkeyHash('tor', $torAddress);
@@ -845,7 +847,7 @@ class TransportUtilityService implements TransportServiceInterface
             if ($recipientPublicKey === null && $recipientAddress !== null) {
                 $transportType = $this->determineTransportType($recipientAddress);
                 if ($transportType !== null) {
-                    $recipientPublicKey = $this->container->getContactRepository()
+                    $recipientPublicKey = $this->container->getRepositoryFactory()->get(ContactRepository::class)
                         ->getPublicKeyFromAddress($transportType, $recipientAddress);
                 }
             }

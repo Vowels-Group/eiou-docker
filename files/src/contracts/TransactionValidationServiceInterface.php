@@ -16,14 +16,6 @@ namespace Eiou\Contracts;
 interface TransactionValidationServiceInterface
 {
     /**
-     * Set the sync trigger (interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger interface
-     * @return void
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void;
-
-    /**
      * Set the transaction service (setter injection for processing)
      *
      * Required because checkTransactionPossible() calls processTransaction()

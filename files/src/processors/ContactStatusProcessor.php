@@ -93,9 +93,9 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
 
         // Get repositories from ServiceContainer directly
-        $this->contactRepository = $app->services->getContactRepository();
-        $this->transactionRepository = $app->services->getTransactionRepository();
-        $this->contactCreditRepository = $app->services->getContactCreditRepository();
+        $this->contactRepository = $app->services->getRepositoryFactory()->get(ContactRepository::class);
+        $this->transactionRepository = $app->services->getRepositoryFactory()->get(TransactionRepository::class);
+        $this->contactCreditRepository = $app->services->getRepositoryFactory()->get(ContactCreditRepository::class);
 
         // Initialize payload builder
         $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);

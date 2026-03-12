@@ -7,7 +7,6 @@ use Eiou\Cli\CliOutputManager;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\ContactManagementServiceInterface;
 use Eiou\Contracts\ContactSyncServiceInterface;
-use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Exceptions\ValidationServiceException; // Used by delegated services
 
 /**
@@ -52,16 +51,6 @@ class ContactService implements ContactServiceInterface
     // =========================================================================
     // SYNC SERVICE DEPENDENCY INJECTION
     // =========================================================================
-
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void
-    {
-        $this->syncService->setSyncTrigger($sync);
-    }
 
     /**
      * Set the message delivery service (for lazy initialization)

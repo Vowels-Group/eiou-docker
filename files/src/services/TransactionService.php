@@ -106,7 +106,8 @@ class TransactionService implements TransactionServiceInterface {
         Logger $secureLogger,
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null,
-        ?HeldTransactionService $heldTransactionService = null
+        ?HeldTransactionService $heldTransactionService = null,
+        ?SyncTriggerInterface $syncTrigger = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -126,6 +127,9 @@ class TransactionService implements TransactionServiceInterface {
         $this->currentUser = $currentUser;
 
         $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
+        if ($syncTrigger !== null) {
+            $this->syncTrigger = $syncTrigger;
+        }
     }
 
     // =========================================================================
@@ -150,18 +154,6 @@ class TransactionService implements TransactionServiceInterface {
 
     public function setSendOperationService(SendOperationServiceInterface $service): void {
         $this->sendOperationService = $service;
-    }
-
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * Note: Primary chain verification is delegated to ChainVerificationService.
-     * This is a fallback for when that service is not available.
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void {
-        $this->syncTrigger = $sync;
     }
 
     public function setP2pService(P2pService $service): void {

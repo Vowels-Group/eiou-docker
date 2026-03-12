@@ -194,7 +194,7 @@ contactCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     try {
         \$app = \Eiou\Core\Application::getInstance();
-        \$contactRepo = \$app->services->getContactRepository();
+        \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
         // Just verify we can query contacts without error
         echo 'CONTACTS_OK';
     } catch (Exception \$e) {
@@ -218,7 +218,7 @@ txCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     try {
         \$app = \Eiou\Core\Application::getInstance();
-        \$txRepo = \$app->services->getTransactionRepository();
+        \$txRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
         // Just verify we can query transactions without error
         echo 'TX_OK';
     } catch (Exception \$e) {

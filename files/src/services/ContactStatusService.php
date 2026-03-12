@@ -11,6 +11,7 @@ use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
@@ -100,15 +101,6 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
 
     /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void {
-        $this->syncTrigger = $sync;
-    }
-
-    /**
      * Get the sync trigger (must be injected via setSyncTrigger)
      *
      * @return SyncTriggerInterface
@@ -128,60 +120,6 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setRateLimiterService(RateLimiterService $service): void {
         $this->rateLimiterService = $service;
-    }
-
-    /**
-     * Set the transaction chain repository (setter injection)
-     *
-     * @param TransactionChainRepository $repo Chain repository
-     */
-    public function setTransactionChainRepository(TransactionChainRepository $repo): void {
-        $this->transactionChainRepository = $repo;
-    }
-
-    /**
-     * Set the chain drop service for auto-proposing drops on mutual gaps
-     *
-     * @param ChainDropServiceInterface $service Chain drop service
-     */
-    public function setChainDropService(ChainDropServiceInterface $service): void {
-        $this->chainDropService = $service;
-    }
-
-    /**
-     * Set the address repository for auto-creating contacts from pings
-     *
-     * @param AddressRepository $repo Address repository
-     */
-    public function setAddressRepository(AddressRepository $repo): void {
-        $this->addressRepository = $repo;
-    }
-
-    /**
-     * Set the balance repository for calculating available credit in pong responses
-     *
-     * @param BalanceRepository $repo Balance repository
-     */
-    public function setBalanceRepository(BalanceRepository $repo): void {
-        $this->balanceRepository = $repo;
-    }
-
-    /**
-     * Set the contact credit repository for storing available credit from pong responses
-     *
-     * @param ContactCreditRepository $repo Contact credit repository
-     */
-    public function setContactCreditRepository(ContactCreditRepository $repo): void {
-        $this->contactCreditRepository = $repo;
-    }
-
-    /**
-     * Set the contact currency repository for multi-currency support
-     *
-     * @param \Eiou\Database\ContactCurrencyRepository $repo Contact currency repository
-     */
-    public function setContactCurrencyRepository(\Eiou\Database\ContactCurrencyRepository $repo): void {
-        $this->contactCurrencyRepository = $repo;
     }
 
     /**
@@ -209,7 +147,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
         ContactRepository $contactRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        RepositoryFactory $repositoryFactory,
+        SyncTriggerInterface $syncTrigger
     ) {
         $this->contactRepository = $contactRepository;
         $this->transactionRepository = $transactionRepository;
@@ -219,6 +159,13 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
         // Initialize payload builder
         $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);
+
+        $this->transactionChainRepository = $repositoryFactory->get(\Eiou\Database\TransactionChainRepository::class);
+        $this->addressRepository = $repositoryFactory->get(\Eiou\Database\AddressRepository::class);
+        $this->balanceRepository = $repositoryFactory->get(\Eiou\Database\BalanceRepository::class);
+        $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
+        $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $this->syncTrigger = $syncTrigger;
     }
 
     /**

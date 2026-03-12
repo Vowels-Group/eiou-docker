@@ -95,7 +95,7 @@ for candidateContainer in "${containers[@]}"; do
     # Get all accepted contact addresses for this container
     contactList=$(docker exec ${candidateContainer} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        \$repo = \Eiou\Core\Application::getInstance()->services->getContactRepository();
+        \$repo = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
         \$addresses = \$repo->getAllSingleAcceptedAddresses('${MODE}');
         echo implode(',', \$addresses);
     " 2>/dev/null || echo "")
@@ -119,14 +119,14 @@ if [[ -n "$dupTestSender" ]]; then
     # Save original names so we can restore them
     dupContact1Name=$(docker exec ${dupTestSender} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        \$repo = \Eiou\Core\Application::getInstance()->services->getContactRepository();
+        \$repo = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
         \$contact = \$repo->lookupByAddress('${MODE}', '${dupContact1Address}');
         echo \$contact ? \$contact->getName() : '';
     " 2>/dev/null || echo "")
 
     dupContact2Name=$(docker exec ${dupTestSender} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        \$repo = \Eiou\Core\Application::getInstance()->services->getContactRepository();
+        \$repo = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
         \$contact = \$repo->lookupByAddress('${MODE}', '${dupContact2Address}');
         echo \$contact ? \$contact->getName() : '';
     " 2>/dev/null || echo "")

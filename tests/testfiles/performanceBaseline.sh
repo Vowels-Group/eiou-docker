@@ -509,7 +509,7 @@ historyTimeResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
 
     \$app = \Eiou\Core\Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
+    \$txRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
 
     \$start = microtime(true);
     \$history = \$txRepo->getTransactionHistory(50, 0); // Get up to 50 transactions
@@ -535,7 +535,7 @@ contactSearchTimeResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
 
     \$app = \Eiou\Core\Application::getInstance();
-    \$contactRepo = \$app->services->getContactRepository();
+    \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
 
     \$start = microtime(true);
     \$contacts = \$contactRepo->searchContacts('test'); // Search for 'test'
@@ -561,7 +561,7 @@ balanceCalcTimeResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
 
     \$app = \Eiou\Core\Application::getInstance();
-    \$balanceRepository = \$app->services->getBalanceRepository();
+    \$balanceRepository = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class);
 
     \$start = microtime(true);
     \$balances = \$balanceRepository->getUserBalance();
@@ -621,8 +621,8 @@ serviceAccessTimeResult=$(docker exec ${testContainer} php -r "
     \$start = microtime(true);
     for (\$i = 0; \$i < 100; \$i++) {
         \$pdo = \$app->services->getPdo();
-        \$txRepo = \$app->services->getTransactionRepository();
-        \$contactRepo = \$app->services->getContactRepository();
+        \$txRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
+        \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
     }
     \$end = microtime(true);
 

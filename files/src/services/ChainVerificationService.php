@@ -42,20 +42,13 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
     public function __construct(
         TransactionChainRepository $transactionChainRepository,
         UserContext $currentUser,
-        Logger $secureLogger
+        Logger $secureLogger,
+        SyncTriggerInterface $syncTrigger
     ) {
         $this->transactionChainRepository = $transactionChainRepository;
         $this->currentUser = $currentUser;
         $this->secureLogger = $secureLogger;
-    }
-
-    /**
-     * Set the sync trigger (accepts interface for loose coupling)
-     *
-     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
-     */
-    public function setSyncTrigger(SyncTriggerInterface $sync): void {
-        $this->syncTrigger = $sync;
+        $this->syncTrigger = $syncTrigger;
     }
 
     /**
