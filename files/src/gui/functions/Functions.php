@@ -134,7 +134,7 @@ $totalEarnings = $currencyUtility->convertMinorToMajor($p2pService->getUserTotal
 
 // Per-currency balance data for future-proof dashboard display
 $totalBalanceByCurrency = [];
-$balancesRaw = $serviceContainer->getBalanceRepository()->getUserBalance();
+$balancesRaw = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalance();
 if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
@@ -165,7 +165,7 @@ foreach ($totalEarningsByCurrency as $item) {
 }
 // totalAvailableCreditByCurrency is populated later, so also check contact_credit directly
 try {
-    $creditCurrencies = $serviceContainer->getContactCreditRepository()->getTotalAvailableCreditByCurrency();
+    $creditCurrencies = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCreditRepository::class)->getTotalAvailableCreditByCurrency();
     foreach ($creditCurrencies as $row) {
         $knownCurrencies[$row['currency']] = true;
     }
@@ -174,7 +174,7 @@ try {
 }
 // Include currencies from accepted contact currency relationships
 try {
-    $acceptedCurrencies = $serviceContainer->getContactCurrencyRepository()->getDistinctAcceptedCurrencies();
+    $acceptedCurrencies = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class)->getDistinctAcceptedCurrencies();
     foreach ($acceptedCurrencies as $cur) {
         $knownCurrencies[$cur] = true;
     }
@@ -273,7 +273,7 @@ $pendingContacts = $contactService->getPendingContactRequests();
 // Exclude contact transactions (tx_type='contact') since those are created as part of
 // the contact request itself — only real transactions indicate a prior relationship
 if (!empty($pendingContacts) && $user->has('public')) {
-    $txRepo = $serviceContainer->getTransactionRepository();
+    $txRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
     $myPubkey = $user->getPublicKey();
     foreach ($pendingContacts as &$pc) {
         $history = $txRepo->getNonContactTransactionsBetweenPubkeys($myPubkey, $pc['pubkey'], 1);
@@ -285,7 +285,7 @@ if (!empty($pendingContacts) && $user->has('public')) {
 // Enrich pending contacts with per-currency data from contact_currencies (direction-aware)
 if (!empty($pendingContacts)) {
     try {
-        $pendingCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+        $pendingCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
         foreach ($pendingContacts as &$pc) {
             $hash = $pc['pubkey_hash'] ?? '';
             if ($hash) {
@@ -308,7 +308,7 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {
     try {
-        $currencyRepo = $serviceContainer->getContactCurrencyRepository();
+        $currencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
         foreach ($pendingUserContacts as &$puc) {
             $hash = $puc['pubkey_hash'] ?? '';
             if ($hash) {
@@ -323,7 +323,7 @@ if (!empty($pendingUserContacts)) {
 // Enrich accepted contacts with pending incoming currency requests
 if (!empty($acceptedContacts)) {
     try {
-        $currencyRepo = $serviceContainer->getContactCurrencyRepository();
+        $currencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
         foreach ($acceptedContacts as &$ac) {
             $hash = $ac['pubkey_hash'] ?? '';
             if ($hash) {
@@ -392,7 +392,7 @@ $addressTypes = $contactService->getAllAddressTypes();
 $chainDropProposalsByContact = [];
 try {
     $chainDropService = $serviceContainer->getChainDropService();
-    $chainDropProposalRepo = $serviceContainer->getChainDropProposalRepository();
+    $chainDropProposalRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ChainDropProposalRepository::class);
 
     $incomingProposals = $chainDropService->getIncomingPendingProposals();
     $outgoingProposals = $chainDropProposalRepo->getOutgoingPending();
@@ -438,7 +438,7 @@ unset($contacts);
 // Shows which txids are valid before/after each gap so users can investigate
 $tcRepo = null;
 try {
-    $tcRepo = $serviceContainer->getTransactionChainRepository();
+    $tcRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class);
 } catch (Exception $e) {
     // Repository not available, skip gap details
 }
@@ -472,7 +472,7 @@ if ($tcRepo && $user->has('public')) {
 // Dead Letter Queue - track newly added items for notification
 $newlyAddedToDlq = [];
 try {
-    $dlqRepository = $serviceContainer->getDeadLetterQueueRepository();
+    $dlqRepository = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
     $currentDlqItems = $dlqRepository->getPendingItems(50);
 
     // Get previously known DLQ item IDs from session
@@ -498,7 +498,7 @@ $dlqItems = [];
 $dlqStats = [];
 $dlqPendingCount = 0;
 try {
-    $dlqRepo = $serviceContainer->getDeadLetterQueueRepository();
+    $dlqRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
     // Always load all items — client-side JS handles tab filtering with no page reload
     $dlqItems = $dlqRepo->getItems(null, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
 
@@ -524,7 +524,7 @@ try {
 $availableCreditByContact = [];
 $totalAvailableCreditByCurrency = [];
 try {
-    $contactCreditRepo = $serviceContainer->getContactCreditRepository();
+    $contactCreditRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCreditRepository::class);
     // Get per-contact credits for merging into contact cards
     foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
         $hash = $c['pubkey_hash'] ?? '';
@@ -552,7 +552,7 @@ try {
 // Fetch per-contact currency configs for multi-currency support
 $contactCurrenciesByHash = [];
 try {
-    $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+    $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
     foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
         $hash = $c['pubkey_hash'] ?? '';
         if ($hash && !isset($contactCurrenciesByHash[$hash])) {

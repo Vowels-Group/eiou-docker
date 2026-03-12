@@ -160,19 +160,19 @@ while [ $waitElapsed -lt 20 ]; do
     statusAB=$(docker exec ${containerA} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        echo \$app->services->getContactRepository()->getContactStatus('${transportB}', '${addressB}') ?? 'none';
+        echo \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${transportB}', '${addressB}') ?? 'none';
     " 2>/dev/null || echo "none")
 
     statusBA=$(docker exec ${containerB} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        echo \$app->services->getContactRepository()->getContactStatus('${transportA}', '${addressA}') ?? 'none';
+        echo \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${transportA}', '${addressA}') ?? 'none';
     " 2>/dev/null || echo "none")
 
     statusBC=$(docker exec ${containerB} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        echo \$app->services->getContactRepository()->getContactStatus('${transportC}', '${addressC}') ?? 'none';
+        echo \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${transportC}', '${addressC}') ?? 'none';
     " 2>/dev/null || echo "none")
 
     if [[ "$statusAB" == "accepted" ]] && [[ "$statusBA" == "accepted" ]] && [[ "$statusBC" == "accepted" ]]; then
@@ -284,7 +284,7 @@ echo -e "\n[2.1 Get container B's public key from A's perspective]"
 pubkeyBfromA=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -312,7 +312,7 @@ prevTxidsByCurrencyAB=$(docker exec ${containerA} php -r "
     \$userPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$contactPubkey = base64_decode('${pubkeyBfromA}');
     \$contactPubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contactPubkey);
-    \$txids = \$app->services->getTransactionRepository()->getPreviousTxidsByCurrency(\$contactPubkeyHash);
+    \$txids = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getPreviousTxidsByCurrency(\$contactPubkeyHash);
     echo json_encode(\$txids);
 " 2>/dev/null || echo "{}")
 
@@ -365,7 +365,7 @@ echo -e "\n[2.3 Update contact online status via repository method]"
 updateResult=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contactRepo = \$app->services->getContactRepository();
+    \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
 
     // Get B's pubkey
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
@@ -399,7 +399,7 @@ echo -e "\n[2.4 Verify online status is set correctly]"
 onlineStatus=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact['online_status'] ?? 'unknown';
 " 2>/dev/null || echo "ERROR")
 
@@ -481,7 +481,7 @@ echo -e "\n[3.2 Set B's online status to 'online' on A and C]"
 docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contactRepo = \$app->services->getContactRepository();
+    \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         \$contactRepo->updateContactFields(\$pubkey, ['online_status' => 'online']);
@@ -492,7 +492,7 @@ docker exec ${containerA} php -r "
 docker exec ${containerC} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contactRepo = \$app->services->getContactRepository();
+    \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         \$contactRepo->updateContactFields(\$pubkey, ['online_status' => 'online']);
@@ -583,7 +583,7 @@ if [[ "$pingFailResult" == "OFFLINE" ]] || [[ "$pingFailResult" == "NO_VALID_RES
     docker exec ${containerA} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$contactRepo = \$app->services->getContactRepository();
+        \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
         \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
         if (\$pubkey) {
             \$contactRepo->updateContactFields(\$pubkey, ['online_status' => 'offline']);
@@ -593,7 +593,7 @@ if [[ "$pingFailResult" == "OFFLINE" ]] || [[ "$pingFailResult" == "NO_VALID_RES
     offlineStatusA=$(docker exec ${containerA} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+        \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
         echo \$contact['online_status'] ?? 'unknown';
     " 2>/dev/null || echo "unknown")
 
@@ -793,7 +793,7 @@ echo -e "\n[3.11 Verify B's online status is updated on A after successful sync]
 docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contactRepo = \$app->services->getContactRepository();
+    \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         \$contactRepo->updateContactFields(\$pubkey, ['online_status' => 'online']);
@@ -803,7 +803,7 @@ docker exec ${containerA} php -r "
 finalStatusA=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact['online_status'] ?? 'unknown';
 " 2>/dev/null || echo "unknown")
 
@@ -890,7 +890,7 @@ echo -e "\n[4.3 Test ping by contact name]"
 contactNameB=$(docker exec ${containerA} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact['name'] ?? '';
 " 2>/dev/null || echo "")
 
@@ -980,10 +980,10 @@ contactTxCheckA=$(docker exec ${containerA} php -r "
     \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
     \$myPubkey = \$config['public'];
 
-    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contactB = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     if (!\$contactB) { echo 'NO_CONTACT'; exit; }
 
-    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tcRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
     \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
     if (!\$tx) {
         \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
@@ -998,7 +998,7 @@ if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT
     docker exec ${containerA} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+        \$contactB = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
         if (\$contactB) {
             \$pdo = \$app->services->getPdo();
             \$pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, \$contactB['pubkey']);
@@ -1019,7 +1019,7 @@ if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT
         reAddStatus=$(docker exec ${containerA} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            echo \$app->services->getContactRepository()->getContactStatus('${transportB}', '${addressB}') ?? 'none';
+            echo \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${transportB}', '${addressB}') ?? 'none';
         " 2>/dev/null || echo "none")
 
         if [[ "$reAddStatus" == "accepted" ]]; then
@@ -1035,9 +1035,9 @@ if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT
         \$app = \Eiou\Core\Application::getInstance();
         \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
         \$myPubkey = \$config['public'];
-        \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+        \$contactB = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
         if (!\$contactB) { echo 'NO_CONTACT'; exit; }
-        \$tcRepo = \$app->services->getTransactionContactRepository();
+        \$tcRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
         \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
         if (!\$tx) { \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey); }
         echo \$tx ? 'EXISTS' : 'STILL_MISSING';
@@ -1076,7 +1076,7 @@ dualSigResultA=$(docker exec ${containerA} php -r "
     \$myPubkey = \$config['public'];
 
     // Get B's pubkey from contacts
-    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contactB = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     if (!\$contactB) {
         echo json_encode(['result' => 'NO_CONTACT']);
         exit;
@@ -1085,7 +1085,7 @@ dualSigResultA=$(docker exec ${containerA} php -r "
     // Find contact transaction between A and B
     // Check receiver direction first (B->me) where recipient_signature can exist
     // (recipient_signature is signed by the receiver, i.e., the current node)
-    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tcRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
     \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     if (!\$tx) {
         \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
@@ -1174,7 +1174,7 @@ dualSigResultC=$(docker exec ${containerC} php -r "
     \$myPubkey = \$config['public'];
 
     // Get B's pubkey from contacts
-    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contactB = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     if (!\$contactB) {
         echo json_encode(['result' => 'NO_CONTACT']);
         exit;
@@ -1182,7 +1182,7 @@ dualSigResultC=$(docker exec ${containerC} php -r "
 
     // Find contact transaction between C and B
     // Check receiver direction first (B->me) where recipient_signature can exist
-    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tcRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
     \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     if (!\$tx) {
         \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
@@ -1228,12 +1228,12 @@ verifySigResult=$(docker exec ${containerA} php -r "
     \$myPubkey = \$config['public'];
 
     // Get B's pubkey from contacts
-    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    \$contactB = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportB}', '${addressB}');
     if (!\$contactB) { echo 'NO_CONTACT'; exit; }
 
     // Find contact transaction between A and B
     // Check receiver direction first (B->me) where recipient_signature can exist
-    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tcRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
     \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
     \$iAmSender = false;
     if (!\$tx) {

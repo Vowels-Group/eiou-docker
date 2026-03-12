@@ -177,7 +177,7 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
 checkResult=$(docker exec ${testContainer} php -r "
     require_once '${BOOTSTRAP_PATH}';
     \$app = \Eiou\Core\Application::getInstance();
-    \$contactRepo = \$app->services->getContactRepository();
+    \$contactRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class);
     \$contacts = \$contactRepo->searchContacts('script');
     if (empty(\$contacts)) {
         echo 'NOT_FOUND_OR_SANITIZED';

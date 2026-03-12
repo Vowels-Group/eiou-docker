@@ -126,7 +126,7 @@ try {
 
 // Initialize API components using ServiceContainer
 $authService = $app->services->getApiAuthService();
-$apiKeyRepo = $app->services->getApiKeyRepository();
+$apiKeyRepo = $app->services->getRepositoryFactory()->get(\Eiou\Database\ApiKeyRepository::class);
 $logger = $app->getLogger();
 $controller = new ApiController($authService, $apiKeyRepo, $app->services, $logger);
 

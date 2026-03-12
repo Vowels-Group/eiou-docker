@@ -12,6 +12,10 @@ use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Utils\Logger;
 use Eiou\Gui\Helpers\MessageHelper;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\ContactRepository;
 
 /**
  * Contact Controller
@@ -538,7 +542,7 @@ class ContactController
                 } else {
                     // Update fee/credit in contact_currencies for the selected currency
                     $app = Application::getInstance();
-                    $contactCurrencyRepo = $app->services->getContactCurrencyRepository();
+                    $contactCurrencyRepo = $app->services->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
                     // Look up contact pubkey hash
                     $contact = $this->contactService->lookupContactInfo($contactAddress);
@@ -669,7 +673,7 @@ class ContactController
         try {
             $app = Application::getInstance();
             $serviceContainer = $app->services;
-            $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
+            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
             // Convert to minor units for storage
             $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
@@ -689,11 +693,11 @@ class ContactController
             }
 
             // Insert initial balance and credit entries for the newly accepted currency
-            $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+            $contactPubkey = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
             if ($contactPubkey) {
-                $serviceContainer->getBalanceRepository()->insertInitialContactBalances($contactPubkey, $currency);
+                $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->insertInitialContactBalances($contactPubkey, $currency);
                 try {
-                    $serviceContainer->getContactCreditRepository()->createInitialCredit($contactPubkey, $currency);
+                    $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->createInitialCredit($contactPubkey, $currency);
                 } catch (\Exception $e) {
                     Logger::getInstance()->warning("Failed to create initial credit for accepted currency", [
                         'currency' => $currency,
@@ -734,8 +738,8 @@ class ContactController
         try {
             $app = Application::getInstance();
             $serviceContainer = $app->services;
-            $contactCurrencyRepo = $serviceContainer->getContactCurrencyRepository();
-            $contactPubkey = $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
+            $contactPubkey = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
             $contactSyncService = $serviceContainer->getContactSyncService();
 
             $accepted = [];
@@ -745,7 +749,7 @@ class ContactController
             // then accept remaining currencies via the standard currency acceptance path
             $firstCurrencyHandled = false;
             if ($isNewContact && !empty($contactPubkey)) {
-                $contact = $serviceContainer->getContactRepository()->getContactByPubkey($contactPubkey);
+                $contact = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactByPubkey($contactPubkey);
                 if ($contact && $contact['status'] !== Constants::CONTACT_STATUS_ACCEPTED) {
                     $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
                     $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
@@ -820,11 +824,11 @@ class ContactController
                 }
 
                 // Re-fetch pubkey in case it was just established by the first currency acceptance
-                $currentPubkey = $contactPubkey ?: $serviceContainer->getContactRepository()->getContactPubkeyFromHash($pubkeyHash);
+                $currentPubkey = $contactPubkey ?: $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
                 if ($currentPubkey) {
-                    $serviceContainer->getBalanceRepository()->insertInitialContactBalances($currentPubkey, $currency);
+                    $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->insertInitialContactBalances($currentPubkey, $currency);
                     try {
-                        $serviceContainer->getContactCreditRepository()->createInitialCredit($currentPubkey, $currency);
+                        $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->createInitialCredit($currentPubkey, $currency);
                     } catch (\Exception $e) {
                         // Credit may already exist
                     }

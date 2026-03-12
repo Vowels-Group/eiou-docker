@@ -88,14 +88,14 @@ while [ $waitElapsed -lt 15 ]; do
     senderStatus=$(docker exec ${sender} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('${receiverTransportType}', '${receiverAddress}');
+        \$status = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${receiverTransportType}', '${receiverAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
     receiverStatus=$(docker exec ${receiver} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('${senderTransportType}', '${senderAddress}');
+        \$status = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('${senderTransportType}', '${senderAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
@@ -117,7 +117,7 @@ fi
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -128,7 +128,7 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
+    \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -343,7 +343,7 @@ preExistingCount=$(docker exec ${receiver} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$senderPubkey = base64_decode('${senderPubkeyB64}');
-    \$txs = \$app->services->getTransactionRepository()->getTransactionsBetweenPubkeys(
+    \$txs = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getTransactionsBetweenPubkeys(
         \$app->services->getCurrentUser()->getPublicKey(),
         \$senderPubkey
     );

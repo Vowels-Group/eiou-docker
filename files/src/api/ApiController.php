@@ -8,7 +8,17 @@ use Eiou\Core\Constants;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
+use Eiou\Database\AddressRepository;
 use Eiou\Database\ApiKeyRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionStatisticsRepository;
 use Eiou\Utils\Logger;
 use Eiou\Exceptions\ServiceException;
 use Eiou\Processors\AbstractMessageProcessor;
@@ -308,8 +318,8 @@ class ApiController {
             return $this->permissionDenied('wallet:read');
         }
 
-        $balanceRepo = $this->services->getBalanceRepository();
-        $contactRepo = $this->services->getContactRepository();
+        $balanceRepo = $this->services->getRepositoryFactory()->get(BalanceRepository::class);
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
 
         $balances = $balanceRepo->getAllBalances();
         $result = [];
@@ -419,13 +429,13 @@ class ApiController {
         $type = $params['type'] ?? null; // sent, received, relay
         $contactFilter = $params['contact'] ?? null;
 
-        $transactionRepo = $this->services->getTransactionRepository();
-        $transactionStatsRepo = $this->services->getTransactionStatisticsRepository();
+        $transactionRepo = $this->services->getRepositoryFactory()->get(TransactionRepository::class);
+        $transactionStatsRepo = $this->services->getRepositoryFactory()->get(TransactionStatisticsRepository::class);
 
         // If contact filter provided, resolve to addresses and filter
         if ($contactFilter) {
-            $contactRepo = $this->services->getContactRepository();
-            $addressRepo = $this->services->getAddressRepository();
+            $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+            $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
             // Resolve contact by name or address
             $contact = $contactRepo->lookupByName($contactFilter);
@@ -530,7 +540,7 @@ class ApiController {
 
         $currentUser = $this->services->getCurrentUser();
         $userAddresses = $currentUser->getUserLocaters();
-        $addressRepo = $this->services->getAddressRepository();
+        $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
         // Use getAllAddressTypes() to dynamically get all address types
         $addressTypes = $addressRepo->getAllAddressTypes();
@@ -540,7 +550,7 @@ class ApiController {
         }
 
         // Fee earnings from P2P relay transactions
-        $p2pRepo = $this->services->getP2pRepository();
+        $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
         $feeEarnings = [];
         $earningsRows = $p2pRepo->getUserTotalEarningsByCurrency();
         foreach ($earningsRows as $row) {
@@ -551,7 +561,7 @@ class ApiController {
         }
 
         // Total available credit from all contacts
-        $creditRepo = $this->services->getContactCreditRepository();
+        $creditRepo = $this->services->getRepositoryFactory()->get(ContactCreditRepository::class);
         $availableCredit = [];
         $creditRows = $creditRepo->getTotalAvailableCreditByCurrency();
         foreach ($creditRows as $row) {
@@ -581,8 +591,8 @@ class ApiController {
             return $this->permissionDenied('wallet:read');
         }
 
-        $balanceRepo = $this->services->getBalanceRepository();
-        $transactionRepo = $this->services->getTransactionRepository();
+        $balanceRepo = $this->services->getRepositoryFactory()->get(BalanceRepository::class);
+        $transactionRepo = $this->services->getRepositoryFactory()->get(TransactionRepository::class);
 
         // Get transaction limit from params (default 5, max 20 for overview)
         $transactionLimit = min((int) ($params['transaction_limit'] ?? 5), 20);
@@ -621,7 +631,7 @@ class ApiController {
         }
 
         // Get total available credit per currency
-        $creditRepo = $this->services->getContactCreditRepository();
+        $creditRepo = $this->services->getRepositoryFactory()->get(ContactCreditRepository::class);
         $totalAvailableCredit = [];
         $creditRows = $creditRepo->getTotalAvailableCreditByCurrency();
         foreach ($creditRows as $row) {
@@ -650,15 +660,15 @@ class ApiController {
         }
 
         $status = $params['status'] ?? Constants::CONTACT_STATUS_ACCEPTED;
-        $contactRepo = $this->services->getContactRepository();
-        $addressRepo = $this->services->getAddressRepository();
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+        $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
         // Get all address types dynamically for future-proofing
         $addressTypes = $addressRepo->getAllAddressTypes();
 
         $contacts = $contactRepo->getContactsByStatus($status);
-        $creditRepo = $this->services->getContactCreditRepository();
-        $balanceRepo = $this->services->getBalanceRepository();
+        $creditRepo = $this->services->getRepositoryFactory()->get(ContactCreditRepository::class);
+        $balanceRepo = $this->services->getRepositoryFactory()->get(BalanceRepository::class);
         $result = [];
 
         foreach ($contacts as $contact) {
@@ -671,7 +681,7 @@ class ApiController {
             }
 
             // Get per-currency config
-            $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+            $contactCurrencyRepo = $this->services->getRepositoryFactory()->get(ContactCurrencyRepository::class);
             $currencies = $contactCurrencyRepo->getContactCurrencies($contact['pubkey_hash']);
 
             // My available credit with them (from contact_credit table, received via pong)
@@ -716,8 +726,8 @@ class ApiController {
             return $this->permissionDenied('contacts:read');
         }
 
-        $contactRepo = $this->services->getContactRepository();
-        $addressRepo = $this->services->getAddressRepository();
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+        $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
         // Get all address types dynamically for future-proofing
         $addressTypes = $addressRepo->getAllAddressTypes();
@@ -785,10 +795,10 @@ class ApiController {
         }
 
         $searchTerm = $params['q'] ?? $params['query'] ?? null;
-        $contactRepo = $this->services->getContactRepository();
-        $addressRepo = $this->services->getAddressRepository();
-        $balanceRepo = $this->services->getBalanceRepository();
-        $creditRepo = $this->services->getContactCreditRepository();
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+        $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
+        $balanceRepo = $this->services->getRepositoryFactory()->get(BalanceRepository::class);
+        $creditRepo = $this->services->getRepositoryFactory()->get(ContactCreditRepository::class);
 
         // Get all address types dynamically
         $addressTypes = $addressRepo->getAllAddressTypes();
@@ -940,9 +950,9 @@ class ApiController {
         }
 
         $address = urldecode($address);
-        $contactRepo = $this->services->getContactRepository();
-        $addressRepo = $this->services->getAddressRepository();
-        $balanceRepo = $this->services->getBalanceRepository();
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+        $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
+        $balanceRepo = $this->services->getRepositoryFactory()->get(BalanceRepository::class);
 
         // Try to find contact by any address type using getAllAddressTypes()
         $contact = null;
@@ -976,7 +986,7 @@ class ApiController {
         $balance = $balanceResult && count($balanceResult) > 0 ? $balanceResult[0] : null;
 
         // My available credit with them (from contact_credit table, received via pong)
-        $creditRepo = $this->services->getContactCreditRepository();
+        $creditRepo = $this->services->getRepositoryFactory()->get(ContactCreditRepository::class);
         $myAvailableCredit = null;
         $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
         if ($creditData !== null) {
@@ -987,7 +997,7 @@ class ApiController {
         // Fetch all currencies for this contact from contact_currencies table
         $currencyConfigs = [];
         try {
-            $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+            $contactCurrencyRepo = $this->services->getRepositoryFactory()->get(ContactCurrencyRepository::class);
             $currencyConfigs = $contactCurrencyRepo->getContactCurrencies($contact['pubkey_hash']);
         } catch (\Exception $e) {
             // Non-critical - continue without multi-currency data
@@ -1083,8 +1093,8 @@ class ApiController {
         }
 
         $address = urldecode($address);
-        $contactRepo = $this->services->getContactRepository();
-        $addressRepo = $this->services->getAddressRepository();
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+        $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
         try {
             // First find the contact to get pubkey
@@ -1142,7 +1152,7 @@ class ApiController {
             if ($contactUpdateOk) {
                 // Update fee/credit in contact_currencies table
                 if (isset($data['currency']) && (isset($data['fee_percent']) || isset($data['credit_limit']))) {
-                    $contactCurrencyRepo = $this->services->getContactCurrencyRepository();
+                    $contactCurrencyRepo = $this->services->getRepositoryFactory()->get(ContactCurrencyRepository::class);
                     $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                     $currencyFields = [];
                     if (isset($data['fee_percent'])) {
@@ -1307,9 +1317,9 @@ class ApiController {
             return $this->permissionDenied('system:read');
         }
 
-        $transactionStatsRepo = $this->services->getTransactionStatisticsRepository();
-        $contactRepo = $this->services->getContactRepository();
-        $p2pRepo = $this->services->getP2pRepository();
+        $transactionStatsRepo = $this->services->getRepositoryFactory()->get(TransactionStatisticsRepository::class);
+        $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+        $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
 
         // Get statistics
         $txStats = $transactionStatsRepo->getTypeStatistics();
@@ -2123,8 +2133,8 @@ class ApiController {
             $contactFilter = $params['contact'] ?? null;
 
             if ($contactFilter) {
-                $contactRepo = $this->services->getContactRepository();
-                $addressRepo = $this->services->getAddressRepository();
+                $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+                $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
                 // Resolve contact by name or address
                 $contact = $contactRepo->lookupByName($contactFilter);
@@ -2175,8 +2185,8 @@ class ApiController {
         }
 
         try {
-            $contactRepo = $this->services->getContactRepository();
-            $addressRepo = $this->services->getAddressRepository();
+            $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
+            $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
 
             // Resolve contact to pubkey_hash
             $contact = $contactRepo->lookupByName($contactAddress);
@@ -2296,10 +2306,10 @@ class ApiController {
         }
 
         try {
-            $p2pRepo = $this->services->getP2pRepository();
+            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
             $awaitingList = $p2pRepo->getAwaitingApprovalList();
 
-            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
 
             $transactions = [];
             foreach ($awaitingList as $p2p) {
@@ -2335,16 +2345,16 @@ class ApiController {
         }
 
         try {
-            $p2pRepo = $this->services->getP2pRepository();
+            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
             $p2p = $p2pRepo->getAwaitingApproval($hash);
             if (!$p2p) {
                 return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
             }
 
-            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
             $candidates = $rp2pCandidateRepo->getCandidatesByHash($hash);
 
-            $rp2pRepo = $this->services->getRp2pRepository();
+            $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
             $rp2p = $rp2pRepo->getByHash($hash);
 
             return $this->successResponse([
@@ -2377,7 +2387,7 @@ class ApiController {
         $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : 0;
 
         try {
-            $p2pRepo = $this->services->getP2pRepository();
+            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
             $p2p = $p2pRepo->getAwaitingApproval($hash);
             if (!$p2p) {
                 return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
@@ -2387,7 +2397,7 @@ class ApiController {
                 return $this->errorResponse('Only the transaction originator can approve', 403, 'not_originator');
             }
 
-            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
             $sendService = $this->services->getSendOperationService();
 
             if ($candidateId > 0) {
@@ -2411,7 +2421,7 @@ class ApiController {
                     'signature' => $candidate['sender_signature'],
                 ];
 
-                $rp2pRepo = $this->services->getRp2pRepository();
+                $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
                 $rp2pRepo->insertRp2pRequest($request);
                 $p2pRepo->updateStatus($hash, 'found');
                 $sendService->sendP2pEiou($request);
@@ -2448,7 +2458,7 @@ class ApiController {
                     'signature' => $candidate['sender_signature'],
                 ];
 
-                $rp2pRepo = $this->services->getRp2pRepository();
+                $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
                 $rp2pRepo->insertRp2pRequest($request);
                 $p2pRepo->updateStatus($hash, 'found');
                 $sendService->sendP2pEiou($request);
@@ -2461,7 +2471,7 @@ class ApiController {
             }
 
             // No candidates - check for single rp2p (fast mode)
-            $rp2pRepo = $this->services->getRp2pRepository();
+            $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
             $rp2p = $rp2pRepo->getByHash($hash);
 
             if ($rp2p) {
@@ -2506,7 +2516,7 @@ class ApiController {
         $hash = $data['hash'];
 
         try {
-            $p2pRepo = $this->services->getP2pRepository();
+            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
             $p2p = $p2pRepo->getAwaitingApproval($hash);
             if (!$p2p) {
                 return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
@@ -2523,7 +2533,7 @@ class ApiController {
             $p2pService->sendCancelNotificationForHash($hash);
 
             // Clean up any remaining candidates
-            $rp2pCandidateRepo = $this->services->getRp2pCandidateRepository();
+            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
             $rp2pCandidateRepo->deleteCandidatesByHash($hash);
 
             return $this->successResponse([

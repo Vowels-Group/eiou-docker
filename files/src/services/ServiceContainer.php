@@ -219,10 +219,10 @@ class ServiceContainer implements ContainerInterface {
     }
 
     // =========================================================================
-    // Repository Accessors
+    // Repository Access
     // =========================================================================
-    // Typed getters delegate to RepositoryFactory for lazy creation & caching.
-    // Adding a new repository: create the class, add a one-line getter here.
+    // Use $this->getRepositoryFactory()->get(XxxRepository::class) to obtain
+    // repository instances. RepositoryFactory handles lazy creation & caching.
     // =========================================================================
 
     /** @return RepositoryFactory */
@@ -233,106 +233,6 @@ class ServiceContainer implements ContainerInterface {
         return $this->repositoryFactory;
     }
 
-    public function getAddressRepository(): AddressRepository {
-        return $this->getRepositoryFactory()->get(AddressRepository::class);
-    }
-
-    public function getBalanceRepository(): BalanceRepository {
-        return $this->getRepositoryFactory()->get(BalanceRepository::class);
-    }
-
-    public function getContactRepository(): ContactRepository {
-        return $this->getRepositoryFactory()->get(ContactRepository::class);
-    }
-
-    public function getP2pRepository(): P2pRepository {
-        return $this->getRepositoryFactory()->get(P2pRepository::class);
-    }
-
-    public function getRp2pRepository(): Rp2pRepository {
-        return $this->getRepositoryFactory()->get(Rp2pRepository::class);
-    }
-
-    public function getRp2pCandidateRepository(): Rp2pCandidateRepository {
-        return $this->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
-    }
-
-    public function getP2pSenderRepository(): P2pSenderRepository {
-        return $this->getRepositoryFactory()->get(P2pSenderRepository::class);
-    }
-
-    public function getP2pRelayedContactRepository(): P2pRelayedContactRepository {
-        return $this->getRepositoryFactory()->get(P2pRelayedContactRepository::class);
-    }
-
-    public function getTransactionRepository(): TransactionRepository {
-        return $this->getRepositoryFactory()->get(TransactionRepository::class);
-    }
-
-    public function getDebugRepository(): DebugRepository {
-        return $this->getRepositoryFactory()->get(DebugRepository::class);
-    }
-
-    public function getApiKeyRepository(): ApiKeyRepository {
-        return $this->getRepositoryFactory()->get(ApiKeyRepository::class);
-    }
-
-    public function getMessageDeliveryRepository(): MessageDeliveryRepository {
-        return $this->getRepositoryFactory()->get(MessageDeliveryRepository::class);
-    }
-
-    public function getDeadLetterQueueRepository(): DeadLetterQueueRepository {
-        return $this->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
-    }
-
-    public function getDeliveryMetricsRepository(): DeliveryMetricsRepository {
-        return $this->getRepositoryFactory()->get(DeliveryMetricsRepository::class);
-    }
-
-    public function getHeldTransactionRepository(): HeldTransactionRepository {
-        return $this->getRepositoryFactory()->get(HeldTransactionRepository::class);
-    }
-
-    public function getChainDropProposalRepository(): ChainDropProposalRepository {
-        return $this->getRepositoryFactory()->get(ChainDropProposalRepository::class);
-    }
-
-    public function getContactCreditRepository(): ContactCreditRepository {
-        return $this->getRepositoryFactory()->get(ContactCreditRepository::class);
-    }
-
-    public function getContactCurrencyRepository(): ContactCurrencyRepository {
-        return $this->getRepositoryFactory()->get(ContactCurrencyRepository::class);
-    }
-
-    public function getRateLimiterRepository(): RateLimiterRepository {
-        return $this->getRepositoryFactory()->get(RateLimiterRepository::class);
-    }
-
-    public function getTransactionStatisticsRepository(): TransactionStatisticsRepository {
-        return $this->getRepositoryFactory()->get(TransactionStatisticsRepository::class);
-    }
-
-    public function getTransactionChainRepository(): TransactionChainRepository {
-        return $this->getRepositoryFactory()->get(TransactionChainRepository::class);
-    }
-
-    public function getTransactionRecoveryRepository(): TransactionRecoveryRepository {
-        return $this->getRepositoryFactory()->get(TransactionRecoveryRepository::class);
-    }
-
-    public function getTransactionContactRepository(): TransactionContactRepository {
-        return $this->getRepositoryFactory()->get(TransactionContactRepository::class);
-    }
-
-    public function getCapacityReservationRepository(): CapacityReservationRepository {
-        return $this->getRepositoryFactory()->get(CapacityReservationRepository::class);
-    }
-
-    public function getRouteCancellationRepository(): RouteCancellationRepository {
-        return $this->getRepositoryFactory()->get(RouteCancellationRepository::class);
-    }
-
     /**
      * Get ContactManagementService instance
      * @return ContactManagementServiceInterface
@@ -340,9 +240,9 @@ class ServiceContainer implements ContainerInterface {
     public function getContactManagementService(): ContactManagementServiceInterface {
         if (!isset($this->services['ContactManagementService'])) {
             $this->services['ContactManagementService'] = new ContactManagementService(
-                $this->getContactRepository(),
-                $this->getAddressRepository(),
-                $this->getBalanceRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->currentUser,
@@ -360,11 +260,11 @@ class ServiceContainer implements ContainerInterface {
     public function getContactSyncService(): ContactSyncServiceInterface {
         if (!isset($this->services['ContactSyncService'])) {
             $this->services['ContactSyncService'] = new ContactSyncService(
-                $this->getContactRepository(),
-                $this->getAddressRepository(),
-                $this->getBalanceRepository(),
-                $this->getTransactionRepository(),
-                $this->getTransactionContactRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionContactRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getRepositoryFactory(),
@@ -402,16 +302,16 @@ class ServiceContainer implements ContainerInterface {
     public function getTransactionService(): TransactionServiceInterface {
         if (!isset($this->services['TransactionService'])) {
             $this->services['TransactionService'] = new TransactionService(
-                $this->getContactRepository(),
-                $this->getAddressRepository(),
-                $this->getBalanceRepository(),
-                $this->getP2pRepository(),
-                $this->getRp2pRepository(),
-                $this->getTransactionRepository(),
-                $this->getTransactionChainRepository(),
-                $this->getTransactionRecoveryRepository(),
-                $this->getTransactionContactRepository(),
-                $this->getTransactionStatisticsRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRecoveryRepository::class),
+                $this->getRepositoryFactory()->get(TransactionContactRepository::class),
+                $this->getRepositoryFactory()->get(TransactionStatisticsRepository::class),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
@@ -438,13 +338,13 @@ class ServiceContainer implements ContainerInterface {
         if (!isset($this->services['P2pService'])) {
             $this->services['P2pService'] = new P2pService(
                 $this->getContactService(),
-                $this->getBalanceRepository(),
-                $this->getP2pRepository(),
-                $this->getTransactionRepository(),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
-                $this->getP2pSenderRepository(),
+                $this->getRepositoryFactory()->get(P2pSenderRepository::class),
                 $this->getRepositoryFactory()
             );
         }
@@ -462,15 +362,15 @@ class ServiceContainer implements ContainerInterface {
     public function getRp2pService(): Rp2pServiceInterface {
         if (!isset($this->services['Rp2pService'])) {
             $this->services['Rp2pService'] = new Rp2pService(
-                $this->getContactRepository(),
-                $this->getBalanceRepository(),
-                $this->getP2pRepository(),
-                $this->getRp2pRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
-                $this->getRp2pCandidateRepository(),
-                $this->getP2pSenderRepository(),
+                $this->getRepositoryFactory()->get(Rp2pCandidateRepository::class),
+                $this->getRepositoryFactory()->get(P2pSenderRepository::class),
                 $this->getRepositoryFactory()
             );
         }
@@ -499,11 +399,11 @@ class ServiceContainer implements ContainerInterface {
     public function getMessageService(): MessageServiceInterface {
         if (!isset($this->services['MessageService'])) {
             $this->services['MessageService'] = new MessageService(
-                $this->getContactRepository(),
-                $this->getBalanceRepository(),
-                $this->getP2pRepository(),
-                $this->getTransactionRepository(),
-                $this->getTransactionContactRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionContactRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
@@ -522,10 +422,10 @@ class ServiceContainer implements ContainerInterface {
     public function getCleanupService(): CleanupServiceInterface {
         if (!isset($this->services['CleanupService'])) {
             $this->services['CleanupService'] = new CleanupService(
-                $this->getP2pRepository(),
-                $this->getRp2pRepository(),
-                $this->getTransactionRepository(),
-                $this->getBalanceRepository(),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService(),
@@ -557,14 +457,14 @@ class ServiceContainer implements ContainerInterface {
     public function getSyncService(): SyncServiceInterface {
         if (!isset($this->services['SyncService'])) {
             $this->services['SyncService'] = new SyncService(
-                $this->getContactRepository(),
-                $this->getAddressRepository(),
-                $this->getP2pRepository(),
-                $this->getRp2pRepository(),
-                $this->getTransactionRepository(),
-                $this->getTransactionChainRepository(),
-                $this->getTransactionContactRepository(),
-                $this->getBalanceRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(TransactionContactRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -580,7 +480,7 @@ class ServiceContainer implements ContainerInterface {
     public function getDebugService(): DebugServiceInterface {
         if (!isset($this->services['DebugService'])) {
             $this->services['DebugService'] = new DebugService(
-                $this->getDebugRepository(),
+                $this->getRepositoryFactory()->get(DebugRepository::class),
                 $this->currentUser
             );
         }
@@ -595,9 +495,9 @@ class ServiceContainer implements ContainerInterface {
     public function getMessageDeliveryService(): MessageDeliveryServiceInterface {
         if (!isset($this->services['MessageDeliveryService'])) {
             $this->services['MessageDeliveryService'] = new MessageDeliveryService(
-                $this->getMessageDeliveryRepository(),
-                $this->getDeadLetterQueueRepository(),
-                $this->getDeliveryMetricsRepository(),
+                $this->getRepositoryFactory()->get(MessageDeliveryRepository::class),
+                $this->getRepositoryFactory()->get(DeadLetterQueueRepository::class),
+                $this->getRepositoryFactory()->get(DeliveryMetricsRepository::class),
                 $this->getUtilityContainer()->getTransportUtility(),
                 $this->getUtilityContainer()->getTimeUtility(),
                 $this->currentUser
@@ -614,12 +514,12 @@ class ServiceContainer implements ContainerInterface {
     public function getHeldTransactionService(): HeldTransactionServiceInterface {
         if (!isset($this->services['HeldTransactionService'])) {
             $this->services['HeldTransactionService'] = new HeldTransactionService(
-                $this->getHeldTransactionRepository(),
-                $this->getTransactionRepository(),
-                $this->getTransactionChainRepository(),
+                $this->getRepositoryFactory()->get(HeldTransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
-                $this->getP2pRepository()
+                $this->getRepositoryFactory()->get(P2pRepository::class)
             );
         }
         return $this->services['HeldTransactionService'];
@@ -633,8 +533,8 @@ class ServiceContainer implements ContainerInterface {
     public function getTransactionRecoveryService(): TransactionRecoveryServiceInterface {
         if (!isset($this->services['TransactionRecoveryService'])) {
             $this->services['TransactionRecoveryService'] = new TransactionRecoveryService(
-                $this->getTransactionRepository(),
-                $this->getTransactionRecoveryRepository()
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRecoveryRepository::class)
             );
         }
         return $this->services['TransactionRecoveryService'];
@@ -652,9 +552,9 @@ class ServiceContainer implements ContainerInterface {
     public function getCliService(): CliServiceInterface {
         if (!isset($this->services['CliService'])) {
             $this->services['CliService'] = new CliService(
-                $this->getContactRepository(),
-                $this->getBalanceRepository(),
-                $this->getTransactionRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getRepositoryFactory()
@@ -676,10 +576,10 @@ class ServiceContainer implements ContainerInterface {
             $service = new CliP2pApprovalService(
                 $this->getUtilityContainer()->getCurrencyUtility()
             );
-            $service->setP2pRepository($this->getP2pRepository());
+            $service->setP2pRepository($this->getRepositoryFactory()->get(P2pRepository::class));
             $service->setP2pApprovalDependencies(
-                $this->getRp2pRepository(),
-                $this->getRp2pCandidateRepository(),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pCandidateRepository::class),
                 $this->getSendOperationService(),
                 $this->getP2pService()
             );
@@ -700,9 +600,9 @@ class ServiceContainer implements ContainerInterface {
         if (!isset($this->services['CliDlqService'])) {
             $service = new CliDlqService(
                 $this->getUtilityContainer()->getTransportUtility(),
-                $this->getTransactionRepository()
+                $this->getRepositoryFactory()->get(TransactionRepository::class)
             );
-            $service->setDeadLetterQueueRepository($this->getDeadLetterQueueRepository());
+            $service->setDeadLetterQueueRepository($this->getRepositoryFactory()->get(DeadLetterQueueRepository::class));
             $this->services['CliDlqService'] = $service;
         }
         return $this->services['CliDlqService'];
@@ -746,7 +646,7 @@ class ServiceContainer implements ContainerInterface {
     public function getRateLimiterService(): RateLimiterServiceInterface {
         if (!isset($this->services['RateLimiterService'])) {
             $this->services['RateLimiterService'] = new RateLimiterService(
-                $this->getRateLimiterRepository()
+                $this->getRepositoryFactory()->get(RateLimiterRepository::class)
             );
         }
         return $this->services['RateLimiterService'];
@@ -778,8 +678,8 @@ class ServiceContainer implements ContainerInterface {
     public function getContactStatusService(): ContactStatusServiceInterface {
         if (!isset($this->services['ContactStatusService'])) {
             $this->services['ContactStatusService'] = new ContactStatusService(
-                $this->getContactRepository(),
-                $this->getTransactionRepository(),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getRepositoryFactory(),
@@ -799,7 +699,7 @@ class ServiceContainer implements ContainerInterface {
     public function getApiAuthService(): ApiAuthServiceInterface {
         if (!isset($this->services['ApiAuthService'])) {
             $this->services['ApiAuthService'] = new ApiAuthService(
-                $this->getApiKeyRepository(),
+                $this->getRepositoryFactory()->get(ApiKeyRepository::class),
                 $this->getLogger()
             );
         }
@@ -817,7 +717,7 @@ class ServiceContainer implements ContainerInterface {
     public function getApiKeyService(CliOutputManager $output): ApiKeyServiceInterface {
         if (!isset($this->services['ApiKeyService'])) {
             $this->services['ApiKeyService'] = new ApiKeyService(
-                $this->getApiKeyRepository(),
+                $this->getRepositoryFactory()->get(ApiKeyRepository::class),
                 $output
             );
         }
@@ -853,9 +753,9 @@ class ServiceContainer implements ContainerInterface {
     public function getBalanceService(): BalanceServiceInterface {
         if (!isset($this->services['BalanceService'])) {
             $this->services['BalanceService'] = new BalanceService(
-                $this->getBalanceRepository(),
-                $this->getTransactionContactRepository(),
-                $this->getAddressRepository(),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(TransactionContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
                 $this->getUtilityContainer()->getCurrencyUtility(),
                 $this->currentUser
             );
@@ -875,7 +775,7 @@ class ServiceContainer implements ContainerInterface {
     public function getChainVerificationService(): ChainVerificationServiceInterface {
         if (!isset($this->services['ChainVerificationService'])) {
             $this->services['ChainVerificationService'] = new ChainVerificationService(
-                $this->getTransactionChainRepository(),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
                 $this->currentUser,
                 $this->getLogger(),
                 $this->getSyncServiceProxy()
@@ -897,7 +797,7 @@ class ServiceContainer implements ContainerInterface {
     public function getTransactionValidationService(): TransactionValidationServiceInterface {
         if (!isset($this->services['TransactionValidationService'])) {
             $this->services['TransactionValidationService'] = new TransactionValidationService(
-                $this->getTransactionRepository(),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
                 $this->getContactService(),
                 $this->getUtilityContainer()->getValidationUtility(),
                 $this->getInputValidator(),
@@ -922,12 +822,12 @@ class ServiceContainer implements ContainerInterface {
     public function getTransactionProcessingService(): TransactionProcessingServiceInterface {
         if (!isset($this->services['TransactionProcessingService'])) {
             $this->services['TransactionProcessingService'] = new TransactionProcessingService(
-                $this->getTransactionRepository(),
-                $this->getTransactionRecoveryRepository(),
-                $this->getTransactionChainRepository(),
-                $this->getP2pRepository(),
-                $this->getRp2pRepository(),
-                $this->getBalanceRepository(),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRecoveryRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
                 $this->getTransactionPayload(),
                 $this->getUtilityContainer()->getTransportUtility(),
                 $this->getUtilityContainer()->getTimeUtility(),
@@ -953,9 +853,9 @@ class ServiceContainer implements ContainerInterface {
     public function getSendOperationService(): SendOperationServiceInterface {
         if (!isset($this->services['SendOperationService'])) {
             $this->services['SendOperationService'] = new SendOperationService(
-                $this->getTransactionRepository(),
-                $this->getAddressRepository(),
-                $this->getP2pRepository(),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getRepositoryFactory()->get(P2pRepository::class),
                 $this->getTransactionPayload(),
                 $this->getUtilityContainer()->getTransportUtility(),
                 $this->getUtilityContainer()->getTimeUtility(),
@@ -987,8 +887,8 @@ class ServiceContainer implements ContainerInterface {
     public function getChainOperationsService(): ChainOperationsInterface {
         if (!isset($this->services['ChainOperationsService'])) {
             $this->services['ChainOperationsService'] = new ChainOperationsService(
-                $this->getTransactionChainRepository(),
-                $this->getTransactionRepository(),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
                 $this->currentUser,
                 $this->getLogger()
             );
@@ -1010,10 +910,10 @@ class ServiceContainer implements ContainerInterface {
     public function getChainDropService(): ChainDropServiceInterface {
         if (!isset($this->services['ChainDropService'])) {
             $this->services['ChainDropService'] = new ChainDropService(
-                $this->getChainDropProposalRepository(),
-                $this->getTransactionChainRepository(),
-                $this->getTransactionRepository(),
-                $this->getContactRepository(),
+                $this->getRepositoryFactory()->get(ChainDropProposalRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getRepositoryFactory(),

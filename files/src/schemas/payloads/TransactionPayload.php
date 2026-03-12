@@ -5,6 +5,7 @@ namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
+use Eiou\Database\TransactionRepository;
 
 /**
  * Transaction payload builder
@@ -139,7 +140,7 @@ class TransactionPayload extends BasePayload
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($rp2pData['sender_address']);
         $transactionService = Application::getInstance()->services->getTransactionService();
-        $transactionRepository = Application::getInstance()->services->getTransactionRepository();
+        $transactionRepository = Application::getInstance()->services->getRepositoryFactory()->get(TransactionRepository::class);
 
         // This method returns data array for further processing, not final payload
         return [

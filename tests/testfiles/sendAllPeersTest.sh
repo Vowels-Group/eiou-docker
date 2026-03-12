@@ -32,7 +32,7 @@ for container in "${containers[@]}"; do
     
     contacts=$(docker exec ${container} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        \$contacts = \Eiou\Core\Application::getInstance()->services->getContactRepository()->getAllSingleAcceptedAddresses('${MODE}');
+        \$contacts = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getAllSingleAcceptedAddresses('${MODE}');
         echo implode(' ', \$contacts);
     " 2>/dev/null || echo "")
 
@@ -79,8 +79,8 @@ for sender in "${containers[@]}"; do
         initialBalance=$(docker exec ${sender} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
-            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${contactAddress}');
+            \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
         " 2>/dev/null || echo "0")
 
@@ -93,8 +93,8 @@ for sender in "${containers[@]}"; do
         balance_cmd="php -r \"
             require_once('${BOOTSTRAP_PATH}');
             \\\$app = \Eiou\Core\Application::getInstance();
-            \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
-            \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+            \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${contactAddress}');
+            \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
             echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
         \""
         newBalance=$(wait_for_balance_change "${sender}" "$initialBalance" "$balance_cmd" 10 "tx processing")
@@ -193,7 +193,7 @@ for sender in "${containers[@]}"; do
        
         hasContact=$(docker exec ${sender} php -r "
             require_once('${BOOTSTRAP_PATH}');
-            echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('${MODE}','${receiverAddress}');
+            echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->isAcceptedContactAddress('${MODE}','${receiverAddress}');
         " 2>/dev/null || echo "0")
 
         if [[ "$hasContact" -eq "1" ]]; then

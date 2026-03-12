@@ -43,8 +43,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
-        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
+        \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
+        \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'${testCurrency}');
         echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
     " 2>/dev/null || echo "0")
 
@@ -56,8 +56,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     balance_cmd="php -r \"
         require_once('${BOOTSTRAP_PATH}');
         \\\$app = \Eiou\Core\Application::getInstance();
-        \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
-        \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'${testCurrency}');
+        \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
+        \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'${testCurrency}');
         echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
     \""
     newBalance=$(wait_for_balance_change "${containerKeys[1]}" "$initialBalance" "$balance_cmd" 20 "tx processing")
@@ -95,7 +95,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     contactName=$(docker exec ${senderContainer} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${receiverAddress}');
+        \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->lookupByAddress('${MODE}', '${receiverAddress}');
         echo \$contact['name'] ?? '';
     " 2>/dev/null || echo "")
 
@@ -107,8 +107,8 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         initialBalanceByName=$(docker exec ${receiverContainer} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
-            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
+            \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
         " 2>/dev/null || echo "0")
 
@@ -120,8 +120,8 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         balance_cmd_name="php -r \"
             require_once('${BOOTSTRAP_PATH}');
             \\\$app = \Eiou\Core\Application::getInstance();
-            \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
-            \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+            \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
+            \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
             echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
         \""
         newBalanceByName=$(wait_for_balance_change "${receiverContainer}" "$initialBalanceByName" "$balance_cmd_name" 20 "send by name")
@@ -189,8 +189,8 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     initialBalanceD=$(docker exec httpD php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
-        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
+        \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
     " 2>/dev/null || echo "0")
 
@@ -202,8 +202,8 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     balance_cmd_d="php -r \"
         require_once('${BOOTSTRAP_PATH}');
         \\\$app = \Eiou\Core\Application::getInstance();
-        \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
-        \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+        \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
+        \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
         echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
     \""
     newBalanceD=$(wait_for_balance_change "httpD" "$initialBalanceD" "$balance_cmd_d" 30 "multi-hop routing")

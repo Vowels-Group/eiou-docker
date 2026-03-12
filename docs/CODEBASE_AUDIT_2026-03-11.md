@@ -188,7 +188,7 @@ foreach ($results as &$result) {
 |-------|-------|----------|--------|
 | CliService | 3,783 → 1,136 | Settings, user info, balance, transactions, SSL, P2P | **Fixed** (70% reduction via 4 sub-services) |
 | SyncService | 2,267 | Contact sync, transaction sync, balance sync, chain resolution | Open |
-| ServiceContainer | 1,842 → 1,570 | 79+ getter methods, wiring, initialization | **Partially fixed** (ARCH-05 + ARCH-01: -272 lines via RepositoryFactory + constructor DI) |
+| ServiceContainer | 1,842 → 1,470 | 79+ getter methods, wiring, initialization | **Partially fixed** (ARCH-05 + ARCH-01: -372 lines via RepositoryFactory + constructor DI) |
 | ContactSyncService | 1,775 | Multiple sync strategies | Open |
 | MessageDeliveryService | 1,764 | Multiple delivery mechanisms | Open |
 
@@ -207,7 +207,7 @@ ServiceContainer contains 40+ repetitive repository getter methods. No factory o
 
 **Fix:** Implement `RepositoryFactory` class. Would reduce ServiceContainer size by ~50%.
 
-**Resolution:** Created `RepositoryFactory` class (`files/src/database/RepositoryFactory.php`) with generic `get(class-string)` method, validation, caching, `has()`, and `set()` (for testing). Replaced 25 near-identical lazy-loading repository getter methods in `ServiceContainer` (~345 lines of boilerplate) with one-line delegations to the factory (~100 lines). New `getRepositoryFactory()` method exposes the factory for direct use by services. Unit tests added (`tests/Unit/Database/RepositoryFactoryTest.php`, 9 tests, 26 assertions).
+**Resolution:** Created `RepositoryFactory` class (`files/src/database/RepositoryFactory.php`) with generic `get(class-string)` method, validation, caching, `has()`, and `set()` (for testing). Removed all 25 repository getter methods from `ServiceContainer`. All callers (187 PHP call sites across 10 files + 133 calls in 19 shell test scripts) migrated to use `getRepositoryFactory()->get(XxxRepository::class)` directly. Unit tests added (`tests/Unit/Database/RepositoryFactoryTest.php`, 9 tests, 26 assertions).
 
 ---
 
