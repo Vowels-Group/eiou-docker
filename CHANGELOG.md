@@ -14,6 +14,7 @@ The project is currently in **ALPHA** status.
 
 ### Fixed
 - Fix `RateLimiterRepository` crash: extend `AbstractRepository` so it can be created via `RepositoryFactory` (regression from ARCH-05 PR #717). All four processors (P2P, Transaction, Cleanup, ContactStatus) were crash-looping on startup
+- Fix missing `ContactStatusService::setChainDropService()` setter: wiring call existed in `ServiceContainer::wireCircularDependencies()` but the method was never added (regression from ARCH-05 PR #717)
 
 ### Changed
 - Convert `eiou.dockerfile` to multi-stage build (DOCK-04): Composer and `unzip` are now isolated in a builder stage; only the pre-built `vendor/` directory is copied into the runtime image. Removes ~20-30MB of build-only tooling from the final image and eliminates Composer as a post-compromise attack vector

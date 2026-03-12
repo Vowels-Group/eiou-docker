@@ -123,6 +123,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
     }
 
     /**
+     * Set the chain drop service (setter injection for circular dependency)
+     *
+     * @param ChainDropServiceInterface $service Chain drop service
+     */
+    public function setChainDropService(ChainDropServiceInterface $service): void {
+        $this->chainDropService = $service;
+    }
+
+    /**
      * Get the rate limiter service (must be injected via setRateLimiterService)
      *
      * @return RateLimiterService
