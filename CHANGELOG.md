@@ -12,7 +12,11 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Add legal notice banner to container startup (`scripts/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
+
 ### Fixed
+- Fix startup banner right-border alignment: replace hardcoded padding with `printf` fixed-width formatting so the right `║` borders align consistently across all banner functions
 - Fix `RateLimiterRepository` crash: extend `AbstractRepository` so it can be created via `RepositoryFactory` (regression from ARCH-05 PR #717). All four processors (P2P, Transaction, Cleanup, ContactStatus) were crash-looping on startup
 - Fix missing `ContactStatusService::setChainDropService()` setter: wiring call existed in `ServiceContainer::wireCircularDependencies()` but the method was never added (regression from ARCH-05 PR #717)
 
