@@ -11,16 +11,28 @@
     <?php
     $noticeFile = '/app/scripts/legal-notice.txt';
     if (file_exists($noticeFile)):
-        $noticeLines = explode("\n", trim(file_get_contents($noticeFile)));
-        $noticeTitle = htmlspecialchars(trim($noticeLines[0]));
+        $raw = trim(file_get_contents($noticeFile));
+        $allLines = explode("\n", $raw);
+        $noticeTitle = htmlspecialchars(trim($allLines[0]));
         // Body starts after the title and any blank lines following it
         $i = 1;
-        while ($i < count($noticeLines) && trim($noticeLines[$i]) === '') { $i++; }
-        $noticeBody = htmlspecialchars(trim(implode("\n", array_slice($noticeLines, $i))));
+        while ($i < count($allLines) && trim($allLines[$i]) === '') { $i++; }
+        $bodyText = implode("\n", array_slice($allLines, $i));
+        // Split into paragraphs on blank lines, then join hard-wrapped lines
+        $paragraphs = preg_split('/\n\s*\n/', trim($bodyText));
     ?>
     <details class="legal-notice">
         <summary><?php echo $noticeTitle; ?></summary>
-        <div class="legal-notice-body"><?php echo $noticeBody; ?></div>
+        <div class="legal-notice-body">
+            <?php foreach ($paragraphs as $para):
+                $para = trim($para);
+                if ($para === '') continue;
+                // Join hard-wrapped lines into flowing text
+                $text = preg_replace('/\s*\n\s*/', ' ', $para);
+            ?>
+            <p><?php echo htmlspecialchars($text); ?></p>
+            <?php endforeach; ?>
+        </div>
     </details>
     <?php endif; ?>
 </div>

@@ -108,6 +108,7 @@ body {
     max-width: 400px;
     width: 90%;
     margin-top: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .alpha-warning {
@@ -155,7 +156,10 @@ body {
     line-height: 1.5;
     color: #6c757d;
     text-align: left;
-    white-space: pre-line;
+}
+
+.legal-notice-body p {
+    margin-bottom: 0.5rem;
 }
 
 /* Loading Overlay and Spinner */
