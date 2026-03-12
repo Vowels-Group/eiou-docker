@@ -255,7 +255,7 @@ remove_container_if_exists() {
     fi
     echo "Removing any volumes of container: $container_name (if they exist)..."
     remove_volume_if_exists "$container_name-mysql-data"
-    remove_volume_if_exists "$container_name-files"
+    remove_volume_if_exists "$container_name-config"
     remove_volume_if_exists "$container_name-letsencrypt"
     remove_volume_if_exists "$container_name-backups"
 }

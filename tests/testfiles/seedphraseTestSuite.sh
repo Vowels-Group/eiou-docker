@@ -418,7 +418,7 @@ restoreContainer="httpRestoreSeedTest"
 # Clean up any existing container and volumes from previous runs
 # Without this, stale volumes cause ConfigCheck to skip RESTORE (userconfig.json already exists)
 docker rm -f ${restoreContainer} > /dev/null 2>&1
-docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-config ${restoreContainer}-backups ${restoreContainer}-letsencrypt > /dev/null 2>&1
 
 restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-config:/etc/eiou/config" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
@@ -605,7 +605,7 @@ fi
 
 # Clean up the restore container from Step 1.12
 docker rm -f ${restoreContainer} > /dev/null 2>&1
-docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-config ${restoreContainer}-backups ${restoreContainer}-letsencrypt > /dev/null 2>&1
 
 ################################################################################
 #                    PART 2: SECURE SEEDPHRASE DISPLAY TEST
@@ -923,7 +923,7 @@ restoreFileContainer="httpRestoreFileTest"
 
 # Clean up any existing container first
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-config ${restoreFileContainer}-backups ${restoreFileContainer}-letsencrypt > /dev/null 2>&1
 
 # Create the container
 # MSYS_NO_PATHCONV=1 disables Git Bash path conversion for this command
@@ -962,7 +962,7 @@ fi
 
 # Clean up the new container
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-config ${restoreFileContainer}-backups ${restoreFileContainer}-letsencrypt > /dev/null 2>&1
 rm -f "${hostSeedFile}"
 
 if [[ "$seedInEnv" == "0" ]] && [[ "$seedInLogs" == "0" ]] && [[ "$originalPubKeyRestoreFile" == "$restoredPubKeyRestoreFile" ]] && [[ "$restoredPubKeyRestoreFile" != "ERROR" ]]; then
@@ -1032,7 +1032,7 @@ fi
 
 # Clean up the new container
 docker rm -f ${restoreEnvContainer} > /dev/null 2>&1
-docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-files ${restoreEnvContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-config ${restoreEnvContainer}-backups ${restoreEnvContainer}-letsencrypt > /dev/null 2>&1
 
 if [[ "$threeWordInLogs" == "0" ]] && [[ "$originalPubKeyRestoreEnv" == "$restoredPubKeyRestoreEnv" ]] && [[ "$restoredPubKeyRestoreEnv" != "ERROR" ]]; then
     printf "\t   RESTORE env var approach ${GREEN}PASSED${NC}\n"
@@ -1391,7 +1391,7 @@ fi
 
 echo -e "\n\t-> Cleaning up test container..."
 docker rm -f ${authcodeRestoreContainer} 2>/dev/null
-docker volume rm ${authcodeRestoreContainer}-mysql-data ${authcodeRestoreContainer}-files ${authcodeRestoreContainer}-eiou 2>/dev/null
+docker volume rm ${authcodeRestoreContainer}-mysql-data ${authcodeRestoreContainer}-config ${authcodeRestoreContainer}-backups ${authcodeRestoreContainer}-letsencrypt 2>/dev/null
 
 ############################ AUTHCODE SUMMARY ############################
 
@@ -1436,7 +1436,7 @@ originalPubKeyQs=$(docker exec ${testContainer} php -r '
 # Create a new container with both RESTORE and QUICKSTART
 restoreQsContainer="httpRestoreQuickstartTest"
 docker rm -f ${restoreQsContainer} > /dev/null 2>&1
-docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-files ${restoreQsContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-config ${restoreQsContainer}-backups ${restoreQsContainer}-letsencrypt > /dev/null 2>&1
 
 docker run -d --network="${network}" --name "${restoreQsContainer}" \
     -e RESTORE="${restoreQsSeedPhrase}" \
@@ -1529,7 +1529,7 @@ fi
 
 echo -e "\n\t-> Cleaning up RESTORE + QUICKSTART container..."
 docker rm -f ${restoreQsContainer} 2>/dev/null
-docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-files ${restoreQsContainer}-eiou 2>/dev/null
+docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-config ${restoreQsContainer}-backups ${restoreQsContainer}-letsencrypt 2>/dev/null
 
 ############################ TEST 4.5: RESTORE_FILE + QUICKSTART ############################
 
@@ -1544,7 +1544,7 @@ chmod 600 "${hostSeedFileQs}"
 # Create a new container with both RESTORE_FILE and QUICKSTART
 restoreFileQsContainer="httpRestoreFileQsTest"
 docker rm -f ${restoreFileQsContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-files ${restoreFileQsContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-config ${restoreFileQsContainer}-backups ${restoreFileQsContainer}-letsencrypt > /dev/null 2>&1
 
 MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileQsContainer}" \
     -v "${hostSeedFileQs}:/restore/seed:ro" \
@@ -1627,7 +1627,7 @@ fi
 
 echo -e "\n\t-> Cleaning up RESTORE_FILE + QUICKSTART container..."
 docker rm -f ${restoreFileQsContainer} 2>/dev/null
-docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-files ${restoreFileQsContainer}-eiou 2>/dev/null
+docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-config ${restoreFileQsContainer}-backups ${restoreFileQsContainer}-letsencrypt 2>/dev/null
 rm -f "${hostSeedFileQs}"
 
 ############################ PART 4 SUMMARY ############################
