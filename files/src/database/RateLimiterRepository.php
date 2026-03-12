@@ -15,16 +15,20 @@ use PDOException;
  *
  * @package Database
  */
-class RateLimiterRepository {
-    private PDO $pdo;
+class RateLimiterRepository extends AbstractRepository {
+    protected $tableName = 'rate_limits';
+    protected array $allowedColumns = [
+        'identifier', 'action', 'attempts', 'first_attempt',
+        'last_attempt', 'blocked_until'
+    ];
 
     /**
      * Initialize repository with database connection
      *
-     * @param PDO $pdo Database connection
+     * @param PDO|null $pdo Database connection
      */
-    public function __construct(PDO $pdo) {
-        $this->pdo = $pdo;
+    public function __construct(?PDO $pdo = null) {
+        parent::__construct($pdo);
     }
 
     /**

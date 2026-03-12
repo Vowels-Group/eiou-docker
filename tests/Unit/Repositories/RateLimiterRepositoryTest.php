@@ -3,8 +3,6 @@
  * Unit Tests for RateLimiterRepository
  *
  * Tests rate limiter repository database operations with mocked PDO.
- * Note: RateLimiterRepository does NOT extend AbstractRepository,
- * so it has different patterns for PDO handling.
  */
 
 namespace Eiou\Tests\Repositories;
