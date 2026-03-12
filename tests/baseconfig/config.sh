@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ############################### Base Configuration #################################
-# Shared configuration variables and helper functions for EIOU Docker test suite
+# Shared configuration variables and helper functions for eIOU Docker test suite
 #
 # This file provides:
 # - Container name arrays and network configuration

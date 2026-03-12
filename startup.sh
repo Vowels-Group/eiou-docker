@@ -2,9 +2,9 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 # =============================================================================
-# startup.sh - EIOU Node Container Entrypoint
+# startup.sh - eIOU Node Container Entrypoint
 # =============================================================================
-# This script initializes and runs an EIOU node container.
+# This script initializes and runs an eIOU node container.
 #
 # Startup Sequence:
 #   1. Configure output buffering for real-time logging
@@ -1604,7 +1604,7 @@ echo "Watchdog started (PID: $WATCHDOG_PID)"
 
 echo ""
 echo "=========================================="
-echo "EIOU Node started successfully!"
+echo "eIOU Node started successfully!"
 echo "All processors running. Ready for graceful shutdown on SIGTERM/SIGINT."
 echo "=========================================="
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 
-# Automated test runner for EIOU Docker test suite
+# Automated test runner for eIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction
 #
 # Usage: ./run-all-tests.sh <build_name> [mode] [subset]
@@ -222,7 +222,7 @@ run_test() {
 # Start test execution
 printf "\n"
 printf "========================================\n"
-printf "  EIOU Docker Automated Test Runner\n"
+printf "  eIOU Docker Automated Test Runner\n"
 printf "========================================\n"
 printf "Build:  ${BUILD_NAME}\n"
 printf "Mode:   ${MODE}\n"

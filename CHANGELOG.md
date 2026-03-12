@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the EIOU Docker project will be documented in this file.
+All notable changes to the eIOU Docker project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -18,6 +18,8 @@ The project is currently in **ALPHA** status.
 
 ### Docs
 - Add alpha/staging warning and legal notice to README.md
+- Standardize branding: rename "EIOU" to "eIOU" in all prose text across 58 files (docs, comments, configs, tests). Preserves uppercase in code values (currency codes, SSL cert fields, PHP namespaces)
+- Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 
 ### Fixed
 - Fix GUI crash from removed `get*Repository()` methods on `ServiceContainer` (regression from ARCH-05 PR #717): migrate 6 calls in `index.html` and `settingsSection.html` to use `getRepositoryFactory()->get()` — affected `getP2pRepository`, `getRp2pRepository`, `getRp2pCandidateRepository`, `getDeadLetterQueueRepository`, `getTransactionRepository`, `getDebugRepository`

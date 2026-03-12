@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 # =============================================================================
-# banner.sh - EIOU Startup Warning Banners
+# banner.sh - eIOU Startup Warning Banners
 # =============================================================================
 # Displays warning banners during container startup.
 # Uses horizontal rules for visual separation — no side borders, so there

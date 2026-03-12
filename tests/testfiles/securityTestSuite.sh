@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ############################ Security Test Suite ############################
-# Comprehensive security testing for the EIOU application
+# Comprehensive security testing for the eIOU application
 #
 # Verifies:
 # - SQL injection protection on API endpoints

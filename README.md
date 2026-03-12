@@ -2,9 +2,9 @@
 >
 > This is an alpha/staging version of eIOU. Do NOT use this for real financial transactions. All data may be reset without notice. For testing purposes only.
 
-# EIOU Docker
+# eIOU Docker
 
-Run an EIOU node with a single `docker compose` command. The container includes everything needed: nginx, PHP-FPM, MariaDB, Tor, PHP processors, and the web GUI.
+Run an eIOU node with a single `docker compose` command. The container includes everything needed: nginx, PHP-FPM, MariaDB, Tor, PHP processors, and the web GUI.
 
 ## Key Features
 
@@ -108,12 +108,12 @@ This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wall
 ```yaml
 environment:
   - QUICKSTART=mynode
-  - EIOU_NAME=My EIOU Node
+  - EIOU_NAME=My eIOU Node
   - EIOU_HOST=88.99.69.172
   - EIOU_PORT=8443
 ```
 
-This generates addresses `http://88.99.69.172:8443` and `https://88.99.69.172:8443`, with "My EIOU Node" as the local display name.
+This generates addresses `http://88.99.69.172:8443` and `https://88.99.69.172:8443`, with "My eIOU Node" as the local display name.
 
 **Priority:** Address: `EIOU_HOST` > `QUICKSTART` | Name: `EIOU_NAME` > `QUICKSTART` | SSL CN: `SSL_DOMAIN` > `EIOU_HOST` > `QUICKSTART`
 

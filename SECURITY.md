@@ -1,6 +1,6 @@
 # Security Policy
 
-Security policy and guidelines for the EIOU Docker project.
+Security policy and guidelines for the eIOU Docker project.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ Security policy and guidelines for the EIOU Docker project.
 
 ## Project Status
 
-EIOU Docker is currently in **ALPHA** status.
+eIOU Docker is currently in **ALPHA** status.
 
 **WARNING: Do NOT use this software for real financial transactions.** The codebase has not undergone a formal third-party security audit. While security measures are implemented throughout the system, alpha software may contain undiscovered vulnerabilities. Use this software for development, testing, and evaluation purposes only.
 
@@ -23,14 +23,14 @@ EIOU Docker is currently in **ALPHA** status.
 
 ## Supported Versions
 
-EIOU Docker follows a rolling-release model during the alpha phase. Security patches are applied to the latest version on the `main` branch only. There is no backporting of fixes to older commits or tags during alpha.
+eIOU Docker follows a rolling-release model during the alpha phase. Security patches are applied to the latest version on the `main` branch only. There is no backporting of fixes to older commits or tags during alpha.
 
 | Version | Status | Security Updates |
 |---------|--------|------------------|
 | `main` (latest) | Alpha | Yes |
 | Older commits | Alpha | No |
 
-Once EIOU Docker reaches a stable release, a formal versioning and support policy will be published.
+Once eIOU Docker reaches a stable release, a formal versioning and support policy will be published.
 
 ---
 
@@ -125,7 +125,7 @@ The container itself follows secure seed handling internally: temporary copies a
 
 ### Volume Security
 
-EIOU containers persist critical data in Docker volumes. Loss of these volumes means loss of wallet access and transaction history.
+eIOU containers persist critical data in Docker volumes. Loss of these volumes means loss of wallet access and transaction history.
 
 | Volume | Contains | Backup Priority |
 |--------|----------|-----------------|
@@ -166,7 +166,7 @@ EIOU containers persist critical data in Docker volumes. Loss of these volumes m
 
 ### Running Behind an External Reverse Proxy
 
-The built-in nginx provides connection-level rate limiting, connection limits, and timeouts — so the container is safe to expose directly. However, if you already run a reverse proxy (Traefik, Caddy, nginx, HAProxy) for centralized SSL management, domain routing, or multiple services on the same host, you can place the EIOU container behind it.
+The built-in nginx provides connection-level rate limiting, connection limits, and timeouts — so the container is safe to expose directly. However, if you already run a reverse proxy (Traefik, Caddy, nginx, HAProxy) for centralized SSL management, domain routing, or multiple services on the same host, you can place the eIOU container behind it.
 
 **Step 1: Restrict container ports to localhost**
 
@@ -299,7 +299,7 @@ CI monitors the digest monthly and opens a GitHub issue when it becomes stale.
 
 ## Security Architecture Overview
 
-EIOU Docker implements security at multiple layers. This section provides a brief summary. For detailed technical documentation, see [Architecture - Security Model](docs/ARCHITECTURE.md#security-model).
+eIOU Docker implements security at multiple layers. This section provides a brief summary. For detailed technical documentation, see [Architecture - Security Model](docs/ARCHITECTURE.md#security-model).
 
 ### Cryptographic Foundations
 

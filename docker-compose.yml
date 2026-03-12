@@ -1,9 +1,9 @@
 # Copyright 2025-2026 Vowels Group, LLC
 # =============================================================================
-# EIOU Docker Compose
+# eIOU Docker Compose
 # =============================================================================
 #
-# Runs a single EIOU node with all services (nginx, PHP-FPM, MariaDB, Tor).
+# Runs a single eIOU node with all services (nginx, PHP-FPM, MariaDB, Tor).
 #
 # Quick start:
 #   docker compose up -d --build
@@ -35,7 +35,7 @@ services:
       - eiou-network
     ports:
       # Bind to all interfaces so the node accepts incoming P2P connections
-      # from other EIOU nodes on the internet. The built-in nginx provides
+      # from other eIOU nodes on the internet. The built-in nginx provides
       # connection-level rate limiting, connection limits, and timeouts.
       - "80:80"
       - "443:443"

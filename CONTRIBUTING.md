@@ -1,10 +1,10 @@
-# Contributing to EIOU Docker
+# Contributing to eIOU Docker
 
-**Note: EIOU Docker is not currently accepting external contributions.** This document is a template for future use when the project opens to community contributions.
+**Note: eIOU Docker is not currently accepting external contributions.** This document is a template for future use when the project opens to community contributions.
 
 ---
 
-Thank you for your interest in contributing to EIOU Docker. This project is in ALPHA status and we welcome contributions that improve reliability, expand test coverage, and strengthen the codebase.
+Thank you for your interest in contributing to eIOU Docker. This project is in ALPHA status and we welcome contributions that improve reliability, expand test coverage, and strengthen the codebase.
 
 This guide covers everything you need to get started: setting up your development environment, understanding the codebase, writing and running tests, and submitting pull requests.
 
@@ -577,6 +577,6 @@ Documentation style:
 
 ## License
 
-By contributing to EIOU Docker, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
+By contributing to eIOU Docker, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
 
 Copyright 2025-2026 Vowels Group, LLC

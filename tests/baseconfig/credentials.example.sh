@@ -11,7 +11,7 @@
 #
 # 3. Update values below with your test-specific credentials (if any)
 #
-# IMPORTANT: Most EIOU credentials are auto-generated and do not require
+# IMPORTANT: Most eIOU credentials are auto-generated and do not require
 # manual configuration. This file is for edge cases only.
 #
 # Current auto-generated credentials (NO ACTION REQUIRED):

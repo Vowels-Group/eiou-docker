@@ -1,6 +1,6 @@
-# EIOU GUI Reference
+# eIOU GUI Reference
 
-Complete documentation for the EIOU Docker node web-based GUI.
+Complete documentation for the eIOU Docker node web-based GUI.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ Complete documentation for the EIOU Docker node web-based GUI.
 
 ## Architecture Overview
 
-The EIOU GUI is a server-rendered PHP web application optimized for Tor Browser compatibility. It follows an MVC-inspired pattern with controllers handling POST requests and HTML templates rendering the view.
+The eIOU GUI is a server-rendered PHP web application optimized for Tor Browser compatibility. It follows an MVC-inspired pattern with controllers handling POST requests and HTML templates rendering the view.
 
 ### Request Flow
 
@@ -477,7 +477,7 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 | Tab | Contents |
 |-----|----------|
 | App Logs | Debug entries from database |
-| EIOU Log | `/var/log/eiou/app.log` |
+| eIOU Log | `/var/log/eiou/app.log` |
 | PHP Logs | PHP error log |
 | nginx Logs | nginx error log |
 | System Info | PHP version, extensions, config files, constants |

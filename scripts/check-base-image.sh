@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Base Image Digest Checker for EIOU Docker
+# Base Image Digest Checker for eIOU Docker
 #
 # Compares the SHA256 digest pinned in eiou.dockerfile against the latest
 # digest published on Docker Hub for debian:12-slim. Reports whether the
@@ -27,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOCKERFILE="$SCRIPT_DIR/../eiou.dockerfile"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  EIOU Base Image Digest Checker${NC}"
+echo -e "${GREEN}  eIOU Base Image Digest Checker${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 

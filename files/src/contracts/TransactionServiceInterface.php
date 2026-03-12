@@ -12,7 +12,7 @@ use Eiou\Cli\CliOutputManager;
 interface TransactionServiceInterface
 {
     /**
-     * Send EIOU transaction.
+     * Send eIOU transaction.
      *
      * @param array $request The transaction request data
      * @param CliOutputManager|null $output Optional CLI output manager for feedback

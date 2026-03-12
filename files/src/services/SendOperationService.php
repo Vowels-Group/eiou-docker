@@ -375,7 +375,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     }
 
     /**
-     * Send a P2P EIOU transaction after route discovery.
+     * Send a P2P eIOU transaction after route discovery.
      *
      * Implements P2pTransactionSenderInterface::sendP2pEiou().
      * This allows Rp2pService to depend on this interface instead of

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
-# Test graceful shutdown handling for EIOU Docker containers
+# Test graceful shutdown handling for eIOU Docker containers
 # Verifies that containers shut down properly without data loss
 
 echo -e "\nTesting Graceful Shutdown Handling..."
