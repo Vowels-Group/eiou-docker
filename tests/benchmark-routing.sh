@@ -317,7 +317,7 @@ establish_contacts() {
     local transport=$(getPhpTransportType "$addr")
     local status=$(docker exec ${first_pair[0]} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus('$transport','$addr');
+        echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus('$transport','$addr');
     " 2>/dev/null || echo "unknown")
     printf "  Sample contact %s->%s status: %s\n" "${first_pair[0]}" "${first_pair[1]}" "$status"
 }
@@ -365,7 +365,7 @@ do_send() {
     # Balance command template
     local balance_cmd="php -r \"
         require_once('${BOOTSTRAP_PATH}');
-        \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+        \\\$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
         echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
     \""
 
@@ -557,7 +557,7 @@ do_burst() {
     # Balance command template
     local balance_cmd="php -r \"
         require_once('${BOOTSTRAP_PATH}');
-        \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+        \\\$balance = \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalanceCurrency('USD');
         echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
     \""
 

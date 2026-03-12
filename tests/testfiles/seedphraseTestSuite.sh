@@ -129,7 +129,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.4: Decrypting seed phrase from encrypted mnemonic"
 
 seedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
@@ -621,7 +621,7 @@ echo -e "\n\t-> Step 2.1: Checking that seedphrase is NOT in docker logs"
 
 # Get the encrypted mnemonic and decrypt it
 actualSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
@@ -660,7 +660,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2.2: Verifying mnemonic is properly stored in userconfig.json"
 
 mnemonicCheck=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (!isset($json["mnemonic_encrypted"])) {
         echo "NO_MNEMONIC";
@@ -714,7 +714,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2.4: Testing SecureSeedphraseDisplay class availability"
 
 displayClassCheck=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/utils/SecureSeedphraseDisplay.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $availability = \Eiou\Utils\SecureSeedphraseDisplay::checkAvailability();
     echo json_encode($availability);
 ' 2>&1)
@@ -736,7 +736,7 @@ echo -e "\n\t-> Step 2.5: Testing secure file display method"
 
 # Test the file-based display (simulating non-TTY environment)
 fileDisplayTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/utils/SecureSeedphraseDisplay.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     // Force non-TTY mode by testing the file method directly
     $testPhrase = "test word one two three four five six seven eight nine ten eleven twelve";
@@ -786,7 +786,7 @@ echo -e "\n\t-> Step 2.6: Testing restore-file command"
 
 # First, get the current seedphrase
 currentSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
@@ -867,7 +867,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2.8: Testing SecureLogger masks seedphrases"
 
 loggerMaskTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/utils/SecureLogger.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     // Test that SecureLogger masks a seedphrase pattern
     $testMessage = "mnemonic=abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -906,7 +906,7 @@ hostSeedFile="$(pwd)/eiou_test_restore_seed_$$"
 
 # Get the current seedphrase
 docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' > "${hostSeedFile}" 2>&1
@@ -992,7 +992,7 @@ echo -e "\n\t-> Step 2.10: Testing RESTORE env var approach"
 
 # Get the current seedphrase from existing container
 restoreEnvSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
@@ -1129,7 +1129,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.3: Decrypting seed phrase from encrypted mnemonic"
 
 seedPhraseAuth=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
@@ -1422,7 +1422,7 @@ echo -e "\n\t-> Step 4.1: Testing RESTORE + QUICKSTART applies hostname to resto
 
 # Get the current seedphrase from existing container
 restoreQsSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
@@ -1706,8 +1706,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 5.3: Creating authcode temp file and verifying contents"
 
 authcodeFileTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/vendor/autoload.php";
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     // Get the actual authcode
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
@@ -1758,8 +1757,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 5.4: Verifying authcode temp file does NOT contain the seedphrase"
 
 seedInFileTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/vendor/autoload.php";
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"] ?? "");

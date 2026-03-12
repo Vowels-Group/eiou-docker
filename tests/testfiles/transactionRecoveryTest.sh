@@ -252,7 +252,7 @@ claimResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_claim_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -284,7 +284,7 @@ dupResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_dup_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -314,7 +314,7 @@ sentResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_sent_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -343,7 +343,7 @@ markResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_mark_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -377,7 +377,7 @@ stuckResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_stuck_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
@@ -409,7 +409,7 @@ resetResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_reset_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
@@ -443,7 +443,7 @@ maxRetryResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_maxretry_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
@@ -477,7 +477,7 @@ concurrentResult=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRecoveryRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRecoveryRepository::class);
 
     \$txid = 'test_recovery_concurrent_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,

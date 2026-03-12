@@ -194,7 +194,7 @@ function wait_for_tx_status(){
         status=$(docker exec $container php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$tx = \$app->services->getTransactionRepository()->getByTxid('$txid');
+            \$tx = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getByTxid('$txid');
             echo \$tx['status'] ?? 'unknown';
         " 2>/dev/null || echo "unknown")
 
@@ -224,7 +224,7 @@ function wait_for_contact(){
         local contact_exists=$(docker exec $container php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportCheck}','$address');
+            \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportCheck}','$address');
             echo \$contact ? 'yes' : 'no';
         " 2>/dev/null || echo "no")
 

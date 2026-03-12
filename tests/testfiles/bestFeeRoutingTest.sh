@@ -108,7 +108,7 @@ echo -e "\t-> Checking Rp2pCandidateRepository methods on ${testSender}"
 repoCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$repo = \$app->services->getRp2pCandidateRepository();
+    \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\Rp2pCandidateRepository::class);
     \$methods = ['insertCandidate', 'getCandidatesByHash', 'getBestCandidate', 'getCandidateCount', 'deleteCandidatesByHash'];
     \$missing = [];
     foreach (\$methods as \$m) {
