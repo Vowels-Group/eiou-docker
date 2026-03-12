@@ -5,10 +5,10 @@ docker network create -d bridge demo-net
 docker rm -f Alice Bob Carol Daniel
 
 # Remove associated volumes (if any)
-docker volume rm Alice-mysql-data Alice-files Alice-backups Alice-letsencrypt
-docker volume rm Bob-mysql-data Bob-files Bob-backups Bob-letsencrypt
-docker volume rm Carol-mysql-data Carol-files Carol-backups Carol-letsencrypt
-docker volume rm Daniel-mysql-data Daniel-files Daniel-backups Daniel-letsencrypt
+docker volume rm Alice-mysql-data Alice-config Alice-backups Alice-letsencrypt
+docker volume rm Bob-mysql-data Bob-config Bob-backups Bob-letsencrypt
+docker volume rm Carol-mysql-data Carol-config Carol-backups Carol-letsencrypt
+docker volume rm Daniel-mysql-data Daniel-config Daniel-backups Daniel-letsencrypt
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .

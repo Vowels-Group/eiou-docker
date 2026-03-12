@@ -80,7 +80,7 @@ done
 echo "Removing associated volumes (if any)..."
 for container in "${containers[@]}"; do
     remove_volume_if_exists "${container}-mysql-data"
-    remove_volume_if_exists "${container}-files"
+    remove_volume_if_exists "${container}-config"
     remove_volume_if_exists "${container}-letsencrypt"
     remove_volume_if_exists "${container}-backups"
 done

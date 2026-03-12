@@ -5,10 +5,10 @@ docker network create -d bridge demo-net
 docker rm -f http0 http1 http2 http3
 
 # Remove associated volumes (if any)
-docker volume rm http0-mysql-data http0-files http0-backups http0-letsencrypt
-docker volume rm http1-mysql-data http1-files http1-backups http1-letsencrypt
-docker volume rm http2-mysql-data http2-files http2-backups http2-letsencrypt
-docker volume rm http3-mysql-data http3-files http3-backups http3-letsencrypt
+docker volume rm http0-mysql-data http0-config http0-backups http0-letsencrypt
+docker volume rm http1-mysql-data http1-config http1-backups http1-letsencrypt
+docker volume rm http2-mysql-data http2-config http2-backups http2-letsencrypt
+docker volume rm http3-mysql-data http3-config http3-backups http3-letsencrypt
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
