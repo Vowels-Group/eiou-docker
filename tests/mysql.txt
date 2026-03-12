@@ -17,7 +17,15 @@ SELECT message FROM debug;
 # CONTACTS TABLE
 # ============================================================
 # Full contacts info (excludes pubkey, pubkey_hash)
-SELECT id, contact_id, name, status, currency, fee_percent, credit_limit, online_status, valid_chain, last_ping_at, created_at FROM contacts;
+# Note: fee_percent, credit_limit, and currency have moved to contact_currencies
+SELECT id, contact_id, name, status, online_status, valid_chain, created_at, last_ping_at FROM contacts;
+
+# ============================================================
+# CONTACT_CURRENCIES TABLE
+# ============================================================
+# Per-contact currency settings (fee, credit limit, direction)
+# Replaced the old fee_percent/credit_limit/currency columns on contacts
+SELECT id, pubkey_hash, currency, fee_percent, credit_limit, status, direction, created_at, updated_at FROM contact_currencies;
 
 # ============================================================
 # ADDRESSES TABLE
@@ -34,14 +42,14 @@ SELECT id, received, sent, currency FROM balances;
 # ============================================================
 # TRANSACTIONS TABLE
 # ============================================================
-# Full transactions (excludes pubkey, pubkey_hash, signatures, nonce)
-SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, timestamp, time, txid, previous_txid, memo, description, sending_started_at, recovery_count, needs_manual_review FROM transactions;
+# Full transactions (excludes pubkey, pubkey_hash, signatures, nonce, signed_message_content)
+SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, timestamp, time, txid, previous_txid, memo, description, sending_started_at, recovery_count, needs_manual_review, expires_at FROM transactions;
 
 # ============================================================
 # P2P TABLE
 # ============================================================
 # Peer-to-peer requests (excludes pubkey, signatures, salt)
-SELECT id, hash, time, expiration, currency, amount, my_fee_amount, destination_address, request_level, max_request_level, sender_address, description, fast, contacts_sent_count, contacts_responded_count, hop_wait, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, status, sending_started_at, sending_worker_pid, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
+SELECT id, hash, time, expiration, currency, amount, my_fee_amount, rp2p_amount, destination_address, request_level, max_request_level, sender_address, description, fast, contacts_sent_count, contacts_responded_count, hop_wait, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, status, sending_started_at, sending_worker_pid, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
 
 # ============================================================
 # RP2P TABLE
@@ -68,6 +76,18 @@ SELECT id, hash, sender_address, created_at FROM p2p_senders;
 SELECT id, hash, contact_address, created_at FROM p2p_relayed_contacts;
 
 # ============================================================
+# ROUTE_CANCELLATIONS TABLE
+# ============================================================
+# Cancel messages sent to losing P2P candidates after best-fee selection
+SELECT id, hash, candidate_id, contact_address, status, created_at, acknowledged_at FROM route_cancellations;
+
+# ============================================================
+# CAPACITY_RESERVATIONS TABLE
+# ============================================================
+# Credit capacity reserved during P2P routing (released on cancel/expire/commit)
+SELECT id, hash, contact_pubkey_hash, base_amount, total_amount, currency, status, created_at, released_at, release_reason FROM capacity_reservations;
+
+# ============================================================
 # CHAIN_DROP_PROPOSALS TABLE
 # ============================================================
 # Mutual agreements to drop missing transactions
@@ -78,6 +98,12 @@ SELECT id, proposal_id, contact_pubkey_hash, missing_txid, broken_txid, previous
 # ============================================================
 # API keys for external access (excludes encrypted_secret)
 SELECT id, key_id, name, permissions, rate_limit_per_minute, enabled, created_at, last_used_at, expires_at FROM api_keys;
+
+# ============================================================
+# API_NONCES TABLE
+# ============================================================
+# Nonce replay protection for API requests (auto-cleaned after expiry)
+SELECT nonce, key_id, created_at FROM api_nonces;
 
 # ============================================================
 # API_REQUEST_LOG TABLE

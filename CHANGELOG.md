@@ -16,6 +16,9 @@ The project is currently in **ALPHA** status.
 - Fix `RateLimiterRepository` crash: extend `AbstractRepository` so it can be created via `RepositoryFactory` (regression from ARCH-05 PR #717). All four processors (P2P, Transaction, Cleanup, ContactStatus) were crash-looping on startup
 - Fix missing `ContactStatusService::setChainDropService()` setter: wiring call existed in `ServiceContainer::wireCircularDependencies()` but the method was never added (regression from ARCH-05 PR #717)
 
+### Docs
+- Update MySQL overview files (`tests/mysql.txt`, `tests/mysql - easy overview.txt`): add 4 new tables (`api_nonces`, `capacity_reservations`, `contact_currencies`, `route_cancellations`); remove stale `fee_percent`/`credit_limit`/`currency` columns from contacts (moved to `contact_currencies`); add missing columns across p2p (`rp2p_amount`, `expiration`), transactions (`expires_at`), message_delivery (`max_retries`, `next_retry_at`, `last_response`), held_transactions (`max_retries`, `last_sync_attempt`, `next_retry_at`), chain_drop_proposals (`previous_txid_before_gap`, `gap_context`, `updated_at`), delivery_metrics (`created_at`), dead_letter_queue (`last_retry_at`), contacts (`created_at`). All 23 tables now validated against live database
+
 ### Changed
 - Convert `eiou.dockerfile` to multi-stage build (DOCK-04): Composer and `unzip` are now isolated in a builder stage; only the pre-built `vendor/` directory is copied into the runtime image. Removes ~20-30MB of build-only tooling from the final image and eliminates Composer as a post-compromise attack vector
 - Add PHP type hints across codebase (CQ-03): add return type `: string` and parameter types to all 90+ `OutputSchema.php` functions; add typed properties and constructor parameter types to `ApiKeyService`, `ApiAuthService`; add return types and parameter types to `DebugService` methods and `DebugServiceInterface`; add `mixed` type to `ApiKeyService::validateRateLimit()` parameter
