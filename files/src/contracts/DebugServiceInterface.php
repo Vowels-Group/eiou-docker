@@ -22,7 +22,7 @@ interface DebugServiceInterface
      *
      * @return string JSON-encoded context information
      */
-    public function getContext();
+    public function getContext(): string;
 
     /**
      * Output a debug message
@@ -34,7 +34,7 @@ interface DebugServiceInterface
      * @param string $level The log level (default: 'ECHO')
      * @return void
      */
-    public function output($message, $level = 'ECHO');
+    public function output(string $message, string $level = 'ECHO'): void;
 
     /**
      * Setup error logging configuration
@@ -44,5 +44,5 @@ interface DebugServiceInterface
      *
      * @return void
      */
-    public function setupErrorLogging();
+    public function setupErrorLogging(): void;
 }

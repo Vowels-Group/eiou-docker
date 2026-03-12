@@ -25,7 +25,7 @@ use Eiou\Utils\Security;
 
 class ApiAuthService implements ApiAuthServiceInterface {
     private ApiKeyRepository $apiKeyRepository;
-    private $logger;
+    private ?Logger $logger;
 
     /**
      * Maximum age of a request timestamp in seconds (5 minutes)
@@ -43,7 +43,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * @param ApiKeyRepository $apiKeyRepository
      * @param Logger|null $logger
      */
-    public function __construct($apiKeyRepository, $logger = null) {
+    public function __construct(ApiKeyRepository $apiKeyRepository, ?Logger $logger = null) {
         $this->apiKeyRepository = $apiKeyRepository;
         $this->logger = $logger;
     }
