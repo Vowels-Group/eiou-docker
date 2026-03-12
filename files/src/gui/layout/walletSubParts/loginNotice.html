@@ -23,10 +23,22 @@
             <?php foreach ($paragraphs as $para):
                 $para = trim($para);
                 if ($para === '') continue;
-                // Join hard-wrapped lines into flowing text
-                $text = preg_replace('/\s*\n\s*/', ' ', $para);
+                // Join hard-wrapped lines but keep breaks before numbered items
+                $lines = explode("\n", $para);
+                $text = '';
+                foreach ($lines as $l) {
+                    $l = trim($l);
+                    if ($l === '') continue;
+                    if (preg_match('/^\d+\./', $l) && $text !== '') {
+                        $text .= "\n" . $l;
+                    } elseif ($text === '') {
+                        $text = $l;
+                    } else {
+                        $text .= ' ' . $l;
+                    }
+                }
             ?>
-            <p><?php echo htmlspecialchars($text); ?></p>
+            <p><?php echo nl2br(htmlspecialchars($text)); ?></p>
             <?php endforeach; ?>
         </div>
     </details>

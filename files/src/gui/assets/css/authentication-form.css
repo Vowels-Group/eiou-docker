@@ -16,20 +16,9 @@
     background: #16213e;
 }
 
-.banner-container + .alpha-warning {
-    border-radius: 0;
-    margin-top: 0;
-    border-top: none;
-}
-
-.banner-container + .alpha-warning + .auth-container {
+.banner-container + .auth-container {
     border-radius: 0 0 8px 8px;
     margin-top: 0;
-}
-
-.alpha-warning + .auth-container {
-    margin-top: 0;
-    border-radius: 0 0 8px 8px;
 }
 
 .banner-image {
@@ -126,11 +115,12 @@ body {
 .alpha-warning {
     background: #fff8e1;
     border: 1px solid #f9a825;
-    border-radius: 0;
+    border-radius: 6px;
     padding: 0.75rem 1rem;
     text-align: center;
     max-width: 400px;
     width: 90%;
+    margin-bottom: 1.5rem;
 }
 
 .alpha-warning strong {
