@@ -12,11 +12,23 @@
 <body>
     <!-- Banner -->
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/banner.html");?>
-    <!-- Alpha Warning -->
+    <!-- Alpha Warning — loaded from /app/scripts/alpha-warning.txt -->
+    <?php
+    $warningFile = '/app/scripts/alpha-warning.txt';
+    if (file_exists($warningFile)):
+        $warnLines = explode("\n", trim(file_get_contents($warningFile)));
+        $warnTitle = htmlspecialchars(trim($warnLines[0]));
+        $warnBody = [];
+        for ($w = 1; $w < count($warnLines); $w++) {
+            $l = trim($warnLines[$w]);
+            if ($l !== '') { $warnBody[] = htmlspecialchars($l); }
+        }
+    ?>
     <div class="alpha-warning">
-        <strong>&#9888; Alpha/Staging Version</strong>
-        <p>Do not use for real financial transactions. All data may be reset without notice.</p>
+        <strong>&#9888; <?php echo $warnTitle; ?></strong>
+        <p><?php echo implode(' ', $warnBody); ?></p>
     </div>
+    <?php endif; ?>
 
     <div class="auth-container">
         <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
