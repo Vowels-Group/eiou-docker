@@ -16,7 +16,9 @@ The project is currently in **ALPHA** status.
 - Add legal notice banner to container startup (`scripts/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
 
 ### Fixed
-- Fix startup banner right-border alignment: replace hardcoded padding with `printf` fixed-width formatting so the right `║` borders align consistently across all banner functions
+- Fix GUI crash from removed `get*Repository()` methods on `ServiceContainer` (regression from ARCH-05 PR #717): migrate 6 calls in `index.html` and `settingsSection.html` to use `getRepositoryFactory()->get()` — affected `getP2pRepository`, `getRp2pRepository`, `getRp2pCandidateRepository`, `getDeadLetterQueueRepository`, `getTransactionRepository`, `getDebugRepository`
+- Fix `/var/log/eiou/app.log` permission denied: move log directory creation before PHP-FPM start so the file is owned by `www-data` before any PHP worker writes to it
+- Fix stale volume names in 48 demo files (`tests/old/demo/`): volume delete commands referenced old `*-files` volumes instead of current `*-config`, causing actual config volumes to persist across resets
 - Fix `RateLimiterRepository` crash: extend `AbstractRepository` so it can be created via `RepositoryFactory` (regression from ARCH-05 PR #717). All four processors (P2P, Transaction, Cleanup, ContactStatus) were crash-looping on startup
 - Fix missing `ContactStatusService::setChainDropService()` setter: wiring call existed in `ServiceContainer::wireCircularDependencies()` but the method was never added (regression from ARCH-05 PR #717)
 
