@@ -30,6 +30,45 @@
 # - Event-driven architecture (handles thousands of connections with minimal memory)
 # =============================================================================
 
+# =============================================================================
+# STAGE 1: COMPOSER DEPENDENCY BUILDER
+# =============================================================================
+# Installs Composer and PHP dependencies in an isolated stage.
+# Only the vendor/ directory is copied to the runtime image — Composer,
+# unzip, and the package cache never enter the final image.
+# =============================================================================
+
+FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe AS composer-deps
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    php-cli \
+    php-curl \
+    php-mbstring \
+    php-xml \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Composer (hash-verified to prevent supply chain attacks)
+RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
+    && EXPECTED_HASH=$(curl -sS https://composer.github.io/installer.sig) \
+    && ACTUAL_HASH=$(php -r "echo hash_file('sha384', '/tmp/composer-setup.php');") \
+    && if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then echo 'Composer installer corrupt'; exit 1; fi \
+    && php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+    && rm /tmp/composer-setup.php
+
+# Copy application code needed for autoload generation
+COPY files/composer.json /app/eiou/composer.json
+COPY files/src/ /app/eiou/src/
+COPY files/root/ /app/eiou/
+
+# Install production dependencies and generate optimized autoloader
+RUN cd /app/eiou && composer install --no-dev --optimize-autoloader --no-interaction
+
+# =============================================================================
+# STAGE 2: RUNTIME IMAGE
+# =============================================================================
+
 FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 # OCI Image Labels — https://github.com/opencontainers/image-spec/blob/main/annotations.md
@@ -42,7 +81,7 @@ LABEL org.opencontainers.image.title="eiou-node" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="debian:12-slim"
 
-# Install required packages:
+# Install runtime packages only (no Composer, no unzip):
 # - nginx: Web server and reverse proxy for PHP-FPM, SSL termination, rate limiting
 # - php-fpm: FastCGI Process Manager for PHP (separate process pool, more efficient than mod_php)
 # - php-cli: PHP command-line interpreter for CLI commands and message processors
@@ -52,10 +91,8 @@ LABEL org.opencontainers.image.title="eiou-node" \
 # - certbot: Let's Encrypt ACME client for automatic SSL certificates
 # - openssl: SSL certificate generation and cryptography
 # - php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
-#   - php-xml: DOM extension required for Composer dependency resolution
 # - tini: Minimal init system for proper signal forwarding and zombie reaping
 # - tor: Anonymous network for .onion addresses
-# - unzip: Required by Composer for package installation
 RUN apt-get update && apt-get install -y \
     certbot \
     cron \
@@ -72,17 +109,7 @@ RUN apt-get update && apt-get install -y \
     php-xml \
     tini \
     tor \
-    unzip \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Composer for PSR-4 autoloading
-# Hash-verified install to prevent supply chain attacks
-RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
-    && EXPECTED_HASH=$(curl -sS https://composer.github.io/installer.sig) \
-    && ACTUAL_HASH=$(php -r "echo hash_file('sha384', '/tmp/composer-setup.php');") \
-    && if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then echo 'Composer installer corrupt'; exit 1; fi \
-    && php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer \
-    && rm /tmp/composer-setup.php
 
 # Configure Tor hidden service:
 # - HiddenServiceDir: Directory for Tor identity keys and hostname
@@ -173,9 +200,12 @@ COPY files/src/ /app/eiou/src/
 # Copy scripts (backup-cron, validate-autoload)
 COPY files/scripts/ /app/eiou/scripts/
 
-# Copy composer files and install dependencies
+# Copy composer.json (needed for autoloader path reference)
 COPY files/composer.json /app/eiou/composer.json
-RUN cd /app/eiou && composer install --no-dev --optimize-autoloader --no-interaction
+
+# Copy pre-built vendor directory from composer-deps stage
+# Composer and unzip stay in the builder — only the dependency output enters the runtime image
+COPY --from=composer-deps /app/eiou/vendor/ /app/eiou/vendor/
 
 # Set permissions on application code
 RUN chown www-data:www-data /app/eiou/SecurityInit.php \

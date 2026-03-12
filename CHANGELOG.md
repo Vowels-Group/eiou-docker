@@ -12,7 +12,12 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Fix `RateLimiterRepository` crash: extend `AbstractRepository` so it can be created via `RepositoryFactory` (regression from ARCH-05 PR #717). All four processors (P2P, Transaction, Cleanup, ContactStatus) were crash-looping on startup
+- Fix missing `ContactStatusService::setChainDropService()` setter: wiring call existed in `ServiceContainer::wireCircularDependencies()` but the method was never added (regression from ARCH-05 PR #717)
+
 ### Changed
+- Convert `eiou.dockerfile` to multi-stage build (DOCK-04): Composer and `unzip` are now isolated in a builder stage; only the pre-built `vendor/` directory is copied into the runtime image. Removes ~20-30MB of build-only tooling from the final image and eliminates Composer as a post-compromise attack vector
 - Add PHP type hints across codebase (CQ-03): add return type `: string` and parameter types to all 90+ `OutputSchema.php` functions; add typed properties and constructor parameter types to `ApiKeyService`, `ApiAuthService`; add return types and parameter types to `DebugService` methods and `DebugServiceInterface`; add `mixed` type to `ApiKeyService::validateRateLimit()` parameter
 
 ## 2026-03-11
