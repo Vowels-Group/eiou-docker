@@ -10,9 +10,9 @@
     <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/authentication-form.css");?></style>
 </head>
 <body>
-    <!-- Alpha Warning — loaded from /app/scripts/alpha-warning.txt -->
+    <!-- Alpha Warning — loaded from /app/scripts/banners/alpha-warning.txt -->
     <?php
-    $warningFile = '/app/scripts/alpha-warning.txt';
+    $warningFile = '/app/scripts/banners/alpha-warning.txt';
     if (file_exists($warningFile)):
         $warnLines = explode("\n", trim(file_get_contents($warningFile)));
         $warnTitle = htmlspecialchars(trim($warnLines[0]));
