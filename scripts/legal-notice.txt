@@ -1,10 +1,18 @@
 IMPORTANT LEGAL NOTICE
 
-eIOU is a peer-to-peer bilateral debt tracking system. When you create an IOU denominated in a fiat currency (e.g. USD, EUR), you are recording a personal debt obligation between two parties.
+eIOU is a peer-to-peer bilateral debt tracking system. When you create an
+IOU denominated in a fiat currency (e.g. USD, EUR), you are recording a
+personal debt obligation between two parties.
 
-The eIOU project believes that tracking interpersonal debts is not subject to Money Services Business (MSB) or money transmitter regulations, as no funds are transmitted, held, or custodied by the software. Each IOU is a private bilateral agreement between two parties, similar to a promissory note.
+The eIOU project believes that tracking interpersonal debts is not subject
+to Money Services Business (MSB) or money transmitter regulations, as no
+funds are transmitted, held, or custodied by the software. Each IOU is a
+private bilateral agreement between two parties, similar to a promissory
+note.
 
-However, regulations vary significantly by jurisdiction. Routing IOUs through intermediary nodes may be classified differently under your local laws.
+However, regulations vary significantly by jurisdiction. Routing IOUs
+through intermediary nodes may be classified differently under your local
+laws.
 
 YOU are responsible for:
   1. Understanding the financial regulations in your jurisdiction
@@ -12,6 +20,11 @@ YOU are responsible for:
      licenses or registrations
   3. Complying with all applicable laws
 
-This software is provided as open source under the First Amendment right to publish software. The eIOU project does not provide legal advice. Consult a qualified attorney in your jurisdiction before using this software for financial transactions.
+This software is provided as open source under the First Amendment right
+to publish software. The eIOU project does not provide legal advice.
+Consult a qualified attorney in your jurisdiction before using this
+software for financial transactions.
 
-By installing and using this software, you acknowledge that you have read this notice and accept full responsibility for regulatory compliance in your jurisdiction.
+By installing and using this software, you acknowledge that you have read
+this notice and accept full responsibility for regulatory compliance in
+your jurisdiction.

@@ -4,8 +4,9 @@
 # =============================================================================
 # banner.sh - EIOU Startup Warning Banners
 # =============================================================================
-# This file contains warning banners displayed during container startup.
-# Edit this file to update the warning message for all containers.
+# Displays warning banners during container startup.
+# All output uses printf with \033 escapes in format strings — no echo -e,
+# no fold, no sed, no locale-dependent operations. Fully portable.
 #
 # Usage: Source this file and call the banner functions
 #   source /app/scripts/banner.sh
@@ -13,58 +14,41 @@
 #   show_alpha_warning_short
 # =============================================================================
 
-# Ensure correct character counting for UTF-8 box-drawing characters.
-# Without this, printf/fold/string-length count bytes instead of characters,
-# causing misaligned borders for multi-byte chars (║, •) and ANSI color codes.
-export LC_ALL=C.UTF-8 2>/dev/null || export LC_ALL=en_US.UTF-8 2>/dev/null || true
-
-# Colors for terminal output.
-# Using $'...' so variables contain actual ESC bytes — no echo -e needed.
-RED=$'\033[0;31m'
-YELLOW=$'\033[1;33m'
-NC=$'\033[0m'
-
-# Box width (inner content area between the ║ borders)
+# Box width (visible characters between the borders)
 BOX_WIDTH=76
 
-# Pre-compute the horizontal border line
+# Pre-compute the horizontal border (BOX_WIDTH + 2 for the spaces around content)
 _BOX_BORDER=$(printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))))
 
-# Print the top border of a box
 box_top() {
-    echo "${RED}╔${_BOX_BORDER}╗${NC}"
+    printf '\033[0;31m╔%s╗\033[0m\n' "$_BOX_BORDER"
 }
 
-# Print the bottom border of a box
 box_bottom() {
-    echo "${RED}╚${_BOX_BORDER}╝${NC}"
+    printf '\033[0;31m╚%s╝\033[0m\n' "$_BOX_BORDER"
 }
 
-# Print a content line inside a red box with proper right-edge alignment.
-# Strips ANSI color codes before measuring width so colored text aligns correctly.
+# Print a plain-text line padded to BOX_WIDTH inside red borders.
+# Text must be ASCII and no longer than BOX_WIDTH characters.
 box_line() {
     local text="$1"
-    # Strip ANSI escape sequences to calculate visible character width
-    local stripped
-    stripped=$(printf '%s' "$text" | sed 's/\x1b\[[0-9;]*m//g')
-    local visible_len=${#stripped}
-    local pad=$((BOX_WIDTH - visible_len))
+    local pad=$((BOX_WIDTH - ${#text}))
     [ "$pad" -lt 0 ] && pad=0
-    local spaces=""
-    [ "$pad" -gt 0 ] && spaces=$(printf "%${pad}s" "")
-    echo "${RED}║${NC} ${text}${spaces} ${RED}║${NC}"
+    printf '\033[0;31m║\033[0m %s%*s \033[0;31m║\033[0m\n' "$text" "$pad" ""
 }
 
-# Print an empty line inside the box
+# Print a line with ANSI color codes. Pass the visible (plain) text separately
+# so padding is calculated from the actual display width.
+box_line_color() {
+    local colored_text="$1"
+    local visible_text="$2"
+    local pad=$((BOX_WIDTH - ${#visible_text}))
+    [ "$pad" -lt 0 ] && pad=0
+    printf '\033[0;31m║\033[0m %s%*s \033[0;31m║\033[0m\n' "$colored_text" "$pad" ""
+}
+
 box_empty() {
     box_line ""
-}
-
-# Print text wrapped to fit inside the box
-box_wrap() {
-    echo "$1" | fold -s -w "$BOX_WIDTH" | while IFS= read -r line; do
-        box_line "$line"
-    done
 }
 
 # Full alpha/testing warning banner - shown at container start
@@ -72,7 +56,8 @@ show_alpha_warning() {
     echo ""
     box_top
     box_empty
-    box_line "${YELLOW}WARNING: ALPHA/STAGING VERSION${NC}"
+    box_line_color "$(printf '\033[1;33mWARNING: ALPHA/STAGING VERSION\033[0m')" \
+                   "WARNING: ALPHA/STAGING VERSION"
     box_empty
     box_line "* This is an alpha/staging version of eIOU."
     box_line "* Do NOT use this for real financial transactions."
@@ -83,7 +68,8 @@ show_alpha_warning() {
     echo ""
 }
 
-# Legal notice banner - loaded from separate file for easy editing
+# Legal notice banner - loaded from separate file for easy editing.
+# The file must be pre-wrapped so every line is <= BOX_WIDTH characters.
 show_legal_notice() {
     local notice_file="/app/scripts/legal-notice.txt"
     if [ ! -f "$notice_file" ]; then
@@ -98,7 +84,7 @@ show_legal_notice() {
         if [ -z "$line" ]; then
             box_empty
         else
-            box_wrap "$line"
+            box_line "$line"
         fi
     done < "$notice_file"
 
@@ -125,9 +111,9 @@ show_startup_warnings() {
 # Short reminder banner - shown before watchdog starts
 show_alpha_warning_short() {
     echo ""
-    echo "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
-    echo "${YELLOW}  REMINDER: This is an ALPHA/STAGING version - FOR TESTING PURPOSES ONLY${NC}"
-    echo "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
+    printf '\033[1;33m══════════════════════════════════════════════════════════════════════════════\033[0m\n'
+    printf '\033[1;33m  REMINDER: This is an ALPHA/STAGING version - FOR TESTING PURPOSES ONLY\033[0m\n'
+    printf '\033[1;33m══════════════════════════════════════════════════════════════════════════════\033[0m\n'
     echo ""
 }
 
@@ -138,10 +124,23 @@ show_error_banner() {
     echo ""
     box_top
     box_empty
-    box_line "${RED}CRITICAL ERROR: ${error_title}${NC}"
+    box_line_color "$(printf '\033[0;31mCRITICAL ERROR: %s\033[0m' "$error_title")" \
+                   "CRITICAL ERROR: $error_title"
     box_empty
     if [ -n "$error_message" ]; then
-        box_wrap "$error_message"
+        # Word wrap error messages in pure bash — no fold needed
+        local current_line=""
+        for word in $error_message; do
+            if [ -z "$current_line" ]; then
+                current_line="$word"
+            elif [ $((${#current_line} + 1 + ${#word})) -le $BOX_WIDTH ]; then
+                current_line="$current_line $word"
+            else
+                box_line "$current_line"
+                current_line="$word"
+            fi
+        done
+        [ -n "$current_line" ] && box_line "$current_line"
     fi
     box_empty
     box_line "The container will now stop. Please check your configuration"
