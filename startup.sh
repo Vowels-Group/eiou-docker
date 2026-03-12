@@ -704,6 +704,15 @@ if [ -n "${NGINX_CONN_LIMIT:-}" ]; then
     sed -i "s|limit_conn addr .*;|limit_conn addr $NGINX_CONN_LIMIT;|" "$EIOU_CONF"
 fi
 
+# Create log directory and app log file before PHP-FPM starts.
+# The file must be owned by www-data so PHP-FPM workers can write to it;
+# otherwise the first root-level PHP process creates it as root:root.
+mkdir -p /var/log/eiou
+touch /var/log/eiou/app.log
+chown -R www-data:www-data /var/log/eiou
+chmod 755 /var/log/eiou
+chmod 640 /var/log/eiou/app.log
+
 # Start services
 service cron start
 service tor start
@@ -1220,10 +1229,7 @@ fi
 # ========================
 echo "Setting up backup system..."
 
-# Create log directory if it doesn't exist
-mkdir -p /var/log/eiou
-chown www-data:www-data /var/log/eiou
-chmod 755 /var/log/eiou
+# Log directory already created before PHP-FPM start (see above)
 
 # Create backup directory with proper permissions
 mkdir -p /var/lib/eiou/backups

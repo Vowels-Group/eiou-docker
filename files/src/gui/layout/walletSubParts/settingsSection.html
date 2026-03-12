@@ -646,7 +646,7 @@
         <div class="debug-header">
             <span class="debug-count">
                 <?php
-                $debugRepo = $serviceContainer->getDebugRepository();
+                $debugRepo = $serviceContainer->getRepositoryFactory()->get(Eiou\Database\DebugRepository::class);
                 $debugEntries = $debugRepo->getRecentDebugEntries(100);
                 $debugCount = $debugRepo->getDebugEntryCount();
                 echo 'Showing ' . count($debugEntries) . ' of ' . $debugCount . ' entries';

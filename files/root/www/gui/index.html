@@ -41,20 +41,21 @@ $user = UserContext::getInstance();
 // Create controllers
 $contactController = new ContactController($secureSession, $contactService);
 $transactionController = new TransactionController($secureSession, $contactService, $transactionService);
+$repoFactory = $serviceContainer->getRepositoryFactory();
 $transactionController->setP2pApprovalDependencies(
-    $serviceContainer->getP2pRepository(),
-    $serviceContainer->getRp2pRepository(),
+    $repoFactory->get(Eiou\Database\P2pRepository::class),
+    $repoFactory->get(Eiou\Database\Rp2pRepository::class),
     $serviceContainer->getSendOperationService(),
     $serviceContainer->getP2pService(),
-    $serviceContainer->getRp2pCandidateRepository()
+    $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
 $settingsController = new SettingsController($secureSession);
 $dlqController = new DlqController(
     $secureSession,
-    $serviceContainer->getDeadLetterQueueRepository(),
+    $repoFactory->get(Eiou\Database\DeadLetterQueueRepository::class),
     $serviceContainer->getMessageDeliveryService(),
     $app->utilityServices->getTransportUtility(),
-    $serviceContainer->getTransactionRepository()
+    $repoFactory->get(Eiou\Database\TransactionRepository::class)
 );
 
 // Handle logout request
