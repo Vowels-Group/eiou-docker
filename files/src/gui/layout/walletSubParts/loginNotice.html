@@ -1,13 +1,9 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
-<!-- Alpha Warning & Legal Notice — displayed below the login form.
+<!-- Legal Notice — displayed below the login form.
      Legal notice text is loaded from /app/scripts/legal-notice.txt (same file
      used by the container startup banner), so a single edit updates both. -->
 <div class="login-notice">
-    <div class="alpha-warning">
-        <strong>&#9888; Alpha/Staging Version</strong>
-        <p>Do not use for real financial transactions. All data may be reset without notice.</p>
-    </div>
     <?php
     $noticeFile = '/app/scripts/legal-notice.txt';
     if (file_exists($noticeFile)):

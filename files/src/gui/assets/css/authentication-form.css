@@ -16,9 +16,20 @@
     background: #16213e;
 }
 
-.banner-container + .auth-container {
+.banner-container + .alpha-warning {
+    border-radius: 0;
+    margin-top: 0;
+    border-top: none;
+}
+
+.banner-container + .alpha-warning + .auth-container {
     border-radius: 0 0 8px 8px;
     margin-top: 0;
+}
+
+.alpha-warning + .auth-container {
+    margin-top: 0;
+    border-radius: 0 0 8px 8px;
 }
 
 .banner-image {
@@ -104,7 +115,7 @@ body {
     margin-top: 1rem;
     font-size: 0.9rem;
 }
-/* Alpha Warning & Legal Notice — below login card */
+/* Legal Notice — collapsible, below login card */
 .login-notice {
     max-width: 400px;
     width: 90%;
@@ -115,10 +126,11 @@ body {
 .alpha-warning {
     background: #fff8e1;
     border: 1px solid #f9a825;
-    border-radius: 6px;
+    border-radius: 0;
     padding: 0.75rem 1rem;
     text-align: center;
-    margin-bottom: 0.75rem;
+    max-width: 400px;
+    width: 90%;
 }
 
 .alpha-warning strong {
