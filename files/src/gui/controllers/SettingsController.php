@@ -548,7 +548,7 @@ class SettingsController
                 $nginxLogContent = shell_exec("tail -50 " . escapeshellarg($nginxLogPath));
             }
 
-            // Collect EIOU app log (last 50 lines)
+            // Collect eIOU app log (last 50 lines)
             $eiouLogContent = '';
             $eiouLogPath = '/var/log/eiou/app.log';
             if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {

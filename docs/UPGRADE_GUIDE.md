@@ -1,6 +1,6 @@
 # Upgrade Guide
 
-How to update your EIOU node to the latest version while preserving your wallet, transaction history, and configuration.
+How to update your eIOU node to the latest version while preserving your wallet, transaction history, and configuration.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ How to update your EIOU node to the latest version while preserving your wallet,
 
 ## Overview
 
-EIOU uses Docker named volumes to separate user data from application code. Source code lives at `/app/eiou/` (baked into the image), while user data is persisted on named volumes. When you upgrade to a new image, the container is recreated with updated code while your three named volumes are reattached, preserving all wallet data.
+eIOU uses Docker named volumes to separate user data from application code. Source code lives at `/app/eiou/` (baked into the image), while user data is persisted on named volumes. When you upgrade to a new image, the container is recreated with updated code while your three named volumes are reattached, preserving all wallet data.
 
 **The short version:**
 

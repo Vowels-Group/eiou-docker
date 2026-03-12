@@ -8,7 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Cli\CliOutputManager;
 
 /**
- * Provides help display functionality for the EIOU CLI.
+ * Provides help display functionality for the eIOU CLI.
  *
  * Extracted from CliService as part of the ARCH-04 refactor to decompose the
  * monolithic CliService into focused, single-responsibility service classes.

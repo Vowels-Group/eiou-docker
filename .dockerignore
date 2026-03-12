@@ -1,7 +1,3 @@
-files/src/config/userconfig.json
-files/src/config/dbconfig.json
-files/src/config/defaultconfig.json
-
 # Repository files not needed in the image
 .github/
 .git/

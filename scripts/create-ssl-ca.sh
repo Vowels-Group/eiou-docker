@@ -1,10 +1,10 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# SSL Certificate Authority Generator for EIOU Docker
+# SSL Certificate Authority Generator for eIOU Docker
 #
 # This script creates a local Certificate Authority (CA) that can be used to sign
-# SSL certificates for EIOU nodes. Once the CA root certificate is installed in
+# SSL certificates for eIOU nodes. Once the CA root certificate is installed in
 # browsers/systems, all nodes using CA-signed certificates will be trusted.
 #
 # Usage:
@@ -33,7 +33,7 @@ NC='\033[0m' # No Color
 CA_DIR="${1:-./ssl-ca}"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  EIOU SSL Certificate Authority Setup${NC}"
+echo -e "${GREEN}  eIOU SSL Certificate Authority Setup${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 

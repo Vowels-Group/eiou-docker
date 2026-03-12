@@ -14,7 +14,7 @@ use Eiou\Contracts\TransportServiceInterface;
  * Abstract base class for all payload builders
  *
  * This class provides common functionality for building structured payloads
- * used throughout the EIOU protocol for different message types.
+ * used throughout the eIOU protocol for different message types.
  *
  */
 

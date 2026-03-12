@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ############################ Performance Baseline Test Suite ############################
-# Performance benchmarking tests for the EIOU application
+# Performance benchmarking tests for the eIOU application
 #
 # Verifies:
 # - Transaction processing time within acceptable limits

@@ -267,7 +267,7 @@ class Constants {
     const P2P_MAX_ROUTING_LEVEL = 10; // Maximum allowed P2P routing hops (user setting cap)
     const P2P_HOP_WAIT_DIVISOR = 12; // Fixed divisor for hopWait formula (hides actual max level for privacy)
     const P2P_HOP_PROCESSING_BUFFER_SECONDS = 2; // Per-hop buffer for network latency and processing time
-    const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per EIOU hop)
+    const P2P_TOR_EXPIRATION_MULTIPLIER = 2; // Tor hidden services need longer expiration (6 Tor hops per eIOU hop)
     const P2P_QUEUE_BATCH_SIZE = 10; // Max queued P2Ps processed per daemon poll cycle (all sent in one curl_multi)
     const P2P_QUEUE_COALESCE_MS = 2000; // Milliseconds to wait for more P2Ps before firing mega-batch (default: 2000ms)
     // Max concurrent worker processes for parallel P2P processing, keyed by transport protocol.

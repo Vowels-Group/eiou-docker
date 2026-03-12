@@ -1,6 +1,6 @@
-# EIOU Error Codes Reference
+# eIOU Error Codes Reference
 
-Complete reference of all error codes used in the EIOU system, with HTTP status mappings and troubleshooting guidance.
+Complete reference of all error codes used in the eIOU system, with HTTP status mappings and troubleshooting guidance.
 
 ## Table of Contents
 
@@ -57,7 +57,7 @@ Complete reference of all error codes used in the EIOU system, with HTTP status 
 
 ## Service Exception Hierarchy
 
-The EIOU system uses a structured exception hierarchy for error handling in service
+The eIOU system uses a structured exception hierarchy for error handling in service
 methods. This enables proper error recovery, testability, and consistent error responses
 across CLI and API interfaces.
 

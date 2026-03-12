@@ -1,6 +1,6 @@
 # Docker Configuration Reference
 
-Complete reference for environment variables and volume mounts used in EIOU Docker containers.
+Complete reference for environment variables and volume mounts used in eIOU Docker containers.
 
 ## Table of Contents
 
@@ -265,7 +265,7 @@ environment:
 
 ### Required Volumes
 
-All EIOU containers use named volumes for data persistence:
+All eIOU containers use named volumes for data persistence:
 
 | Volume | Container Path | Purpose | Backup Priority |
 |--------|----------------|---------|-----------------|
@@ -318,7 +318,7 @@ Generate a CA using: `./scripts/create-ssl-ca.sh ./ssl-ca`
 
 ### Docker Network
 
-EIOU containers communicate over a Docker bridge network. All compose files use a shared network named `eiou-network-compose`.
+eIOU containers communicate over a Docker bridge network. All compose files use a shared network named `eiou-network-compose`.
 
 ```yaml
 networks:
@@ -370,7 +370,7 @@ curl https://bob/api/status   # HTTPS with self-signed cert
 
 ### Tor Network
 
-EIOU containers automatically configure Tor hidden services:
+eIOU containers automatically configure Tor hidden services:
 - Hidden service directory: `/var/lib/tor/hidden_service/`
 - Hidden service port: Maps external port 80 to internal nginx
 - Tor SOCKS proxy: Available at `127.0.0.1:9050` inside the container
@@ -379,7 +379,7 @@ EIOU containers automatically configure Tor hidden services:
 
 ## Resource Limits
 
-All EIOU containers are configured with resource limits to prevent runaway resource consumption and ensure predictable performance.
+All eIOU containers are configured with resource limits to prevent runaway resource consumption and ensure predictable performance.
 
 ### Default Resource Configuration
 
@@ -671,7 +671,7 @@ Then install `ca.crt` in your browser or operating system trust store so that ce
 **Chrome / Edge (macOS):**
 1. Double-click `ssl-ca/ca.crt` — this opens Keychain Access
 2. Add to the **System** keychain
-3. Find **EIOU Root CA** in the list, double-click it
+3. Find **eIOU Root CA** in the list, double-click it
 4. Expand **Trust** → set **When using this certificate** to **Always Trust**
 5. Close and enter your password to confirm
 
@@ -823,7 +823,7 @@ healthcheck:
 
 ### Container Privilege Model
 
-EIOU containers run as root during initialization, then services drop privileges:
+eIOU containers run as root during initialization, then services drop privileges:
 
 | Service | Runtime User | Purpose |
 |---------|--------------|---------|
@@ -905,7 +905,7 @@ To check whether the pinned digest is current, run `./scripts/check-base-image.s
 
 ### Automated Backup System
 
-EIOU includes an automated backup system that creates encrypted database backups daily at midnight.
+eIOU includes an automated backup system that creates encrypted database backups daily at midnight.
 
 **Configuration:**
 ```yaml

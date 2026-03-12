@@ -16,9 +16,9 @@ namespace Eiou\Contracts;
 interface P2pTransactionSenderInterface
 {
     /**
-     * Send a P2P EIOU transaction.
+     * Send a P2P eIOU transaction.
      *
-     * Initiates a peer-to-peer EIOU transaction based on the provided
+     * Initiates a peer-to-peer eIOU transaction based on the provided
      * request data. This handles the full P2P flow including validation,
      * chain verification, and network broadcast.
      *

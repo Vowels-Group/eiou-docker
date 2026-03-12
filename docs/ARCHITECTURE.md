@@ -1,6 +1,6 @@
-# EIOU Docker Architecture
+# eIOU Docker Architecture
 
-Technical architecture documentation for the EIOU Docker node implementation.
+Technical architecture documentation for the eIOU Docker node implementation.
 
 ## Table of Contents
 
@@ -27,13 +27,13 @@ Technical architecture documentation for the EIOU Docker node implementation.
 
 ## Overview
 
-EIOU Docker is a peer-to-peer (P2P) payment system implemented as self-contained Docker
+eIOU Docker is a peer-to-peer (P2P) payment system implemented as self-contained Docker
 containers. Each node operates as an independent payment processing unit capable of
 sending, receiving, and routing transactions across a decentralized network.
 
-### What Is an EIOU Node?
+### What Is an eIOU Node?
 
-An EIOU node is a complete, isolated payment system running in a Docker container. Each
+An eIOU node is a complete, isolated payment system running in a Docker container. Each
 node contains:
 
 - **Wallet**: BIP39-based cryptographic wallet with secp256k1 keypairs
@@ -2687,7 +2687,7 @@ eiou <command> [args...] [--json] [--help]
 
 The `/src/schemas/payloads/` directory defines structured payload builders for all
 message types exchanged between nodes. Each payload class extends `BasePayload` and
-provides type-safe construction of the EIOU wire protocol messages.
+provides type-safe construction of the eIOU wire protocol messages.
 
 ### Payload Hierarchy
 

@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document describes how to run tests for the EIOU Docker node.
+This document describes how to run tests for the eIOU Docker node.
 
 ## Quick Start
 

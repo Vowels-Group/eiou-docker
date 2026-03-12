@@ -1,6 +1,6 @@
 <?php
 /**
- * EIOU Bootstrap File
+ * eIOU Bootstrap File
  *
  * This file MUST be included by ALL entry points before using any classes.
  * It initializes the Composer classmap autoloader for namespace support.

@@ -30,7 +30,7 @@ class P2pPayload extends BasePayload
 
         // Force fast mode if our resolved address is Tor — transport index cascading
         // means the entire P2P chain will propagate over Tor, making best-fee mode
-        // impractical due to per-hop Tor latency (~5s × 6 Tor relays per EIOU hop).
+        // impractical due to per-hop Tor latency (~5s × 6 Tor relays per eIOU hop).
         // Disabled when EIOU_TOR_FORCE_FAST=false (for testing best-fee over Tor).
         $isTorRoute = $this->transportUtility->isTorAddress($data['receiverAddress'])
             || $this->transportUtility->isTorAddress($userAddress);
@@ -45,7 +45,7 @@ class P2pPayload extends BasePayload
         // hopWait regardless of the user's maxP2pLevel setting (prevents topology inference).
         $expirationSeconds = $this->currentUser->getP2pExpirationTime();
 
-        // Tor hidden services add significant per-hop latency (each EIOU hop = 6 Tor relay hops).
+        // Tor hidden services add significant per-hop latency (each eIOU hop = 6 Tor relay hops).
         // Scale expiration so multi-hop Tor chains don't expire prematurely.
         if ($isTorRoute) {
             $expirationSeconds *= Constants::P2P_TOR_EXPIRATION_MULTIPLIER;

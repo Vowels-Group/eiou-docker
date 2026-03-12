@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ############################ API Endpoints Test ############################
-# Tests REST API endpoints for the EIOU API integration
+# Tests REST API endpoints for the eIOU API integration
 #
 # Verifies:
 # - API key creation and authentication
@@ -18,7 +18,7 @@
 # - API must be accessible
 ##########################################################################
 
-# Test REST API endpoints for the EIOU API integration
+# Test REST API endpoints for the eIOU API integration
 # Tests API key creation, system status, wallet info, contacts, and error handling
 
 echo -e "\nTesting REST API endpoints..."

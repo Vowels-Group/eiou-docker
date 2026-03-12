@@ -1,11 +1,11 @@
-# EIOU Docker Test Suite
+# eIOU Docker Test Suite
 
 > **Note:** This document covers **integration/shell tests** (E2E tests run via Docker).
 > For **PHPUnit unit tests**, see [Testing Guide](../docs/TESTING.md).
 
 ## Overview
 
-Automated test suite for validating EIOU Docker node deployments. The suite tests multi-node network topologies including contact management, transaction processing, message routing, chain synchronization, and Tor/SSL connectivity.
+Automated test suite for validating eIOU Docker node deployments. The suite tests multi-node network topologies including contact management, transaction processing, message routing, chain synchronization, and Tor/SSL connectivity.
 
 ### Test Types
 
@@ -254,7 +254,7 @@ Common helpers from `testHelpers.sh`:
 3. Verify sufficient system memory for topology
 4. On WSL2: Ensure adequate WSL memory allocation in `.wslconfig`
 
-### No EIOU Containers Found
+### No eIOU Containers Found
 
 **Symptom:** "No eiou containers found!" error
 

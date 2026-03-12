@@ -1,6 +1,6 @@
-# EIOU GUI Quick Reference
+# eIOU GUI Quick Reference
 
-Quick lookup card for the EIOU Wallet web interface.
+Quick lookup card for the eIOU Wallet web interface.
 
 ---
 

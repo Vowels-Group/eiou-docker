@@ -1,6 +1,6 @@
 # Error Handling Policy
 
-Standardized error handling guidelines for the EIOU codebase.
+Standardized error handling guidelines for the eIOU codebase.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ Standardized error handling guidelines for the EIOU codebase.
 
 ## Overview
 
-This document defines the standardized approach to error handling across the EIOU codebase. The goal is to provide:
+This document defines the standardized approach to error handling across the eIOU codebase. The goal is to provide:
 
 - **Consistency**: All errors are handled the same way across CLI, API, and service layers
 - **Rich Context**: Every error includes actionable information for debugging and user feedback

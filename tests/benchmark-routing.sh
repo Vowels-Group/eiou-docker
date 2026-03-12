@@ -1066,7 +1066,7 @@ print_path_analysis() {
 
 echo ""
 echo "================================================================"
-echo "  EIOU Routing Benchmark (collisionscluster)"
+echo "  eIOU Routing Benchmark (collisionscluster)"
 echo "================================================================"
 echo "Runs per condition: ${RUNS}"
 echo "Protocols:          ${PROTOCOLS[*]}"
