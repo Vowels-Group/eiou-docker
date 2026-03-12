@@ -22,6 +22,10 @@ The project is currently in **ALPHA** status.
 - Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 
 ### Fixed
+- Fix integration and unit test failures from ARCH-05 RepositoryFactory migration: update all shell test scripts and PHPUnit tests to use `getRepositoryFactory()->get()` instead of removed direct repository getters on `ServiceContainer`
+- Fix garbled namespace in `addContactsTest.sh` (`\\Eiou\\Core\\\Eiou\Core\Application` → `\Eiou\Core\Application`)
+- Fix `curlErrorHandlingTest.sh` timeout expectations to match current constants (TOR_TRANSPORT_TIMEOUT: 45s, TOR_CONNECT_TIMEOUT: 20s) and grep patterns to match `DELIVERY_ERROR` constant
+- Fix `seedphraseTestSuite.sh` require paths from `${EIOU_DIR}/src/...` to `${BOOTSTRAP_PATH}` for Composer autoloading
 - Fix GUI crash from removed `get*Repository()` methods on `ServiceContainer` (regression from ARCH-05 PR #717): migrate 6 calls in `index.html` and `settingsSection.html` to use `getRepositoryFactory()->get()` — affected `getP2pRepository`, `getRp2pRepository`, `getRp2pCandidateRepository`, `getDeadLetterQueueRepository`, `getTransactionRepository`, `getDebugRepository`
 - Fix `/var/log/eiou/app.log` permission denied: move log directory creation before PHP-FPM start so the file is owned by `www-data` before any PHP worker writes to it
 - Fix stale volume names in 48 demo files (`tests/old/demo/`): volume delete commands referenced old `*-files` volumes instead of current `*-config`, causing actual config volumes to persist across resets

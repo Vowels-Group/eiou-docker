@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\ServiceContainer;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\RepositoryFactory;
 
 #[CoversClass(ValidationUtilityService::class)]
 class ValidationUtilityServiceTest extends TestCase
@@ -27,10 +28,14 @@ class ValidationUtilityServiceTest extends TestCase
         $this->serviceContainer = $this->createMock(ServiceContainer::class);
         $this->balanceRepository = $this->createMock(BalanceRepository::class);
 
-        // Configure service container to return the mock balance repository
-        $this->serviceContainer->expects($this->any())
-            ->method('getBalanceRepository')
+        // Configure service container to return the mock balance repository via factory
+        $mockFactory = $this->createMock(RepositoryFactory::class);
+        $mockFactory->method('get')
+            ->with(BalanceRepository::class)
             ->willReturn($this->balanceRepository);
+        $this->serviceContainer->expects($this->any())
+            ->method('getRepositoryFactory')
+            ->willReturn($mockFactory);
 
         // Create the service
         $this->service = new ValidationUtilityService($this->serviceContainer);

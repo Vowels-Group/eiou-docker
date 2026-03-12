@@ -19,6 +19,7 @@ use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Exceptions\FatalServiceException;
 use Eiou\Contracts\TransactionServiceInterface;
+use Eiou\Database\RepositoryFactory;
 
 #[CoversClass(ApiController::class)]
 class ApiControllerTest extends TestCase
@@ -29,12 +30,25 @@ class ApiControllerTest extends TestCase
     private ?Logger $mockLogger;
     private ApiController $controller;
 
+    /** @var array<class-string, object> Repository mocks keyed by class name */
+    private array $repoMocks = [];
+
     protected function setUp(): void
     {
+        $this->repoMocks = [];
         $this->mockAuthService = $this->createMock(ApiAuthService::class);
         $this->mockApiKeyRepository = $this->createMock(ApiKeyRepository::class);
         $this->mockServices = $this->createMock(ServiceContainer::class);
         $this->mockLogger = $this->createMock(Logger::class);
+
+        // Wire RepositoryFactory mock to return per-test repo mocks
+        $mockRepoFactory = $this->createMock(RepositoryFactory::class);
+        $mockRepoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return $this->repoMocks[$class] ?? $this->createMock($class);
+            });
+        $this->mockServices->method('getRepositoryFactory')
+            ->willReturn($mockRepoFactory);
 
         $this->controller = new ApiController(
             $this->mockAuthService,
@@ -231,8 +245,17 @@ class ApiControllerTest extends TestCase
         $mockBalanceRepo = $this->createMock(\Eiou\Database\BalanceRepository::class);
         $mockBalanceRepo->method('getAllBalances')
             ->willThrowException(new FatalServiceException('Database error', 'DB_ERROR', [], 500));
-        $mockServices->method('getBalanceRepository')
-            ->willReturn($mockBalanceRepo);
+
+        $mockRepoFactory = $this->createMock(RepositoryFactory::class);
+        $mockRepoFactory->method('get')
+            ->willReturnCallback(function (string $class) use ($mockBalanceRepo) {
+                if ($class === \Eiou\Database\BalanceRepository::class) {
+                    return $mockBalanceRepo;
+                }
+                return $this->createMock($class);
+            });
+        $mockServices->method('getRepositoryFactory')
+            ->willReturn($mockRepoFactory);
 
         $mockApiKeyRepo = $this->createMock(ApiKeyRepository::class);
         $mockApiKeyRepo->method('logRequest');
@@ -1015,8 +1038,8 @@ class ApiControllerTest extends TestCase
 
         $mockContactRepo = $this->createMock(\Eiou\Database\ContactRepository::class);
 
-        $this->mockServices->method('getBalanceRepository')->willReturn($mockBalanceRepo);
-        $this->mockServices->method('getContactRepository')->willReturn($mockContactRepo);
+        $this->repoMocks[\Eiou\Database\BalanceRepository::class] = $mockBalanceRepo;
+        $this->repoMocks[\Eiou\Database\ContactRepository::class] = $mockContactRepo;
 
         $this->mockApiKeyRepository->method('logRequest');
 
@@ -1291,9 +1314,9 @@ class ApiControllerTest extends TestCase
         ]);
 
         $this->mockServices->method('getCurrentUser')->willReturn($mockCurrentUser);
-        $this->mockServices->method('getAddressRepository')->willReturn($mockAddressRepo);
-        $this->mockServices->method('getP2pRepository')->willReturn($mockP2pRepo);
-        $this->mockServices->method('getContactCreditRepository')->willReturn($mockCreditRepo);
+        $this->repoMocks[\Eiou\Database\AddressRepository::class] = $mockAddressRepo;
+        $this->repoMocks[\Eiou\Database\P2pRepository::class] = $mockP2pRepo;
+        $this->repoMocks[\Eiou\Database\ContactCreditRepository::class] = $mockCreditRepo;
 
         $this->mockApiKeyRepository->method('logRequest');
 
@@ -1335,8 +1358,8 @@ class ApiControllerTest extends TestCase
         $mockAddressRepo = $this->createMock(\Eiou\Database\AddressRepository::class);
         $mockAddressRepo->method('getAllAddressTypes')->willReturn(['http', 'https', 'tor']);
 
-        $this->mockServices->method('getContactRepository')->willReturn($mockContactRepo);
-        $this->mockServices->method('getAddressRepository')->willReturn($mockAddressRepo);
+        $this->repoMocks[\Eiou\Database\ContactRepository::class] = $mockContactRepo;
+        $this->repoMocks[\Eiou\Database\AddressRepository::class] = $mockAddressRepo;
         // TransactionRepository and TransactionStatisticsRepository not needed due to early return
 
         $this->mockApiKeyRepository->method('logRequest');
