@@ -1,3 +1,7 @@
+> **WARNING: ALPHA/STAGING VERSION**
+>
+> This is an alpha/staging version of eIOU. Do NOT use this for real financial transactions. All data may be reset without notice. For testing purposes only.
+
 # EIOU Docker
 
 Run an EIOU node with a single `docker compose` command. The container includes everything needed: nginx, PHP-FPM, MariaDB, Tor, PHP processors, and the web GUI.
@@ -331,3 +335,21 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 | [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |
+
+## Important Legal Notice
+
+eIOU is a peer-to-peer bilateral debt tracking system. When you create an IOU denominated in a fiat currency (e.g. USD, EUR), you are recording a personal debt obligation between two parties.
+
+The eIOU project believes that tracking interpersonal debts is not subject to Money Services Business (MSB) or money transmitter regulations, as no funds are transmitted, held, or custodied by the software. Each IOU is a private bilateral agreement between two parties, similar to a promissory note.
+
+However, regulations vary significantly by jurisdiction. Routing IOUs through intermediary nodes may be classified differently under your local laws.
+
+**You are responsible for:**
+
+1. Understanding the financial regulations in your jurisdiction
+2. Determining whether your use of this software requires any licenses or registrations
+3. Complying with all applicable laws
+
+This software is provided as open source under the First Amendment right to publish software. The eIOU project does not provide legal advice. Consult a qualified attorney in your jurisdiction before using this software for financial transactions.
+
+By installing and using this software, you acknowledge that you have read this notice and accept full responsibility for regulatory compliance in your jurisdiction.
