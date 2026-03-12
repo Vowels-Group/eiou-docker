@@ -14,6 +14,7 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - Add legal notice banner to container startup (`scripts/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
+- Add alpha warning and collapsible legal notice to the GUI login screen (`loginNotice.html`). Legal text is loaded from `scripts/legal-notice.txt` — same file as the startup banner, so one edit updates both
 
 ### Fixed
 - Fix GUI crash from removed `get*Repository()` methods on `ServiceContainer` (regression from ARCH-05 PR #717): migrate 6 calls in `index.html` and `settingsSection.html` to use `getRepositoryFactory()->get()` — affected `getP2pRepository`, `getRp2pRepository`, `getRp2pCandidateRepository`, `getDeadLetterQueueRepository`, `getTransactionRepository`, `getDebugRepository`

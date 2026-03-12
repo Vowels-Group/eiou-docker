@@ -103,6 +103,61 @@ body {
     margin-top: 1rem;
     font-size: 0.9rem;
 }
+/* Alpha Warning & Legal Notice — below login card */
+.login-notice {
+    max-width: 400px;
+    width: 90%;
+    margin-top: 1.5rem;
+}
+
+.alpha-warning {
+    background: #fff8e1;
+    border: 1px solid #f9a825;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    margin-bottom: 0.75rem;
+}
+
+.alpha-warning strong {
+    color: #e65100;
+    font-size: 0.9rem;
+}
+
+.alpha-warning p {
+    color: #795548;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+.legal-notice {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.legal-notice summary {
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6c757d;
+    cursor: pointer;
+    user-select: none;
+}
+
+.legal-notice summary:hover {
+    color: #495057;
+}
+
+.legal-notice-body {
+    padding: 0 1rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #6c757d;
+    text-align: left;
+    white-space: pre-line;
+}
+
 /* Loading Overlay and Spinner */
 .loading-overlay {
     position: fixed;
