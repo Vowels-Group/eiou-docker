@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 112" width="500" height="112">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0a1628"/>
+      <stop offset="100%" style="stop-color:#1a2744"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f59e0b"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="112" fill="url(#bg)"/>
+
+  <!-- Accent line bottom -->
+  <line x1="0" y1="110" x2="500" y2="110" stroke="url(#accent)" stroke-width="2"/>
+
+  <!-- Launch icon (rocket silhouette) -->
+  <g transform="translate(243, 5) scale(0.9)" opacity="0.7">
+    <polygon points="8,0 12,6 14,16 2,16 4,6" fill="#3b82f6"/>
+    <rect x="4" y="16" width="8" height="2" rx="1" fill="#60a5fa"/>
+    <polygon points="6,18 8,22 10,18" fill="#f59e0b" opacity="0.8"/>
+  </g>
+
+  <!-- Main title -->
+  <text x="250" y="52" text-anchor="middle" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-size="22" font-weight="700" fill="white" letter-spacing="3">ALPHA LAUNCH DAY</text>
+
+  <!-- Decorative line under title -->
+  <line x1="160" y1="60" x2="340" y2="60" stroke="url(#accent)" stroke-width="1" opacity="0.3"/>
+
+  <!-- Date -->
+  <text x="250" y="76" text-anchor="middle" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-size="11" fill="#94a3b8" letter-spacing="3">15 MARCH 2026</text>
+
+  <!-- eIOU WALLET subtitle -->
+  <text x="175" y="99" text-anchor="middle" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-size="12" fill="#adb5bd" letter-spacing="2">eIOU WALLET</text>
+
+  <!-- Alpha badge + Version pill -->
+  <rect x="248" y="86" width="52" height="18" rx="4" fill="url(#gold)"/>
+  <text x="274" y="99" text-anchor="middle" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-size="9" font-weight="700" fill="#0a1628" letter-spacing="1.5">ALPHA</text>
+
+  <rect x="308" y="86" width="44" height="18" rx="4" fill="none" stroke="#adb5bd" stroke-width="1" opacity="0.4"/>
+  <text x="330" y="99" text-anchor="middle" font-family="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" font-size="9" fill="#adb5bd" letter-spacing="0.5">v0.1.0</text>
+</svg>
