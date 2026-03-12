@@ -508,13 +508,7 @@ heldRepoCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
 
-    // First check if the getter method exists on ServiceContainer
-    if (!method_exists(\$app->services, 'getHeldTransactionRepository')) {
-        echo 'REPO_GETTER_MISSING';
-        exit;
-    }
-
-    \$heldRepo = \$app->services->getHeldTransactionRepository();
+    \$heldRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\HeldTransactionRepository::class);
     if (\$heldRepo === null) {
         echo 'REPO_NULL';
         exit;
@@ -594,13 +588,7 @@ isolationCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
 
-    // First check if the getter method exists
-    if (!method_exists(\$app->services, 'getHeldTransactionRepository')) {
-        echo 'REPO_GETTER_MISSING';
-        exit;
-    }
-
-    \$heldRepo = \$app->services->getHeldTransactionRepository();
+    \$heldRepo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\HeldTransactionRepository::class);
     if (\$heldRepo === null) {
         echo 'REPO_NULL';
         exit;

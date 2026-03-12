@@ -61,7 +61,7 @@ echo -e "\n[Test 1: Verifying interface files exist]"
 
 for interface in "${!INTERFACE_MAP[@]}"; do
     totaltests=$((totaltests + 1))
-    interface_file="${EIOU_DIR}//src//contracts//${interface}.php"
+    interface_file="//app//eiou//src//contracts//${interface}.php"
 
     file_exists=$(docker exec $test_container php -r "
         echo file_exists('${interface_file}') ? 'yes' : 'no';

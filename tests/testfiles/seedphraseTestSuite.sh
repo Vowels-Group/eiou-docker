@@ -129,7 +129,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.4: Decrypting seed phrase from encrypted mnemonic"
 
 seedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
@@ -418,7 +418,7 @@ restoreContainer="httpRestoreSeedTest"
 # Clean up any existing container and volumes from previous runs
 # Without this, stale volumes cause ConfigCheck to skip RESTORE (userconfig.json already exists)
 docker rm -f ${restoreContainer} > /dev/null 2>&1
-docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-config ${restoreContainer}-backups ${restoreContainer}-letsencrypt > /dev/null 2>&1
 
 restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-config:/etc/eiou/config" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
@@ -605,7 +605,7 @@ fi
 
 # Clean up the restore container from Step 1.12
 docker rm -f ${restoreContainer} > /dev/null 2>&1
-docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-config ${restoreContainer}-backups ${restoreContainer}-letsencrypt > /dev/null 2>&1
 
 ################################################################################
 #                    PART 2: SECURE SEEDPHRASE DISPLAY TEST
@@ -621,7 +621,7 @@ echo -e "\n\t-> Step 2.1: Checking that seedphrase is NOT in docker logs"
 
 # Get the encrypted mnemonic and decrypt it
 actualSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
@@ -660,7 +660,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2.2: Verifying mnemonic is properly stored in userconfig.json"
 
 mnemonicCheck=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (!isset($json["mnemonic_encrypted"])) {
         echo "NO_MNEMONIC";
@@ -714,7 +714,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2.4: Testing SecureSeedphraseDisplay class availability"
 
 displayClassCheck=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/utils/SecureSeedphraseDisplay.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $availability = \Eiou\Utils\SecureSeedphraseDisplay::checkAvailability();
     echo json_encode($availability);
 ' 2>&1)
@@ -736,7 +736,7 @@ echo -e "\n\t-> Step 2.5: Testing secure file display method"
 
 # Test the file-based display (simulating non-TTY environment)
 fileDisplayTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/utils/SecureSeedphraseDisplay.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     // Force non-TTY mode by testing the file method directly
     $testPhrase = "test word one two three four five six seven eight nine ten eleven twelve";
@@ -786,7 +786,7 @@ echo -e "\n\t-> Step 2.6: Testing restore-file command"
 
 # First, get the current seedphrase
 currentSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
@@ -867,7 +867,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2.8: Testing SecureLogger masks seedphrases"
 
 loggerMaskTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/utils/SecureLogger.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     // Test that SecureLogger masks a seedphrase pattern
     $testMessage = "mnemonic=abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -906,7 +906,7 @@ hostSeedFile="$(pwd)/eiou_test_restore_seed_$$"
 
 # Get the current seedphrase
 docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' > "${hostSeedFile}" 2>&1
@@ -923,7 +923,7 @@ restoreFileContainer="httpRestoreFileTest"
 
 # Clean up any existing container first
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-config ${restoreFileContainer}-backups ${restoreFileContainer}-letsencrypt > /dev/null 2>&1
 
 # Create the container
 # MSYS_NO_PATHCONV=1 disables Git Bash path conversion for this command
@@ -962,7 +962,7 @@ fi
 
 # Clean up the new container
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-config ${restoreFileContainer}-backups ${restoreFileContainer}-letsencrypt > /dev/null 2>&1
 rm -f "${hostSeedFile}"
 
 if [[ "$seedInEnv" == "0" ]] && [[ "$seedInLogs" == "0" ]] && [[ "$originalPubKeyRestoreFile" == "$restoredPubKeyRestoreFile" ]] && [[ "$restoredPubKeyRestoreFile" != "ERROR" ]]; then
@@ -992,7 +992,7 @@ echo -e "\n\t-> Step 2.10: Testing RESTORE env var approach"
 
 # Get the current seedphrase from existing container
 restoreEnvSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
@@ -1032,7 +1032,7 @@ fi
 
 # Clean up the new container
 docker rm -f ${restoreEnvContainer} > /dev/null 2>&1
-docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-files ${restoreEnvContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-config ${restoreEnvContainer}-backups ${restoreEnvContainer}-letsencrypt > /dev/null 2>&1
 
 if [[ "$threeWordInLogs" == "0" ]] && [[ "$originalPubKeyRestoreEnv" == "$restoredPubKeyRestoreEnv" ]] && [[ "$restoredPubKeyRestoreEnv" != "ERROR" ]]; then
     printf "\t   RESTORE env var approach ${GREEN}PASSED${NC}\n"
@@ -1066,7 +1066,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.1: Storing original authcode from userconfig.json"
 
 originalAuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1129,7 +1129,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.3: Decrypting seed phrase from encrypted mnemonic"
 
 seedPhraseAuth=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
@@ -1199,7 +1199,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.6: Retrieving restored authcode"
 
 restoredAuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1297,7 +1297,7 @@ docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
 wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 iteration2AuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1315,7 +1315,7 @@ docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
 wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 iteration3AuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1391,7 +1391,7 @@ fi
 
 echo -e "\n\t-> Cleaning up test container..."
 docker rm -f ${authcodeRestoreContainer} 2>/dev/null
-docker volume rm ${authcodeRestoreContainer}-mysql-data ${authcodeRestoreContainer}-files ${authcodeRestoreContainer}-eiou 2>/dev/null
+docker volume rm ${authcodeRestoreContainer}-mysql-data ${authcodeRestoreContainer}-config ${authcodeRestoreContainer}-backups ${authcodeRestoreContainer}-letsencrypt 2>/dev/null
 
 ############################ AUTHCODE SUMMARY ############################
 
@@ -1422,7 +1422,7 @@ echo -e "\n\t-> Step 4.1: Testing RESTORE + QUICKSTART applies hostname to resto
 
 # Get the current seedphrase from existing container
 restoreQsSeedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
@@ -1436,7 +1436,7 @@ originalPubKeyQs=$(docker exec ${testContainer} php -r '
 # Create a new container with both RESTORE and QUICKSTART
 restoreQsContainer="httpRestoreQuickstartTest"
 docker rm -f ${restoreQsContainer} > /dev/null 2>&1
-docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-files ${restoreQsContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-config ${restoreQsContainer}-backups ${restoreQsContainer}-letsencrypt > /dev/null 2>&1
 
 docker run -d --network="${network}" --name "${restoreQsContainer}" \
     -e RESTORE="${restoreQsSeedPhrase}" \
@@ -1529,7 +1529,7 @@ fi
 
 echo -e "\n\t-> Cleaning up RESTORE + QUICKSTART container..."
 docker rm -f ${restoreQsContainer} 2>/dev/null
-docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-files ${restoreQsContainer}-eiou 2>/dev/null
+docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-config ${restoreQsContainer}-backups ${restoreQsContainer}-letsencrypt 2>/dev/null
 
 ############################ TEST 4.5: RESTORE_FILE + QUICKSTART ############################
 
@@ -1544,7 +1544,7 @@ chmod 600 "${hostSeedFileQs}"
 # Create a new container with both RESTORE_FILE and QUICKSTART
 restoreFileQsContainer="httpRestoreFileQsTest"
 docker rm -f ${restoreFileQsContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-files ${restoreFileQsContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-config ${restoreFileQsContainer}-backups ${restoreFileQsContainer}-letsencrypt > /dev/null 2>&1
 
 MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileQsContainer}" \
     -v "${hostSeedFileQs}:/restore/seed:ro" \
@@ -1627,7 +1627,7 @@ fi
 
 echo -e "\n\t-> Cleaning up RESTORE_FILE + QUICKSTART container..."
 docker rm -f ${restoreFileQsContainer} 2>/dev/null
-docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-files ${restoreFileQsContainer}-eiou 2>/dev/null
+docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-config ${restoreFileQsContainer}-backups ${restoreFileQsContainer}-letsencrypt 2>/dev/null
 rm -f "${hostSeedFileQs}"
 
 ############################ PART 4 SUMMARY ############################
@@ -1679,7 +1679,7 @@ echo -e "\n\t-> Step 5.2: Checking that actual authcode value is NOT in docker l
 
 # Get the actual authcode
 actualAuthCode=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         echo \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1706,8 +1706,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 5.3: Creating authcode temp file and verifying contents"
 
 authcodeFileTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/vendor/autoload.php";
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     // Get the actual authcode
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
@@ -1758,8 +1757,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 5.4: Verifying authcode temp file does NOT contain the seedphrase"
 
 seedInFileTest=$(docker exec ${testContainer} php -r '
-    require_once "'"${EIOU_DIR}"'/vendor/autoload.php";
-    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
 
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"] ?? "");

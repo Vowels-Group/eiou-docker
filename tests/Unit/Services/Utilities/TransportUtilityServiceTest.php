@@ -14,6 +14,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\ServiceContainer;
 use Eiou\Core\UserContext;
 use Eiou\Database\AddressRepository;
+use Eiou\Database\RepositoryFactory;
 
 #[CoversClass(TransportUtilityService::class)]
 class TransportUtilityServiceTest extends TestCase
@@ -35,9 +36,13 @@ class TransportUtilityServiceTest extends TestCase
             ->method('getCurrentUser')
             ->willReturn($this->userContext);
 
-        $this->serviceContainer->expects($this->any())
-            ->method('getAddressRepository')
+        $mockRepoFactory = $this->createMock(RepositoryFactory::class);
+        $mockRepoFactory->method('get')
+            ->with(AddressRepository::class)
             ->willReturn($this->addressRepository);
+        $this->serviceContainer->expects($this->any())
+            ->method('getRepositoryFactory')
+            ->willReturn($mockRepoFactory);
 
         // Create the service
         $this->service = new TransportUtilityService($this->serviceContainer);
