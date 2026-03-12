@@ -163,9 +163,9 @@ class P2pService implements P2pServiceInterface {
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
+        RepositoryFactory $repositoryFactory,
         ?MessageDeliveryService $messageDeliveryService = null,
-        ?P2pSenderRepository $p2pSenderRepository = null,
-        RepositoryFactory $repositoryFactory
+        ?P2pSenderRepository $p2pSenderRepository = null
     ) {
         $this->contactService = $contactService;
         $this->balanceRepository = $balanceRepository;

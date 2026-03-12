@@ -343,9 +343,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRepositoryFactory()->get(TransactionRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser,
+                $this->getRepositoryFactory(),
                 $this->getMessageDeliveryService(),
-                $this->getRepositoryFactory()->get(P2pSenderRepository::class),
-                $this->getRepositoryFactory()
+                $this->getRepositoryFactory()->get(P2pSenderRepository::class)
             );
         }
         return $this->services['P2pService'];
