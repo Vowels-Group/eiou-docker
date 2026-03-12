@@ -18,8 +18,9 @@
 #   show_alpha_warning_short
 # =============================================================================
 
-# Detect terminal width, default to 80 if unavailable
-_TERM_WIDTH=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
+# Detect terminal width. Default to 70 when no TTY is available (e.g. Docker
+# startup logs viewed externally) — conservative enough for most terminals.
+_TERM_WIDTH=${COLUMNS:-$(tput cols 2>/dev/null || echo 70)}
 
 # Box content width = terminal width - 4 (2 borders + 2 spaces)
 BOX_WIDTH=$((_TERM_WIDTH - 4))
