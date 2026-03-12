@@ -6,16 +6,16 @@ docker network create -d bridge demo-net
 docker rm -f httpsA httpsB httpsC httpsD httpsE httpsF httpsG httpsH httpsI httpsJ
 
 # Remove associated volumes (if any)
-docker volume rm httpsA-mysql-data httpsA-files httpsA-backups httpsA-letsencrypt
-docker volume rm httpsB-mysql-data httpsB-files httpsB-backups httpsB-letsencrypt
-docker volume rm httpsC-mysql-data httpsC-files httpsC-backups httpsC-letsencrypt
-docker volume rm httpsD-mysql-data httpsD-files httpsD-backups httpsD-letsencrypt
-docker volume rm httpsE-mysql-data httpsE-files httpsE-backups httpsE-letsencrypt
-docker volume rm httpsF-mysql-data httpsF-files httpsF-backups httpsF-letsencrypt
-docker volume rm httpsG-mysql-data httpsG-files httpsG-backups httpsG-letsencrypt
-docker volume rm httpsH-mysql-data httpsH-files httpsH-backups httpsH-letsencrypt
-docker volume rm httpsI-mysql-data httpsI-files httpsI-backups httpsI-letsencrypt
-docker volume rm httpsJ-mysql-data httpsJ-files httpsJ-backups httpsJ-letsencrypt
+docker volume rm httpsA-mysql-data httpsA-config httpsA-backups httpsA-letsencrypt
+docker volume rm httpsB-mysql-data httpsB-config httpsB-backups httpsB-letsencrypt
+docker volume rm httpsC-mysql-data httpsC-config httpsC-backups httpsC-letsencrypt
+docker volume rm httpsD-mysql-data httpsD-config httpsD-backups httpsD-letsencrypt
+docker volume rm httpsE-mysql-data httpsE-config httpsE-backups httpsE-letsencrypt
+docker volume rm httpsF-mysql-data httpsF-config httpsF-backups httpsF-letsencrypt
+docker volume rm httpsG-mysql-data httpsG-config httpsG-backups httpsG-letsencrypt
+docker volume rm httpsH-mysql-data httpsH-config httpsH-backups httpsH-letsencrypt
+docker volume rm httpsI-mysql-data httpsI-config httpsI-backups httpsI-letsencrypt
+docker volume rm httpsJ-mysql-data httpsJ-config httpsJ-backups httpsJ-letsencrypt
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
