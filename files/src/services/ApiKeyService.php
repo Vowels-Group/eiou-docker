@@ -21,8 +21,8 @@ use Exception;
  */
 
 class ApiKeyService implements ApiKeyServiceInterface {
-    private $repository;
-    private $output;
+    private ApiKeyRepository $repository;
+    private CliOutputManager $output;
 
     /**
      * Available permissions
@@ -50,7 +50,7 @@ class ApiKeyService implements ApiKeyServiceInterface {
      * @param ApiKeyRepository $repository
      * @param CliOutputManager $output
      */
-    public function __construct($repository, $output) {
+    public function __construct(ApiKeyRepository $repository, CliOutputManager $output) {
         $this->repository = $repository;
         $this->output = $output;
     }
@@ -76,7 +76,7 @@ class ApiKeyService implements ApiKeyServiceInterface {
      * @param mixed $rateLimit Rate limit to validate
      * @return array ['valid' => bool, 'value' => int|null, 'error' => string|null]
      */
-    public static function validateRateLimit($rateLimit): array {
+    public static function validateRateLimit(mixed $rateLimit): array {
         if (!is_numeric($rateLimit)) {
             return ['valid' => false, 'value' => null, 'error' => 'Rate limit must be numeric'];
         }

@@ -40,7 +40,7 @@ class DebugService implements DebugServiceInterface {
         $this->currentUser = $currentUser;
     }
 
-    public function getContext(){
+    public function getContext(): string {
         $context = [];
 
         // Add command line arguments (use global $argv for CLI context)
@@ -93,7 +93,7 @@ class DebugService implements DebugServiceInterface {
         return json_encode($context, JSON_PRETTY_PRINT);
     }
 
-    public function output($message, $level = 'ECHO') {
+    public function output(string $message, string $level = 'ECHO'): void {
         // Check if debug mode is enabled (supports env var override)
         if (Constants::isDebug()) {
             $data = [
@@ -111,7 +111,7 @@ class DebugService implements DebugServiceInterface {
         }
     }
 
-    public function setupErrorLogging() {
+    public function setupErrorLogging(): void {
         ini_set('display_errors', Constants::isDebug() ? 1 : 0);
         ini_set('log_errors', 1);
         error_reporting(E_ALL);

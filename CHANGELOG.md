@@ -12,6 +12,13 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- Add PHP type hints across codebase (CQ-03): add return type `: string` and parameter types to all 90+ `OutputSchema.php` functions; add typed properties and constructor parameter types to `ApiKeyService`, `ApiAuthService`; add return types and parameter types to `DebugService` methods and `DebugServiceInterface`; add `mixed` type to `ApiKeyService::validateRateLimit()` parameter
+
+## 2026-03-11
+
+Codebase audit remediation (Phases 1-5, ARCH-04, DOCK-05, ARCH-05/01).
+
 ### Security
 - Move dbconfig.json password encryption from startup.sh into `Wallet::generateWallet()` and `Wallet::restoreWallet()`, running immediately after master key initialization. Eliminates the window where plaintext DB password persisted on disk between Application constructor and next container restart. Success message logged for operator confirmation
 - Default `APP_DEBUG` to `false` (secure-by-default). Debug mode now requires explicit opt-in via `APP_DEBUG=true` environment variable. Updated `DebugService`, `Security`, and GUI settings to use `Constants::isDebug()` for env var override support
@@ -19,6 +26,16 @@ The project is currently in **ALPHA** status.
 - Add logging to silent catch blocks across database repositories, services, and utilities. Previously, exceptions in `TransactionRepository`, `TransactionContactRepository`, `QueryBuilder`, `TorCircuitHealth`, `ContactSyncService`, and `ConfigCheck` were swallowed without any logging, masking potential database and configuration failures
 - Fix insecure SSL temp files in `CliSettingsService::regenerateSslCertificate()`: use `tempnam()` with `/dev/shm` for unique file names, set restrictive umask for 0600 permissions at creation, wrap in try/finally for guaranteed cleanup (SEC-04)
 - Add input validation for QUICKSTART, EIOU_HOST, EIOU_NAME, and EIOU_PORT environment variables in startup.sh to prevent injection via crafted values (DOCK-08)
+
+### Added
+- PHPStan static analysis at level 1 with CI workflow (`.github/workflows/phpstan.yml`, `phpstan.neon`)
+- Container image vulnerability scanning via Trivy in integration tests workflow
+- Dependabot configuration for Composer and GitHub Actions dependency updates (`.github/dependabot.yml`)
+- `.env.example` template documenting all configurable environment variables with defaults
+- Extended `.gitignore` with OS artifacts, sensitive files, logs, and database patterns
+- OCI labels in Dockerfile (title, description, source, vendor, license, base image)
+- Unauthenticated `/api/health` endpoint for Docker healthcheck and load balancers — checks database connectivity and message processor status, returns JSON with `ok`/`degraded` status (ARCH-10). Docker healthcheck updated from `/gui/` to `/api/health`
+- Environment variable overrides for PHP-FPM and Nginx service tuning: `PHP_FPM_PM`, `PHP_FPM_MAX_CHILDREN`, `PHP_FPM_MAX_REQUESTS`, `NGINX_WORKER_PROCESSES`, `NGINX_WORKER_CONNECTIONS`, `NGINX_RATE_LIMIT_*`, `NGINX_CONN_LIMIT`, `NGINX_CLIENT_MAX_BODY`. Applied at boot by startup.sh — no volume mount needed, configure via docker-compose.yml environment variables
 
 ### Changed
 - Extract `RepositoryFactory` to centralize repository instantiation and caching (ARCH-05). Removes 25 repository getter methods from `ServiceContainer` (~345 lines). All callers migrated to use `getRepositoryFactory()->get(XxxRepository::class)` directly
@@ -32,15 +49,9 @@ The project is currently in **ALPHA** status.
 - Remove all `@` error suppression operators (33 occurrences across 11 files) with proper error handling: `file_exists()` checks before `unlink()`, return value checks for `file_get_contents()`/`fopen()`, and direct calls where `is_dir()` guards exist
 - Increase container resource limits from 512MB/256MB to 1024MB/512MB (memory limit/reservation) and from 1.0 to 2.0 CPU cores to prevent OOM kills under load with nginx + PHP-FPM + MariaDB + Tor
 
-### Added
-- PHPStan static analysis at level 1 with CI workflow (`.github/workflows/phpstan.yml`, `phpstan.neon`)
-- Container image vulnerability scanning via Trivy in integration tests workflow
-- Dependabot configuration for Composer and GitHub Actions dependency updates (`.github/dependabot.yml`)
-- `.env.example` template documenting all configurable environment variables with defaults
-- Extended `.gitignore` with OS artifacts, sensitive files, logs, and database patterns
-- OCI labels in Dockerfile (title, description, source, vendor, license, base image)
-- Unauthenticated `/api/health` endpoint for Docker healthcheck and load balancers — checks database connectivity and message processor status, returns JSON with `ok`/`degraded` status (ARCH-10). Docker healthcheck updated from `/gui/` to `/api/health`
-- Environment variable overrides for PHP-FPM and Nginx service tuning: `PHP_FPM_PM`, `PHP_FPM_MAX_CHILDREN`, `PHP_FPM_MAX_REQUESTS`, `NGINX_WORKER_PROCESSES`, `NGINX_WORKER_CONNECTIONS`, `NGINX_RATE_LIMIT_*`, `NGINX_CONN_LIMIT`, `NGINX_CLIENT_MAX_BODY`. Applied at boot by startup.sh — no volume mount needed, configure via docker-compose.yml environment variables
+## 2026-03-07 -- 2026-03-10
+
+Multi-currency, E2E encryption, nginx migration, route cancellation, Tor circuit health.
 
 ### Security
 - Replace `exec()` SSL certificate generation with PHP native `openssl_pkey_new()`/`openssl_csr_sign()` functions, eliminating command injection risk via OpenSSL config file. Add strict hostname validation (alphanumeric, dots, hyphens only)
@@ -55,11 +66,6 @@ The project is currently in **ALPHA** status.
 - Preserve `signed_message_content` through the full data flow: capture raw signed JSON at signing time in `signWithCapture()`, propagate through `send()`/`sendBatch()`/`sendMultiBatch()` and `MessageDeliveryService`, store via `updateSignatureData()`, include in sync responses from `formatTransactionForSync()`, and store on the receiving end in `syncTransactionChain()`. Without this, E2E encrypted transactions failed signature verification during chain sync recovery
 - Derive master encryption key deterministically from BIP39 seed (M-13). Master key is now recoverable via seed phrase restore instead of being randomly generated. Wallet generate and restore both produce identical master keys from the same seed.
 - Remove master key SHA-256 hash from seedphrase test output (sensitive information should not be displayed in logs)
-
-### Changed
-- Web server replaced from Apache (mod_php) to nginx + PHP-FPM. nginx handles connections, SSL termination, rate limiting, and static files; PHP-FPM executes PHP via unix socket. All SSL cert paths moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`. Log paths changed from `/var/log/apache2/` to `/var/log/nginx/`. GUI debug panel updated from "Apache Logs" to "nginx Logs". Service reload command changed from `apache2ctl graceful` to `nginx -s reload`
-- Interactive `changesettings` menu refactored from flat 44-item numbered list to two-level grouped navigation: select a category (1-8), then select a setting within that category. Press 0 to go back or cancel. All validation logic unchanged
-- Tor circuit health settings (max failures, cooldown duration, transport fallback) added to API (GET/PUT `/api/v1/system/settings`), GUI settings panel, and grouped interactive CLI menu
 
 ### Added
 - Maintenance mode lockfile (`/tmp/eiou_maintenance.lock`): created during startup before source file sync and database migrations, removed after all initialization is complete. HTTP entry points (API, GUI, P2P) return 503 with `Retry-After: 30` while the lockfile exists, preventing partial code execution against mid-sync source files or mid-migration database schema
@@ -82,19 +88,59 @@ The project is currently in **ALPHA** status.
 - `EIOU_HOP_BUDGET_RANDOMIZED` env variable: when set to `false`, disables geometric distribution and returns `maxP2pLevel` deterministically. Test buildfiles default to `false` for predictable routing depth assertions
 - `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` env variable and per-node setting: separate toggle for the balance guard that runs before auto-accepting chain drop proposals. Default `true` (guard enabled). Set to `false` for unconditional auto-accept when `EIOU_AUTO_CHAIN_DROP_ACCEPT=true`. Configurable via CLI (`changesettings autoChainDropAcceptGuard`), GUI settings toggle, and REST API
 - Integration test `routeCancellationTest.sh` (13 tests): service wiring, table existence, hop budget distribution, capacity reservation creation/release, cancel timing, relay status propagation, originator downstream cancel and multi-route safety verification
-
-### Fixed
-- RP2P fee calculation changed from additive to multiplicative (compounding): each relay now recalculates its fee on the **accumulated RP2P total** (base + all downstream fees) instead of the original base amount. The exact rounded fee is saved to `my_fee_amount` during RP2P backtracking and added to the forwarded amount, ensuring `TransactionService::removeTransactionFee()` subtracts the identical value with no rounding discrepancies. New `calculateFeeForP2p()` helper in `Rp2pService` handles per-contact fee lookup and calculation
-- `routeCancellationTest` hop budget test: now checks `Constants::isHopBudgetRandomized()` and accepts deterministic output (constant `maxHops`) when randomization is disabled via `EIOU_HOP_BUDGET_RANDOMIZED=false`, instead of always requiring variance across 100 samples
-- `DatabaseSchemaTest`: Update column type assertions from INT/INTEGER to BIGINT for `transactions.amount`, `balances.received/sent`, `p2p.amount/my_fee_amount`, `rp2p.amount`. Remove obsolete `contacts.currency/fee_percent/credit_limit` assertions (moved to `contact_currencies` table). Add `signed_message_content` assertion for transactions table
-- `DatabaseSetupTest`: Replace two obsolete `online_status` enum migration tests with single test verifying no enum migration runs (schema already includes 'partial' on fresh install)
-- Fee calculation formula in `CurrencyUtilityService::calculateFee()` was currency-dependent — used `conversionFactor` in the formula which only produced correct results for USD (factor=100). Replaced with currency-independent formula `amount * feePercent / 100`. Also fixed inconsistent fee scale: `getDefaultFee()` returned raw percentage while DB `getFeePercent()` returned a scaled INT — callers now normalize DB values before passing to `calculateFee()`
-- Originator cancel now propagates downstream: `CliService::rejectP2p()` calls `broadcastFullCancelForHash()` instead of `sendCancelNotificationForHash()` which exited early for originator nodes
-- Multi-route cancel safety (diamond topology): regular `route_cancel` from best-fee selection now just acknowledges without cancelling P2P or releasing reservation, preventing incorrect resource freeing when a node is part of both selected and unselected routes
-- `handleIncomingCancellation` now propagates `full_cancel` downstream to relay contacts, enabling cancel cascade through the full route chain instead of being local-only
-- `P2pService::sendP2pMessage` visibility changed from private to public and added to `P2pServiceInterface`, fixing runtime error when called from `RouteCancellationService::cancelUnselectedRoutes`
+- Shared P2P diagnostic functions in `testHelpers.sh`: `get_processor_health`, `get_p2p_state`, `get_p2p_timing`, `dump_p2p_diagnostic` — reusable across all test suites for debugging P2P routing issues
+- Shared backup helper functions moved to `testHelpers.sh`: `cleanup_backups`, `count_backups`, `verify_tx_exists` — previously defined inline in `chainDropTestSuite.sh` after first use (causing `command not found` errors)
+- Best-fee routing test: diagnostic output on failure AND on slow success (>60s), showing per-hop P2P status, timing, candidate counts, and processor health
+- Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
+- Per-currency available credit exchange: pong returns `availableCreditByCurrency` map; each currency's available credit stored independently in `contact_credit` table (UNIQUE on `pubkey_hash, currency`)
+- GUI currency slider: contact modal uses horizontal pill-style currency slider with left/right arrows to switch between currencies, replacing the dropdown selector
+- Dynamic currency dropdowns: Send eIOU form populates currencies from user's allowed currencies and filters to contact's accepted currencies when a contact is selected; Add Contact form also uses allowed currencies
+- Per-currency "Your Available Credit" and "Their Available Credit" display in contact modal per-currency entries
+- `TransactionRepository::getPreviousTxidsByCurrency()` for retrieving per-currency chain heads
+- `ContactCurrencyRepository::getDistinctAcceptedCurrencies()` for wallet info currency display
+- `contact_currencies.direction` column (`ENUM('incoming','outgoing')`) with database migration — enables per-direction currency tracking so both sides independently track what they requested vs what was requested of them
+- Sender-side outgoing currency tracking: `handleNewContact` now inserts `direction='outgoing'` entries in `contact_currencies` when a contact request is sent, so the sender can see "Awaiting their acceptance" for each requested currency
+- Direction-aware GUI: pending contact section shows "Your pending requests (awaiting their acceptance)" for outgoing currencies and "They requested" for incoming currencies, eliminating the confusion where sender's own currency appeared as an incoming request
+- `MessageService` now updates outgoing `contact_currencies` entries to 'accepted' when remote acceptance is received
+- Unique index on `contact_currencies` changed from `(pubkey_hash, currency)` to `(pubkey_hash, currency, direction)` — allows both sides to independently request the same currency
+- Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
+- Contact detail modal currency selector: multi-currency contacts now display a dropdown to switch between currencies, updating balance, credit limit, fee, and available credit fields
+- Per-currency contact balances: `getAllContactBalances()` now returns balances grouped by currency (`pubkey => ['USD' => amount, 'GBY' => amount]`)
+- `balances_by_currency` field added to contact data throughout the GUI pipeline (BalanceService, TransactionService, ContactDataBuilder)
+- Pending currency acceptance flow: adding a new currency to an existing contact now sends a P2P request; the remote side sees it as "pending" and must accept with their own fee/credit terms
+- `contact_currencies.status` column (`'accepted'`/`'pending'`) with database migration for existing tables
+- `ContactCurrencyRepository::acceptCurrency()` and `getPendingCurrencies()` methods
+- `ContactSyncService::setContactCurrencyRepository()` for new currency request handling on receiver side
+- GUI `acceptCurrency` action handler in ContactController for accepting pending currency requests
+- Pending currency badge on contact cards and accept form in contact detail modal
+- Cross-currency mutual request handling: when both sides initiate contact requests with different currencies, the remote's currency is stored as a pending entry in `contact_currencies` and displayed in the GUI as a "Currency Mismatch" with an option to accept their terms
+- CLI `eiou add` now allows updating the currency on a pending outgoing contact request — re-sends the P2P request with the new currency, enabling mutual accept when currencies now match
+- Accept contact form currency dropdown now populated dynamically from `getAllowedCurrencies()` instead of hardcoded USD
+- Configurable allowed currencies — the hardcoded `['USD']` allowed list in `InputValidator::validateCurrency()` is now a `Constants::ALLOWED_CURRENCIES` default that can be overridden per-node via `UserContext::getAllowedCurrencies()`
+  - New `Constants::ALLOWED_CURRENCIES` constant defines the system default
+  - New `UserContext::getAllowedCurrencies()` getter reads from config (comma-separated string or array), falls back to Constants
+  - `InputValidator::validateCurrency()` now reads allowed list from UserContext; accepts optional `$allowedCurrencies` parameter for tests and override scenarios
+  - New `InputValidator::validateAllowedCurrency()` validates that a currency code has a `Constants::CONVERSION_FACTORS` entry before it can be added to the allowed list
+  - CLI `changesettings allowedCurrencies` command and interactive menu option (16) for managing allowed currencies
+  - GUI settings: dynamic default currency dropdown populated from allowed list; new "Allowed Currencies" text input field
+  - GUI SettingsController validates each currency has a conversion factor on save
+  - API `PUT /api/v1/system/settings` supports `allowed_currencies` field with per-currency conversion factor validation
+  - `allowedCurrencies` added to `UserContext::getConfigurableDefaults()` (stored as comma-separated string)
+- Multi-currency contact support — contacts can now have multiple currency relationships with independent fee and credit limit per currency
+  - New `contact_currencies` table stores per-currency configuration (`pubkey_hash`, `currency`, `fee_percent`, `credit_limit`) with composite UNIQUE on `(pubkey_hash, currency)`
+  - New `ContactCurrencyRepository` with full CRUD: `insertCurrencyConfig()`, `getCurrencyConfig()`, `getContactCurrencies()`, `hasCurrency()`, `getCreditLimit()`, `getFeePercent()`, `updateCurrencyConfig()`, `upsertCurrencyConfig()`, `deleteAllForContact()`, `deleteCurrencyConfig()`
+  - `ContactManagementService::addCurrencyToContact()` method to add a new currency to an existing accepted contact, creating rows in `contact_currencies`, `balances`, and `contact_credit`
+  - `ContactCreditRepository::getAvailableCreditAllCurrencies()` returns all per-currency credit rows for a contact
+  - GUI contact cards show "+N currency" badge when contact has multiple currencies
+  - GUI contact modal shows "Additional Currencies" section with per-currency credit limit, fee, and available credit
+  - GUI contact controller supports `addCurrency` action for adding currencies from the contact settings
+  - API `GET /api/v1/contacts/:address` response now includes `currencies` array with per-currency configuration
+  - Data migration in `DatabaseSetup::runColumnMigrations()` copies existing `contacts.{currency, fee_percent, credit_limit}` into `contact_currencies` via `INSERT IGNORE`
 
 ### Changed
+- Web server replaced from Apache (mod_php) to nginx + PHP-FPM. nginx handles connections, SSL termination, rate limiting, and static files; PHP-FPM executes PHP via unix socket. All SSL cert paths moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`. Log paths changed from `/var/log/apache2/` to `/var/log/nginx/`. GUI debug panel updated from "Apache Logs" to "nginx Logs". Service reload command changed from `apache2ctl graceful` to `nginx -s reload`
+- Interactive `changesettings` menu refactored from flat 44-item numbered list to two-level grouped navigation: select a category (1-8), then select a setting within that category. Press 0 to go back or cancel. All validation logic unchanged
+- Tor circuit health settings (max failures, cooldown duration, transport fallback) added to API (GET/PUT `/api/v1/system/settings`), GUI settings panel, and grouped interactive CLI menu
 - Default fee percentage reduced from 0.1% to 0.01% (`CONTACT_DEFAULT_FEE_PERCENT`). The minimum fee floor (`TRANSACTION_MINIMUM_FEE = 0.01`) ensures fees never round to zero on small amounts
 - All hardcoded currency display patterns (`/ 100`, `number_format(..., 2)`) replaced with `Constants::getConversionFactor()` and `Constants::getCurrencyDecimals()` across GUI templates, CLI, and services — display is now per-currency aware
 - Credit hold calculation in `checkAvailableFunds` now uses `capacity_reservations` table (Option 1: single source of truth) with fallback to legacy `getCreditInP2p` method
@@ -109,18 +155,37 @@ The project is currently in **ALPHA** status.
 - Help `available_settings` for `changesettings` updated from 14 to 43 entries
 - API GET `/api/v1/system/settings` response now includes `name`, `direct_tx_expiration`, `trusted_proxies`, `allowed_currencies`
 - API PUT `/api/v1/system/settings` now accepts `direct_tx_expiration` and `trusted_proxies`
-
-### Docs
-- ARCHITECTURE.md: Add credit reservation lifecycle section — explains `base_amount` vs `total_amount`, three release paths (cancel/commit/expiry), and status transitions with diagram
-- ARCHITECTURE.md: Add fee accumulation through relays section — shows multiplicative/compounding per-hop fee calculation, two-phase process (estimate on outbound, authoritative recalculation on RP2P return), multi-route example with best-fee selection, and `rp2p_candidates` table schema
-- ARCHITECTURE.md: Add coalesce delay and mega-batch section — explains `P2P_QUEUE_COALESCE_MS`, when mega-batch is used vs inline sends, and compound key mapping
-- ARCHITECTURE.md: Add message delivery and dead letter queue section — documents retry policy, exponential backoff schedule, Tor cooldown handling, DLQ operations (retry/abandon/resolve), and atomic claiming
-- ARCHITECTURE.md: Add distributed locking section — explains MariaDB advisory locks, atomic claiming pattern, and where locks are used
-- ARCHITECTURE.md: Add ping/pong credit exchange section — documents ping payload, pong response fields, available credit synchronization, chain validation, sync trigger, and online status determination
-- ARCHITECTURE.md: Add proactive vs reactive sync comparison table to sync flow section
-- `update` CLI help now documents the required `currency` parameter for `fee` and `credit` fields, and optional currency for `all`. Usage, arguments, examples, and note all updated to reflect the actual command syntax.
+- `MessagePayload::buildTransactionSyncRequest()` now accepts optional `lastKnownTxidsByCurrency` parameter for per-currency sync cursors
+- `SyncService::handleTransactionSyncRequest()` filters transactions per-currency when `lastKnownTxidsByCurrency` is provided in the request
+- `ContactStatusPayload::build()` sends `prevTxidsByCurrency` instead of single `prevTxid`
+- `ContactStatusPayload::buildResponse()` takes `chainStatusByCurrency` and `availableCreditByCurrency` maps instead of single `chainValid`/`availableCredit`/`currency` values
+- `getCreditLimit()` without direction parameter now returns `MAX(credit_limit)` across all direction rows for that contact+currency
+- Wallet information section now includes currencies from accepted contact relationships (not just those with balances/earnings)
+- Legacy single-`prevTxid` code removed from ping/pong protocol entirely
+- CLI `update` command now requires currency parameter for `fee` and `credit` fields (`eiou update Bob fee 1.5 USD`); optional for `all` (defaults to contact's current currency)
+- CLI `update` for fee/credit now propagates changes to `contact_currencies` table (not just `contacts`)
+- GUI contact settings tab: currency selector moved above fee/credit, populated from contact's accepted currencies; changing currency loads that currency's current fee/credit values
+- GUI `handleEditContact` updates `contact_currencies` directly for fee/credit per selected currency instead of only updating `contacts` table
+- `contact_credit` table UNIQUE constraint changed from `pubkey_hash` alone to composite `(pubkey_hash, currency)` — allows storing per-currency credit entries for the same contact
+- `getCreditLimit()` across all interfaces, services, and repositories now accepts an optional `currency` parameter (defaults to `Constants::TRANSACTION_DEFAULT_CURRENCY`) — affects `ContactServiceInterface`, `ContactManagementServiceInterface`, `ContactRepository`, `ContactManagementService`, `ContactService`
+- `ContactRepository::getCreditLimit()` queries `contact_currencies` table first, falls back to `contacts` table for backward compatibility
+- `ContactCreditRepository::getAvailableCredit()` now accepts optional `currency` parameter to filter by specific currency
+- All `getCreditLimit()` call sites updated to pass currency from the request/transaction context: `TransactionValidationService`, `TransactionService`, `Rp2pService` (2 call sites), `P2pService`
+- `ContactStatusService::handlePingRequest()` reads credit limit from `contact_currencies` table first, falling back to `contacts.credit_limit`
+- `ContactManagementService::acceptContact()` now also writes to `contact_currencies` table alongside the existing `contacts` table write
+- `ContactDataBuilder` output includes `currencies` array for multi-currency GUI rendering
+- `Functions.php` fetches per-contact currency configs and all-currency available credits for GUI display
 
 ### Fixed
+- RP2P fee calculation changed from additive to multiplicative (compounding): each relay now recalculates its fee on the **accumulated RP2P total** (base + all downstream fees) instead of the original base amount. The exact rounded fee is saved to `my_fee_amount` during RP2P backtracking and added to the forwarded amount, ensuring `TransactionService::removeTransactionFee()` subtracts the identical value with no rounding discrepancies. New `calculateFeeForP2p()` helper in `Rp2pService` handles per-contact fee lookup and calculation
+- `routeCancellationTest` hop budget test: now checks `Constants::isHopBudgetRandomized()` and accepts deterministic output (constant `maxHops`) when randomization is disabled via `EIOU_HOP_BUDGET_RANDOMIZED=false`, instead of always requiring variance across 100 samples
+- `DatabaseSchemaTest`: Update column type assertions from INT/INTEGER to BIGINT for `transactions.amount`, `balances.received/sent`, `p2p.amount/my_fee_amount`, `rp2p.amount`. Remove obsolete `contacts.currency/fee_percent/credit_limit` assertions (moved to `contact_currencies` table). Add `signed_message_content` assertion for transactions table
+- `DatabaseSetupTest`: Replace two obsolete `online_status` enum migration tests with single test verifying no enum migration runs (schema already includes 'partial' on fresh install)
+- Fee calculation formula in `CurrencyUtilityService::calculateFee()` was currency-dependent — used `conversionFactor` in the formula which only produced correct results for USD (factor=100). Replaced with currency-independent formula `amount * feePercent / 100`. Also fixed inconsistent fee scale: `getDefaultFee()` returned raw percentage while DB `getFeePercent()` returned a scaled INT — callers now normalize DB values before passing to `calculateFee()`
+- Originator cancel now propagates downstream: `CliService::rejectP2p()` calls `broadcastFullCancelForHash()` instead of `sendCancelNotificationForHash()` which exited early for originator nodes
+- Multi-route cancel safety (diamond topology): regular `route_cancel` from best-fee selection now just acknowledges without cancelling P2P or releasing reservation, preventing incorrect resource freeing when a node is part of both selected and unselected routes
+- `handleIncomingCancellation` now propagates `full_cancel` downstream to relay contacts, enabling cancel cascade through the full route chain instead of being local-only
+- `P2pService::sendP2pMessage` visibility changed from private to public and added to `P2pServiceInterface`, fixing runtime error when called from `RouteCancellationService::cancelUnselectedRoutes`
 - `changesettings maxP2pLevel` via command-line was broken: `strtolower($argv[2]) === 'maxp2pLevel'` comparison could never match due to uppercase in the comparison target
 - `autoBackupEnabled` was only changeable in interactive mode; added to command-line argv handling
 - P2P best-fee mode over Tor: forced fast mode now detects Tor transport on any hop (originator resolved address or incoming sender address), not just when the final destination is a `.onion` address. Previously, if the originator's address resolved to Tor via fallback but the destination was HTTP, best-fee mode (`fast=0`) persisted across the entire chain — causing 240s+ delays waiting for Tor relay timeouts on unresponsive routes. Transport index cascading (`determineTransportType(sender_address)`) propagated Tor to all downstream relays.
@@ -136,40 +201,6 @@ The project is currently in **ALPHA** status.
 - Ping test 6.3: signature verification now includes `currency` in the reconstructed signed message, matching `ContactPayload::generateRecipientSignature()` format
 - Chunked sync test: fixed `getUserContext()` → `getCurrentUser()` and `getMessagePayload()` → direct `MessagePayload` instantiation (methods don't exist on ServiceContainer)
 - Chain drop test suite: `clean_chain()` deletes ALL transactions including the contact TX — identified as root cause of ping test 6.1/6.3 dual-signature failures (design decision pending: missing contact TX invalidates entire chain)
-
-### Added
-- Shared P2P diagnostic functions in `testHelpers.sh`: `get_processor_health`, `get_p2p_state`, `get_p2p_timing`, `dump_p2p_diagnostic` — reusable across all test suites for debugging P2P routing issues
-- Shared backup helper functions moved to `testHelpers.sh`: `cleanup_backups`, `count_backups`, `verify_tx_exists` — previously defined inline in `chainDropTestSuite.sh` after first use (causing `command not found` errors)
-- Best-fee routing test: diagnostic output on failure AND on slow success (>60s), showing per-hop P2P status, timing, candidate counts, and processor health
-- Per-currency transaction chain validation: ping sends `prevTxidsByCurrency` map (one chain head per currency) instead of single `prevTxid`; pong returns `chainStatusByCurrency` map with per-currency chain validity
-- Per-currency available credit exchange: pong returns `availableCreditByCurrency` map; each currency's available credit stored independently in `contact_credit` table (UNIQUE on `pubkey_hash, currency`)
-- GUI currency slider: contact modal uses horizontal pill-style currency slider with left/right arrows to switch between currencies, replacing the dropdown selector
-- Dynamic currency dropdowns: Send eIOU form populates currencies from user's allowed currencies and filters to contact's accepted currencies when a contact is selected; Add Contact form also uses allowed currencies
-- Per-currency "Your Available Credit" and "Their Available Credit" display in contact modal per-currency entries
-- `TransactionRepository::getPreviousTxidsByCurrency()` for retrieving per-currency chain heads
-- `ContactCurrencyRepository::getDistinctAcceptedCurrencies()` for wallet info currency display
-
-### Changed
-- `MessagePayload::buildTransactionSyncRequest()` now accepts optional `lastKnownTxidsByCurrency` parameter for per-currency sync cursors
-- `SyncService::handleTransactionSyncRequest()` filters transactions per-currency when `lastKnownTxidsByCurrency` is provided in the request
-- `ContactStatusPayload::build()` sends `prevTxidsByCurrency` instead of single `prevTxid`
-- `ContactStatusPayload::buildResponse()` takes `chainStatusByCurrency` and `availableCreditByCurrency` maps instead of single `chainValid`/`availableCredit`/`currency` values
-- `getCreditLimit()` without direction parameter now returns `MAX(credit_limit)` across all direction rows for that contact+currency
-- Wallet information section now includes currencies from accepted contact relationships (not just those with balances/earnings)
-- Legacy single-`prevTxid` code removed from ping/pong protocol entirely
-- CLI `update` command now requires currency parameter for `fee` and `credit` fields (`eiou update Bob fee 1.5 USD`); optional for `all` (defaults to contact's current currency)
-- CLI `update` for fee/credit now propagates changes to `contact_currencies` table (not just `contacts`)
-- GUI contact settings tab: currency selector moved above fee/credit, populated from contact's accepted currencies; changing currency loads that currency's current fee/credit values
-- GUI `handleEditContact` updates `contact_currencies` directly for fee/credit per selected currency instead of only updating `contacts` table
-
-### Removed
-- Legacy `currency`, `fee_percent`, `credit_limit` columns from `contacts` table — fee/credit configuration is now exclusively in `contact_currencies` table
-- Dual-write pattern: services no longer write fee/credit/currency to `contacts` table; only `contact_currencies` is used
-- Single-value fee/credit/currency from CLI `get` and `search` output; replaced with per-currency display
-- Single-value `fee_percent`, `credit_limit`, `currency` from API GET endpoints (`/contacts`, `/contacts/search`, `/contacts/ping`); replaced with `currencies` array
-- Legacy `their_available_credit` single-value calculation from GUI; per-currency values in `currencies` array are used instead
-
-### Fixed
 - Contact transaction sync recovery: chain gap detection and `missingTxids` DB lookup no longer gated behind `backupService !== null` — previously, if `BackupService` was not wired (lazy-loaded), sync could not detect gaps or ask the remote to look up missing transactions, causing permanent "both sides missing same transactions" errors even when the remote had the transaction in its DB
 - Contact transaction signature verification during sync: `senderAddresses` removed from signed content in `signWithCapture()` — previously, the sender's full address set was included in the signed message, making signatures unverifiable if any address was added or removed after signing
 - Contact signature reconstruction: `reconstructContactSignedMessage()` now includes `currency` field to match the actual signed content — previously reconstructed only `{"type":"create","nonce":"..."}` which never matched the signed payload
@@ -179,8 +210,6 @@ The project is currently in **ALPHA** status.
 - Credit limit conversion: `handleAcceptCurrency` and `handleAcceptAllCurrencies` now properly convert fee and credit limit to minor units (cents) before storing — previously stored raw float values
 - "Their Available Credit" in contact modal now calculated per-currency as `credit_limit - balance` instead of showing "—"
 - "Your Available Credit" in pong calculation no longer incorrectly filters by direction — credit limit lookup uses max across directions
-
-### Fixed
 - Multi-currency acceptance for existing contacts: `handleExistingContact()` now creates an outgoing `contact_currencies` entry and sends a P2P notification when accepting an incoming pending currency — previously only the incoming entry was accepted, leaving the remote side stuck on "Awaiting their acceptance" for non-default currencies
 - False positive chain gap after contact add/accept cycle: pong handler now re-evaluates chain validity after sync using txid existence checks instead of stale head comparison — resolves race condition where in-flight transactions caused chain head mismatches between ping and pong
 - Wallet restore via ping: `handlePingRequest` auto-create path now creates `contact_currencies` entries for all currencies from `prevTxidsByCurrency`, auto-accepts the contact when sync proves prior relationship, and uses the correct multi-currency `buildResponse` signature — previously only created a bare pending contact with no currencies and used the deprecated single-value response signature
@@ -208,65 +237,30 @@ The project is currently in **ALPHA** status.
 - GUI `contactSection.html` now derives fee/credit/currency display from `currencies` array instead of removed top-level contact fields
 - Accept contact with mismatched currency no longer rejects — user can accept with their preferred currency while remote's pending currencies stay for later acceptance
 - Cross-currency contact requests now correctly distinguished via `direction` column in `contact_currencies`: "incoming" = they requested from us, "outgoing" = we requested from them — resolves mismatch where Alice's USD request was confused with Bob's GBY request
-
-### Added
-- `contact_currencies.direction` column (`ENUM('incoming','outgoing')`) with database migration — enables per-direction currency tracking so both sides independently track what they requested vs what was requested of them
-- Sender-side outgoing currency tracking: `handleNewContact` now inserts `direction='outgoing'` entries in `contact_currencies` when a contact request is sent, so the sender can see "Awaiting their acceptance" for each requested currency
-- Direction-aware GUI: pending contact section shows "Your pending requests (awaiting their acceptance)" for outgoing currencies and "They requested" for incoming currencies, eliminating the confusion where sender's own currency appeared as an incoming request
-- `MessageService` now updates outgoing `contact_currencies` entries to 'accepted' when remote acceptance is received
-- Unique index on `contact_currencies` changed from `(pubkey_hash, currency)` to `(pubkey_hash, currency, direction)` — allows both sides to independently request the same currency
-- Multi-currency GUI display: wallet info cards now show one row per currency (Balance, Earnings, Credit grouped per currency) instead of mixing all currencies in a single row
-- Contact detail modal currency selector: multi-currency contacts now display a dropdown to switch between currencies, updating balance, credit limit, fee, and available credit fields
-- Per-currency contact balances: `getAllContactBalances()` now returns balances grouped by currency (`pubkey => ['USD' => amount, 'GBY' => amount]`)
-- `balances_by_currency` field added to contact data throughout the GUI pipeline (BalanceService, TransactionService, ContactDataBuilder)
-- Pending currency acceptance flow: adding a new currency to an existing contact now sends a P2P request; the remote side sees it as "pending" and must accept with their own fee/credit terms
-- `contact_currencies.status` column (`'accepted'`/`'pending'`) with database migration for existing tables
-- `ContactCurrencyRepository::acceptCurrency()` and `getPendingCurrencies()` methods
-- `ContactSyncService::setContactCurrencyRepository()` for new currency request handling on receiver side
-- GUI `acceptCurrency` action handler in ContactController for accepting pending currency requests
-- Pending currency badge on contact cards and accept form in contact detail modal
-- Cross-currency mutual request handling: when both sides initiate contact requests with different currencies, the remote's currency is stored as a pending entry in `contact_currencies` and displayed in the GUI as a "Currency Mismatch" with an option to accept their terms
-- CLI `eiou add` now allows updating the currency on a pending outgoing contact request — re-sends the P2P request with the new currency, enabling mutual accept when currencies now match
-- Accept contact form currency dropdown now populated dynamically from `getAllowedCurrencies()` instead of hardcoded USD
-
-- Configurable allowed currencies — the hardcoded `['USD']` allowed list in `InputValidator::validateCurrency()` is now a `Constants::ALLOWED_CURRENCIES` default that can be overridden per-node via `UserContext::getAllowedCurrencies()`
-  - New `Constants::ALLOWED_CURRENCIES` constant defines the system default
-  - New `UserContext::getAllowedCurrencies()` getter reads from config (comma-separated string or array), falls back to Constants
-  - `InputValidator::validateCurrency()` now reads allowed list from UserContext; accepts optional `$allowedCurrencies` parameter for tests and override scenarios
-  - New `InputValidator::validateAllowedCurrency()` validates that a currency code has a `Constants::CONVERSION_FACTORS` entry before it can be added to the allowed list
-  - CLI `changesettings allowedCurrencies` command and interactive menu option (16) for managing allowed currencies
-  - GUI settings: dynamic default currency dropdown populated from allowed list; new "Allowed Currencies" text input field
-  - GUI SettingsController validates each currency has a conversion factor on save
-  - API `PUT /api/v1/system/settings` supports `allowed_currencies` field with per-currency conversion factor validation
-  - `allowedCurrencies` added to `UserContext::getConfigurableDefaults()` (stored as comma-separated string)
-- Multi-currency contact support — contacts can now have multiple currency relationships with independent fee and credit limit per currency
-  - New `contact_currencies` table stores per-currency configuration (`pubkey_hash`, `currency`, `fee_percent`, `credit_limit`) with composite UNIQUE on `(pubkey_hash, currency)`
-  - New `ContactCurrencyRepository` with full CRUD: `insertCurrencyConfig()`, `getCurrencyConfig()`, `getContactCurrencies()`, `hasCurrency()`, `getCreditLimit()`, `getFeePercent()`, `updateCurrencyConfig()`, `upsertCurrencyConfig()`, `deleteAllForContact()`, `deleteCurrencyConfig()`
-  - `ContactManagementService::addCurrencyToContact()` method to add a new currency to an existing accepted contact, creating rows in `contact_currencies`, `balances`, and `contact_credit`
-  - `ContactCreditRepository::getAvailableCreditAllCurrencies()` returns all per-currency credit rows for a contact
-  - GUI contact cards show "+N currency" badge when contact has multiple currencies
-  - GUI contact modal shows "Additional Currencies" section with per-currency credit limit, fee, and available credit
-  - GUI contact controller supports `addCurrency` action for adding currencies from the contact settings
-  - API `GET /api/v1/contacts/:address` response now includes `currencies` array with per-currency configuration
-  - Data migration in `DatabaseSetup::runColumnMigrations()` copies existing `contacts.{currency, fee_percent, credit_limit}` into `contact_currencies` via `INSERT IGNORE`
-
-### Changed
-- `contact_credit` table UNIQUE constraint changed from `pubkey_hash` alone to composite `(pubkey_hash, currency)` — allows storing per-currency credit entries for the same contact
-- `getCreditLimit()` across all interfaces, services, and repositories now accepts an optional `currency` parameter (defaults to `Constants::TRANSACTION_DEFAULT_CURRENCY`) — affects `ContactServiceInterface`, `ContactManagementServiceInterface`, `ContactRepository`, `ContactManagementService`, `ContactService`
-- `ContactRepository::getCreditLimit()` queries `contact_currencies` table first, falls back to `contacts` table for backward compatibility
-- `ContactCreditRepository::getAvailableCredit()` now accepts optional `currency` parameter to filter by specific currency
-- All `getCreditLimit()` call sites updated to pass currency from the request/transaction context: `TransactionValidationService`, `TransactionService`, `Rp2pService` (2 call sites), `P2pService`
-- `ContactStatusService::handlePingRequest()` reads credit limit from `contact_currencies` table first, falling back to `contacts.credit_limit`
-- `ContactManagementService::acceptContact()` now also writes to `contact_currencies` table alongside the existing `contacts` table write
-- `ContactDataBuilder` output includes `currencies` array for multi-currency GUI rendering
-- `Functions.php` fetches per-contact currency configs and all-currency available credits for GUI display
-
-### Fixed
 - Mutual auto-accept no longer fires when currencies differ — Alice adding Bob with USD and Bob adding Alice with GBY are now treated as separate pending requests instead of auto-accepting with mismatched currencies
 - Wallet info card currency rows now follow the allowed currencies order (first allowed currency = first row)
 - Wallet info card loops use `isset()` guards so data for currencies not in `$knownCurrencies` cannot create phantom rows
-- API `POST /api/v1/wallet/send` now reads `best_fee` from request body and passes `--best` to argv — previously the field was documented but silently ignored, always using fast mode (#679)
-- CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
+
+### Removed
+- Legacy `currency`, `fee_percent`, `credit_limit` columns from `contacts` table — fee/credit configuration is now exclusively in `contact_currencies` table
+- Dual-write pattern: services no longer write fee/credit/currency to `contacts` table; only `contact_currencies` is used
+- Single-value fee/credit/currency from CLI `get` and `search` output; replaced with per-currency display
+- Single-value `fee_percent`, `credit_limit`, `currency` from API GET endpoints (`/contacts`, `/contacts/search`, `/contacts/ping`); replaced with `currencies` array
+- Legacy `their_available_credit` single-value calculation from GUI; per-currency values in `currencies` array are used instead
+
+### Docs
+- ARCHITECTURE.md: Add credit reservation lifecycle section — explains `base_amount` vs `total_amount`, three release paths (cancel/commit/expiry), and status transitions with diagram
+- ARCHITECTURE.md: Add fee accumulation through relays section — shows multiplicative/compounding per-hop fee calculation, two-phase process (estimate on outbound, authoritative recalculation on RP2P return), multi-route example with best-fee selection, and `rp2p_candidates` table schema
+- ARCHITECTURE.md: Add coalesce delay and mega-batch section — explains `P2P_QUEUE_COALESCE_MS`, when mega-batch is used vs inline sends, and compound key mapping
+- ARCHITECTURE.md: Add message delivery and dead letter queue section — documents retry policy, exponential backoff schedule, Tor cooldown handling, DLQ operations (retry/abandon/resolve), and atomic claiming
+- ARCHITECTURE.md: Add distributed locking section — explains MariaDB advisory locks, atomic claiming pattern, and where locks are used
+- ARCHITECTURE.md: Add ping/pong credit exchange section — documents ping payload, pong response fields, available credit synchronization, chain validation, sync trigger, and online status determination
+- ARCHITECTURE.md: Add proactive vs reactive sync comparison table to sync flow section
+- `update` CLI help now documents the required `currency` parameter for `fee` and `credit` fields, and optional currency for `all`. Usage, arguments, examples, and note all updated to reflect the actual command syntax.
+
+## 2026-02-28 -- 2026-03-03
+
+DLQ management, configurable settings, security hardening, GUI improvements.
 
 ### Security
 - Drop all Linux capabilities and re-add only the 7 required (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `KILL`, `NET_BIND_SERVICE`, `SETGID`, `SETUID`) in all compose files — significantly reduces blast radius of a container escape (#521)
@@ -299,12 +293,30 @@ The project is currently in **ALPHA** status.
 - Document all 30 new settings in CLI_REFERENCE.md, API_REFERENCE.md, and GUI_REFERENCE.md
 - Add category dropdown selector to Advanced Settings — replaces flat scrollable list with a `<select>` that switches between Feature Toggles, Display, Backup & Logging, Data Retention, Sync, Network, and Rate Limiting panels (ordered simple→advanced); all fields remain in the DOM so changes across multiple categories are saved in a single click
 - Add `.adv-section-nav` and `.settings-section-warning` CSS classes to `page.css`; extend `.form-group` rules to cover `textarea` elements (monospace font, vertical resize, matching border/focus/default-value styles)
+- API `POST /api/v1/wallet/send` now reads `best_fee` from request body and passes `--best` to argv — previously the field was documented but silently ignored, always using fast mode (#679)
 
 ### Changed
 - Increase `DIRECT_TX_DELIVERY_EXPIRATION_SECONDS` from 60s to 120s (two Tor round-trips instead of one) — gives Tor delivery enough time to complete under normal network conditions; P2P post-expiry delivery window and DLQ retry window increase accordingly
-
-### Docs
-- Document transport selection behavior in `CLI_REFERENCE.md` `send` command — clarifies that passing an explicit address scheme (e.g. `http://Bob`) uses that scheme directly, while passing a contact name falls back to the `defaultTransportMode` setting (default: `tor`); both forms address the same contact but differ in delivery mechanism by design
+- Replace separate Backup Hour / Backup Minute number inputs with a single `<input type="time">` (`HH:MM`); `SettingsController` parses the combined value and stores the individual `backupCronHour` / `backupCronMinute` keys unchanged
+- Replace API CORS Origins single-line text input with a resizable monospace textarea (one origin per line); controller normalises newline/comma-separated input to comma-separated storage and PHP renders it back as newline-separated on display
+- Make Held TX Sync Timeout upper bound dynamic: PHP renders the initial `max` as `p2pExpiration − 1` and a JS listener on the P2P Request Expiration field keeps it current, auto-clamping the timeout value if needed; server-side validation also uses the submitted/saved `p2pExpiration` value rather than a hardcoded 299
+- Rename "Max Display Lines" setting label to "GUI/CLI Max Output Lines" (setting affects both the GUI dashboard and CLI commands); update description to reference correct CLI commands (`viewbalances`, `history`); update "Recent Transactions Limit" note to reference the renamed label
+- Move API CORS Origins field from Feature Toggles to Network section — it is a text configuration input, not a feature toggle
+- Reorder Backup & Logging fields: Backup Time (UTC) → Backup Retention Count → Max Log Entries → Log Level (backup schedule before retention count; log capacity before log level)
+- Style the Advanced Settings category `<select>` to match other form inputs — adds padding, border, border-radius, custom chevron arrow, and focus ring consistent with `.form-group select`
+- Add expert warning to Network timeout section; add data-loss warning to Data Retention section
+- Clarify Rate Limiting section: describe the two independent mechanisms (P2P throughput cap vs attempt-counting brute-force blocker) so the separate fields are not confused as controlling the same thing; rename fields to reflect their actual function ("P2P Throughput Limit", "Max Attempts per Window", "Attempt Window")
+- Remove `rateLimitEnabled` toggle from GUI Feature Toggles — rate limiting is a security-critical feature that should not be easily disabled from the UI; toggle remains available via CLI and API; remove corresponding POST handler in `SettingsController` to prevent saving settings from silently writing `false` for a missing checkbox; document as CLI/API-only in API_REFERENCE.md and CLI_REFERENCE.md
+- Remove incorrect "(HH:MM, 24-hour)" qualifier from Backup Time field description — the browser native time picker renders in 12h or 24h based on OS locale
+- Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
+- Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
+- Make integration tests manual-only — no longer auto-runs on every PR; trigger via `workflow_dispatch` from the Actions tab or by adding the `run-integration` label to a PR
+- Group DatabaseSchema tables into 6 logical sections (Contacts & Network, Transactions & Chain Integrity, P2P Routing, Message Delivery, API, System & Security) with header comments; update matching order in DatabaseSetup and DatabaseSchemaTest
+- Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
+- Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
+- Archive old multi-node compose files to `tests/old/compose-files/`
+- Rewrite README.md to focus on the single compose file with comprehensive configuration reference
+- CLI wrapper (`/usr/local/bin/eiou`) now waits up to 30s for MariaDB before running commands — prevents "Database setup failed" errors when `docker exec` is used before node startup completes
 
 ### Fixed
 - Fix `sending` transaction status badge rendering as unstyled text — added `.tx-status-sending` CSS rule with orange background (`#fd7e14`) to match the existing in-progress phase badge colour and distinguish it from pending (yellow) and sent (teal)
@@ -354,26 +366,8 @@ The project is currently in **ALPHA** status.
 - Add P2P expiration timestamp check in `isP2pExpiredOrCancelled` — checks actual expiration time, not just status field (cleanup cycle may lag behind real expiry)
 - Skip proactive hold for P2P transactions with insufficient remaining lifetime — prevents holding transactions that will become zombies because the P2P expires on all other relay nodes before sync can complete
 
-### Changed
-- Replace separate Backup Hour / Backup Minute number inputs with a single `<input type="time">` (`HH:MM`); `SettingsController` parses the combined value and stores the individual `backupCronHour` / `backupCronMinute` keys unchanged
-- Replace API CORS Origins single-line text input with a resizable monospace textarea (one origin per line); controller normalises newline/comma-separated input to comma-separated storage and PHP renders it back as newline-separated on display
-- Make Held TX Sync Timeout upper bound dynamic: PHP renders the initial `max` as `p2pExpiration − 1` and a JS listener on the P2P Request Expiration field keeps it current, auto-clamping the timeout value if needed; server-side validation also uses the submitted/saved `p2pExpiration` value rather than a hardcoded 299
-- Rename "Max Display Lines" setting label to "GUI/CLI Max Output Lines" (setting affects both the GUI dashboard and CLI commands); update description to reference correct CLI commands (`viewbalances`, `history`); update "Recent Transactions Limit" note to reference the renamed label
-- Move API CORS Origins field from Feature Toggles to Network section — it is a text configuration input, not a feature toggle
-- Reorder Backup & Logging fields: Backup Time (UTC) → Backup Retention Count → Max Log Entries → Log Level (backup schedule before retention count; log capacity before log level)
-- Style the Advanced Settings category `<select>` to match other form inputs — adds padding, border, border-radius, custom chevron arrow, and focus ring consistent with `.form-group select`
-- Add expert warning to Network timeout section; add data-loss warning to Data Retention section
-- Clarify Rate Limiting section: describe the two independent mechanisms (P2P throughput cap vs attempt-counting brute-force blocker) so the separate fields are not confused as controlling the same thing; rename fields to reflect their actual function ("P2P Throughput Limit", "Max Attempts per Window", "Attempt Window")
-- Remove `rateLimitEnabled` toggle from GUI Feature Toggles — rate limiting is a security-critical feature that should not be easily disabled from the UI; toggle remains available via CLI and API; remove corresponding POST handler in `SettingsController` to prevent saving settings from silently writing `false` for a missing checkbox; document as CLI/API-only in API_REFERENCE.md and CLI_REFERENCE.md
-- Remove incorrect "(HH:MM, 24-hour)" qualifier from Backup Time field description — the browser native time picker renders in 12h or 24h based on OS locale
-- Migrate service consumers from Constants static helpers to UserContext getters: ContactStatusProcessor, ContactStatusService, SendOperationService, ChainDropService, and BackupService now read feature toggles from user configuration instead of hardcoded constants
-- Deprecate `Constants::isContactStatusEnabled()`, `isAutoBackupEnabled()`, `isAutoChainDropProposeEnabled()`, and `isAutoChainDropAcceptEnabled()` in favor of UserContext getters
-- Make integration tests manual-only — no longer auto-runs on every PR; trigger via `workflow_dispatch` from the Actions tab or by adding the `run-integration` label to a PR
-- Group DatabaseSchema tables into 6 logical sections (Contacts & Network, Transactions & Chain Integrity, P2P Routing, Message Delivery, API, System & Security) with header comments; update matching order in DatabaseSetup and DatabaseSchemaTest
-- Make contact IDs deterministic using HMAC-SHA256(contact_pubkey, user_pubkey) — re-adding a contact after deletion or database wipe now produces the same contact_id, preserving record correlation
-- Consolidate to a single `docker-compose.yml` at project root — replaces the four separate compose files (single, 4line, 10line, cluster) with one fully-documented single-node compose file containing all environment variables and volume mounts as commented-out options
-- Archive old multi-node compose files to `tests/old/compose-files/`
-- Rewrite README.md to focus on the single compose file with comprehensive configuration reference
+### Docs
+- Document transport selection behavior in `CLI_REFERENCE.md` `send` command — clarifies that passing an explicit address scheme (e.g. `http://Bob`) uses that scheme directly, while passing a contact name falls back to the `defaultTransportMode` setting (default: `tor`); both forms address the same contact but differ in delivery mechanism by design
 
 ## 2026-02-19 -- 2026-02-27
 
