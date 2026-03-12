@@ -1066,7 +1066,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.1: Storing original authcode from userconfig.json"
 
 originalAuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1199,7 +1199,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.6: Retrieving restored authcode"
 
 restoredAuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1297,7 +1297,7 @@ docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
 wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 iteration2AuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1315,7 +1315,7 @@ docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
 wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 iteration3AuthCodeResult=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
@@ -1679,7 +1679,7 @@ echo -e "\n\t-> Step 5.2: Checking that actual authcode value is NOT in docker l
 
 # Get the actual authcode
 actualAuthCode=$(docker exec ${testContainer} php -r '
-    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    require_once("'"${BOOTSTRAP_PATH}"'");
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         echo \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
