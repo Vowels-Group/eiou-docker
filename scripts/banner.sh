@@ -9,24 +9,50 @@
 #
 # Usage: Source this file and call the banner functions
 #   source /app/scripts/banner.sh
-#   show_alpha_warning
+#   show_startup_warnings
 #   show_alpha_warning_short
 # =============================================================================
 
-# Colors for terminal output
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+# Ensure correct character counting for UTF-8 box-drawing characters.
+# Without this, printf/fold/string-length count bytes instead of characters,
+# causing misaligned borders for multi-byte chars (║, •) and ANSI color codes.
+export LC_ALL=C.UTF-8 2>/dev/null || export LC_ALL=en_US.UTF-8 2>/dev/null || true
 
-# Box width (inner content area, excluding the ║ borders)
+# Colors for terminal output.
+# Using $'...' so variables contain actual ESC bytes — no echo -e needed.
+RED=$'\033[0;31m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m'
+
+# Box width (inner content area between the ║ borders)
 BOX_WIDTH=76
 
-# Print a line inside a red box with proper right-edge alignment
-# Usage: box_line "text"
+# Pre-compute the horizontal border line
+_BOX_BORDER=$(printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))))
+
+# Print the top border of a box
+box_top() {
+    echo "${RED}╔${_BOX_BORDER}╗${NC}"
+}
+
+# Print the bottom border of a box
+box_bottom() {
+    echo "${RED}╚${_BOX_BORDER}╝${NC}"
+}
+
+# Print a content line inside a red box with proper right-edge alignment.
+# Strips ANSI color codes before measuring width so colored text aligns correctly.
 box_line() {
-    printf "${RED}║${NC} %-${BOX_WIDTH}s ${RED}║${NC}\n" "$1"
+    local text="$1"
+    # Strip ANSI escape sequences to calculate visible character width
+    local stripped
+    stripped=$(printf '%s' "$text" | sed 's/\x1b\[[0-9;]*m//g')
+    local visible_len=${#stripped}
+    local pad=$((BOX_WIDTH - visible_len))
+    [ "$pad" -lt 0 ] && pad=0
+    local spaces=""
+    [ "$pad" -gt 0 ] && spaces=$(printf "%${pad}s" "")
+    echo "${RED}║${NC} ${text}${spaces} ${RED}║${NC}"
 }
 
 # Print an empty line inside the box
@@ -35,9 +61,8 @@ box_empty() {
 }
 
 # Print text wrapped to fit inside the box
-# Usage: box_wrap "long text here"
 box_wrap() {
-    echo "$1" | fold -s -w $BOX_WIDTH | while IFS= read -r line; do
+    echo "$1" | fold -s -w "$BOX_WIDTH" | while IFS= read -r line; do
         box_line "$line"
     done
 }
@@ -45,21 +70,20 @@ box_wrap() {
 # Full alpha/testing warning banner - shown at container start
 show_alpha_warning() {
     echo ""
-    printf "${RED}╔"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╗${NC}\n"
+    box_top
     box_empty
-    box_line "$(echo -e "${YELLOW}WARNING: ALPHA/STAGING VERSION${NC}")"
+    box_line "${YELLOW}WARNING: ALPHA/STAGING VERSION${NC}"
     box_empty
-    box_line "• This is an alpha/staging version of eIOU."
-    box_line "• Do NOT use this for real financial transactions."
-    box_line "• All data may be reset without notice."
-    box_line "• For testing purposes only."
+    box_line "* This is an alpha/staging version of eIOU."
+    box_line "* Do NOT use this for real financial transactions."
+    box_line "* All data may be reset without notice."
+    box_line "* For testing purposes only."
     box_empty
-    printf "${RED}╚"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╝${NC}\n"
+    box_bottom
     echo ""
 }
 
 # Legal notice banner - loaded from separate file for easy editing
-# Usage: show_legal_notice
 show_legal_notice() {
     local notice_file="/app/scripts/legal-notice.txt"
     if [ ! -f "$notice_file" ]; then
@@ -67,7 +91,7 @@ show_legal_notice() {
     fi
 
     echo ""
-    printf "${RED}╔"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╗${NC}\n"
+    box_top
     box_empty
 
     while IFS= read -r line || [ -n "$line" ]; do
@@ -79,7 +103,7 @@ show_legal_notice() {
     done < "$notice_file"
 
     box_empty
-    printf "${RED}╚"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╝${NC}\n"
+    box_bottom
     echo ""
 }
 
@@ -89,21 +113,21 @@ show_startup_warnings() {
     show_legal_notice
 
     echo ""
-    printf "${RED}╔"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╗${NC}\n"
+    box_top
     box_empty
     box_line "By using this software, you acknowledge that you have read and"
     box_line "agree to the above terms."
     box_empty
-    printf "${RED}╚"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╝${NC}\n"
+    box_bottom
     echo ""
 }
 
 # Short reminder banner - shown before watchdog starts
 show_alpha_warning_short() {
     echo ""
-    echo -e "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  REMINDER: This is an ALPHA/STAGING version - FOR TESTING PURPOSES ONLY${NC}"
-    echo -e "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
+    echo "${YELLOW}  REMINDER: This is an ALPHA/STAGING version - FOR TESTING PURPOSES ONLY${NC}"
+    echo "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 }
 
@@ -112,9 +136,9 @@ show_error_banner() {
     local error_title="$1"
     local error_message="$2"
     echo ""
-    printf "${RED}╔"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╗${NC}\n"
+    box_top
     box_empty
-    box_line "$(echo -e "${RED}CRITICAL ERROR: ${error_title}${NC}")"
+    box_line "${RED}CRITICAL ERROR: ${error_title}${NC}"
     box_empty
     if [ -n "$error_message" ]; then
         box_wrap "$error_message"
@@ -123,6 +147,6 @@ show_error_banner() {
     box_line "The container will now stop. Please check your configuration"
     box_line "and try again with a valid seedphrase."
     box_empty
-    printf "${RED}╚"; printf '═%.0s' $(seq 1 $((BOX_WIDTH + 2))); printf "╝${NC}\n"
+    box_bottom
     echo ""
 }
