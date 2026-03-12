@@ -2,47 +2,85 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 # =============================================================================
-# banner.sh - EIOU Alpha/Testing Warning Banner
+# banner.sh - EIOU Startup Warning Banners
 # =============================================================================
-# This file contains warning banners displayed during container startup.
-# Edit this file to update the warning message for all containers.
+# Displays warning banners during container startup.
+# Uses horizontal rules for visual separation — no side borders, so there
+# are no terminal-width alignment issues. Text is indented for readability.
 #
 # Usage: Source this file and call the banner functions
 #   source /app/scripts/banner.sh
-#   show_alpha_warning
+#   show_startup_warnings
 #   show_alpha_warning_short
 # =============================================================================
 
-# Colors for terminal output
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+# Horizontal rule — 60 dashes
+_HR="------------------------------------------------------------"
+
+# Print a red horizontal rule
+box_rule() {
+    printf '\033[0;31m%s\033[0m\n' "$_HR"
+}
 
 # Full alpha/testing warning banner - shown at container start
 show_alpha_warning() {
     echo ""
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}║${NC}  ${YELLOW}⚠️  WARNING: ALPHA/STAGING VERSION${NC}                                          ${RED}║${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}║${NC}  • This is an alpha/staging version of eIOU.                                ${RED}║${NC}"
-    echo -e "${RED}║${NC}  • Do NOT use this for real financial transactions.                         ${RED}║${NC}"
-    echo -e "${RED}║${NC}  • All data may be reset without notice.                                    ${RED}║${NC}"
-    echo -e "${RED}║${NC}  • For testing purposes only.                                               ${RED}║${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}║${NC}  By using this software, you acknowledge that you have read and agree       ${RED}║${NC}"
-    echo -e "${RED}║${NC}  to the above terms.                                                        ${RED}║${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
+    box_rule
+    echo ""
+    printf '\033[1;33m  WARNING: ALPHA/STAGING VERSION\033[0m\n'
+    echo ""
+    printf '  * This is an alpha/staging version of eIOU.\n'
+    printf '  * Do NOT use this for real financial transactions.\n'
+    printf '  * All data may be reset without notice.\n'
+    printf '  * For testing purposes only.\n'
+    echo ""
+    box_rule
+    echo ""
+}
+
+# Legal notice banner - loaded from separate file for easy editing.
+show_legal_notice() {
+    local notice_file="/app/scripts/legal-notice.txt"
+    if [ ! -f "$notice_file" ]; then
+        return 0
+    fi
+
+    box_rule
+    echo ""
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [ -z "$line" ]; then
+            echo ""
+        else
+            printf '  %s\n' "$line"
+        fi
+    done < "$notice_file"
+
+    echo ""
+    box_rule
+    echo ""
+}
+
+# Combined: show all warnings, then the acceptance line
+show_startup_warnings() {
+    show_alpha_warning
+    show_legal_notice
+
+    box_rule
+    echo ""
+    printf '  By using this software, you acknowledge that you have\n'
+    printf '  read and agree to the above terms.\n'
+    echo ""
+    box_rule
     echo ""
 }
 
 # Short reminder banner - shown before watchdog starts
 show_alpha_warning_short() {
     echo ""
-    echo -e "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  REMINDER: This is an ALPHA/STAGING version - FOR TESTING PURPOSES ONLY${NC}"
-    echo -e "${YELLOW}══════════════════════════════════════════════════════════════════════════════${NC}"
+    printf '\033[1;33m%s\033[0m\n' "$_HR"
+    printf '\033[1;33m  REMINDER: ALPHA/STAGING version - FOR TESTING ONLY\033[0m\n'
+    printf '\033[1;33m%s\033[0m\n' "$_HR"
     echo ""
 }
 
@@ -51,20 +89,29 @@ show_error_banner() {
     local error_title="$1"
     local error_message="$2"
     echo ""
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}║${NC}  ${RED}❌ CRITICAL ERROR: ${error_title}${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
+    box_rule
+    echo ""
+    printf '\033[0;31m  CRITICAL ERROR: %s\033[0m\n' "$error_title"
+    echo ""
     if [ -n "$error_message" ]; then
-        # Word wrap the error message to fit within the banner
-        echo "$error_message" | fold -s -w 72 | while read -r line; do
-            printf "${RED}║${NC}  %-74s${RED}║${NC}\n" "$line"
+        # Word wrap long error messages at 56 chars
+        local current_line=""
+        for word in $error_message; do
+            if [ -z "$current_line" ]; then
+                current_line="$word"
+            elif [ $((${#current_line} + 1 + ${#word})) -le 56 ]; then
+                current_line="$current_line $word"
+            else
+                printf '  %s\n' "$current_line"
+                current_line="$word"
+            fi
         done
+        [ -n "$current_line" ] && printf '  %s\n' "$current_line"
+        echo ""
     fi
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}║${NC}  The container will now stop. Please check your configuration and try       ${RED}║${NC}"
-    echo -e "${RED}║${NC}  again with a valid seedphrase.                                             ${RED}║${NC}"
-    echo -e "${RED}║${NC}                                                                              ${RED}║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
+    printf '  The container will now stop. Please check your\n'
+    printf '  configuration and try again with a valid seedphrase.\n'
+    echo ""
+    box_rule
     echo ""
 }

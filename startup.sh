@@ -67,8 +67,8 @@ set -o pipefail
 # This file can be edited to update the warning banners without modifying startup.sh
 if [ -f "/app/scripts/banner.sh" ]; then
     source /app/scripts/banner.sh
-    # Display alpha/testing warning at container start
-    show_alpha_warning
+    # Display alpha/testing warning + legal notice at container start
+    show_startup_warnings
 fi
 
 # Detect PHP-FPM service name (version-independent, e.g., php8.2-fpm)
