@@ -45,21 +45,21 @@ class CliHelpService
             ],
             'add' => [
                 'description' => 'Add a new contact or accept an incoming contact request',
-                'usage' => 'add [address] [name] [fee] [credit] [currency] ([minfee])',
+                'usage' => 'add [address] [name] [fee] [credit] [minfee] [currency]',
                 'arguments' => [
                     'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor .onion)'],
                     'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
-                    'minfee' => ['type' => 'optional', 'description' => 'Minimum fee amount for this contact/currency (e.g., 0.01). Falls back to global default if omitted.']
+                    'minfee' => ['type' => 'required', 'description' => 'Minimum fee amount for this contact/currency (e.g., 0.01). Must be greater than 0.'],
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)']
                 ],
                 'examples' => [
-                    'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact (uses default min fee)',
-                    'add http://bob:8080 Bob 1.0 100 USD 0.05' => 'Add with custom min fee amount',
-                    'add http://bob:8080 "Jane Doe" 1.0 100 USD' => 'Add with a multi-word name',
-                    'add abc123...onion Alice 0.5 500 USD' => 'Add via Tor address',
-                    'add http://charlie:8080 Charlie 1 200 USD --json' => 'JSON output'
+                    'add http://bob:8080 Bob 1.0 100 0.01 USD' => 'Add a new contact with $0.01 min fee',
+                    'add http://bob:8080 Bob 1.0 100 0.05 USD' => 'Add with $0.05 min fee amount',
+                    'add http://bob:8080 "Jane Doe" 1.0 100 0.01 USD' => 'Add with a multi-word name',
+                    'add abc123...onion Alice 0.5 500 0.01 USD' => 'Add via Tor address',
+                    'add http://charlie:8080 Charlie 1 200 0.01 USD --json' => 'JSON output'
                 ],
                 'note' => 'Creates a pending contact request that the recipient must accept. To accept an incoming request, use add with the sender\'s address. Rate limited: 20 additions per minute.'
             ],

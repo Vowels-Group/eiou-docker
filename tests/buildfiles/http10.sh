@@ -57,30 +57,31 @@ declare -a containers=(
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
 readonly defaultCredit=1000
+readonly defaultMinFee=0.01
 
 # Define contacts, direction ->
 # example: [httpA,httpB] defines httpB as a contact of httpA
-#          must be accepted in reverse that is to say: 
+#          must be accepted in reverse that is to say:
 #          [httpA,httpB] needs to be followed by [httpB,httpA]
 declare -A containersLinks=(
-    [httpA,httpB]="$defaultFee $defaultCredit USD"
-    [httpB,httpA]="$defaultFee $defaultCredit USD"
-    [httpB,httpC]="$defaultFee $defaultCredit USD"
-    [httpC,httpB]="$defaultFee $defaultCredit USD"
-    [httpC,httpD]="$defaultFee $defaultCredit USD"
-    [httpD,httpC]="$defaultFee $defaultCredit USD"
-    [httpD,httpE]="$defaultFee $defaultCredit USD"
-    [httpE,httpD]="$defaultFee $defaultCredit USD"
-    [httpE,httpF]="$defaultFee $defaultCredit USD"
-    [httpF,httpE]="$defaultFee $defaultCredit USD"
-    [httpF,httpG]="$defaultFee $defaultCredit USD"
-    [httpG,httpF]="$defaultFee $defaultCredit USD"
-    [httpG,httpH]="$defaultFee $defaultCredit USD"
-    [httpH,httpG]="$defaultFee $defaultCredit USD"
-    [httpH,httpI]="$defaultFee $defaultCredit USD"
-    [httpI,httpH]="$defaultFee $defaultCredit USD"
-    [httpI,httpJ]="$defaultFee $defaultCredit USD"
-    [httpJ,httpI]="$defaultFee $defaultCredit USD"
+    [httpA,httpB]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpB,httpA]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpB,httpC]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpC,httpB]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpC,httpD]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpD,httpC]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpD,httpE]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpE,httpD]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpE,httpF]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpF,httpE]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpF,httpG]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpG,httpF]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpG,httpH]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpH,httpG]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpH,httpI]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpI,httpH]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpI,httpJ]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpJ,httpI]="$defaultFee $defaultCredit $defaultMinFee USD"
 )
 
 declare -A expectedContacts=(

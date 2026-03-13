@@ -31,36 +31,37 @@ declare -a containers=(
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
 readonly defaultCredit=1000
+readonly defaultMinFee=0.01
 
 # Define contacts, direction ->
 # example: [A0,A1] defines A0 as a contact of A1
 #          must be accepted in reverse that is to say: 
 #          [A0,A1] needs to be followed by [A1,A0]
 declare -A containersLinks=(
-    [A0,A1]="$defaultFee $defaultCredit USD"
-    [A1,A0]="$defaultFee $defaultCredit USD"
-    [A0,A2]="$defaultFee $defaultCredit USD"
-    [A2,A0]="$defaultFee $defaultCredit USD"
-    [A0,A3]="$defaultFee $defaultCredit USD"
-    [A3,A0]="$defaultFee $defaultCredit USD"
-    [A0,A4]="$defaultFee $defaultCredit USD"
-    [A4,A0]="$defaultFee $defaultCredit USD"
-    [A1,A11]="$defaultFee $defaultCredit USD"
-    [A11,A1]="$defaultFee $defaultCredit USD"
-    [A1,A12]="$defaultFee $defaultCredit USD"
-    [A12,A1]="$defaultFee $defaultCredit USD"
-    [A2,A21]="$defaultFee $defaultCredit USD"
-    [A21,A2]="$defaultFee $defaultCredit USD"
-    [A2,A22]="$defaultFee $defaultCredit USD"
-    [A22,A2]="$defaultFee $defaultCredit USD"
-    [A3,A31]="$defaultFee $defaultCredit USD"
-    [A31,A3]="$defaultFee $defaultCredit USD"
-    [A3,A32]="$defaultFee $defaultCredit USD"
-    [A32,A3]="$defaultFee $defaultCredit USD"
-    [A4,A41]="$defaultFee $defaultCredit USD"
-    [A41,A4]="$defaultFee $defaultCredit USD"
-    [A4,A42]="$defaultFee $defaultCredit USD"
-    [A42,A4]="$defaultFee $defaultCredit USD"
+    [A0,A1]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A1,A0]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A0,A2]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A2,A0]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A0,A3]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A3,A0]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A0,A4]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A4,A0]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A1,A11]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A11,A1]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A1,A12]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A12,A1]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A2,A21]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A21,A2]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A2,A22]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A22,A2]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A3,A31]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A31,A3]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A3,A32]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A32,A3]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A4,A41]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A41,A4]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A4,A42]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [A42,A4]="$defaultFee $defaultCredit $defaultMinFee USD"
 )
 
 declare -A expectedContacts=(

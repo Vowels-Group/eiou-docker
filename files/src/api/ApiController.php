@@ -911,13 +911,10 @@ class ApiController {
                 $data['name'],                           // $data[3] - contact name
                 (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
                 (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
-                $data['currency'] ?? 'USD',              // $data[6] - currency
+                (string) ($data['min_fee_amount'] ?? Constants::TRANSACTION_MINIMUM_FEE), // $data[6] - min fee amount
+                $data['currency'] ?? 'USD',              // $data[7] - currency
+                '--json',                                // Enable JSON output mode
             ];
-            // Add min_fee_amount if provided (optional per-currency minimum fee)
-            if (isset($data['min_fee_amount'])) {
-                $argv[] = (string) $data['min_fee_amount']; // $data[7] - min fee amount
-            }
-            $argv[] = '--json';                          // Enable JSON output mode
 
             // Create a fresh CliOutputManager instance with JSON mode
             CliOutputManager::resetInstance();

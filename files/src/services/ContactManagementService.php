@@ -236,11 +236,22 @@ class ContactManagementService implements ContactManagementServiceInterface
             $output->error("Invalid credit: " . $creditValidation['error'], ErrorCodes::INVALID_CREDIT, 400);
             return;
         }
-        // Validate currency (needed before credit conversion)
-        $currencyValidation = $this->inputValidator->validateCurrency($data[6] ?? 'USD');
+        // Validate minimum fee amount (required, must be > 0)
+        $minFeeValidation = $this->inputValidator->validateAmountFee($data[6] ?? 0);
+        if (!$minFeeValidation['valid']) {
+            $this->secureLogger->warning("Invalid minimum fee amount", [
+                'min_fee' => $data[6] ?? 'empty',
+                'error' => $minFeeValidation['error']
+            ]);
+            $output->error("Invalid minimum fee amount: " . $minFeeValidation['error'], ErrorCodes::INVALID_FEE, 400);
+            return;
+        }
+
+        // Validate currency (needed before credit and minfee conversion)
+        $currencyValidation = $this->inputValidator->validateCurrency($data[7] ?? 'USD');
         if (!$currencyValidation['valid']) {
             $this->secureLogger->warning("Invalid currency", [
-                'currency' => $data[6] ?? 'empty',
+                'currency' => $data[7] ?? 'empty',
                 'error' => $currencyValidation['error']
             ]);
             $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
@@ -248,23 +259,7 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
         $currency = $currencyValidation['value'];
         $credit = $creditValidation['value'] * Constants::CONVERSION_FACTORS[$currency];
-
-        // Validate minimum fee amount (optional, falls back to global default)
-        $minFeeAmount = null;
-        $rawMinFee = $data[7] ?? null;
-        // Skip if it's a flag like --json
-        if ($rawMinFee !== null && strpos($rawMinFee, '--') !== 0) {
-            $minFeeValidation = $this->inputValidator->validateAmountFee($rawMinFee);
-            if (!$minFeeValidation['valid']) {
-                $this->secureLogger->warning("Invalid minimum fee amount", [
-                    'min_fee' => $rawMinFee,
-                    'error' => $minFeeValidation['error']
-                ]);
-                $output->error("Invalid minimum fee amount: " . $minFeeValidation['error'], ErrorCodes::INVALID_FEE, 400);
-                return;
-            }
-            $minFeeAmount = (int) ($minFeeValidation['value'] * Constants::CONVERSION_FACTORS[$currency]);
-        }
+        $minFeeAmount = (int) ($minFeeValidation['value'] * Constants::CONVERSION_FACTORS[$currency]);
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [

@@ -84,10 +84,10 @@ echo -e "\t   Sender: ${sender} (${senderAddress})"
 echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 
 # Ensure contacts exist between sender and receiver
-# Use same format as addContactsTest: eiou add <address> <name> <fee> <credit> <currency>
+# Use same format as addContactsTest: eiou add <address> <name> <fee> <credit> <minfee> <currency>
 # Credit must be > 0 to allow transactions (1000 matches http4 topology default)
-docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > /dev/null || true
+docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
+docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
 # Process queues for contact exchange
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}

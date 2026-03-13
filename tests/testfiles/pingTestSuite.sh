@@ -142,12 +142,12 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[1.3 Setup contacts between A, B, and C]"
 
 # Ensure bidirectional contacts exist
-docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerA} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerB} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerC} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
+docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
+docker exec ${containerA} eiou add ${addressC} ${containerC} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
+docker exec ${containerB} eiou add ${addressA} ${containerA} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
+docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
+docker exec ${containerC} eiou add ${addressA} ${containerA} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
+docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
 
 # Process queues to initiate contact exchange
 wait_for_queue_processed ${containerA}
@@ -1009,7 +1009,7 @@ if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT
     " 2>/dev/null
 
     # Re-add B from A (creates fresh contact TX with dual signature on acceptance)
-    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
+    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 0.01 USD 2>&1 > /dev/null || true
     wait_for_queue_processed ${containerA}
     wait_for_queue_processed ${containerB}
 
@@ -1360,13 +1360,13 @@ printf "\t   All contacts wiped\n"
 for link in "${!containersLinks[@]}"; do
     IFS=',' read -r from to <<< "$link"
     linkParams="${containersLinks[$link]}"
-    IFS=' ' read -r fee credit currency <<< "$linkParams"
+    IFS=' ' read -r fee credit minfee currency <<< "$linkParams"
     if [[ "$MODE" == "http" ]] || [[ "$MODE" == "https" ]]; then
         toAddr="${containerAddresses[${to}]}"
     else
         toAddr=$(get_tor_address "${to}")
     fi
-    docker exec ${from} eiou add ${toAddr} ${to} ${fee} ${credit} ${currency} 2>&1 > /dev/null || true
+    docker exec ${from} eiou add ${toAddr} ${to} ${fee} ${credit} ${minfee} ${currency} 2>&1 > /dev/null || true
 done
 
 # Process queues to establish contacts

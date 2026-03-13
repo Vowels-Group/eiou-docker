@@ -121,18 +121,18 @@ class ContactController
             $credit = $creditValidation['value'];
             $currency = $currencyValidation['value'];
 
-            // Create argv array with --json flag for structured output
-            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
-            // Add min fee amount if provided (optional per-currency minimum fee)
-            if ($minFeeAmount !== '') {
-                $minFeeValidation = InputValidator::validateAmountFee($minFeeAmount);
-                if (!$minFeeValidation['valid']) {
-                    MessageHelper::redirectMessage('Invalid minimum fee amount: ' . $minFeeValidation['error'], 'error');
-                    return;
-                }
-                $argv[] = $minFeeValidation['value'];
+            // Validate min fee amount (required, must be > 0)
+            if ($minFeeAmount === '') {
+                $minFeeAmount = $this->currentUser->getMinimumFee();
             }
-            $argv[] = '--json';
+            $minFeeValidation = InputValidator::validateAmountFee($minFeeAmount);
+            if (!$minFeeValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid minimum fee amount: ' . $minFeeValidation['error'], 'error');
+                return;
+            }
+
+            // Create argv array with --json flag for structured output
+            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $minFeeValidation['value'], $currency, '--json'];
 
             // Create CliOutputManager with JSON mode enabled
             CliOutputManager::resetInstance();
@@ -234,7 +234,9 @@ class ContactController
             $contactCredit = $creditValidation['value'];
             $contactCurrency = $currencyValidation['value'];
             // Create argv array with --json flag for structured output
-            $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency, '--json'];
+            // Use global default min fee for accept (contact can customize later)
+            $defaultMinFee = $this->currentUser->getMinimumFee();
+            $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $defaultMinFee, $contactCurrency, '--json'];
 
             // Create CliOutputManager with JSON mode enabled
             CliOutputManager::resetInstance();
@@ -788,7 +790,8 @@ class ContactController
 
                         if (!empty($firstCurrency) && $firstFee !== '' && $firstCredit !== '') {
                             // Accept the contact with the first currency via CLI addContact
-                            $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstCurrency, '--json'];
+                            $firstMinFee = Security::sanitizeInput($firstEntry['min_fee'] ?? '') ?: $this->currentUser->getMinimumFee();
+                            $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstMinFee, $firstCurrency, '--json'];
                             CliOutputManager::resetInstance();
                             $outputManager = new CliOutputManager($argv);
 
