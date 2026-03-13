@@ -3,17 +3,10 @@
 > eIOU is a decentralized peer-to-peer credit network. There is no central server, no central authority, and no central point of failure. Each node is independently operated and stores its own data.
 >
 > This software is in open alpha and under active development. Updates may change how features work without prior notice.
-
-<details>
-<summary><strong>Important</strong></summary>
-
-IOUs created on the network are bilateral agreements between real people. Once accepted by both parties, they may not be reversible. Treat every IOU as a real financial obligation.
-
-eIOU tracks debt in any unit of account chosen by its users (fiat currencies, commodities, time, or custom units) and is not a cryptocurrency, token, or digital asset. No coins are mined, minted, or generated.
-
-You are responsible for securing your own node, maintaining backups, understanding the obligations you create, and complying with all applicable laws. Do not use this for obligations you cannot afford to lose.
-
-</details>
+>
+> **Important:** IOUs created on the network are bilateral agreements between real people. Once accepted by both parties, they may not be reversible. Treat every IOU as a real financial obligation. eIOU tracks debt in any unit of account chosen by its users (fiat currencies, commodities, time, or custom units) and is not a cryptocurrency, token, or digital asset. No coins are mined, minted, or generated.
+>
+> You are responsible for securing your own node, maintaining backups, understanding the obligations you create, and complying with all applicable laws. Do not use this for obligations you cannot afford to lose.
 
 # eIOU Docker
 
