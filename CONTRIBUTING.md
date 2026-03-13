@@ -253,11 +253,7 @@ $container = new ServiceContainer();
 **Repository Access -- RepositoryFactory:**
 
 ```php
-// CORRECT: Use RepositoryFactory to get repository instances
 $contactRepo = $services->getRepositoryFactory()->get(ContactRepository::class);
-
-// WRONG: Do not use removed direct getters
-$contactRepo = $services->getContactRepository();
 ```
 
 **Constructor Injection for Required Dependencies:**
