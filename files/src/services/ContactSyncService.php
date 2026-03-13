@@ -881,7 +881,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // Ensure contact transaction exists
                         if (!$this->contactTransactionExists($senderPublicKey)) {
                             $txid = $responseData['txid'] ?? null;
-                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
                         }
                         $this->completeReceivedContactTransaction($senderPublicKey);
 
@@ -905,7 +905,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // using the txid from the receiver to ensure both sides match
                         if (isset($responseData['txid'])) {
                             $senderPublicKey = $responseData['senderPublicKey'] ?? $contact['pubkey'];
-                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $responseData['txid']);
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $responseData['txid'], $description);
                         }
 
                         $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
@@ -1028,7 +1028,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         if (!$this->contactTransactionExists($senderPublicKey)) {
                             $txid = $responseData['txid'] ?? null;
-                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
                         }
                         $this->completeReceivedContactTransaction($senderPublicKey);
 
@@ -1220,7 +1220,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                     // Create contact transaction for this currency
                     $txid = $responseData['txid'] ?? null;
-                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
 
                     // Store signature data
                     $signingData = $sendResult['signing_data'] ?? null;
@@ -1364,7 +1364,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // will sync the original contact TX with correct signatures.
                     $remoteTxid = $responseData['txid'] ?? null;
                     if ($remoteTxid === null && !$this->contactTransactionExists($senderPublicKey)) {
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency, null, $description);
 
                         // Store signature data for future sync verification
                         $signingData = $sendResult['signing_data'] ?? null;
@@ -1436,7 +1436,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // with the correct txid, nonce, and signatures from the original establishment.
                     $remoteTxid = $responseData['txid'] ?? null;
                     if ($remoteTxid === null && !$this->contactTransactionExists($senderPublicKey)) {
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency, null, $description);
 
                         // Store signature data for future sync verification
                         $signingData = $sendResult['signing_data'] ?? null;
