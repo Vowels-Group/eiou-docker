@@ -206,7 +206,8 @@ class ConstantsTest extends TestCase
         $this->assertIsInt(Constants::VALIDATION_TOR_V3_ADDRESS_LENGTH);
         $this->assertIsInt(Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH);
         $this->assertIsInt(Constants::VALIDATION_HASH_LENGTH_SHA256);
-        $this->assertIsInt(Constants::VALIDATION_CURRENCY_CODE_LENGTH);
+        $this->assertIsInt(Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH);
+        $this->assertIsInt(Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH);
         $this->assertIsInt(Constants::VALIDATION_MEMO_MAX_LENGTH);
         $this->assertIsInt(Constants::VALIDATION_FEE_MIN_PERCENT);
         $this->assertIsInt(Constants::VALIDATION_FEE_MAX_PERCENT);
@@ -222,7 +223,8 @@ class ConstantsTest extends TestCase
         $this->assertEquals(56, Constants::VALIDATION_TOR_V3_ADDRESS_LENGTH);
         $this->assertEquals(16, Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH);
         $this->assertEquals(64, Constants::VALIDATION_HASH_LENGTH_SHA256);
-        $this->assertEquals(3, Constants::VALIDATION_CURRENCY_CODE_LENGTH);
+        $this->assertEquals(3, Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH);
+        $this->assertEquals(9, Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH);
         $this->assertEquals(500, Constants::VALIDATION_MEMO_MAX_LENGTH);
         $this->assertEquals(0, Constants::VALIDATION_FEE_MIN_PERCENT);
         $this->assertEquals(100, Constants::VALIDATION_FEE_MAX_PERCENT);
@@ -482,7 +484,7 @@ class ConstantsTest extends TestCase
         $expectedValidationConstants = [
             'VALIDATION_PUBLIC_KEY_MIN_LENGTH', 'VALIDATION_SIGNATURE_MIN_LENGTH',
             'VALIDATION_TOR_V3_ADDRESS_LENGTH', 'VALIDATION_TOR_V2_ADDRESS_LENGTH',
-            'VALIDATION_HASH_LENGTH_SHA256', 'VALIDATION_CURRENCY_CODE_LENGTH',
+            'VALIDATION_HASH_LENGTH_SHA256', 'VALIDATION_CURRENCY_CODE_MIN_LENGTH', 'VALIDATION_CURRENCY_CODE_MAX_LENGTH',
             'VALIDATION_MEMO_MAX_LENGTH', 'VALIDATION_FEE_MIN_PERCENT', 'VALIDATION_FEE_MAX_PERCENT'
         ];
 
@@ -683,7 +685,8 @@ class ConstantsTest extends TestCase
         $this->assertGreaterThan(0, Constants::VALIDATION_TOR_V3_ADDRESS_LENGTH);
         $this->assertGreaterThan(0, Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH);
         $this->assertGreaterThan(0, Constants::VALIDATION_HASH_LENGTH_SHA256);
-        $this->assertGreaterThan(0, Constants::VALIDATION_CURRENCY_CODE_LENGTH);
+        $this->assertGreaterThan(0, Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH);
+        $this->assertGreaterThan(0, Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH);
         $this->assertGreaterThan(0, Constants::VALIDATION_MEMO_MAX_LENGTH);
     }
 

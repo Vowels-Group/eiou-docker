@@ -105,8 +105,13 @@ class InputValidator {
 
         $currency = strtoupper(trim($currency));
 
-        if (strlen($currency) !== Constants::VALIDATION_CURRENCY_CODE_LENGTH) {
-            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be ' . Constants::VALIDATION_CURRENCY_CODE_LENGTH . ' characters'];
+        if (!preg_match('/^[A-Z]+$/', $currency)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must contain only letters (A-Z)'];
+        }
+
+        $len = strlen($currency);
+        if ($len < Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH || $len > Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be between ' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ' and ' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . ' characters'];
         }
 
         if (!in_array($currency, $allowedCurrencies)) {
@@ -126,8 +131,13 @@ class InputValidator {
     public static function validateAllowedCurrency(string $currency): array {
         $currency = strtoupper(trim($currency));
 
-        if (strlen($currency) !== Constants::VALIDATION_CURRENCY_CODE_LENGTH) {
-            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be ' . Constants::VALIDATION_CURRENCY_CODE_LENGTH . ' characters'];
+        if (!preg_match('/^[A-Z]+$/', $currency)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must contain only letters (A-Z)'];
+        }
+
+        $len = strlen($currency);
+        if ($len < Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH || $len > Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be between ' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ' and ' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . ' characters'];
         }
 
         if (!isset(Constants::CONVERSION_FACTORS[$currency])) {
