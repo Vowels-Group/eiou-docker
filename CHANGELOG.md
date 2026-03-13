@@ -28,7 +28,11 @@ The project is currently in **ALPHA** status.
 - Strip `_contact_params` (fee, credit, name values) from contact request payloads before signing and sending. These private values were previously included in the signed message content and transmitted to the remote node, leaking the sender's fee/credit configuration. Now stored locally only for delivery retry purposes
 
 ### Fixed
+<<<<<<< eiou-docker-fix-contact-request-sync-on-restore
 - Fix contact transaction sync failure on wallet restore: contact request transactions were signed with `_contact_params` included in the message, but `reconstructContactSignedMessage()` did not include these fields, causing signature verification to fail during sync. Stripping `_contact_params` before signing aligns the signed content with the reconstruction
+=======
+- Fix fee input step validation in contact forms: change `step="0.1"` to `step="0.01"` so values like 0.01% (the default fee) are accepted. Affected: add contact form, edit contact form, and pending contact accept forms
+>>>>>>> main
 - Fix integration and unit test failures from ARCH-05 RepositoryFactory migration: update all shell test scripts and PHPUnit tests to use `getRepositoryFactory()->get()` instead of removed direct repository getters on `ServiceContainer`
 - Fix garbled namespace in `addContactsTest.sh` (`\\Eiou\\Core\\\Eiou\Core\Application` → `\Eiou\Core\Application`)
 - Fix `curlErrorHandlingTest.sh` timeout expectations to match current constants (TOR_TRANSPORT_TIMEOUT: 45s, TOR_CONNECT_TIMEOUT: 20s) and grep patterns to match `DELIVERY_ERROR` constant
