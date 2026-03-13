@@ -36,6 +36,7 @@
 #   performance  - Performance baseline benchmarks
 #   mutual       - Mutual contact request auto-accept test
 #   bestfee      - Best-fee P2P route selection tests (best with collisions build)
+#   encryption   - Data-at-rest encryption: TDE, credential encryption, key management
 #
 # Environment Variables (for WSL2/slow environments):
 #   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 120)
@@ -51,7 +52,7 @@ if [ $# -eq 0 ]; then
     echo ""
     echo "Available builds: http4, http10, http13, collisions, collisionscluster"
     echo "Available modes:  http, https, tor (default: http)"
-    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, mutual, bestfee"
+    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, mutual, bestfee, encryption"
     exit 1
 fi
 
@@ -90,6 +91,7 @@ show_available_subsets() {
     printf "  ${GREEN}system${NC}       - System tests: shutdown, lockfiles, seedphrase\n"
     printf "  ${GREEN}performance${NC}  - Performance baseline benchmarks\n"
     printf "  ${GREEN}bestfee${NC}      - Best-fee P2P route selection tests (best with collisions build)\n"
+    printf "  ${GREEN}encryption${NC}   - Data-at-rest encryption: TDE, credential encryption, key management\n"
     echo ""
     printf "${YELLOW}Note:${NC} Some subsets require 'addContactsTest' to run first.\n"
     printf "      The runner automatically includes prerequisites when needed.\n"
@@ -97,7 +99,7 @@ show_available_subsets() {
 }
 
 # Validate SUBSET is one of the allowed values
-VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance mutual bestfee"
+VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance mutual bestfee encryption"
 if ! echo "$VALID_SUBSETS" | grep -qw "$SUBSET"; then
     printf "${RED}Error: Invalid test subset '${SUBSET}'${NC}\n"
     show_available_subsets
@@ -454,6 +456,7 @@ pingTestSuite
 serviceInterfaceTest
 serviceExceptionTest
 nodeIdentityTest
+encryptionTestSuite
 bestFeeRoutingTest
 cascadeCancelTest
 maxLevelCancelTest
@@ -531,6 +534,7 @@ processorLockfileTest
 serviceInterfaceTest
 serviceExceptionTest
 nodeIdentityTest
+encryptionTestSuite
 backupTestSuite
 "
 
@@ -548,6 +552,11 @@ cascadeCancelTest
 maxLevelCancelTest
 routeCancellationTest
 parallelBroadcastTest
+"
+
+# Encryption tests (TDE, credential encryption, key management)
+TESTS_ENCRYPTION="
+encryptionTestSuite
 "
 
 # Mutual contact request tests (runs before addContactsTest to use clean state)
@@ -592,6 +601,9 @@ case "$SUBSET" in
         ;;
     mutual)
         TEST_ORDER="$TESTS_MUTUAL"
+        ;;
+    encryption)
+        TEST_ORDER="$TESTS_ENCRYPTION"
         ;;
 esac
 
