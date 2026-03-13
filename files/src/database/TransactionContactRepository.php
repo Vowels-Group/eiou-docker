@@ -249,7 +249,7 @@ class TransactionContactRepository extends AbstractRepository {
         $senderHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
         $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPubkey);
 
-        $query = "SELECT txid, signature_nonce, currency FROM {$this->tableName}
+        $query = "SELECT txid, signature_nonce, currency, description FROM {$this->tableName}
                   WHERE tx_type = 'contact'
                   AND sender_public_key_hash = :sender AND receiver_public_key_hash = :receiver
                   LIMIT 1";

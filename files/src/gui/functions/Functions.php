@@ -269,15 +269,22 @@ $allContacts = $contactService->getAllContacts();
 $pendingContacts = $contactService->getPendingContactRequests();
 
 // Check if pending contacts have prior transaction history (wallet restore scenario)
-// Contacts created via auto-restore from ping will have synced transactions
-// Exclude contact transactions (tx_type='contact') since those are created as part of
-// the contact request itself — only real transactions indicate a prior relationship
+// and retrieve the description from the contact transaction (sent with the request)
 if (!empty($pendingContacts) && $user->has('public')) {
     $txRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
+    $txContactRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
     $myPubkey = $user->getPublicKey();
     foreach ($pendingContacts as &$pc) {
+        // Check for prior non-contact transaction history
         $history = $txRepo->getNonContactTransactionsBetweenPubkeys($myPubkey, $pc['pubkey'], 1);
         $pc['has_prior_history'] = !empty($history);
+
+        // Get the contact transaction description (message sent with the request)
+        $contactTx = $txContactRepo->getContactTransactionByParties($pc['pubkey'], $myPubkey);
+        $desc = $contactTx['description'] ?? null;
+        if ($desc !== null && $desc !== 'Contact request transaction') {
+            $pc['contact_description'] = $desc;
+        }
     }
     unset($pc);
 }

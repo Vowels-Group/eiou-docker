@@ -523,7 +523,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string|null $txid The txid from the receiver's response
      * @return string|null The txid on success, null on failure
      */
-    public function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): ?string {
+    public function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null, ?string $description = null): ?string {
         // Use provided txid from receiver, or generate locally as fallback
         // Currency is included in fallback hash to ensure unique txids per currency
         $time = $this->timeUtility->getCurrentMicrotime();
@@ -542,7 +542,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => 'Contact request transaction'
+            'description' => $description ?? 'Contact request transaction'
             // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
             // They are added via updateTrackingFields() after insert
         ];
@@ -581,7 +581,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string|null $nonce The signature nonce from the incoming request
      * @return string|null The txid on success, null on failure
      */
-    public function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD', ?string $signature = null, ?string $nonce = null): ?string {
+    public function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD', ?string $signature = null, ?string $nonce = null, ?string $description = null): ?string {
         // Generate time and txid on receiver side
         $time = $this->timeUtility->getCurrentMicrotime();
 
@@ -610,7 +610,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => 'Contact request transaction',
+            'description' => $description ?? 'Contact request transaction',
             // Sender's signature data for future sync verification
             'signature' => $signature,
             'nonce' => $nonce
@@ -1069,7 +1069,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
+    public function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
         // Build contact data for JSON response
@@ -1082,7 +1082,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
         ];
 
         // Build the payload array (include currency so receiver knows sender's preference)
-        $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+        $payload = $this->contactPayload->buildCreateRequest($address, $currency, $description);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
         // Store contact creation params as metadata in the payload.
@@ -1268,7 +1268,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Insert contact transaction (first transaction between users, amount=0)
                     // Use the txid from the response to ensure both parties have matching txids
                     $txid = $responseData['txid'] ?? null;
-                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
 
                     // Store signature data for future sync verification
                     $signingData = $sendResult['signing_data'] ?? null;
@@ -1311,7 +1311,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Insert contact transaction if one doesn't already exist
                     if (!$this->contactTransactionExists($senderPublicKey)) {
                         $txid = $responseData['txid'] ?? null;
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
 
                         // Store signature data for future sync verification
                         $signingData = $sendResult['signing_data'] ?? null;
@@ -1559,6 +1559,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Extract sender's additional addresses for storage (allows fallback transport)
         $senderAddresses = $request['senderAddresses'] ?? [];
 
+        // Extract optional description/message from the contact request
+        $description = $request['description'] ?? null;
+
         // Extract sender's preferred currency (falls back to receiver's default)
         $currency = $request['currency'] ?? $this->currentUser->getDefaultCurrency();
 
@@ -1622,7 +1625,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         );
                         $txid = null;
                         if (!$hasContactTx) {
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
                         }
 
                         // Generate recipient signature after TX exists (needs signature_nonce from TX)
@@ -1656,7 +1659,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
                         }
                         // Create the contact transaction on our side for this currency
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
                         // Return 'received' with txid so sender can sync
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
@@ -1695,7 +1698,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
 
                         // Create contact transaction for this currency so both sides have matching per-currency chains
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
 
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     } elseif (!$existingCurrencyConfig) {
@@ -1703,7 +1706,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         $this->contactCurrencyRepository->insertCurrencyConfig($senderPublicKeyHash, $currency, 0, null, 'pending', 'incoming');
 
                         // Create contact transaction for this currency
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
 
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
@@ -1764,7 +1767,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         );
                         $txid = null;
                         if (!$hasContactTx) {
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
                         }
 
                         // Generate recipient signature after TX exists (needs signature_nonce from TX)
@@ -1794,7 +1797,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                     if (!$hasContactTx) {
                         // Create the contact transaction on our side for this currency
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
                         return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
                     }
 
@@ -1841,7 +1844,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // Insert received contact transaction with status 'accepted' (pending user acceptance)
                 // This creates the contact transaction on the receiver's side
                 // Receiver generates txid and includes it in response for sender to use
-                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce);
+                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, $currency, $signature, $nonce, $description);
                 return $this->contactPayload->buildReceived($senderAddress, $myAddresses, $txid);
             } else{
                 // Unable to insert contact

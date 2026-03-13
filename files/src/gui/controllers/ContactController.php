@@ -73,6 +73,7 @@ class ContactController
         $fee = $_POST['fee'] ?? '';
         $credit = $_POST['credit'] ?? '';
         $currency = $_POST['currency'] ?? '';
+        $description = Security::sanitizeInput($_POST['description'] ?? '');
 
         if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
             $message = 'All fields are required';
@@ -121,7 +122,11 @@ class ContactController
             $currency = $currencyValidation['value'];
 
             // Create argv array with --json flag for structured output
-            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency, '--json'];
+            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
+            if (!empty($description)) {
+                $argv[] = $description;
+            }
+            $argv[] = '--json';
 
             // Create CliOutputManager with JSON mode enabled
             CliOutputManager::resetInstance();

@@ -277,12 +277,18 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
 
+        // Optional description/message for the contact request
+        $description = $data[7] ?? null;
+        if ($description === '--json' || $description === null || $description === '') {
+            $description = null;
+        }
+
         // Delegate to sync service for P2P exchange handling
         $syncService = $this->getContactSyncService();
         if ($contact) {
             $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output);
         } else {
-            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output);
+            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description);
         }
     }
 

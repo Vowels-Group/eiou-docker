@@ -134,7 +134,7 @@ Handles all contact-related operations.
 
 | Method | Action Value | Description | Parameters |
 |--------|-------------|-------------|------------|
-| `handleAddContact()` | `addContact` | Add new contact | `address`, `name`, `fee`, `credit`, `currency` |
+| `handleAddContact()` | `addContact` | Add new contact | `address`, `name`, `fee`, `credit`, `currency`, `description` (optional) |
 | `handleAcceptContact()` | `acceptContact` | Accept pending request | `contact_address`, `contact_name`, `contact_fee`, `contact_credit`, `contact_currency` |
 | `handleDeleteContact()` | `deleteContact` | Delete contact | `contact_address` |
 | `handleBlockContact()` | `blockContact` | Block contact | `contact_address` |

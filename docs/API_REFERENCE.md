@@ -597,7 +597,8 @@ Add a new contact.
     "name": "Bob",
     "fee_percent": 1.0,
     "credit_limit": 100.00,
-    "currency": "USD"
+    "currency": "USD",
+    "description": "Hey, it's Dave!"
 }
 ```
 
@@ -608,6 +609,7 @@ Add a new contact.
 | `fee_percent` | number | No | 1.0 | Transaction fee percentage |
 | `credit_limit` | number | No | 100.0 | Credit limit for contact |
 | `currency` | string | No | USD | Currency for transactions |
+| `description` | string | No | - | A short message sent with the contact request |
 
 **Response (201 Created):**
 

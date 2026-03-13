@@ -226,7 +226,7 @@ Add a new contact or accept an incoming contact request.
 
 **Syntax:**
 ```bash
-eiou add <address> <name> <fee> <credit> <currency>
+eiou add <address> <name> <fee> <credit> <currency> [message]
 ```
 
 **Arguments:**
@@ -238,11 +238,15 @@ eiou add <address> <name> <fee> <credit> <currency>
 | `fee` | required | Fee percentage for transactions (e.g., 1.0) |
 | `credit` | required | Credit limit for this contact |
 | `currency` | required | Currency code (e.g., USD) |
+| `message` | optional | A short message sent with the contact request |
 
 **Examples:**
 ```bash
 # Add a new contact
 eiou add http://bob:8080 Bob 1.0 100 USD
+
+# Add with a message
+eiou add http://bob:8080 Bob 1.0 100 USD "Hey, it's Dave!"
 
 # Add with a multi-word name
 eiou add http://bob:8080 "Jane Doe" 1.0 100 USD

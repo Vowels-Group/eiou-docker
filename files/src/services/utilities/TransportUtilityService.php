@@ -821,12 +821,13 @@ class TransportUtilityService implements TransportServiceInterface
         unset($messageContent['senderPublicKey']);
         unset($messageContent['signature']);
 
-        // Remove description from signed content - it's private metadata not part of signature
-        // Description is stored separately and not included in sync verification
-        // This ensures P2P privacy (intermediaries don't see description) and consistent
-        // signature verification during chain sync recovery
-        $description = $messageContent['description'] ?? null;
-        unset($messageContent['description']);
+        // Strip description from P2P relay messages to prevent intermediaries from seeing it.
+        // For direct sends (type=send) and contact requests (type=create), description is kept
+        // in the signed content so the receiver gets it and sync can reconstruct the signature.
+        $messageType = $messageContent['type'] ?? '';
+        if (!in_array($messageType, ['send', 'create'], true)) {
+            unset($messageContent['description']);
+        }
 
         // Capture debug info before encryption hides the fields
         $messageType = $messageContent['type'] ?? '';

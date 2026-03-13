@@ -45,18 +45,20 @@ class CliHelpService
             ],
             'add' => [
                 'description' => 'Add a new contact or accept an incoming contact request',
-                'usage' => 'add [address] [name] [fee] [credit] [currency]',
+                'usage' => 'add [address] [name] [fee] [credit] [currency] [message]',
                 'arguments' => [
                     'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor .onion)'],
                     'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)']
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
+                    'message' => ['type' => 'optional', 'description' => 'A short message sent with the contact request (e.g., "Hey, it\'s Dave!")']
                 ],
                 'examples' => [
                     'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact',
                     'add http://bob:8080 "Jane Doe" 1.0 100 USD' => 'Add with a multi-word name',
                     'add abc123...onion Alice 0.5 500 USD' => 'Add via Tor address',
+                    'add http://charlie:8080 Charlie 1 200 USD "Hey its me Dave"' => 'Add with a message',
                     'add http://charlie:8080 Charlie 1 200 USD --json' => 'JSON output'
                 ],
                 'note' => 'Creates a pending contact request that the recipient must accept. To accept an incoming request, use add with the sender\'s address. Rate limited: 20 additions per minute.'

@@ -470,15 +470,24 @@ class CliService implements CliServiceInterface {
             'total_count' => count($incomingRequests) + count($outgoingRequests)
         ];
 
-        // Format incoming requests
+        // Format incoming requests (include description from contact transaction if present)
+        $txContactRepo = $this->container->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
+        $myPubkey = $this->currentUser->getPublicKey();
         foreach ($incomingRequests as $contact) {
             $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'Unknown';
-            $pendingData['incoming'][] = [
+            $entry = [
                 'address' => $contactAddress,
                 'pubkey_hash' => $contact['pubkey_hash'] ?? null,
                 'created_at' => $contact['created_at'] ?? null,
                 'status' => 'pending'
             ];
+            // Get the description/message from the contact transaction
+            $contactTx = $txContactRepo->getContactTransactionByParties($contact['pubkey'], $myPubkey);
+            $desc = $contactTx['description'] ?? null;
+            if ($desc !== null && $desc !== 'Contact request transaction') {
+                $entry['description'] = $desc;
+            }
+            $pendingData['incoming'][] = $entry;
         }
 
         // Format outgoing requests
@@ -512,6 +521,9 @@ class CliService implements CliServiceInterface {
                 echo "-------------------------------------------\n";
                 foreach ($pendingData['incoming'] as $contact) {
                     echo "  From: " . $contact['address'] . "\n";
+                    if (!empty($contact['description'])) {
+                        echo "  Message: " . $contact['description'] . "\n";
+                    }
                     if ($contact['created_at']) {
                         echo "  Date: " . $contact['created_at'] . "\n";
                     }
