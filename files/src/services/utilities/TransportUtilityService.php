@@ -824,8 +824,11 @@ class TransportUtilityService implements TransportServiceInterface
         // Strip description from P2P relay messages to prevent intermediaries from seeing it.
         // For direct sends (type=send) and contact requests (type=create), description is kept
         // in the signed content so the receiver gets it and sync can reconstruct the signature.
+        // For P2P, description is removed from signed content and added to the envelope separately.
         $messageType = $messageContent['type'] ?? '';
+        $description = null;
         if (!in_array($messageType, ['send', 'create'], true)) {
+            $description = $messageContent['description'] ?? null;
             unset($messageContent['description']);
         }
 
