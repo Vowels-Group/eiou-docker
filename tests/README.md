@@ -76,8 +76,8 @@ tests/
 │   ├── http4.sh                      # 4-node linear topology
 │   ├── http10.sh                     # 10-node linear topology
 │   ├── http13.sh                     # 13-node hierarchical cluster
-│   ├── collisions.sh                 # 5-node mesh with random fees
-│   └── collisionscluster.sh          # 13-node cluster with random fees
+│   ├── collisions.sh                 # 13-node mesh with random fees + isolated node (A12)
+│   └── collisionscluster.sh          # 53-node cluster with random fees + isolated node (ISO)
 └── testfiles/
     ├── hostnameTest.sh               # HTTP/HTTPS prerequisite test
     ├── addContactsTest.sh            # Contact addition workflow
@@ -110,8 +110,8 @@ tests/
     ├── serviceExceptionTest.sh       # Service exception handling
     ├── nodeIdentityTest.sh           # Node identity management
     ├── bestFeeRoutingTest.sh         # Best-fee route selection
-    ├── cascadeCancelTest.sh          # Cascade cancellation of transactions
-    ├── maxLevelCancelTest.sh         # Max-level cancellation limits
+    ├── cascadeCancelTest.sh          # Cascade cancellation via isolated node (A12/ISO)
+    ├── maxLevelCancelTest.sh         # Max-level cancellation via isolated node (A12/ISO)
     ├── routeCancellationTest.sh      # Route cancellation handling
     ├── parallelBroadcastTest.sh      # Parallel broadcast delivery
     ├── performanceBaseline.sh        # Performance benchmarks
