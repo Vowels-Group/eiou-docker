@@ -93,6 +93,7 @@ LABEL org.opencontainers.image.title="eiou-node" \
 # - php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
 # - tini: Minimal init system for proper signal forwarding and zombie reaping
 # - tor: Anonymous network for .onion addresses
+# Note: php-sodium is not needed — libsodium is compiled into PHP 8.2 on Debian 12
 RUN apt-get update && apt-get install -y \
     certbot \
     cron \
@@ -106,7 +107,6 @@ RUN apt-get update && apt-get install -y \
     php-fpm \
     php-mbstring \
     php-mysql \
-    php-sodium \
     php-xml \
     tini \
     tor \
