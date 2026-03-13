@@ -821,13 +821,16 @@ class TransportUtilityService implements TransportServiceInterface
         unset($messageContent['senderPublicKey']);
         unset($messageContent['signature']);
 
-        // Strip description from P2P relay messages — it is never sent over P2P.
-        // The original sender stores description locally and delivers it to the end
-        // recipient via the completion inquiry message, not the relay payload.
-        // For direct sends (type=send) and contact requests (type=create), description
-        // is kept in the signed content so the receiver gets it directly.
+        // Description handling:
+        // - Contact requests (type=create): keep in signed content (sent directly)
+        // - Direct sends (type=send, memo=standard): keep in signed content (sent directly)
+        // - P2P relay (type=send, memo=hash): strip — delivered via completion inquiry
+        // - All other types: strip
         $messageType = $messageContent['type'] ?? '';
-        if (!in_array($messageType, ['send', 'create'], true)) {
+        $memo = $messageContent['memo'] ?? '';
+        $isDirectSend = $messageType === 'send' && $memo === 'standard';
+        $isContactRequest = $messageType === 'create';
+        if (!$isDirectSend && !$isContactRequest) {
             unset($messageContent['description']);
         }
 
