@@ -91,7 +91,7 @@ show_startup_warnings() {
 show_alpha_warning_short() {
     echo ""
     printf '\033[1;33m%s\033[0m\n' "$_HR"
-    printf '\033[1;33m  REMINDER: ALPHA/STAGING version - FOR TESTING ONLY\033[0m\n'
+    printf '\033[1;33m  OPEN ALPHA: Decentralized P2P credit network. Active development.\033[0m\n'
     printf '\033[1;33m%s\033[0m\n' "$_HR"
     echo ""
 }

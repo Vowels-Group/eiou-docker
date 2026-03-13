@@ -38,7 +38,7 @@
                     }
                 }
             ?>
-            <p><?php echo nl2br(htmlspecialchars($text)); ?></p>
+            <p><?php echo function_exists('autoLinkUrls') ? autoLinkUrls(nl2br(htmlspecialchars($text))) : nl2br(htmlspecialchars($text)); ?></p>
             <?php endforeach; ?>
         </div>
     </details>

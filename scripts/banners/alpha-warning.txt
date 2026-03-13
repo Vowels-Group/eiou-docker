@@ -1,6 +1,31 @@
-WARNING: ALPHA/STAGING VERSION
+OPEN ALPHA
 
-This is an alpha/staging version of eIOU.
-Do NOT use this for real financial transactions.
-All data may be reset without notice.
-For testing purposes only.
+eIOU is a decentralized peer-to-peer credit network. There is
+no central server, no central authority, and no central point
+of failure. Each node is independently operated and stores its
+own data.
+
+This software is in open alpha. It is under active development
+and updates may change how features work without prior notice.
+
+IMPORTANT:
+
+IOUs created on the network are bilateral agreements between
+real people. Once accepted by both parties, they may not be
+reversible. Treat every IOU as a real financial obligation.
+
+eIOU tracks debt in any unit of account chosen by its users
+(fiat currencies, commodities, time, or custom units) and is
+not a cryptocurrency, token, or digital asset. No coins are
+mined, minted, or generated. The software facilitates the
+recording and routing of personal credit obligations only.
+
+You are responsible for:
+  1. Securing your own node and private keys
+  2. Maintaining your own backups
+  3. Understanding the obligations you create
+  4. Complying with all applicable laws in your jurisdiction
+
+Do not use this for obligations you cannot afford to lose.
+
+Report issues: https://github.com/eiou-org/eiou-docker
