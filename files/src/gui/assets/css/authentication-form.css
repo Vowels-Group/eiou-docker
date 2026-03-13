@@ -134,6 +134,15 @@ body {
     margin-top: 0.25rem;
 }
 
+.alpha-warning a {
+    color: #e65100;
+    text-decoration: underline;
+}
+
+.alpha-warning a:hover {
+    color: #bf360c;
+}
+
 .alpha-details {
     margin-top: 0.5rem;
     text-align: left;

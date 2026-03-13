@@ -12,6 +12,18 @@
 <body>
     <!-- Alpha Warning — loaded from /app/scripts/alpha-warning.txt -->
     <?php
+    // Auto-link URLs in already-escaped text (safe: runs after htmlspecialchars)
+    function autoLinkUrls(string $escaped): string {
+        return preg_replace_callback(
+            '~(https?://[^\s<]+|(?:[\w-]+\.)+(?:com|org|net|io|dev)(?:/[^\s<]*)?)~i',
+            function ($m) {
+                $url = $m[1];
+                $href = preg_match('~^https?://~i', $url) ? $url : 'https://' . $url;
+                return '<a href="' . $href . '" target="_blank" rel="noopener noreferrer">' . $url . '</a>';
+            },
+            $escaped
+        );
+    }
     $warningFile = '/app/scripts/alpha-warning.txt';
     if (file_exists($warningFile)):
         // Split file into paragraphs (separated by blank lines)
@@ -37,7 +49,7 @@
     <div class="alpha-warning">
         <strong>&#9888; <?php echo $warnTitle; ?></strong>
         <?php foreach ($introParagraphs as $para): ?>
-            <p><?php echo htmlspecialchars($para); ?></p>
+            <p><?php echo autoLinkUrls(htmlspecialchars($para)); ?></p>
         <?php endforeach; ?>
         <?php if (!empty($detailParagraphs)): ?>
         <details class="alpha-details">
@@ -47,7 +59,7 @@
                     $para = preg_replace('/^IMPORTANT:\s*/i', '', $para);
                     if (trim($para) === '') continue;
                 ?>
-                    <p><?php echo nl2br(htmlspecialchars($para)); ?></p>
+                    <p><?php echo autoLinkUrls(nl2br(htmlspecialchars($para))); ?></p>
                 <?php endforeach; ?>
             </div>
         </details>
