@@ -1,12 +1,14 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Best-fee routing quality benchmark.
-# See tests/README.md (Benchmarks section) for full documentation.
+# Best-fee routing benchmark: runs the bestfee test N times and summarizes results.
+# Each run rebuilds the collisions topology with fresh random fees.
 #
 # Usage: ./benchmark-bestfee.sh [runs] [mode]
 #   runs  - Number of benchmark runs (default: 10)
 #   mode  - Transport mode: http or tor (default: http)
+#
+# Example: ./benchmark-bestfee.sh 10 http
 
 RUNS="${1:-10}"
 MODE="${2:-http}"

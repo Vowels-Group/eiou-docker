@@ -1,15 +1,42 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Systematic routing performance benchmark for the collisionscluster topology.
-# See tests/README.md (Benchmarks section) for full documentation including
-# timing breakdown diagram, topology/send modes, and output format.
+# Routing performance benchmark for the collisionscluster topology.
+# Systematically measures routing across protocols, hop distances, and routing modes.
+#
+# Tests fast mode (first route wins) vs best-fee mode (collect all routes, pick cheapest)
+# at 1-hop, 3-hop, and 6-hop distances from C0, measuring:
+#   - Delivery time (wall clock + DB-derived breakdowns)
+#   - Path taken
+#   - Fee multiplier
+#   - Optimality (vs enumerated best path)
+#
+# Timing breakdown (per send):
+#
+#   |-- CLI overhead --|------- P2P search -------|---- settlement ----|-- poll jitter --|
+#   |                  |                          |                    |                 |
+#   eiou send     P2P created_at            P2P created_at       P2P completed_at   balance
+#   (wall clock)  on SENDER                 on TARGET            on SENDER           detected
+#                  |                          |                    |
+#                  |<-------- p2p_time -------------------------------->|
+#                  |<-- search_time --------->|<-- settle_time --->|
+#   |<----------------------- wall_time ------------------------------------------>|
+#
+#   wall_time    = date before eiou send → balance change detected (includes poll jitter)
+#   p2p_time     = p2p.created_at → p2p.completed_at on SENDER (full P2P round-trip)
+#   search_time  = p2p.created_at on SENDER → p2p.created_at on TARGET (network propagation)
+#   settle_time  = p2p.created_at on TARGET → p2p.completed_at on SENDER (tx chain back)
 #
 # Usage: ./benchmark-routing.sh [runs] [protocols] [topology] [send_mode]
 #   runs      - Number of runs per condition (default: 10)
 #   protocols - Comma-separated protocols (default: http,https,tor)
-#   topology  - "shared" (build once) or "rebuild" (fresh per protocol). Default: shared
-#   send_mode - "serial" (one at a time) or "burst" (fire all at once). Default: serial
+#   topology  - "shared" (default) or "rebuild"
+#               shared:  build once, reuse across all protocols (same fees, faster)
+#               rebuild: fresh topology per protocol (different random fees each time)
+#   send_mode - "serial" (default) or "burst"
+#               serial: send one at a time, poll for completion, collect results, repeat
+#               burst:  fire all runs at once, wait for all to complete, collect from DB
+#                       keeps processors warm (100ms polling), measures true throughput
 #
 # Examples:
 #   ./benchmark-routing.sh 10                              # Full benchmark, serial
@@ -17,8 +44,10 @@
 #   ./benchmark-routing.sh 5 http,https                    # HTTP and HTTPS only
 #   ./benchmark-routing.sh 10 http,https,tor rebuild       # Fresh build per protocol
 #   ./benchmark-routing.sh 3 http shared burst             # Burst mode, HTTP only
+#   ./benchmark-routing.sh 10 http,https shared burst      # Burst mode, multi-protocol
 #
-# Total sends per full run: protocols x 3 distances x 2 modes x runs
+# Total sends: protocols × 3 distances × 2 modes × runs
+# With shared topology at $5/send, 180 sends = $900 total — well under $1000 credit limit.
 
 set -e
 
