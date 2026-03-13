@@ -43,6 +43,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | No | Auto-propose chain drops when mutual gaps detected |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming chain drop proposals (with balance guard) |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | No | Balance guard for auto-accept: blocks if missing txs erase debt owed to us |
+| `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | No | Auto-accept restored contacts on wallet restore when transaction history proves prior relationship |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates for P2P HTTPS connections. Set to `false` for self-signed certs |
 | `P2P_CA_CERT` | (none) | No | Path to CA certificate file for P2P SSL verification |
 
@@ -258,6 +259,25 @@ environment:
 - Default is ON — the balance guard runs before every auto-accept
 - Set to `false` if you want truly unconditional auto-accept behavior
 - Can also be toggled per-node via CLI (`changesettings autoChainDropAcceptGuard`), GUI, or API
+
+#### EIOU_AUTO_ACCEPT_RESTORED_CONTACT
+
+Controls whether contacts are auto-accepted on wallet restore when transaction history proves a prior relationship. When a node is restored from seed (empty database) and receives a ping from a former contact, the system syncs transaction history. If transactions are found:
+
+- **Enabled (default):** the contact is auto-accepted with default fee (1%) and credit limit (1000). The contact name is set to `RestoredContact<N>`. The user should manually reconfigure the name, fee percentages, and credit limits per currency to match the original terms.
+- **Disabled:** the contact stays pending for manual review. Transaction history is synced so it's visible when reviewing.
+
+```yaml
+environment:
+  - EIOU_AUTO_ACCEPT_RESTORED_CONTACT=true   # Enable (default) — auto-accept with defaults
+  - EIOU_AUTO_ACCEPT_RESTORED_CONTACT=false  # Disable — leave pending for manual review
+```
+
+**Notes:**
+- Default is ON — restored contacts are auto-accepted when transaction history proves the relationship
+- Original fee structures and credit limits are NOT restored — they reset to node defaults
+- Contact is named `RestoredContact<N>` and should be renamed by the user
+- Can also be toggled per-node via CLI (`changesettings autoAcceptRestoredContact`), GUI, or API
 
 ---
 

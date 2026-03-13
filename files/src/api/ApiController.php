@@ -1462,6 +1462,7 @@ class ApiController {
             'auto_chain_drop_propose' => ['key' => 'autoChainDropPropose', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'auto_chain_drop_accept' => ['key' => 'autoChainDropAccept', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'auto_chain_drop_accept_guard' => ['key' => 'autoChainDropAcceptGuard', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'auto_accept_restored_contact' => ['key' => 'autoAcceptRestoredContact', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_enabled' => ['key' => 'apiEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
             'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],

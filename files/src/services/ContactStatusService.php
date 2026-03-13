@@ -225,7 +225,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                 if ($transportIndexAssociative !== null) {
                     try {
-                        $this->contactRepository->addPendingContact($senderPubkey);
+                        $restoredCount = $this->contactRepository->countContactsByNamePrefix('RestoredContact') + 1;
+                        $restoredName = 'RestoredContact' . $restoredCount;
+                        $this->contactRepository->addPendingContact($senderPubkey, $restoredName);
                         $this->addressRepository->insertAddress($senderPubkey, $transportIndexAssociative);
 
                         // Create contact_currencies entries for all currencies the remote has

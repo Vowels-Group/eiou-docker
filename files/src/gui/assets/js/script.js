@@ -4031,6 +4031,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('autoChainDropPropose', 'autoChainDropProposeStatus');
     initToggleSwitch('autoChainDropAccept', 'autoChainDropAcceptStatus');
     initToggleSwitch('autoChainDropAcceptGuard', 'autoChainDropAcceptGuardStatus');
+    initToggleSwitch('autoAcceptRestoredContact', 'autoAcceptRestoredContactStatus');
     initToggleSwitch('apiEnabled', 'apiEnabledStatus');
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initSyncTimeoutDynamicMax();

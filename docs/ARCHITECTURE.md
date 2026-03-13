@@ -969,14 +969,37 @@ chains. Operates in 5-minute cycles.
 
 **Wallet Restore Contact Re-establishment:**
 
-When a node receives a ping from an address that is not in its contacts database at all,
-`ContactStatusService` auto-creates a pending contact record and inserts the address. This
-handles the wallet restore scenario where a user restores from a seed phrase only (no backups)
-and their prior contacts ping them. After the pending contact is created, sync is triggered
-to restore the transaction chain from the contact. Once sync restores transactions, the
-pending contact appears in the GUI with a "Prior Contact" badge indicating it has prior
-transaction history. The user must then re-accept the contact by providing a name, fee,
-credit limit, and currency before normal operations can resume.
+When a wallet is restored from a seed phrase (empty database, same keys/address) and a former
+contact pings the restored node, the following flow occurs:
+
+1. **Signature verification** — the incoming ping signature is verified against the sender's
+   public key included in the request itself (`ValidationUtilityService::verifyRequestSignature`).
+   No contact database record is needed; this is a self-contained cryptographic check.
+2. **Unknown sender detected** — `ContactStatusService::handlePingRequest()` finds the sender
+   pubkey is not in the contacts table and creates a pending contact record named
+   `RestoredContact<N>` (sequentially numbered).
+3. **Sync triggered** — the node pulls the transaction chain from the remote node via
+   `SyncTriggerInterface::syncTransactionChain()`.
+4. **Prior relationship verified** — if the sync restores transactions between the two pubkeys,
+   this proves a prior relationship existed.
+5. **Accept or hold for review** — controlled by `autoAcceptRestoredContact` setting
+   (env: `EIOU_AUTO_ACCEPT_RESTORED_CONTACT`, default: `true`):
+   - **Enabled (default):** the contact is auto-accepted with the node's default fee
+     (`Constants::CONTACT_DEFAULT_FEE_PERCENT`, 1%) and default credit limit
+     (`Constants::CONTACT_DEFAULT_CREDIT_LIMIT`, 1000) for all restored currencies.
+     Balances are recalculated from the synced transaction history.
+   - **Disabled:** the contact stays pending for manual review. Balances are still synced
+     so the user can see the transaction history when deciding whether to accept.
+
+**What is NOT restored automatically (even with auto-accept enabled):**
+
+- **Contact name** — set to `RestoredContact<N>`, must be renamed manually
+- **Credit limits** per contact per currency — reset to the node's default
+- **Fee percentages** per contact per currency — reset to the node's default
+
+The original negotiated terms (e.g., a 5000 credit limit with 0.5% fee) are lost because
+they were stored only in the local database. The user must manually reconfigure these after
+the contact is re-established.
 
 ### Watchdog Monitoring
 
@@ -2324,7 +2347,7 @@ Contacts progress through states managed by the `contacts` table:
 | State | Description |
 |-------|-------------|
 | `pending` | Contact request created, awaiting acceptance by other party |
-| `pending` (prior contact) | Auto-created by `ContactStatusService` when an unknown address pings after wallet restore; displayed with a "Prior Contact" badge in the GUI indicating prior transaction history exists; user must re-accept with name, fee, credit limit, and currency |
+| `pending` (prior contact) | Auto-created by `ContactStatusService` when an unknown address pings after wallet restore; named `RestoredContact<N>`. If `autoAcceptRestoredContact` is enabled (default), auto-promoted to `accepted` with default fee/credit. If disabled, stays pending with a "Prior Contact" badge in the GUI; user must re-accept with name, fee, and credit limit |
 | `accepted` | Both parties confirmed; transactions and sync are enabled |
 | `blocked` | Contact blocked; incoming messages rejected |
 

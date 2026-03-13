@@ -72,14 +72,15 @@ class ContactRepository extends AbstractRepository {
      * Add a pending contact (incoming request)
      *
      * @param string $senderPublicKey Sender's public key
+     * @param string|null $name Optional contact name
      * @return string JSON response
      */
-    public function addPendingContact(string $senderPublicKey): string {
+    public function addPendingContact(string $senderPublicKey, ?string $name = null): string {
         $data = [
             'contact_id' => $this->generateContactId($senderPublicKey),
             'pubkey' => $senderPublicKey,
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
-            'name' => null,
+            'name' => $name,
             'status' => 'pending',
         ];
         return $this->insert($data);
@@ -216,8 +217,8 @@ class ContactRepository extends AbstractRepository {
      * @return int amount accepted contacts
      */
     public function countAcceptedContacts(): int {
-        $query = "SELECT COUNT(*) as count 
-                    FROM {$this->tableName} 
+        $query = "SELECT COUNT(*) as count
+                    FROM {$this->tableName}
                     WHERE status = 'accepted'";
         $stmt = $this->execute($query);
 
@@ -227,6 +228,21 @@ class ContactRepository extends AbstractRepository {
 
         $result = $stmt->fetchColumn();
         return (int) ($result ?? 0);
+    }
+
+    /**
+     * Count contacts whose name starts with a given prefix
+     *
+     * @param string $prefix Name prefix to match
+     * @return int Count of matching contacts
+     */
+    public function countContactsByNamePrefix(string $prefix): int {
+        $query = "SELECT COUNT(*) FROM {$this->tableName} WHERE name LIKE :prefix";
+        $stmt = $this->execute($query, [':prefix' => $prefix . '%']);
+        if (!$stmt) {
+            return 0;
+        }
+        return (int) ($stmt->fetchColumn() ?? 0);
     }
 
     /**

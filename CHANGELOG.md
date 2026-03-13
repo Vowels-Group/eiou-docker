@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Add `autoAcceptRestoredContact` toggle (env: `EIOU_AUTO_ACCEPT_RESTORED_CONTACT`, default: `true`) to control whether contacts are auto-accepted on wallet restore when transaction history proves a prior relationship. When disabled, restored contacts stay pending for manual review. Configurable via CLI, GUI, and API. Restored contacts are named `RestoredContact<N>` for identification
 - Add legal notice banner to container startup (`scripts/banners/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
 - Add alpha warning and collapsible legal notice to the GUI login screen (`loginNotice.html`). Legal text is loaded from `scripts/banners/legal-notice.txt` — same file as the startup banner, so one edit updates both
 - Move banner text files (`alpha-warning.txt`, `legal-notice.txt`) from `scripts/` to `scripts/banners/` to separate static content from executable scripts

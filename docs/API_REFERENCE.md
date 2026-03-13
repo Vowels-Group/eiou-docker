@@ -1073,6 +1073,7 @@ Get system settings.
             "auto_chain_drop_propose": true,
             "auto_chain_drop_accept": false,
             "auto_chain_drop_accept_guard": true,
+            "auto_accept_restored_contact": true,
             "api_enabled": true,
             "api_cors_allowed_origins": "",
             "rate_limit_enabled": true,
@@ -1124,6 +1125,7 @@ Get system settings.
 - `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
 - `auto_chain_drop_accept`: Whether to auto-accept chain-drop proposals
 - `auto_chain_drop_accept_guard`: Whether to run balance guard before auto-accepting
+- `auto_accept_restored_contact`: Whether to auto-accept restored contacts on wallet restore when transaction history proves prior relationship
 - `api_enabled`: Whether the REST API endpoint is enabled
 - `api_cors_allowed_origins`: Allowed CORS origins for API (empty = none)
 - `rate_limit_enabled`: Whether rate limiting is active (configurable via CLI/API only — not exposed in GUI)
@@ -1189,6 +1191,7 @@ Update system settings.
 | `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
+| `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
 | `rate_limit_enabled` | boolean | Enable/disable rate limiting (CLI/API only — not exposed in GUI) |

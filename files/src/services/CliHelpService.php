@@ -307,6 +307,7 @@ class CliHelpService
                     'autoChainDropPropose' => 'Enable auto chain drop propose (true/false)',
                     'autoChainDropAccept' => 'Enable auto chain drop accept (true/false)',
                     'autoChainDropAcceptGuard' => 'Enable auto chain drop accept balance guard (true/false)',
+                    'autoAcceptRestoredContact' => 'Auto-accept restored contacts on wallet restore (true/false)',
                     'apiEnabled' => 'Enable API access (true/false)',
                     'apiCorsAllowedOrigins' => 'API CORS allowed origins',
                     'rateLimitEnabled' => 'Enable rate limiting (true/false)',
