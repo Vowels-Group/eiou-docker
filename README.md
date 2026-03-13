@@ -342,8 +342,7 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 | [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |
 
-<details>
-<summary><strong>Important Legal Notice</strong></summary>
+## Important Legal Notice
 
 eIOU is a decentralized peer-to-peer bilateral debt tracking system. When you create an IOU, you are recording a personal debt obligation between two parties. Debt can be denominated in any unit of account chosen by the users (fiat currencies, commodities, time, or custom units).
 
@@ -360,5 +359,3 @@ However, regulations vary significantly by jurisdiction. Routing IOUs through in
 This software is provided as open source under the First Amendment right to publish software, as established in *Bernstein v. United States Department of Justice*, 176 F.3d 1132 (9th Cir. 1999), where the Ninth Circuit ruled that software source code is speech protected by the First Amendment, and affirmed in *Junger v. Daley*, 209 F.3d 481 (6th Cir. 2000), where the Sixth Circuit held that all source code is protected expression under the First Amendment. The eIOU project does not provide legal advice. Consult a qualified attorney in your jurisdiction before using this software for financial transactions.
 
 By installing and using this software, you acknowledge that you have read this notice and accept full responsibility for regulatory compliance in your jurisdiction.
-
-</details>
