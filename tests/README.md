@@ -45,8 +45,8 @@ Automated test suite for validating eIOU Docker node deployments. The suite test
 > - `http4`: `httpA`, `httpB`, `httpC`, `httpD`
 > - `http10`: `httpA` through `httpJ`
 > - `http13`: `A0`, `A1`, `A11`, `A12`, `A2`, `A21`, `A22`, `A3`, `A31`, `A32`, `A4`, `A41`, `A42`
-> - `collisions`: `A1` through `A5` (5-node mesh with random fees)
-> - `collisionscluster`: `C0` through `C12` (13-node cluster with random fees)
+> - `collisions`: `A0` through `A12` (13 nodes, A12 isolated)
+> - `collisionscluster`: `C0`, `N1`-`N8`, `E1`-`E8`, `S1`-`S8`, `W1`-`W8`, `MH`, `MH2`, `LN1`-`LN3`, `LS1`-`LS2`, `ISO`, and branch nodes (53 total)
 >
 > The Docker network `eiou-network` is also created if it does not exist. If you have
 > any existing containers or volumes with these names, **they will be permanently
@@ -150,10 +150,10 @@ tests/
 | `http4`  | 4     | ~1.1GB  | Linear chain: A <-> B <-> C <-> D |
 | `http10` | 10    | ~2.8GB  | Extended linear: A through J (max 5-hop routing by default) |
 | `http13` | 13    | ~3.5GB  | Hierarchical cluster with central hub (A0) and 4 branches |
-| `collisions` | 5 | ~1.4GB  | Mesh topology with random fees per contact pair (A1-A5) |
-| `collisionscluster` | 13 | ~3.5GB | Cluster topology with random fees, hub C0, 4 branches of 3 nodes each |
+| `collisions` | 13 | ~3.5GB  | Mesh topology (A0-A11) with random fees and one isolated node (A12) for cancel testing |
+| `collisionscluster` | 53 | ~14GB | 4-arm cluster with random fees, hub C0, mesh hubs, skip connections, cross-arm links, and one isolated node (ISO) for cancel testing |
 
-The `collisions` and `collisionscluster` topologies assign random fee multipliers to each contact relationship. This creates varied routing costs across the network, which is essential for testing best-fee route selection and benchmarking routing performance.
+The `collisions` and `collisionscluster` topologies assign random fee multipliers to each contact relationship. This creates varied routing costs across the network, which is essential for testing best-fee route selection and benchmarking routing performance. Both topologies include an isolated node with zero contacts (`A12` in collisions, `ISO` in collisionscluster) used for cascade cancel testing — sending to an unreachable node exercises the cancellation and rollback paths.
 
 ### Transport Modes
 
