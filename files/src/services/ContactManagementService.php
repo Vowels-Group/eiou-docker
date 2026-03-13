@@ -236,11 +236,22 @@ class ContactManagementService implements ContactManagementServiceInterface
             $output->error("Invalid credit: " . $creditValidation['error'], ErrorCodes::INVALID_CREDIT, 400);
             return;
         }
-        // Validate currency (needed before credit conversion)
-        $currencyValidation = $this->inputValidator->validateCurrency($data[6] ?? 'USD');
+        // Validate minimum fee amount (required, must be > 0)
+        $minFeeValidation = $this->inputValidator->validateAmountFee($data[6] ?? 0);
+        if (!$minFeeValidation['valid']) {
+            $this->secureLogger->warning("Invalid minimum fee amount", [
+                'min_fee' => $data[6] ?? 'empty',
+                'error' => $minFeeValidation['error']
+            ]);
+            $output->error("Invalid minimum fee amount: " . $minFeeValidation['error'], ErrorCodes::INVALID_FEE, 400);
+            return;
+        }
+
+        // Validate currency (needed before credit and minfee conversion)
+        $currencyValidation = $this->inputValidator->validateCurrency($data[7] ?? 'USD');
         if (!$currencyValidation['valid']) {
             $this->secureLogger->warning("Invalid currency", [
-                'currency' => $data[6] ?? 'empty',
+                'currency' => $data[7] ?? 'empty',
                 'error' => $currencyValidation['error']
             ]);
             $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
@@ -248,6 +259,7 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
         $currency = $currencyValidation['value'];
         $credit = $creditValidation['value'] * Constants::CONVERSION_FACTORS[$currency];
+        $minFeeAmount = (int) ($minFeeValidation['value'] * Constants::CONVERSION_FACTORS[$currency]);
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -267,10 +279,10 @@ class ContactManagementService implements ContactManagementServiceInterface
             $currencyAlreadyExists = $this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency);
         }
         if ($contact && $contact['status'] === Constants::CONTACT_STATUS_ACCEPTED && !$currencyAlreadyExists) {
-            if ($this->addCurrencyToContact($contact['pubkey'], $currency, $fee, $credit)) {
+            if ($this->addCurrencyToContact($contact['pubkey'], $currency, $fee, $credit, $minFeeAmount)) {
                 // Send P2P request so the remote side is notified of the new currency
                 $syncService = $this->getContactSyncService();
-                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output);
+                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $minFeeAmount);
             } else {
                 $output->error("Failed to add currency {$currency} to contact {$name}. Currency may already exist or contact is not accepted.", ErrorCodes::CONTACT_EXISTS, 409);
             }
@@ -280,9 +292,9 @@ class ContactManagementService implements ContactManagementServiceInterface
         // Delegate to sync service for P2P exchange handling
         $syncService = $this->getContactSyncService();
         if ($contact) {
-            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output);
+            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output, $minFeeAmount);
         } else {
-            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output);
+            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $minFeeAmount);
         }
     }
 
@@ -296,7 +308,7 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param string $currency Currency code
      * @return bool Success status
      */
-    public function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency): bool
+    public function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency, ?int $minFeeAmount = null): bool
     {
         $success = $this->contactRepository->acceptContact($pubkey, $name, $fee, $credit, $currency);
         if ($success) {
@@ -322,7 +334,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $pubkeyHash,
                         $currency,
                         (int) $fee,
-                        (int) $credit
+                        (int) $credit,
+                        'incoming',
+                        $minFeeAmount
                     );
                 } catch (\Exception $e) {
                     $this->secureLogger->warning("Failed to create contact currency config", [
@@ -741,6 +755,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
                         'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'min_fee_amount' => isset($c['min_fee_amount']) && $c['min_fee_amount'] !== null
+                            ? $c['min_fee_amount'] / Constants::getConversionFactor($c['currency'])
+                            : null,
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -759,7 +776,10 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $cur = $c['currency'];
                         $fee = $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR;
                         $credit = $c['credit_limit'] / Constants::getConversionFactor($cur);
-                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getCurrencyDecimals($cur)) . "\n";
+                        $minFeeDisplay = (isset($c['min_fee_amount']) && $c['min_fee_amount'] !== null)
+                            ? number_format($c['min_fee_amount'] / Constants::getConversionFactor($cur), Constants::getCurrencyDecimals($cur))
+                            : 'default';
+                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getCurrencyDecimals($cur)) . ", Min Fee " . $minFeeDisplay . "\n";
                     }
                 }
                 if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, Constants::getCurrencyDecimals($creditCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
@@ -1192,20 +1212,22 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
 
         // Validate field
-        if (!in_array($field, ['name', 'fee', 'credit', 'all'])) {
-            $output->error("Invalid field. Must be one of: name, fee, credit, all", ErrorCodes::INVALID_FIELD, 400, [
-                'valid_fields' => ['name', 'fee', 'credit', 'all']
+        if (!in_array($field, ['name', 'fee', 'credit', 'minfee', 'all'])) {
+            $output->error("Invalid field. Must be one of: name, fee, credit, minfee, all", ErrorCodes::INVALID_FIELD, 400, [
+                'valid_fields' => ['name', 'fee', 'credit', 'minfee', 'all']
             ]);
             return;
         }
 
-        // Validate values — currency is required for fee/credit, optional for all (defaults to contact's currency)
+        // Validate values — currency is required for fee/credit/minfee, optional for all (defaults to contact's currency)
         $insufficientParams = false;
         if ($field === 'name' && !$value) {
             $insufficientParams = true;
         } elseif ($field === 'fee' && (!$value || !$value2)) {
             $insufficientParams = true;
         } elseif ($field === 'credit' && (!$value || !$value2)) {
+            $insufficientParams = true;
+        } elseif ($field === 'minfee' && (!$value || !$value2)) {
             $insufficientParams = true;
         } elseif ($field === 'all' && (!$value || !$value2 || !$value3)) {
             $insufficientParams = true;
@@ -1215,7 +1237,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                 'name' => 'update [address] name [name]',
                 'fee' => 'update [address] fee [value] [currency]',
                 'credit' => 'update [address] credit [value] [currency]',
-                'all' => 'update [address] all [name] [fee] [credit] [currency]',
+                'minfee' => 'update [address] minfee [value] [currency]',
+                'all' => 'update [address] all [name] [fee] [credit] [currency] [minfee]',
             ];
             $output->error("Insufficient parameters for update", ErrorCodes::MISSING_PARAMS, 400, [
                 'field' => $field,
@@ -1242,9 +1265,9 @@ class ContactManagementService implements ContactManagementServiceInterface
         $updateFields = [];
         $updateData = ['address' => $address, 'field' => $field];
 
-        // Validate and resolve currency for fee/credit updates
+        // Validate and resolve currency for fee/credit/minfee updates
         $currency = null;
-        if ($field === 'fee' || $field === 'credit') {
+        if ($field === 'fee' || $field === 'credit' || $field === 'minfee') {
             $currency = strtoupper($value2);
         } elseif ($field === 'all') {
             if ($value4) {
@@ -1279,12 +1302,21 @@ class ContactManagementService implements ContactManagementServiceInterface
         } elseif ($field === 'credit') {
             $updateData['credit'] = $value;
             $updateData['currency'] = $currency;
+        } elseif ($field === 'minfee') {
+            $updateData['minfee'] = $value;
+            $updateData['currency'] = $currency;
         } elseif ($field === 'all') {
             $updateFields['name'] = $value;
             $updateData['name'] = $value;
             $updateData['fee'] = $value2;
             $updateData['credit'] = $value3;
             $updateData['currency'] = $currency;
+            // value4 is currency (already resolved above), value after that is optional minfee
+            // For 'all': update [addr] all [name] [fee] [credit] [currency] [minfee]
+            $minFeeRaw = $positional[8] ?? null;
+            if ($minFeeRaw !== null && strpos($minFeeRaw, '--') !== 0) {
+                $updateData['minfee'] = $minFeeRaw;
+            }
         }
 
         // Update name in contacts table if changed
@@ -1293,7 +1325,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             $contactUpdateOk = $this->contactRepository->updateContactFields($contact['pubkey'], $updateFields);
         }
 
-        // Update fee/credit in contact_currencies table
+        // Update fee/credit/minfee in contact_currencies table
         if ($contactUpdateOk) {
             if ($this->contactCurrencyRepository !== null && $currency !== null) {
                 $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
@@ -1305,6 +1337,20 @@ class ContactManagementService implements ContactManagementServiceInterface
                 if ($field === 'credit' || $field === 'all') {
                     $creditValue = ($field === 'credit') ? $value : $value3;
                     $currencyFields['credit_limit'] = (int) ($creditValue * Constants::getConversionFactor($currency));
+                }
+                if ($field === 'minfee') {
+                    $minFeeValidation = $this->inputValidator->validateAmountFee($value);
+                    if (!$minFeeValidation['valid']) {
+                        $output->error("Invalid minimum fee amount: " . $minFeeValidation['error'], ErrorCodes::INVALID_FEE, 400);
+                        return;
+                    }
+                    $currencyFields['min_fee_amount'] = (int) ($minFeeValidation['value'] * Constants::getConversionFactor($currency));
+                }
+                if ($field === 'all' && isset($updateData['minfee'])) {
+                    $minFeeValidation = $this->inputValidator->validateAmountFee($updateData['minfee']);
+                    if ($minFeeValidation['valid']) {
+                        $currencyFields['min_fee_amount'] = (int) ($minFeeValidation['value'] * Constants::getConversionFactor($currency));
+                    }
                 }
                 if (!empty($currencyFields)) {
                     $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, $currencyFields);
@@ -1369,9 +1415,10 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param string $currency Currency code
      * @param float $fee Fee percentage
      * @param float $credit Credit limit
+     * @param int|null $minFeeAmount Minimum fee amount in minor units (null = use global default)
      * @return bool True on success
      */
-    public function addCurrencyToContact(string $pubkey, string $currency, float $fee, float $credit): bool
+    public function addCurrencyToContact(string $pubkey, string $currency, float $fee, float $credit, ?int $minFeeAmount = null): bool
     {
         // Verify contact is accepted
         if (!$this->contactRepository->isAcceptedContactPubkey($pubkey)) {
@@ -1387,7 +1434,7 @@ class ContactManagementService implements ContactManagementServiceInterface
 
         // Insert into contact_currencies as outgoing (we are adding this currency)
         if ($this->contactCurrencyRepository !== null) {
-            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing');
+            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing', $minFeeAmount);
         }
 
         // Create initial balance entries for the new currency

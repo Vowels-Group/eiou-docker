@@ -86,7 +86,8 @@ interface ContactSyncServiceInterface
         float $fee,
         float $credit,
         string $currency,
-        ?CliOutputManager $output = null
+        ?CliOutputManager $output = null,
+        ?int $minFeeAmount = null
     ): void;
 
     /**
@@ -110,7 +111,8 @@ interface ContactSyncServiceInterface
         float $fee,
         float $credit,
         string $currency,
-        ?CliOutputManager $output = null
+        ?CliOutputManager $output = null,
+        ?int $minFeeAmount = null
     ): void;
 
     /**

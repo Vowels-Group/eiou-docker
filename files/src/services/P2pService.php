@@ -346,15 +346,21 @@ class P2pService implements P2pServiceInterface {
         // getDefaultFee() returns raw percentage (e.g. 0.01 for 0.01%).
         // getFeePercent() returns DB-stored INT (scaled by FEE_CONVERSION_FACTOR), so divide to get raw %.
         $fee = $this->currentUser->getDefaultFee();
+        $minimumFee = $this->currentUser->getMinimumFee();
         if ($senderContact && isset($senderContact['pubkey_hash'])) {
             $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
             $feePercent = $this->contactCurrencyRepository?->getFeePercent($senderContact['pubkey_hash'], $currency);
             if ($feePercent !== null) {
                 $fee = $feePercent / Constants::FEE_CONVERSION_FACTOR;
             }
+            // Use per-contact min fee amount if set, otherwise fall back to global default
+            $contactMinFee = $this->contactCurrencyRepository?->getMinFeeAmount($senderContact['pubkey_hash'], $currency);
+            if ($contactMinFee !== null) {
+                $minimumFee = $contactMinFee / Constants::getConversionFactor($currency);
+            }
         }
 
-        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
+        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $minimumFee);
     }
 
     /**

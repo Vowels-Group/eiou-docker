@@ -302,7 +302,7 @@ establish_contacts() {
         local pair=(${key//,/ })
         count=$((count + 1))
         printf "\r  Contact %d/%d: %s -> %s    " "$count" "$total" "${pair[0]}" "${pair[1]}"
-        docker exec ${pair[0]} eiou add ${containerAddresses[${pair[1]}]} ${pair[1]} ${values[0]} ${values[1]} ${values[2]} 2>&1 >/dev/null || true
+        docker exec ${pair[0]} eiou add ${containerAddresses[${pair[1]}]} ${pair[1]} ${values[0]} ${values[1]} ${values[2]} ${values[3]} 2>&1 >/dev/null || true
     done
     printf "\n"
 
@@ -344,7 +344,7 @@ add_transport_addresses() {
         _seen_pairs[$key]=1
         count=$((count + 1))
         printf "\r  ${protocol} %d: %s -> %s    " "$count" "${pair[0]}" "${pair[1]}"
-        docker exec ${pair[0]} eiou add ${containerAddresses[${pair[1]}]} ${pair[1]} ${values[0]} ${values[1]} ${values[2]} 2>&1 >/dev/null || true
+        docker exec ${pair[0]} eiou add ${containerAddresses[${pair[1]}]} ${pair[1]} ${values[0]} ${values[1]} ${values[2]} ${values[3]} 2>&1 >/dev/null || true
     done
     printf "\n  Waiting for address exchange...\n"
     sleep 10

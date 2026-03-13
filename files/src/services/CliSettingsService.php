@@ -352,7 +352,7 @@ class CliSettingsService
             $categories = [
                 'Transaction Settings' => [
                     ['num' => '1', 'label' => 'Default currency'],
-                    ['num' => '2', 'label' => 'Minimum fee amount'],
+                    ['num' => '2', 'label' => 'Default minimum fee amount'],
                     ['num' => '3', 'label' => 'Default fee percentage'],
                     ['num' => '4', 'label' => 'Maximum fee percentage'],
                     ['num' => '5', 'label' => 'Default credit limit'],
@@ -476,7 +476,7 @@ class CliSettingsService
                     break;
 
                 case '2':
-                    echo "Enter new minimum fee amount: ";
+                    echo "Enter new default minimum fee amount: ";
                     $key = 'minFee';
                     $validation = InputValidator::validateAmountFee(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
@@ -1065,8 +1065,8 @@ class CliSettingsService
         $settings = [
             'name' => $this->currentUser->getName(),
             'default_currency' => $this->currentUser->getDefaultCurrency(),
-            'minimum_fee_amount' => $this->currentUser->getMinimumFee(),
-            'minimum_fee_currency' => $this->currentUser->getDefaultCurrency(),
+            'default_minimum_fee_amount' => $this->currentUser->getMinimumFee(),
+            'default_minimum_fee_currency' => $this->currentUser->getDefaultCurrency(),
             'default_fee_percent' => $this->currentUser->getDefaultFee(),
             'maximum_fee_percent' => $this->currentUser->getMaxFee(),
             'default_credit_limit' => $this->currentUser->getDefaultCreditLimit(),

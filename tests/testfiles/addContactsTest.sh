@@ -22,7 +22,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
     echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
-    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
+    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]} ${values[3]}
 done
 
 # Wait for contacts to be added with polling

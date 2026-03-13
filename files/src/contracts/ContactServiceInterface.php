@@ -31,7 +31,7 @@ interface ContactServiceInterface
      * @param string $currency The currency code
      * @return bool True if contact was accepted successfully
      */
-    public function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency): bool;
+    public function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency, ?int $minFeeAmount = null): bool;
 
     /**
      * Lookup contact information from a request.

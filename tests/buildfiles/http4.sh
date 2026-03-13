@@ -45,18 +45,19 @@ declare -a containers=(
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
 readonly defaultCredit=1000
+readonly defaultMinFee=0.01
 
 # Define contacts, direction ->
 # example: [httpA,httpB] defines httpB as a contact of httpA
-#          must be accepted in reverse that is to say: 
+#          must be accepted in reverse that is to say:
 #          [httpA,httpB] needs to be followed by [httpB,httpA]
 declare -A containersLinks=(
-    [httpA,httpB]="$defaultFee $defaultCredit USD"
-    [httpB,httpA]="$defaultFee $defaultCredit USD"
-    [httpB,httpC]="$defaultFee $defaultCredit USD"
-    [httpC,httpB]="$defaultFee $defaultCredit USD"
-    [httpC,httpD]="$defaultFee $defaultCredit USD"
-    [httpD,httpC]="$defaultFee $defaultCredit USD"
+    [httpA,httpB]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpB,httpA]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpB,httpC]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpC,httpB]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpC,httpD]="$defaultFee $defaultCredit $defaultMinFee USD"
+    [httpD,httpC]="$defaultFee $defaultCredit $defaultMinFee USD"
 )
 
 declare -A expectedContacts=(

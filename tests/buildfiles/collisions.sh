@@ -32,6 +32,7 @@ declare -a containers=(
 # Randomized fees (0.1-0.9) per edge, same both directions
 # This ensures best-fee routing is tested against varying fee structures
 readonly defaultCredit=1000
+readonly defaultMinFee=0.01
 
 # Generate a random fee: 0.1 to 0.9 (single decimal digit)
 random_fee() { echo "0.$(( RANDOM % 9 + 1 ))"; }
@@ -58,36 +59,36 @@ fee_A8_A11=$(random_fee)
 #          must be accepted in reverse that is to say:
 #          [A0,A1] needs to be followed by [A1,A0]
 declare -A containersLinks=(
-    [A0,A1]="$fee_A0_A1 $defaultCredit USD"
-    [A1,A0]="$fee_A0_A1 $defaultCredit USD"
-    [A1,A3]="$fee_A1_A3 $defaultCredit USD"
-    [A3,A1]="$fee_A1_A3 $defaultCredit USD"
-    [A1,A4]="$fee_A1_A4 $defaultCredit USD"
-    [A4,A1]="$fee_A1_A4 $defaultCredit USD"
-    [A0,A2]="$fee_A0_A2 $defaultCredit USD"
-    [A2,A0]="$fee_A0_A2 $defaultCredit USD"
-    [A2,A5]="$fee_A2_A5 $defaultCredit USD"
-    [A5,A2]="$fee_A2_A5 $defaultCredit USD"
-    [A2,A4]="$fee_A2_A4 $defaultCredit USD"
-    [A4,A2]="$fee_A2_A4 $defaultCredit USD"
-    [A6,A3]="$fee_A3_A6 $defaultCredit USD"
-    [A3,A6]="$fee_A3_A6 $defaultCredit USD"
-    [A6,A4]="$fee_A4_A6 $defaultCredit USD"
-    [A4,A6]="$fee_A4_A6 $defaultCredit USD"
-    [A7,A4]="$fee_A4_A7 $defaultCredit USD"
-    [A4,A7]="$fee_A4_A7 $defaultCredit USD"
-    [A4,A8]="$fee_A4_A8 $defaultCredit USD"
-    [A8,A4]="$fee_A4_A8 $defaultCredit USD"
-    [A8,A5]="$fee_A5_A8 $defaultCredit USD"
-    [A5,A8]="$fee_A5_A8 $defaultCredit USD"  
-    [A6,A9]="$fee_A6_A9 $defaultCredit USD"
-    [A9,A6]="$fee_A6_A9 $defaultCredit USD"
-    [A6,A10]="$fee_A6_A10 $defaultCredit USD"
-    [A10,A6]="$fee_A6_A10 $defaultCredit USD"
-    [A8,A10]="$fee_A8_A10 $defaultCredit USD"
-    [A10,A8]="$fee_A8_A10 $defaultCredit USD"
-    [A8,A11]="$fee_A8_A11 $defaultCredit USD"
-    [A11,A8]="$fee_A8_A11 $defaultCredit USD" 
+    [A0,A1]="$fee_A0_A1 $defaultCredit $defaultMinFee USD"
+    [A1,A0]="$fee_A0_A1 $defaultCredit $defaultMinFee USD"
+    [A1,A3]="$fee_A1_A3 $defaultCredit $defaultMinFee USD"
+    [A3,A1]="$fee_A1_A3 $defaultCredit $defaultMinFee USD"
+    [A1,A4]="$fee_A1_A4 $defaultCredit $defaultMinFee USD"
+    [A4,A1]="$fee_A1_A4 $defaultCredit $defaultMinFee USD"
+    [A0,A2]="$fee_A0_A2 $defaultCredit $defaultMinFee USD"
+    [A2,A0]="$fee_A0_A2 $defaultCredit $defaultMinFee USD"
+    [A2,A5]="$fee_A2_A5 $defaultCredit $defaultMinFee USD"
+    [A5,A2]="$fee_A2_A5 $defaultCredit $defaultMinFee USD"
+    [A2,A4]="$fee_A2_A4 $defaultCredit $defaultMinFee USD"
+    [A4,A2]="$fee_A2_A4 $defaultCredit $defaultMinFee USD"
+    [A6,A3]="$fee_A3_A6 $defaultCredit $defaultMinFee USD"
+    [A3,A6]="$fee_A3_A6 $defaultCredit $defaultMinFee USD"
+    [A6,A4]="$fee_A4_A6 $defaultCredit $defaultMinFee USD"
+    [A4,A6]="$fee_A4_A6 $defaultCredit $defaultMinFee USD"
+    [A7,A4]="$fee_A4_A7 $defaultCredit $defaultMinFee USD"
+    [A4,A7]="$fee_A4_A7 $defaultCredit $defaultMinFee USD"
+    [A4,A8]="$fee_A4_A8 $defaultCredit $defaultMinFee USD"
+    [A8,A4]="$fee_A4_A8 $defaultCredit $defaultMinFee USD"
+    [A8,A5]="$fee_A5_A8 $defaultCredit $defaultMinFee USD"
+    [A5,A8]="$fee_A5_A8 $defaultCredit $defaultMinFee USD"  
+    [A6,A9]="$fee_A6_A9 $defaultCredit $defaultMinFee USD"
+    [A9,A6]="$fee_A6_A9 $defaultCredit $defaultMinFee USD"
+    [A6,A10]="$fee_A6_A10 $defaultCredit $defaultMinFee USD"
+    [A10,A6]="$fee_A6_A10 $defaultCredit $defaultMinFee USD"
+    [A8,A10]="$fee_A8_A10 $defaultCredit $defaultMinFee USD"
+    [A10,A8]="$fee_A8_A10 $defaultCredit $defaultMinFee USD"
+    [A8,A11]="$fee_A8_A11 $defaultCredit $defaultMinFee USD"
+    [A11,A8]="$fee_A8_A11 $defaultCredit $defaultMinFee USD" 
 )
 
 declare -A expectedContacts=(

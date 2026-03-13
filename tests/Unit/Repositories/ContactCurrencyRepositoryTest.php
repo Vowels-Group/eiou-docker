@@ -67,7 +67,7 @@ class ContactCurrencyRepositoryTest extends TestCase
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->with($this->logicalAnd(
-                $this->stringContains('INSERT INTO'),
+                $this->stringContains('INSERT'),
                 $this->stringContains('contact_currencies'),
                 $this->stringContains('pubkey_hash'),
                 $this->stringContains('currency'),
@@ -746,5 +746,360 @@ class ContactCurrencyRepositoryTest extends TestCase
         $result = $this->repository->deleteCurrencyConfig(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
 
         $this->assertFalse($result);
+    }
+
+    // =========================================================================
+    // getMinFeeAmount
+    // =========================================================================
+
+    public function testGetMinFeeAmountReturnsValueWhenSet(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('SELECT min_fee_amount'),
+                $this->stringContains('WHERE pubkey_hash')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['min_fee_amount' => 100]);
+
+        $result = $this->repository->getMinFeeAmount(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
+
+        $this->assertEquals(100, $result);
+    }
+
+    public function testGetMinFeeAmountReturnsNullWhenNotSet(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['min_fee_amount' => null]);
+
+        $result = $this->repository->getMinFeeAmount(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
+
+        $this->assertNull($result);
+    }
+
+    public function testGetMinFeeAmountReturnsNullWhenNotFound(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(false);
+
+        $result = $this->repository->getMinFeeAmount(self::TEST_PUBKEY_HASH, 'NONEXISTENT');
+
+        $this->assertNull($result);
+    }
+
+    public function testGetMinFeeAmountReturnsNullOnFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willThrowException(new \PDOException('Connection error'));
+
+        $result = $this->repository->getMinFeeAmount(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
+
+        $this->assertNull($result);
+    }
+
+    // =========================================================================
+    // insertCurrencyConfig with minFeeAmount
+    // =========================================================================
+
+    public function testInsertCurrencyConfigWithMinFeeAmount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('INSERT'),
+                $this->stringContains('min_fee_amount')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $result = $this->repository->insertCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            self::TEST_FEE_PERCENT,
+            self::TEST_CREDIT_LIMIT,
+            'accepted',
+            'outgoing',
+            500  // min_fee_amount in minor units
+        );
+
+        $this->assertTrue($result);
+    }
+
+    public function testInsertCurrencyConfigWithNullMinFeeAmount(): void
+    {
+        $boundValues = [];
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains('INSERT'))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturnCallback(function ($key, $value) use (&$boundValues) {
+                $boundValues[$key] = $value;
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->repository->insertCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            self::TEST_FEE_PERCENT,
+            self::TEST_CREDIT_LIMIT
+        );
+
+        $this->assertNull($boundValues[':min_fee_amount']);
+    }
+
+    public function testInsertCurrencyConfigBindsMinFeeAmountCorrectly(): void
+    {
+        $boundValues = [];
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturnCallback(function ($key, $value) use (&$boundValues) {
+                $boundValues[$key] = $value;
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->repository->insertCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            self::TEST_FEE_PERCENT,
+            self::TEST_CREDIT_LIMIT,
+            'accepted',
+            'outgoing',
+            750
+        );
+
+        $this->assertEquals(750, $boundValues[':min_fee_amount']);
+    }
+
+    // =========================================================================
+    // upsertCurrencyConfig with minFeeAmount
+    // =========================================================================
+
+    public function testUpsertCurrencyConfigWithMinFeeAmount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('INSERT INTO'),
+                $this->stringContains('ON DUPLICATE KEY UPDATE'),
+                $this->stringContains('min_fee_amount = VALUES(min_fee_amount)')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $result = $this->repository->upsertCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            self::TEST_FEE_PERCENT,
+            self::TEST_CREDIT_LIMIT,
+            'incoming',
+            1000  // min_fee_amount
+        );
+
+        $this->assertTrue($result);
+    }
+
+    public function testUpsertCurrencyConfigWithNullMinFeeAmountSkipsUpdate(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('INSERT INTO'),
+                $this->stringContains('ON DUPLICATE KEY UPDATE'),
+                $this->logicalNot($this->stringContains('min_fee_amount = VALUES(min_fee_amount)'))
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $result = $this->repository->upsertCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            self::TEST_FEE_PERCENT,
+            self::TEST_CREDIT_LIMIT,
+            'incoming',
+            null
+        );
+
+        $this->assertTrue($result);
+    }
+
+    public function testUpsertCurrencyConfigBindsMinFeeAmount(): void
+    {
+        $boundValues = [];
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturnCallback(function ($key, $value) use (&$boundValues) {
+                $boundValues[$key] = $value;
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->repository->upsertCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            self::TEST_FEE_PERCENT,
+            self::TEST_CREDIT_LIMIT,
+            'outgoing',
+            2500
+        );
+
+        $this->assertEquals(2500, $boundValues[':min_fee_amount']);
+    }
+
+    // =========================================================================
+    // updateCurrencyConfig with min_fee_amount
+    // =========================================================================
+
+    public function testUpdateCurrencyConfigWithMinFeeAmount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('UPDATE'),
+                $this->stringContains('min_fee_amount')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $result = $this->repository->updateCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            ['min_fee_amount' => 300]
+        );
+
+        $this->assertTrue($result);
+    }
+
+    public function testUpdateCurrencyConfigWithMinFeeAmountSetToNull(): void
+    {
+        $boundValues = [];
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains('min_fee_amount'))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturnCallback(function ($key, $value) use (&$boundValues) {
+                $boundValues[$key] = $value;
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $result = $this->repository->updateCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            ['min_fee_amount' => null]
+        );
+
+        $this->assertTrue($result);
+        $this->assertNull($boundValues[':min_fee_amount']);
+    }
+
+    public function testUpdateCurrencyConfigWithAllFieldsIncludingMinFee(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('fee_percent'),
+                $this->stringContains('credit_limit'),
+                $this->stringContains('min_fee_amount')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $result = $this->repository->updateCurrencyConfig(
+            self::TEST_PUBKEY_HASH,
+            self::TEST_CURRENCY,
+            ['fee_percent' => 300, 'credit_limit' => 60000, 'min_fee_amount' => 500]
+        );
+
+        $this->assertTrue($result);
     }
 }
