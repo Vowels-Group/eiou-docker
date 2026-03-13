@@ -209,7 +209,6 @@ The test runner handles this automatically - you do not need to manually manage 
 | `TEST_TIMEOUT` | 30 | Default timeout for adaptive polling functions (seconds) |
 | `TEST_POLL_INTERVAL` | 1 | Default polling interval for wait functions (seconds) |
 | `SKIP_CLEANUP` | 0 | Set to `1` to preserve containers after test completion |
-| `JUNIT_REPORT_PATH` | (unset) | Path to write JUnit XML report (e.g., `./test-results/integration.xml`) |
 
 **WSL2/Slow Environment Tip:** If tests timeout waiting for containers or conditions, increase the timeouts:
 ```bash
@@ -308,7 +307,7 @@ Common helpers from `testHelpers.sh`:
 
 The benchmark scripts are standalone tools for measuring routing performance. Unlike the integration test suite, benchmarks are not run by `run-all-tests.sh` and do not contribute to pass/fail counts. They build their own topologies, run repeated measurements, and produce statistical summaries.
 
-**Startup time:** Each iteration that rebuilds the topology requires all containers to fully initialize, including Tor hidden service creation. This takes several minutes per iteration. When running many iterations (especially with `rebuild` mode or `benchmark-bestfee.sh` which rebuilds every run), expect long total runtimes. Tor can also become unreliable when many nodes are created in rapid succession — if Tor initialization times out, the benchmark will fail on that iteration. Using `http` mode or the `shared` topology mode avoids repeated Tor startup overhead.
+**Startup time:** Each iteration that rebuilds the topology requires all containers to fully initialize, including Tor hidden service creation. This takes several minutes per iteration. When running many iterations (especially with `rebuild` mode or `benchmark-bestfee.sh` which rebuilds every run), expect long total runtimes. Tor runs on every node regardless of the transport mode being benchmarked, so startup time is always significant. The benchmarks include per-container Tor readiness guards (SOCKS proxy connectivity checks) and will wait for full initialization before proceeding. However, when many nodes are created in rapid succession, the Tor network can become unstable — sending over Tor in that state may fail even after the readiness checks pass. Using `http` or `https` as the transport mode avoids routing over Tor while still letting the nodes initialize normally.
 
 ### benchmark-bestfee.sh
 
@@ -518,16 +517,6 @@ All tests passed successfully!
 Exit codes:
 - `0` - All tests passed
 - `1` - One or more tests failed
-
-### JUnit XML Reports
-
-Set `JUNIT_REPORT_PATH` to generate a JUnit XML report for CI integration:
-
-```bash
-JUNIT_REPORT_PATH=./test-results/integration.xml ./run-all-tests.sh http4
-```
-
-The report includes per-test timing, pass/fail status, and failure messages.
 
 ## CI/CD Integration
 
