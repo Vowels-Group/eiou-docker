@@ -259,6 +259,12 @@ class ContactManagementService implements ContactManagementServiceInterface
         $transportIndex = $this->transportUtility->determineTransportType($address);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
+        // Optional description/message for the contact request
+        $description = $data[7] ?? null;
+        if ($description === '--json' || $description === null || $description === '') {
+            $description = null;
+        }
+
         // If contact is already accepted and a new currency is requested,
         // add the currency locally and send P2P request so remote side can accept
         $currencyAlreadyExists = false;
@@ -270,23 +276,17 @@ class ContactManagementService implements ContactManagementServiceInterface
             if ($this->addCurrencyToContact($contact['pubkey'], $currency, $fee, $credit)) {
                 // Send P2P request so the remote side is notified of the new currency
                 $syncService = $this->getContactSyncService();
-                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output);
+                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description);
             } else {
                 $output->error("Failed to add currency {$currency} to contact {$name}. Currency may already exist or contact is not accepted.", ErrorCodes::CONTACT_EXISTS, 409);
             }
             return;
         }
 
-        // Optional description/message for the contact request
-        $description = $data[7] ?? null;
-        if ($description === '--json' || $description === null || $description === '') {
-            $description = null;
-        }
-
         // Delegate to sync service for P2P exchange handling
         $syncService = $this->getContactSyncService();
         if ($contact) {
-            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output);
+            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output, $description);
         } else {
             $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description);
         }

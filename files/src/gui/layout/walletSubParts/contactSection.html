@@ -563,13 +563,6 @@
                 <span class="badge badge-pending">Pending</span>
             </div>
 
-            <?php if (!empty($contact['contact_description'])): ?>
-            <div class="pending-contact-message">
-                <i class="fas fa-comment"></i>
-                <em><?php echo htmlspecialchars($contact['contact_description']); ?></em>
-            </div>
-            <?php endif; ?>
-
             <div class="pending-addresses">
                 <?php if (!empty($contact['http'])): ?>
                     <div class="address-line">

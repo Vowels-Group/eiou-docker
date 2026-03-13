@@ -746,7 +746,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
+    public function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
         // Build contact data for JSON response
@@ -861,7 +861,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Re-send the contact request with updated currency
-                    $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                    $payload = $this->contactPayload->buildCreateRequest($address, $currency, $description);
                     $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
                     $responseData = $sendResult['response'];
@@ -1010,7 +1010,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Send a contact creation request to remote with user's currency
-                    $payload = $this->contactPayload->buildCreateRequest($address, $currency);
+                    $payload = $this->contactPayload->buildCreateRequest($address, $currency, $description);
                     $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
                     $responseData = $sendResult['response'];
