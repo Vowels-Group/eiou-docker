@@ -308,6 +308,8 @@ Common helpers from `testHelpers.sh`:
 
 The benchmark scripts are standalone tools for measuring routing performance. Unlike the integration test suite, benchmarks are not run by `run-all-tests.sh` and do not contribute to pass/fail counts. They build their own topologies, run repeated measurements, and produce statistical summaries.
 
+**Startup time:** Each iteration that rebuilds the topology requires all containers to fully initialize, including Tor hidden service creation. This takes several minutes per iteration. When running many iterations (especially with `rebuild` mode or `benchmark-bestfee.sh` which rebuilds every run), expect long total runtimes. Tor can also become unreliable when many nodes are created in rapid succession — if Tor initialization times out, the benchmark will fail on that iteration. Using `http` mode or the `shared` topology mode avoids repeated Tor startup overhead.
+
 ### benchmark-bestfee.sh
 
 Measures the quality of best-fee route selection by running the `bestfee` test subset repeatedly with fresh random fees each time. Each run rebuilds the `collisions` topology so that fee multipliers are randomized, then compares fast mode (first route found) against best-fee mode (collects all routes, picks cheapest).
