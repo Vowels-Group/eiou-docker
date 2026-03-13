@@ -22,6 +22,7 @@ use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Services\ServiceContainer;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 
@@ -53,13 +54,19 @@ class ApiControllerP2pTest extends TestCase
 
         $this->mockApiKeyRepository->method('logRequest');
 
-        // Wire service container
-        $this->mockServices->method('getP2pRepository')
-            ->willReturn($this->mockP2pRepo);
-        $this->mockServices->method('getRp2pRepository')
-            ->willReturn($this->mockRp2pRepo);
-        $this->mockServices->method('getRp2pCandidateRepository')
-            ->willReturn($this->mockRp2pCandidateRepo);
+        // Wire service container via RepositoryFactory
+        $mockRepoFactory = $this->createMock(RepositoryFactory::class);
+        $mockRepoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    P2pRepository::class => $this->mockP2pRepo,
+                    Rp2pRepository::class => $this->mockRp2pRepo,
+                    Rp2pCandidateRepository::class => $this->mockRp2pCandidateRepo,
+                    default => $this->createMock($class),
+                };
+            });
+        $this->mockServices->method('getRepositoryFactory')
+            ->willReturn($mockRepoFactory);
         $this->mockServices->method('getSendOperationService')
             ->willReturn($this->mockSendService);
         $this->mockServices->method('getP2pService')

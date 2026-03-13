@@ -15,9 +15,9 @@
 #   - pids_limit: caps process count to prevent fork bombs
 
 # =============================================================================
-# EIOU Node Docker Image
+# eIOU Node Docker Image
 # =============================================================================
-# Builds a complete EIOU node with:
+# Builds a complete eIOU node with:
 # - nginx web server + PHP-FPM for GUI, API, and P2P transport
 # - MariaDB database for transactions and contacts
 # - Tor for anonymous .onion addressing
@@ -73,7 +73,7 @@ FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553
 
 # OCI Image Labels — https://github.com/opencontainers/image-spec/blob/main/annotations.md
 LABEL org.opencontainers.image.title="eiou-node" \
-      org.opencontainers.image.description="EIOU peer-to-peer transaction node with GUI, API, Tor, and MariaDB" \
+      org.opencontainers.image.description="eIOU peer-to-peer transaction node with GUI, API, Tor, and MariaDB" \
       org.opencontainers.image.url="https://eiou.org" \
       org.opencontainers.image.source="https://github.com/eiou-org/eiou-docker" \
       org.opencontainers.image.documentation="https://github.com/eiou-org/eiou-docker#readme" \
@@ -134,12 +134,12 @@ RUN mkdir -p /etc/nginx/ssl
 # The default socket path includes the PHP version (e.g., php8.2-fpm.sock).
 # Using a fixed path keeps the nginx config stable across PHP version upgrades.
 # Override socket path and allow .html files to be processed by PHP-FPM.
-# EIOU uses PHP inside .html files (GUI templates) — equivalent to Apache's
+# eIOU uses PHP inside .html files (GUI templates) — equivalent to Apache's
 # AddType application/x-httpd-php .html. Without this, PHP-FPM blocks .html
 # with "Access denied (see security.limit_extensions)".
 # PHP-FPM pool tuning:
 # - Fixed socket path (version-independent, keeps nginx config stable)
-# - Allow .html (EIOU GUI templates contain PHP)
+# - Allow .html (eIOU GUI templates contain PHP)
 # - pm = ondemand: spawn workers only on request, kill after 10s idle.
 #   Better than "dynamic" for containers with intermittent traffic — avoids
 #   keeping idle workers alive. max_children=5 caps peak PHP concurrency.
@@ -157,7 +157,7 @@ RUN sed -i 's|^worker_processes auto;|worker_processes 2;|' /etc/nginx/nginx.con
 # Rate limiting zones must be in the http block (nginx.conf), not server blocks.
 # These zones are referenced by the server config in eiou.conf.
 RUN sed -i '/http {/a \
-    # --- EIOU rate limiting zones ---\n\
+    # --- eIOU rate limiting zones ---\n\
     # Per-IP request rate limiting at the connection level (before PHP runs)\n\
     limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;\n\
     limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n\
@@ -174,7 +174,7 @@ RUN sed -i '/http {/a \
 COPY nginx/eiou.conf /etc/nginx/sites-available/eiou.conf
 COPY nginx/eiou-locations.conf /etc/nginx/eiou-locations.conf
 
-# Enable EIOU site, disable default site
+# Enable eIOU site, disable default site
 RUN rm -f /etc/nginx/sites-enabled/default && \
     ln -s /etc/nginx/sites-available/eiou.conf /etc/nginx/sites-enabled/eiou.conf
 

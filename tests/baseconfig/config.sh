@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ############################### Base Configuration #################################
-# Shared configuration variables and helper functions for EIOU Docker test suite
+# Shared configuration variables and helper functions for eIOU Docker test suite
 #
 # This file provides:
 # - Container name arrays and network configuration
@@ -194,7 +194,7 @@ function wait_for_tx_status(){
         status=$(docker exec $container php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$tx = \$app->services->getTransactionRepository()->getByTxid('$txid');
+            \$tx = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getByTxid('$txid');
             echo \$tx['status'] ?? 'unknown';
         " 2>/dev/null || echo "unknown")
 
@@ -224,7 +224,7 @@ function wait_for_contact(){
         local contact_exists=$(docker exec $container php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportCheck}','$address');
+            \$contact = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactByAddress('${transportCheck}','$address');
             echo \$contact ? 'yes' : 'no';
         " 2>/dev/null || echo "no")
 
@@ -255,7 +255,7 @@ remove_container_if_exists() {
     fi
     echo "Removing any volumes of container: $container_name (if they exist)..."
     remove_volume_if_exists "$container_name-mysql-data"
-    remove_volume_if_exists "$container_name-files"
+    remove_volume_if_exists "$container_name-config"
     remove_volume_if_exists "$container_name-letsencrypt"
     remove_volume_if_exists "$container_name-backups"
 }

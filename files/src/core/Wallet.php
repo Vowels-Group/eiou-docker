@@ -13,7 +13,7 @@ use Eiou\Security\TorKeyDerivation;
 /**
  * Wallet management for BIP39 seed phrase generation and restoration
  *
- * This class handles cryptographic wallet operations for the EIOU system including:
+ * This class handles cryptographic wallet operations for the eIOU system including:
  * - Generating new wallets with secure random 24-word BIP39 seed phrases
  * - Restoring wallets from existing seed phrases (via CLI arguments or file)
  * - Deriving deterministic secp256k1 keypairs from seed data

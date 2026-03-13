@@ -187,7 +187,7 @@ wait_for_contact_status() {
     while [ $elapsed -lt $timeout ]; do
         local status=$(docker exec ${container} php -r "
             require_once('${BOOTSTRAP_PATH}');
-            echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+            echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
                 '${transport}','${address}'
             );
         " 2>/dev/null || echo "error")
@@ -320,7 +320,7 @@ get_pubkey_info() {
     docker exec ${container} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${mode}','${address}');
+        \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${mode}','${address}');
         if (\$pubkey) {
             echo base64_encode(\$pubkey) . '|' . hash('sha256', \$pubkey);
         } else {
@@ -796,7 +796,7 @@ check_contact_status_with_retry() {
     # First check
     local status=$(docker exec ${container} php -r "
         require_once('${BOOTSTRAP_PATH}');
-        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+        echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
             '${transport_type}','${address}'
         );
     " 2>/dev/null || echo "error")
@@ -811,7 +811,7 @@ check_contact_status_with_retry() {
         # Retry check
         status=$(docker exec ${container} php -r "
             require_once('${BOOTSTRAP_PATH}');
-            echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
+            echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
                 '${transport_type}','${address}'
             );
         " 2>/dev/null || echo "error")

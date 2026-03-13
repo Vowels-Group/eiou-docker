@@ -2,9 +2,9 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 /**
- * EIOU CLI Entry Point
+ * eIOU CLI Entry Point
  *
- * Main command-line interface for interacting with an EIOU wallet.
+ * Main command-line interface for interacting with an eIOU wallet.
  * This script processes user commands and delegates to appropriate services.
  *
  * Usage: php eiou.php <command> [arguments] [--json]

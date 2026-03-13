@@ -1,6 +1,6 @@
-# EIOU API Quick Reference
+# eIOU API Quick Reference
 
-Quick lookup card for the EIOU REST API endpoints.
+Quick lookup card for the eIOU REST API endpoints.
 
 ---
 

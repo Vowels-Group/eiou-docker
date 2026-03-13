@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 
-# Test backup functionality for EIOU Docker containers
+# Test backup functionality for eIOU Docker containers
 # Verifies backup creation, listing, verification, restore, delete, and cleanup
 
 echo -e "\nTesting Backup Functionality..."

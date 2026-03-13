@@ -1,10 +1,10 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Let's Encrypt Certificate Generator for EIOU Docker
+# Let's Encrypt Certificate Generator for eIOU Docker
 #
 # This script obtains a Let's Encrypt SSL certificate that can be shared across
-# multiple EIOU node containers. It supports both single-domain and wildcard
+# multiple eIOU node containers. It supports both single-domain and wildcard
 # certificates using HTTP-01 or DNS-01 ACME challenges.
 #
 # Use Cases:
@@ -80,7 +80,7 @@ while [ $# -gt 0 ]; do
 done
 
 printf "${GREEN}================================================${NC}\n"
-printf "${GREEN}  EIOU Let's Encrypt Certificate Setup${NC}\n"
+printf "${GREEN}  eIOU Let's Encrypt Certificate Setup${NC}\n"
 printf "${GREEN}================================================${NC}\n"
 echo ""
 

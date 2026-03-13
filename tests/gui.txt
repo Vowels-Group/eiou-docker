@@ -1,5 +1,5 @@
 # GUI Integration Instructions for All Systems
-# This document provides instructions for building and running EIOU containers with GUI access
+# This document provides instructions for building and running eIOU containers with GUI access
 
 ## Build Instructions
 

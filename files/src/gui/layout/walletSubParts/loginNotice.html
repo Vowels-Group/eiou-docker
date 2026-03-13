@@ -1,11 +1,11 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- Legal Notice — displayed below the login form.
-     Legal notice text is loaded from /app/scripts/legal-notice.txt (same file
+     Legal notice text is loaded from /app/scripts/banners/legal-notice.txt (same file
      used by the container startup banner), so a single edit updates both. -->
 <div class="login-notice">
     <?php
-    $noticeFile = '/app/scripts/legal-notice.txt';
+    $noticeFile = '/app/scripts/banners/legal-notice.txt';
     if (file_exists($noticeFile)):
         $raw = trim(file_get_contents($noticeFile));
         $allLines = explode("\n", $raw);

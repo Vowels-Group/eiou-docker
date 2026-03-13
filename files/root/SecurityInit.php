@@ -4,7 +4,7 @@
 /**
  * Security Initialization File
  *
- * Initializes security components for all EIOU PHP entry points.
+ * Initializes security components for all eIOU PHP entry points.
  * This file should be included early in the request lifecycle.
  *
  * Initialization Sequence:

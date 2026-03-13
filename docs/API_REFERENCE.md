@@ -1,6 +1,6 @@
-# EIOU API Reference
+# eIOU API Reference
 
-Complete API documentation for the EIOU Docker node REST API.
+Complete API documentation for the eIOU Docker node REST API.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ Complete API documentation for the EIOU Docker node REST API.
 
 ## Authentication
 
-The EIOU API uses HMAC-SHA256 signature-based authentication to secure all requests.
+The eIOU API uses HMAC-SHA256 signature-based authentication to secure all requests.
 
 ### Required Headers
 

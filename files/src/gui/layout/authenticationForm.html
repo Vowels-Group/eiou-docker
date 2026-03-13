@@ -10,7 +10,7 @@
     <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/authentication-form.css");?></style>
 </head>
 <body>
-    <!-- Alpha Warning — loaded from /app/scripts/alpha-warning.txt -->
+    <!-- Alpha Warning — loaded from /app/scripts/banners/alpha-warning.txt -->
     <?php
     // Auto-link URLs in already-escaped text (safe: runs after htmlspecialchars)
     function autoLinkUrls(string $escaped): string {
@@ -24,7 +24,7 @@
             $escaped
         );
     }
-    $warningFile = '/app/scripts/alpha-warning.txt';
+    $warningFile = '/app/scripts/banners/alpha-warning.txt';
     if (file_exists($warningFile)):
         // Split file into paragraphs (separated by blank lines)
         $warnText = trim(file_get_contents($warningFile));

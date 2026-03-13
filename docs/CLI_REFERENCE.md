@@ -1,6 +1,6 @@
-# EIOU CLI Reference
+# eIOU CLI Reference
 
-Complete command-line interface documentation for the EIOU Docker node.
+Complete command-line interface documentation for the eIOU Docker node.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Complete command-line interface documentation for the EIOU Docker node.
 
 ## Overview
 
-The EIOU CLI provides a command-line interface for interacting with an EIOU wallet node.
+The eIOU CLI provides a command-line interface for interacting with an eIOU wallet node.
 
 **Usage:**
 ```bash

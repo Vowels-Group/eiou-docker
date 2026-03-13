@@ -86,13 +86,16 @@ fi
 echo -e "\n[Test 3: P2pService uses CapacityReservationRepository for credit holds]"
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\t-> Checking setCapacityReservationRepository on P2pService on ${testSender}"
+echo -e "\t-> Checking CapacityReservationRepository injected into P2pService on ${testSender}"
 
 p2pCapCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getP2pService();
-    echo method_exists(\$service, 'setCapacityReservationRepository') ? 'OK' : 'MISSING';
+    \$ref = new ReflectionProperty(\$service, 'capacityReservationRepository');
+    \$ref->setAccessible(true);
+    \$repo = \$ref->getValue(\$service);
+    echo (\$repo instanceof \Eiou\Database\CapacityReservationRepository) ? 'OK' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$p2pCapCheck" = "OK" ]; then
@@ -128,16 +131,17 @@ fi
 echo -e "\n[Test 5: CleanupService -> CapacityReservation/RouteCancellation wiring]"
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\t-> Checking setter methods on CleanupService on ${testSender}"
+echo -e "\t-> Checking repository injection on CleanupService on ${testSender}"
 
 cleanupCheck=$(docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getCleanupService();
-    \$methods = ['setCapacityReservationRepository', 'setRouteCancellationRepository'];
     \$missing = [];
-    foreach (\$methods as \$m) {
-        if (!method_exists(\$service, \$m)) \$missing[] = \$m;
+    foreach (['capacityReservationRepository', 'routeCancellationRepository'] as \$prop) {
+        \$ref = new ReflectionProperty(\$service, \$prop);
+        \$ref->setAccessible(true);
+        if (\$ref->getValue(\$service) === null) \$missing[] = \$prop;
     }
     echo empty(\$missing) ? 'OK' : 'MISSING:' . implode(',', \$missing);
 " 2>/dev/null || echo "ERROR")
@@ -157,7 +161,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\t-> Checking route_cancel handler in entry point on ${testSender}"
 
 routeTypeCheck=$(docker exec ${testSender} php -r "
-    \$indexContent = file_get_contents('//etc//eiou//www//eiou//index.html');
+    \$indexContent = file_get_contents('//app//eiou//www//eiou//index.html');
     echo (strpos(\$indexContent, 'route_cancel') !== false) ? 'OK' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
@@ -375,9 +379,9 @@ originatorCancelCheck=$(docker exec ${testSender} php -r "
         exit;
     }
 
-    // Verify CliService::rejectP2p calls broadcastFullCancelForHash (not sendCancelNotificationForHash)
-    \$cliService = \$app->services->getCliService();
-    \$ref = new ReflectionMethod(\$cliService, 'rejectP2p');
+    // Verify CliP2pApprovalService::rejectP2p calls broadcastFullCancelForHash
+    // (CliService delegates to CliP2pApprovalService)
+    \$ref = new ReflectionMethod(\Eiou\Services\CliP2pApprovalService::class, 'rejectP2p');
     \$filename = \$ref->getFileName();
     \$startLine = \$ref->getStartLine();
     \$endLine = \$ref->getEndLine();

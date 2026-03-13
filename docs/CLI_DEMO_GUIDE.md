@@ -1,13 +1,13 @@
-# EIOU CLI Demo Guide
+# eIOU CLI Demo Guide
 
-A step-by-step walkthrough for demonstrating EIOU CLI commands.
+A step-by-step walkthrough for demonstrating eIOU CLI commands.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Prerequisites & Installation](#section-1-prerequisites--installation)
    - [System Requirements](#system-requirements)
-   - [Pulling the EIOU Image](#pulling-the-eiou-image)
+   - [Pulling the eIOU Image](#pulling-the-eiou-image)
    - [Building from Source](#building-from-source-alternative)
    - [Loading from a .tar File](#loading-from-a-tar-file)
 3. [Creating Containers](#section-2-creating-containers)
@@ -55,21 +55,21 @@ A step-by-step walkthrough for demonstrating EIOU CLI commands.
 
 ## Overview
 
-This guide provides a hands-on walkthrough for demonstrating the EIOU command-line interface (CLI). It covers container setup, wallet generation, contact management, and transaction operations.
+This guide provides a hands-on walkthrough for demonstrating the eIOU command-line interface (CLI). It covers container setup, wallet generation, contact management, and transaction operations.
 
 **What you will learn:**
-- How to pull and run the EIOU Docker image
-- Two methods for creating EIOU wallets (automatic and manual)
+- How to pull and run the eIOU Docker image
+- Two methods for creating eIOU wallets (automatic and manual)
 - Essential CLI commands for daily wallet operations
 - Setting up a 4-node network for P2P routing demonstrations
 - Sending transactions directly and through multi-hop routing
 - Best practices for secure wallet management
 
 **Target audience:**
-- Developers evaluating the EIOU system
+- Developers evaluating the eIOU system
 - Demo presenters conducting live demonstrations
-- System administrators deploying EIOU nodes
-- Users learning to operate EIOU wallets
+- System administrators deploying eIOU nodes
+- Users learning to operate eIOU wallets
 
 **Prerequisites:**
 - Basic familiarity with Docker commands
@@ -82,7 +82,7 @@ This guide provides a hands-on walkthrough for demonstrating the EIOU command-li
 
 ### System Requirements
 
-Before running EIOU containers, ensure your system meets these requirements:
+Before running eIOU containers, ensure your system meets these requirements:
 
 **Docker Requirements:**
 - Docker Engine 20.10 or later
@@ -115,7 +115,7 @@ docker compose version
 
 ---
 
-### Pulling the EIOU Image
+### Pulling the eIOU Image
 
 The fastest way to get started is pulling the pre-built image from Docker Hub.
 
@@ -195,7 +195,7 @@ docker save eiou/eiou:latest | gzip > eiou-image.tar.gz
 
 ## Section 2: Creating Containers
 
-EIOU wallet generation and restoration happens at container startup via environment variables.
+eIOU wallet generation and restoration happens at container startup via environment variables.
 
 ### QUICKSTART vs No QUICKSTART
 
@@ -549,7 +549,7 @@ docker exec alice eiou info --json | jq -r '.data.locators.http'
 
 ### Understanding the 4-Node Topology
 
-The EIOU 4-node setup creates a linear chain of containers for demonstrating peer-to-peer routing:
+The eIOU 4-node setup creates a linear chain of containers for demonstrating peer-to-peer routing:
 
 ```
 Alice <---> Bob <---> Carol <---> Daniel
@@ -561,7 +561,7 @@ Alice <---> Bob <---> Carol <---> Daniel
 - **No pre-configured contacts**: Nodes start independently; connections must be established manually
 
 **Why This Matters:**
-If Alice wants to transact with Daniel, the transaction must route through Bob and Carol. This demonstrates EIOU's peer-to-peer relay capabilities.
+If Alice wants to transact with Daniel, the transaction must route through Bob and Carol. This demonstrates eIOU's peer-to-peer relay capabilities.
 
 ---
 
@@ -651,9 +651,9 @@ Within the Docker network, containers resolve each other by hostname:
 
 ## Section 5: Contact Management Commands
 
-### Understanding EIOU Contacts
+### Understanding eIOU Contacts
 
-EIOU contacts form the trust network that enables value transfer.
+eIOU contacts form the trust network that enables value transfer.
 
 #### Bidirectional Requirement
 
@@ -928,7 +928,7 @@ docker exec alice eiou history all
 
 ### 6.4 Multi-Hop P2P Routing
 
-This demonstrates EIOU's key feature: sending transactions to contacts you don't directly know.
+This demonstrates eIOU's key feature: sending transactions to contacts you don't directly know.
 
 **Prerequisite:** The full A<->B<->C<->D contact chain from [Section 5.1](#51-add---adding-contacts) must be established for P2P routing to work.
 
@@ -1094,7 +1094,7 @@ docker exec alice eiou backup restore backup_20260126_030000.eiou.enc --confirm
 
 ### 7.3 apikey - API Key Management
 
-API keys allow external applications to interact with your EIOU wallet programmatically.
+API keys allow external applications to interact with your eIOU wallet programmatically.
 
 #### Creating an API Key
 

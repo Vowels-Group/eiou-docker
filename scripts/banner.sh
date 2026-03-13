@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 # =============================================================================
-# banner.sh - EIOU Startup Warning Banners
+# banner.sh - eIOU Startup Warning Banners
 # =============================================================================
 # Displays warning banners during container startup.
 # Uses horizontal rules for visual separation — no side borders, so there
@@ -24,7 +24,7 @@ box_rule() {
 
 # Full alpha/testing warning banner - loaded from separate file for easy editing.
 show_alpha_warning() {
-    local warning_file="/app/scripts/alpha-warning.txt"
+    local warning_file="/app/scripts/banners/alpha-warning.txt"
     if [ ! -f "$warning_file" ]; then
         return 0
     fi
@@ -52,7 +52,7 @@ show_alpha_warning() {
 
 # Legal notice banner - loaded from separate file for easy editing.
 show_legal_notice() {
-    local notice_file="/app/scripts/legal-notice.txt"
+    local notice_file="/app/scripts/banners/legal-notice.txt"
     if [ ! -f "$notice_file" ]; then
         return 0
     fi

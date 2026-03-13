@@ -520,7 +520,7 @@ class P2pService implements P2pServiceInterface {
 
             // Force fast mode when any part of the route uses Tor —
             // prevents best-fee mode over Tor where relay latency (~5s × 6 Tor
-            // relays per EIOU hop) makes candidate collection impractical.
+            // relays per eIOU hop) makes candidate collection impractical.
             // Checks both the final destination AND the incoming sender transport,
             // because transport index cascading means if the sender used Tor to
             // reach us, all our downstream forwards will also use Tor.

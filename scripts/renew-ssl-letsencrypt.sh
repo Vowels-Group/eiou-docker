@@ -1,10 +1,10 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Let's Encrypt Certificate Renewal for EIOU Docker
+# Let's Encrypt Certificate Renewal for eIOU Docker
 #
 # This script renews Let's Encrypt certificates and updates the shared
-# certificate directory used by EIOU node containers.
+# certificate directory used by eIOU node containers.
 #
 # Designed to be run as a host-level cron job. Certbot only renews
 # certificates that are within 30 days of expiry, so running daily is safe.
@@ -25,7 +25,7 @@
 #   # Basic renewal (run from cron):
 #   ./scripts/renew-ssl-letsencrypt.sh -d wallet.example.com -o ./letsencrypt-certs
 #
-#   # Renew and gracefully reload all EIOU containers:
+#   # Renew and gracefully reload all eIOU containers:
 #   ./scripts/renew-ssl-letsencrypt.sh -d wallet.example.com -o ./letsencrypt-certs \
 #       --restart "eiou-*" --graceful
 #

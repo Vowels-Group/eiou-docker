@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 ############################ API Input Validation Test ############################
-# Comprehensive input validation testing for the EIOU API
+# Comprehensive input validation testing for the eIOU API
 #
 # Verifies:
 # - Missing required fields return proper 400 errors
