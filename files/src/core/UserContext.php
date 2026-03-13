@@ -561,6 +561,23 @@ class UserContext {
     }
 
     /**
+     * Get auto-accept restored contact setting
+     *
+     * When true, contacts are auto-accepted on wallet restore if transaction
+     * history proves a prior relationship (with default fee/credit values).
+     * When false, restored contacts stay pending for manual review.
+     *
+     * @return bool
+     */
+    public function getAutoAcceptRestoredContact(): bool {
+        $envValue = getenv('EIOU_AUTO_ACCEPT_RESTORED_CONTACT');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('autoAcceptRestoredContact') ?? Constants::AUTO_ACCEPT_RESTORED_CONTACT);
+    }
+
+    /**
      * Get auto chain drop accept setting
      *
      * @return bool
@@ -923,6 +940,7 @@ class UserContext {
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
+            'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
 
             // Feature toggles
             'contactStatusEnabled' => Constants::CONTACT_STATUS_ENABLED,

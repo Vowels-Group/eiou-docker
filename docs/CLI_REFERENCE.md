@@ -948,6 +948,7 @@ eiou changesettings [setting] [value]
 | `contactStatusSyncOnPing` | Sync status during ping operations | `true`, `false` |
 | `autoChainDropPropose` | Auto-propose chain-drop operations | `true`, `false` |
 | `autoChainDropAccept` | Auto-accept chain-drop proposals | `true`, `false` |
+| `autoAcceptRestoredContact` | Auto-accept restored contacts on wallet restore | `true`, `false` |
 | `apiEnabled` | Enable REST API endpoint | `true`, `false` |
 | `apiCorsAllowedOrigins` | Allowed CORS origins for API | `https://example.com` |
 | `rateLimitEnabled` | Enable rate limiting (CLI/API only — not exposed in GUI) | `true`, `false` |

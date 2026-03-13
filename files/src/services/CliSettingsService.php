@@ -189,6 +189,11 @@ class CliSettingsService
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autoacceptrestoredcontact'){
+                $key = 'autoAcceptRestoredContact';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'apienabled'){
                 $key = 'apiEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -380,6 +385,7 @@ class CliSettingsService
                     ['num' => '19', 'label' => 'Auto chain drop propose'],
                     ['num' => '20', 'label' => 'Auto chain drop accept'],
                     ['num' => '21', 'label' => 'Auto chain drop accept guard'],
+                    ['num' => '49', 'label' => 'Auto-accept restored contacts'],
                     ['num' => '22', 'label' => 'API enabled'],
                     ['num' => '23', 'label' => 'API CORS allowed origins'],
                     ['num' => '24', 'label' => 'Rate limiting enabled'],
@@ -995,6 +1001,17 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
+                case '49':
+                    echo "Auto-accept restored contacts on wallet restore? (yes/no): ";
+                    $key = 'autoAcceptRestoredContact';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -1087,6 +1104,7 @@ class CliSettingsService
             'auto_chain_drop_propose' => $this->currentUser->getAutoChainDropPropose(),
             'auto_chain_drop_accept' => $this->currentUser->getAutoChainDropAccept(),
             'auto_chain_drop_accept_guard' => $this->currentUser->getAutoChainDropAcceptGuard(),
+            'auto_accept_restored_contact' => $this->currentUser->getAutoAcceptRestoredContact(),
             'api_enabled' => $this->currentUser->getApiEnabled(),
             'api_cors_allowed_origins' => $this->currentUser->getApiCorsAllowedOrigins(),
             'rate_limit_enabled' => $this->currentUser->getRateLimitEnabled(),
@@ -1155,6 +1173,7 @@ class CliSettingsService
             echo "\tAuto chain drop propose: " . ($settings['auto_chain_drop_propose'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop accept: " . ($settings['auto_chain_drop_accept'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop accept guard: " . ($settings['auto_chain_drop_accept_guard'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto-accept restored contacts: " . ($settings['auto_accept_restored_contact'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAPI enabled: " . ($settings['api_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAPI CORS origins: " . ($settings['api_cors_allowed_origins'] ?: '(none)') . "\n";
             echo "\tRate limiting: " . ($settings['rate_limit_enabled'] ? 'enabled' : 'disabled') . "\n";

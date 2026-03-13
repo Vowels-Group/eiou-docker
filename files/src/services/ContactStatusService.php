@@ -225,7 +225,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                 if ($transportIndexAssociative !== null) {
                     try {
-                        $this->contactRepository->addPendingContact($senderPubkey);
+                        $restoredCount = $this->contactRepository->countContactsByNamePrefix('RestoredContact') + 1;
+                        $restoredName = 'RestoredContact' . $restoredCount;
+                        $this->contactRepository->addPendingContact($senderPubkey, $restoredName);
                         $this->addressRepository->insertAddress($senderPubkey, $transportIndexAssociative);
 
                         // Create contact_currencies entries for all currencies the remote has
@@ -256,8 +258,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             $senderPubkey
                         );
 
-                        if (!empty($localPrevTxidsByCurrency)) {
-                            // Transactions exist — auto-accept the contact
+                        if (!empty($localPrevTxidsByCurrency) && $this->currentUser->getAutoAcceptRestoredContact()) {
+                            // Transactions exist and auto-accept is enabled — accept the contact
                             $defaultFee = (int) ($this->currentUser->getDefaultFee() * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY]);
                             $defaultCredit = (int) ($this->currentUser->getDefaultCreditLimit() * Constants::CONVERSION_FACTORS[Constants::TRANSACTION_DEFAULT_CURRENCY]);
 
@@ -293,6 +295,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             Logger::getInstance()->info("Auto-accepted restored contact after sync", [
                                 'sender_address' => $senderAddress,
                                 'currencies' => $restoredCurrencies
+                            ]);
+                        } elseif (!empty($localPrevTxidsByCurrency)) {
+                            // Transactions exist but auto-accept is disabled — leave as pending for manual review
+                            // Balances are still synced so the user can see the history when reviewing
+                            $this->getSyncTrigger()->syncContactBalance($senderPubkey);
+
+                            Logger::getInstance()->info("Restored contact left pending for review (auto-accept disabled)", [
+                                'sender_address' => $senderAddress,
+                                'currencies' => array_keys($localPrevTxidsByCurrency)
                             ]);
                         }
 
