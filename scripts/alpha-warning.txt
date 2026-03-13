@@ -28,4 +28,4 @@ You are responsible for:
 
 Do not use this for obligations you cannot afford to lose.
 
-Report issues: github.com/eiou-org/eiou-docker
+Report issues: https://github.com/eiou-org/eiou-docker
