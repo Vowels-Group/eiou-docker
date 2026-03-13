@@ -2091,10 +2091,11 @@ function openContactModal(contact, openTab) {
             opt.textContent = acceptedCurrencies[ci].currency;
             editCurrencySelect.appendChild(opt);
         }
-        // Select the first currency and load its fee/credit
+        // Select the first currency and load its fee/credit/min_fee
         editCurrencySelect.value = acceptedCurrencies[0].currency;
         document.getElementById('edit_contact_fee').value = acceptedCurrencies[0].fee;
         document.getElementById('edit_contact_credit').value = acceptedCurrencies[0].credit_limit;
+        document.getElementById('edit_contact_min_fee').value = acceptedCurrencies[0].min_fee_amount != null ? acceptedCurrencies[0].min_fee_amount : '';
     } else {
         // Fallback: no accepted currencies
         var opt = document.createElement('option');
@@ -2103,6 +2104,7 @@ function openContactModal(contact, openTab) {
         editCurrencySelect.appendChild(opt);
         document.getElementById('edit_contact_fee').value = 0;
         document.getElementById('edit_contact_credit').value = 0;
+        document.getElementById('edit_contact_min_fee').value = '';
     }
 
     // Set action form addresses
@@ -2204,6 +2206,7 @@ function editCurrencyChanged(selectedCurrency) {
         if (currentContactCurrencies[i].currency === selectedCurrency) {
             document.getElementById('edit_contact_fee').value = currentContactCurrencies[i].fee;
             document.getElementById('edit_contact_credit').value = currentContactCurrencies[i].credit_limit;
+            document.getElementById('edit_contact_min_fee').value = currentContactCurrencies[i].min_fee_amount !== null ? currentContactCurrencies[i].min_fee_amount : '';
             return;
         }
     }

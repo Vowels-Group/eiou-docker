@@ -99,6 +99,7 @@
                             <?php if ($primaryCur): ?>
                             <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($displayCurrency)); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
                             <div>Fee: <?php echo number_format($primaryCur['fee'] ?? 0, 2); ?>%</div>
+                            <div>Min Fee: <?php echo ($primaryCur['min_fee_amount'] !== null) ? number_format($primaryCur['min_fee_amount'], \Eiou\Core\Constants::getCurrencyDecimals($displayCurrency)) : 'default'; ?></div>
                             <?php endif; ?>
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
                                 <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> more</div>
@@ -500,6 +501,12 @@
                         <div class="form-group">
                             <label for="edit_contact_fee">Fee (%):</label>
                             <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit_contact_min_fee">Min Fee Amount:</label>
+                            <input type="number" id="edit_contact_min_fee" name="contact_min_fee" step="0.01" min="0">
+                            <small class="form-hint"><i class="fas fa-info-circle"></i> Leave empty to use default</small>
                         </div>
                     </div>
                 </form>

@@ -21,7 +21,7 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'status', 'direction', 'created_at', 'updated_at'
+        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'min_fee_amount', 'status', 'direction', 'created_at', 'updated_at'
     ];
 
     /**
@@ -46,15 +46,16 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $direction Direction ('incoming' = they requested, 'outgoing' = we requested)
      * @return bool True on success
      */
-    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $status = 'accepted', string $direction = 'incoming'): bool {
-        $query = "INSERT IGNORE INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status, direction)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status, :direction)";
+    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $status = 'accepted', string $direction = 'incoming', ?int $minFeeAmount = null): bool {
+        $query = "INSERT IGNORE INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, min_fee_amount, status, direction)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :min_fee_amount, :status, :direction)";
 
         $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
             ':credit_limit' => $creditLimit,
+            ':min_fee_amount' => $minFeeAmount,
             ':status' => $status,
             ':direction' => $direction
         ]);
@@ -76,7 +77,7 @@ class ContactCurrencyRepository extends AbstractRepository {
             ':currency' => $currency
         ];
 
-        $query = "SELECT currency, fee_percent, credit_limit, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit, min_fee_amount, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
@@ -105,7 +106,7 @@ class ContactCurrencyRepository extends AbstractRepository {
     public function getContactCurrencies(string $pubkeyHash, ?string $direction = null): array {
         $params = [':pubkey_hash' => $pubkeyHash];
 
-        $query = "SELECT currency, fee_percent, credit_limit, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit, min_fee_amount, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash";
 
@@ -184,6 +185,33 @@ class ContactCurrencyRepository extends AbstractRepository {
     }
 
     /**
+     * Get minimum fee amount for a specific contact and currency
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code
+     * @return int|null Minimum fee amount in minor units, or null if not set
+     */
+    public function getMinFeeAmount(string $pubkeyHash, string $currency): ?int {
+        $query = "SELECT min_fee_amount FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency
+        ]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result && $result['min_fee_amount'] !== null) {
+            return (int) $result['min_fee_amount'];
+        }
+        return null;
+    }
+
+    /**
      * Get fee percent for a specific contact and currency
      *
      * @param string $pubkeyHash Contact's public key hash
@@ -232,7 +260,7 @@ class ContactCurrencyRepository extends AbstractRepository {
         ];
 
         foreach ($fields as $field => $value) {
-            if (in_array($field, ['fee_percent', 'credit_limit', 'status'], true)) {
+            if (in_array($field, ['fee_percent', 'credit_limit', 'min_fee_amount', 'status'], true)) {
                 $setClauses[] = "{$field} = :{$field}";
                 $params[":{$field}"] = $value;
             }
@@ -265,18 +293,20 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $direction Direction ('incoming' or 'outgoing')
      * @return bool True on success
      */
-    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $direction = 'incoming'): bool {
-        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, direction)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :direction)
+    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $direction = 'incoming', ?int $minFeeAmount = null): bool {
+        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, min_fee_amount, direction)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :min_fee_amount, :direction)
                   ON DUPLICATE KEY UPDATE
                   fee_percent = VALUES(fee_percent),
-                  credit_limit = VALUES(credit_limit)";
+                  credit_limit = VALUES(credit_limit)" .
+                  ($minFeeAmount !== null ? ", min_fee_amount = VALUES(min_fee_amount)" : "");
 
         $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
             ':credit_limit' => $creditLimit,
+            ':min_fee_amount' => $minFeeAmount,
             ':direction' => $direction
         ]);
 
@@ -333,7 +363,7 @@ class ContactCurrencyRepository extends AbstractRepository {
     public function getPendingCurrencies(string $pubkeyHash, ?string $direction = null): array {
         $params = [':pubkey_hash' => $pubkeyHash];
 
-        $query = "SELECT currency, fee_percent, credit_limit, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit, min_fee_amount, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND status = 'pending'";
 

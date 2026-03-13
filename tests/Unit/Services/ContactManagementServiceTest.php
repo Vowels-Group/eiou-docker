@@ -22,6 +22,8 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Contracts\SyncTriggerInterface;
 
 #[CoversClass(ContactManagementService::class)]
 class ContactManagementServiceTest extends TestCase
@@ -35,6 +37,8 @@ class ContactManagementServiceTest extends TestCase
     private UserContext $currentUser;
     private ContactCreditRepository $contactCreditRepo;
     private ContactCurrencyRepository $contactCurrencyRepo;
+    private RepositoryFactory $repositoryFactory;
+    private SyncTriggerInterface $syncTrigger;
     private ContactManagementService $service;
 
     protected function setUp(): void
@@ -46,6 +50,8 @@ class ContactManagementServiceTest extends TestCase
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->inputValidator = new InputValidator();
         $this->currentUser = $this->createMock(UserContext::class);
+        $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->syncTrigger = $this->createMock(SyncTriggerInterface::class);
 
         $this->utilityContainer->method('getTransportUtility')
             ->willReturn($this->transportUtility);
@@ -53,17 +59,27 @@ class ContactManagementServiceTest extends TestCase
         $this->contactCreditRepo = $this->createMock(ContactCreditRepository::class);
         $this->contactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
 
+        $this->repositoryFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                if ($class === ContactCreditRepository::class) {
+                    return $this->contactCreditRepo;
+                }
+                if ($class === ContactCurrencyRepository::class) {
+                    return $this->contactCurrencyRepo;
+                }
+                return $this->createMock($class);
+            });
+
         $this->service = new ContactManagementService(
             $this->contactRepo,
             $this->addressRepo,
             $this->balanceRepo,
             $this->utilityContainer,
             $this->inputValidator,
-            $this->currentUser
+            $this->currentUser,
+            $this->repositoryFactory,
+            $this->syncTrigger
         );
-
-        $this->service->setContactCreditRepository($this->contactCreditRepo);
-        $this->service->setContactCurrencyRepository($this->contactCurrencyRepo);
     }
 
     // =========================================================================
@@ -397,5 +413,142 @@ class ContactManagementServiceTest extends TestCase
         $result = $this->service->addCurrencyToContact($pubkey, $currency, 1.0, 100.0);
 
         $this->assertFalse($result);
+    }
+
+    // =========================================================================
+    // acceptContact() with minFeeAmount Tests
+    // =========================================================================
+
+    /**
+     * Test acceptContact passes minFeeAmount to upsertCurrencyConfig
+     */
+    public function testAcceptContactPassesMinFeeAmount(): void
+    {
+        $pubkey = 'test-pubkey-minfee';
+        $name = 'MinFeeContact';
+        $fee = 1.0;
+        $credit = 100.0;
+        $currency = 'USD';
+        $minFeeAmount = 500; // 500 cents = $5.00
+
+        $this->contactRepo->method('acceptContact')
+            ->with($pubkey, $name, $fee, $credit, $currency)
+            ->willReturn(true);
+
+        $this->balanceRepo->method('insertInitialContactBalances')
+            ->with($pubkey, $currency);
+
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('upsertCurrencyConfig')
+            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit, $this->anything(), $minFeeAmount)
+            ->willReturn(true);
+
+        $result = $this->service->acceptContact($pubkey, $name, $fee, $credit, $currency, $minFeeAmount);
+
+        $this->assertTrue($result);
+    }
+
+    /**
+     * Test acceptContact with null minFeeAmount passes null
+     */
+    public function testAcceptContactWithNullMinFeeAmount(): void
+    {
+        $pubkey = 'test-pubkey-nominfee';
+        $name = 'NoMinFeeContact';
+        $fee = 2.0;
+        $credit = 200.0;
+        $currency = 'EUR';
+
+        $this->contactRepo->method('acceptContact')
+            ->with($pubkey, $name, $fee, $credit, $currency)
+            ->willReturn(true);
+
+        $this->balanceRepo->method('insertInitialContactBalances')
+            ->with($pubkey, $currency);
+
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('upsertCurrencyConfig')
+            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit, $this->anything(), null)
+            ->willReturn(true);
+
+        $result = $this->service->acceptContact($pubkey, $name, $fee, $credit, $currency);
+
+        $this->assertTrue($result);
+    }
+
+    // =========================================================================
+    // addCurrencyToContact() with minFeeAmount Tests
+    // =========================================================================
+
+    /**
+     * Test addCurrencyToContact passes minFeeAmount to insertCurrencyConfig
+     */
+    public function testAddCurrencyToContactWithMinFeeAmount(): void
+    {
+        $pubkey = 'accepted-pubkey-minfee';
+        $currency = 'GBP';
+        $fee = 1.5;
+        $credit = 150.0;
+        $minFeeAmount = 200; // 200 pence = £2.00
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactRepo->method('isAcceptedContactPubkey')
+            ->with($pubkey)
+            ->willReturn(true);
+
+        $this->contactCurrencyRepo->method('hasCurrency')
+            ->with($pubkeyHash, $currency)
+            ->willReturn(false);
+
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('insertCurrencyConfig')
+            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit, $this->anything(), $this->anything(), $minFeeAmount);
+
+        $this->balanceRepo->expects($this->once())
+            ->method('insertInitialContactBalances')
+            ->with($pubkey, $currency);
+
+        $this->contactCreditRepo->expects($this->once())
+            ->method('createInitialCredit')
+            ->with($pubkey, $currency);
+
+        $result = $this->service->addCurrencyToContact($pubkey, $currency, $fee, $credit, $minFeeAmount);
+
+        $this->assertTrue($result);
+    }
+
+    /**
+     * Test addCurrencyToContact defaults minFeeAmount to null
+     */
+    public function testAddCurrencyToContactDefaultsMinFeeAmountToNull(): void
+    {
+        $pubkey = 'accepted-pubkey-default';
+        $currency = 'JPY';
+        $fee = 3.0;
+        $credit = 500.0;
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+
+        $this->contactRepo->method('isAcceptedContactPubkey')
+            ->with($pubkey)
+            ->willReturn(true);
+
+        $this->contactCurrencyRepo->method('hasCurrency')
+            ->with($pubkeyHash, $currency)
+            ->willReturn(false);
+
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('insertCurrencyConfig')
+            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit, $this->anything(), $this->anything(), null);
+
+        $this->balanceRepo->method('insertInitialContactBalances');
+        $this->contactCreditRepo->method('createInitialCredit');
+
+        $result = $this->service->addCurrencyToContact($pubkey, $currency, $fee, $credit);
+
+        $this->assertTrue($result);
     }
 }

@@ -67,7 +67,7 @@ function getContactCreditTableSchema() {
     )";
 }
 
-// Contact Currencies table - per-contact currency configuration (fee, credit limit)
+// Contact Currencies table - per-contact currency configuration (fee, credit limit, min fee amount)
 function getContactCurrenciesTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contact_currencies (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -75,6 +75,7 @@ function getContactCurrenciesTableSchema() {
         currency VARCHAR(10) NOT NULL,
         fee_percent INT NOT NULL,
         credit_limit BIGINT DEFAULT NULL,
+        min_fee_amount BIGINT DEFAULT NULL,
         status ENUM('accepted', 'pending', 'blocked') DEFAULT 'pending',
         direction ENUM('incoming', 'outgoing') DEFAULT 'incoming',
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,

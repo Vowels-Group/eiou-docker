@@ -432,6 +432,7 @@ balanceTest
 sendAllPeersTest
 routingTest
 contactListTest
+contactMinFeeTest
 contactNameTest
 transactionTestSuite
 negativeFinancialTest
@@ -473,6 +474,7 @@ balanceTest
 TESTS_CONTACTS="
 addContactsTest
 contactListTest
+contactMinFeeTest
 contactNameTest
 pingTestSuite
 "

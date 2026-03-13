@@ -45,16 +45,18 @@ class CliHelpService
             ],
             'add' => [
                 'description' => 'Add a new contact or accept an incoming contact request',
-                'usage' => 'add [address] [name] [fee] [credit] [currency]',
+                'usage' => 'add [address] [name] [fee] [credit] [currency] ([minfee])',
                 'arguments' => [
                     'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor .onion)'],
                     'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)']
+                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
+                    'minfee' => ['type' => 'optional', 'description' => 'Minimum fee amount for this contact/currency (e.g., 0.01). Falls back to global default if omitted.']
                 ],
                 'examples' => [
-                    'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact',
+                    'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact (uses default min fee)',
+                    'add http://bob:8080 Bob 1.0 100 USD 0.05' => 'Add with custom min fee amount',
                     'add http://bob:8080 "Jane Doe" 1.0 100 USD' => 'Add with a multi-word name',
                     'add abc123...onion Alice 0.5 500 USD' => 'Add via Tor address',
                     'add http://charlie:8080 Charlie 1 200 USD --json' => 'JSON output'
@@ -88,23 +90,24 @@ class CliHelpService
                 'note' => 'Shows name, status, addresses, public key, balance (received/sent/net), fee percentage, credit limit, your available credit with them (from pong, ~5 min refresh), and their available credit with you (calculated).'
             ],
             'update' => [
-                'description' => 'Update contact settings (name, fee, credit limit, or all at once)',
-                'usage' => 'update [address/name] [name/fee/credit/all] [values...] [currency]',
+                'description' => 'Update contact settings (name, fee, credit limit, min fee, or all at once)',
+                'usage' => 'update [address/name] [name/fee/credit/minfee/all] [values...] [currency]',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Contact address or display name'],
-                    'field' => ['type' => 'required', 'description' => 'Field to update: name, fee, credit, or all'],
+                    'field' => ['type' => 'required', 'description' => 'Field to update: name, fee, credit, minfee, or all'],
                     'values' => ['type' => 'required', 'description' => 'New value(s) for the field(s)'],
-                    'currency' => ['type' => 'required for fee/credit', 'description' => 'Currency code (e.g., USD, EUR). Optional for "all" (defaults to contact\'s current currency)']
+                    'currency' => ['type' => 'required for fee/credit/minfee', 'description' => 'Currency code (e.g., USD, EUR). Optional for "all" (defaults to contact\'s current currency)']
                 ],
                 'examples' => [
                     'update Bob name Robert' => 'Rename contact',
                     'update Bob fee 1.5 USD' => 'Change fee percentage for USD',
                     'update Bob credit 500 EUR' => 'Change credit limit for EUR',
-                    'update Bob all NewName 2.0 1000 USD' => 'Update all fields at once for USD',
+                    'update Bob minfee 0.05 USD' => 'Change minimum fee amount for USD',
+                    'update Bob all NewName 2.0 1000 USD 0.05' => 'Update all fields at once for USD',
                     'update Bob all NewName 2.0 1000' => 'Update all (currency defaults to contact\'s)',
                     'update http://bob:8080 fee 2.0 USD --json' => 'Update by address with JSON output'
                 ],
-                'note' => 'Changes are local only — the contact is not notified. Fee percentage controls what you charge for relaying transactions through you for this contact. Credit limit is the maximum amount you allow this contact to owe you. Currency is required for fee and credit updates to specify which currency\'s settings to modify.'
+                'note' => 'Changes are local only — the contact is not notified. Fee percentage controls what you charge for relaying transactions through you for this contact. Credit limit is the maximum amount you allow this contact to owe you. Minimum fee amount is the minimum fee charged per transaction for this contact/currency (falls back to global default if not set). Currency is required for fee, credit, and minfee updates.'
             ],
             'block' => [
                 'description' => 'Block a contact from sending transactions to you',
@@ -281,7 +284,7 @@ class CliHelpService
                 'available_settings' => [
                     // Transaction Settings
                     'defaultCurrency' => 'Default currency code (e.g., USD)',
-                    'minFee' => 'Minimum fee amount (e.g., 0.01)',
+                    'minFee' => 'Default minimum fee amount - fallback when no per-contact minimum fee is set (e.g., 0.01)',
                     'defaultFee' => 'Default fee percentage for transactions (e.g., 1.0)',
                     'maxFee' => 'Maximum fee percentage (e.g., 5.0)',
                     'defaultCreditLimit' => 'Default credit limit for new contacts (e.g., 100)',

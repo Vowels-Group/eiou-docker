@@ -73,6 +73,7 @@ class ContactController
         $fee = $_POST['fee'] ?? '';
         $credit = $_POST['credit'] ?? '';
         $currency = $_POST['currency'] ?? '';
+        $minFeeAmount = $_POST['minFeeAmount'] ?? '';
 
         if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
             $message = 'All fields are required';
@@ -121,7 +122,17 @@ class ContactController
             $currency = $currencyValidation['value'];
 
             // Create argv array with --json flag for structured output
-            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency, '--json'];
+            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
+            // Add min fee amount if provided (optional per-currency minimum fee)
+            if ($minFeeAmount !== '') {
+                $minFeeValidation = InputValidator::validateAmountFee($minFeeAmount);
+                if (!$minFeeValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid minimum fee amount: ' . $minFeeValidation['error'], 'error');
+                    return;
+                }
+                $argv[] = $minFeeValidation['value'];
+            }
+            $argv[] = '--json';
 
             // Create CliOutputManager with JSON mode enabled
             CliOutputManager::resetInstance();
@@ -479,6 +490,7 @@ class ContactController
         $contactFee = $_POST['contact_fee'] ?? '';
         $contactCredit = $_POST['contact_credit'] ?? '';
         $contactCurrency = $_POST['contact_currency'] ?? '';
+        $contactMinFee = $_POST['contact_min_fee'] ?? '';
 
         if (empty($contactAddress) || empty($contactName) || $contactFee === '' || $contactCredit === '' || empty($contactCurrency)) {
             $message = 'All fields are required to edit a contact';
@@ -553,10 +565,24 @@ class ContactController
                         $feeMinor = (int) ($contactFee * Constants::FEE_CONVERSION_FACTOR);
                         $creditMinor = (int) ($contactCredit * Constants::getConversionFactor($contactCurrency));
 
-                        $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
+                        $updateFields = [
                             'fee_percent' => $feeMinor,
                             'credit_limit' => $creditMinor,
-                        ]);
+                        ];
+
+                        // Handle min fee amount - empty string means use default (null)
+                        if ($contactMinFee !== '') {
+                            $minFeeValidation = InputValidator::validateAmountFee($contactMinFee);
+                            if (!$minFeeValidation['valid']) {
+                                MessageHelper::redirectMessage('Invalid min fee amount: ' . $minFeeValidation['error'], 'error');
+                                return;
+                            }
+                            $updateFields['min_fee_amount'] = (int) ($minFeeValidation['value'] * Constants::getConversionFactor($contactCurrency));
+                        } else {
+                            $updateFields['min_fee_amount'] = null;
+                        }
+
+                        $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, $updateFields);
 
                         $message = 'Contact updated successfully';
                         $messageType = 'success';

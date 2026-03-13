@@ -701,6 +701,9 @@ class ApiController {
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
                         'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'min_fee_amount' => isset($c['min_fee_amount']) && $c['min_fee_amount'] !== null
+                            ? $c['min_fee_amount'] / Constants::getConversionFactor($c['currency'])
+                            : null,
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -909,8 +912,12 @@ class ApiController {
                 (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
                 (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
                 $data['currency'] ?? 'USD',              // $data[6] - currency
-                '--json'                                 // Enable JSON output mode
             ];
+            // Add min_fee_amount if provided (optional per-currency minimum fee)
+            if (isset($data['min_fee_amount'])) {
+                $argv[] = (string) $data['min_fee_amount']; // $data[7] - min fee amount
+            }
+            $argv[] = '--json';                          // Enable JSON output mode
 
             // Create a fresh CliOutputManager instance with JSON mode
             CliOutputManager::resetInstance();
@@ -1130,17 +1137,20 @@ class ApiController {
             if (isset($data['credit_limit'])) {
                 $updatedData['credit_limit'] = $data['credit_limit'];
             }
+            if (isset($data['min_fee_amount'])) {
+                $updatedData['min_fee_amount'] = $data['min_fee_amount'];
+            }
             if (isset($data['currency'])) {
                 $updatedData['currency'] = $data['currency'];
             }
 
-            if (empty($updateFields) && !isset($data['fee_percent']) && !isset($data['credit_limit'])) {
+            if (empty($updateFields) && !isset($data['fee_percent']) && !isset($data['credit_limit']) && !isset($data['min_fee_amount'])) {
                 return $this->errorResponse('No fields to update', 400, 'no_fields');
             }
 
-            // Require currency when updating fee or credit
-            if ((isset($data['fee_percent']) || isset($data['credit_limit'])) && !isset($data['currency'])) {
-                return $this->errorResponse('Currency is required when updating fee_percent or credit_limit', 400, 'missing_currency');
+            // Require currency when updating fee, credit, or min_fee_amount
+            if ((isset($data['fee_percent']) || isset($data['credit_limit']) || isset($data['min_fee_amount'])) && !isset($data['currency'])) {
+                return $this->errorResponse('Currency is required when updating fee_percent, credit_limit, or min_fee_amount', 400, 'missing_currency');
             }
 
             // Update name in contacts table if provided
@@ -1150,8 +1160,8 @@ class ApiController {
             }
 
             if ($contactUpdateOk) {
-                // Update fee/credit in contact_currencies table
-                if (isset($data['currency']) && (isset($data['fee_percent']) || isset($data['credit_limit']))) {
+                // Update fee/credit/min_fee_amount in contact_currencies table
+                if (isset($data['currency']) && (isset($data['fee_percent']) || isset($data['credit_limit']) || isset($data['min_fee_amount']))) {
                     $contactCurrencyRepo = $this->services->getRepositoryFactory()->get(ContactCurrencyRepository::class);
                     $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                     $currencyFields = [];
@@ -1160,6 +1170,9 @@ class ApiController {
                     }
                     if (isset($data['credit_limit'])) {
                         $currencyFields['credit_limit'] = (int) ($data['credit_limit'] * Constants::getConversionFactor($data['currency']));
+                    }
+                    if (isset($data['min_fee_amount'])) {
+                        $currencyFields['min_fee_amount'] = (int) ($data['min_fee_amount'] * Constants::getConversionFactor($data['currency']));
                     }
                     if (!empty($currencyFields)) {
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);
@@ -1364,7 +1377,7 @@ class ApiController {
             'settings' => [
                 'name' => $currentUser->getName(),
                 'default_currency' => $currentUser->getDefaultCurrency(),
-                'minimum_fee_amount' => $currentUser->getMinimumFee(),
+                'default_minimum_fee_amount' => $currentUser->getMinimumFee(),
                 'default_fee_percent' => $currentUser->getDefaultFee(),
                 'maximum_fee_percent' => $currentUser->getMaxFee(),
                 'default_credit_limit' => $currentUser->getDefaultCreditLimit(),
@@ -1443,7 +1456,7 @@ class ApiController {
             'default_fee' => ['key' => 'defaultFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
             'default_credit_limit' => ['key' => 'defaultCreditLimit', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
             'default_currency' => ['key' => 'defaultCurrency', 'validate' => 'validateCurrency', 'config' => 'defaultconfig.json'],
-            'min_fee' => ['key' => 'minFee', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
+            'default_min_fee' => ['key' => 'minFee', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
             'max_fee' => ['key' => 'maxFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
             'max_p2p_level' => ['key' => 'maxP2pLevel', 'validate' => 'validateRequestLevel', 'config' => 'defaultconfig.json'],
             'p2p_expiration' => ['key' => 'p2pExpiration', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
