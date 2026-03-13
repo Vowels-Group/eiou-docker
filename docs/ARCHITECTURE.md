@@ -2814,6 +2814,10 @@ indistinguishable on the wire. Encryption happens in `TransportUtilityService::s
 **Excluded from encryption:**
 - `create` (contact requests) — recipient may not be a contact yet (no public key)
 
+**Stripped before signing/sending** (private metadata, never sent to remote):
+- `senderAddress`, `senderAddresses`, `senderPublicKey` — transport envelope fields, added at top level
+- `_contact_params` — fee/credit/name values for contact requests, stored locally for delivery retries only
+
 **Graceful cleartext fallback** (recipient public key unavailable):
 - Transaction inquiry to P2P end-recipient — not necessarily a direct contact
 - Contact acceptance inquiry to pending contacts — public key not yet known

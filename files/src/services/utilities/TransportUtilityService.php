@@ -828,6 +828,11 @@ class TransportUtilityService implements TransportServiceInterface
         $description = $messageContent['description'] ?? null;
         unset($messageContent['description']);
 
+        // Remove _contact_params from signed/sent content - private retry metadata
+        // containing fee/credit values that should not be leaked to the remote node.
+        // These params are preserved in the locally stored payload for retry delivery.
+        unset($messageContent['_contact_params']);
+
         // Capture debug info before encryption hides the fields
         $messageType = $messageContent['type'] ?? '';
         $txidForLog = $messageContent['txid'] ?? 'unknown';

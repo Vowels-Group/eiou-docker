@@ -24,7 +24,11 @@ The project is currently in **ALPHA** status.
 - Standardize branding: rename "EIOU" to "eIOU" in all prose text across 58 files (docs, comments, configs, tests). Preserves uppercase in code values (currency codes, SSL cert fields, PHP namespaces)
 - Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 
+### Security
+- Strip `_contact_params` (fee, credit, name values) from contact request payloads before signing and sending. These private values were previously included in the signed message content and transmitted to the remote node, leaking the sender's fee/credit configuration. Now stored locally only for delivery retry purposes
+
 ### Fixed
+- Fix contact transaction sync failure on wallet restore: contact request transactions were signed with `_contact_params` included in the message, but `reconstructContactSignedMessage()` did not include these fields, causing signature verification to fail during sync. Stripping `_contact_params` before signing aligns the signed content with the reconstruction
 - Fix integration and unit test failures from ARCH-05 RepositoryFactory migration: update all shell test scripts and PHPUnit tests to use `getRepositoryFactory()->get()` instead of removed direct repository getters on `ServiceContainer`
 - Fix garbled namespace in `addContactsTest.sh` (`\\Eiou\\Core\\\Eiou\Core\Application` → `\Eiou\Core\Application`)
 - Fix `curlErrorHandlingTest.sh` timeout expectations to match current constants (TOR_TRANSPORT_TIMEOUT: 45s, TOR_CONNECT_TIMEOUT: 20s) and grep patterns to match `DELIVERY_ERROR` constant
