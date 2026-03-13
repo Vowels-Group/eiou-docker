@@ -134,6 +134,37 @@ body {
     margin-top: 0.25rem;
 }
 
+.alpha-details {
+    margin-top: 0.5rem;
+    text-align: left;
+}
+
+.alpha-details summary {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #e65100;
+    cursor: pointer;
+    text-align: center;
+    user-select: none;
+}
+
+.alpha-details summary:hover {
+    color: #bf360c;
+}
+
+.alpha-details-body {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #795548;
+    text-align: left;
+}
+
+.alpha-details-body p {
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+}
+
 .legal-notice {
     border: 1px solid #dee2e6;
     border-radius: 6px;

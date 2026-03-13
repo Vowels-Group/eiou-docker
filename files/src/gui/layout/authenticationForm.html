@@ -14,17 +14,44 @@
     <?php
     $warningFile = '/app/scripts/alpha-warning.txt';
     if (file_exists($warningFile)):
-        $warnLines = explode("\n", trim(file_get_contents($warningFile)));
-        $warnTitle = htmlspecialchars(trim($warnLines[0]));
-        $warnBody = [];
-        for ($w = 1; $w < count($warnLines); $w++) {
-            $l = trim($warnLines[$w]);
-            if ($l !== '') { $warnBody[] = htmlspecialchars($l); }
+        // Split file into paragraphs (separated by blank lines)
+        $warnText = trim(file_get_contents($warningFile));
+        $warnParagraphs = preg_split('/\n\s*\n/', $warnText);
+        $warnTitle = htmlspecialchars(trim($warnParagraphs[0]));
+        // Paragraphs before "IMPORTANT:" are the intro
+        $introParagraphs = [];
+        $detailParagraphs = [];
+        $foundImportant = false;
+        for ($w = 1; $w < count($warnParagraphs); $w++) {
+            $para = trim($warnParagraphs[$w]);
+            if (!$foundImportant && preg_match('/^IMPORTANT/i', $para)) {
+                $foundImportant = true;
+            }
+            if ($foundImportant) {
+                $detailParagraphs[] = $para;
+            } else {
+                $introParagraphs[] = $para;
+            }
         }
     ?>
     <div class="alpha-warning">
         <strong>&#9888; <?php echo $warnTitle; ?></strong>
-        <p><?php echo implode(' ', $warnBody); ?></p>
+        <?php foreach ($introParagraphs as $para): ?>
+            <p><?php echo htmlspecialchars($para); ?></p>
+        <?php endforeach; ?>
+        <?php if (!empty($detailParagraphs)): ?>
+        <details class="alpha-details">
+            <summary>Important</summary>
+            <div class="alpha-details-body">
+                <?php foreach ($detailParagraphs as $para):
+                    $para = preg_replace('/^IMPORTANT:\s*/i', '', $para);
+                    if (trim($para) === '') continue;
+                ?>
+                    <p><?php echo nl2br(htmlspecialchars($para)); ?></p>
+                <?php endforeach; ?>
+            </div>
+        </details>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
