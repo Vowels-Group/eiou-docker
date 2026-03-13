@@ -346,8 +346,8 @@ class VolumeEncryption
     {
         if (!function_exists('sodium_crypto_pwhash')) {
             throw new RuntimeException(
-                'php-sodium extension is required for volume encryption. '
-                . 'Install it with: apt-get install php-sodium'
+                'sodium extension is required for volume encryption '
+                . '(built into PHP 8.2+ on Debian 12)'
             );
         }
 
