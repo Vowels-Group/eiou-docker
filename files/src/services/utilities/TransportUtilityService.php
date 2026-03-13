@@ -821,14 +821,13 @@ class TransportUtilityService implements TransportServiceInterface
         unset($messageContent['senderPublicKey']);
         unset($messageContent['signature']);
 
-        // Strip description from P2P relay messages to prevent intermediaries from seeing it.
-        // For direct sends (type=send) and contact requests (type=create), description is kept
-        // in the signed content so the receiver gets it and sync can reconstruct the signature.
-        // For P2P, description is removed from signed content and added to the envelope separately.
+        // Strip description from P2P relay messages — it is never sent over P2P.
+        // The original sender stores description locally and delivers it to the end
+        // recipient via the completion inquiry message, not the relay payload.
+        // For direct sends (type=send) and contact requests (type=create), description
+        // is kept in the signed content so the receiver gets it directly.
         $messageType = $messageContent['type'] ?? '';
-        $description = null;
         if (!in_array($messageType, ['send', 'create'], true)) {
-            $description = $messageContent['description'] ?? null;
             unset($messageContent['description']);
         }
 
@@ -900,8 +899,9 @@ class TransportUtilityService implements TransportServiceInterface
 
         // Build clean payload structure:
         // - Transport metadata at top level
-        // - Message content in 'message' field (no duplication)
-        // - Description added separately (not part of signature)
+        // - Message content in 'message' field (includes description for send/create)
+        // - Description is NOT added to envelope — for P2P it's sent via inquiry,
+        //   for direct sends/contact requests it's inside the signed message content
         $envelope = [
             'senderAddress' => $payload['senderAddress'],
             'senderPublicKey' => $payload['senderPublicKey'],
@@ -909,16 +909,10 @@ class TransportUtilityService implements TransportServiceInterface
             'signature' => $base64Signature
         ];
 
-        // Add description to envelope if present (not part of signed message)
-        if ($description !== null) {
-            $envelope['description'] = $description;
-        }
-
         return [
             'envelope' => $envelope,
             'signature' => $base64Signature,
             'nonce' => $nonce,
-            'description' => $description,
             // For E2E encrypted messages, include the signed message so the sender
             // can store it for future sync signature verification. Without this,
             // signature reconstruction from plaintext DB fields would fail because

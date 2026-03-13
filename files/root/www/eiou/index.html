@@ -107,17 +107,13 @@ if (isset($messageContent['encrypted']) && is_array($messageContent['encrypted']
 
 // Build the full request by merging transport metadata with message content
 // This provides backward compatibility with services expecting senderAddress/senderPublicKey/signature
-// For direct messages (send/create), description is in the signed message content.
-// For P2P relay messages, description may be in the envelope (sent separately for privacy).
-// Only override messageContent description if the envelope explicitly has one.
+// Description is inside the signed message content for direct sends/contact requests,
+// and never sent for P2P (delivered via completion inquiry instead).
 $request = array_merge($messageContent, [
     'signature' => $envelope['signature'],
     'senderAddress' => $envelope['senderAddress'],
     'senderPublicKey' => $envelope['senderPublicKey'],
 ]);
-if (isset($envelope['description']) && $envelope['description'] !== null) {
-    $request['description'] = $envelope['description'];
-}
 
 // Route based on the type from message content
 $type = $messageContent['type'] ?? null;
