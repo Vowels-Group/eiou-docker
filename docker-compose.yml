@@ -176,6 +176,33 @@ services:
       # - EIOU_TOR_TIMEOUT=120
 
       # -----------------------------------------------------------------------
+      # DATA-AT-REST ENCRYPTION
+      # -----------------------------------------------------------------------
+      # MariaDB Transparent Data Encryption (TDE) is enabled automatically
+      # after the wallet is generated. All database files (transactions,
+      # contacts, balances) are encrypted at rest using a key derived from
+      # the master encryption key. No configuration required.
+      #
+      # OPTIONAL: Volume key for additional hardening
+      # For high-security or hosted environments with external secrets
+      # management (Vault, Kubernetes secrets, Docker Swarm secrets), you
+      # can add a passphrase that encrypts the master key itself on the
+      # config volume. The secrets manager injects the passphrase on every
+      # container start.
+      #
+      # EIOU_VOLUME_KEY_FILE (recommended — not visible in docker inspect)
+      # Path to a file containing the passphrase. Use with a volume mount:
+      #   volumes:
+      #     - /secure/path/volume-key.txt:/volume-key:ro
+      #   environment:
+      #     - EIOU_VOLUME_KEY_FILE=/volume-key
+      # - EIOU_VOLUME_KEY_FILE=/volume-key
+      #
+      # EIOU_VOLUME_KEY (convenient but less secure)
+      # Passphrase as environment variable. Visible in docker inspect output.
+      # - EIOU_VOLUME_KEY=your-strong-passphrase-here
+
+      # -----------------------------------------------------------------------
       # FEATURE FLAGS (optional)
       # -----------------------------------------------------------------------
 

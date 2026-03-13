@@ -130,8 +130,58 @@ eIOU containers persist critical data in Docker volumes. Loss of these volumes m
 | Volume | Contains | Backup Priority |
 |--------|----------|-----------------|
 | `{node}-mysql-data` | Transactions, contacts, balances | Critical |
-| `{node}-files` | Wallet private keys, encryption keys, configuration | Critical |
+| `{node}-config` | Wallet private keys, encryption keys, configuration | Critical |
 | `{node}-backups` | AES-256-GCM encrypted database backups | Critical |
+
+#### Data-at-Rest Encryption
+
+On a shared server hosting multiple nodes, the server operator has root access to all Docker volumes. eIOU protects volume data with multiple encryption layers:
+
+**MariaDB Transparent Data Encryption (TDE) — enabled by default**
+
+All database files (transactions, contacts, balances, redo logs, temp tables) are encrypted at rest using MariaDB's `file_key_management` plugin. The TDE key is derived from the master encryption key and stored only in `/dev/shm` (RAM) during runtime.
+
+This means the raw MySQL data files on the `mysql-data` Docker volume are encrypted. Even if the host operator reads the volume directly, they see only ciphertext. TDE is enabled automatically after wallet generation — no configuration required.
+
+**What the host sees on volumes:**
+
+| Volume | Without TDE | With TDE (default) |
+|--------|-------------|---------------------|
+| `mysql-data` | Plaintext database files | Encrypted database files |
+| `config` | `.master.key` (32 bytes, 0600 perms), encrypted private keys, encrypted seed | Same |
+| `backups` | AES-256-GCM encrypted backups | Same |
+
+The remaining attack surface is the master key file on the config volume. It is a single 32-byte file with `0600` permissions. Combined with Docker user namespace remapping (see below), locating and reading this file becomes non-trivial.
+
+**Optional: Volume key for additional hardening**
+
+For high-security or hosted environments with external secrets management infrastructure (HashiCorp Vault, Kubernetes secrets, Docker Swarm secrets), you can add a passphrase that encrypts the master key itself on the config volume. The secrets manager injects the passphrase on every container start.
+
+```bash
+# Method 1: File-based passphrase (recommended — not visible in docker inspect)
+echo "your-strong-passphrase" > /secure/path/volume-key.txt
+chmod 600 /secure/path/volume-key.txt
+
+# In docker-compose.yml:
+#   volumes:
+#     - /secure/path/volume-key.txt:/volume-key:ro
+#   environment:
+#     - EIOU_VOLUME_KEY_FILE=/volume-key
+
+# Method 2: Environment variable (less secure — visible in docker inspect)
+#   environment:
+#     - EIOU_VOLUME_KEY=your-strong-passphrase
+```
+
+When the volume key is set, the master key on the config volume is encrypted with Argon2id + AES-256-GCM. The plaintext master key exists only in `/dev/shm` (RAM) during runtime. If the passphrase is lost, the only recovery path is restoring from the 24-word seed phrase.
+
+**Host-level protections (defense in depth):**
+
+| Layer | Protection | How |
+|-------|-----------|-----|
+| LUKS volumes | Full disk encryption per node | Create LUKS-encrypted partitions/files, mount as Docker volumes |
+| User namespaces | UID remapping — host sees unprivileged UIDs | Set `userns-remap` in Docker daemon config |
+| Secrets management | External key injection at boot | Docker Swarm secrets, HashiCorp Vault, AWS KMS |
 
 **Recommendations:**
 
@@ -139,6 +189,7 @@ eIOU containers persist critical data in Docker volumes. Loss of these volumes m
 - Store volume backups on separate physical media or secure remote storage
 - Test backup restoration periodically to verify integrity
 - Use Docker named volumes (default) rather than bind mounts for production data to benefit from Docker's volume management
+- Enable volume encryption (`EIOU_VOLUME_KEY`) on any server where the host operator should not have access to node data
 
 ### Network Security
 
@@ -309,6 +360,8 @@ eIOU Docker implements security at multiple layers. This section provides a brie
 | Signing keys | secp256k1 (ECDSA) | Message signing and identity verification |
 | Tor identity | Ed25519 | Hidden service authentication (derived from secp256k1 keys) |
 | Master encryption key | HKDF-SHA256 from BIP39 seed | Deterministic master key for at-rest encryption. Recoverable via seed phrase restore |
+| Volume encryption | Argon2id + AES-256-GCM | Passphrase-based protection of master key at rest (optional, for shared servers) |
+| Database encryption | MariaDB TDE (file_key_management) | Transparent data-at-rest encryption for all database tables and logs |
 | Private key storage | AES-256-GCM | Encryption at rest for private keys, auth codes, and mnemonics |
 | Backup encryption | AES-256-GCM | Encrypted MariaDB database backups |
 | Payload E2E encryption | ECDH + AES-256-GCM | End-to-end encryption for **all** contact message payloads. Uses ephemeral key pairs for forward secrecy. Encrypt-then-sign design allows signature verification without decryption |
@@ -379,6 +432,7 @@ The following are known security limitations of the current alpha release.
 | Self-signed certificates by default | Default TLS configuration uses self-signed certificates, which do not provide server identity verification. Let's Encrypt support is available for browser-trusted certificates (see [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md) SSL section) |
 | Single-container architecture | Each node runs all services (web server, database, Tor, processors) in a single container; while each service drops to its own user, there is no inter-service network isolation |
 | No HSM support | Private keys are stored encrypted on disk rather than in a hardware security module |
+| Host access to volumes | Database files are TDE-encrypted by default, but the master key file (32 bytes) remains on the config volume. Use `EIOU_VOLUME_KEY` + Docker user namespace remapping for additional protection |
 | No multi-factor authentication | API access relies on HMAC-SHA256 key-based authentication without a second factor |
 | Seed phrase is the single root of trust | Compromise of the 24-word seed phrase grants full control over the wallet, Tor identity, and backup decryption |
 

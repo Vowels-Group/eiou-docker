@@ -106,6 +106,7 @@ RUN apt-get update && apt-get install -y \
     php-fpm \
     php-mbstring \
     php-mysql \
+    php-sodium \
     php-xml \
     tini \
     tor \
