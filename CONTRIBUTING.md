@@ -1,10 +1,6 @@
 # Contributing to eIOU Docker
 
-**Note: eIOU Docker is not currently accepting external contributions.** This document is a template for future use when the project opens to community contributions.
-
----
-
-Thank you for your interest in contributing to eIOU Docker. This project is in ALPHA status and we welcome contributions that improve reliability, expand test coverage, and strengthen the codebase.
+Thank you for your interest in contributing to eIOU Docker. This project is in **open alpha** and we welcome contributions that improve reliability, expand test coverage, and strengthen the codebase.
 
 This guide covers everything you need to get started: setting up your development environment, understanding the codebase, writing and running tests, and submitting pull requests.
 
@@ -46,7 +42,7 @@ A formal Code of Conduct will be added to this repository. In the meantime, all 
 |-----------|--------------|
 | `dom` | PHPUnit XML parsing |
 | `mbstring` | String handling |
-| `sodium` | Cryptographic operations (Tor key derivation) |
+| `sodium` | Cryptographic operations (Tor key derivation, encryption) |
 | `openssl` | Key encryption, BIP39 tests |
 
 **Ubuntu/Debian:**
@@ -79,16 +75,16 @@ cd files && composer test
 
 ```bash
 # Start a single node for development
-docker-compose -f docker-compose-single.yml up -d --build
+docker compose up -d --build
 
 # Verify the container is running
 sleep 10 && docker ps | grep eiou
 
 # View logs
-docker-compose -f docker-compose-single.yml logs -f
+docker compose logs -f
 
 # Stop and remove data
-docker-compose -f docker-compose-single.yml down -v
+docker compose down -v
 ```
 
 ### Repository Structure
@@ -98,29 +94,31 @@ eiou-docker/
   files/src/              PHP application source
     api/                  REST API controllers
     cli/                  CLI interface (eiou command)
+    contracts/            Service interfaces
     core/                 Application, UserContext, Wallet, Constants
     config/               DI container configuration
-    database/             PDO, schema, migrations, query builder
-    exceptions/           ServiceException hierarchy
+    database/             PDO, schema, repositories, query builder
     events/               EventDispatcher, SyncEvents
+    exceptions/           ServiceException hierarchy
     formatters/           Output formatting
+    gui/                  Web GUI controllers, views, helpers
     processors/           Background message processors
+    schemas/              Message payload schemas
     security/             BIP39, encryption, Tor key derivation
     services/             Business logic (ServiceContainer, all services)
-    gui/                  Web GUI controllers, views, helpers
-    schemas/              Message payload schemas
+    startup/              Startup sequence helpers
     utils/                Input validation, logging, security utilities
   tests/
-    Unit/                 PHPUnit tests (2900+ tests)
+    Unit/                 PHPUnit tests (3700+ tests across 137 test classes)
     testfiles/            Integration test scripts
     run-all-tests.sh      Integration test runner
     phpunit.xml.dist      PHPUnit configuration template
     bootstrap.php         Test environment setup
   startup.sh              Container entrypoint
-  eiou.dockerfile          Docker build file
-  docker-compose-*.yml    Network topology configurations
+  eiou.dockerfile         Multi-stage Docker build file
+  docker-compose.yml      Default single-node configuration
   docs/                   Technical documentation
-  scripts/                Helper scripts
+  scripts/                Helper scripts (banners, SSL, base image checks)
 ```
 
 ### Base Image Maintenance
@@ -156,16 +154,16 @@ FROM debian:12-slim@sha256:<new-digest>
 Create a new branch for each change. Branch names should follow this format:
 
 ```
-eiou-docker-<type>-<issue>-<description>
+eiou-docker-<type>-<description>
 ```
 
-Include the issue number when the branch relates to a GitHub issue. The description is optional but recommended for clarity.
+Include the issue number when the branch relates to a GitHub issue.
 
 | Type | Use For | Example |
 |------|---------|---------|
 | `feature` | New functionality | `eiou-docker-feature-580-node-identity` |
 | `fix` | Bug fixes | `eiou-docker-fix-432-sync-timeout` |
-| `docs` | Documentation | `eiou-docker-docs-550-standard-files` |
+| `docs` | Documentation | `eiou-docker-docs-contributing-update` |
 | `refactor` | Code restructuring | `eiou-docker-refactor-562-dependency-injection` |
 | `test` | Test additions | `eiou-docker-test-555-p2p-routing` |
 
@@ -175,9 +173,6 @@ git checkout -b eiou-docker-feature-580-node-identity
 
 # Bug fix for issue #432
 git checkout -b eiou-docker-fix-432-sync-timeout
-
-# Documentation for issue #550
-git checkout -b eiou-docker-docs-550-standard-files
 
 # Branch without an issue (e.g., minor cleanup)
 git checkout -b eiou-docker-refactor-service-split
@@ -253,6 +248,12 @@ $container = ServiceContainer::getInstance();
 
 // WRONG: Do not instantiate directly
 $container = new ServiceContainer();
+```
+
+**Repository Access -- RepositoryFactory:**
+
+```php
+$contactRepo = $services->getRepositoryFactory()->get(ContactRepository::class);
 ```
 
 **Constructor Injection for Required Dependencies:**
@@ -373,7 +374,7 @@ composer test-coverage
 
 ```bash
 docker run --rm -v "$(pwd)":/app -w /app/files composer:latest install
-docker run --rm -v "$(pwd)":/app -w /app php:8.3-cli ./files/vendor/bin/phpunit --configuration tests/phpunit.xml
+docker run --rm -v "$(pwd)":/app -w /app/files php:8.3-cli vendor/bin/phpunit --configuration ../tests/phpunit.xml.dist
 ```
 
 **Writing unit tests:**
@@ -444,26 +445,19 @@ Any change to PHP source code must pass Docker container validation:
 
 ```bash
 # 1. Build and start a single node
-docker-compose -f docker-compose-single.yml up -d --build
+docker compose up -d --build
 
 # 2. Wait for startup and verify container is running
 sleep 10 && docker ps | grep eiou  # Must show "Up"
 
-# 3. Verify initialization order
-docker-compose -f docker-compose-single.yml exec eiou php -r "
-  require_once '/app/src/context/UserContext.php';
-  require_once '/app/src/services/ServiceContainer.php';
-  echo 'Initialization successful';
-"
-
-# 4. Container must remain stable for 60 seconds
+# 3. Container must remain stable for 60 seconds
 sleep 60 && docker ps | grep eiou  # Still "Up"
 
-# 5. Run full integration test suite
+# 4. Run full integration test suite
 cd tests && ./run-all-tests.sh http4
 
-# 6. Clean up
-docker-compose -f docker-compose-single.yml down -v
+# 5. Clean up
+docker compose down -v
 ```
 
 ### Coverage Requirements
@@ -485,6 +479,7 @@ docker-compose -f docker-compose-single.yml down -v
 5. `composer audit` reports no known vulnerabilities.
 6. Circular dependency check passes: `cd tests/testfiles && ./circularDependencyCheck.sh`
 7. PR is under 500 lines of changes. Split larger changes into multiple PRs.
+8. Update `CHANGELOG.md` under `## [Unreleased]` with a brief description of your change.
 
 ### PR Description Template
 
@@ -505,7 +500,6 @@ Use this template when opening a pull request:
 
 - [ ] Container starts successfully
 - [ ] Stable after 60 seconds
-- [ ] Initialization order verified
 ```
 
 ### Review Criteria
@@ -519,6 +513,7 @@ Use this template when opening a pull request:
 | Security audit | `composer audit` clean |
 | PR size | Under 500 lines (larger PRs have a 90% rejection rate) |
 | Single purpose | One PR = one logical change |
+| CHANGELOG | Updated under `## [Unreleased]` |
 
 ### After Merge
 
@@ -539,8 +534,8 @@ When filing a bug report, include:
 
 - Steps to reproduce the issue.
 - Expected behavior vs. actual behavior.
-- Docker Compose configuration used (single, 4line, 10line, cluster).
-- Relevant container logs (`docker-compose -f <config>.yml logs`).
+- Docker Compose configuration used.
+- Relevant container logs (`docker compose logs`).
 - PHP version and operating system.
 
 When requesting a feature, include:
@@ -558,12 +553,17 @@ Documentation lives in the `docs/` directory. When your changes affect user-faci
 | Document | When to Update |
 |----------|----------------|
 | [API Reference](docs/API_REFERENCE.md) | New or changed API endpoints |
+| [API Quick Reference](docs/API_QUICK_REFERENCE.md) | Summary of API endpoints |
 | [CLI Reference](docs/CLI_REFERENCE.md) | New or changed CLI commands |
+| [CLI Demo Guide](docs/CLI_DEMO_GUIDE.md) | CLI walkthrough examples |
 | [GUI Reference](docs/GUI_REFERENCE.md) | Web interface changes |
+| [GUI Quick Reference](docs/GUI_QUICK_REFERENCE.md) | Summary of GUI features |
 | [Architecture](docs/ARCHITECTURE.md) | New services, changed initialization order, dependency changes |
 | [Error Codes](docs/ERROR_CODES.md) | New error codes or changed error handling |
+| [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 | [Testing Guide](docs/TESTING.md) | New test patterns, changed test infrastructure |
 | [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | New environment variables, volume changes |
+| [Upgrade Guide](docs/UPGRADE_GUIDE.md) | Breaking changes, migration steps |
 
 Documentation style:
 
