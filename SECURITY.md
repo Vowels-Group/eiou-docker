@@ -151,11 +151,81 @@ This means the raw MySQL data files on the `mysql-data` Docker volume are encryp
 | `config` | `.master.key` (32 bytes, 0600 perms), encrypted private keys, encrypted seed | Same |
 | `backups` | AES-256-GCM encrypted backups | Same |
 
-The remaining attack surface is the master key file on the config volume. It is a single 32-byte file with `0600` permissions. Combined with Docker user namespace remapping (see below), locating and reading this file becomes non-trivial.
+The remaining attack surface is the master key file on the config volume. It is a single 32-byte file with `0600` permissions. The sections below describe additional layers that progressively reduce this exposure.
 
-**Optional: Volume key for additional hardening**
+#### Protection Layers and Threat Model
 
-For high-security or hosted environments with external secrets management infrastructure (HashiCorp Vault, Kubernetes secrets, Docker Swarm secrets), you can add a passphrase that encrypts the master key itself on the config volume. The secrets manager injects the passphrase on every container start.
+The following table shows what each protection layer defends against. Layers are cumulative — each row adds to the protection of all layers above it.
+
+| Scenario | TDE only (default) | + LUKS volumes | + userns-remap | + Volume key | + Confidential VM |
+|----------|-------------------|----------------|----------------|-------------|-------------------|
+| Container stopped, host reads volume | DB encrypted | **All data opaque** | All data opaque | All data opaque | All data opaque |
+| Container running, non-root host user reads volume | DB encrypted | Readable | **Blocked** | Blocked | Blocked |
+| Container running, host root reads volume | DB encrypted | Readable | Readable | Master key encrypted | **Blocked** |
+| Container running, host root + knows codebase | Derives TDE key from master key | Same | Same | Needs passphrase | **Blocked** |
+
+For a typical self-hosted or small hosting scenario, **TDE + LUKS + userns-remap** covers the vast majority of threats. True zero-trust hosting (protection from a determined host root during runtime) requires confidential computing hardware.
+
+#### LUKS-Encrypted Volumes
+
+LUKS (Linux Unified Key Setup) provides full-disk encryption for each node's data. When the container is stopped and the volume is locked, the host sees only an encrypted blob — completely opaque.
+
+**Setup:**
+
+```bash
+# 1. Create encrypted volume (node owner sets the passphrase)
+sudo ./scripts/create-encrypted-node.sh alice
+
+# 2. Unlock before starting (node owner provides passphrase)
+sudo ./scripts/unlock-node.sh alice
+
+# 3. Start the node using the encrypted compose file
+NODE_NAME=alice docker compose -f docker-compose-encrypted.yml up -d --build
+
+# 4. Stop and lock when done
+docker compose -f docker-compose-encrypted.yml down
+sudo ./scripts/lock-node.sh alice
+```
+
+**Security model:**
+- The hosting provider creates the volume, but the **node owner** sets the passphrase
+- While locked: host sees only `alice.luks` (encrypted file) — no data is accessible
+- While unlocked: data is transparently decrypted by dm-crypt. Host root CAN read the mounted filesystem during this time. Combine with userns-remap and volume key for defense in depth
+- Volume image location: `/srv/eiou-nodes/` (configurable via `EIOU_ENCRYPTED_DIR`)
+
+**For automated unlock in production**, consider:
+- Network-bound disk encryption (Clevis + Tang server)
+- HashiCorp Vault transit engine for remote key management
+- Kubernetes encrypted volumes with external KMS
+
+#### Docker User Namespace Remapping
+
+User namespace remapping maps container UIDs to unprivileged host UIDs. Container root (UID 0) becomes a regular unprivileged user on the host, so volume files are not owned by host root.
+
+**Setup:**
+
+```bash
+# Enable remapping (affects all containers on this Docker daemon)
+sudo ./scripts/setup-userns-remap.sh
+
+# Restart Docker for changes to take effect
+sudo systemctl restart docker
+```
+
+**Effect:**
+- Container root (UID 0) maps to host UID ~100000 (subordinate range)
+- Volume files are owned by UID 100000 on the host, not by root
+- Non-root host users cannot read the files (normal Unix permissions)
+- Host root CAN still read them (root bypasses all permissions), but casual access by other system users or processes is blocked
+
+**Caveats:**
+- Affects ALL containers on the Docker daemon, or use `--userns=host` per container to bypass
+- Existing volumes may need ownership changes after enabling
+- Some containers that require host UID 0 may need the bypass flag
+
+#### Optional: Volume Key (EIOU_VOLUME_KEY)
+
+For environments with external secrets management infrastructure (HashiCorp Vault, Kubernetes secrets, Docker Swarm secrets) that can inject a passphrase on every container start, the volume key encrypts the master key itself on the config volume.
 
 ```bash
 # Method 1: File-based passphrase (recommended — not visible in docker inspect)
@@ -173,23 +243,36 @@ chmod 600 /secure/path/volume-key.txt
 #     - EIOU_VOLUME_KEY=your-strong-passphrase
 ```
 
-When the volume key is set, the master key on the config volume is encrypted with Argon2id + AES-256-GCM. The plaintext master key exists only in `/dev/shm` (RAM) during runtime. If the passphrase is lost, the only recovery path is restoring from the 24-word seed phrase.
+When set, the master key on the config volume is encrypted with Argon2id + AES-256-GCM. The plaintext master key exists only in `/dev/shm` (RAM) during runtime. The host sees `.master.key.enc` (encrypted) instead of `.master.key` (plaintext).
 
-**Host-level protections (defense in depth):**
+**Important:** The passphrase must be provided on every container start. If the passphrase is lost and the plaintext master key no longer exists, the only recovery path is restoring from the 24-word seed phrase.
 
-| Layer | Protection | How |
-|-------|-----------|-----|
-| LUKS volumes | Full disk encryption per node | Create LUKS-encrypted partitions/files, mount as Docker volumes |
-| User namespaces | UID remapping — host sees unprivileged UIDs | Set `userns-remap` in Docker daemon config |
-| Secrets management | External key injection at boot | Docker Swarm secrets, HashiCorp Vault, AWS KMS |
+This layer is most useful when a secrets manager handles passphrase injection automatically. It is NOT recommended for manual passphrase entry on every reboot — use LUKS volumes instead for that use case.
 
-**Recommendations:**
+#### Confidential Computing (Hardware-Dependent)
+
+Confidential computing is the only way to fully protect node data from a host with root access **during runtime**. It requires specific hardware:
+
+| Technology | Hardware | What it protects | How to use with eIOU |
+|------------|----------|-----------------|----------------------|
+| AMD SEV-SNP | AMD EPYC (3rd gen+) | Encrypts all VM memory; host kernel cannot read it | Run eIOU inside a confidential VM (Azure, GCP) |
+| Intel TDX | 4th+ Gen Xeon Scalable | Same as SEV for Intel | Run eIOU inside a confidential VM |
+| Intel SGX | Various Xeon | Per-application enclaves with encrypted memory | Via Gramine or Occlum (complex integration) |
+| AWS Nitro Enclaves | AWS Nitro instances | Isolated compute environment; no host SSH/access | Run eIOU in a Nitro Enclave |
+
+For practical deployment, run each node inside a **confidential VM** on a supported cloud provider. The VM's memory is encrypted with a key the hypervisor does not have. Inside the confidential VM, run Docker normally — the VM boundary provides the hardware-enforced isolation.
+
+This is the appropriate solution when the threat model includes a malicious or compromised host operator with full root access who is actively trying to extract node data during runtime.
+
+#### Recommendations
 
 - Back up all three critical volumes regularly using the automated backup system or manual volume backup procedures documented in [DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md)
 - Store volume backups on separate physical media or secure remote storage
 - Test backup restoration periodically to verify integrity
 - Use Docker named volumes (default) rather than bind mounts for production data to benefit from Docker's volume management
-- Enable volume encryption (`EIOU_VOLUME_KEY`) on any server where the host operator should not have access to node data
+- For shared/hosted servers: enable LUKS volumes + userns-remap as a minimum
+- For high-security environments: add `EIOU_VOLUME_KEY` via a secrets manager
+- For zero-trust hosting: use confidential computing (AMD SEV, Intel TDX, or cloud provider confidential VMs)
 
 ### Network Security
 

@@ -13,6 +13,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 7. [Timeout Configuration](#timeout-configuration)
 8. [Healthcheck Configuration](#healthcheck-configuration)
 9. [Security Configuration](#security-configuration)
+   - [Data-at-Rest Encryption](#data-at-rest-encryption)
 10. [Backup and Restore](#backup-and-restore)
 11. [Troubleshooting](#troubleshooting)
 
@@ -45,6 +46,8 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | No | Balance guard for auto-accept: blocks if missing txs erase debt owed to us |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates for P2P HTTPS connections. Set to `false` for self-signed certs |
 | `P2P_CA_CERT` | (none) | No | Path to CA certificate file for P2P SSL verification |
+| `EIOU_VOLUME_KEY` | (none) | No | Passphrase for volume encryption (optional hardening layer) |
+| `EIOU_VOLUME_KEY_FILE` | (none) | No | Path to file containing volume encryption passphrase |
 
 *Required unless using Tor-only mode
 
@@ -258,6 +261,27 @@ environment:
 - Default is ON — the balance guard runs before every auto-accept
 - Set to `false` if you want truly unconditional auto-accept behavior
 - Can also be toggled per-node via CLI (`changesettings autoChainDropAcceptGuard`), GUI, or API
+
+#### EIOU_VOLUME_KEY / EIOU_VOLUME_KEY_FILE
+
+Optional passphrase for encrypting the wallet master key at rest. When set, the master key is stored encrypted on the config volume and decrypted at runtime using the passphrase. See [Data-at-Rest Encryption](#data-at-rest-encryption) for full details.
+
+```yaml
+# File-based (recommended)
+environment:
+  - EIOU_VOLUME_KEY_FILE=/run/secrets/volume_key
+
+# Or environment variable (less secure)
+environment:
+  - EIOU_VOLUME_KEY=your-strong-passphrase
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EIOU_VOLUME_KEY` | (none) | Passphrase string. Cleared from environment after reading. |
+| `EIOU_VOLUME_KEY_FILE` | (none) | Path to file containing passphrase. Takes precedence over `EIOU_VOLUME_KEY`. |
+
+> **Security Note:** The passphrase is read once at startup, stored in `/dev/shm` (RAM-only), and cleared from the environment. It is never written to disk. If both `EIOU_VOLUME_KEY_FILE` and `EIOU_VOLUME_KEY` are set, the file takes precedence.
 
 ---
 
@@ -821,6 +845,60 @@ healthcheck:
 
 ## Security Configuration
 
+### Data-at-Rest Encryption
+
+eIOU containers encrypt data at rest using multiple layers. MariaDB Transparent Data Encryption (TDE) is enabled by default and requires no configuration. An optional volume encryption passphrase provides an additional hardening layer for environments with secrets management infrastructure.
+
+#### MariaDB TDE (Default — Always On)
+
+MariaDB TDE encrypts all database table files using the `file_key_management` plugin. The encryption key is derived from the wallet's master key via `HMAC-SHA256(master_key, 'eiou-mariadb-tde')` and stored only in RAM (`/dev/shm`). No configuration is needed — TDE is set up automatically on first boot.
+
+**What it protects:** Database files on the `{node}-mysql-data` volume are encrypted. A host user who copies or inspects `.ibd` files sees ciphertext, not table data.
+
+**Limitation:** The TDE key is derived from the master key stored on the `{node}-config` volume. A host user with access to both volumes could theoretically derive the TDE key. For stronger isolation, add the volume encryption passphrase or use LUKS-encrypted volumes.
+
+#### EIOU_VOLUME_KEY / EIOU_VOLUME_KEY_FILE (Optional)
+
+An optional passphrase that encrypts the master key itself. When set, the master key is stored encrypted on disk and can only be decrypted at runtime with the passphrase. The passphrase is held in RAM only (`/dev/shm`) and never written to disk.
+
+**Method 1: File-based (RECOMMENDED)**
+
+More secure as the passphrase is not visible in process listings or environment variable dumps.
+
+```yaml
+environment:
+  - EIOU_VOLUME_KEY_FILE=/run/secrets/volume_key
+secrets:
+  volume_key:
+    file: ./secrets/volume-key.txt
+```
+
+Or with Docker Compose bind mount:
+
+```yaml
+environment:
+  - EIOU_VOLUME_KEY_FILE=/secrets/volume_key
+volumes:
+  - /secure/location/volume-key.txt:/secrets/volume_key:ro
+```
+
+**Method 2: Environment variable**
+
+Convenient for development but less secure — visible in process listings and `docker inspect`.
+
+```yaml
+environment:
+  - EIOU_VOLUME_KEY=your-strong-passphrase-here
+```
+
+**Important notes:**
+- The passphrase must be provided on every container start. Without it, the encrypted master key cannot be decrypted and the node will not start.
+- There is no recovery mechanism if the passphrase is lost — the wallet seed phrase is the ultimate backup.
+- Best suited for environments with external secrets management (HashiCorp Vault, AWS Secrets Manager, Kubernetes Secrets) that can inject the passphrase automatically.
+- The passphrase is cleared from the environment immediately after use and stored only in `/dev/shm` (RAM-backed tmpfs).
+
+For the complete security architecture and additional protection layers (LUKS volumes, user namespace remapping, confidential computing), see [SECURITY.md](../SECURITY.md#data-at-rest-encryption).
+
 ### Container Privilege Model
 
 eIOU containers run as root during initialization, then services drop privileges:
@@ -1188,6 +1266,7 @@ These warnings appear during normal operation and do not indicate a problem:
 |---------|------|-----|
 | `dbconfig.json encryption migration deferred — will complete during wallet setup` | First boot only | The Application constructor attempts to encrypt the database password before the wallet (master key) exists. This is harmless — wallet generation encrypts the password immediately after initializing the master key. Look for the follow-up message `dbconfig.json: plaintext password encrypted successfully` confirming completion. |
 | `Contact status polling disabled, stopping processor` | When `EIOU_CONTACT_STATUS_ENABLED=false` | Normal — the contact status processor exits cleanly when disabled. |
+| `MariaDB TDE: configuration written` / `RESTART_REQUIRED` | First boot only | MariaDB TDE is being set up. MariaDB restarts once to load the encryption plugin, then existing tables are encrypted. Subsequent boots show only `MariaDB TDE: key file ready`. |
 | `Hidden service hostname file not ready` | Boot (Tor mode) | Tor is still building circuits. Wait for `EIOU_HS_TIMEOUT` (default 60s) or increase if on slow networks. |
 
 ---
