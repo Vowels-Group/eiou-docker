@@ -52,7 +52,7 @@ class CliHelpService
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
                     'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
-                    'message' => ['type' => 'optional', 'description' => 'A short message sent with the contact request (e.g., "Hey, it\'s Dave!")']
+                    'message' => ['type' => 'optional', 'description' => 'A short message sent with the contact request (not E2E encrypted)']
                 ],
                 'examples' => [
                     'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact',

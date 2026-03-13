@@ -265,6 +265,37 @@ class TransactionContactRepository extends AbstractRepository {
     }
 
     /**
+     * Get contact transaction descriptions indexed by currency for a sender/receiver pair
+     *
+     * @param string $senderPubkey Sender's public key
+     * @param string $receiverPubkey Receiver's public key
+     * @return array<string, string> Currency => description mapping
+     */
+    public function getContactDescriptionsByCurrency(string $senderPubkey, string $receiverPubkey): array
+    {
+        $senderHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+        $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPubkey);
+
+        $query = "SELECT currency, description FROM {$this->tableName}
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender AND receiver_public_key_hash = :receiver";
+
+        $stmt = $this->execute($query, [':sender' => $senderHash, ':receiver' => $receiverHash]);
+        if (!$stmt) {
+            return [];
+        }
+
+        $result = [];
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $desc = $row['description'] ?? null;
+            if ($desc !== null && $desc !== 'Contact request transaction') {
+                $result[$row['currency']] = $desc;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Check if a contact transaction exists for a given receiver public key hash
      *
      * Used to prevent duplicate contact transactions when re-adding a deleted contact.

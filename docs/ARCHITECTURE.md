@@ -2812,7 +2812,12 @@ indistinguishable on the wire. Encryption happens in `TransportUtilityService::s
 (encrypt-then-sign), decryption in `index.html` before message routing.
 
 **Excluded from encryption:**
-- `create` (contact requests) — recipient may not be a contact yet (no public key)
+- `create` (contact requests) — recipient is not yet a contact, so their public key is
+  unknown and E2E encryption is not possible. All fields in the contact request payload
+  (including the optional description/message) are sent in cleartext within the signed
+  envelope. Transport-level encryption (Tor or HTTPS) provides the only confidentiality
+  layer for the initial contact request. Users should avoid including sensitive information
+  in contact request messages when using plain HTTP transport.
 
 **Graceful cleartext fallback** (recipient public key unavailable):
 - Transaction inquiry to P2P end-recipient — not necessarily a direct contact

@@ -300,6 +300,18 @@ if (!empty($pendingContacts)) {
                 $pc['pending_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash, 'incoming');
                 // Outgoing: currencies WE requested from them (waiting for their acceptance)
                 $pc['outgoing_currencies'] = $pendingCurrencyRepo->getPendingCurrencies($hash, 'outgoing');
+
+                // Enrich pending currencies with descriptions from contact transactions
+                $descByCurrency = $txContactRepo->getContactDescriptionsByCurrency($pc['pubkey'], $myPubkey);
+                if (!empty($descByCurrency)) {
+                    foreach ($pc['pending_currencies'] as &$pcur) {
+                        $cur = $pcur['currency'] ?? '';
+                        if (isset($descByCurrency[$cur])) {
+                            $pcur['description'] = $descByCurrency[$cur];
+                        }
+                    }
+                    unset($pcur);
+                }
             }
         }
         unset($pc);

@@ -673,6 +673,12 @@
                                 </button>
                             </div>
                         </div>
+                        <?php if (!empty($pc['description'])): ?>
+                        <div class="pending-contact-currency-message">
+                            <label><i class="fas fa-comment"></i> Message:</label>
+                            <div class="pending-message-text"><?php echo htmlspecialchars($pc['description']); ?></div>
+                        </div>
+                        <?php endif; ?>
                     </form>
                     <?php endforeach; ?>
 

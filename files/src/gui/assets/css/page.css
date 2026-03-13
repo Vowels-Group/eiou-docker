@@ -3227,6 +3227,39 @@ html {
     margin-bottom: 1rem;
 }
 
+.pending-contact-message {
+    margin: 0.5rem 0;
+    padding: 0.5rem 0.75rem;
+    background: #e8f4fd;
+    border-left: 3px solid #0d6efd;
+    border-radius: 3px;
+    font-size: 0.9rem;
+}
+.pending-contact-message i {
+    color: #0d6efd;
+    margin-right: 0.3rem;
+}
+
+.pending-contact-currency-message {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: #f0f7ff;
+    border-radius: 3px;
+    font-size: 0.85rem;
+}
+.pending-contact-currency-message label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 0.2rem;
+    display: block;
+}
+.pending-message-text {
+    max-height: 4rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* Multi-currency badge (contact cards) */
 .multi-currency-badge {
     display: inline-block;

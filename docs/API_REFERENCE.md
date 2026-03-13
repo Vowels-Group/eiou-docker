@@ -609,7 +609,7 @@ Add a new contact.
 | `fee_percent` | number | No | 1.0 | Transaction fee percentage |
 | `credit_limit` | number | No | 100.0 | Credit limit for contact |
 | `currency` | string | No | USD | Currency for transactions |
-| `description` | string | No | - | A short message sent with the contact request |
+| `description` | string | No | - | A short message sent with the contact request. Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
 
 **Response (201 Created):**
 
