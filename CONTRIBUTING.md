@@ -73,6 +73,8 @@ cd files && composer test
 
 ### Running a Local Node
 
+The `docker-compose.yml` file contains environment variables that configure the node (name, host address, ports, wallet restoration, etc.). Review the file and adjust as needed before starting. See [Docker Configuration](docs/DOCKER_CONFIGURATION.md) for a full reference of all available options.
+
 ```bash
 # Start a single node for development
 docker compose up -d --build
