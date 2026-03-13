@@ -18,6 +18,7 @@ The project is currently in **ALPHA** status.
 - Move banner text files (`alpha-warning.txt`, `legal-notice.txt`) from `scripts/` to `scripts/banners/` to separate static content from executable scripts
 
 ### Docs
+- Update `tests/README.md` with benchmark documentation, new topologies (`collisions`, `collisionscluster`), new test subsets (`bestfee`, `mutual`), complete test file listing, and current environment variables
 - Add alpha/staging warning and legal notice to README.md
 - Standardize branding: rename "EIOU" to "eIOU" in all prose text across 58 files (docs, comments, configs, tests). Preserves uppercase in code values (currency codes, SSL cert fields, PHP namespaces)
 - Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
