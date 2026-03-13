@@ -499,7 +499,7 @@
 
                         <div class="form-group">
                             <label for="edit_contact_fee">Fee (%):</label>
-                            <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                            <input type="number" id="edit_contact_fee" name="contact_fee" step="0.01" min="0" required>
                         </div>
                     </div>
                 </form>
@@ -653,7 +653,7 @@
                         <div class="form-row currency-form-row">
                             <div class="form-group">
                                 <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo htmlspecialchars($pc['currency']); ?> Fee (%):</label>
-                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
+                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
                                 <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit:</label>
@@ -707,7 +707,7 @@
                             </div>
                             <div class="form-group">
                                 <label for="contact_fee_<?php echo $index; ?>">Fee (%):</label>
-                                <input type="number" id="contact_fee_<?php echo $index; ?>" name="contact_fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
+                                <input type="number" id="contact_fee_<?php echo $index; ?>" name="contact_fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
                             </div>
                         </div>
                         <div class="form-row">

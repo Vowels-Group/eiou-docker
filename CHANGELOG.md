@@ -25,6 +25,7 @@ The project is currently in **ALPHA** status.
 - Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 
 ### Fixed
+- Fix fee input step validation in contact forms: change `step="0.1"` to `step="0.01"` so values like 0.01% (the default fee) are accepted. Affected: add contact form, edit contact form, and pending contact accept forms
 - Fix integration and unit test failures from ARCH-05 RepositoryFactory migration: update all shell test scripts and PHPUnit tests to use `getRepositoryFactory()->get()` instead of removed direct repository getters on `ServiceContainer`
 - Fix garbled namespace in `addContactsTest.sh` (`\\Eiou\\Core\\\Eiou\Core\Application` → `\Eiou\Core\Application`)
 - Fix `curlErrorHandlingTest.sh` timeout expectations to match current constants (TOR_TRANSPORT_TIMEOUT: 45s, TOR_CONNECT_TIMEOUT: 20s) and grep patterns to match `DELIVERY_ERROR` constant
