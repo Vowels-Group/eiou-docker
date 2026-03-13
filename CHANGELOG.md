@@ -13,6 +13,13 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Add MariaDB Transparent Data Encryption (TDE): all database files encrypted at rest by default using `file_key_management` plugin with key derived from master encryption key. TDE key stored only in `/dev/shm` (RAM). No user configuration required
+- Add optional volume passphrase (`EIOU_VOLUME_KEY` / `EIOU_VOLUME_KEY_FILE`) for environments with external secrets management (Vault, K8s secrets). Encrypts master key at rest on config volume using Argon2id + AES-256-GCM
+- Add LUKS-encrypted volume scripts for hosting: `create-encrypted-node.sh`, `unlock-node.sh`, `lock-node.sh` for per-node full-disk encryption
+- Add `docker-compose-encrypted.yml` for LUKS bind-mount deployments
+- Add Docker user namespace remapping setup script (`setup-userns-remap.sh`)
+- Add `php-sodium` package to Dockerfile for Argon2id key derivation
+- Encrypt `dbUser` and `dbName` in `dbconfig.json` alongside `dbPass` — config volume now contains only encrypted credentials and `dbHost` (always `localhost`)
 - Add legal notice banner to container startup (`scripts/banners/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
 - Add alpha warning and collapsible legal notice to the GUI login screen (`loginNotice.html`). Legal text is loaded from `scripts/banners/legal-notice.txt` — same file as the startup banner, so one edit updates both
 - Move banner text files (`alpha-warning.txt`, `legal-notice.txt`) from `scripts/` to `scripts/banners/` to separate static content from executable scripts

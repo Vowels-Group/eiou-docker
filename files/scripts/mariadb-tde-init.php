@@ -61,23 +61,27 @@ try {
                 throw new \RuntimeException('Invalid dbconfig.json');
             }
 
-            // Get database password (may be encrypted)
-            $dbPass = null;
-            if (isset($config['dbPassEncrypted'])) {
-                $dbPass = \Eiou\Security\KeyEncryption::decrypt($config['dbPassEncrypted']);
-            } elseif (isset($config['dbPass'])) {
-                $dbPass = $config['dbPass'];
-            }
+            // Decrypt database credentials (may be stored encrypted or plaintext)
+            $decrypt = function(array $config, string $field): ?string {
+                $encField = $field . 'Encrypted';
+                if (isset($config[$encField]) && is_array($config[$encField])) {
+                    return \Eiou\Security\KeyEncryption::decrypt($config[$encField]);
+                }
+                return $config[$field] ?? null;
+            };
+
+            $dbHost = $decrypt($config, 'dbHost') ?? 'localhost';
+            $dbName = $decrypt($config, 'dbName') ?? 'eiou';
+            $dbUser = $decrypt($config, 'dbUser') ?? 'root';
+            $dbPass = $decrypt($config, 'dbPass');
 
             if ($dbPass === null) {
                 throw new \RuntimeException('Cannot read database password');
             }
 
             $pdo = new PDO(
-                "mysql:host=" . ($config['dbHost'] ?? 'localhost')
-                    . ";dbname=" . ($config['dbName'] ?? 'eiou')
-                    . ";unix_socket=/var/run/mysqld/mysqld.sock",
-                $config['dbUser'] ?? 'root',
+                "mysql:host={$dbHost};dbname={$dbName};unix_socket=/var/run/mysqld/mysqld.sock",
+                $dbUser,
                 $dbPass
             );
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

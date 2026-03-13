@@ -1,0 +1,103 @@
+# Copyright 2025-2026 Vowels Group, LLC
+# =============================================================================
+# eIOU Docker Compose — LUKS-Encrypted Volumes
+# =============================================================================
+#
+# Uses bind mounts from a LUKS-encrypted filesystem instead of Docker named
+# volumes. All node data is stored inside the encrypted volume — the host
+# cannot read it without the node owner's passphrase.
+#
+# Prerequisites:
+#   1. Create the encrypted volume:
+#      sudo ./scripts/create-encrypted-node.sh <node-name>
+#
+#   2. Unlock before starting:
+#      sudo ./scripts/unlock-node.sh <node-name>
+#
+#   3. Start the node:
+#      NODE_NAME=<node-name> docker compose -f docker-compose-encrypted.yml up -d --build
+#
+#   4. Stop and lock:
+#      docker compose -f docker-compose-encrypted.yml down
+#      sudo ./scripts/lock-node.sh <node-name>
+#
+# Environment:
+#   NODE_NAME             Node name (must match create-encrypted-node.sh)
+#   EIOU_ENCRYPTED_DIR    Base directory (default: /srv/eiou-nodes)
+#
+# =============================================================================
+
+x-node-name: &node-name ${NODE_NAME:-eiou-node}
+x-encrypted-dir: &encrypted-dir ${EIOU_ENCRYPTED_DIR:-/srv/eiou-nodes}
+
+services:
+  eiou:
+    build:
+      context: .
+      dockerfile: eiou.dockerfile
+    container_name: *node-name
+    networks:
+      - eiou-network
+    ports:
+      - "80:80"
+      - "443:443"
+
+    environment:
+      - QUICKSTART=eiou
+
+    # =========================================================================
+    # VOLUME MOUNTS — Bind mounts from LUKS-encrypted filesystem
+    # =========================================================================
+    # These mount subdirectories from the unlocked LUKS volume.
+    # When the volume is locked, these paths don't exist and the container
+    # cannot start — this is intentional.
+    # =========================================================================
+    volumes:
+      - ${EIOU_ENCRYPTED_DIR:-/srv/eiou-nodes}/${NODE_NAME:-eiou-node}/mysql:/var/lib/mysql
+      - ${EIOU_ENCRYPTED_DIR:-/srv/eiou-nodes}/${NODE_NAME:-eiou-node}/config:/etc/eiou/config
+      - ${EIOU_ENCRYPTED_DIR:-/srv/eiou-nodes}/${NODE_NAME:-eiou-node}/backups:/var/lib/eiou/backups
+      - ${EIOU_ENCRYPTED_DIR:-/srv/eiou-nodes}/${NODE_NAME:-eiou-node}/letsencrypt:/etc/letsencrypt
+
+    # =========================================================================
+    # SECURITY HARDENING (same as docker-compose.yml)
+    # =========================================================================
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+    stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1024M
+          pids: 200
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+networks:
+  eiou-network:
+    driver: bridge
+    name: eiou-network
+
+# No named volumes — all data lives on the LUKS-encrypted bind mounts
