@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Add per-contact per-currency minimum fee amount (`min_fee_amount`) to `contact_currencies` table. Allows configuring custom minimum fees per contact/currency pair, falling back to the global default when not set. Supported in CLI `add`/`update` commands, GUI contact forms, API endpoints, and P2P/RP2P fee calculation. Includes new `contactMinFeeTest.sh` integration test and expanded PHPUnit coverage
 - Add legal notice banner to container startup (`scripts/banners/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
 - Add alpha warning and collapsible legal notice to the GUI login screen (`loginNotice.html`). Legal text is loaded from `scripts/banners/legal-notice.txt` — same file as the startup banner, so one edit updates both
 - Move banner text files (`alpha-warning.txt`, `legal-notice.txt`) from `scripts/` to `scripts/banners/` to separate static content from executable scripts
