@@ -2042,13 +2042,14 @@ VERIFICATION (on end-recipient C):
 - `inquiry_token` (the hash) propagates openly but is irreversible
 - Swapping the token breaks the P2P hash, detected by every relay node
 - The transport envelope is signed, preventing man-in-the-middle modification of the inquiry
+- The secret is ephemeral — used once for the initial inquiry. After the description is stored on all nodes, it is recoverable via normal transaction chain sync (A syncs with B to recover descriptions). The end-recipient does not need to store the secret.
 
 **Database columns (p2p table):**
 
 | Column | Stored On | Purpose |
 |--------|-----------|---------|
 | `inquiry_token` | All nodes | `sha256(inquiry_secret)` — baked into P2P hash |
-| `inquiry_secret` | Originator only | Pre-image for inquiry authentication |
+| `inquiry_secret` | Originator only | Pre-image for initial inquiry authentication |
 
 ---
 

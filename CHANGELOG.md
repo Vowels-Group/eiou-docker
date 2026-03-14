@@ -14,6 +14,12 @@ The project is currently in **ALPHA** status.
 
 ### Security
 - Add P2P inquiry token authentication — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates.
+- Completion inquiries now require `inquiry_secret` — `checkMessageValidity` rejects inquiry messages that lack the secret when the P2P has an `inquiry_token`, closing the relay forgery gap where the address-based fallback allowed any node to pass validation
+
+### Fixed
+- Fix P2P completion inquiry description stripped before delivery — `signWithCapture()` removed `description` from all non-send/non-contact messages, including completion inquiries. Now preserves description for `type=message` with `inquiry=true`
+- Fix `inquiry_token` and `inquiry_secret` missing from `P2pRepository::$allowedColumns` whitelist — caused all P2P inserts to fail silently, breaking P2P routing entirely
+- Fix `inquiry_secret` not stored on originator — `sendP2pRequest()` passed the wire payload (which correctly excludes the secret) to `insertP2pRequest()`, losing the secret. Now restores the secret from prepared data before local DB insert
 
 ### Changed
 - P2P hash formula changed from `sha256(receiver_address + salt + time)` to `sha256(receiver_address + salt + time + inquiry_token)`
