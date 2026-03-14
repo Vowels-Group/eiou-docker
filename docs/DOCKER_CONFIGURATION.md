@@ -57,7 +57,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 
 #### QUICKSTART
 
-Sets the node's hostname for HTTP/HTTPS addressing. When set, the node generates a self-signed SSL certificate and is reachable at `https://<value>` or `http://<value>`.
+Sets the node's container hostname for HTTP/HTTPS addressing. When set, the node generates a self-signed SSL certificate and registers addresses based on the value.
 
 ```yaml
 environment:
@@ -66,11 +66,13 @@ environment:
 
 The node will be accessible at:
 - `http://alice` (within Docker network)
-- `https://alice` (within Docker network)
+- `https://alice` (within Docker network, self-signed certificate)
+
+> **Important:** Addresses like `http://alice` are resolved by Docker's internal DNS and are **only reachable by other containers on the same Docker network**. They are not accessible from the host machine or the internet. For external access, set `EIOU_HOST` to a real IP address or domain name, `EIOU_PORT` to the mapped port, and use a trusted SSL certificate (Let's Encrypt or CA-signed) instead of the auto-generated self-signed one. See the `EIOU_HOST` / `EIOU_PORT` section below.
 
 #### EIOU_NAME / EIOU_HOST / EIOU_PORT
 
-These optional variables allow separating the node's display name from its network address. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address).
+These variables configure the node's externally reachable identity. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address), but the resulting addresses are Docker-internal only.
 
 `EIOU_NAME` is purely local — it is never broadcast to contacts or other nodes. It appears in the GUI wallet header, Docker startup logs, and any integration that reads the node's display name.
 
