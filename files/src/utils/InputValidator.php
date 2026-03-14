@@ -105,8 +105,8 @@ class InputValidator {
 
         $currency = strtoupper(trim($currency));
 
-        if (!preg_match('/^[A-Z]+$/', $currency)) {
-            return ['valid' => false, 'value' => null, 'error' => 'Currency code must contain only letters (A-Z)'];
+        if (!preg_match('/^[A-Z0-9]+$/', $currency)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must contain only uppercase letters (A-Z) and numbers (0-9)'];
         }
 
         $len = strlen($currency);
@@ -131,8 +131,8 @@ class InputValidator {
     public static function validateAllowedCurrency(string $currency): array {
         $currency = strtoupper(trim($currency));
 
-        if (!preg_match('/^[A-Z]+$/', $currency)) {
-            return ['valid' => false, 'value' => null, 'error' => 'Currency code must contain only letters (A-Z)'];
+        if (!preg_match('/^[A-Z0-9]+$/', $currency)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must contain only uppercase letters (A-Z) and numbers (0-9)'];
         }
 
         $len = strlen($currency);
