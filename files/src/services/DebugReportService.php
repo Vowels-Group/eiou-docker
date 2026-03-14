@@ -82,7 +82,7 @@ class DebugReportService
             throw new \RuntimeException('Failed to encode debug report: ' . json_last_error_msg());
         }
 
-        $bytes = file_put_contents($path, $json);
+        $bytes = @file_put_contents($path, $json);
         if ($bytes === false) {
             throw new \RuntimeException('Failed to write debug report to: ' . $path);
         }

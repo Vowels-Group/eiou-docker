@@ -994,6 +994,80 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ REPORT COMMAND ############################
+
+echo -e "\n[Report Command Test]"
+
+# Test: report debug (regular output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'report debug' command (regular output)"
+reportOutput=$(docker exec ${testContainer} eiou report debug 2>&1)
+
+if [[ "$reportOutput" =~ "Debug report saved to" ]] && [[ "$reportOutput" =~ "/tmp/eiou-debug-report-" ]]; then
+    printf "\t   report debug (regular) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   report debug (regular) ${RED}FAILED${NC}\n"
+    echo -e "\t   Output: $reportOutput"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: report debug (JSON output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'report debug' command (JSON output)"
+reportJsonOutput=$(docker exec ${testContainer} eiou report debug --json 2>&1)
+
+if [[ "$reportJsonOutput" =~ '"success":true' ]] && [[ "$reportJsonOutput" =~ '"path"' ]]; then
+    printf "\t   report debug (JSON) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   report debug (JSON) ${RED}FAILED${NC}\n"
+    echo -e "\t   Output: $reportJsonOutput"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: report debug with description
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'report debug' with description"
+reportDescOutput=$(docker exec ${testContainer} eiou report debug "test issue" --json 2>&1)
+
+if [[ "$reportDescOutput" =~ '"success":true' ]]; then
+    printf "\t   report debug with description ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   report debug with description ${RED}FAILED${NC}\n"
+    echo -e "\t   Output: $reportDescOutput"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: report (no subcommand shows help)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'report' without subcommand (shows help)"
+reportHelpOutput=$(docker exec ${testContainer} eiou report 2>&1)
+
+if [[ "$reportHelpOutput" =~ "debug" ]] && [[ "$reportHelpOutput" =~ "Usage" ]]; then
+    printf "\t   report help ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   report help ${RED}FAILED${NC}\n"
+    echo -e "\t   Output: $reportHelpOutput"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: help includes report command
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'help' lists report command"
+helpReportOutput=$(docker exec ${testContainer} eiou help 2>&1)
+
+if [[ "$helpReportOutput" =~ "report" ]]; then
+    printf "\t   help includes report ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   help includes report ${RED}FAILED${NC}\n"
+    echo -e "\t   Output: $helpReportOutput"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ ERROR HANDLING TEST ############################
 
 echo -e "\n[Error Handling Test]"

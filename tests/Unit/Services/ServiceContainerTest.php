@@ -579,6 +579,31 @@ class ServiceContainerTest extends TestCase
         $this->assertInstanceOf(\Eiou\Contracts\RateLimiterServiceInterface::class, $service);
     }
 
+    /**
+     * Test getDebugReportService returns DebugReportService instance
+     */
+    public function testGetDebugReportServiceReturnsDebugReportService(): void
+    {
+        $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
+
+        $service = $container->getDebugReportService();
+
+        $this->assertInstanceOf(\Eiou\Services\DebugReportService::class, $service);
+    }
+
+    /**
+     * Test getDebugReportService returns same instance on subsequent calls
+     */
+    public function testGetDebugReportServiceReturnsSameInstance(): void
+    {
+        $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
+
+        $service1 = $container->getDebugReportService();
+        $service2 = $container->getDebugReportService();
+
+        $this->assertSame($service1, $service2);
+    }
+
     // =========================================================================
     // Wiring Tests
     // =========================================================================
