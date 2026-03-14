@@ -9,6 +9,7 @@ use Eiou\Utils\Security;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Database\DebugRepository;
+use Eiou\Services\DebugReportService;
 use PDO;
 use Exception;
 use Eiou\Gui\Helpers\MessageHelper;
@@ -509,224 +510,25 @@ class SettingsController
         // CSRF Protection
         $this->session->verifyCSRFToken();
 
-
         $description = Security::sanitizeInput($_POST['description'] ?? '');
 
         try {
-            // Collect all debug information
-            $debugRepo = new DebugRepository($this->getPdoConnection());
-            $debugEntries = $debugRepo->getRecentDebugEntries(100);
+            $reportService = new DebugReportService(
+                new DebugRepository($this->getPdoConnection()),
+                $this->getPdoConnection()
+            );
+            $result = $reportService->generateAndSave($description, false);
+            $sizeKb = round($result['size'] / 1024, 1);
 
-            // Collect system info
-            $systemInfo = [
-                'php_version' => phpversion(),
-                'sapi' => php_sapi_name(),
-                'os' => PHP_OS,
-                'memory_limit' => ini_get('memory_limit'),
-                'max_execution_time' => ini_get('max_execution_time'),
-                'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
-                'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
-                'timestamp' => date('Y-m-d H:i:s')
-            ];
-
-            // Get MySQL/MariaDB version
-            try {
-                $pdo = $this->getPdoConnection();
-                if ($pdo) {
-                    $stmt = $pdo->query('SELECT VERSION() as version');
-                    $result = $stmt->fetch();
-                    $systemInfo['mysql_version'] = $result['version'] ?? 'N/A';
-                } else {
-                    $systemInfo['mysql_version'] = 'N/A (no connection)';
-                }
-            } catch (Exception $e) {
-                $systemInfo['mysql_version'] = 'Error: ' . $e->getMessage();
-            }
-
-            // Get Debian version
-            $systemInfo['debian_version'] = 'N/A';
-            if (file_exists('/etc/debian_version') && is_readable('/etc/debian_version')) {
-                $systemInfo['debian_version'] = trim(file_get_contents('/etc/debian_version'));
-            }
-
-            // Get OS release info
-            $systemInfo['os_release'] = 'N/A';
-            if (file_exists('/etc/os-release') && is_readable('/etc/os-release')) {
-                $osInfo = parse_ini_file('/etc/os-release');
-                $systemInfo['os_release'] = $osInfo['PRETTY_NAME'] ?? 'N/A';
-            }
-
-            // Get PHP config path and contents
-            $phpIniPath = php_ini_loaded_file() ?: 'Not found';
-            $systemInfo['php_ini_path'] = $phpIniPath;
-            $systemInfo['php_ini_content'] = 'N/A';
-            if ($phpIniPath && $phpIniPath !== 'Not found' && file_exists($phpIniPath) && is_readable($phpIniPath)) {
-                $fileSize = filesize($phpIniPath);
-                if ($fileSize > 51200) { // 50KB
-                    $content = file_get_contents($phpIniPath, false, null, 0, 51200);
-                    $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
-                    $systemInfo['php_ini_content'] = $content;
-                } else {
-                    $systemInfo['php_ini_content'] = file_get_contents($phpIniPath);
-                }
-            }
-
-            // Get nginx config path and contents
-            $nginxConfigPath = '/etc/nginx/nginx.conf';
-            $systemInfo['nginx_config_path'] = file_exists($nginxConfigPath) ? $nginxConfigPath : 'N/A';
-            $systemInfo['nginx_config_content'] = 'N/A';
-            if (file_exists($nginxConfigPath) && is_readable($nginxConfigPath)) {
-                $fileSize = filesize($nginxConfigPath);
-                if ($fileSize > 51200) { // 50KB
-                    $content = file_get_contents($nginxConfigPath, false, null, 0, 51200);
-                    $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
-                    $systemInfo['nginx_config_content'] = $content;
-                } else {
-                    $systemInfo['nginx_config_content'] = file_get_contents($nginxConfigPath);
-                }
-            }
-
-            // Get PHP extensions with versions
-            $phpExtensions = get_loaded_extensions();
-            sort($phpExtensions);
-            $phpExtensionsWithVersions = [];
-            foreach ($phpExtensions as $ext) {
-                $version = phpversion($ext);
-                $phpExtensionsWithVersions[$ext] = $version ?: 'N/A';
-            }
-            $systemInfo['php_extensions_count'] = count($phpExtensions);
-            $systemInfo['php_extensions'] = $phpExtensionsWithVersions;
-
-            // Get Constants.php values
-            $systemInfo['constants'] = Constants::all();
-
-            // Get defaultconfig.json values
-            $defaultConfigPath = '/etc/eiou/config/defaultconfig.json';
-            $systemInfo['user_config'] = [];
-            if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
-                $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);
-                if ($defaultConfigData) {
-                    $systemInfo['user_config'] = $defaultConfigData;
-                }
-            }
-
-            // Collect PHP error log (last 50 lines)
-            $phpLogContent = '';
-            $phpLogPaths = ['/var/log/php_errors.log', '/var/log/eiou/eiou-php-error.log'];
-            foreach ($phpLogPaths as $logPath) {
-                if (file_exists($logPath) && is_readable($logPath)) {
-                    $phpLogContent = shell_exec("tail -50 " . escapeshellarg($logPath));
-                    break;
-                }
-            }
-
-            // Collect nginx error log (last 50 lines)
-            $nginxLogContent = '';
-            $nginxLogPath = '/var/log/nginx/error.log';
-            if (file_exists($nginxLogPath) && is_readable($nginxLogPath)) {
-                $nginxLogContent = shell_exec("tail -50 " . escapeshellarg($nginxLogPath));
-            }
-
-            // Collect eIOU app log (last 50 lines)
-            $eiouLogContent = '';
-            $eiouLogPath = '/var/log/eiou/app.log';
-            if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
-                $eiouLogContent = shell_exec("tail -50 " . escapeshellarg($eiouLogPath));
-            }
-
-            // Build report
-            $report = [
-                'description' => $description,
-                'system_info' => $systemInfo,
-                'debug_entries' => $debugEntries,
-                'php_errors' => $phpLogContent,
-                'nginx_errors' => $nginxLogContent,
-                'eiou_app_log' => $eiouLogContent
-            ];
-
-            // Sanitize log content to ensure valid UTF-8
-            // Use iconv as fallback if mbstring is not available
-            $sanitizeUtf8 = function($str) {
-                if (empty($str)) return '';
-                if (function_exists('mb_convert_encoding')) {
-                    return mb_convert_encoding($str, 'UTF-8', 'UTF-8');
-                } elseif (function_exists('iconv')) {
-                    return iconv('UTF-8', 'UTF-8//IGNORE', $str);
-                }
-                // Last resort: strip non-UTF-8 characters with regex
-                return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $str);
-            };
-
-            if (isset($report['php_errors'])) {
-                $report['php_errors'] = $sanitizeUtf8($report['php_errors'] ?? '');
-            }
-            if (isset($report['nginx_errors'])) {
-                $report['nginx_errors'] = $sanitizeUtf8($report['nginx_errors'] ?? '');
-            }
-            if (isset($report['eiou_app_log'])) {
-                $report['eiou_app_log'] = $sanitizeUtf8($report['eiou_app_log'] ?? '');
-            }
-
-            // For now, save the report to a file (email integration would be added later)
-            $reportPath = '/tmp/eiou-debug-report-' . date('YmdHis') . '.json';
-
-            $jsonReport = json_encode($report, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
-            if ($jsonReport === false) {
-                $jsonError = json_last_error_msg();
-                MessageHelper::redirectMessage('Failed to encode debug report: ' . $jsonError, 'error');
-                return;
-            }
-
-            $bytesWritten = file_put_contents($reportPath, $jsonReport);
-            if ($bytesWritten === false) {
-                MessageHelper::redirectMessage('Failed to write debug report to file', 'error');
-                return;
-            }
-
-            MessageHelper::redirectMessage('Debug report saved to ' . $reportPath . ' (' . round($bytesWritten/1024, 1) . ' KB). Email functionality coming soon.', 'success');
-
+            MessageHelper::redirectMessage(
+                'Debug report saved to ' . $result['path'] . ' (' . $sizeKb . ' KB). Email functionality coming soon.',
+                'success'
+            );
         } catch (Exception $e) {
             MessageHelper::redirectMessage('Failed to generate debug report: ' . $e->getMessage(), 'error');
         }
     }
 
-    /**
-     * Read full log file contents with size limit
-     * Returns entire file content up to maxSize bytes
-     *
-     * @param string $filePath Path to log file
-     * @param int $maxSize Maximum bytes to read (default 5MB)
-     * @return string File contents or empty string if not readable
-     */
-    private function readFullLogFile(string $filePath, int $maxSize = 5242880): string {
-        if (!file_exists($filePath) || !is_readable($filePath)) {
-            return '';
-        }
-
-        $fileSize = filesize($filePath);
-        if ($fileSize === 0) {
-            return '';
-        }
-
-        // If file is within size limit, read entire file
-        if ($fileSize <= $maxSize) {
-            return file_get_contents($filePath) ?: '';
-        }
-
-        // File exceeds limit - read the last maxSize bytes (most recent logs)
-        $content = file_get_contents($filePath, false, null, $fileSize - $maxSize, $maxSize);
-        if ($content === false) {
-            return '';
-        }
-
-        // Find first newline to start at a complete line
-        $firstNewline = strpos($content, "\n");
-        if ($firstNewline !== false && $firstNewline < 1000) {
-            $content = substr($content, $firstNewline + 1);
-        }
-
-        return "[TRUNCATED - Showing last " . round($maxSize / 1024 / 1024, 1) . "MB of " . round($fileSize / 1024 / 1024, 1) . "MB]\n\n" . $content;
-    }
 
     /**
      * Handle get debug report JSON action (AJAX)
@@ -740,186 +542,17 @@ class SettingsController
         // Note: CSRF already verified in index.html before Functions.php is included
         // JSON header already set in Functions.php for clean error handling
 
-
         $description = Security::sanitizeInput($_POST['description'] ?? '');
-        // Check if limited mode requested (same data as GUI display)
         $reportMode = Security::sanitizeInput($_POST['report_mode'] ?? 'full');
         $isFullReport = ($reportMode !== 'limited');
 
         try {
-            // Collect debug information based on mode
-            $debugRepo = new DebugRepository($this->getPdoConnection());
+            $reportService = new DebugReportService(
+                new DebugRepository($this->getPdoConnection()),
+                $this->getPdoConnection()
+            );
+            $report = $reportService->generateReport($description, $isFullReport);
 
-            if ($isFullReport) {
-                // Full mode: get complete debug history
-                $debugEntries = $debugRepo->getAllDebugEntries();
-            } else {
-                // Limited mode: same as GUI display (100 entries)
-                $debugEntries = $debugRepo->getRecentDebugEntries(100);
-            }
-
-            // Collect system info
-            $systemInfo = [
-                'php_version' => phpversion(),
-                'sapi' => php_sapi_name(),
-                'os' => PHP_OS,
-                'memory_limit' => ini_get('memory_limit'),
-                'max_execution_time' => ini_get('max_execution_time'),
-                'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
-                'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
-                'timestamp' => date('Y-m-d H:i:s')
-            ];
-
-            // Get MySQL/MariaDB version
-            try {
-                $pdo = $this->getPdoConnection();
-                if ($pdo) {
-                    $stmt = $pdo->query('SELECT VERSION() as version');
-                    $result = $stmt->fetch();
-                    $systemInfo['mysql_version'] = $result['version'] ?? 'N/A';
-                } else {
-                    $systemInfo['mysql_version'] = 'N/A (no connection)';
-                }
-            } catch (Exception $e) {
-                $systemInfo['mysql_version'] = 'Error: ' . $e->getMessage();
-            }
-
-            // Get Debian version
-            $systemInfo['debian_version'] = 'N/A';
-            if (file_exists('/etc/debian_version') && is_readable('/etc/debian_version')) {
-                $systemInfo['debian_version'] = trim(file_get_contents('/etc/debian_version'));
-            }
-
-            // Get OS release info
-            $systemInfo['os_release'] = 'N/A';
-            if (file_exists('/etc/os-release') && is_readable('/etc/os-release')) {
-                $osInfo = parse_ini_file('/etc/os-release');
-                $systemInfo['os_release'] = $osInfo['PRETTY_NAME'] ?? 'N/A';
-            }
-
-            // Get PHP config path and contents
-            $phpIniPath = php_ini_loaded_file() ?: 'Not found';
-            $systemInfo['php_ini_path'] = $phpIniPath;
-            $systemInfo['php_ini_content'] = 'N/A';
-            if ($phpIniPath && $phpIniPath !== 'Not found' && file_exists($phpIniPath) && is_readable($phpIniPath)) {
-                $fileSize = filesize($phpIniPath);
-                if ($fileSize > 51200) { // 50KB
-                    $content = file_get_contents($phpIniPath, false, null, 0, 51200);
-                    $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
-                    $systemInfo['php_ini_content'] = $content;
-                } else {
-                    $systemInfo['php_ini_content'] = file_get_contents($phpIniPath);
-                }
-            }
-
-            // Get nginx config path and contents
-            $nginxConfigPath = '/etc/nginx/nginx.conf';
-            $systemInfo['nginx_config_path'] = file_exists($nginxConfigPath) ? $nginxConfigPath : 'N/A';
-            $systemInfo['nginx_config_content'] = 'N/A';
-            if (file_exists($nginxConfigPath) && is_readable($nginxConfigPath)) {
-                $fileSize = filesize($nginxConfigPath);
-                if ($fileSize > 51200) { // 50KB
-                    $content = file_get_contents($nginxConfigPath, false, null, 0, 51200);
-                    $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
-                    $systemInfo['nginx_config_content'] = $content;
-                } else {
-                    $systemInfo['nginx_config_content'] = file_get_contents($nginxConfigPath);
-                }
-            }
-
-            // Get PHP extensions with versions
-            $phpExtensions = get_loaded_extensions();
-            sort($phpExtensions);
-            $phpExtensionsWithVersions = [];
-            foreach ($phpExtensions as $ext) {
-                $version = phpversion($ext);
-                $phpExtensionsWithVersions[$ext] = $version ?: 'N/A';
-            }
-            $systemInfo['php_extensions_count'] = count($phpExtensions);
-            $systemInfo['php_extensions'] = $phpExtensionsWithVersions;
-
-            // Get Constants.php values
-            $systemInfo['constants'] = Constants::all();
-
-            // Get defaultconfig.json values
-            $defaultConfigPath = '/etc/eiou/config/defaultconfig.json';
-            $systemInfo['user_config'] = [];
-            if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
-                $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);
-                if ($defaultConfigData) {
-                    $systemInfo['user_config'] = $defaultConfigData;
-                }
-            }
-
-            // Collect log files based on report mode
-            $phpLogContent = '';
-            $phpLogPaths = ['/var/log/php_errors.log', '/var/log/eiou/eiou-php-error.log'];
-
-            if ($isFullReport) {
-                // Full mode: read entire log files (up to 5MB each)
-                foreach ($phpLogPaths as $logPath) {
-                    $content = $this->readFullLogFile($logPath);
-                    if (!empty($content)) {
-                        $phpLogContent = $content;
-                        break;
-                    }
-                }
-                $nginxLogContent = $this->readFullLogFile('/var/log/nginx/error.log');
-                $eiouLogContent = $this->readFullLogFile('/var/log/eiou/app.log');
-            } else {
-                // Limited mode: same as GUI display (last 50 lines)
-                foreach ($phpLogPaths as $logPath) {
-                    if (file_exists($logPath) && is_readable($logPath)) {
-                        $phpLogContent = shell_exec("tail -50 " . escapeshellarg($logPath));
-                        break;
-                    }
-                }
-                $nginxLogPath = '/var/log/nginx/error.log';
-                $nginxLogContent = '';
-                if (file_exists($nginxLogPath) && is_readable($nginxLogPath)) {
-                    $nginxLogContent = shell_exec("tail -50 " . escapeshellarg($nginxLogPath));
-                }
-                $eiouLogPath = '/var/log/eiou/app.log';
-                $eiouLogContent = '';
-                if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
-                    $eiouLogContent = shell_exec("tail -50 " . escapeshellarg($eiouLogPath));
-                }
-            }
-
-            // Build report with metadata about log completeness
-            $report = [
-                'description' => $description,
-                'system_info' => $systemInfo,
-                'debug_entries' => $debugEntries,
-                'debug_entries_count' => count($debugEntries),
-                'php_errors' => $phpLogContent,
-                'nginx_errors' => $nginxLogContent,
-                'eiou_app_log' => $eiouLogContent,
-                'report_type' => $isFullReport ? 'full' : 'limited'
-            ];
-
-            // Sanitize log content to ensure valid UTF-8
-            $sanitizeUtf8 = function($str) {
-                if (empty($str)) return '';
-                if (function_exists('mb_convert_encoding')) {
-                    return mb_convert_encoding($str, 'UTF-8', 'UTF-8');
-                } elseif (function_exists('iconv')) {
-                    return iconv('UTF-8', 'UTF-8//IGNORE', $str);
-                }
-                return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $str);
-            };
-
-            if (isset($report['php_errors'])) {
-                $report['php_errors'] = $sanitizeUtf8($report['php_errors'] ?? '');
-            }
-            if (isset($report['nginx_errors'])) {
-                $report['nginx_errors'] = $sanitizeUtf8($report['nginx_errors'] ?? '');
-            }
-            if (isset($report['eiou_app_log'])) {
-                $report['eiou_app_log'] = $sanitizeUtf8($report['eiou_app_log'] ?? '');
-            }
-
-            // Return JSON response
             header('Content-Type: application/json');
             $jsonReport = json_encode($report, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
             if ($jsonReport === false) {

@@ -658,6 +658,28 @@ class CliHelpService
                 ],
                 'note' => 'Backups are AES-256-CBC encrypted using the node\'s master key. Automatic backups run daily at midnight when enabled. Cleanup keeps the 3 most recent backups.'
             ],
+            'report' => [
+                'description' => 'Generate reports for troubleshooting and analysis',
+                'usage' => 'report <type> [description] [--full]',
+                'arguments' => [
+                    'type' => ['type' => 'required', 'description' => 'Report type: debug'],
+                    'description' => ['type' => 'optional', 'description' => 'Issue description to include in the report'],
+                    '--full' => ['type' => 'optional', 'description' => 'Include full log history (default: last 50 lines)']
+                ],
+                'actions' => [
+                    'debug' => [
+                        'description' => 'Generate a debug report with system info, debug entries, and logs',
+                        'usage' => 'report debug [description] [--full]'
+                    ]
+                ],
+                'examples' => [
+                    'report debug' => 'Generate a limited debug report',
+                    'report debug "login page crash"' => 'Include an issue description',
+                    'report debug --full' => 'Include full log history',
+                    'report debug "issue description" --full' => 'Full report with description'
+                ],
+                'note' => 'Reports are saved as JSON files in /tmp/. The debug report includes system info (PHP, MariaDB, OS), debug table entries, application logs, PHP errors, and nginx errors.'
+            ],
             'dlq' => [
                 'description' => 'Manage the dead letter queue — messages that failed delivery after all automatic retries',
                 'usage' => 'dlq [list|retry|abandon] [id] [--status=pending|retrying|resolved|abandoned|all]',

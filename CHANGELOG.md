@@ -51,6 +51,8 @@ Open alpha launch prep, currency configuration, settings GUI cleanup, legal noti
 - Consolidate alpha warning and legal notice into a single combined startup message (`scripts/banners/alpha-warning.txt`); remove separate `legal-notice.txt`
 
 ### Added
+- Add `eiou report debug` CLI command for generating debug reports from the command line. Supports optional issue description and `--full` flag for complete log history. Outputs JSON report to `/tmp/`
+- Extract `DebugReportService` from `SettingsController` — shared service used by both the GUI debug report buttons and the new CLI `report` command, eliminating ~200 lines of duplicated report generation logic
 - Add Currency category to GUI Advanced Settings dropdown with fields for conversion factors, currency decimals, and allowed currencies
 - Add CLI `changesettings` handlers for `conversionFactors` (JSON) and `currencyDecimals` (JSON)
 - Add `docs/CURRENCY_CONFIGURATION.md`: guide for adding new currencies via GUI, CLI, and API with persistence and example configurations
