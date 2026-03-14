@@ -1204,6 +1204,11 @@ if [[ ! -z ${http} ]]; then
     fi
     echo -e "\t HTTP address: $httpAddr"
     echo -e "\t HTTPS address: $httpsAddr"
+    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
+        echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
+        echo -e "\t   They are not reachable from outside the Docker network."
+        echo -e "\t   For external access, set EIOU_HOST to a real IP or domain and EIOU_PORT to the mapped port.\033[0m"
+    fi
 fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
