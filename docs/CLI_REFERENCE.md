@@ -237,7 +237,7 @@ eiou add <address> <name> <fee> <credit> <currency> [message]
 | `name` | required | Display name for the contact (use quotes for multi-word names, e.g., `"Jane Doe"`) |
 | `fee` | required | Fee percentage for transactions (e.g., 1.0) |
 | `credit` | required | Credit limit for this contact |
-| `currency` | required | Currency code (e.g., USD) |
+| `currency` | required | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
 | `message` | optional | A short message sent with the contact request |
 
 **Examples:**
@@ -732,7 +732,7 @@ eiou send <address|name> <amount> <currency> [description] [--best]
 |----------|------|-------------|
 | `address\|name` | required | Recipient's address or display name |
 | `amount` | required | Amount to send (positive number) |
-| `currency` | required | Currency code (e.g., USD) |
+| `currency` | required | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
 | `description` | optional | Transaction description/memo text |
 
 **Flags:**

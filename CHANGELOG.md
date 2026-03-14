@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
+
 ### Added
 - Add optional message/description field to contact requests: GUI (Add Contact form), CLI (`eiou add ... "message"`), and API (`description` field). The message is sent with the contact request and stored in the contact transaction on both sides. Descriptions are included in the signed payload for direct sends and contact requests but stripped from P2P relay messages for privacy (#739)
 - Add `autoAcceptRestoredContact` toggle (env: `EIOU_AUTO_ACCEPT_RESTORED_CONTACT`, default: `true`) to control whether contacts are auto-accepted on wallet restore when transaction history proves a prior relationship. When disabled, restored contacts stay pending for manual review. Configurable via CLI, GUI, and API. Restored contacts are named `RestoredContact<N>` for identification

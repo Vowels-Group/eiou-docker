@@ -493,7 +493,7 @@ Send a transaction to a contact.
 |-------|------|----------|-------------|
 | `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) |
 | `amount` | number | Yes | Amount to send (must be > 0) |
-| `currency` | string | Yes | Currency code (e.g., USD) |
+| `currency` | string | Yes | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
 | `description` | string | No | Optional transaction description |
 | `best_fee` | boolean | No | **[Experimental]** Use best-fee routing: collects all P2P route responses and selects the lowest accumulated fee. May be slower than default fast mode. |
 
@@ -608,7 +608,7 @@ Add a new contact.
 | `name` | string | Yes | - | Display name for contact |
 | `fee_percent` | number | No | 1.0 | Transaction fee percentage |
 | `credit_limit` | number | No | 100.0 | Credit limit for contact |
-| `currency` | string | No | USD | Currency for transactions |
+| `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
 | `description` | string | No | - | A short message sent with the contact request. Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
 
 **Response (201 Created):**
