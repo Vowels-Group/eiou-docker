@@ -27,6 +27,7 @@ Open alpha launch prep, currency configuration, settings GUI cleanup, legal noti
 - Audit and update GUI_REFERENCE.md: document all 8 Advanced Settings categories, add contact form `description` field
 - Audit and update DOCKER_CONFIGURATION.md: add missing env vars (`APP_DEBUG`, `EIOU_DEFAULT_TRANSPORT_MODE`, `EIOU_TOR_FORCE_FAST`, `EIOU_HOP_BUDGET_RANDOMIZED`)
 - Audit and update CLI_DEMO_GUIDE.md: fix stale `docker-compose-4line.yml` references to `tests/old/compose-files/`, add optional `[message]` parameter to `eiou add` syntax, add `[currency]` to `eiou update` quick reference
+- Add "Before Creating a New Issue" section to CONTRIBUTING.md: search open/closed issues and CHANGELOG before filing duplicates
 
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
