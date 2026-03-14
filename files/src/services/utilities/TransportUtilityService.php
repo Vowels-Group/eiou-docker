@@ -824,13 +824,15 @@ class TransportUtilityService implements TransportServiceInterface
         // Description handling:
         // - Contact requests (type=create): keep in signed content (sent directly)
         // - Direct sends (type=send, memo=standard): keep in signed content (sent directly)
+        // - Completion inquiries (type=message, inquiry=true): keep — carries description to end-recipient
         // - P2P relay (type=send, memo=hash): strip — delivered via completion inquiry
         // - All other types: strip
         $messageType = $messageContent['type'] ?? '';
         $memo = $messageContent['memo'] ?? '';
         $isDirectSend = $messageType === 'send' && $memo === 'standard';
         $isContactRequest = $messageType === 'create';
-        if (!$isDirectSend && !$isContactRequest) {
+        $isCompletionInquiry = $messageType === 'message' && !empty($messageContent['inquiry']);
+        if (!$isDirectSend && !$isContactRequest && !$isCompletionInquiry) {
             unset($messageContent['description']);
         }
 

@@ -200,7 +200,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'viewsettings' JSON includes new settings keys"
 settingsJsonHasNew=true
-for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format display_currency_decimals; do
+for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format currency_decimals; do
     if ! echo "$settingsJsonOutput" | grep -q "\"${key}\""; then
         settingsJsonHasNew=false
         printf "\t   Missing key: ${key}\n"
@@ -299,21 +299,6 @@ else
     printf "\t   Output: ${changeTimeoutInvalidOutput}\n"
     failure=$(( failure + 1 ))
 fi
-
-# Test: changesettings displayCurrencyDecimals with valid value
-totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing 'changesettings displayCurrencyDecimals 4'"
-changeDecimalsOutput=$(docker exec ${testContainer} eiou changesettings displayCurrencyDecimals 4 --json 2>&1)
-if [[ "$changeDecimalsOutput" =~ '"success"' ]] && [[ "$changeDecimalsOutput" =~ '"displayCurrencyDecimals"' ]]; then
-    printf "\t   changesettings displayCurrencyDecimals valid ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   changesettings displayCurrencyDecimals valid ${RED}FAILED${NC}\n"
-    printf "\t   Output: ${changeDecimalsOutput}\n"
-    failure=$(( failure + 1 ))
-fi
-# Restore default
-docker exec ${testContainer} eiou changesettings displayCurrencyDecimals 2 >/dev/null 2>&1
 
 # Test: changesettings persists to config file
 totaltests=$(( totaltests + 1 ))
@@ -1017,7 +1002,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'report debug' command (JSON output)"
 reportJsonOutput=$(docker exec ${testContainer} eiou report debug --json 2>&1)
 
-if [[ "$reportJsonOutput" =~ '"success":true' ]] && [[ "$reportJsonOutput" =~ '"path"' ]]; then
+if [[ "$reportJsonOutput" =~ '"success": true' ]] && [[ "$reportJsonOutput" =~ '"path"' ]]; then
     printf "\t   report debug (JSON) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -1031,7 +1016,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'report debug' with description"
 reportDescOutput=$(docker exec ${testContainer} eiou report debug "test issue" --json 2>&1)
 
-if [[ "$reportDescOutput" =~ '"success":true' ]]; then
+if [[ "$reportDescOutput" =~ '"success": true' ]]; then
     printf "\t   report debug with description ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
