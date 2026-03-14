@@ -381,6 +381,7 @@ The following are known security limitations of the current alpha release.
 | No HSM support | Private keys are stored encrypted on disk rather than in a hardware security module |
 | No multi-factor authentication | API access relies on HMAC-SHA256 key-based authentication without a second factor |
 | Seed phrase is the single root of trust | Compromise of the 24-word seed phrase grants full control over the wallet, Tor identity, and backup decryption |
+| Contact request messages are not E2E encrypted | Initial contact requests (`type: create`) cannot be E2E encrypted because the recipient's public key is not yet known. The optional message/description included with a contact request is protected only by transport-level encryption (Tor or HTTPS). Avoid including sensitive information in contact request messages when using plain HTTP transport |
 
 These limitations will be addressed as the project matures toward a production release.
 

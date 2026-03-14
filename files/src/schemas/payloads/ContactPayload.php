@@ -35,6 +35,11 @@ class ContactPayload extends BasePayload
             $payload['currency'] = $data['currency'];
         }
 
+        // Include optional description/message for the contact request
+        if (isset($data['description']) && $data['description'] !== null && $data['description'] !== '') {
+            $payload['description'] = $data['description'];
+        }
+
         return $payload;
     }
 
@@ -44,11 +49,14 @@ class ContactPayload extends BasePayload
      * @param string $address The address of the contact request
      * @return array The contact creation payload
      */
-    public function buildCreateRequest(string $address, ?string $currency = null): array
+    public function buildCreateRequest(string $address, ?string $currency = null, ?string $description = null): array
     {
         $data = ['address' => $address];
         if ($currency !== null) {
             $data['currency'] = $currency;
+        }
+        if ($description !== null && $description !== '') {
+            $data['description'] = $description;
         }
         return $this->build($data);
     }

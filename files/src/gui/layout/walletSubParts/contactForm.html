@@ -41,6 +41,14 @@
             <i class="fas fa-info-circle"></i>
             Default values from your wallet settings
         </small>
+        <div class="form-group">
+            <label for="description">Message (optional):</label>
+            <input type="text" id="description" name="description" placeholder="e.g. Hey, it's Dave!" maxlength="255">
+            <small class="form-hint text-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>WARNING:</strong> This message is <strong>not end-to-end encrypted</strong> (the recipient's key is not yet known). Do not include sensitive or personal information.
+            </small>
+        </div>
         <div class="form-actions">
             <button type="submit" class="btn btn-success">Add Contact</button>
         </div>

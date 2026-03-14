@@ -559,6 +559,67 @@ class ContactPayloadTest extends TestCase
     }
 
     /**
+     * Test build includes description when provided
+     */
+    public function testBuildIncludesDescriptionWhenProvided(): void
+    {
+        $result = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS,
+            'description' => "Hey, it's Dave!"
+        ]);
+
+        $this->assertArrayHasKey('description', $result);
+        $this->assertEquals("Hey, it's Dave!", $result['description']);
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * Test build excludes description when empty or null
+     */
+    public function testBuildExcludesDescriptionWhenEmptyOrNull(): void
+    {
+        $resultEmpty = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS,
+            'description' => ''
+        ]);
+        $this->assertArrayNotHasKey('description', $resultEmpty);
+
+        $resultNull = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS,
+            'description' => null
+        ]);
+        $this->assertArrayNotHasKey('description', $resultNull);
+
+        $resultMissing = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS
+        ]);
+        $this->assertArrayNotHasKey('description', $resultMissing);
+    }
+
+    /**
+     * Test buildCreateRequest passes description to build
+     */
+    public function testBuildCreateRequestPassesDescription(): void
+    {
+        $result = $this->payload->buildCreateRequest(self::TEST_HTTP_ADDRESS, 'USD', 'Hello from Alice');
+
+        $this->assertArrayHasKey('description', $result);
+        $this->assertEquals('Hello from Alice', $result['description']);
+        $this->assertArrayHasKey('currency', $result);
+        $this->assertEquals('USD', $result['currency']);
+    }
+
+    /**
+     * Test buildCreateRequest without description
+     */
+    public function testBuildCreateRequestWithoutDescription(): void
+    {
+        $result = $this->payload->buildCreateRequest(self::TEST_HTTP_ADDRESS, 'USD');
+
+        $this->assertArrayNotHasKey('description', $result);
+    }
+
+    /**
      * Test filterAddresses with custom address types from utility
      */
     public function testFilterAddressesWithCustomAddressTypesFromUtility(): void

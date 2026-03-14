@@ -1694,9 +1694,14 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         $memo = $tx['memo'] ?? 'standard';
         $messageContent['memo'] = $memo;
 
-        // NOTE: Description is NOT included in the signed message
-        // It's transmitted separately in the envelope for privacy (P2P intermediaries don't see it)
-        // and stored separately in the database
+        // Description is included in the signed message for direct sends (memo=standard)
+        // For P2P transactions, description is stripped before signing and sent via inquiry instead
+        if ($memo === 'standard') {
+            $description = $tx['description'] ?? null;
+            if ($description !== null && $description !== '') {
+                $messageContent['description'] = $description;
+            }
+        }
 
         // NOTE: endRecipientAddress and initialSenderAddress are NOT included
         // These are local tracking fields that are NOT part of the signed payload
@@ -1732,13 +1737,19 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         }
 
         // Build message in the same key order as the original payload after signing:
-        // type → [currency] → nonce
+        // type → [currency] → [description] → nonce
         $messageContent = ['type' => 'create'];
 
         // Currency is included for multi-currency contact requests
         $currency = $tx['currency'] ?? null;
         if ($currency !== null) {
             $messageContent['currency'] = $currency;
+        }
+
+        // Description is included for contact requests (kept in signed content for direct messages)
+        $description = $tx['description'] ?? null;
+        if ($description !== null && $description !== '') {
+            $messageContent['description'] = $description;
         }
 
         $messageContent['nonce'] = $tx['signature_nonce'];

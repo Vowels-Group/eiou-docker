@@ -249,7 +249,7 @@ class TransactionContactRepository extends AbstractRepository {
         $senderHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
         $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPubkey);
 
-        $query = "SELECT txid, signature_nonce, currency FROM {$this->tableName}
+        $query = "SELECT txid, signature_nonce, currency, description FROM {$this->tableName}
                   WHERE tx_type = 'contact'
                   AND sender_public_key_hash = :sender AND receiver_public_key_hash = :receiver
                   LIMIT 1";
@@ -262,6 +262,37 @@ class TransactionContactRepository extends AbstractRepository {
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row !== false ? $row : null;
+    }
+
+    /**
+     * Get contact transaction descriptions indexed by currency for a sender/receiver pair
+     *
+     * @param string $senderPubkey Sender's public key
+     * @param string $receiverPubkey Receiver's public key
+     * @return array<string, string> Currency => description mapping
+     */
+    public function getContactDescriptionsByCurrency(string $senderPubkey, string $receiverPubkey): array
+    {
+        $senderHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+        $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPubkey);
+
+        $query = "SELECT currency, description FROM {$this->tableName}
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender AND receiver_public_key_hash = :receiver";
+
+        $stmt = $this->execute($query, [':sender' => $senderHash, ':receiver' => $receiverHash]);
+        if (!$stmt) {
+            return [];
+        }
+
+        $result = [];
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $desc = $row['description'] ?? null;
+            if ($desc !== null && $desc !== 'Contact request transaction') {
+                $result[$row['currency']] = $desc;
+            }
+        }
+        return $result;
     }
 
     /**

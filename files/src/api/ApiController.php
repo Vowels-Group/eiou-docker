@@ -909,8 +909,11 @@ class ApiController {
                 (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
                 (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
                 $data['currency'] ?? 'USD',              // $data[6] - currency
-                '--json'                                 // Enable JSON output mode
             ];
+            if (!empty($data['description'])) {
+                $argv[] = $data['description'];          // $data[7] - optional description
+            }
+            $argv[] = '--json';                          // Enable JSON output mode
 
             // Create a fresh CliOutputManager instance with JSON mode
             CliOutputManager::resetInstance();
