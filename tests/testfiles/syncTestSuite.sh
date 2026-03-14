@@ -1696,27 +1696,43 @@ process_all_queues() {
     sleep ${TEST_POLL_INTERVAL:-1}
 }
 
-# Cleanup function for test transactions
+# Chain-aware cleanup: reset to contact-only state
+# Deletes ALL non-contact transactions from all containers, clears related
+# table residue (balances, p2p, chain_drop_proposals, capacity_reservations),
+# and repairs previous_txid links so the contact tx is the chain tail.
+# This ensures every test starts with a pure, consistent chain state.
 cleanup_test_transactions() {
-    local ts="$1"
-    docker exec ${contactA} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$app = \Eiou\Core\Application::getInstance();
-        \$pdo = \$app->services->getPdo();
-        \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%-${ts}'\");
-    " 2>/dev/null || true
-    docker exec ${contactB} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$app = \Eiou\Core\Application::getInstance();
-        \$pdo = \$app->services->getPdo();
-        \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%-${ts}'\");
-    " 2>/dev/null || true
-    docker exec ${contactC} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$app = \Eiou\Core\Application::getInstance();
-        \$pdo = \$app->services->getPdo();
-        \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%-${ts}'\");
-    " 2>/dev/null || true
+    # Argument $1 (timestamp) is accepted for backward compatibility but ignored —
+    # we always do a full reset to contact-only state.
+    for container in ${contactA} ${contactB} ${contactC}; do
+        docker exec ${container} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+
+            // Delete all non-contact transactions
+            \$pdo->exec(\"DELETE FROM transactions WHERE memo != 'contact'\");
+
+            // Repair chain: contact txs should have no dangling previous_txid
+            // Contact txs either have previous_txid = NULL (first contact with a peer)
+            // or point to another contact tx. Clear any that point to now-deleted txs.
+            \$broken = \$pdo->query(\"
+                SELECT t1.txid FROM transactions t1
+                WHERE t1.previous_txid IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM transactions t2 WHERE t2.txid = t1.previous_txid)
+            \")->fetchAll(PDO::FETCH_COLUMN);
+            foreach (\$broken as \$txid) {
+                \$pdo->exec(\"UPDATE transactions SET previous_txid = NULL WHERE txid = '\$txid'\");
+            }
+
+            // Clear related tables that accumulate test residue
+            \$pdo->exec('DELETE FROM balances');
+            \$pdo->exec('DELETE FROM chain_drop_proposals');
+            \$pdo->exec('DELETE FROM capacity_reservations');
+            \$pdo->exec('DELETE FROM p2p');
+            \$pdo->exec('DELETE FROM rp2p');
+            \$pdo->exec('DELETE FROM p2p_senders');
+        " 2>/dev/null || true
+    done
 }
 
 ################################################################################
