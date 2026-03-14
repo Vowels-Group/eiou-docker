@@ -189,6 +189,12 @@ class MessagePayload extends BasePayload
             $payload['description'] = $this->sanitizeString($message['description']);
         }
 
+        // Include inquiry_secret so end-recipient can verify original sender identity
+        // Only the P2P originator has this; relay nodes only have the token (hash)
+        if (isset($message['inquirySecret']) && $message['inquirySecret'] !== null) {
+            $payload['inquirySecret'] = $message['inquirySecret'];
+        }
+
         // Include initialSenderAddress if present (for end-recipient tracking)
         if (isset($message['initialSenderAddress']) && $message['initialSenderAddress'] !== null) {
             $payload['initialSenderAddress'] = $this->sanitizeString($message['initialSenderAddress']);

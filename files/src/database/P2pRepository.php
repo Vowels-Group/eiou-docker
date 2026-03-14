@@ -95,6 +95,8 @@ class P2pRepository extends AbstractRepository {
         $data = [
             'hash' => $request['hash'],
             'salt' => $request['salt'],
+            'inquiry_token' => $request['inquiryToken'] ?? null,
+            'inquiry_secret' => $request['inquirySecret'] ?? null, // Only stored on originator, never sent through relay chain
             'time' => $request['time'],
             'expiration' => $request['expiration'],
             'currency' => $request['currency'],

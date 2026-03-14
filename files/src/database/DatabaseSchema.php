@@ -246,8 +246,10 @@ function getChainDropProposalsTableSchema() {
 function getP2pTableSchema() {
     return "CREATE TABLE IF NOT EXISTS p2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL UNIQUE, /* This is the hash of the final recipient address + salt + time*/
+        hash VARCHAR(255) NOT NULL UNIQUE, /* sha256(receiver_address + salt + time + inquiry_token) */
         salt VARCHAR(255) NOT NULL,
+        inquiry_token VARCHAR(64), /* sha256(inquiry_secret) — propagates through relay chain; baked into P2P hash */
+        inquiry_secret VARCHAR(64), /* pre-image of inquiry_token — only stored on original sender, never sent through relay chain */
         time BIGINT NOT NULL,
         expiration BIGINT NOT NULL, /* unix epoch (micro) seconds */
         currency VARCHAR(10) NOT NULL,

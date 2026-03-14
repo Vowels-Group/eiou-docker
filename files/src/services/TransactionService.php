@@ -216,8 +216,8 @@ class TransactionService implements TransactionServiceInterface {
         return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $currency . $rp2p['time']);
     }
 
-    public function createContactHash(string $receiverAddress, string $salt, string $time): string {
-        return hash(Constants::HASH_ALGORITHM, $receiverAddress . $salt . $time);
+    public function createContactHash(string $receiverAddress, string $salt, string $time, string $inquiryToken = ''): string {
+        return hash(Constants::HASH_ALGORITHM, $receiverAddress . $salt . $time . $inquiryToken);
     }
 
     // =========================================================================
@@ -226,13 +226,14 @@ class TransactionService implements TransactionServiceInterface {
 
     public function matchYourselfTransaction($request, $address) {
         $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
-        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
+        $token = $p2pRequest['inquiry_token'] ?? '';
+        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time'] . $token) === $request['memo']) {
             return true;
         }
         $allAddresses = $this->currentUser->getUserLocaters();
         foreach ($allAddresses as $userAddress) {
             if ($userAddress === $address) continue;
-            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time'] . $token) === $request['memo']) {
                 return true;
             }
         }

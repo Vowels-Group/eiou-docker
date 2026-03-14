@@ -56,7 +56,7 @@ class P2pPayload extends BasePayload
             Constants::P2P_MIN_HOP_WAIT_SECONDS
         );
 
-        return [
+        $payload = [
             'type' => 'p2p',
             'hash' => $data['hash'],
             'salt' => $data['salt'],
@@ -71,6 +71,14 @@ class P2pPayload extends BasePayload
             'fast' => (bool) ($data['fast'] ?? true),
             'hopWait' => $hopWait,
         ];
+
+        // Include inquiry token (hash commitment) — propagates through relay chain.
+        // Only the original sender knows the pre-image (inquiry_secret).
+        if (isset($data['inquiryToken'])) {
+            $payload['inquiryToken'] = $data['inquiryToken'];
+        }
+
+        return $payload;
     }
 
     /**
@@ -88,7 +96,7 @@ class P2pPayload extends BasePayload
         //output(outputBuildingP2pPayload($data),'SILENT');
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['sender_address']);
 
-        return [
+        $payload = [
             'type' => 'p2p',
             'hash' => $data['hash'],
             'salt' => $data['salt'],
@@ -103,6 +111,12 @@ class P2pPayload extends BasePayload
             'fast' => (bool) ($data['fast'] ?? true),
             'hopWait' => (int) ($data['hop_wait'] ?? 0),
         ];
+
+        if (!empty($data['inquiry_token'])) {
+            $payload['inquiryToken'] = $data['inquiry_token'];
+        }
+
+        return $payload;
     }
 
     /**
