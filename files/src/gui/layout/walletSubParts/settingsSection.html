@@ -66,46 +66,6 @@
                 </small>
             </div>
 
-            <!-- Max P2P Level -->
-            <div class="form-group">
-                <label for="maxP2pLevel">Max P2P Routing Level:</label>
-                <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Maximum number of hops for P2P routing (1-<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>)
-                </small>
-            </div>
-
-            <!-- P2P Expiration -->
-            <div class="form-group">
-                <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
-                <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds). P2P transactions automatically get an extra <?php echo \Eiou\Core\Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS; ?>s delivery window after the P2P request expires.
-                </small>
-            </div>
-
-            <!-- Direct Transaction Delivery Expiration -->
-            <div class="form-group">
-                <label for="directTxExpiration">Tx Delivery Expiry (seconds):</label>
-                <input type="number" id="directTxExpiration" name="directTxExpiration" value="<?php echo htmlspecialchars($user->getDirectTxExpirationTime()); ?>" step="1" min="0" class="default-value">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry. Default: <?php echo \Eiou\Core\Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS; ?>s (one Tor round-trip). Failed deliveries appear in <a href="#dlq">Failed Messages</a> and can be retried.
-                </small>
-            </div>
-
-            <!-- Max Output Lines (GUI/CLI) -->
-            <div class="form-group">
-                <label for="maxOutput">GUI/CLI Max Output Lines:</label>
-                <input type="number" id="maxOutput" name="maxOutput" value="<?php echo htmlspecialchars($user->getMaxOutput()); ?>" step="1" min="1" class="default-value">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Maximum rows shown in command output — applies to both the GUI dashboard and CLI commands (e.g. viewbalances, history)
-                </small>
-            </div>
-
             <!-- Default Transport Mode -->
             <div class="form-group">
                 <label for="defaultTransportMode">Default Transport Mode:</label>
@@ -124,60 +84,6 @@
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Preferred network transport for communications (Tor is most secure, HTTP is least secure)
-                </small>
-            </div>
-
-            <!-- Auto-Refresh Toggle -->
-            <div class="form-group">
-                <label for="autoRefreshEnabled">Auto-Refresh Transactions:</label>
-                <div class="toggle-row">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="autoRefreshEnabled" name="autoRefreshEnabled" value="1" <?php echo $user->getAutoRefreshEnabled() ? 'checked' : ''; ?>>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span id="autoRefreshStatus" class="toggle-status <?php echo $user->getAutoRefreshEnabled() ? 'enabled' : ''; ?>">
-                        <?php echo $user->getAutoRefreshEnabled() ? 'Enabled' : 'Disabled'; ?>
-                    </span>
-                </div>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Automatically refresh transaction list when transactions are pending
-                </small>
-            </div>
-
-            <!-- Auto-Accept P2P Transaction Toggle -->
-            <div class="form-group">
-                <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
-                <div class="toggle-row">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
-                        <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
-                    </span>
-                </div>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
-                </small>
-            </div>
-
-            <!-- Auto-Backup Toggle -->
-            <div class="form-group">
-                <label for="autoBackupEnabled">Auto-Backup Database:</label>
-                <div class="toggle-row">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="autoBackupEnabled" name="autoBackupEnabled" value="1" <?php echo $user->getAutoBackupEnabled() ? 'checked' : ''; ?>>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span id="autoBackupStatus" class="toggle-status <?php echo $user->getAutoBackupEnabled() ? 'enabled' : ''; ?>">
-                        <?php echo $user->getAutoBackupEnabled() ? 'Enabled' : 'Disabled'; ?>
-                    </span>
-                </div>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Automatically backup database daily at midnight (encrypted with wallet key)
                 </small>
             </div>
         </div>
@@ -323,6 +229,53 @@
                             </small>
                         </div>
 
+                        <div class="form-group">
+                            <label for="autoRefreshEnabled">Auto-Refresh Transactions:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoRefreshEnabled" name="autoRefreshEnabled" value="1" <?php echo $user->getAutoRefreshEnabled() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoRefreshStatus" class="toggle-status <?php echo $user->getAutoRefreshEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoRefreshEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Automatically refresh transaction list when transactions are pending
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoBackupEnabled">Auto-Backup Database:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoBackupEnabled" name="autoBackupEnabled" value="1" <?php echo $user->getAutoBackupEnabled() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoBackupStatus" class="toggle-status <?php echo $user->getAutoBackupEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoBackupEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Automatically backup database daily at midnight (encrypted with wallet key)
+                            </small>
+                        </div>
 
                     </div>
                 </div>
@@ -544,6 +497,38 @@
                             </small>
                         </div>
 
+                        <div class="form-group">
+                            <label for="maxP2pLevel">Max P2P Routing Level:</label>
+                            <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Maximum number of hops for P2P routing (1-<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
+                            <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="directTxExpiration">Tx Delivery Expiry (seconds):</label>
+                            <input type="number" id="directTxExpiration" name="directTxExpiration" value="<?php echo htmlspecialchars($user->getDirectTxExpirationTime()); ?>" step="1" min="0" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry. Failed deliveries appear in <a href="#dlq">Failed Messages</a> and can be retried.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="maxOutput">GUI/CLI Max Output Lines:</label>
+                            <input type="number" id="maxOutput" name="maxOutput" value="<?php echo htmlspecialchars($user->getMaxOutput()); ?>" step="1" min="1" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Maximum rows shown in command output — applies to both the GUI dashboard and CLI commands
+                            </small>
+                        </div>
+
                     </div>
                 </div>
 
@@ -640,14 +625,6 @@
                             <input type="text" id="displayDateFormat" name="displayDateFormat" value="<?php echo htmlspecialchars($user->getDisplayDateFormat()); ?>" class="default-value" placeholder="Y-m-d H:i:s.u">
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> PHP date format string for timestamps in the GUI (e.g., Y-m-d H:i:s)
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="displayCurrencyDecimals">Currency Decimals:</label>
-                            <input type="number" id="displayCurrencyDecimals" name="displayCurrencyDecimals" value="<?php echo htmlspecialchars($user->getDisplayCurrencyDecimals()); ?>" min="0" max="8" step="1" class="default-value">
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Decimal places for currency display in the GUI (0-8)
                             </small>
                         </div>
 

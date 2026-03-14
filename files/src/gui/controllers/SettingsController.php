@@ -441,11 +441,6 @@ class SettingsController
             if ($validation['valid']) { $settings['displayDateFormat'] = $validation['value']; }
             else { $errors[] = 'Invalid date format: ' . $validation['error']; }
         }
-        if (isset($_POST['displayCurrencyDecimals'])) {
-            $validation = InputValidator::validateIntRange($_POST['displayCurrencyDecimals'], 0, 8, 'Currency decimals');
-            if ($validation['valid']) { $settings['displayCurrencyDecimals'] = $validation['value']; }
-            else { $errors[] = 'Invalid currency decimals: ' . $validation['error']; }
-        }
         if (isset($_POST['displayRecentTransactionsLimit'])) {
             $validation = InputValidator::validatePositiveInteger($_POST['displayRecentTransactionsLimit'], 1);
             if ($validation['valid']) { $settings['displayRecentTransactionsLimit'] = $validation['value']; }

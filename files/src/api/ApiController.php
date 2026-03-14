@@ -1418,7 +1418,6 @@ class ApiController {
                 'tor_fallback_require_encrypted' => $currentUser->isTorFallbackRequireEncrypted(),
                 // Display
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
-                'display_currency_decimals' => $currentUser->getDisplayCurrencyDecimals(),
                 'display_recent_transactions_limit' => $currentUser->getDisplayRecentTransactionsLimit(),
                 // Currency management
                 'allowed_currencies' => $currentUser->getAllowedCurrencies(),
@@ -1501,7 +1500,6 @@ class ApiController {
             'held_tx_sync_timeout_seconds' => ['key' => 'heldTxSyncTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [30, 299]],
             // Display
             'display_date_format' => ['key' => 'displayDateFormat', 'validate' => 'validateDateFormat', 'config' => 'defaultconfig.json'],
-            'display_currency_decimals' => ['key' => 'displayCurrencyDecimals', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [0, 8]],
             'display_recent_transactions_limit' => ['key' => 'displayRecentTransactionsLimit', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
         ];
 

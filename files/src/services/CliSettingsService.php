@@ -317,11 +317,6 @@ class CliSettingsService
                 $validation = InputValidator::validateDateFormat($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
-            } elseif(strtolower($argv[2]) === 'displaycurrencydecimals'){
-                $key = 'displayCurrencyDecimals';
-                $validation = InputValidator::validateIntRange($argv[3] ?? '', 0, 8, 'Currency decimals');
-                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
-                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'displayrecenttransactionslimit'){
                 $key = 'displayRecentTransactionsLimit';
                 $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
@@ -442,7 +437,6 @@ class CliSettingsService
                 'Display' => [
                     ['num' => '40', 'label' => 'Maximum lines of balance/transaction output'],
                     ['num' => '41', 'label' => 'Date format'],
-                    ['num' => '42', 'label' => 'Currency decimals'],
                     ['num' => '43', 'label' => 'Recent transactions limit'],
                 ],
                 'Currency Management' => [
@@ -947,17 +941,6 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
-                case '42':
-                    echo "Enter currency decimals (0-8): ";
-                    $key = 'displayCurrencyDecimals';
-                    $validation = InputValidator::validateIntRange(trim(fgets(STDIN)), 0, 8, 'Currency decimals');
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
-                    }
-                    $value = $validation['value'];
-                    break;
-
                 case '43':
                     echo "Enter recent transactions limit (minimum 1): ";
                     $key = 'displayRecentTransactionsLimit';
@@ -1204,7 +1187,6 @@ class CliSettingsService
             'tor_fallback_require_encrypted' => $this->currentUser->isTorFallbackRequireEncrypted(),
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
-            'display_currency_decimals' => $this->currentUser->getDisplayCurrencyDecimals(),
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
@@ -1269,7 +1251,6 @@ class CliSettingsService
             echo "\n  Display:\n";
             echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
-            echo "\tCurrency decimals: " . $settings['display_currency_decimals'] . "\n";
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";

@@ -334,7 +334,6 @@ class CliHelpService
                     // Display
                     'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
                     'displayDateFormat' => 'Date format (e.g., Y-m-d H:i:s)',
-                    'displayCurrencyDecimals' => 'Currency decimal places (0-8)',
                     'displayRecentTransactionsLimit' => 'Recent transactions display limit (minimum 1)',
                     // Currency Management
                     'allowedCurrencies' => 'Allowed currencies (comma-separated, e.g., USD,EUR)',

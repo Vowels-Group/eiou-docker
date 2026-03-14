@@ -4183,6 +4183,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // Settings grid hint expand — click to toggle truncated hint text
+    document.addEventListener('click', function(event) {
+        var hint = event.target.closest('.settings-grid .form-hint');
+        if (hint) { hint.classList.toggle('expanded'); }
+    }, false);
+
     // Delegated click handler
     document.addEventListener('click', function(event) {
         // Walk up from target to find closest element with data-action or data-confirm or data-stop-propagation
