@@ -154,14 +154,17 @@ services:
       # - LETSENCRYPT_STAGING=true
 
       # P2P_SSL_VERIFY (optional)
-      # Verify SSL certificates when making outbound HTTPS P2P connections.
-      # Set to false when all nodes use self-signed certificates.
-      # Default: true
+      # Verify SSL certificates on outbound HTTPS P2P connections.
+      # Default: true — self-signed certs (from QUICKSTART) are REJECTED.
+      # Set to false when all nodes use self-signed certificates (dev/testing).
+      # For production, use trusted certs (Let's Encrypt/CA) instead of disabling.
       # - P2P_SSL_VERIFY=false
 
       # P2P_CA_CERT (optional)
-      # Path to a CA certificate file for P2P SSL verification.
-      # Use with the CA volume mount below to trust a shared CA.
+      # Path to a CA certificate file inside the container for P2P verification.
+      # When set, outbound HTTPS connections verify against this CA instead of
+      # the system bundle. Use with the CA volume mount below. This lets nodes
+      # trust each other's certificates without disabling verification entirely.
       # - P2P_CA_CERT=/ssl-ca/ca.crt
 
       # -----------------------------------------------------------------------

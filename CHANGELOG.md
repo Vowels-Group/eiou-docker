@@ -31,6 +31,8 @@ Open alpha launch prep, currency configuration, settings GUI cleanup, legal noti
 - Clarify QUICKSTART addresses are Docker-internal only in README.md, docker-compose.yml, and DOCKER_CONFIGURATION.md — note that external access requires `EIOU_HOST`, `EIOU_PORT`, and proper SSL
 - Add reverse proxy (nginx, Caddy, Traefik) and Cloudflare Tunnel as SSL alternatives to DOCKER_CONFIGURATION.md and README.md
 - Add startup log warning when QUICKSTART is used without EIOU_HOST — alerts users that HTTP/HTTPS addresses are Docker-internal only and not reachable from outside
+- Clarify `P2P_SSL_VERIFY` behavior with self-signed certs across README.md, docker-compose.yml, and DOCKER_CONFIGURATION.md — QUICKSTART self-signed certs are rejected by default, expanded descriptions in quick reference tables and SSL section
+- Add startup log warning when HTTPS between QUICKSTART nodes will fail due to `P2P_SSL_VERIFY=true` with self-signed certs — only shown when `P2P_SSL_VERIFY` is not disabled and `P2P_CA_CERT` is not set
 
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
