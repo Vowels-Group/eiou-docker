@@ -75,9 +75,9 @@ class TransactionPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiver_address']);
         $memo = $data['memo'];
 
-        return [
+        $payload = [
             'type' => 'send',
-            'time' => $data['time'],   
+            'time' => $data['time'],
             'receiverAddress' => $data['receiver_address'],
             'receiverPublicKey' => $data['receiver_public_key'],
             'amount' => $this->sanitizeNumber($data['amount']),
@@ -88,6 +88,13 @@ class TransactionPayload extends BasePayload
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include encrypted description for P2P relay — opaque ciphertext
+        if (!empty($data['encrypted_description'])) {
+            $payload['encryptedDescription'] = $data['encrypted_description'];
+        }
+
+        return $payload;
     }
 
     /**

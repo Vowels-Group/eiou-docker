@@ -22,7 +22,7 @@ class P2pRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'hash', 'salt', 'inquiry_token', 'inquiry_secret',
-        'time', 'expiration', 'currency', 'amount',
+        'time', 'expiration', 'currency', 'amount', 'encrypted_description',
         'my_fee_amount', 'rp2p_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
@@ -112,7 +112,8 @@ class P2pRepository extends AbstractRepository {
             'incoming_txid' => $request['incoming_txid'] ?? null,
             'outgoing_txid' => $request['outgoing_txid'] ?? null,
             'status' => $status,
-            'description' => $description, // Privacy: Only stored locally, never sent to relay nodes
+            'description' => $description, // Plaintext: only stored on originator
+            'encrypted_description' => $request['encryptedDescription'] ?? null, // AES-256-GCM: travels through relays
             'fast' => (int)($request['fast'] ?? 1),
             'hop_wait' => (int)($request['hopWait'] ?? 0)
         ];

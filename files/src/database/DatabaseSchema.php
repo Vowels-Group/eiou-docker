@@ -142,6 +142,7 @@ function getTransactionsTableSchema() {
         time BIGINT NULL,
         memo TEXT,
         description TEXT,
+        encrypted_description TEXT, /* AES-256-GCM ciphertext with embedded salt+time — decryptable only with inquiry_secret derived from originator's private key */
         initial_sender_address VARCHAR(255) DEFAULT NULL,
         end_recipient_address VARCHAR(255) DEFAULT NULL,
         sending_started_at DATETIME(6) DEFAULT NULL,  /* When processing started, for recovery timeout detection */
@@ -265,6 +266,7 @@ function getP2pTableSchema() {
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT,
         description TEXT,
+        encrypted_description TEXT, /* AES-256-GCM encrypted description — travels through relay chain, decryptable only with inquiry_secret */
         fast TINYINT(1) DEFAULT 1, /* 1=fast mode (first rp2p wins), 0=best-fee mode (collect all, pick cheapest) */
         hop_wait INT DEFAULT 0, /* seconds to wait at each hop before forwarding (best-fee mode delay) */
         contacts_sent_count INT DEFAULT 0, /* number of contacts the p2p was sent to */

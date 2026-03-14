@@ -756,15 +756,19 @@ class P2pService implements P2pServiceInterface {
         // Additional data preparation - Use cryptographically secure random
         try {
             $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
-            // Generate inquiry secret (only stored locally) and token (propagates through relay chain).
-            // The token is baked into the P2P hash so relay nodes can't swap it.
-            // Only the original sender can produce the pre-image to authenticate completion inquiries.
-            $data['inquirySecret'] = bin2hex(random_bytes(32));
-            $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
         } catch (Exception $e) {
             Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
+
+        // Derive inquiry secret deterministically from private key + P2P fields.
+        // HMAC(private_key, salt + time) is recoverable after seed restore:
+        // sync with relay to get the P2P record (which has salt + time), then
+        // regenerate secret from restored private key. Salt is random per P2P
+        // so each secret is unique. The token (hash of secret) propagates through
+        // relays and is baked into the P2P hash.
+        $data['inquirySecret'] = hash_hmac(Constants::HASH_ALGORITHM, $data['salt'] . $data['time'], $this->currentUser->getPrivateKey());
+        $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
 
         $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time'] . $data['inquiryToken']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
@@ -817,12 +821,14 @@ class P2pService implements P2pServiceInterface {
         // Additional data preparation - Use cryptographically secure random
         try {
             $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
-            $data['inquirySecret'] = bin2hex(random_bytes(32));
-            $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
         } catch (Exception $e) {
             Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
+
+        // Derive inquiry secret deterministically (see prepareP2pRequestData for details)
+        $data['inquirySecret'] = hash_hmac(Constants::HASH_ALGORITHM, $data['salt'] . $data['time'], $this->currentUser->getPrivateKey());
+        $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
 
         $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time'] . $data['inquiryToken']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
@@ -1257,8 +1263,13 @@ class P2pService implements P2pServiceInterface {
             $p2pPayload['inquirySecret'] = $preparedData['inquirySecret'];
         }
         output(outputInsertingP2pRequest($address), 'SILENT');
-        // Privacy: Store description locally but don't include in P2P payload sent to relays
         $description = isset($data[5]) && !empty($data[5]) && strncmp($data[5], '--', 2) !== 0 ? $data[5] : null;
+        // Encrypt description with inquiry_secret so it can travel through relays
+        // without being readable. Only the originator (via HMAC-derived secret) and
+        // the end-recipient (via completion inquiry) can decrypt it.
+        if ($description !== null && isset($preparedData['inquirySecret'])) {
+            $p2pPayload['encryptedDescription'] = self::encryptDescription($description, $preparedData['inquirySecret'], $preparedData['salt'], $preparedData['time']);
+        }
         $this->p2pRepository->insertP2pRequest($p2pPayload, $address, $description);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
     }
@@ -1278,8 +1289,74 @@ class P2pService implements P2pServiceInterface {
             $p2pPayload['inquirySecret'] = $preparedData['inquirySecret'];
         }
         output(outputInsertingP2pRequest($message['receiver_address']), 'SILENT');
-        $this->p2pRepository->insertP2pRequest($p2pPayload, $message['receiver_address']);
+        // Encrypt description for relay (failed direct transaction may have had a description)
+        $description = $message['description'] ?? null;
+        if ($description !== null && isset($preparedData['inquirySecret'])) {
+            $p2pPayload['encryptedDescription'] = self::encryptDescription($description, $preparedData['inquirySecret'], $preparedData['salt'], $preparedData['time']);
+        }
+        $this->p2pRepository->insertP2pRequest($p2pPayload, $message['receiver_address'], $description);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
+    }
+
+    /**
+     * Encrypt a description using the inquiry secret as key (AES-256-GCM).
+     * Embeds salt + time into the blob so the secret can be rederived after
+     * seed restore without needing the P2P record.
+     *
+     * Blob format: base64(salt_hex(32) + time_str + \0 + IV(12) + tag(16) + ciphertext)
+     *
+     * @param string $plaintext Description to encrypt
+     * @param string $key Inquiry secret (hex string from HMAC)
+     * @param string $salt P2P salt (hex string)
+     * @param string|int $time P2P time (microtime integer)
+     * @return string Base64-encoded blob
+     */
+    public static function encryptDescription(string $plaintext, string $key, string $salt, string|int $time): string {
+        $keyBytes = hex2bin(substr(hash('sha256', $key), 0, 64)); // 32 bytes for AES-256
+        $iv = random_bytes(12); // 96-bit IV for GCM
+        $ciphertext = openssl_encrypt($plaintext, 'aes-256-gcm', $keyBytes, OPENSSL_RAW_DATA, $iv, $tag);
+        // Embed salt + time as plaintext prefix so they survive P2P record cleanup
+        $header = $salt . (string)$time . "\0";
+        return base64_encode($header . $iv . $tag . $ciphertext);
+    }
+
+    /**
+     * Decrypt a description using the inquiry secret as key (AES-256-GCM).
+     *
+     * @param string $encrypted Base64-encoded blob from encryptDescription()
+     * @param string $key Inquiry secret (hex string from HMAC)
+     * @return string|false Decrypted plaintext or false on failure
+     */
+    public static function decryptDescription(string $encrypted, string $key): string|false {
+        $raw = base64_decode($encrypted);
+        if ($raw === false) return false;
+        // Find the null separator between header (salt+time) and crypto payload
+        $nullPos = strpos($raw, "\0");
+        if ($nullPos === false) return false;
+        $cryptoPayload = substr($raw, $nullPos + 1);
+        if (strlen($cryptoPayload) < 28) return false; // 12 IV + 16 tag minimum
+        $keyBytes = hex2bin(substr(hash('sha256', $key), 0, 64)); // 32 bytes for AES-256
+        $iv = substr($cryptoPayload, 0, 12);
+        $tag = substr($cryptoPayload, 12, 16);
+        $ciphertext = substr($cryptoPayload, 28);
+        return openssl_decrypt($ciphertext, 'aes-256-gcm', $keyBytes, OPENSSL_RAW_DATA, $iv, $tag);
+    }
+
+    /**
+     * Extract salt and time from an encrypted description blob.
+     * Used for secret recovery after seed restore.
+     *
+     * @param string $encrypted Base64-encoded blob from encryptDescription()
+     * @return array{salt: string, time: string}|false Extracted values or false
+     */
+    public static function extractSaltTimeFromEncrypted(string $encrypted): array|false {
+        $raw = base64_decode($encrypted);
+        if ($raw === false) return false;
+        $nullPos = strpos($raw, "\0");
+        if ($nullPos === false || $nullPos < 33) return false; // 32 hex salt + at least 1 digit time
+        $salt = substr($raw, 0, 32);
+        $time = substr($raw, 32, $nullPos - 32);
+        return ['salt' => $salt, 'time' => $time];
     }
 
     /**

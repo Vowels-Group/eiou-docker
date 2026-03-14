@@ -2016,40 +2016,71 @@ A's contact, C must verify that the inquiry sender is the legitimate P2P origina
 hash check (`resolveUserAddressForTransport`) converts any sender address to the
 local node's address, meaning any node with the P2P data could pass validation.
 
-**Solution: Hash-committed inquiry secret.**
+**Solution: HMAC-derived inquiry secret with encrypted description.**
 
 ```
 CREATION (on originator A):
-  inquiry_secret = random_bytes(32)                    ← stored only on A
+  inquiry_secret = HMAC-SHA256(private_key, salt + time)
   inquiry_token  = sha256(inquiry_secret)              ← propagates through relays
+  encrypted_desc = AES-256-GCM(description, inquiry_secret)  ← travels through relays
   p2p_hash       = sha256(receiver + salt + time + inquiry_token)
 ```
 
 The `inquiry_token` is baked into the P2P hash that every node validates. A relay
 node cannot swap the token without breaking the hash, which would be rejected by
-all downstream nodes.
+all downstream nodes. The `encrypted_description` travels alongside the P2P through
+relay nodes — they can see the ciphertext but cannot decrypt it without the secret.
 
 ```
-VERIFICATION (on end-recipient C):
+VERIFICATION + DECRYPTION (on end-recipient C):
   1. A sends completion inquiry to C with inquiry_secret
   2. C computes: sha256(received_secret) === stored inquiry_token
-  3. Match → A is the legitimate originator; accept inquiry + store description
+  3. Match → C decrypts encrypted_description using the secret
+  4. C stores the plaintext description on the transaction
      No match → reject (relay node attempting to forge inquiry)
 ```
 
+```
+RECOVERY (after A restores from seedphrase):
+  1. A restores wallet → gets private_key back from seedphrase
+  2. A syncs with B (relay contact) → gets P2P record (salt, time)
+  3. A regenerates: inquiry_secret = HMAC-SHA256(private_key, salt + time)
+  4. A decrypts encrypted_description from the synced P2P record
+```
+
 **Key properties:**
+- The secret is deterministic from the private key — recoverable after seed restore
+  without any cooperation from other nodes
 - `inquiry_secret` never traverses the relay chain — only sent on the direct A→C path
 - `inquiry_token` (the hash) propagates openly but is irreversible
+- `encrypted_description` travels through relays as opaque ciphertext (AES-256-GCM)
 - Swapping the token breaks the P2P hash, detected by every relay node
-- The transport envelope is signed, preventing man-in-the-middle modification of the inquiry
-- The secret is ephemeral — used once for the initial inquiry. After the description is stored on all nodes, it is recoverable via normal transaction chain sync (A syncs with B to recover descriptions). The end-recipient does not need to store the secret.
+- HMAC security: even with many (message, token) pairs from the same originator,
+  recovering the private key is computationally infeasible
 
-**Database columns (p2p table):**
+**Database columns:**
+
+*p2p table:*
 
 | Column | Stored On | Purpose |
 |--------|-----------|---------|
 | `inquiry_token` | All nodes | `sha256(inquiry_secret)` — baked into P2P hash |
-| `inquiry_secret` | Originator only | Pre-image for initial inquiry authentication |
+| `inquiry_secret` | Originator only | `HMAC(private_key, salt + time)` — pre-image for inquiry authentication |
+| `encrypted_description` | All nodes | AES-256-GCM ciphertext with embedded salt+time — decryptable only with inquiry_secret |
+
+*transactions table:*
+
+| Column | Stored On | Purpose |
+|--------|-----------|---------|
+| `encrypted_description` | All nodes | Same ciphertext as p2p table — persists after P2P record cleanup, enabling recovery after seed restore |
+| `description` | Originator + end-recipient | Plaintext — set on originator at creation, set on end-recipient after inquiry decryption |
+
+**Encrypted description blob format:**
+```
+base64( salt_hex(32 chars) + time_str + \0 + IV(12 bytes) + GCM_tag(16 bytes) + ciphertext )
+```
+The salt and time are embedded as a plaintext prefix so the secret can be rederived
+from `HMAC(private_key, salt + time)` even after the P2P record is cleaned up.
 
 ---
 

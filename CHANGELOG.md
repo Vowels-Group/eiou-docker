@@ -23,7 +23,9 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - P2P hash formula changed from `sha256(receiver_address + salt + time)` to `sha256(receiver_address + salt + time + inquiry_token)`
-- P2P table schema: added `inquiry_token` (propagates through relay chain) and `inquiry_secret` (stored only on originator) columns
+- P2P `inquiry_secret` now derived deterministically via `HMAC(private_key, salt + time)` instead of random bytes — recoverable after seed restore by syncing the P2P record from a relay and regenerating from the restored private key
+- P2P descriptions now travel through the relay chain as AES-256-GCM encrypted ciphertext (`encrypted_description`), decryptable only with the `inquiry_secret`. End-recipient decrypts upon receiving the completion inquiry. Originator can also recover by regenerating the secret after seed restore.
+- P2P table schema: added `inquiry_token` (propagates through relay chain), `inquiry_secret` (stored only on originator, deterministic from private key), and `encrypted_description` (AES-256-GCM ciphertext, travels through relays) columns
 
 ## 2026-03-14
 

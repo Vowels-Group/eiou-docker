@@ -78,6 +78,11 @@ class P2pPayload extends BasePayload
             $payload['inquiryToken'] = $data['inquiryToken'];
         }
 
+        // Include encrypted description — relay nodes can't decrypt (no secret)
+        if (isset($data['encryptedDescription'])) {
+            $payload['encryptedDescription'] = $data['encryptedDescription'];
+        }
+
         return $payload;
     }
 
@@ -114,6 +119,10 @@ class P2pPayload extends BasePayload
 
         if (!empty($data['inquiry_token'])) {
             $payload['inquiryToken'] = $data['inquiry_token'];
+        }
+
+        if (!empty($data['encrypted_description'])) {
+            $payload['encryptedDescription'] = $data['encrypted_description'];
         }
 
         return $payload;

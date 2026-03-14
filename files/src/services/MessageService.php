@@ -563,14 +563,39 @@ class MessageService implements MessageServiceInterface {
         // Handle inquiry about transaction status
         output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
 
-        // Store description from inquiry if provided (for P2P transactions)
-        // The original sender includes the description in the inquiry so end-recipient can store it
-        if (isset($decodedMessage['description']) && $decodedMessage['description'] !== null && isset($decodedMessage['hash'])) {
+        // Store description from inquiry if provided (for P2P transactions).
+        // The inquiry carries the description directly, or the end-recipient can decrypt
+        // the encrypted_description stored during P2P relay using the inquiry_secret.
+        $description = $decodedMessage['description'] ?? null;
+        if ($description === null && isset($decodedMessage['inquirySecret'], $decodedMessage['hash'])) {
+            $secret = $decodedMessage['inquirySecret'];
             $hash = $decodedMessage['hash'];
-            // Update description in p2p table
-            $this->p2pRepository->updateDescription($hash, $decodedMessage['description']);
-            // Update description in transaction table (using memo/hash)
-            $this->transactionRepository->updateDescription($hash, $decodedMessage['description'], false);
+            // Try decrypting from P2P record first, then fall back to transaction record
+            $encrypted = null;
+            $p2pRecord = $this->p2pRepository->getByHash($hash);
+            if ($p2pRecord && !empty($p2pRecord['encrypted_description'])) {
+                $encrypted = $p2pRecord['encrypted_description'];
+            }
+            if ($encrypted === null) {
+                $txRecords = $this->transactionRepository->getByMemo($hash);
+                foreach ($txRecords as $tx) {
+                    if (!empty($tx['encrypted_description'])) {
+                        $encrypted = $tx['encrypted_description'];
+                        break;
+                    }
+                }
+            }
+            if ($encrypted !== null) {
+                $decrypted = \Eiou\Services\P2pService::decryptDescription($encrypted, $secret);
+                if ($decrypted !== false) {
+                    $description = $decrypted;
+                }
+            }
+        }
+        if ($description !== null && isset($decodedMessage['hash'])) {
+            $hash = $decodedMessage['hash'];
+            $this->p2pRepository->updateDescription($hash, $description);
+            $this->transactionRepository->updateDescription($hash, $description, false);
         }
 
         // Extract and store initial_sender_address from inquiry message (for P2P transactions)
