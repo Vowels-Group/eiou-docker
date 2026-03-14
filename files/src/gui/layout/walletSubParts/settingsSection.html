@@ -487,17 +487,6 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
-                            <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
-                                $corsOrigins = array_filter(array_map('trim', explode(',', $user->getApiCorsAllowedOrigins())));
-                                echo htmlspecialchars(implode("\n", $corsOrigins));
-                            ?></textarea>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
-                            </small>
-                        </div>
-
-                        <div class="form-group">
                             <label for="maxP2pLevel">Max P2P Routing Level:</label>
                             <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
                             <small class="form-hint">
@@ -522,10 +511,13 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="maxOutput">GUI/CLI Max Output Lines:</label>
-                            <input type="number" id="maxOutput" name="maxOutput" value="<?php echo htmlspecialchars($user->getMaxOutput()); ?>" step="1" min="1" class="default-value">
+                            <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
+                            <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
+                                $corsOrigins = array_filter(array_map('trim', explode(',', $user->getApiCorsAllowedOrigins())));
+                                echo htmlspecialchars(implode("\n", $corsOrigins));
+                            ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Maximum rows shown in command output — applies to both the GUI dashboard and CLI commands
+                                <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
                             </small>
                         </div>
 
@@ -632,7 +624,15 @@
                             <label for="displayRecentTransactionsLimit">Recent Transactions Limit:</label>
                             <input type="number" id="displayRecentTransactionsLimit" name="displayRecentTransactionsLimit" value="<?php echo htmlspecialchars($user->getDisplayRecentTransactionsLimit()); ?>" min="1" step="1" class="default-value">
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Number of recent transactions shown on the GUI dashboard (separate from GUI/CLI Max Output Lines in main settings)
+                                <i class="fas fa-info-circle"></i> Number of recent transactions shown on the GUI dashboard (separate from GUI/CLI Max Output Lines)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="maxOutput">GUI/CLI Max Output Lines:</label>
+                            <input type="number" id="maxOutput" name="maxOutput" value="<?php echo htmlspecialchars($user->getMaxOutput()); ?>" step="1" min="1" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Maximum rows shown in command output — applies to both the GUI dashboard and CLI commands
                             </small>
                         </div>
                     </div>
