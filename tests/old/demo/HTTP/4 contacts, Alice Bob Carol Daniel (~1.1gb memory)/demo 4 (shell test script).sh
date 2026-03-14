@@ -83,7 +83,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -104,7 +104,7 @@ docker exec Alice eiou send ${containerAddresses[Carol]} 100 USD
 docker exec Alice eiou send ${containerAddresses[Daniel]} 100 USD # first complicated path
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 echo -e "\nTesting other functions..."
 
@@ -119,7 +119,7 @@ docker exec Daniel eiou viewcontact ${containerAddresses[Carol]}
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
 echo -e "\nSleeping for 5 seconds..."
-sleep 15 
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # View balances
 echo -e "\nViewing balances..."

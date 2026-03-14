@@ -84,7 +84,7 @@ docker run -d --restart unless-stopped --network=demo-net --name A42 -v "A42-mys
 docker run -d --restart unless-stopped --network=demo-net --name A421 -v "A421-mysql-data:/var/lib/mysql" -v "A421-config:/etc/eiou/config" -v "A421-backups:/var/lib/eiou/backups" -v "A421-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A421 eiou/eiou
 docker run -d --restart unless-stopped --network=demo-net --name A422 -v "A422-mysql-data:/var/lib/mysql" -v "A422-config:/etc/eiou/config" -v "A422-backups:/var/lib/eiou/backups" -v "A422-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A422 eiou/eiou
 docker run -d --restart unless-stopped --network=demo-net --name A423 -v "A423-mysql-data:/var/lib/mysql" -v "A423-config:/etc/eiou/config" -v "A423-backups:/var/lib/eiou/backups" -v "A423-letsencrypt:/etc/letsencrypt" -e QUICKSTART=A423 eiou/eiou
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends (NOTE that names are NOT arbitrary)
 docker exec A0 eiou add https://A1 A1 0.1 1000 USD

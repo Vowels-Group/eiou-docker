@@ -18,7 +18,7 @@ docker run -d --restart unless-stopped  --network=demo-net --name Alice -v "Alic
 docker run -d --restart unless-stopped  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-config:/etc/eiou/config" -v "Bob-backups:/var/lib/eiou/backups" -v "Bob-letsencrypt:/etc/letsencrypt" -e QUICKSTART=Bob eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-config:/etc/eiou/config" -v "Carol-backups:/var/lib/eiou/backups" -v "Carol-letsencrypt:/etc/letsencrypt" -e QUICKSTART=Carol eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-config:/etc/eiou/config" -v "Daniel-backups:/var/lib/eiou/backups" -v "Daniel-letsencrypt:/etc/letsencrypt" -e QUICKSTART=Daniel eiou/eiou
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
 docker exec Alice eiou add https://Bob Bob 0.1 1000 USD

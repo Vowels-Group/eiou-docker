@@ -76,7 +76,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (Tor)
@@ -86,7 +86,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nWaiting for 15 seconds due to the nature of Tor..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 
 

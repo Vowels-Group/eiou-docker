@@ -101,7 +101,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends
 echo -e "\nAdding friends..."
