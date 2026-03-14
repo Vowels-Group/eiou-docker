@@ -14,8 +14,14 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
+- Make `conversionFactors` and `currencyDecimals` configurable through UserContext (GUI, CLI, API) instead of hardcoded constants. Settings persist in the config volume across container rebuilds. `Constants::getConversionFactor()` and `Constants::getCurrencyDecimals()` now check UserContext first with fallback to defaults
+- Replace all direct `Constants::CONVERSION_FACTORS[$currency]` array accesses with `Constants::getConversionFactor($currency)` method calls to route through configurable settings
+- Move Allowed Currencies from Network to new Currency category in GUI Advanced Settings
 
 ### Added
+- Add Currency category to GUI Advanced Settings dropdown with fields for conversion factors, currency decimals, and allowed currencies
+- Add CLI `changesettings` handlers for `conversionFactors` (JSON) and `currencyDecimals` (JSON)
+- Add `docs/CURRENCY_CONFIGURATION.md`: guide for adding new currencies via GUI, CLI, and API with persistence and example configurations
 - Add optional message/description field to contact requests: GUI (Add Contact form), CLI (`eiou add ... "message"`), and API (`description` field). The message is sent with the contact request and stored in the contact transaction on both sides. Descriptions are included in the signed payload for direct sends and contact requests but stripped from P2P relay messages for privacy (#739)
 - Add `autoAcceptRestoredContact` toggle (env: `EIOU_AUTO_ACCEPT_RESTORED_CONTACT`, default: `true`) to control whether contacts are auto-accepted on wallet restore when transaction history proves a prior relationship. When disabled, restored contacts stay pending for manual review. Configurable via CLI, GUI, and API. Restored contacts are named `RestoredContact<N>` for identification
 - Add legal notice banner to container startup (`scripts/banners/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts

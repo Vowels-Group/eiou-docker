@@ -195,6 +195,7 @@
                     <label for="advancedSectionSelect">Category:</label>
                     <select id="advancedSectionSelect" data-action-change="switchAdvancedSection">
                         <option value="feature-toggles">Feature Toggles</option>
+                        <option value="currency">Currency</option>
                         <option value="display">Display</option>
                         <option value="backup-logging">Backup &amp; Logging</option>
                         <option value="data-retention">Data Retention</option>
@@ -543,6 +544,45 @@
                             </small>
                         </div>
 
+                    </div>
+                </div>
+
+                <!-- Currency (hidden by default) -->
+                <div id="adv-section-currency" class="adv-section d-none">
+                    <h4 class="settings-subsection-title">
+                        <i class="fas fa-coins"></i> Currency
+                    </h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="conversionFactors">Conversion Factors:</label>
+                            <textarea id="conversionFactors" name="conversionFactors" rows="4" class="default-value" placeholder="USD:100&#10;EUR:100&#10;BTC:100000000"><?php
+                                $factors = $user->getConversionFactors();
+                                $lines = [];
+                                foreach ($factors as $code => $factor) {
+                                    $lines[] = $code . ':' . $factor;
+                                }
+                                echo htmlspecialchars(implode("\n", $lines));
+                            ?></textarea>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Minor-to-major unit conversion per currency — one per line as CODE:FACTOR (e.g., USD:100 means 100 cents per dollar, BTC:100000000 means satoshis per bitcoin). Persists across container rebuilds.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="currencyDecimals">Currency Decimal Places:</label>
+                            <textarea id="currencyDecimals" name="currencyDecimals" rows="4" class="default-value" placeholder="USD:2&#10;EUR:2&#10;BTC:8"><?php
+                                $decimals = $user->getCurrencyDecimalsMap();
+                                $lines = [];
+                                foreach ($decimals as $code => $dec) {
+                                    $lines[] = $code . ':' . $dec;
+                                }
+                                echo htmlspecialchars(implode("\n", $lines));
+                            ?></textarea>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Display decimal places per currency — one per line as CODE:DECIMALS (e.g., USD:2, BTC:8). Persists across container rebuilds.
+                            </small>
+                        </div>
+
                         <div class="form-group">
                             <label for="allowedCurrencies">Allowed Currencies:</label>
                             <textarea id="allowedCurrencies" name="allowedCurrencies" rows="3" class="default-value" placeholder="USD&#10;EUR"><?php
@@ -550,7 +590,7 @@
                                 echo htmlspecialchars(implode("\n", $allowedCurrencyList));
                             ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined.
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined above. Set conversion factors and decimals first, then add the currency here.
                             </small>
                         </div>
                     </div>

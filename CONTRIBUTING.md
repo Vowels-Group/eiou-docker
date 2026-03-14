@@ -42,14 +42,24 @@ A formal Code of Conduct will be added to this repository. In the meantime, all 
 |-----------|--------------|
 | `dom` | PHPUnit XML parsing |
 | `mbstring` | String handling |
-| `sodium` | Cryptographic operations (Tor key derivation, encryption) |
-| `openssl` | Key encryption, BIP39 tests |
+| `sodium` | Cryptographic operations (Tor key derivation, encryption). Built into PHP on Debian 12; may require a separate package on Ubuntu (see below) |
+| `openssl` | Key encryption, BIP39 tests. Built into PHP core on all platforms |
 
-**Ubuntu/Debian:**
+**Debian 12 (bookworm):**
 
 ```bash
-sudo apt-get install php8.3-cli php8.3-xml php8.3-mbstring php8.3-sodium
+sudo apt-get install php-cli php-xml php-mbstring
 ```
+
+Sodium and OpenSSL are compiled into PHP on Debian 12 — no separate packages needed. This matches the runtime packages in `eiou.dockerfile`.
+
+**Ubuntu (24.04+):**
+
+```bash
+sudo apt-get install php-cli php-xml php-mbstring php-sodium
+```
+
+Ubuntu ships sodium as a separate package (`php8.3-sodium` on 24.04).
 
 **macOS (Homebrew):**
 
@@ -554,6 +564,7 @@ Documentation lives in the `docs/` directory. When your changes affect user-faci
 
 | Document | When to Update |
 |----------|----------------|
+| [Currency Configuration](docs/CURRENCY_CONFIGURATION.md) | New currencies, changed conversion factors or decimal places |
 | [API Reference](docs/API_REFERENCE.md) | New or changed API endpoints |
 | [API Quick Reference](docs/API_QUICK_REFERENCE.md) | Summary of API endpoints |
 | [CLI Reference](docs/CLI_REFERENCE.md) | New or changed CLI commands |

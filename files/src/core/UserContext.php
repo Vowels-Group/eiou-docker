@@ -427,6 +427,66 @@ class UserContext {
     }
 
     /**
+     * Get currency conversion factors map
+     *
+     * @return array<string, int> Map of currency code to conversion factor (e.g., ['USD' => 100, 'BTC' => 100000000])
+     */
+    public function getConversionFactors(): array {
+        $factors = $this->get('conversionFactors');
+        if ($factors === null) {
+            return Constants::CONVERSION_FACTORS;
+        }
+        if (is_string($factors)) {
+            $decoded = json_decode($factors, true);
+            return is_array($decoded) ? $decoded : Constants::CONVERSION_FACTORS;
+        }
+        return (array) $factors;
+    }
+
+    /**
+     * Get the conversion factor for a single currency
+     *
+     * @param string $currency Currency code (e.g., 'USD')
+     * @return int Conversion factor (e.g., 100 for USD cents-to-dollars)
+     * @throws \InvalidArgumentException If currency has no defined factor
+     */
+    public function getConversionFactor(string $currency): int {
+        $factors = $this->getConversionFactors();
+        if (!isset($factors[$currency])) {
+            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
+        }
+        return (int) $factors[$currency];
+    }
+
+    /**
+     * Get currency decimal places map
+     *
+     * @return array<string, int> Map of currency code to decimal places (e.g., ['USD' => 2, 'BTC' => 8])
+     */
+    public function getCurrencyDecimalsMap(): array {
+        $decimals = $this->get('currencyDecimals');
+        if ($decimals === null) {
+            return Constants::CURRENCY_DECIMALS;
+        }
+        if (is_string($decimals)) {
+            $decoded = json_decode($decimals, true);
+            return is_array($decoded) ? $decoded : Constants::CURRENCY_DECIMALS;
+        }
+        return (array) $decimals;
+    }
+
+    /**
+     * Get the number of decimal places for a single currency
+     *
+     * @param string $currency Currency code (e.g., 'USD')
+     * @return int Number of decimal places
+     */
+    public function getCurrencyDecimals(string $currency): int {
+        $decimals = $this->getCurrencyDecimalsMap();
+        return (int) ($decimals[$currency] ?? Constants::DISPLAY_CURRENCY_DECIMALS);
+    }
+
+    /**
      * Get maximum fee percentage
      *
      * @return float
@@ -927,6 +987,8 @@ class UserContext {
         return [
             // Transaction settings (original 11)
             'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
+            'conversionFactors' => json_encode(Constants::CONVERSION_FACTORS),
+            'currencyDecimals' => json_encode(Constants::CURRENCY_DECIMALS),
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,
