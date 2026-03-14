@@ -12,13 +12,12 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
-### Fixed
-- Fix `CliService::displayPendingContacts()` crash — `$this->container` property didn't exist, replaced with stored `$repositoryFactory`
-- Fix `cliCommandsTest.sh` report debug JSON assertions using `"success":true` (no space) instead of `"success": true` to match `JSON_PRETTY_PRINT` output
-- Fix `cliCommandsTest.sh` and `apiEndpointsTest.sh` checking for removed `display_currency_decimals` key — replaced with `currency_decimals` in CLI test, removed from API test
-- Remove stale `changesettings displayCurrencyDecimals` integration test (setting was replaced by `currencyDecimals` JSON map)
-- Fix P2P completion inquiry description stripped before delivery — `signWithCapture()` removed `description` from all non-send/non-contact messages, including completion inquiries that carry the description to the end-recipient. Now preserves description for `type=message` with `inquiry=true`
-- Fix sync test cascading failures — replace naive description-pattern cleanup with chain-aware reset to contact-only state between tests. Clears non-contact transactions, repairs `previous_txid` links, and wipes related table residue (balances, p2p, chain_drop_proposals, etc.)
+### Security
+- Add P2P inquiry token authentication — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates.
+
+### Changed
+- P2P hash formula changed from `sha256(receiver_address + salt + time)` to `sha256(receiver_address + salt + time + inquiry_token)`
+- P2P table schema: added `inquiry_token` (propagates through relay chain) and `inquiry_secret` (stored only on originator) columns
 
 ## 2026-03-14
 
