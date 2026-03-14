@@ -28,6 +28,9 @@ Open alpha launch prep, currency configuration, settings GUI cleanup, legal noti
 - Audit and update DOCKER_CONFIGURATION.md: add missing env vars (`APP_DEBUG`, `EIOU_DEFAULT_TRANSPORT_MODE`, `EIOU_TOR_FORCE_FAST`, `EIOU_HOP_BUDGET_RANDOMIZED`)
 - Audit and update CLI_DEMO_GUIDE.md: fix stale `docker-compose-4line.yml` references to `tests/old/compose-files/`, add optional `[message]` parameter to `eiou add` syntax, add `[currency]` to `eiou update` quick reference
 - Add "Before Creating a New Issue" section to CONTRIBUTING.md: search open/closed issues and CHANGELOG before filing duplicates
+- Clarify QUICKSTART addresses are Docker-internal only in README.md, docker-compose.yml, and DOCKER_CONFIGURATION.md — note that external access requires `EIOU_HOST`, `EIOU_PORT`, and proper SSL
+- Add reverse proxy (nginx, Caddy, Traefik) and Cloudflare Tunnel as SSL alternatives to DOCKER_CONFIGURATION.md and README.md
+- Add startup log warning when QUICKSTART is used without EIOU_HOST — alerts users that HTTP/HTTPS addresses are Docker-internal only and not reachable from outside
 
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
