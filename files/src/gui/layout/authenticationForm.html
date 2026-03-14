@@ -58,8 +58,10 @@
                 <?php foreach ($detailParagraphs as $para):
                     $para = preg_replace('/^IMPORTANT:\s*/i', '', $para);
                     if (trim($para) === '') continue;
+                    // Join hard-wrapped lines into flowing text (the txt file uses ~55 char lines)
+                    $para = preg_replace('/\s*\n\s*/', ' ', trim($para));
                 ?>
-                    <p><?php echo autoLinkUrls(nl2br(htmlspecialchars($para))); ?></p>
+                    <p><?php echo autoLinkUrls(htmlspecialchars($para)); ?></p>
                 <?php endforeach; ?>
             </div>
         </details>
@@ -87,9 +89,6 @@
             </div>
         <?php endif; ?>
     </div>
-
-    <!-- Legal Notice (collapsible) -->
-    <?php require_once("/app/eiou/src/gui/layout/walletSubParts/loginNotice.html"); ?>
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
