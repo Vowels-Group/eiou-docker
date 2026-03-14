@@ -12,11 +12,25 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+## 2026-03-14
+
+Open alpha launch prep, currency configuration, settings GUI cleanup, legal notices.
+
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
 - Make `conversionFactors` and `currencyDecimals` configurable through UserContext (GUI, CLI, API) instead of hardcoded constants. Settings persist in the config volume across container rebuilds. `Constants::getConversionFactor()` and `Constants::getCurrencyDecimals()` now check UserContext first with fallback to defaults
 - Replace all direct `Constants::CONVERSION_FACTORS[$currency]` array accesses with `Constants::getConversionFactor($currency)` method calls to route through configurable settings
 - Move Allowed Currencies from Network to new Currency category in GUI Advanced Settings
+- Bump `APP_VERSION` from `0.0.1` to `0.1.0-alpha` (used in `/api/health` endpoint)
+- Set `APP_DEBUG=true` by default for the alpha/development phase (overridable via `APP_DEBUG=false` env var)
+- Remove redundant `displayCurrencyDecimals` global setting — per-currency decimals map now handles all formatting. The setting was never used for actual display, only shown in settings views
+- Declutter main Wallet Settings page: move P2P routing level, P2P expiration, TX delivery expiry, max output lines to Advanced Settings > Network; move auto-refresh, auto-accept P2P, auto-backup toggles to Advanced Settings > Feature Toggles
+- Move GUI/CLI Max Output Lines from Network dropdown to Display dropdown in Advanced Settings
+- Move API CORS Origins to end of Network dropdown in Advanced Settings (largest input box last)
+- Convert `eiou.dockerfile` to multi-stage build (DOCK-04): Composer and `unzip` are now isolated in a builder stage; only the pre-built `vendor/` directory is copied into the runtime image. Removes ~20-30MB of build-only tooling from the final image and eliminates Composer as a post-compromise attack vector
+- Add PHP type hints across codebase (CQ-03): add return type `: string` and parameter types to all 90+ `OutputSchema.php` functions; add typed properties and constructor parameter types to `ApiKeyService`, `ApiAuthService`; add return types and parameter types to `DebugService` methods and `DebugServiceInterface`; add `mixed` type to `ApiKeyService::validateRateLimit()` parameter
+- Increase legacy demo sleep timers from 15s to 160s across all 48 test files in `tests/old/` (HTTP, HTTPS, Tor) as a safety margin for Tor connection readiness
+- Consolidate alpha warning and legal notice into a single combined startup message (`scripts/banners/alpha-warning.txt`); remove separate `legal-notice.txt`
 
 ### Added
 - Add Currency category to GUI Advanced Settings dropdown with fields for conversion factors, currency decimals, and allowed currencies
@@ -24,15 +38,9 @@ The project is currently in **ALPHA** status.
 - Add `docs/CURRENCY_CONFIGURATION.md`: guide for adding new currencies via GUI, CLI, and API with persistence and example configurations
 - Add optional message/description field to contact requests: GUI (Add Contact form), CLI (`eiou add ... "message"`), and API (`description` field). The message is sent with the contact request and stored in the contact transaction on both sides. Descriptions are included in the signed payload for direct sends and contact requests but stripped from P2P relay messages for privacy (#739)
 - Add `autoAcceptRestoredContact` toggle (env: `EIOU_AUTO_ACCEPT_RESTORED_CONTACT`, default: `true`) to control whether contacts are auto-accepted on wallet restore when transaction history proves a prior relationship. When disabled, restored contacts stay pending for manual review. Configurable via CLI, GUI, and API. Restored contacts are named `RestoredContact<N>` for identification
-- Add legal notice banner to container startup (`scripts/banners/legal-notice.txt`), displayed between the alpha warning and the acceptance line. Notice is loaded from a separate text file for easy editing without modifying shell scripts
-- Add alpha warning and collapsible legal notice to the GUI login screen (`loginNotice.html`). Legal text is loaded from `scripts/banners/legal-notice.txt` — same file as the startup banner, so one edit updates both
+- Add alpha warning and legal notice to GUI login screen with collapsible Important dropdown
+- Add warning icon next to "(optional)" in Add Contact message label to clarify the encryption warning applies to the message field only
 - Move banner text files (`alpha-warning.txt`, `legal-notice.txt`) from `scripts/` to `scripts/banners/` to separate static content from executable scripts
-
-### Docs
-- Update `tests/README.md` with benchmark documentation, new topologies (`collisions`, `collisionscluster`), new test subsets (`bestfee`, `mutual`), complete test file listing, and current environment variables
-- Add alpha/staging warning and legal notice to README.md
-- Standardize branding: rename "EIOU" to "eIOU" in all prose text across 58 files (docs, comments, configs, tests). Preserves uppercase in code values (currency codes, SSL cert fields, PHP namespaces)
-- Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 
 ### Fixed
 - Fix fee input step validation in contact forms: change `step="0.1"` to `step="0.01"` so values like 0.01% (the default fee) are accepted. Affected: add contact form, edit contact form, and pending contact accept forms
@@ -45,13 +53,19 @@ The project is currently in **ALPHA** status.
 - Fix stale volume names in 48 demo files (`tests/old/demo/`): volume delete commands referenced old `*-files` volumes instead of current `*-config`, causing actual config volumes to persist across resets
 - Fix `RateLimiterRepository` crash: extend `AbstractRepository` so it can be created via `RepositoryFactory` (regression from ARCH-05 PR #717). All four processors (P2P, Transaction, Cleanup, ContactStatus) were crash-looping on startup
 - Fix missing `ContactStatusService::setChainDropService()` setter: wiring call existed in `ServiceContainer::wireCircularDependencies()` but the method was never added (regression from ARCH-05 PR #717)
+- Fix jagged text in login screen Important dropdown: hard-wrapped lines from `alpha-warning.txt` were preserved as `<br>` via `nl2br()`, causing awkward breaks on narrow screens. Now joins lines into flowing paragraphs
+- Remove duplicate legal notice section below the login form — all content is now in the alpha warning Important dropdown
 
 ### Docs
+- Update `tests/README.md` with benchmark documentation, new topologies (`collisions`, `collisionscluster`), new test subsets (`bestfee`, `mutual`), complete test file listing, and current environment variables
+- Rewrite alpha warning and legal notice text for open alpha launch: decentralization emphasis, IOU irreversibility warning, any-unit-of-account framing, First Amendment case law precedents
+- Update README.md alpha warning and remove archived banner SVGs
+- Standardize branding: rename "EIOU" to "eIOU" in all prose text across 58 files (docs, comments, configs, tests). Preserves uppercase in code values (currency codes, SSL cert fields, PHP namespaces)
+- Update CONTRIBUTING.md for open alpha external contributions: update Docker commands, repo structure, architecture patterns, PR checklist (add CHANGELOG requirement), and docs table
+- Add docker-compose.yml setup note to CONTRIBUTING.md
+- Document currency code length change (3-9 alphanumeric) in CLI_REFERENCE, API_REFERENCE, and ERROR_CODES
+- Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 - Update MySQL overview files (`tests/mysql.txt`, `tests/mysql - easy overview.txt`): add 4 new tables (`api_nonces`, `capacity_reservations`, `contact_currencies`, `route_cancellations`); remove stale `fee_percent`/`credit_limit`/`currency` columns from contacts (moved to `contact_currencies`); add missing columns across p2p (`rp2p_amount`, `expiration`), transactions (`expires_at`), message_delivery (`max_retries`, `next_retry_at`, `last_response`), held_transactions (`max_retries`, `last_sync_attempt`, `next_retry_at`), chain_drop_proposals (`previous_txid_before_gap`, `gap_context`, `updated_at`), delivery_metrics (`created_at`), dead_letter_queue (`last_retry_at`), contacts (`created_at`). All 23 tables now validated against live database
-
-### Changed
-- Convert `eiou.dockerfile` to multi-stage build (DOCK-04): Composer and `unzip` are now isolated in a builder stage; only the pre-built `vendor/` directory is copied into the runtime image. Removes ~20-30MB of build-only tooling from the final image and eliminates Composer as a post-compromise attack vector
-- Add PHP type hints across codebase (CQ-03): add return type `: string` and parameter types to all 90+ `OutputSchema.php` functions; add typed properties and constructor parameter types to `ApiKeyService`, `ApiAuthService`; add return types and parameter types to `DebugService` methods and `DebugServiceInterface`; add `mixed` type to `ApiKeyService::validateRateLimit()` parameter
 
 ## 2026-03-11
 
