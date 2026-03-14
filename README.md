@@ -159,8 +159,8 @@ The container auto-generates a self-signed certificate by default. Override with
 | `LETSENCRYPT_EMAIL` | *(none)* | **Setting this enables Let's Encrypt.** Email for registration and expiry warnings. Requires a real FQDN and port 80 reachable from the internet |
 | `LETSENCRYPT_DOMAIN` | `SSL_DOMAIN` | Domain for the Let's Encrypt certificate |
 | `LETSENCRYPT_STAGING` | `false` | Use the staging server for testing (avoids rate limits, certs won't be browser-trusted) |
-| `P2P_SSL_VERIFY` | `true` | Verify SSL certificates on outbound P2P HTTPS connections. Set to `false` when all nodes use self-signed certs |
-| `P2P_CA_CERT` | *(none)* | Path to a CA certificate for P2P verification. Use with the `/ssl-ca` volume mount |
+| `P2P_SSL_VERIFY` | `true` | Verify SSL certificates on outbound P2P HTTPS connections. Self-signed certs (from QUICKSTART) are **rejected by default**. Set to `false` for dev/testing, or use `P2P_CA_CERT` with a shared CA |
+| `P2P_CA_CERT` | *(none)* | Path to a CA certificate inside the container for P2P verification. Requires a volume mount (e.g., `./ssl-ca:/ssl-ca:ro`). Lets nodes trust each other without disabling verification |
 
 **Certificate selection priority:**
 1. External certs mounted at `/ssl-certs` (server.crt, server.key)
