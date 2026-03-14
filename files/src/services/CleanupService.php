@@ -547,12 +547,18 @@ class CleanupService implements CleanupServiceInterface {
         // Update P2P status to completed
         $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
 
-        // Complete associated transactions and update balances
+        // Complete associated transactions and update balances BEFORE releasing
+        // the reservation — this ensures available credit is never overstated.
+        // Order: record debt first, then release reservation.
         $transactions = $this->transactionRepository->getByMemo($hash);
         if ($transactions) {
             $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
             $this->balanceRepository->updateBalanceGivenTransactions($transactions);
         }
+
+        // Now commit capacity reservations — balance already reflects the debt,
+        // so releasing the reservation restores accurate available credit.
+        $this->capacityReservationRepository?->commitByHash($hash);
     }
 
     /**

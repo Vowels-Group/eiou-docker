@@ -3023,6 +3023,19 @@ html {
     display: block;
 }
 
+/* Truncated hint in settings grid — clips at 1 line, click to expand */
+.settings-grid .form-hint {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    cursor: pointer;
+}
+.settings-grid .form-hint.expanded {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}
+
 /* Contact form defaults hint — closer to preceding form-row */
 .form-hint-defaults {
     color: #6c757d;

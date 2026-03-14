@@ -209,7 +209,7 @@ if (file_exists($torGuiStatusFile)) {
                 unlink($torGuiStatusFile);
             } elseif ($torGuiAge > 600) {
                 // Any status older than 10 minutes — stale, clean up
-                unlink($torGuiStatusFile);
+                @unlink($torGuiStatusFile);
             } else {
                 $torGuiStatus = $torGuiData;
             }
