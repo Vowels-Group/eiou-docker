@@ -168,6 +168,71 @@ class InputValidatorTest extends TestCase
     }
 
     // =========================================================================
+    // Currency Code Length and Format Tests
+    // =========================================================================
+
+    public function testValidateCurrencyAccepts3CharCode(): void
+    {
+        $result = InputValidator::validateCurrency('USD', ['USD']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('USD', $result['value']);
+    }
+
+    public function testValidateCurrencyAcceptsLongerCode(): void
+    {
+        $result = InputValidator::validateCurrency('EIOU', ['EIOU']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('EIOU', $result['value']);
+    }
+
+    public function testValidateCurrencyAccepts9CharCode(): void
+    {
+        $result = InputValidator::validateCurrency('ABCDEFGHI', ['ABCDEFGHI']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('ABCDEFGHI', $result['value']);
+    }
+
+    public function testValidateCurrencyRejects10CharCode(): void
+    {
+        $result = InputValidator::validateCurrency('ABCDEFGHIJ', ['ABCDEFGHIJ']);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('between', $result['error']);
+    }
+
+    public function testValidateCurrencyRejects2CharCode(): void
+    {
+        $result = InputValidator::validateCurrency('AB', ['AB']);
+        $this->assertFalse($result['valid']);
+    }
+
+    public function testValidateCurrencyAcceptsAlphanumeric(): void
+    {
+        $result = InputValidator::validateCurrency('US1', ['US1']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('US1', $result['value']);
+    }
+
+    public function testValidateCurrencyUppercasesInput(): void
+    {
+        $result = InputValidator::validateCurrency('eiou', ['EIOU']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('EIOU', $result['value']);
+    }
+
+    public function testValidateCurrencyRejectsSpecialChars(): void
+    {
+        $result = InputValidator::validateCurrency('US$', ['US$']);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('uppercase letters', $result['error']);
+    }
+
+    public function testValidateCurrencyRejectsSpacesInCode(): void
+    {
+        $result = InputValidator::validateCurrency('U S D', ['U S D']);
+        $this->assertFalse($result['valid']);
+    }
+
+    // =========================================================================
     // validateAddress Tests
     // =========================================================================
 
