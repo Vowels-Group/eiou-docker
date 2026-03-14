@@ -1250,7 +1250,12 @@ class P2pService implements P2pServiceInterface {
             }
         }
 
-        $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestData($data));
+        $preparedData = $this->prepareP2pRequestData($data);
+        $p2pPayload = $this->p2pPayload->build($preparedData);
+        // Restore inquiry_secret for local DB storage (not included in wire payload)
+        if (isset($preparedData['inquirySecret'])) {
+            $p2pPayload['inquirySecret'] = $preparedData['inquirySecret'];
+        }
         output(outputInsertingP2pRequest($address), 'SILENT');
         // Privacy: Store description locally but don't include in P2P payload sent to relays
         $description = isset($data[5]) && !empty($data[5]) && strncmp($data[5], '--', 2) !== 0 ? $data[5] : null;
@@ -1266,7 +1271,12 @@ class P2pService implements P2pServiceInterface {
      */
     public function sendP2pRequestFromFailedDirectTransaction(array $message): void {
         // Create p2p version of failed direct transaction
-        $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestFromFailedTransactionData($message));
+        $preparedData = $this->prepareP2pRequestFromFailedTransactionData($message);
+        $p2pPayload = $this->p2pPayload->build($preparedData);
+        // Restore inquiry_secret for local DB storage (not included in wire payload)
+        if (isset($preparedData['inquirySecret'])) {
+            $p2pPayload['inquirySecret'] = $preparedData['inquirySecret'];
+        }
         output(outputInsertingP2pRequest($message['receiver_address']), 'SILENT');
         $this->p2pRepository->insertP2pRequest($p2pPayload, $message['receiver_address']);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
