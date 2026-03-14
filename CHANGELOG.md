@@ -10,11 +10,15 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## [Unreleased]
-
 ## 2026-03-14
 
-Open alpha launch prep, currency configuration, settings GUI cleanup, legal notices.
+Open alpha launch prep, currency configuration, settings GUI cleanup, legal notices, debug fix.
+
+### Fixed
+- Fix debug panel showing "No debug entries found" despite `APP_DEBUG=true` — `Logger::registerDebugService()` was never called, so all debug entries were silently discarded. Added registration in `ServiceContainer::wireAllServices()`
+- Fix Recent Transactions Refresh button smaller than Failed Messages Refresh button — use consistent `btn-sm` class on both
+- Fix Allowed Currencies textarea shorter than Conversion Factors and Currency Decimal Places textareas — match `rows="4"`
+- Fix Add Contact message label and warning hint entirely red — only the warning icon and "WARNING:" text are now red; "(optional)" and the rest of the hint text are default color. Warning icon moved after "(optional)"
 
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased
