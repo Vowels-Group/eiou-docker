@@ -8,6 +8,8 @@ stores its own data.
 This software is in open alpha and under active development.
 Features and behavior may change without prior notice.
 
+IMPORTANT:
+
 IOUs are bilateral agreements between real people and may not
 be reversible once accepted. Debt can be denominated in any
 unit of account (fiat, commodities, time, or custom units).
