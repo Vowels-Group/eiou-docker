@@ -854,6 +854,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         'previousTxid' => $tx['previous_txid'] ?? null,  // Keep original for signature validity
                         'memo' => $tx['memo'] ?? 'standard',
                         'description' => $tx['description'] ?? null,
+                        'encryptedDescription' => $tx['encrypted_description'] ?? null,
                         'status' => Constants::STATUS_COMPLETED,
                         // Include signature data for future verification
                         'signature' => $tx['sender_signature'] ?? null,
@@ -870,6 +871,23 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     $this->transactionRepository->insertTransaction($insertData, $type);
                     $syncedCount++;
                     $lastInsertedTxid = $tx['txid'];
+
+                    // Auto-decrypt encrypted_description if we are the originator (have private key)
+                    // After seed restore, the originator syncs transactions from relays. The encrypted
+                    // blob has embedded salt+time, allowing secret rederivation via HMAC(private_key, salt+time).
+                    if (!empty($insertData['encryptedDescription']) && empty($insertData['description'])) {
+                        $extracted = \Eiou\Services\P2pService::extractSaltTimeFromEncrypted($insertData['encryptedDescription']);
+                        if ($extracted !== false) {
+                            $privateKey = $this->currentUser->getPrivateKey();
+                            if ($privateKey !== null) {
+                                $recoveredSecret = hash_hmac(Constants::HASH_ALGORITHM, $extracted['salt'] . $extracted['time'], $privateKey);
+                                $decrypted = \Eiou\Services\P2pService::decryptDescription($insertData['encryptedDescription'], $recoveredSecret);
+                                if ($decrypted !== false) {
+                                    $this->transactionRepository->updateDescription($tx['txid'], $decrypted, true);
+                                }
+                            }
+                        }
+                    }
 
                     // If remote won a chain conflict, re-sign our local loser to point to the winner
                     if ($localLoserToResign !== null) {
@@ -1410,6 +1428,12 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $txData['description'] = $tx['description'] ?? null;
         } else {
             $txData['description'] = null;
+            // Include encrypted_description for P2P transactions — opaque ciphertext that
+            // relay nodes can't decrypt. Enables originator to recover the description
+            // after seed restore by rederiving the secret via HMAC(private_key, salt + time).
+            if (!empty($tx['encrypted_description'])) {
+                $txData['encrypted_description'] = $tx['encrypted_description'];
+            }
         }
 
         return $txData;

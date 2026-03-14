@@ -2052,11 +2052,20 @@ RECOVERY (after A restores from seedphrase):
 - The secret is deterministic from the private key — recoverable after seed restore
   without any cooperation from other nodes
 - `inquiry_secret` never traverses the relay chain — only sent on the direct A→C path
+  and never included in sync responses
 - `inquiry_token` (the hash) propagates openly but is irreversible
-- `encrypted_description` travels through relays as opaque ciphertext (AES-256-GCM)
+- `encrypted_description` travels through relays as opaque ciphertext (AES-256-GCM),
+  and is included in transaction sync responses for recovery
 - Swapping the token breaks the P2P hash, detected by every relay node
 - HMAC security: even with many (message, token) pairs from the same originator,
   recovering the private key is computationally infeasible
+
+**Known limitation:** The end-recipient (C) cannot independently recover the P2P
+description after data loss. The `inquiry_secret` is derived from the originator's
+private key, which C does not possess. C's description can only be restored if the
+originator (A) sends a new completion inquiry. The originator can always recover its
+own description by rederiving the secret from its restored private key + the salt and
+time embedded in the encrypted description blob on the synced transaction record.
 
 **Database columns:**
 

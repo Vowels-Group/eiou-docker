@@ -722,7 +722,7 @@ class TransactionRepository extends AbstractRepository {
                 'time' => $request['time'] ?? null, // microtime used for P2P/RP2P hash or transaction creation
                 'memo' => $request['memo'],
                 'description' => $request['description'] ?? null,
-                'encrypted_description' => $request['encryptedDescription'] ?? null,
+                'encrypted_description' => $request['encryptedDescription'] ?? $request['encrypted_description'] ?? null,
                 'signed_message_content' => $request['signedMessageContent'] ?? null
                 // NOTE: end_recipient_address and initial_sender_address are NOT included here
                 // They are local tracking fields added via updateTrackingFields() after insert
