@@ -152,7 +152,7 @@ function outputResponseTransactionTimes(int $httpExpectedResponseTime, int $torE
 }
 
 function outputSendTransaction(array $payload): string {
-    return "[Transaction] Sending " . $payload['amount']/Constants::CONVERSION_FACTORS[$payload['currency']] . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
+    return "[Transaction] Sending " . $payload['amount']/Constants::getConversionFactor($payload['currency']) . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
 }
 
 function outputSendTransactionCompletionMessageMemo(array $message): string {
@@ -172,7 +172,7 @@ function outputSendTransactionOnwards(array $message): string {
 }
 
 function outputTransactionAmountReceived(array $message): string {
-    return "[Transaction] Received " . $message['amount']/Constants::CONVERSION_FACTORS[$message['currency']] . " " . $message['currency'] . " from " . $message['sender_address']."\n";
+    return "[Transaction] Received " . $message['amount']/Constants::getConversionFactor($message['currency']) . " " . $message['currency'] . " from " . $message['sender_address']."\n";
 }
 
 function outputTransactionExpired(array $message): string {
@@ -188,11 +188,11 @@ function outputTransactionInquiryResponse(array $response): string {
 }
 
 function outputTransactionP2pSentSuccesfully(array $p2p): string {
-    return "[Transaction] Sent " . $p2p['amount']/Constants::CONVERSION_FACTORS[$p2p['currency']] . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
+    return "[Transaction] Sent " . $p2p['amount']/Constants::getConversionFactor($p2p['currency']) . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
 }
 
 function outputTransactionDirectSentSuccesfully(array $data): string {
-    return "[Transaction] Sent " . $data['amount']/Constants::CONVERSION_FACTORS[$data['currency']] . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
+    return "[Transaction] Sent " . $data['amount']/Constants::getConversionFactor($data['currency']) . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
 }
 
 function outputTransactionDescriptionUpdated(string $description, string $typeTransaction, string $memo): string {

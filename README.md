@@ -30,6 +30,8 @@ Run an eIOU node with a single `docker compose` command. The container includes 
 
 ## Quick Start
 
+The `docker-compose.yml` file contains environment variables that configure the node (name, host address, ports, wallet restoration, etc.). Review the file and adjust as needed before starting. See [Docker Configuration](docs/DOCKER_CONFIGURATION.md) for a full reference of all available options.
+
 ```bash
 # Clone the repository
 git clone https://github.com/eiou-org/eiou-docker.git
@@ -329,6 +331,7 @@ See [Testing Guide](docs/TESTING.md) for details.
 | Document | Description |
 |----------|-------------|
 | [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Full environment variable, volume, SSL, and network reference |
+| [Currency Configuration](docs/CURRENCY_CONFIGURATION.md) | Adding currencies, conversion factors, and decimal places |
 | [Architecture](docs/ARCHITECTURE.md) | System architecture and design |
 | [Upgrade Guide](docs/UPGRADE_GUIDE.md) | How to update your node while preserving data |
 | [API Reference](docs/API_REFERENCE.md) | REST API documentation |

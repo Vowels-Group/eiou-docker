@@ -140,8 +140,18 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Currency code must be between ' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ' and ' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . ' characters'];
         }
 
-        if (!isset(Constants::CONVERSION_FACTORS[$currency])) {
-            return ['valid' => false, 'value' => null, 'error' => 'No conversion factor defined for currency: ' . $currency . '. Add conversion factor to Constants before enabling.'];
+        try {
+            $factors = UserContext::getInstance()->getConversionFactors();
+            $decimals = UserContext::getInstance()->getCurrencyDecimalsMap();
+        } catch (\Throwable $e) {
+            $factors = Constants::CONVERSION_FACTORS;
+            $decimals = Constants::CURRENCY_DECIMALS;
+        }
+        if (!isset($factors[$currency])) {
+            return ['valid' => false, 'value' => null, 'error' => 'No conversion factor defined for currency: ' . $currency . '. Add conversion factor via changesettings before enabling.'];
+        }
+        if (!isset($decimals[$currency])) {
+            return ['valid' => false, 'value' => null, 'error' => 'No currency decimals defined for currency: ' . $currency . '. Add currency decimals via changesettings before enabling.'];
         }
 
         return ['valid' => true, 'value' => $currency, 'error' => null];

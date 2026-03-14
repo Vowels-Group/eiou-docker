@@ -551,7 +551,7 @@ try {
             $creditData = $contactCreditRepo->getAvailableCredit($hash);
             if ($creditData !== null) {
                 $contactCurrency = $c['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::CONVERSION_FACTORS[$contactCurrency];
+                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::getConversionFactor($contactCurrency);
             }
         }
     }
@@ -592,7 +592,7 @@ try {
             $creditMap = [];
             foreach ($allCredits as $cr) {
                 $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $creditMap[$cur] = $cr['available_credit'] / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur];
+                $creditMap[$cur] = $cr['available_credit'] / \Eiou\Core\Constants::getConversionFactor($cur);
             }
             $availableCreditAllByHash[$hash] = $creditMap;
         }
@@ -622,7 +622,7 @@ foreach ($contactArraysForCredit as &$contacts) {
             $cur = $cc['currency'];
             $ccStatus = $cc['status'] ?? 'accepted';
             $ccDirection = $cc['direction'] ?? 'outgoing';
-            $creditLimitMajor = ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::CONVERSION_FACTORS[$cur];
+            $creditLimitMajor = ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::getConversionFactor($cur);
             $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
             $entry = [
                 'currency' => $cur,

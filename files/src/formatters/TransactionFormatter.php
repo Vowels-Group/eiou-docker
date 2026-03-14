@@ -34,7 +34,7 @@ class TransactionFormatter
         if ($minorAmount === null) {
             return null;
         }
-        return $minorAmount / Constants::CONVERSION_FACTORS[$currency];
+        return $minorAmount / Constants::getConversionFactor($currency);
     }
 
     /**

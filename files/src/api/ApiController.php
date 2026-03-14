@@ -330,9 +330,9 @@ class ApiController {
                 'contact_name' => $contact['name'] ?? 'Unknown',
                 'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null,
                 'currency' => $balance['currency'],
-                'received' => $balance['received'] / Constants::CONVERSION_FACTORS[$balance['currency']],
-                'sent' => $balance['sent'] / Constants::CONVERSION_FACTORS[$balance['currency']],
-                'net_balance' => ($balance['received'] - $balance['sent']) / Constants::CONVERSION_FACTORS[$balance['currency']]
+                'received' => $balance['received'] / Constants::getConversionFactor($balance['currency']),
+                'sent' => $balance['sent'] / Constants::getConversionFactor($balance['currency']),
+                'net_balance' => ($balance['received'] - $balance['sent']) / Constants::getConversionFactor($balance['currency'])
             ];
         }
 
@@ -504,7 +504,7 @@ class ApiController {
                 'type' => $tx['type'],
                 'tx_type' => $tx['tx_type'],
                 'status' => $tx['status'],
-                'amount' => $tx['amount'] / Constants::CONVERSION_FACTORS[$tx['currency']],
+                'amount' => $tx['amount'] / Constants::getConversionFactor($tx['currency']),
                 'currency' => $tx['currency'],
                 'sender_address' => $tx['sender_address'],
                 'receiver_address' => $tx['receiver_address'],
@@ -556,7 +556,7 @@ class ApiController {
         foreach ($earningsRows as $row) {
             $feeEarnings[] = [
                 'currency' => $row['currency'],
-                'total_amount' => $row['total_amount'] / Constants::CONVERSION_FACTORS[$row['currency']]
+                'total_amount' => $row['total_amount'] / Constants::getConversionFactor($row['currency'])
             ];
         }
 
@@ -567,7 +567,7 @@ class ApiController {
         foreach ($creditRows as $row) {
             $availableCredit[] = [
                 'currency' => $row['currency'],
-                'total_available_credit' => $row['total_available_credit'] / Constants::CONVERSION_FACTORS[$row['currency']]
+                'total_available_credit' => $row['total_available_credit'] / Constants::getConversionFactor($row['currency'])
             ];
         }
 
@@ -605,7 +605,7 @@ class ApiController {
             foreach ($balances as $balance) {
                 $balanceResult[] = [
                     'currency' => $balance['currency'],
-                    'total_balance' => $balance['total_balance'] / Constants::CONVERSION_FACTORS[$balance['currency']]
+                    'total_balance' => $balance['total_balance'] / Constants::getConversionFactor($balance['currency'])
                 ];
             }
         }
@@ -637,7 +637,7 @@ class ApiController {
         foreach ($creditRows as $row) {
             $totalAvailableCredit[] = [
                 'currency' => $row['currency'],
-                'total_available_credit' => $row['total_available_credit'] / Constants::CONVERSION_FACTORS[$row['currency']]
+                'total_available_credit' => $row['total_available_credit'] / Constants::getConversionFactor($row['currency'])
             ];
         }
 
@@ -689,7 +689,7 @@ class ApiController {
             $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
             if ($creditData !== null) {
                 $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
+                $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
             }
 
             $result[] = [
@@ -821,7 +821,7 @@ class ApiController {
                     $creditData = $creditRepo->getAvailableCredit($hash);
                     if ($creditData !== null) {
                         $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
+                        $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
                     }
                 }
 
@@ -994,7 +994,7 @@ class ApiController {
         $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
         if ($creditData !== null) {
             $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-            $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
+            $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
         }
 
         // Fetch all currencies for this contact from contact_currencies table
@@ -1017,9 +1017,9 @@ class ApiController {
                 'my_available_credit' => $myAvailableCredit,
                 'addresses' => $addresses,
                 'balance' => $balance ? [
-                    'received' => $balance['received'] / Constants::CONVERSION_FACTORS[$balanceCurrency],
-                    'sent' => $balance['sent'] / Constants::CONVERSION_FACTORS[$balanceCurrency],
-                    'net' => ($balance['received'] - $balance['sent']) / Constants::CONVERSION_FACTORS[$balanceCurrency]
+                    'received' => $balance['received'] / Constants::getConversionFactor($balanceCurrency),
+                    'sent' => $balance['sent'] / Constants::getConversionFactor($balanceCurrency),
+                    'net' => ($balance['received'] - $balance['sent']) / Constants::getConversionFactor($balanceCurrency)
                 ] : null,
                 'currencies' => array_map(function ($c) {
                     return [

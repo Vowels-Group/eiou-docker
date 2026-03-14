@@ -73,20 +73,21 @@ class Constants {
     const TRANSACTION_MAX_AMOUNT = 999999999;
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
     const TRANSACTION_MINIMUM_FEE = 0.01;
-    // Currency conversion factors: minor unit to major unit
-    // USD: 100 (cents → dollars). Add new currencies here as needed (e.g. BTC => 100000000).
+    // Currency conversion factors: minor unit to major unit (defaults)
+    // USD: 100 (cents → dollars). Additional currencies are configured via changesettings.
     const CONVERSION_FACTORS = [
         'USD' => 100,
     ];
-    // Currency decimal places for display and validation
+    // Currency decimal places for display and validation (defaults)
     const CURRENCY_DECIMALS = [
         'USD' => 2,
     ];
-    // Allowed currencies: only currencies with a CONVERSION_FACTORS entry are valid
+    // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
     /**
-     * Get the conversion factor for a given currency
+     * Get the conversion factor for a given currency.
+     * Checks UserContext config first (persists across rebuilds), falls back to constants.
      *
      * @param string $currency Currency code (e.g., 'USD')
      * @return int Conversion factor
@@ -94,6 +95,13 @@ class Constants {
      */
     public static function getConversionFactor(string $currency): int
     {
+        try {
+            return UserContext::getInstance()->getConversionFactor($currency);
+        } catch (\InvalidArgumentException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // UserContext not initialized yet (startup/tests)
+        }
         if (!isset(self::CONVERSION_FACTORS[$currency])) {
             throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
         }
@@ -101,13 +109,19 @@ class Constants {
     }
 
     /**
-     * Get the number of decimal places for a given currency
+     * Get the number of decimal places for a given currency.
+     * Checks UserContext config first (persists across rebuilds), falls back to constants.
      *
      * @param string $currency Currency code (e.g., 'USD')
      * @return int Number of decimal places
      */
     public static function getCurrencyDecimals(string $currency): int
     {
+        try {
+            return UserContext::getInstance()->getCurrencyDecimals($currency);
+        } catch (\Throwable $e) {
+            // UserContext not initialized yet (startup/tests)
+        }
         return self::CURRENCY_DECIMALS[$currency] ?? self::DISPLAY_CURRENCY_DECIMALS;
     }
 

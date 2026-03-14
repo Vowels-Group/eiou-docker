@@ -247,7 +247,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
         $currency = $currencyValidation['value'];
-        $credit = $creditValidation['value'] * Constants::CONVERSION_FACTORS[$currency];
+        $credit = $creditValidation['value'] * Constants::getConversionFactor($currency);
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -594,14 +594,14 @@ class ContactManagementService implements ContactManagementServiceInterface
                     // My available credit (from contact_credit table, received via pong)
                     if (isset($creditsByHash[$hash])) {
                         $resultCurrency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $result['my_available_credit'] = $creditsByHash[$hash]['available_credit'] / Constants::CONVERSION_FACTORS[$resultCurrency];
+                        $result['my_available_credit'] = $creditsByHash[$hash]['available_credit'] / Constants::getConversionFactor($resultCurrency);
                     }
                     // Their available credit (calculated: sent - received + credit_limit)
                     if (isset($balancesByHash[$hash])) {
                         $b = $balancesByHash[$hash];
                         $currency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                         $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($result['credit_limit'] ?? 0));
-                        $result['their_available_credit'] = $theirMinorUnits / Constants::CONVERSION_FACTORS[$currency];
+                        $result['their_available_credit'] = $theirMinorUnits / Constants::getConversionFactor($currency);
                     }
                 }
             }
@@ -709,7 +709,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $creditData = $this->contactCreditRepository->getAvailableCredit($contactResult['pubkey_hash']);
                     if ($creditData !== null) {
                         $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::CONVERSION_FACTORS[$creditCurrency];
+                        $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
                     }
                 } catch (\Exception $e) {
                     // Non-critical — skip available credit display
@@ -726,7 +726,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $b = $balanceData[0];
                         $creditLimit = $currencies[0]['credit_limit'] ?? 0;
                         $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)$creditLimit);
-                        $theirAvailableCredit = $theirMinorUnits / Constants::CONVERSION_FACTORS[$firstCurrency];
+                        $theirAvailableCredit = $theirMinorUnits / Constants::getConversionFactor($firstCurrency);
                     }
                 } catch (\Exception $e) {
                     // Non-critical
