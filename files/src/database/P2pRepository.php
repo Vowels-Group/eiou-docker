@@ -21,7 +21,8 @@ class P2pRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'hash', 'salt', 'time', 'expiration', 'currency', 'amount',
+        'id', 'hash', 'salt', 'inquiry_token', 'inquiry_secret',
+        'time', 'expiration', 'currency', 'amount',
         'my_fee_amount', 'rp2p_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
