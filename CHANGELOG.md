@@ -17,6 +17,8 @@ The project is currently in **ALPHA** status.
 - Fix `cliCommandsTest.sh` report debug JSON assertions using `"success":true` (no space) instead of `"success": true` to match `JSON_PRETTY_PRINT` output
 - Fix `cliCommandsTest.sh` and `apiEndpointsTest.sh` checking for removed `display_currency_decimals` key — replaced with `currency_decimals` in CLI test, removed from API test
 - Remove stale `changesettings displayCurrencyDecimals` integration test (setting was replaced by `currencyDecimals` JSON map)
+- Fix P2P completion inquiry description stripped before delivery — `signWithCapture()` removed `description` from all non-send/non-contact messages, including completion inquiries that carry the description to the end-recipient. Now preserves description for `type=message` with `inquiry=true`
+- Fix sync test cascading failures — replace naive description-pattern cleanup with chain-aware reset to contact-only state between tests. Clears non-contact transactions, repairs `previous_txid` links, and wipes related table residue (balances, p2p, chain_drop_proposals, etc.)
 
 ## 2026-03-14
 
