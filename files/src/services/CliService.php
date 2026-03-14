@@ -83,6 +83,11 @@ class CliService implements CliServiceInterface {
     private UserContext $currentUser;
 
     /**
+     * @var RepositoryFactory|null Repository factory for lazy repository access
+     */
+    private ?RepositoryFactory $repositoryFactory = null;
+
+    /**
      * @var ContactCreditRepository|null Contact credit repository (optional, setter-injected)
      */
     private ?ContactCreditRepository $contactCreditRepository = null;
@@ -137,6 +142,7 @@ class CliService implements CliServiceInterface {
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->generalUtility = $utilityContainer->getGeneralUtility();
         if ($repositoryFactory !== null) {
+            $this->repositoryFactory = $repositoryFactory;
             $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
             $this->p2pRepository = $repositoryFactory->get(\Eiou\Database\P2pRepository::class);
         }
@@ -471,7 +477,7 @@ class CliService implements CliServiceInterface {
         ];
 
         // Format incoming requests (include description from contact transaction if present)
-        $txContactRepo = $this->container->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
+        $txContactRepo = $this->repositoryFactory ? $this->repositoryFactory->get(\Eiou\Database\TransactionContactRepository::class) : null;
         $myPubkey = $this->currentUser->getPublicKey();
         foreach ($incomingRequests as $contact) {
             $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'Unknown';
@@ -482,10 +488,12 @@ class CliService implements CliServiceInterface {
                 'status' => 'pending'
             ];
             // Get the description/message from the contact transaction
-            $contactTx = $txContactRepo->getContactTransactionByParties($contact['pubkey'], $myPubkey);
-            $desc = $contactTx['description'] ?? null;
-            if ($desc !== null && $desc !== 'Contact request transaction') {
-                $entry['description'] = $desc;
+            if ($txContactRepo !== null) {
+                $contactTx = $txContactRepo->getContactTransactionByParties($contact['pubkey'], $myPubkey);
+                $desc = $contactTx['description'] ?? null;
+                if ($desc !== null && $desc !== 'Contact request transaction') {
+                    $entry['description'] = $desc;
+                }
             }
             $pendingData['incoming'][] = $entry;
         }

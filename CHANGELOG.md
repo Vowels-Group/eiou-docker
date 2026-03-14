@@ -10,6 +10,14 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Fix `CliService::displayPendingContacts()` crash — `$this->container` property didn't exist, replaced with stored `$repositoryFactory`
+- Fix `cliCommandsTest.sh` report debug JSON assertions using `"success":true` (no space) instead of `"success": true` to match `JSON_PRETTY_PRINT` output
+- Fix `cliCommandsTest.sh` and `apiEndpointsTest.sh` checking for removed `display_currency_decimals` key — replaced with `currency_decimals` in CLI test, removed from API test
+- Remove stale `changesettings displayCurrencyDecimals` integration test (setting was replaced by `currencyDecimals` JSON map)
+
 ## 2026-03-14
 
 Open alpha launch prep, currency configuration, settings GUI cleanup, legal notices, debug fix.

@@ -213,8 +213,8 @@ class CliServiceTest extends TestCase
                     && $settings['http_transport_timeout_seconds'] === 15
                     && $settings['tor_transport_timeout_seconds'] === 30
                     && $settings['display_date_format'] === 'Y-m-d H:i:s.u'
-                    && $settings['display_currency_decimals'] === 2
-                    && $settings['display_recent_transactions_limit'] === 5;
+                    && $settings['display_recent_transactions_limit'] === 5
+                    && array_key_exists('currency_decimals', $settings);
             }));
 
         $this->service->displayCurrentSettings($this->outputManager);
@@ -1097,7 +1097,7 @@ class CliServiceTest extends TestCase
     }
 
     /**
-     * Test changeSettings accepts valid currency decimals
+     * Test changeSettings accepts valid currency decimals JSON map
      */
     public function testChangeSettingsAcceptsValidCurrencyDecimals(): void
     {
@@ -1109,17 +1109,17 @@ class CliServiceTest extends TestCase
             ->with(
                 'Setting updated successfully.',
                 $this->callback(function ($data) {
-                    return $data['setting'] === 'displayCurrencyDecimals'
-                        && $data['value'] === 4;
+                    return $data['setting'] === 'currencyDecimals'
+                        && $data['value'] === '{"USD":2,"BTC":8}';
                 }),
                 $this->anything()
             );
 
-        @$this->service->changeSettings(['eiou', 'changesettings', 'displayCurrencyDecimals', '4'], $this->outputManager);
+        @$this->service->changeSettings(['eiou', 'changesettings', 'currencyDecimals', '{"USD":2,"BTC":8}'], $this->outputManager);
     }
 
     /**
-     * Test changeSettings rejects currency decimals above maximum (8)
+     * Test changeSettings rejects currency decimals above maximum (18)
      */
     public function testChangeSettingsRejectsCurrencyDecimalsAboveMax(): void
     {
@@ -1128,9 +1128,9 @@ class CliServiceTest extends TestCase
 
         $this->outputManager->expects($this->once())
             ->method('validationError')
-            ->with('displayCurrencyDecimals', $this->anything());
+            ->with('currencyDecimals', $this->anything());
 
-        $this->service->changeSettings(['eiou', 'changesettings', 'displayCurrencyDecimals', '10'], $this->outputManager);
+        $this->service->changeSettings(['eiou', 'changesettings', 'currencyDecimals', '{"USD":20}'], $this->outputManager);
     }
 
     /**
