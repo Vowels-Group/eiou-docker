@@ -168,7 +168,9 @@ The container auto-generates a self-signed certificate by default. Override with
 3. CA-signed (when `/ssl-ca/ca.crt` is mounted)
 4. Self-signed (automatic)
 
-See [docs/DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md#ssl-certificate-configuration) for multi-node SSL setups, wildcard certificates, and browser CA trust installation.
+**Alternative:** Instead of managing SSL inside the container, you can use a **reverse proxy** (nginx, Caddy, Traefik) or a **Cloudflare Tunnel** to terminate SSL externally. The container keeps its self-signed cert internally.
+
+See [docs/DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md#ssl-certificate-configuration) for multi-node SSL setups, reverse proxy/tunnel configuration, wildcard certificates, and browser CA trust installation.
 
 #### Timeouts
 

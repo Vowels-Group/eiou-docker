@@ -513,9 +513,47 @@ The container selects SSL certificates in this order:
 3. **CA-signed** (`/ssl-ca/ca.crt`) - Self-generated, signed by mounted CA
 4. **Self-signed** - Generated automatically using SSL_DOMAIN or QUICKSTART
 
-### Let's Encrypt (Automatic — Recommended for Production)
+### Reverse Proxy or Cloudflare Tunnel
 
-Let's Encrypt provides free, browser-trusted SSL certificates. Two approaches are supported:
+Instead of managing SSL inside the container, you can terminate SSL externally using a reverse proxy or a Cloudflare Tunnel. In both cases the container keeps its self-signed certificate (or plain HTTP internally) — the trusted SSL is handled by the external layer.
+
+**Reverse Proxy (nginx, Caddy, Traefik, etc.):**
+
+The proxy sits in front of the eIOU container, terminates SSL with a trusted certificate, and forwards traffic to the container's HTTP port. This is the standard approach when you already run a web server or ingress controller on the host.
+
+```
+Internet → Reverse Proxy (trusted SSL) → eIOU container (HTTP or self-signed)
+```
+
+```yaml
+# Example: expose only HTTP internally, proxy handles SSL
+services:
+  eiou:
+    ports:
+      - "127.0.0.1:8080:80"   # Only reachable from localhost
+    environment:
+      - QUICKSTART=eiou
+      - EIOU_HOST=node.example.com
+      - EIOU_PORT=443
+```
+
+Your reverse proxy (e.g., Caddy with automatic HTTPS, or nginx with a Let's Encrypt certificate) listens on port 443 and proxies to `127.0.0.1:8080`.
+
+**Cloudflare Tunnel (`cloudflared`):**
+
+A Cloudflare Tunnel creates an outbound-only connection from your server to Cloudflare's edge — no inbound ports need to be opened. Cloudflare handles SSL termination and proxies requests to your container. This is useful when you cannot open ports (e.g., behind CGNAT or a firewall).
+
+```
+Internet → Cloudflare Edge (trusted SSL) ← cloudflared tunnel ← eIOU container
+```
+
+Install `cloudflared` on the host, create a tunnel via the Cloudflare dashboard, and point it to your container's local HTTP address (e.g., `http://localhost:8080`).
+
+> **Note:** When using a reverse proxy or tunnel, set `EIOU_HOST` to the public domain (e.g., `node.example.com`) so the node advertises the correct externally reachable address to contacts.
+
+### Let's Encrypt (Automatic — Recommended for Direct Exposure)
+
+Let's Encrypt provides free, browser-trusted SSL certificates. Use this when the container is directly exposed to the internet (no reverse proxy). Two approaches are supported:
 
 #### Single Node (In-Container Certbot)
 
