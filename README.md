@@ -1,12 +1,12 @@
 > **OPEN ALPHA**
 >
-> eIOU is a decentralized peer-to-peer credit network. There is no central server, no central authority, and no central point of failure. Each node is independently operated and stores its own data.
+> eIOU is a decentralized peer-to-peer credit network. There is no central server, no central authority, and no central point of failure. Each node is independently operated and stores its own data. This software is in open alpha and under active development. Features and behavior may change without prior notice.
 >
-> This software is in open alpha and under active development. Updates may change how features work without prior notice.
+> IOUs are bilateral agreements between real people and may not be reversible once accepted. Debt can be denominated in any unit of account (fiat, commodities, time, or custom units). eIOU is not a cryptocurrency, token, or digital asset. No coins are mined, minted, or generated.
 >
-> **Important:** IOUs created on the network are bilateral agreements between real people. Once accepted by both parties, they may not be reversible. Treat every IOU as a real financial obligation. eIOU tracks debt in any unit of account chosen by its users (fiat currencies, commodities, time, or custom units) and is not a cryptocurrency, token, or digital asset. No coins are mined, minted, or generated.
+> eIOU believes that tracking interpersonal debts is not subject to Money Services Business or money transmitter regulations, as no funds are transmitted, held, or custodied. However, regulations vary by jurisdiction, and routing IOUs through intermediary nodes may be classified differently under your local laws. This software is provided as open source under the First Amendment right to publish software (*Bernstein v. DOJ*, 176 F.3d 1132, 9th Cir. 1999; *Junger v. Daley*, 209 F.3d 481, 6th Cir. 2000).
 >
-> You are responsible for securing your own node, maintaining backups, understanding the obligations you create, and complying with all applicable laws. Do not use this for obligations you cannot afford to lose.
+> You are responsible for securing your node and keys, maintaining backups, understanding the obligations you create, and complying with all applicable laws. Do not use this for obligations you cannot afford to lose. This is not legal advice. Consult an attorney in your jurisdiction.
 
 # eIOU Docker
 
@@ -342,20 +342,6 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 | [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |
 
-## Important Legal Notice
+## Legal Notice
 
-eIOU is a decentralized peer-to-peer bilateral debt tracking system. When you create an IOU, you are recording a personal debt obligation between two parties. Debt can be denominated in any unit of account chosen by the users (fiat currencies, commodities, time, or custom units).
-
-The eIOU project believes that tracking interpersonal debts is not subject to Money Services Business (MSB) or money transmitter regulations, as no funds are transmitted, held, or custodied by the software. Each IOU is a private bilateral agreement between two parties, similar to a promissory note.
-
-However, regulations vary significantly by jurisdiction. Routing IOUs through intermediary nodes may be classified differently under your local laws.
-
-**You are responsible for:**
-
-1. Understanding the financial regulations in your jurisdiction
-2. Determining whether your use of this software requires any licenses or registrations
-3. Complying with all applicable laws
-
-This software is provided as open source under the First Amendment right to publish software, as established in *Bernstein v. United States Department of Justice*, 176 F.3d 1132 (9th Cir. 1999), where the Ninth Circuit ruled that software source code is speech protected by the First Amendment, and affirmed in *Junger v. Daley*, 209 F.3d 481 (6th Cir. 2000), where the Sixth Circuit held that all source code is protected expression under the First Amendment. The eIOU project does not provide legal advice. Consult a qualified attorney in your jurisdiction before using this software for financial transactions.
-
-By installing and using this software, you acknowledge that you have read this notice and accept full responsibility for regulatory compliance in your jurisdiction.
+See the full notice displayed at container startup (`scripts/banners/alpha-warning.txt`) or the blockquote at the top of this README.

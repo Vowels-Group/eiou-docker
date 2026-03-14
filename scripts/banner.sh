@@ -73,10 +73,9 @@ show_legal_notice() {
     echo ""
 }
 
-# Combined: show all warnings, then the acceptance line
+# Combined: show warning, then the acceptance line
 show_startup_warnings() {
     show_alpha_warning
-    show_legal_notice
 
     box_rule
     echo ""
