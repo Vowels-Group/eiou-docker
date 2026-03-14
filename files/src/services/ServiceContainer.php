@@ -1280,9 +1280,6 @@ class ServiceContainer implements ContainerInterface {
         // so setter injection for ContactCreditRepository and P2pRepository runs)
         $this->getCliService();
 
-        // Register DebugService with Logger so debug panel entries are recorded
-        \Eiou\Utils\Logger::registerDebugService($this->getDebugService());
-
         // Wire circular dependencies
         $this->wireCircularDependencies();
     }
