@@ -562,7 +562,7 @@
 
                         <div class="form-group">
                             <label for="allowedCurrencies">Allowed Currencies:</label>
-                            <textarea id="allowedCurrencies" name="allowedCurrencies" rows="3" class="default-value" placeholder="USD&#10;EUR"><?php
+                            <textarea id="allowedCurrencies" name="allowedCurrencies" rows="4" class="default-value" placeholder="USD&#10;EUR"><?php
                                 $allowedCurrencyList = $user->getAllowedCurrencies();
                                 echo htmlspecialchars(implode("\n", $allowedCurrencyList));
                             ?></textarea>
