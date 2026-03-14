@@ -18,7 +18,7 @@ docker run -d --restart unless-stopped  --network=demo-net --name http0 -v "http
 docker run -d --restart unless-stopped  --network=demo-net --name http1 -v "http1-mysql-data:/var/lib/mysql" -v "http1-config:/etc/eiou/config" -v "http1-backups:/var/lib/eiou/backups" -v "http1-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http1 eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name http2 -v "http2-mysql-data:/var/lib/mysql" -v "http2-config:/etc/eiou/config" -v "http2-backups:/var/lib/eiou/backups" -v "http2-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http2 eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name http3 -v "http3-mysql-data:/var/lib/mysql" -v "http3-config:/etc/eiou/config" -v "http3-backups:/var/lib/eiou/backups" -v "http3-letsencrypt:/etc/letsencrypt" -e QUICKSTART=http3 eiou/eiou
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
 docker exec http0 eiou add http://http1 http1 0.1 1000 USD

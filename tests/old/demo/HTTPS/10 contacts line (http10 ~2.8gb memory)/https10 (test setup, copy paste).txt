@@ -30,7 +30,7 @@ docker run -d --restart unless-stopped  --network=demo-net --name httpsG -v "htt
 docker run -d --restart unless-stopped  --network=demo-net --name httpsH -v "httpsH-mysql-data:/var/lib/mysql" -v "httpsH-config:/etc/eiou/config" -v "httpsH-backups:/var/lib/eiou/backups" -v "httpsH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsH eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name httpsI -v "httpsI-mysql-data:/var/lib/mysql" -v "httpsI-config:/etc/eiou/config" -v "httpsI-backups:/var/lib/eiou/backups" -v "httpsI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsI eiou/eiou
 docker run -d --restart unless-stopped  --network=demo-net --name httpsJ -v "httpsJ-mysql-data:/var/lib/mysql" -v "httpsJ-config:/etc/eiou/config" -v "httpsJ-backups:/var/lib/eiou/backups" -v "httpsJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsJ eiou/eiou
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
 docker exec httpsA eiou add https://httpsB httpsB 0.1 1000 USD

@@ -223,7 +223,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -246,7 +246,7 @@ docker exec A0 eiou send ${containerAddresses[A412]} 100 USD
 docker exec A0 eiou send ${containerAddresses[A121]} 100 USD
 
 echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 echo -e "\nTesting other functions..."
 
@@ -257,7 +257,7 @@ docker exec A421 eiou viewcontact ${containerAddresses[A113]}
 
 # need A0 moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
 echo -e "\nSleeping for 5 seconds for proper transaction completion..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # View balances
 echo -e "\nViewing balances..."

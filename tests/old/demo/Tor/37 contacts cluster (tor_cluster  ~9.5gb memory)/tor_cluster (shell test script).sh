@@ -216,7 +216,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (Tor)
@@ -226,7 +226,7 @@ for container in "${containers[@]}"; do
 done
 
 echo -e "\nWaiting for 15 seconds due to the nature of Tor..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends
 echo -e "\nAdding friends (this might take a moment)..."
@@ -250,7 +250,7 @@ docker exec torA eiou send ${containerAddresses[torA121]} 100 USD
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
 echo -e "\nSleeping for 10 seconds for proper completion of transaction cycles..."
-sleep 15
+sleep 160 # Safety wait for all Tor connections to be properly ready
 
 echo -e "\nTesting other functions..."
 
