@@ -19,6 +19,18 @@ Open alpha launch prep, currency configuration, settings GUI cleanup, legal noti
 - Fix Recent Transactions Refresh button smaller than Failed Messages Refresh button — use consistent `btn-sm` class on both
 - Fix Allowed Currencies textarea shorter than Conversion Factors and Currency Decimal Places textareas — match `rows="4"`
 - Fix Add Contact message label and warning hint entirely red — only the warning icon and "WARNING:" text are now red; "(optional)" and the rest of the hint text are default color. Warning icon moved after "(optional)"
+- Fix `auto_accept_restored_contact` missing from API GET `/api/v1/system/settings` response — setting was writable via PUT but not returned in GET
+
+### Docs
+- Audit and update CLI_REFERENCE.md: add missing settings (`autoChainDropAcceptGuard`, `conversionFactors`, `currencyDecimals`, Tor circuit settings), remove stale `displayCurrencyDecimals`, fix settings count
+- Audit and update API_REFERENCE.md: add Tor circuit fields to GET response example and PUT table, remove stale `display_currency_decimals`
+- Audit and update GUI_REFERENCE.md: document all 8 Advanced Settings categories, add contact form `description` field
+- Audit and update DOCKER_CONFIGURATION.md: add missing env vars (`APP_DEBUG`, `EIOU_DEFAULT_TRANSPORT_MODE`, `EIOU_TOR_FORCE_FAST`, `EIOU_HOP_BUDGET_RANDOMIZED`)
+- Audit and update CLI_DEMO_GUIDE.md: fix stale `docker-compose-4line.yml` references to `tests/old/compose-files/`, add optional `[message]` parameter to `eiou add` syntax, add `[currency]` to `eiou update` quick reference
+- Add "Before Creating a New Issue" section to CONTRIBUTING.md: search open/closed issues and CHANGELOG before filing duplicates
+- Clarify QUICKSTART addresses are Docker-internal only in README.md, docker-compose.yml, and DOCKER_CONFIGURATION.md — note that external access requires `EIOU_HOST`, `EIOU_PORT`, and proper SSL
+- Add reverse proxy (nginx, Caddy, Traefik) and Cloudflare Tunnel as SSL alternatives to DOCKER_CONFIGURATION.md and README.md
+- Add startup log warning when QUICKSTART is used without EIOU_HOST — alerts users that HTTP/HTTPS addresses are Docker-internal only and not reachable from outside
 
 ### Changed
 - Currency codes now accept 3-9 uppercase alphanumeric characters (previously fixed at exactly 3). Validated with `/^[A-Z0-9]+$/` regex. Input is always uppercased

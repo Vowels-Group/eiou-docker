@@ -542,6 +542,18 @@ git branch -d your-branch-name
 
 Report bugs and request features through [GitHub Issues](https://github.com/eiou-org/eiou-docker/issues).
 
+### Before Creating a New Issue
+
+**Always search existing issues first.** Before opening a new issue:
+
+1. Search [open issues](https://github.com/eiou-org/eiou-docker/issues) for keywords related to your problem or feature idea.
+2. Search [closed issues](https://github.com/eiou-org/eiou-docker/issues?q=is%3Aissue+is%3Aclosed) — your issue may have already been resolved.
+3. Check the [CHANGELOG](CHANGELOG.md) — the behavior you're reporting may be an intentional change in a recent update.
+
+If you find an existing issue that matches, add a comment with any additional details rather than creating a duplicate. Duplicate issues fragment discussion and slow down resolution.
+
+### Filing a Bug Report
+
 When filing a bug report, include:
 
 - Steps to reproduce the issue.
@@ -549,6 +561,8 @@ When filing a bug report, include:
 - Docker Compose configuration used.
 - Relevant container logs (`docker compose logs`).
 - PHP version and operating system.
+
+### Requesting a Feature
 
 When requesting a feature, include:
 

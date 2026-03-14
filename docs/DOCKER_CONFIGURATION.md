@@ -44,6 +44,10 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming chain drop proposals (with balance guard) |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | No | Balance guard for auto-accept: blocks if missing txs erase debt owed to us |
 | `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | No | Auto-accept restored contacts on wallet restore when transaction history proves prior relationship |
+| `APP_DEBUG` | `true` | No | Enable debug logging to database (visible in GUI Debug panel). Set to `false` for production |
+| `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | No | Default transport when sending to a contact name (`http`, `https`, `tor`) |
+| `EIOU_TOR_FORCE_FAST` | `true` | No | Auto-enable fast mode for Tor routes. Set to `false` for best-fee testing over Tor |
+| `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | No | Randomize hop budget via geometric distribution. Set to `false` for deterministic routing depth |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates for P2P HTTPS connections. Set to `false` for self-signed certs |
 | `P2P_CA_CERT` | (none) | No | Path to CA certificate file for P2P SSL verification |
 
@@ -53,7 +57,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 
 #### QUICKSTART
 
-Sets the node's hostname for HTTP/HTTPS addressing. When set, the node generates a self-signed SSL certificate and is reachable at `https://<value>` or `http://<value>`.
+Sets the node's container hostname for HTTP/HTTPS addressing. When set, the node generates a self-signed SSL certificate and registers addresses based on the value.
 
 ```yaml
 environment:
@@ -62,11 +66,13 @@ environment:
 
 The node will be accessible at:
 - `http://alice` (within Docker network)
-- `https://alice` (within Docker network)
+- `https://alice` (within Docker network, self-signed certificate)
+
+> **Important:** Addresses like `http://alice` are resolved by Docker's internal DNS and are **only reachable by other containers on the same Docker network**. They are not accessible from the host machine or the internet. For external access, set `EIOU_HOST` to a real IP address or domain name, `EIOU_PORT` to the mapped port, and use a trusted SSL certificate (Let's Encrypt or CA-signed) instead of the auto-generated self-signed one. See the `EIOU_HOST` / `EIOU_PORT` section below.
 
 #### EIOU_NAME / EIOU_HOST / EIOU_PORT
 
-These optional variables allow separating the node's display name from its network address. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address).
+These variables configure the node's externally reachable identity. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address), but the resulting addresses are Docker-internal only.
 
 `EIOU_NAME` is purely local — it is never broadcast to contacts or other nodes. It appears in the GUI wallet header, Docker startup logs, and any integration that reads the node's display name.
 
@@ -279,6 +285,52 @@ environment:
 - Contact is named `RestoredContact<N>` and should be renamed by the user
 - Can also be toggled per-node via CLI (`changesettings autoAcceptRestoredContact`), GUI, or API
 
+#### APP_DEBUG
+
+Controls debug logging to the database. When enabled, log entries are written to the `debug` table and viewable in the GUI Debug Information panel.
+
+```yaml
+environment:
+  - APP_DEBUG=true    # Enable (default during alpha) — debug entries visible in GUI
+  - APP_DEBUG=false   # Disable — recommended for production deployments
+```
+
+**Notes:**
+- Default is `true` during the alpha/development phase
+- Set to `false` in production to disable debug database writes
+- File-based logging (`/var/log/eiou/app.log`) is always active regardless of this setting
+
+#### EIOU_DEFAULT_TRANSPORT_MODE
+
+Sets the default transport type used when sending to a contact by name. In production, defaults to `tor` for maximum privacy. Test environments typically override to `http`.
+
+```yaml
+environment:
+  - EIOU_DEFAULT_TRANSPORT_MODE=tor     # Default — use Tor for privacy
+  - EIOU_DEFAULT_TRANSPORT_MODE=http    # Use HTTP (testing)
+  - EIOU_DEFAULT_TRANSPORT_MODE=https   # Use HTTPS
+```
+
+#### EIOU_TOR_FORCE_FAST
+
+Controls whether Tor routes automatically use fast mode (single-route, first-response). When enabled (default), P2P transactions over Tor skip best-fee collection to avoid long Tor timeout delays.
+
+```yaml
+environment:
+  - EIOU_TOR_FORCE_FAST=true    # Default — fast mode for Tor routes
+  - EIOU_TOR_FORCE_FAST=false   # Allow best-fee mode over Tor (slower)
+```
+
+#### EIOU_HOP_BUDGET_RANDOMIZED
+
+Controls whether the P2P hop budget uses geometric distribution randomization (30% stop probability per hop) for traffic analysis resistance. Disable for deterministic routing depth in tests.
+
+```yaml
+environment:
+  - EIOU_HOP_BUDGET_RANDOMIZED=true    # Default — randomized hop budget
+  - EIOU_HOP_BUDGET_RANDOMIZED=false   # Deterministic — uses maxP2pLevel directly
+```
+
 ---
 
 ## Volume Mounts
@@ -461,9 +513,47 @@ The container selects SSL certificates in this order:
 3. **CA-signed** (`/ssl-ca/ca.crt`) - Self-generated, signed by mounted CA
 4. **Self-signed** - Generated automatically using SSL_DOMAIN or QUICKSTART
 
-### Let's Encrypt (Automatic — Recommended for Production)
+### Reverse Proxy or Cloudflare Tunnel
 
-Let's Encrypt provides free, browser-trusted SSL certificates. Two approaches are supported:
+Instead of managing SSL inside the container, you can terminate SSL externally using a reverse proxy or a Cloudflare Tunnel. In both cases the container keeps its self-signed certificate (or plain HTTP internally) — the trusted SSL is handled by the external layer.
+
+**Reverse Proxy (nginx, Caddy, Traefik, etc.):**
+
+The proxy sits in front of the eIOU container, terminates SSL with a trusted certificate, and forwards traffic to the container's HTTP port. This is the standard approach when you already run a web server or ingress controller on the host.
+
+```
+Internet → Reverse Proxy (trusted SSL) → eIOU container (HTTP or self-signed)
+```
+
+```yaml
+# Example: expose only HTTP internally, proxy handles SSL
+services:
+  eiou:
+    ports:
+      - "127.0.0.1:8080:80"   # Only reachable from localhost
+    environment:
+      - QUICKSTART=eiou
+      - EIOU_HOST=node.example.com
+      - EIOU_PORT=443
+```
+
+Your reverse proxy (e.g., Caddy with automatic HTTPS, or nginx with a Let's Encrypt certificate) listens on port 443 and proxies to `127.0.0.1:8080`.
+
+**Cloudflare Tunnel (`cloudflared`):**
+
+A Cloudflare Tunnel creates an outbound-only connection from your server to Cloudflare's edge — no inbound ports need to be opened. Cloudflare handles SSL termination and proxies requests to your container. This is useful when you cannot open ports (e.g., behind CGNAT or a firewall).
+
+```
+Internet → Cloudflare Edge (trusted SSL) ← cloudflared tunnel ← eIOU container
+```
+
+Install `cloudflared` on the host, create a tunnel via the Cloudflare dashboard, and point it to your container's local HTTP address (e.g., `http://localhost:8080`).
+
+> **Note:** When using a reverse proxy or tunnel, set `EIOU_HOST` to the public domain (e.g., `node.example.com`) so the node advertises the correct externally reachable address to contacts.
+
+### Let's Encrypt (Automatic — Recommended for Direct Exposure)
+
+Let's Encrypt provides free, browser-trusted SSL certificates. Use this when the container is directly exposed to the internet (no reverse proxy). Two approaches are supported:
 
 #### Single Node (In-Container Certbot)
 

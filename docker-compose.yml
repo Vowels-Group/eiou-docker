@@ -66,12 +66,16 @@ services:
       # -----------------------------------------------------------------------
 
       # QUICKSTART (recommended)
-      # Sets the node's hostname for HTTP/HTTPS mode. The node will be
+      # Sets the container hostname for HTTP/HTTPS mode. The node will be
       # reachable at http://<value> and https://<value> within the Docker
-      # network. Also used as the display name and SSL certificate CN
-      # unless overridden by the variables below.
+      # network only (Docker-internal DNS). These addresses are NOT
+      # reachable from outside Docker. A self-signed SSL certificate is
+      # auto-generated. Also used as the display name and SSL certificate
+      # CN unless overridden by the variables below.
       # If omitted, the node runs in Tor-only mode (reachable only via
       # its auto-generated .onion address).
+      # For external access: set EIOU_HOST + EIOU_PORT below and use
+      # proper SSL (Let's Encrypt or CA-signed).
       - QUICKSTART=eiou
 
       # EIOU_NAME (optional)
@@ -80,11 +84,11 @@ services:
       # Default: uses QUICKSTART value.
       # - EIOU_NAME=My Node
 
-      # EIOU_HOST (optional)
+      # EIOU_HOST (required for external access)
       # Externally reachable address (IP or domain name).
-      # Use this when your container is reachable at an address different
-      # from the QUICKSTART hostname (e.g., a public IP or domain).
-      # Default: uses QUICKSTART value.
+      # Use this when the node must be reachable from outside the Docker
+      # network (e.g., a public IP or domain for production).
+      # Default: uses QUICKSTART value (Docker-internal only).
       # - EIOU_HOST=192.168.1.100
 
       # EIOU_PORT (optional)

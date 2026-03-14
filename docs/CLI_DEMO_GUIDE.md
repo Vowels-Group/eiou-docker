@@ -576,13 +576,13 @@ cd /path/to/eiou-docker
 #### Step 2: Clean Up Any Existing Setup
 
 ```bash
-docker-compose -f docker-compose-4line.yml down -v
+docker compose -f tests/old/compose-files/docker-compose-4line.yml down -v
 ```
 
 #### Step 3: Start the Topology
 
 ```bash
-docker-compose -f docker-compose-4line.yml up -d --build
+docker compose -f tests/old/compose-files/docker-compose-4line.yml up -d --build
 ```
 
 #### Step 4: Wait for Initialization
@@ -599,7 +599,7 @@ For WSL2 or slow environments, wait up to 180 seconds.
 #### Step 5: Verify All Containers Are Running
 
 ```bash
-docker-compose -f docker-compose-4line.yml ps
+docker compose -f tests/old/compose-files/docker-compose-4line.yml ps
 ```
 
 **Expected output:**
@@ -688,7 +688,7 @@ Bob adds Alice     -->  Both sides become ACCEPTED
 
 **Syntax:**
 ```bash
-eiou add <address> <name> <fee> <credit> <currency>
+eiou add <address> <name> <fee> <credit> <currency> [message]
 ```
 
 #### Creating the A<->B<->C<->D Chain
@@ -1156,7 +1156,7 @@ docker exec alice eiou apikey help
 ### Stopping Containers (Preserving Data)
 
 ```bash
-docker-compose -f docker-compose-4line.yml down
+docker compose -f tests/old/compose-files/docker-compose-4line.yml down
 ```
 
 This stops containers but preserves all data volumes.
@@ -1164,7 +1164,7 @@ This stops containers but preserves all data volumes.
 ### Complete Cleanup (Remove All Data)
 
 ```bash
-docker-compose -f docker-compose-4line.yml down -v
+docker compose -f tests/old/compose-files/docker-compose-4line.yml down -v
 ```
 
 **Warning:** The `-v` flag removes all Docker volumes. This permanently deletes:
@@ -1207,12 +1207,12 @@ docker volume rm demo-mysql-data demo-config demo-eiou demo-backups
 |----------|---------|-------------|
 | **Wallet** | `eiou info` | Wallet information |
 | | `eiou overview` | Dashboard summary |
-| **Contacts** | `eiou add <addr> <name> <fee> <credit> <currency>` | Add contact |
+| **Contacts** | `eiou add <addr> <name> <fee> <credit> <currency> [message]` | Add contact |
 | | `eiou search [name]` | Search contacts |
 | | `eiou viewcontact <name>` | View contact details |
 | | `eiou pending` | Show pending requests |
 | | `eiou ping <name>` | Check online status |
-| | `eiou update <name> <field> <value>` | Update contact |
+| | `eiou update <name> <field> <value> [currency]` | Update contact |
 | | `eiou block <name>` | Block contact |
 | | `eiou unblock <name>` | Unblock contact |
 | | `eiou delete <name>` | Delete contact |
@@ -1254,8 +1254,8 @@ docker volume rm demo-mysql-data demo-config demo-eiou demo-backups
 docker logs alice
 
 # Reset and rebuild
-docker-compose -f docker-compose-4line.yml down -v
-docker-compose -f docker-compose-4line.yml up -d --build
+docker compose -f tests/old/compose-files/docker-compose-4line.yml down -v
+docker compose -f tests/old/compose-files/docker-compose-4line.yml up -d --build
 ```
 
 ### Contact Stuck in Pending

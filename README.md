@@ -48,7 +48,7 @@ docker compose logs -f
 # For Tor: use Tor Browser and navigate to your node's .onion address (no certificate warning)
 ```
 
-The container automatically generates a wallet, starts Tor, and initializes all services. With the default `QUICKSTART=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for local testing. For production use (public IP, trusted SSL, custom domain), see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
+The container automatically generates a wallet, starts Tor, and initializes all services. With the default `QUICKSTART=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for Docker-internal testing between containers on the same network. These addresses are not reachable from outside Docker. For production use (public IP, trusted SSL, custom domain), set `EIOU_HOST` and `EIOU_PORT` and configure proper SSL — see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
 
 ## Container Management
 
@@ -106,9 +106,9 @@ This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wall
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `QUICKSTART` | No | *(none)* | Node hostname for HTTP/HTTPS mode. Sets the address, display name, and SSL certificate CN. The node is reachable at `http://<value>` within Docker. If omitted, the node runs in **Tor-only mode** (reachable only via its .onion address) |
+| `QUICKSTART` | No | *(none)* | Container hostname for HTTP/HTTPS mode. Generates Docker-internal addresses (`http://<value>`) with a self-signed SSL certificate — **not reachable from outside the Docker network**. For external access, also set `EIOU_HOST` and `EIOU_PORT`. If omitted, the node runs in **Tor-only mode** (reachable only via its .onion address) |
 | `EIOU_NAME` | No | `QUICKSTART` | Display name shown in the local GUI header and logs. Cosmetic only — never sent to other nodes |
-| `EIOU_HOST` | No | `QUICKSTART` | Externally reachable address (IP or domain). Use when the public address differs from the container hostname |
+| `EIOU_HOST` | No | `QUICKSTART` | Externally reachable address (IP or domain). **Required for access from outside Docker.** Use a real IP or FQDN with proper SSL (Let's Encrypt or CA-signed) for production |
 | `EIOU_PORT` | No | *(none)* | Port appended to URLs. Use when mapping to a non-standard external port (e.g., `8443`) |
 
 **Example — production node with public IP:**
@@ -168,7 +168,9 @@ The container auto-generates a self-signed certificate by default. Override with
 3. CA-signed (when `/ssl-ca/ca.crt` is mounted)
 4. Self-signed (automatic)
 
-See [docs/DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md#ssl-certificate-configuration) for multi-node SSL setups, wildcard certificates, and browser CA trust installation.
+**Alternative:** Instead of managing SSL inside the container, you can use a **reverse proxy** (nginx, Caddy, Traefik) or a **Cloudflare Tunnel** to terminate SSL externally. The container keeps its self-signed cert internally.
+
+See [docs/DOCKER_CONFIGURATION.md](docs/DOCKER_CONFIGURATION.md#ssl-certificate-configuration) for multi-node SSL setups, reverse proxy/tunnel configuration, wildcard certificates, and browser CA trust installation.
 
 #### Timeouts
 

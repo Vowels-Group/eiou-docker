@@ -1095,8 +1095,11 @@ Get system settings.
             "rate_limit_block_seconds": 300,
             "http_transport_timeout_seconds": 15,
             "tor_transport_timeout_seconds": 30,
+            "tor_circuit_max_failures": 3,
+            "tor_circuit_cooldown_seconds": 300,
+            "tor_failure_transport_fallback": true,
+            "tor_fallback_require_encrypted": true,
             "display_date_format": "Y-m-d H:i:s.u",
-            "display_currency_decimals": 2,
             "display_recent_transactions_limit": 5,
             "allowed_currencies": ["USD", "EUR"]
         }
@@ -1147,8 +1150,11 @@ Get system settings.
 - `rate_limit_block_seconds`: Block duration after limit exceeded in seconds (min 1)
 - `http_transport_timeout_seconds`: HTTP transport timeout (5-120 seconds)
 - `tor_transport_timeout_seconds`: Tor transport timeout (10-300 seconds)
+- `tor_circuit_max_failures`: Consecutive Tor failures before cooldown (1-10)
+- `tor_circuit_cooldown_seconds`: Cooldown duration after max failures (60-3600 seconds)
+- `tor_failure_transport_fallback`: Fall back to HTTP/HTTPS when Tor delivery fails
+- `tor_fallback_require_encrypted`: Only fall back to HTTPS, never plain HTTP
 - `display_date_format`: PHP date format string for timestamps
-- `display_currency_decimals`: Decimal places for currency display (0-8)
 - `display_recent_transactions_limit`: Number of recent transactions on dashboard (min 1)
 - `allowed_currencies`: List of allowed currency codes
 
@@ -1213,11 +1219,14 @@ Update system settings.
 | `rate_limit_block_seconds` | int | Block duration after limit exceeded (min 1) |
 | `http_transport_timeout_seconds` | int | HTTP timeout (5-120 seconds) |
 | `tor_transport_timeout_seconds` | int | Tor timeout (10-300 seconds) |
+| `tor_circuit_max_failures` | int | Consecutive Tor failures before cooldown (1-10) |
+| `tor_circuit_cooldown_seconds` | int | Cooldown after max failures (60-3600 seconds) |
+| `tor_failure_transport_fallback` | boolean | Fall back to HTTP/HTTPS when Tor fails |
+| `tor_fallback_require_encrypted` | boolean | Only fall back to HTTPS, never HTTP |
 | `sync_chunk_size` | int | Transactions per sync chunk (10-500) |
 | `sync_max_chunks` | int | Max sync chunks per cycle (10-1000) |
 | `held_tx_sync_timeout_seconds` | int | Held tx sync timeout (30-299 seconds) |
 | `display_date_format` | string | PHP date format string |
-| `display_currency_decimals` | int | Currency decimal places (0-8) |
 | `display_recent_transactions_limit` | int | Recent transactions on dashboard (min 1) |
 
 All fields are optional. Only provided fields will be updated. Unknown fields return warnings.
