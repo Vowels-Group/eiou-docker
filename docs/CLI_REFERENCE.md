@@ -952,6 +952,7 @@ eiou changesettings [setting] [value]
 | `contactStatusSyncOnPing` | Sync status during ping operations | `true`, `false` |
 | `autoChainDropPropose` | Auto-propose chain-drop operations | `true`, `false` |
 | `autoChainDropAccept` | Auto-accept chain-drop proposals | `true`, `false` |
+| `autoChainDropAcceptGuard` | Balance guard for auto-accept chain drops | `true`, `false` |
 | `autoAcceptRestoredContact` | Auto-accept restored contacts on wallet restore | `true`, `false` |
 | `apiEnabled` | Enable REST API endpoint | `true`, `false` |
 | `apiCorsAllowedOrigins` | Allowed CORS origins for API | `https://example.com` |
@@ -992,6 +993,10 @@ eiou changesettings [setting] [value]
 |---------|-------------|---------------|
 | `httpTransportTimeoutSeconds` | HTTP transport timeout (5-120) | `15` |
 | `torTransportTimeoutSeconds` | Tor transport timeout (10-300) | `30` |
+| `torCircuitMaxFailures` | Consecutive Tor failures before cooldown (1-10) | `3` |
+| `torCircuitCooldownSeconds` | Cooldown duration after max failures (60-3600) | `300` |
+| `torFailureTransportFallback` | Fall back to HTTP/HTTPS when Tor fails | `true`, `false` |
+| `torFallbackRequireEncrypted` | Only fall back to HTTPS, never plain HTTP | `true`, `false` |
 
 **Advanced Settings (Sync):**
 
@@ -1001,17 +1006,23 @@ eiou changesettings [setting] [value]
 | `syncMaxChunks` | Max sync chunks per cycle (10-1000) | `100` |
 | `heldTxSyncTimeoutSeconds` | Held tx sync timeout in seconds (30-299) | `120` |
 
+**Advanced Settings (Currency):**
+
+| Setting | Description | Example Value |
+|---------|-------------|---------------|
+| `conversionFactors` | Minor-to-major unit conversion per currency (JSON) | `{"USD":100,"BTC":100000000}` |
+| `currencyDecimals` | Display decimal places per currency (JSON) | `{"USD":2,"BTC":8}` |
+
 **Advanced Settings (Display):**
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
 | `displayDateFormat` | PHP date format string | `Y-m-d H:i:s.u` |
-| `displayCurrencyDecimals` | Currency decimal places (0-8) | `2` |
 | `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
 
 **Interactive Mode:**
 
-Running `eiou changesettings` without arguments enters interactive mode, which displays all current settings then presents a numbered menu of all 43 changeable settings grouped by category. All settings available via direct command-line mode are also available interactively.
+Running `eiou changesettings` without arguments enters interactive mode, which displays all current settings then presents a numbered menu of all changeable settings grouped by category. All settings available via direct command-line mode are also available interactively.
 
 **Examples:**
 ```bash
@@ -1035,8 +1046,11 @@ eiou changesettings logLevel WARNING
 eiou changesettings backupRetentionCount 5
 eiou changesettings cleanupDeliveryRetentionDays 60
 eiou changesettings httpTransportTimeoutSeconds 30
-eiou changesettings displayCurrencyDecimals 4
 eiou changesettings rateLimitEnabled false
+eiou changesettings conversionFactors '{"USD":100,"BTC":100000000}'
+eiou changesettings currencyDecimals '{"USD":2,"BTC":8}'
+eiou changesettings torCircuitMaxFailures 5
+eiou changesettings torFailureTransportFallback false
 eiou changesettings contactStatusEnabled false
 
 # JSON output

@@ -44,6 +44,10 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming chain drop proposals (with balance guard) |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | No | Balance guard for auto-accept: blocks if missing txs erase debt owed to us |
 | `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | No | Auto-accept restored contacts on wallet restore when transaction history proves prior relationship |
+| `APP_DEBUG` | `true` | No | Enable debug logging to database (visible in GUI Debug panel). Set to `false` for production |
+| `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | No | Default transport when sending to a contact name (`http`, `https`, `tor`) |
+| `EIOU_TOR_FORCE_FAST` | `true` | No | Auto-enable fast mode for Tor routes. Set to `false` for best-fee testing over Tor |
+| `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | No | Randomize hop budget via geometric distribution. Set to `false` for deterministic routing depth |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates for P2P HTTPS connections. Set to `false` for self-signed certs |
 | `P2P_CA_CERT` | (none) | No | Path to CA certificate file for P2P SSL verification |
 
@@ -278,6 +282,52 @@ environment:
 - Original fee structures and credit limits are NOT restored — they reset to node defaults
 - Contact is named `RestoredContact<N>` and should be renamed by the user
 - Can also be toggled per-node via CLI (`changesettings autoAcceptRestoredContact`), GUI, or API
+
+#### APP_DEBUG
+
+Controls debug logging to the database. When enabled, log entries are written to the `debug` table and viewable in the GUI Debug Information panel.
+
+```yaml
+environment:
+  - APP_DEBUG=true    # Enable (default during alpha) — debug entries visible in GUI
+  - APP_DEBUG=false   # Disable — recommended for production deployments
+```
+
+**Notes:**
+- Default is `true` during the alpha/development phase
+- Set to `false` in production to disable debug database writes
+- File-based logging (`/var/log/eiou/app.log`) is always active regardless of this setting
+
+#### EIOU_DEFAULT_TRANSPORT_MODE
+
+Sets the default transport type used when sending to a contact by name. In production, defaults to `tor` for maximum privacy. Test environments typically override to `http`.
+
+```yaml
+environment:
+  - EIOU_DEFAULT_TRANSPORT_MODE=tor     # Default — use Tor for privacy
+  - EIOU_DEFAULT_TRANSPORT_MODE=http    # Use HTTP (testing)
+  - EIOU_DEFAULT_TRANSPORT_MODE=https   # Use HTTPS
+```
+
+#### EIOU_TOR_FORCE_FAST
+
+Controls whether Tor routes automatically use fast mode (single-route, first-response). When enabled (default), P2P transactions over Tor skip best-fee collection to avoid long Tor timeout delays.
+
+```yaml
+environment:
+  - EIOU_TOR_FORCE_FAST=true    # Default — fast mode for Tor routes
+  - EIOU_TOR_FORCE_FAST=false   # Allow best-fee mode over Tor (slower)
+```
+
+#### EIOU_HOP_BUDGET_RANDOMIZED
+
+Controls whether the P2P hop budget uses geometric distribution randomization (30% stop probability per hop) for traffic analysis resistance. Disable for deterministic routing depth in tests.
+
+```yaml
+environment:
+  - EIOU_HOP_BUDGET_RANDOMIZED=true    # Default — randomized hop budget
+  - EIOU_HOP_BUDGET_RANDOMIZED=false   # Deterministic — uses maxP2pLevel directly
+```
 
 ---
 

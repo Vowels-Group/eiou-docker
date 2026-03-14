@@ -1388,6 +1388,7 @@ class ApiController {
                 'auto_chain_drop_propose' => $currentUser->getAutoChainDropPropose(),
                 'auto_chain_drop_accept' => $currentUser->getAutoChainDropAccept(),
                 'auto_chain_drop_accept_guard' => $currentUser->getAutoChainDropAcceptGuard(),
+                'auto_accept_restored_contact' => $currentUser->getAutoAcceptRestoredContact(),
                 'api_enabled' => $currentUser->getApiEnabled(),
                 'api_cors_allowed_origins' => $currentUser->getApiCorsAllowedOrigins(),
                 'rate_limit_enabled' => $currentUser->getRateLimitEnabled(),

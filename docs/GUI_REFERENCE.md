@@ -210,6 +210,19 @@ Handles settings and debug operations.
 | `syncMaxChunks` | int | Max sync chunks per cycle (10-1000) |
 | `heldTxSyncTimeoutSeconds` | int | Held tx sync timeout in seconds (30-299) |
 
+**Advanced Settings** are organized into categories via a dropdown selector:
+
+| Category | Settings |
+|----------|----------|
+| Feature Toggles | `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled` |
+| Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
+| Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
+| Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
+| Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
+| Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
+| Currency | `conversionFactors`, `currencyDecimals`, `allowedCurrencies` |
+| Display | `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
+
 ---
 
 ### DlqController
@@ -348,6 +361,7 @@ All three dashboard cards display per-currency rows. When a card has no data for
 | credit | number | Credit limit (default from settings) |
 | fee | number | Fee percentage (default from settings) |
 | currency | select | Currency code (dynamically populated from user's allowed currencies) |
+| description | text | Optional message sent with the contact request (max 255 chars). **Not E2E encrypted** — the recipient's key is not yet known at contact request time |
 
 ---
 
@@ -468,8 +482,8 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 #### settingsSection.html
 
 **Settings Form:**
-- All wallet configuration options
-- Auto-refresh toggle switch
+- Basic wallet settings (currency, fee, credit limit, transport mode)
+- Collapsible Advanced Settings with category dropdown (Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Sync, Network, Currency, Display)
 - Save/Reset buttons
 
 **Debug Section (Tabbed):**
