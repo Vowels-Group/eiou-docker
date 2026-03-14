@@ -488,6 +488,21 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get DebugReportService instance
+     *
+     * @return DebugReportService
+     */
+    public function getDebugReportService(): DebugReportService {
+        if (!isset($this->services['DebugReportService'])) {
+            $this->services['DebugReportService'] = new DebugReportService(
+                $this->getRepositoryFactory()->get(DebugRepository::class),
+                $this->pdo
+            );
+        }
+        return $this->services['DebugReportService'];
+    }
+
+    /**
      * Get MessageDeliveryService instance
      *
      * @return MessageDeliveryService

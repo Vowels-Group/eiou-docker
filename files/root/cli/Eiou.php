@@ -20,6 +20,7 @@
  *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
  *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
  *   overview [limit]           - View wallet overview dashboard
+ *   report <type>              - Generate reports (debug, etc.)
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
  *   ping <contact>             - Check contact online status
@@ -96,6 +97,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
         'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 chain drop operations per minute
+        'report' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 report generations per minute
         'p2p' => ['max' => 30, 'window' => 60, 'block' => 300],       // 30 P2P approval operations per minute
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
@@ -348,6 +350,46 @@ elseif($request === "chaindrop"){
   $debugService->output("Executing chain drop request", 'SILENT');
   $chainDropService = $app->services->getChainDropService();
   $chainDropService->handleCommand($cleanArgv, $output);
+}
+// Reports
+elseif($request === "report"){
+  $debugService->output("Executing report request", 'SILENT');
+  $subcommand = $cleanArgv[2] ?? 'help';
+
+  if ($subcommand === 'debug') {
+    $description = $cleanArgv[3] ?? '';
+    $full = in_array('--full', $cleanArgv, true);
+    $reportService = $app->services->getDebugReportService();
+
+    try {
+      $result = $reportService->generateAndSave($description, $full);
+      $sizeKb = round($result['size'] / 1024, 1);
+      $output->success(
+        "Debug report saved to {$result['path']} ({$sizeKb} KB)",
+        [
+          'path' => $result['path'],
+          'size' => $result['size'],
+          'size_human' => $sizeKb . ' KB',
+          'report_type' => $full ? 'full' : 'limited',
+          'debug_entries' => $result['report']['debug_entries_count'],
+        ],
+        'Debug report generated'
+      );
+    } catch (\RuntimeException $e) {
+      $output->error($e->getMessage(), ErrorCodes::INTERNAL_ERROR, 500);
+    }
+  } else {
+    echo "Usage: eiou report <type>\n\n";
+    echo "Available report types:\n";
+    echo "  debug [description] [--full]   Generate a debug report (JSON)\n";
+    echo "\nOptions:\n";
+    echo "  --full    Include full log history (default: last 50 lines)\n";
+    echo "\nExamples:\n";
+    echo "  eiou report debug\n";
+    echo "  eiou report debug \"login page crash\"\n";
+    echo "  eiou report debug --full\n";
+    echo "  eiou report debug \"issue description\" --full\n";
+  }
 }
 else{
   // If no known input, display commands possible for input

@@ -15,9 +15,10 @@ Complete command-line interface documentation for the eIOU Docker node.
 9. [API Key Management](#api-key-management)
 10. [Chain Drop Commands](#chain-drop-commands)
 11. [Backup Commands](#backup-commands)
-12. [Test Mode Commands](#test-mode-commands)
-13. [Exit Codes](#exit-codes)
-14. [Rate Limiting](#rate-limiting)
+12. [Report Commands](#report-commands)
+13. [Test Mode Commands](#test-mode-commands)
+14. [Exit Codes](#exit-codes)
+15. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -1448,6 +1449,60 @@ eiou backup status --json
 - Location: `/var/lib/eiou/backups/`
 - Filename format: `backup_YYYYMMDD_HHmmss.eiou.enc`
 - Retention: 3 most recent backups (configurable)
+
+---
+
+## Report Commands
+
+### report
+
+Generate reports for troubleshooting and analysis.
+
+**Usage:**
+```bash
+eiou report <type> [description] [--full]
+```
+
+**Available report types:**
+
+| Type | Description |
+|------|-------------|
+| `debug` | System info, debug table entries, application logs, PHP errors, nginx errors |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--full` | Include full log history (default: last 50 lines per log file) |
+
+**Examples:**
+```bash
+# Generate a limited debug report
+eiou report debug
+
+# Include an issue description
+eiou report debug "login page crash"
+
+# Full report with complete log history
+eiou report debug --full
+
+# Full report with description
+eiou report debug "sync failure after restore" --full
+```
+
+**Output:** Reports are saved as JSON files in `/tmp/` (e.g., `/tmp/eiou-debug-report-20260314170000.json`). The file path and size are printed to stdout. With `--json`, structured output includes `path`, `size`, `report_type`, and `debug_entries` count.
+
+**Report Contents:**
+- System info: PHP version, MariaDB version, OS, memory limits, loaded extensions
+- Application constants and user configuration (`defaultconfig.json`)
+- PHP config (`php.ini`) and nginx config
+- Debug table entries (from `DebugService::output()` calls)
+- PHP error log, nginx error log, eIOU application log
+
+**Notes:**
+- Same report format as the GUI Debug Report (both use `DebugReportService`)
+- Limited mode includes last 50 lines of each log file; full mode includes up to 5MB per log
+- Reports do not contain private keys, seed phrases, or authentication codes
 
 ---
 
