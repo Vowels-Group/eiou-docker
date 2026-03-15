@@ -1067,32 +1067,32 @@ docker exec <container> eiou backup cleanup
 
 ### Manual Volume Backup
 
-For complete disaster recovery, back up Docker volumes directly:
+For complete disaster recovery, back up Docker volumes directly from the running container:
 
 ```bash
-# Backup volumes
-docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
-  eiou/eiou tar czf /backup/alice-mysql-data.tar.gz -C /data .
+# Backup volumes (replace <container> with your container name)
+docker exec <container> tar czf /tmp/mysql-data.tar.gz -C /var/lib/mysql .
+docker cp <container>:/tmp/mysql-data.tar.gz ./mysql-data.tar.gz
 
-docker run --rm -v alice-config:/data -v /backup:/backup \
-  eiou/eiou tar czf /backup/alice-config.tar.gz -C /data .
+docker exec <container> tar czf /tmp/config.tar.gz -C /etc/eiou/config .
+docker cp <container>:/tmp/config.tar.gz ./config.tar.gz
 
-docker run --rm -v alice-backups:/data -v /backup:/backup \
-  eiou/eiou tar czf /backup/alice-backups.tar.gz -C /data .
+docker exec <container> tar czf /tmp/backups.tar.gz -C /var/lib/eiou/backups .
+docker cp <container>:/tmp/backups.tar.gz ./backups.tar.gz
 ```
 
 ### Restore Commands
 
 ```bash
-# Restore volumes
-docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
-  eiou/eiou sh -c "cd /data && tar xzf /backup/alice-mysql-data.tar.gz"
+# Restore volumes (replace <container> with your container name)
+docker cp ./mysql-data.tar.gz <container>:/tmp/mysql-data.tar.gz
+docker exec <container> sh -c "cd /var/lib/mysql && tar xzf /tmp/mysql-data.tar.gz"
 
-docker run --rm -v alice-config:/data -v /backup:/backup \
-  eiou/eiou sh -c "cd /data && tar xzf /backup/alice-config.tar.gz"
+docker cp ./config.tar.gz <container>:/tmp/config.tar.gz
+docker exec <container> sh -c "cd /etc/eiou/config && tar xzf /tmp/config.tar.gz"
 
-docker run --rm -v alice-backups:/data -v /backup:/backup \
-  eiou/eiou sh -c "cd /data && tar xzf /backup/alice-backups.tar.gz"
+docker cp ./backups.tar.gz <container>:/tmp/backups.tar.gz
+docker exec <container> sh -c "cd /var/lib/eiou/backups && tar xzf /tmp/backups.tar.gz"
 ```
 
 ### Restore from Encrypted Backup
@@ -1137,7 +1137,7 @@ docker compose down -v
 docker logs <container_name>
 
 # Verify volume permissions
-docker run --rm -v mynode-config:/data eiou/eiou ls -la /data
+docker exec <container_name> ls -la /etc/eiou/config
 
 # Reset and rebuild
 docker-compose -f <config>.yml down -v

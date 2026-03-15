@@ -252,15 +252,25 @@ docker exec eiou-node eiou backup cleanup                             # Delete o
 For complete disaster recovery, back up Docker volumes directly:
 
 ```bash
-# Backup (replace eiou-node with your NODE_NAME if changed)
-docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup eiou/eiou tar czf /backup/mysql-data.tar.gz -C /data .
-docker run --rm -v eiou-node-files:/data -v $(pwd):/backup eiou/eiou tar czf /backup/files.tar.gz -C /data .
-docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup eiou/eiou tar czf /backup/backups.tar.gz -C /data .
+# Backup (replace <container> with your container name, default: eiou-node)
+docker exec <container> tar czf /tmp/mysql-data.tar.gz -C /var/lib/mysql .
+docker cp <container>:/tmp/mysql-data.tar.gz ./mysql-data.tar.gz
+
+docker exec <container> tar czf /tmp/config.tar.gz -C /etc/eiou/config .
+docker cp <container>:/tmp/config.tar.gz ./config.tar.gz
+
+docker exec <container> tar czf /tmp/backups.tar.gz -C /var/lib/eiou/backups .
+docker cp <container>:/tmp/backups.tar.gz ./backups.tar.gz
 
 # Restore
-docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup eiou/eiou sh -c "cd /data && tar xzf /backup/mysql-data.tar.gz"
-docker run --rm -v eiou-node-files:/data -v $(pwd):/backup eiou/eiou sh -c "cd /data && tar xzf /backup/files.tar.gz"
-docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup eiou/eiou sh -c "cd /data && tar xzf /backup/backups.tar.gz"
+docker cp ./mysql-data.tar.gz <container>:/tmp/mysql-data.tar.gz
+docker exec <container> sh -c "cd /var/lib/mysql && tar xzf /tmp/mysql-data.tar.gz"
+
+docker cp ./config.tar.gz <container>:/tmp/config.tar.gz
+docker exec <container> sh -c "cd /etc/eiou/config && tar xzf /tmp/config.tar.gz"
+
+docker cp ./backups.tar.gz <container>:/tmp/backups.tar.gz
+docker exec <container> sh -c "cd /var/lib/eiou/backups && tar xzf /tmp/backups.tar.gz"
 ```
 
 ## Troubleshooting
