@@ -113,6 +113,11 @@ class MessageService implements MessageServiceInterface {
     private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
 
     /**
+     * @var \Eiou\Database\ContactCreditRepository|null Contact credit repository (setter injected)
+     */
+    private ?\Eiou\Database\ContactCreditRepository $contactCreditRepository = null;
+
+    /**
      * @var TransactionContactRepository Transaction contact repository for contact transaction operations
      */
     private TransactionContactRepository $transactionContactRepository;
@@ -174,6 +179,7 @@ class MessageService implements MessageServiceInterface {
         }
         if ($repositoryFactory !== null) {
             $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+            $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
         }
     }
 
@@ -633,7 +639,7 @@ class MessageService implements MessageServiceInterface {
                 if($p2p && $transactions){
                     // Check if user was original sender of transaction
                     if(isset($p2p['destination_address'])){
-                        // Send direct message inquiry to end recipient double checking if completion of transaction correct
+                        // Send direct message inquiry to end-recipient double checking if completion of transaction correct
                         // This is a direct message (no forwarding) - completes on 'inserted' status
                         // Subtype 'inquiry' creates message_id: tx-inquiry-{hash}-{timestamp}
                         // Include description from p2p table so end-recipient can store it
@@ -672,6 +678,11 @@ class MessageService implements MessageServiceInterface {
                                     $this->transactionRepository->updateDescription($hash, $response['description'], false);
                                 }
 
+                                // Save available credit from the relay contact's completion message.
+                                // The relay attached its own credit calculation for us.
+                                // Only saved after inquiry confirms completion to avoid premature updates.
+                                $this->saveAvailableCreditFromCompletion($decodedMessage);
+
                                 // Mark all P2P delivery records for this hash as completed
                                 $this->markP2pDeliveriesCompleted($hash);
                             } elseif ($inquiryStatus === 'not_found') {
@@ -697,12 +708,17 @@ class MessageService implements MessageServiceInterface {
                             $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                         }
 
+                        // Save available credit from completion response (downstream node's credit for us)
+                        $this->saveAvailableCreditFromCompletion($decodedMessage);
+
                         // Mark all P2P delivery records for this hash as completed
                         $this->markP2pDeliveriesCompleted($hash);
 
                         // Send transaction completion message onwards (relayed through chain)
                         // This is a relay message - completes on 'forwarded' or 'inserted' status
                         // Subtype 'completion-relay' creates message_id: tx-completion-relay-{hash}-{timestamp}
+                        // Replace downstream node's credit with our credit for the upstream sender
+                        $this->attachAvailableCreditForSender($decodedMessage, $p2p);
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
                         $sendResult = $this->sendMessage('completion-relay', $p2p['sender_address'], $payloadTransactionCompleted, $hash);
@@ -738,6 +754,9 @@ class MessageService implements MessageServiceInterface {
                     if (isset($decodedMessage['description']) && $decodedMessage['description'] !== null) {
                         $this->transactionRepository->updateDescription($hash, $decodedMessage['description'], true);
                     }
+
+                    // Save available credit from completion response
+                    $this->saveAvailableCreditFromCompletion($decodedMessage);
                 }
                 // Return acknowledgment for direct transaction completion message delivery tracking
                 echo $this->messagePayload->buildTransactionCompletionAcknowledgment($decodedMessage);
@@ -835,6 +854,86 @@ class MessageService implements MessageServiceInterface {
      * @param string $hash The P2P hash (memo)
      * @return void
      */
+    /**
+     * Calculate and attach our available credit for the upstream P2P sender
+     *
+     * When relaying a completion message upstream, replace the downstream node's
+     * credit info with our own credit calculation for the upstream sender.
+     * This way each hop in the chain receives credit info from their direct contact.
+     *
+     * @param array &$message The completion message (modified in place)
+     * @param array $p2p The P2P record (contains sender_public_key of upstream node)
+     */
+    private function attachAvailableCreditForSender(array &$message, array $p2p): void {
+        if ($this->contactCurrencyRepository === null) {
+            return;
+        }
+
+        try {
+            $senderPubkey = $p2p['sender_public_key'];
+            $currency = $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+
+            $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
+            $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
+            $balance = $sentBalance - $receivedBalance;
+
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
+            $availableCredit = $balance + $creditLimit;
+
+            $message['availableCreditByCurrency'] = [$currency => $availableCredit];
+            $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();
+        } catch (\Exception $e) {
+            // Non-fatal — completion relay still works without credit info
+            Logger::getInstance()->warning("Failed to calculate available credit for completion relay", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Save available credit from a completion response if newer than stored value
+     *
+     * The completing node includes our available credit with them in the
+     * completion response. We save it only if the timestamp is newer than
+     * what we already have, to handle out-of-order completions.
+     *
+     * @param array $message The decoded completion message
+     */
+    private function saveAvailableCreditFromCompletion(array $message): void {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $message['availableCreditByCurrency'] ?? null;
+        $calculatedAt = $message['creditCalculatedAt'] ?? null;
+
+        if (!is_array($creditByCurrency) || empty($creditByCurrency) || $calculatedAt === null) {
+            return;
+        }
+
+        try {
+            $contactPubkey = $message['senderPublicKey'] ?? $message['sender_public_key'] ?? null;
+            if ($contactPubkey === null) {
+                return;
+            }
+
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+            foreach ($creditByCurrency as $currency => $credit) {
+                $this->contactCreditRepository->upsertAvailableCreditIfNewer(
+                    $pubkeyHash,
+                    (int) $credit,
+                    $currency,
+                    (int) $calculatedAt
+                );
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning("Failed to save available credit from completion", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
     private function markP2pDeliveriesCompleted(string $hash): void {
         if ($this->messageDeliveryService === null) {
             return;

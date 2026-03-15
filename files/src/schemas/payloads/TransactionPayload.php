@@ -290,6 +290,14 @@ class TransactionPayload extends BasePayload
             $payload['initialSenderAddress'] = $this->sanitizeString($request['initialSenderAddress']);
         }
 
+        // Include available credit if the completer calculated it
+        if (isset($request['availableCreditByCurrency']) && is_array($request['availableCreditByCurrency'])) {
+            $payload['availableCreditByCurrency'] = $request['availableCreditByCurrency'];
+            if (isset($request['creditCalculatedAt'])) {
+                $payload['creditCalculatedAt'] = $request['creditCalculatedAt'];
+            }
+        }
+
         return $payload;
     }
 

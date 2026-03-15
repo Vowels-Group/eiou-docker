@@ -361,4 +361,111 @@ class ContactCreditRepositoryTest extends TestCase
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
+
+    // =========================================================================
+    // upsertAvailableCreditIfNewer() Tests
+    // =========================================================================
+
+    public function testUpsertAvailableCreditIfNewerSuccess(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('INSERT INTO'),
+                $this->stringContains('ON DUPLICATE KEY UPDATE'),
+                $this->stringContains('IF(')
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        // Microtime integer: e.g. 17417499042270 = 2025-03-12 ~14:05:04
+        $result = $this->repository->upsertAvailableCreditIfNewer('some-pubkey-hash', 5000, 'USD', 17417499042270);
+
+        $this->assertTrue($result);
+    }
+
+    public function testUpsertAvailableCreditIfNewerFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willThrowException(new \PDOException('Connection error'));
+
+        $result = $this->repository->upsertAvailableCreditIfNewer('some-pubkey-hash', 5000, 'USD', 17417499042270);
+
+        $this->assertFalse($result);
+    }
+
+    public function testUpsertAvailableCreditIfNewerIncludesTimestampParams(): void
+    {
+        $microtimeInt = 17417499042270;
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $boundValues = [];
+        $this->stmt->method('bindValue')
+            ->willReturnCallback(function ($key, $value) use (&$boundValues) {
+                $boundValues[$key] = $value;
+                return true;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->repository->upsertAvailableCreditIfNewer('test-hash', 9000, 'EUR', $microtimeInt);
+
+        // All three timestamp params should be the same converted value
+        $this->assertEquals($boundValues[':updated_at'], $boundValues[':updated_at2']);
+        $this->assertEquals($boundValues[':updated_at'], $boundValues[':updated_at3']);
+        $this->assertEquals('test-hash', $boundValues[':pubkey_hash']);
+        $this->assertEquals(9000, $boundValues[':available_credit']);
+        $this->assertEquals('EUR', $boundValues[':currency']);
+    }
+
+    // =========================================================================
+    // microtimeIntToTimestamp() Tests
+    // =========================================================================
+
+    public function testMicrotimeIntToTimestampFormat(): void
+    {
+        // microtimeIntToTimestamp is private static, use reflection
+        $method = new \ReflectionMethod(ContactCreditRepository::class, 'microtimeIntToTimestamp');
+        $method->setAccessible(true);
+
+        // Known value: 1741749904 seconds = some date, remainder 2270 = 227000 microseconds
+        $result = $method->invoke(null, 17417499042270);
+
+        // Should be a valid timestamp format: YYYY-MM-DD HH:MM:SS.UUUUUU
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}$/', $result);
+        // Microseconds should be remainder * 100 = 2270 * 100 = 227000
+        $this->assertStringEndsWith('.227000', $result);
+    }
+
+    public function testMicrotimeIntToTimestampZeroRemainder(): void
+    {
+        $method = new \ReflectionMethod(ContactCreditRepository::class, 'microtimeIntToTimestamp');
+        $method->setAccessible(true);
+
+        // Exact second boundary (no fractional part)
+        $result = $method->invoke(null, 17417499040000);
+
+        $this->assertStringEndsWith('.000000', $result);
+    }
+
+    public function testMicrotimeIntToTimestampMaxRemainder(): void
+    {
+        $method = new \ReflectionMethod(ContactCreditRepository::class, 'microtimeIntToTimestamp');
+        $method->setAccessible(true);
+
+        // Maximum remainder: 9999 (just under 1 second)
+        $result = $method->invoke(null, 17417499049999);
+
+        // 9999 * 100 = 999900 microseconds
+        $this->assertStringEndsWith('.999900', $result);
+    }
 }

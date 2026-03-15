@@ -1183,7 +1183,7 @@ class ServiceContainer implements ContainerInterface {
             $this->services['TransactionValidationService']->setTransactionService($this->services['TransactionService']);
         }
 
-        // TransactionProcessingService -> P2pService, HeldTransactionService
+        // TransactionProcessingService -> P2pService, HeldTransactionService, ContactCurrencyRepository
         if (isset($this->services['TransactionProcessingService'])) {
             if (isset($this->services['P2pService'])) {
                 $this->services['TransactionProcessingService']->setP2pService($this->services['P2pService']);
@@ -1191,6 +1191,9 @@ class ServiceContainer implements ContainerInterface {
             if (isset($this->services['HeldTransactionService'])) {
                 $this->services['TransactionProcessingService']->setHeldTransactionService($this->services['HeldTransactionService']);
             }
+            $this->services['TransactionProcessingService']->setContactCurrencyRepository(
+                $this->getRepositoryFactory()->get(ContactCurrencyRepository::class)
+            );
         }
 
         // SendOperationService -> ContactService, P2pService, TransactionService, ChainDropService

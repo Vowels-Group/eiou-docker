@@ -105,6 +105,60 @@ class ContactCreditRepository extends AbstractRepository {
     }
 
     /**
+     * Insert or update available credit only if the provided timestamp is newer
+     *
+     * Used when saving credit from transaction completion or pong responses.
+     * The timestamp is converted from the app's integer microtime format
+     * (seconds * 10000) to a MySQL TIMESTAMP(6) and stored in updated_at.
+     *
+     * On INSERT (no existing row): always inserts.
+     * On UPDATE (row exists): only updates if the new timestamp > stored updated_at.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param int $availableCredit Available credit amount (in cents)
+     * @param string $currency Currency code
+     * @param int $calculatedAt Timestamp from getCurrentMicrotime() (seconds * 10000)
+     * @return bool True on success
+     */
+    public function upsertAvailableCreditIfNewer(string $pubkeyHash, int $availableCredit, string $currency, int $calculatedAt): bool {
+        $timestamp = self::microtimeIntToTimestamp($calculatedAt);
+
+        $query = "INSERT INTO {$this->tableName} (pubkey_hash, available_credit, currency, updated_at)
+                  VALUES (:pubkey_hash, :available_credit, :currency, :updated_at)
+                  ON DUPLICATE KEY UPDATE
+                  available_credit = IF(:updated_at2 > updated_at, VALUES(available_credit), available_credit),
+                  updated_at = IF(:updated_at3 > updated_at, VALUES(updated_at), updated_at)";
+
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':available_credit' => $availableCredit,
+            ':currency' => $currency,
+            ':updated_at' => $timestamp,
+            ':updated_at2' => $timestamp,
+            ':updated_at3' => $timestamp,
+        ]);
+
+        return $stmt !== false;
+    }
+
+    /**
+     * Convert app microtime integer to MySQL TIMESTAMP(6) string
+     *
+     * App uses (int)(microtime(true) * 10000), e.g. 17417499042270.
+     * This converts back to '2025-03-12 14:05:04.227000'.
+     *
+     * @param int $microtimeInt Integer from getCurrentMicrotime()
+     * @return string MySQL TIMESTAMP(6) string
+     */
+    private static function microtimeIntToTimestamp(int $microtimeInt): string {
+        $seconds = intdiv($microtimeInt, 10000);
+        $remainder = $microtimeInt % 10000;
+        // Convert remainder from 1/10000s to microseconds (multiply by 100)
+        $microseconds = $remainder * 100;
+        return date('Y-m-d H:i:s', $seconds) . '.' . sprintf('%06d', $microseconds);
+    }
+
+    /**
      * Create initial credit entry for a new contact
      *
      * Sets available_credit to 0 until updated by a ping/pong exchange.
