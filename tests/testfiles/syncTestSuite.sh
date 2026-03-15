@@ -2504,7 +2504,8 @@ done
 
 # Verify C received the P2P transaction (with retry for timing)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp10}" 1 15)
-echo -e "\t   C has ${countC_p2p} P2P test transactions"
+countB_t10_after=$(get_tx_count ${contactB} "AB%-${timestamp10}")
+echo -e "\t   After sync:      B recovered ${countB_t10_after} of ${countB_t10} AB txs, C received ${countC_p2p} P2P tx"
 
 # P2P should complete after sync recovery
 if [[ "$countC_p2p" -ge 1 ]]; then
@@ -2550,7 +2551,8 @@ done
 
 # Verify (with retry for timing)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp11}" 1 15)
-echo -e "\t   C has ${countC_p2p} P2P test transactions"
+countB_t11_after=$(get_tx_count ${contactB} "AB%-${timestamp11}")
+echo -e "\t   After sync:      B recovered ${countB_t11_after} of ${countB_t11} AB txs, C received ${countC_p2p} P2P tx"
 
 if [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 11 (P2P, B lost after AB0) ${GREEN}PASSED${NC}\n"
@@ -2595,7 +2597,8 @@ done
 
 # Verify (with retry for timing)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp12}" 1 15)
-echo -e "\t   C has ${countC_p2p} P2P test transactions"
+countB_t12_after=$(get_tx_count ${contactB} "AB%-${timestamp12}")
+echo -e "\t   After sync:      B recovered ${countB_t12_after} of ${countB_t12} AB txs, C received ${countC_p2p} P2P tx"
 
 if [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 12 (P2P, B has gap) ${GREEN}PASSED${NC}\n"
@@ -2651,7 +2654,8 @@ done
 
 # Verify (with retry for timing - extended delay for complete chain loss sync recovery)
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp13}" 1 30)
-echo -e "\t   A has ${countA_p2p} P2P test transactions from C"
+countB_ab_t13_after=$(get_tx_count ${contactB} "AB%-${timestamp13}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t13_after} of ${countB_ab_t13} AB txs, A received ${countA_p2p} P2P tx from C"
 
 if [[ "$countA_p2p" -ge 1 ]]; then
     printf "\t   Test 13 (P2P C->A, B lost all AB) ${GREEN}PASSED${NC}\n"
@@ -2698,7 +2702,8 @@ done
 
 # Verify (with retry for timing - extended delay for sync recovery)
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp14}" 1 30)
-echo -e "\t   A has ${countA_p2p} P2P test transactions from C"
+countB_ab_t14_after=$(get_tx_count ${contactB} "AB%-${timestamp14}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t14_after} of ${countB_ab_t14} AB txs, A received ${countA_p2p} P2P tx from C"
 
 if [[ "$countA_p2p" -ge 1 ]]; then
     printf "\t   Test 14 (P2P C->A, B lost after AB0) ${GREEN}PASSED${NC}\n"
@@ -2745,7 +2750,8 @@ done
 
 # Verify (with retry for timing)
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp15}" 1 15)
-echo -e "\t   A has ${countA_p2p} P2P test transactions from C"
+countB_ab_t15_after=$(get_tx_count ${contactB} "AB%-${timestamp15}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t15_after} of ${countB_ab_t15} AB txs, A received ${countA_p2p} P2P tx from C"
 
 if [[ "$countA_p2p" -ge 1 ]]; then
     printf "\t   Test 15 (P2P C->A, B has gap) ${GREEN}PASSED${NC}\n"
@@ -2797,7 +2803,7 @@ done
 # Verify
 countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp16}")
 countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp16}")
-echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
+echo -e "\t   After sync:      A received ${countA_p2p} P2P from C, C received ${countC_p2p} P2P from A"
 
 if [[ "$countA_p2p" -ge 1 ]] || [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 16 (simultaneous P2P, full chains) ${GREEN}PASSED${NC}\n"
@@ -2846,7 +2852,8 @@ done
 # Verify both end-recipients received transactions (with retry for timing - longer delay)
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp17}" 1 25)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp17}" 1 25)
-echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
+countB_ab_t17_after=$(get_tx_count ${contactB} "AB%-${timestamp17}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t17_after} of ${countB_ab_t17} AB txs, A received ${countA_p2p} P2P, C received ${countC_p2p} P2P"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 17 (simultaneous P2P, B missing AB3) ${GREEN}PASSED${NC}\n"
@@ -2898,7 +2905,8 @@ done
 # Increased delay to match tests 13-14 which also deal with broken chains
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp18}" 1 30)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp18}" 1 30)
-echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
+countB_ab_t18_after=$(get_tx_count ${contactB} "AB%-${timestamp18}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t18_after} of ${countB_ab_t18} AB txs, A received ${countA_p2p} P2P, C received ${countC_p2p} P2P"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 18 (simultaneous P2P, broken chain) ${GREEN}PASSED${NC}\n"
@@ -2958,7 +2966,9 @@ done
 # Verify both end-recipients received transactions after sync recovery (with retry for timing - longer delay)
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp19}" 1 45)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp19}" 1 45)
-echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
+countB_ab_t19_after=$(get_tx_count ${contactB} "AB%-${timestamp19}")
+countB_cb_t19_after=$(get_tx_count ${contactB} "CB%-${timestamp19}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t19_after} of ${countB_ab_t19} AB + ${countB_cb_t19_after} of ${countB_cb_t19} CB txs, A received ${countA_p2p} P2P, C received ${countC_p2p} P2P"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 19 (double disaster, no chains) ${GREEN}PASSED${NC} - both recipients received\n"
@@ -3009,7 +3019,9 @@ done
 # Verify both end-recipients received transactions after sync recovery (with retry for timing)
 countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp20}" 1 35)
 countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp20}" 1 35)
-echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
+countB_ab_t20_after=$(get_tx_count ${contactB} "AB%-${timestamp20}")
+countB_cb_t20_after=$(get_tx_count ${contactB} "CB%-${timestamp20}")
+echo -e "\t   After sync:      B recovered ${countB_ab_t20_after} of ${countB_ab_t20} AB + ${countB_cb_t20_after} of ${countB_cb_t20} CB txs, A received ${countA_p2p} P2P, C received ${countC_p2p} P2P"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 20 (double disaster, contacts only) ${GREEN}PASSED${NC} - both recipients received\n"
