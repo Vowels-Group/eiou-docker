@@ -15,7 +15,7 @@ The project is currently in **ALPHA** status.
 CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
 
 ### Docs
-- Fix documentation referencing `alpine` image in backup/restore commands — project uses `debian:12-slim`
+- Fix documentation referencing `alpine` image in backup/restore commands — project uses `eiou/eiou`
 
 ### Security
 - Add P2P inquiry token authentication (#757) — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates

@@ -253,14 +253,14 @@ For complete disaster recovery, back up Docker volumes directly:
 
 ```bash
 # Backup (replace eiou-node with your NODE_NAME if changed)
-docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup debian:12-slim tar czf /backup/mysql-data.tar.gz -C /data .
-docker run --rm -v eiou-node-files:/data -v $(pwd):/backup debian:12-slim tar czf /backup/files.tar.gz -C /data .
-docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup debian:12-slim tar czf /backup/backups.tar.gz -C /data .
+docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup eiou/eiou tar czf /backup/mysql-data.tar.gz -C /data .
+docker run --rm -v eiou-node-files:/data -v $(pwd):/backup eiou/eiou tar czf /backup/files.tar.gz -C /data .
+docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup eiou/eiou tar czf /backup/backups.tar.gz -C /data .
 
 # Restore
-docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup debian:12-slim sh -c "cd /data && tar xzf /backup/mysql-data.tar.gz"
-docker run --rm -v eiou-node-files:/data -v $(pwd):/backup debian:12-slim sh -c "cd /data && tar xzf /backup/files.tar.gz"
-docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup debian:12-slim sh -c "cd /data && tar xzf /backup/backups.tar.gz"
+docker run --rm -v eiou-node-mysql-data:/data -v $(pwd):/backup eiou/eiou sh -c "cd /data && tar xzf /backup/mysql-data.tar.gz"
+docker run --rm -v eiou-node-files:/data -v $(pwd):/backup eiou/eiou sh -c "cd /data && tar xzf /backup/files.tar.gz"
+docker run --rm -v eiou-node-backups:/data -v $(pwd):/backup eiou/eiou sh -c "cd /data && tar xzf /backup/backups.tar.gz"
 ```
 
 ## Troubleshooting
