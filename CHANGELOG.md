@@ -14,6 +14,9 @@ The project is currently in **ALPHA** status.
 
 CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
 
+### Docs
+- Fix documentation referencing `alpine` image in backup/restore commands — project uses `eiou/eiou`
+
 ### Fixed
 - Fix duplicate contact transaction inserted when receiving repeated contact requests — `contactTransactionExistsForReceiver()` had sender/receiver swapped in its query, so the duplicate check never found the existing transaction
 
