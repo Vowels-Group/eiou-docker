@@ -498,11 +498,14 @@ class TransportUtilityService implements TransportServiceInterface
                 }
 
                 // Write GUI-readable status so the wallet UI can display a notification
-                file_put_contents('/tmp/tor-gui-status', json_encode([
+                // Use 0666 permissions so both www-data (PHP) and root (watchdog) can update
+                $statusFile = '/tmp/tor-gui-status';
+                file_put_contents($statusFile, json_encode([
                     'status' => 'issue',
                     'timestamp' => time(),
                     'message' => 'Tor connectivity issue detected — automatic restart in progress'
                 ]));
+                chmod($statusFile, 0666);
             }
 
             // Return a structured error response that can be parsed
