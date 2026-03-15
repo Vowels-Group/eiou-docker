@@ -360,3 +360,5 @@ See [Testing Guide](docs/TESTING.md) for details.
 ## Legal Notice
 
 See the full notice displayed at container startup (`scripts/banners/alpha-warning.txt`) or the blockquote at the top of this README.
+
+Patent pending.
