@@ -10,24 +10,25 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## 2026-03-15
-
-CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
+## 2026-03-15 
+P2P fee fix, duplicate contact prevention, available credit on completion, watchdog fix, documentation updates, P2P inquiry token authentication.
 
 ### Added
-- Include available credit in transaction completion responses — the completing node calculates the sender's available credit and includes it with a timestamp in the completion payload. The sender saves it only if the timestamp is newer than what's stored, preventing out-of-order completions from overwriting fresher values
-- Relay nodes attach their own credit calculation when forwarding completion messages upstream, so each node in a P2P chain receives credit info from its direct contact
-- Ping/pong credit saves now use the same timestamp guard via `upsertAvailableCreditIfNewer()`
+- Include available credit in transaction completion responses (#763) — the completing node calculates the sender's available credit and includes it with a timestamp in the completion payload. The sender saves it only if the timestamp is newer than what's stored, preventing out-of-order completions from overwriting fresher values
+- Relay nodes attach their own credit calculation when forwarding completion messages upstream, so each node in a P2P chain receives credit info from its direct contact (#763)
+- Ping/pong credit saves now use the same timestamp guard via `upsertAvailableCreditIfNewer()` (#763)
 
 ### Docs
-- Fix documentation referencing wrong image in backup/restore commands — project uses `eiou/eiou`
+- Fix backup/restore and troubleshooting commands to use `docker exec` on the running container instead of `docker run` with a separate image (#761)
 
 ### Security
 - Add P2P inquiry token authentication (#757) — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates
 - Completion inquiries now require `inquiry_secret` — `checkMessageValidity` rejects inquiry messages that lack the secret when the P2P has an `inquiry_token`, closing the relay forgery gap where the address-based fallback allowed any node to pass validation
 
 ### Fixed
-- Fix duplicate contact transaction inserted when receiving repeated contact requests — `contactTransactionExistsForReceiver()` had sender/receiver swapped in its query, so the duplicate check never found the existing transaction
+- Fix originator charging itself a relay fee on P2P transactions (#764) — `handleRp2pRequest()` calculated and added a relay fee for every node receiving an RP2P response, including the originator. This caused A→B→C payments to overcharge the sender and overpay the end-recipient
+- Fix duplicate contact transaction inserted when receiving repeated contact requests (#762) — `contactTransactionExistsForReceiver()` had sender/receiver swapped in its query, so the duplicate check never found the existing transaction
+- Fix `/tmp/tor-gui-status` permission denied in watchdog (#765) — PHP (www-data) creates the file with 0644 permissions, then the watchdog (root) fails to overwrite it. Added `write_tor_gui_status()` helper that removes the file before writing, and PHP now sets 0666 permissions after writing
 - Fix `CliService::displayPendingContacts()` crash (#756) — `$this->container` property didn't exist, replaced with stored `$repositoryFactory`
 - Fix `cliCommandsTest.sh` report debug JSON assertions (#756) — `"success":true` (no space) didn't match `JSON_PRETTY_PRINT` output `"success": true`
 - Fix `cliCommandsTest.sh` and `apiEndpointsTest.sh` checking for removed `display_currency_decimals` key (#756) — replaced with `currency_decimals` in CLI test, removed from API test
@@ -44,8 +45,7 @@ CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authent
 - Sync test P2P output now shows B's chain recovery counts alongside P2P delivery result (#759)
 - Update unit tests for `currencyDecimals` rename (#756)
 
-## 2026-03-14
-
+## 2026-03-14 
 Open alpha launch prep, currency configuration, settings GUI cleanup, legal notices, debug fix.
 
 ### Fixed
@@ -123,8 +123,7 @@ Open alpha launch prep, currency configuration, settings GUI cleanup, legal noti
 - Remove stale `.dockerignore` entries for config files that moved to runtime volume generation
 - Update MySQL overview files (`tests/mysql.txt`, `tests/mysql - easy overview.txt`): add 4 new tables (`api_nonces`, `capacity_reservations`, `contact_currencies`, `route_cancellations`); remove stale `fee_percent`/`credit_limit`/`currency` columns from contacts (moved to `contact_currencies`); add missing columns across p2p (`rp2p_amount`, `expiration`), transactions (`expires_at`), message_delivery (`max_retries`, `next_retry_at`, `last_response`), held_transactions (`max_retries`, `last_sync_attempt`, `next_retry_at`), chain_drop_proposals (`previous_txid_before_gap`, `gap_context`, `updated_at`), delivery_metrics (`created_at`), dead_letter_queue (`last_retry_at`), contacts (`created_at`). All 23 tables now validated against live database
 
-## 2026-03-11
-
+## 2026-03-11 
 Codebase audit remediation (Phases 1-5, ARCH-04, DOCK-05, ARCH-05/01).
 
 ### Security
@@ -157,8 +156,7 @@ Codebase audit remediation (Phases 1-5, ARCH-04, DOCK-05, ARCH-05/01).
 - Remove all `@` error suppression operators (33 occurrences across 11 files) with proper error handling: `file_exists()` checks before `unlink()`, return value checks for `file_get_contents()`/`fopen()`, and direct calls where `is_dir()` guards exist
 - Increase container resource limits from 512MB/256MB to 1024MB/512MB (memory limit/reservation) and from 1.0 to 2.0 CPU cores to prevent OOM kills under load with nginx + PHP-FPM + MariaDB + Tor
 
-## 2026-03-07 -- 2026-03-10
-
+## 2026-03-07 -- 2026-03-10 
 Multi-currency, E2E encryption, nginx migration, route cancellation, Tor circuit health.
 
 ### Security
