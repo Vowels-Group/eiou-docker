@@ -283,13 +283,17 @@ class Rp2pService implements Rp2pServiceInterface {
             throw new Exception('P2P request was not found for the given hash.');
         }
 
-        // Recalculate fee on the accumulated RP2P amount (multiplicative/compounding fees).
-        // Each relay charges its fee on the total including downstream fees, not the original base.
-        // The exact rounded fee is saved to my_fee_amount so TransactionService::removeTransactionFee()
-        // subtracts the identical value — preventing rounding discrepancies.
-        $recalculatedFee = $this->calculateFeeForP2p($p2p, $request['amount']);
-        $this->p2pRepository->updateFeeAmount($request['hash'], $recalculatedFee);
-        $request['amount'] += $recalculatedFee;
+        // Only relay nodes charge fees — the originator (destination_address is set)
+        // does not relay and must not add its own fee to the amount.
+        if(!isset($p2p['destination_address'])) {
+            // Recalculate fee on the accumulated RP2P amount (multiplicative/compounding fees).
+            // Each relay charges its fee on the total including downstream fees, not the original base.
+            // The exact rounded fee is saved to my_fee_amount so TransactionService::removeTransactionFee()
+            // subtracts the identical value — preventing rounding discrepancies.
+            $recalculatedFee = $this->calculateFeeForP2p($p2p, $request['amount']);
+            $this->p2pRepository->updateFeeAmount($request['hash'], $recalculatedFee);
+            $request['amount'] += $recalculatedFee;
+        }
 
         //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
         if(!isset($p2p['destination_address'])) {
