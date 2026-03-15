@@ -2005,6 +2005,52 @@ The lookup is centralized in `TransportUtilityService::getConcurrencyLimit(array
 which resolves addresses to protocols via `determineTransportType()` and returns `min()` of
 the applicable limits. To tune: edit the `CURL_MULTI_MAX_CONCURRENT` array in `Constants.php`.
 
+### P2P Inquiry Token Authentication
+
+The P2P completion inquiry flow requires the original sender (A) to contact the
+end-recipient (C) directly to deliver the transaction description. Since C is not
+A's contact, C must verify that the inquiry sender is the legitimate P2P originator
+— not a relay node attempting to forge the inquiry.
+
+**Threat:** Relay nodes possess the P2P hash, salt, and time. The address-based
+hash check (`resolveUserAddressForTransport`) converts any sender address to the
+local node's address, meaning any node with the P2P data could pass validation.
+
+**Solution: Hash-committed inquiry secret.**
+
+```
+CREATION (on originator A):
+  inquiry_secret = random_bytes(32)                    ← stored only on A
+  inquiry_token  = sha256(inquiry_secret)              ← propagates through relays
+  p2p_hash       = sha256(receiver + salt + time + inquiry_token)
+```
+
+The `inquiry_token` is baked into the P2P hash that every node validates. A relay
+node cannot swap the token without breaking the hash, which would be rejected by
+all downstream nodes.
+
+```
+VERIFICATION (on end-recipient C):
+  1. A sends completion inquiry to C with inquiry_secret
+  2. C computes: sha256(received_secret) === stored inquiry_token
+  3. Match → A is the legitimate originator; accept inquiry + store description
+     No match → reject (relay node attempting to forge inquiry)
+```
+
+**Key properties:**
+- `inquiry_secret` never traverses the relay chain — only sent on the direct A→C path
+- `inquiry_token` (the hash) propagates openly but is irreversible
+- Swapping the token breaks the P2P hash, detected by every relay node
+- The transport envelope is signed, preventing man-in-the-middle modification of the inquiry
+- The secret is ephemeral — used once for the initial inquiry. After the description is stored on all nodes, it is recoverable via normal transaction chain sync (A syncs with B to recover descriptions). The end-recipient does not need to store the secret.
+
+**Database columns (p2p table):**
+
+| Column | Stored On | Purpose |
+|--------|-----------|---------|
+| `inquiry_token` | All nodes | `sha256(inquiry_secret)` — baked into P2P hash |
+| `inquiry_secret` | Originator only | Pre-image for initial inquiry authentication |
+
 ---
 
 ## Transaction Lifecycle
