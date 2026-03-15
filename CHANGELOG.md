@@ -14,6 +14,9 @@ The project is currently in **ALPHA** status.
 
 CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
 
+### Fixed
+- Fix duplicate contact transaction inserted when receiving repeated contact requests — `contactTransactionExistsForReceiver()` had sender/receiver swapped in its query, so the duplicate check never found the existing transaction
+
 ### Security
 - Add P2P inquiry token authentication (#757) — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates
 - Completion inquiries now require `inquiry_secret` — `checkMessageValidity` rejects inquiry messages that lack the secret when the P2P has an `inquiry_token`, closing the relay forgery gap where the address-based fallback allowed any node to pass validation

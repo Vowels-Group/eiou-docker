@@ -296,15 +296,16 @@ class TransactionContactRepository extends AbstractRepository {
     }
 
     /**
-     * Check if a contact transaction exists for a given receiver public key hash
+     * Check if a contact transaction exists for a given sender public key hash
      *
-     * Used to prevent duplicate contact transactions when re-adding a deleted contact.
+     * Used to prevent duplicate contact transactions when receiving repeated
+     * contact requests from the same sender.
      *
-     * @param string $receiverPublicKeyHash The hash of the receiver's public key
+     * @param string $senderPublicKeyHash The hash of the remote sender's public key
      * @return bool True if a contact transaction exists
      */
-    public function contactTransactionExistsForReceiver(string $receiverPublicKeyHash, ?string $currency = null): bool {
-        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+    public function contactTransactionExistsForReceiver(string $senderPublicKeyHash, ?string $currency = null): bool {
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
 
         $query = "SELECT 1 FROM {$this->tableName}
                   WHERE tx_type = 'contact'

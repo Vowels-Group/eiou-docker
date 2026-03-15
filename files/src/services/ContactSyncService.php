@@ -494,14 +494,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
     // =========================================================================
 
     /**
-     * Check if a contact transaction already exists for the given receiver
+     * Check if a contact transaction already exists for the given sender
      *
-     * @param string $receiverPublicKey The public key of the contact
+     * @param string $senderPublicKey The public key of the remote sender
      * @return bool True if contact transaction exists
      */
-    public function contactTransactionExists(string $receiverPublicKey): bool {
-        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
-        return $this->transactionContactRepository->contactTransactionExistsForReceiver($receiverPublicKeyHash);
+    public function contactTransactionExists(string $senderPublicKey): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        return $this->transactionContactRepository->contactTransactionExistsForReceiver($senderPublicKeyHash);
     }
 
     // =========================================================================

@@ -394,13 +394,13 @@ class TransactionContactRepositoryTest extends TestCase
 
     public function testContactTransactionExistsForReceiverReturnsTrue(): void
     {
-        $receiverHash = hash(Constants::HASH_ALGORITHM, 'receiver-pubkey');
+        $senderHash = hash(Constants::HASH_ALGORITHM, 'sender-pubkey');
 
-        // Mock UserContext
+        // Mock UserContext — our public key is the receiver
         $userContext = $this->createMock(UserContext::class);
         $userContext->expects($this->once())
             ->method('getPublicKey')
-            ->willReturn('sender-pubkey');
+            ->willReturn('receiver-pubkey');
 
         // Use reflection to set the currentUser property
         $reflection = new \ReflectionClass($this->repository);
@@ -424,17 +424,18 @@ class TransactionContactRepositoryTest extends TestCase
             ->with(PDO::FETCH_ASSOC)
             ->willReturn(['1']);
 
-        $result = $this->repository->contactTransactionExistsForReceiver($receiverHash);
+        $result = $this->repository->contactTransactionExistsForReceiver($senderHash);
 
         $this->assertTrue($result);
     }
 
     public function testContactTransactionExistsForReceiverReturnsFalse(): void
     {
+        // Mock UserContext — our public key is the receiver
         $userContext = $this->createMock(UserContext::class);
         $userContext->expects($this->once())
             ->method('getPublicKey')
-            ->willReturn('sender-pubkey');
+            ->willReturn('receiver-pubkey');
 
         $reflection = new \ReflectionClass($this->repository);
         $property = $reflection->getProperty('currentUser');
