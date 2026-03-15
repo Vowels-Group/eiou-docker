@@ -10,20 +10,30 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## [Unreleased]
+## 2026-03-15
+
+CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
 
 ### Security
-- Add P2P inquiry token authentication — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates.
+- Add P2P inquiry token authentication (#757) — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates
 - Completion inquiries now require `inquiry_secret` — `checkMessageValidity` rejects inquiry messages that lack the secret when the P2P has an `inquiry_token`, closing the relay forgery gap where the address-based fallback allowed any node to pass validation
 
 ### Fixed
-- Fix P2P completion inquiry description stripped before delivery — `signWithCapture()` removed `description` from all non-send/non-contact messages, including completion inquiries. Now preserves description for `type=message` with `inquiry=true`
-- Fix `inquiry_token` and `inquiry_secret` missing from `P2pRepository::$allowedColumns` whitelist — caused all P2P inserts to fail silently, breaking P2P routing entirely
-- Fix `inquiry_secret` not stored on originator — `sendP2pRequest()` passed the wire payload (which correctly excludes the secret) to `insertP2pRequest()`, losing the secret. Now restores the secret from prepared data before local DB insert
+- Fix `CliService::displayPendingContacts()` crash (#756) — `$this->container` property didn't exist, replaced with stored `$repositoryFactory`
+- Fix `cliCommandsTest.sh` report debug JSON assertions (#756) — `"success":true` (no space) didn't match `JSON_PRETTY_PRINT` output `"success": true`
+- Fix `cliCommandsTest.sh` and `apiEndpointsTest.sh` checking for removed `display_currency_decimals` key (#756) — replaced with `currency_decimals` in CLI test, removed from API test
+- Fix sync test cascading failures (#756) — replace naive description-pattern cleanup with chain-aware reset to contact-only state between tests. Clears non-contact transactions, repairs `previous_txid` links, and wipes related table residue (balances, p2p, chain_drop_proposals, etc.)
+- Fix P2P completion inquiry description stripped before delivery (#756, #757) — `signWithCapture()` removed `description` from all non-send/non-contact messages, including completion inquiries. Now preserves description for `type=message` with `inquiry=true`
+- Fix `inquiry_token` and `inquiry_secret` missing from `P2pRepository::$allowedColumns` whitelist (#757) — caused all P2P inserts to fail silently, breaking P2P routing entirely
+- Fix `inquiry_secret` not stored on originator (#757) — `sendP2pRequest()` passed the wire payload (which correctly excludes the secret) to `insertP2pRequest()`, losing the secret. Now restores the secret from prepared data before local DB insert
+- Remove stale `changesettings displayCurrencyDecimals` integration test (#756) — setting was replaced by `currencyDecimals` JSON map
+- Remove stale `scripts/alpha-warning.txt` (#755) — file was already moved to `scripts/banners/`
 
 ### Changed
-- P2P hash formula changed from `sha256(receiver_address + salt + time)` to `sha256(receiver_address + salt + time + inquiry_token)`
-- P2P table schema: added `inquiry_token` (propagates through relay chain) and `inquiry_secret` (stored only on originator) columns
+- P2P hash formula changed from `sha256(receiver_address + salt + time)` to `sha256(receiver_address + salt + time + inquiry_token)` (#757)
+- P2P table schema: added `inquiry_token` (propagates through relay chain) and `inquiry_secret` (stored only on originator) columns (#757)
+- Sync test P2P output now shows B's chain recovery counts alongside P2P delivery result (#759)
+- Update unit tests for `currencyDecimals` rename (#756)
 
 ## 2026-03-14
 
