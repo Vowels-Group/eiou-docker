@@ -1319,6 +1319,16 @@ fi
 # Note: Watchdog is stopped first during graceful_shutdown() to prevent
 #       process respawning during container termination.
 # -----------------------------------------------------------------------------
+write_tor_gui_status() {
+    # Write Tor GUI status file safely — remove-then-write to avoid permission
+    # issues when the file was created by a different user (www-data vs root).
+    local status_file="/tmp/tor-gui-status"
+    rm -f "$status_file" 2>/dev/null
+    echo "$1" > "$status_file" 2>/dev/null
+    chmod 666 "$status_file" 2>/dev/null
+    chown www-data:www-data "$status_file" 2>/dev/null
+}
+
 watchdog() {
     local WATCHDOG_INTERVAL=30       # Check every 30 seconds
     local RESTART_COOLDOWN=60        # Minimum seconds between restarts of same processor
@@ -1473,14 +1483,14 @@ watchdog() {
                         # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
                         TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                         # Update GUI status to indicate Tor is restarting
-                        echo "{\"status\":\"restarting\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor service restarted — verifying connectivity\"}" > /tmp/tor-gui-status 2>/dev/null && chown www-data:www-data /tmp/tor-gui-status 2>/dev/null || true
+                        write_tor_gui_status "{\"status\":\"restarting\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor service restarted — verifying connectivity\"}"
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
-                        echo "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}" > /tmp/tor-gui-status 2>/dev/null && chown www-data:www-data /tmp/tor-gui-status 2>/dev/null || true
+                        write_tor_gui_status "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}"
                     fi
                 else
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal — start command failed"
-                    echo "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}" > /tmp/tor-gui-status 2>/dev/null && chown www-data:www-data /tmp/tor-gui-status 2>/dev/null || true
+                    write_tor_gui_status "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}"
                 fi
             elif [ $TOR_RESTART_COUNT -ge $TOR_MAX_RESTARTS ]; then
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: SOCKS5 signal received but max restarts exceeded — waiting for cooldown reset"
@@ -1595,7 +1605,7 @@ watchdog() {
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor self-check passed — hidden service reachable again, resetting restart counter"
                     TOR_RESTART_COUNT=0
                     # Update GUI status to indicate Tor has recovered
-                    echo "{\"status\":\"recovered\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor connectivity restored\"}" > /tmp/tor-gui-status 2>/dev/null && chown www-data:www-data /tmp/tor-gui-status 2>/dev/null || true
+                    write_tor_gui_status "{\"status\":\"recovered\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor connectivity restored\"}"
                 fi
             fi
         fi

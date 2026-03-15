@@ -15,16 +15,14 @@ The project is currently in **ALPHA** status.
 CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
 
 ### Docs
-- Fix documentation referencing `alpine` image in backup/restore commands — project uses `eiou/eiou`
-
-### Fixed
-- Fix duplicate contact transaction inserted when receiving repeated contact requests — `contactTransactionExistsForReceiver()` had sender/receiver swapped in its query, so the duplicate check never found the existing transaction
+- Fix documentation referencing wrong image in backup/restore commands — project uses `eiou/eiou`
 
 ### Security
 - Add P2P inquiry token authentication (#757) — prevents relay nodes from forging completion inquiries to end-recipients. The P2P hash now includes a hash-committed `inquiry_token` (`sha256(inquiry_secret)`). Only the original sender knows the pre-image (`inquiry_secret`), which is included in the completion inquiry for end-recipient verification. Relay nodes can see the token but cannot reverse it, and swapping the token breaks the P2P hash that every node validates
 - Completion inquiries now require `inquiry_secret` — `checkMessageValidity` rejects inquiry messages that lack the secret when the P2P has an `inquiry_token`, closing the relay forgery gap where the address-based fallback allowed any node to pass validation
 
 ### Fixed
+- Fix duplicate contact transaction inserted when receiving repeated contact requests — `contactTransactionExistsForReceiver()` had sender/receiver swapped in its query, so the duplicate check never found the existing transaction
 - Fix `CliService::displayPendingContacts()` crash (#756) — `$this->container` property didn't exist, replaced with stored `$repositoryFactory`
 - Fix `cliCommandsTest.sh` report debug JSON assertions (#756) — `"success":true` (no space) didn't match `JSON_PRETTY_PRINT` output `"success": true`
 - Fix `cliCommandsTest.sh` and `apiEndpointsTest.sh` checking for removed `display_currency_decimals` key (#756) — replaced with `currency_decimals` in CLI test, removed from API test
