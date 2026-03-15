@@ -134,15 +134,15 @@ interface ContactSyncServiceInterface
     // =========================================================================
 
     /**
-     * Check if a contact transaction exists for a receiver.
+     * Check if a contact transaction exists for a given sender.
      *
      * Determines whether a contact transaction chain has been established
      * with the specified contact.
      *
-     * @param string $receiverPublicKey The receiver's public key
+     * @param string $senderPublicKey The remote sender's public key
      * @return bool True if a contact transaction exists
      */
-    public function contactTransactionExists(string $receiverPublicKey): bool;
+    public function contactTransactionExists(string $senderPublicKey): bool;
 
     /**
      * Insert a new outgoing contact transaction.
