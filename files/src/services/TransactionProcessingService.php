@@ -16,6 +16,7 @@ use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
@@ -57,6 +58,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private ?SyncTriggerInterface $syncTrigger = null;
     private ?P2pServiceInterface $p2pService = null;
     private ?HeldTransactionServiceInterface $heldTransactionService = null;
+    private ?ContactCurrencyRepository $contactCurrencyRepository = null;
 
     public function __construct(
         TransactionRepository $transactionRepository,
@@ -96,6 +98,11 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     public function setHeldTransactionService(HeldTransactionServiceInterface $heldTransactionService): void
     {
         $this->heldTransactionService = $heldTransactionService;
+    }
+
+    public function setContactCurrencyRepository(ContactCurrencyRepository $contactCurrencyRepository): void
+    {
+        $this->contactCurrencyRepository = $contactCurrencyRepository;
     }
 
     public function setUtilityContainer(UtilityServiceContainer $utilityContainer): void
@@ -315,6 +322,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         output(outputTransactionAmountReceived($message), 'SILENT');
 
         $this->ensureDescriptionFromP2p($message);
+        $this->attachAvailableCredit($message);
         $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
         output(outputSendTransactionCompletionMessageTxid($message), 'SILENT');
         $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
@@ -477,6 +485,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             output(outputTransactionAmountReceived($message), 'SILENT');
 
             $this->ensureDescriptionFromP2p($message, $memo);
+            $this->attachAvailableCredit($message);
             $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
             output(outputSendTransactionCompletionMessageMemo($message), 'SILENT');
 
@@ -691,6 +700,42 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             $context['memo'] = $memo;
         }
         $this->secureLogger->warning("$type delivery failed", $context);
+    }
+
+    /**
+     * Calculate available credit for a contact and attach it to the message array
+     *
+     * Called after balance update on transaction completion so the sender
+     * receives their updated available credit in the completion response.
+     *
+     * @param array $message The transaction message (modified in place)
+     */
+    private function attachAvailableCredit(array &$message): void
+    {
+        if ($this->contactCurrencyRepository === null) {
+            return;
+        }
+
+        try {
+            $senderPubkey = $message['sender_public_key'];
+            $currency = $message['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+
+            $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
+            $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
+            $balance = $sentBalance - $receivedBalance;
+
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
+            $availableCredit = $balance + $creditLimit;
+
+            $message['availableCreditByCurrency'] = [$currency => $availableCredit];
+            $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();
+        } catch (\Exception $e) {
+            // Non-fatal — completion still works without credit info
+            $this->secureLogger->warning("Failed to calculate available credit for completion", [
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     private function sendTransactionMessage(string $address, array $payload, string $txid, bool $isRelay = false): array

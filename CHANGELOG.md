@@ -14,6 +14,11 @@ The project is currently in **ALPHA** status.
 
 CLI/API test fixes, sync test infrastructure overhaul, P2P inquiry token authentication.
 
+### Added
+- Include available credit in transaction completion responses — the completing node calculates the sender's available credit and includes it with a timestamp in the completion payload. The sender saves it only if the timestamp is newer than what's stored, preventing out-of-order completions from overwriting fresher values
+- Relay nodes attach their own credit calculation when forwarding completion messages upstream, so each node in a P2P chain receives credit info from its direct contact
+- Ping/pong credit saves now use the same timestamp guard via `upsertAvailableCreditIfNewer()`
+
 ### Docs
 - Fix documentation referencing wrong image in backup/restore commands — project uses `eiou/eiou`
 

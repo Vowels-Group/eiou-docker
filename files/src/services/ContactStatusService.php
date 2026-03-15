@@ -749,6 +749,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         }
 
         $creditByCurrency = $response['availableCreditByCurrency'] ?? [];
+        $pongTime = $response['time'];
 
         if (empty($creditByCurrency)) {
             return;
@@ -757,10 +758,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
             foreach ($creditByCurrency as $currency => $credit) {
-                $this->contactCreditRepository->upsertAvailableCredit(
+                $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                     $pubkeyHash,
                     (int) $credit,
-                    $currency
+                    $currency,
+                    (int) $pongTime
                 );
             }
         } catch (\Exception $e) {
