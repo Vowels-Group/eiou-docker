@@ -1072,13 +1072,13 @@ For complete disaster recovery, back up Docker volumes directly:
 ```bash
 # Backup volumes
 docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
-  alpine tar czf /backup/alice-mysql-data.tar.gz -C /data .
+  debian:12-slim tar czf /backup/alice-mysql-data.tar.gz -C /data .
 
 docker run --rm -v alice-config:/data -v /backup:/backup \
-  alpine tar czf /backup/alice-config.tar.gz -C /data .
+  debian:12-slim tar czf /backup/alice-config.tar.gz -C /data .
 
 docker run --rm -v alice-backups:/data -v /backup:/backup \
-  alpine tar czf /backup/alice-backups.tar.gz -C /data .
+  debian:12-slim tar czf /backup/alice-backups.tar.gz -C /data .
 ```
 
 ### Restore Commands
@@ -1086,13 +1086,13 @@ docker run --rm -v alice-backups:/data -v /backup:/backup \
 ```bash
 # Restore volumes
 docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
-  alpine sh -c "cd /data && tar xzf /backup/alice-mysql-data.tar.gz"
+  debian:12-slim sh -c "cd /data && tar xzf /backup/alice-mysql-data.tar.gz"
 
 docker run --rm -v alice-config:/data -v /backup:/backup \
-  alpine sh -c "cd /data && tar xzf /backup/alice-config.tar.gz"
+  debian:12-slim sh -c "cd /data && tar xzf /backup/alice-config.tar.gz"
 
 docker run --rm -v alice-backups:/data -v /backup:/backup \
-  alpine sh -c "cd /data && tar xzf /backup/alice-backups.tar.gz"
+  debian:12-slim sh -c "cd /data && tar xzf /backup/alice-backups.tar.gz"
 ```
 
 ### Restore from Encrypted Backup
@@ -1137,7 +1137,7 @@ docker compose down -v
 docker logs <container_name>
 
 # Verify volume permissions
-docker run --rm -v mynode-config:/data alpine ls -la /data
+docker run --rm -v mynode-config:/data debian:12-slim ls -la /data
 
 # Reset and rebuild
 docker-compose -f <config>.yml down -v
