@@ -264,13 +264,13 @@ docker cp <container>:/tmp/backups.tar.gz ./backups.tar.gz
 
 # Restore
 docker cp ./mysql-data.tar.gz <container>:/tmp/mysql-data.tar.gz
-docker exec <container> sh -c "cd /var/lib/mysql && tar xzf /tmp/mysql-data.tar.gz"
+docker exec <container> sh -c "cd /var/lib/mysql && tar xzf /tmp/mysql-data.tar.gz && chown -R mysql:mysql /var/lib/mysql"
 
 docker cp ./config.tar.gz <container>:/tmp/config.tar.gz
-docker exec <container> sh -c "cd /etc/eiou/config && tar xzf /tmp/config.tar.gz"
+docker exec <container> sh -c "cd /etc/eiou/config && tar xzf /tmp/config.tar.gz && chown -R www-data:www-data /etc/eiou/config"
 
 docker cp ./backups.tar.gz <container>:/tmp/backups.tar.gz
-docker exec <container> sh -c "cd /var/lib/eiou/backups && tar xzf /tmp/backups.tar.gz"
+docker exec <container> sh -c "cd /var/lib/eiou/backups && tar xzf /tmp/backups.tar.gz && chown -R www-data:www-data /var/lib/eiou/backups"
 ```
 
 ## Troubleshooting
