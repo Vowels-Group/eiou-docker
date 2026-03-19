@@ -2419,10 +2419,21 @@ currency's chain heads don't match.
     |                                             |
     |                                             +-- eiou accept <name>
     |                                             |     +-- Update contact to 'accepted'
-    |<---------- Send acceptance message ---------+     +-- Complete contact transaction
+    |                                             |     +-- Calculate available credit
+    |<-- Send acceptance (+ availableCredit) -----+     +-- Complete contact transaction
     +-- Update contact to 'accepted'              |
-    +-- Complete contact transaction              |
+    +-- Save B's available credit                 |
+    +-- Calculate own available credit            |
+    +-- Return ack (+ availableCredit) ---------->|
+    +-- Complete contact transaction              +-- Save A's available credit
 ```
+
+Both nodes start with accurate available credit immediately after acceptance,
+without waiting for the first ping/pong cycle. The credit data is included in
+the E2E-encrypted acceptance message and acknowledgment response. For new
+contacts, available credit equals the credit limit. For re-added contacts with
+prior transactions, it reflects the real balance:
+`availableCredit = (sentBalance - receivedBalance) + creditLimit`.
 
 ### Ping/Pong Credit Exchange
 
@@ -2448,11 +2459,15 @@ and available credit synchronization.
 | `availableCreditByCurrency` | `{currency: amount}` — how much credit the contact has available for us |
 | `chainStatusByCurrency` | Per-currency chain validity flags |
 
-**Available credit update:** On receiving a pong, the processor calls
-`saveAvailableCreditFromPong()` which upserts each currency's credit into the
-`contact_credit` table via `ContactCreditRepository::upsertAvailableCredit()`. This
-is the **only mechanism** that updates available credit — it is not calculated from
-transactions but explicitly reported by the contact during pong.
+**Available credit update:** Available credit is explicitly reported by the remote
+contact and stored in the `contact_credit` table. There are three update paths:
+1. **Ping/pong:** The processor calls `saveAvailableCreditFromPong()` which upserts
+   each currency's credit via `ContactCreditRepository::upsertAvailableCredit()`.
+2. **Contact acceptance:** The acceptance message and acknowledgment both include
+   `availableCreditByCurrency`, saved via `saveAvailableCreditFromAcceptance()`
+   and `saveAvailableCreditFromResponse()` respectively.
+3. **Transaction completion:** The completion response includes the sender's
+   available credit with a timestamp, saved via `upsertAvailableCreditIfNewer()`.
 
 **Chain validation and sync trigger:** The processor compares `prevTxidsByCurrency`
 from the pong against local chain heads. If any currency's chain heads don't match,

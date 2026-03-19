@@ -10,7 +10,22 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## 2026-03-15 
+## [Unreleased]
+
+### Added
+- Send available credit on contact acceptance (#768) — when a contact request is accepted, both nodes now exchange their calculated available credit in the E2E-encrypted acceptance message and acknowledgment. This eliminates the gap where available credit shows as 0 until the first ping/pong cycle or transaction. For new contacts the available credit equals the credit limit; for re-added contacts with prior transactions it reflects the real balance
+- Include available credit in mutual acceptance responses (#768) — when both sides sent contact requests simultaneously, the inline `buildMutuallyAccepted` response now includes credit data
+- Include available credit in wallet restore pong (#768) — when a restored contact is auto-accepted during a ping, the pong response now includes the calculated credit instead of an empty array
+
+### Changed
+- Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
+
+### Fixed
+- Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters
+
+---
+
+## 2026-03-15
 P2P fee fix, duplicate contact prevention, available credit on completion, watchdog fix, documentation updates, P2P inquiry token authentication.
 
 ### Added
