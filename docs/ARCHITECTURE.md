@@ -1932,6 +1932,17 @@ RP2P candidates at originator (sorted by amount ASC):
 validation (relay can't afford or fee exceeds originator's `maxFee`), the next
 cheapest is tried. All candidates are deleted after selection regardless of outcome.
 
+**Zero-fee relaying:** Both the contact fee percentage and the system minimum fee
+(`minFee`) can be set to 0, enabling completely free relaying. This is safe because
+fees are excluded from hash/txid generation (hashes use sender pubkey, receiver
+pubkey, amount, currency, and time — never fees), all division operations involving
+fees have zero guards, and balance updates use the final amount which simply equals
+the base amount when fee is 0. Since fees are configured per contact, operators can
+relay free for friends and family while charging fees for other contacts. Setting
+`minFee` to 0 removes the global fee floor, so a 0% contact fee truly results in
+zero relay cost. The default `minFee` of 0.01 preserves incentives; 0 is an
+intentional opt-in for operators who prioritize reachability over relay compensation.
+
 ### Multi-Path Sender Tracking
 
 In a mesh network, a relay node may receive the same P2P request from multiple

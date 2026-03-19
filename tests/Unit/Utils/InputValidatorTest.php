@@ -448,6 +448,58 @@ class InputValidatorTest extends TestCase
     }
 
     // =========================================================================
+    // validateFeeAmount Tests
+    // =========================================================================
+
+    public function testValidateFeeAmountWithPositive(): void
+    {
+        $result = InputValidator::validateFeeAmount(0.05);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.05, $result['value']);
+    }
+
+    public function testValidateFeeAmountWithZero(): void
+    {
+        $result = InputValidator::validateFeeAmount(0);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0, $result['value']);
+    }
+
+    public function testValidateFeeAmountWithZeroString(): void
+    {
+        $result = InputValidator::validateFeeAmount('0');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0, $result['value']);
+    }
+
+    public function testValidateFeeAmountWithNegative(): void
+    {
+        $result = InputValidator::validateFeeAmount(-0.01);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('negative', $result['error']);
+    }
+
+    public function testValidateFeeAmountWithNonNumeric(): void
+    {
+        $result = InputValidator::validateFeeAmount('abc');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('number', $result['error']);
+    }
+
+    public function testValidateFeeAmountRoundsToCurrencyPrecision(): void
+    {
+        $result = InputValidator::validateFeeAmount(0.005, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.01, $result['value']); // rounded to 2 decimals
+    }
+
+    // =========================================================================
     // validateCreditLimit Tests
     // =========================================================================
 

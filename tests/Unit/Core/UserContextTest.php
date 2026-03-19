@@ -486,6 +486,17 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getMinimumFee returns 0 when configured for free relaying
+     */
+    public function testGetMinimumFeeReturnsZeroWhenConfigured(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['minFee' => 0]);
+
+        $this->assertEquals(0.0, $instance->getMinimumFee());
+    }
+
+    /**
      * Test getDefaultFee returns default when not set
      */
     public function testGetDefaultFeeReturnsDefaultWhenNotSet(): void

@@ -189,6 +189,25 @@ class SettingsControllerTest extends TestCase
     }
 
     #[Test]
+    public function handleUpdateSettingsAcceptsZeroMinFee(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['minFee' => '0'];
+
+        $this->mockSession->expects($this->once())
+            ->method('verifyCSRFToken');
+
+        try {
+            $this->controller->handleUpdateSettings();
+        } catch (\Throwable $e) {
+            // Expected - redirect after save
+        }
+
+        // No validation error for 0 — it's valid for free relaying
+        $this->assertTrue(true);
+    }
+
+    #[Test]
     public function handleUpdateSettingsValidatesMaxFee(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';

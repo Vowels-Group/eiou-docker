@@ -1111,7 +1111,7 @@ Get system settings.
 **Fields:**
 - `name`: Display name for this node
 - `default_currency`: Default currency code for transactions (e.g., "USD")
-- `minimum_fee_amount`: Minimum fee amount for transactions
+- `minimum_fee_amount`: Minimum fee amount for transactions (0 = free relaying)
 - `default_fee_percent`: Default fee percentage for new contacts
 - `maximum_fee_percent`: Maximum allowed fee percentage
 - `default_credit_limit`: Default credit limit for new contacts
@@ -1183,7 +1183,7 @@ Update system settings.
 | `default_fee` | number | Default fee percentage for new contacts |
 | `default_credit_limit` | number | Default credit limit for new contacts |
 | `default_currency` | string | Default currency code (e.g., USD) |
-| `min_fee` | number | Minimum fee amount |
+| `min_fee` | number | Minimum fee amount (0 = free relaying) |
 | `max_fee` | number | Maximum fee percentage |
 | `max_p2p_level` | int | Maximum P2P relay depth |
 | `p2p_expiration` | int | P2P request expiration in seconds |

@@ -86,6 +86,32 @@ class InputValidator {
     }
 
     /**
+     * Validate a fee amount that may be zero
+     *
+     * Like validateAmountFee but allows 0 (e.g. for minFee where free
+     * relaying is intentional). Negative values are still rejected.
+     *
+     * @param mixed $amount Fee amount to validate
+     * @param string $currency Currency code for decimal precision
+     * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
+     */
+    public static function validateFeeAmount($amount, $currency = 'USD'): array {
+        if (!is_numeric($amount)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Fee amount must be a number'];
+        }
+
+        $amount = floatval($amount);
+
+        if ($amount < 0) {
+            return ['valid' => false, 'value' => null, 'error' => 'Fee amount cannot be negative'];
+        }
+
+        $amount = round($amount, Constants::getCurrencyDecimals($currency));
+
+        return ['valid' => true, 'value' => $amount, 'error' => null];
+    }
+
+    /**
      * Validate currency code against the allowed currencies list
      *
      * @param string $currency Currency code to validate

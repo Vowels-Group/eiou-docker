@@ -66,7 +66,7 @@ class CliSettingsService
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'minfee'){
                 $key = 'minFee';
-                $validation = InputValidator::validateAmountFee($argv[3]);
+                $validation = InputValidator::validateFeeAmount($argv[3]);
                 if (!$validation['valid']) {
                     $output->validationError('minFee', $validation['error']);
                     return;
@@ -512,9 +512,9 @@ class CliSettingsService
                     break;
 
                 case '2':
-                    echo "Enter new minimum fee amount: ";
+                    echo "Enter new minimum fee amount (0 = free relaying): ";
                     $key = 'minFee';
-                    $validation = InputValidator::validateAmountFee(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateFeeAmount(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
                         return;
