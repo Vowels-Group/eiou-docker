@@ -778,12 +778,13 @@ class P2pService implements P2pServiceInterface {
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANGE_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANGE_HIGH) -
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH)
         ) + random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
-        // Hop budget: randomized geometric distribution when enabled,
-        // or deterministic maxP2pLevel when EIOU_HOP_BUDGET_RANDOMIZED=false (tests).
+        // Hop budget: randomized geometric distribution when enabled (default),
+        // or deterministic maxP2pLevel when disabled (sparse trust graphs / tests).
         // minHops = floor(maxP2pLevel * HOP_BUDGET_MIN_RATIO) to ensure useful routing depth.
         $maxP2pLevel = $this->currentUser->getMaxP2pLevel();
         $minHops = max(1, (int) floor($maxP2pLevel * Constants::HOP_BUDGET_MIN_RATIO));
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel);
+        $hopRandomized = $this->currentUser->getHopBudgetRandomized();
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel, $hopRandomized);
 
         // Thread fast flag from user request (default: true for backward compatibility)
         $data['fast'] = (int)($request['fast'] ?? true);
@@ -834,11 +835,12 @@ class P2pService implements P2pServiceInterface {
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANGE_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANGE_HIGH) -
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH)
         ) + random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
-        // Hop budget: randomized geometric distribution when enabled,
-        // or deterministic maxP2pLevel when EIOU_HOP_BUDGET_RANDOMIZED=false (tests).
+        // Hop budget: randomized geometric distribution when enabled (default),
+        // or deterministic maxP2pLevel when disabled (sparse trust graphs / tests).
         $maxP2pLevel = $this->currentUser->getMaxP2pLevel();
         $minHops = max(1, (int) floor($maxP2pLevel * Constants::HOP_BUDGET_MIN_RATIO));
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel);
+        $hopRandomized = $this->currentUser->getHopBudgetRandomized();
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel, $hopRandomized);
 
         return $data;
     }

@@ -1383,6 +1383,7 @@ class ApiController {
                 'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
                 'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
                 // Feature toggles
+                'hop_budget_randomized' => $currentUser->getHopBudgetRandomized(),
                 'contact_status_enabled' => $currentUser->getContactStatusEnabled(),
                 'contact_status_sync_on_ping' => $currentUser->getContactStatusSyncOnPing(),
                 'auto_chain_drop_propose' => $currentUser->getAutoChainDropPropose(),
@@ -1460,6 +1461,7 @@ class ApiController {
             'hostname' => ['key' => 'hostname', 'validate' => 'validateHostname', 'config' => 'userconfig.json'],
             'name' => ['key' => 'name', 'validate' => null, 'config' => 'userconfig.json'],
             // Feature toggles
+            'hop_budget_randomized' => ['key' => 'hopBudgetRandomized', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'contact_status_enabled' => ['key' => 'contactStatusEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'contact_status_sync_on_ping' => ['key' => 'contactStatusSyncOnPing', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'auto_chain_drop_propose' => ['key' => 'autoChainDropPropose', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],

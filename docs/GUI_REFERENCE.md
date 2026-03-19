@@ -214,7 +214,7 @@ Handles settings and debug operations.
 
 | Category | Settings |
 |----------|----------|
-| Feature Toggles | `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled` |
+| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled` |
 | Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
 | Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |

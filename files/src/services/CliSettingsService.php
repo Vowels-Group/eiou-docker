@@ -164,6 +164,11 @@ class CliSettingsService
                 }
                 $value = trim($argv[3]);
             // Feature toggles
+            } elseif(strtolower($argv[2]) === 'hopbudgetrandomized'){
+                $key = 'hopBudgetRandomized';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'contactstatusenabled'){
                 $key = 'contactStatusEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -403,6 +408,7 @@ class CliSettingsService
                 'Feature Toggles' => [
                     ['num' => '15', 'label' => 'Display name'],
                     ['num' => '16', 'label' => 'Auto-refresh transactions'],
+                    ['num' => '50', 'label' => 'Hop budget randomization'],
                     ['num' => '17', 'label' => 'Contact status pinging'],
                     ['num' => '18', 'label' => 'Contact status sync on ping'],
                     ['num' => '19', 'label' => 'Auto chain drop propose'],
@@ -1065,6 +1071,17 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
+                case '50':
+                    echo "Enable hop budget randomization? (yes/no): ";
+                    $key = 'hopBudgetRandomized';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -1152,6 +1169,7 @@ class CliSettingsService
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
             'auto_accept_transaction' => $this->currentUser->getAutoAcceptTransaction(),
             // Feature toggles
+            'hop_budget_randomized' => $this->currentUser->getHopBudgetRandomized(),
             'contact_status_enabled' => $this->currentUser->getContactStatusEnabled(),
             'contact_status_sync_on_ping' => $this->currentUser->getContactStatusSyncOnPing(),
             'auto_chain_drop_propose' => $this->currentUser->getAutoChainDropPropose(),
@@ -1222,6 +1240,7 @@ class CliSettingsService
             echo "\n  Feature Toggles:\n";
             if ($settings['name']) echo "\tDisplay name: " . $settings['name'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tHop budget randomization: " . ($settings['hop_budget_randomized'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status pinging: " . ($settings['contact_status_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status sync on ping: " . ($settings['contact_status_sync_on_ping'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop propose: " . ($settings['auto_chain_drop_propose'] ? 'enabled' : 'disabled') . "\n";

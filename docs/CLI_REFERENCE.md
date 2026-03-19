@@ -949,6 +949,7 @@ eiou changesettings [setting] [value]
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
+| `hopBudgetRandomized` | Randomize P2P hop depth for privacy (disable for max reachability in sparse networks) | `true`, `false` |
 | `contactStatusEnabled` | Enable contact status tracking | `true`, `false` |
 | `contactStatusSyncOnPing` | Sync status during ping operations | `true`, `false` |
 | `autoChainDropPropose` | Auto-propose chain-drop operations | `true`, `false` |

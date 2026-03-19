@@ -18,6 +18,7 @@ use Eiou\Services\RouteCancellationService;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Database\CapacityReservationRepository;
 use Eiou\Database\RouteCancellationRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\P2pRepository;
 use Eiou\Core\Constants;
 
@@ -39,16 +40,21 @@ class RouteCancellationServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->service = new RouteCancellationService();
-
         $this->p2pService = $this->createMock(P2pServiceInterface::class);
         $this->capacityReservationRepository = $this->createMock(CapacityReservationRepository::class);
         $this->routeCancellationRepository = $this->createMock(RouteCancellationRepository::class);
         $this->p2pRepository = $this->createMock(P2pRepository::class);
 
-        $this->service->setCapacityReservationRepository($this->capacityReservationRepository);
-        $this->service->setRouteCancellationRepository($this->routeCancellationRepository);
-        $this->service->setP2pRepository($this->p2pRepository);
+        $repoFactory = $this->createMock(RepositoryFactory::class);
+        $repoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                if ($class === CapacityReservationRepository::class) return $this->capacityReservationRepository;
+                if ($class === RouteCancellationRepository::class) return $this->routeCancellationRepository;
+                if ($class === P2pRepository::class) return $this->p2pRepository;
+                return null;
+            });
+
+        $this->service = new RouteCancellationService($repoFactory);
     }
 
     // =========================================================================
@@ -273,12 +279,19 @@ class RouteCancellationServiceTest extends TestCase
         ];
 
         foreach ($terminalStatuses as $terminalStatus) {
-            $service = new RouteCancellationService();
             $p2pRepo = $this->createMock(P2pRepository::class);
             $capacityRepo = $this->createMock(CapacityReservationRepository::class);
             $p2pMock = $this->createMock(P2pServiceInterface::class);
-            $service->setP2pRepository($p2pRepo);
-            $service->setCapacityReservationRepository($capacityRepo);
+            $cancelRepo = $this->createMock(RouteCancellationRepository::class);
+            $repoFactory = $this->createMock(RepositoryFactory::class);
+            $repoFactory->method('get')
+                ->willReturnCallback(function (string $class) use ($capacityRepo, $cancelRepo, $p2pRepo) {
+                    if ($class === CapacityReservationRepository::class) return $capacityRepo;
+                    if ($class === RouteCancellationRepository::class) return $cancelRepo;
+                    if ($class === P2pRepository::class) return $p2pRepo;
+                    return null;
+                });
+            $service = new RouteCancellationService($repoFactory);
             $service->setP2pService($p2pMock);
 
             $p2pRepo->method('getByHash')
@@ -483,6 +496,63 @@ class RouteCancellationServiceTest extends TestCase
             $this->assertGreaterThanOrEqual(1, $result);
             $this->assertLessThanOrEqual(6, $result);
         }
+    }
+
+    // =========================================================================
+    // computeHopBudget() $randomized parameter Tests
+    // =========================================================================
+
+    /**
+     * Test computeHopBudget with explicit $randomized=false returns maxHops
+     * regardless of the env var setting.
+     */
+    public function testComputeHopBudgetExplicitFalseReturnsDeterministic(): void
+    {
+        // Even with env set to true, explicit false should override
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=true');
+
+        for ($i = 0; $i < 50; $i++) {
+            $result = RouteCancellationService::computeHopBudget(1, 6, false);
+            $this->assertEquals(6, $result, "Explicit randomized=false should always return maxHops");
+        }
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+    }
+
+    /**
+     * Test computeHopBudget with explicit $randomized=true produces varied results
+     * regardless of the env var setting.
+     */
+    public function testComputeHopBudgetExplicitTrueReturnsVaried(): void
+    {
+        // Even with env set to false, explicit true should randomize
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=false');
+
+        $results = [];
+        for ($i = 0; $i < 200; $i++) {
+            $results[] = RouteCancellationService::computeHopBudget(1, 10, true);
+        }
+
+        $unique = array_unique($results);
+        $this->assertGreaterThan(1, count($unique), 'Explicit randomized=true should produce varied results');
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
+    }
+
+    /**
+     * Test computeHopBudget with $randomized=null falls back to Constants
+     */
+    public function testComputeHopBudgetNullFallsBackToConstant(): void
+    {
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED=false');
+
+        // null should behave like the env var (false → deterministic)
+        for ($i = 0; $i < 50; $i++) {
+            $result = RouteCancellationService::computeHopBudget(1, 6, null);
+            $this->assertEquals(6, $result, "null randomized should fall back to env/constant");
+        }
+
+        putenv('EIOU_HOP_BUDGET_RANDOMIZED');
     }
 
     // =========================================================================

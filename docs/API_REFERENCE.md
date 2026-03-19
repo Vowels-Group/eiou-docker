@@ -1070,6 +1070,7 @@ Get system settings.
             "auto_refresh_enabled": true,
             "auto_backup_enabled": true,
             "auto_accept_transaction": true,
+            "hop_budget_randomized": true,
             "contact_status_enabled": true,
             "contact_status_sync_on_ping": true,
             "auto_chain_drop_propose": true,
@@ -1125,6 +1126,7 @@ Get system settings.
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
+- `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
 - `contact_status_sync_on_ping`: Whether to sync contact status during ping
 - `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
@@ -1194,6 +1196,7 @@ Update system settings.
 | `hostname` | string | Node hostname (triggers SSL cert regeneration) |
 | `name` | string | Node display name |
 | `allowed_currencies` | string | Allowed currencies (comma-separated, e.g., "USD,EUR") |
+| `hop_budget_randomized` | boolean | Randomize P2P hop depth (disable for max reachability) |
 | `contact_status_enabled` | boolean | Enable/disable contact status tracking |
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
 | `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |
