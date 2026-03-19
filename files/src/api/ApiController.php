@@ -1446,7 +1446,7 @@ class ApiController {
             'default_fee' => ['key' => 'defaultFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
             'default_credit_limit' => ['key' => 'defaultCreditLimit', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
             'default_currency' => ['key' => 'defaultCurrency', 'validate' => 'validateCurrency', 'config' => 'defaultconfig.json'],
-            'min_fee' => ['key' => 'minFee', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
+            'min_fee' => ['key' => 'minFee', 'validate' => 'validateFeeAmount', 'config' => 'defaultconfig.json'],
             'max_fee' => ['key' => 'maxFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
             'max_p2p_level' => ['key' => 'maxP2pLevel', 'validate' => 'validateRequestLevel', 'config' => 'defaultconfig.json'],
             'p2p_expiration' => ['key' => 'p2pExpiration', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],

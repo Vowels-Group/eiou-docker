@@ -319,4 +319,48 @@ class CurrencyUtilityServiceTest extends TestCase
         $fee = $this->service->calculateFee(1000000, 0.01, 0.01, 'USD');
         $this->assertEquals(100, $fee);
     }
+
+    // =========================================================================
+    // calculateFee with zero fee / zero minFee
+    // =========================================================================
+
+    /**
+     * Test calculateFee with 0% fee and non-zero minFee applies the minimum
+     */
+    public function testCalculateFeeZeroPercentAppliesMinFee(): void
+    {
+        // 0% fee on $100 (10000 cents) = 0, but minFee $0.01 = 1 cent
+        $fee = $this->service->calculateFee(10000, 0.0, 0.01, 'USD');
+        $this->assertEquals(1, $fee);
+    }
+
+    /**
+     * Test calculateFee with 0% fee and 0 minFee returns 0
+     */
+    public function testCalculateFeeZeroPercentZeroMinFeeReturnsZero(): void
+    {
+        // 0% fee, 0 minFee = truly free relaying
+        $fee = $this->service->calculateFee(10000, 0.0, 0.0, 'USD');
+        $this->assertEquals(0, $fee);
+    }
+
+    /**
+     * Test calculateFee with positive fee and 0 minFee uses calculated fee
+     */
+    public function testCalculateFeePositivePercentZeroMinFeeUsesCalculated(): void
+    {
+        // 1% fee on $100 (10000 cents) = 100 cents, minFee=0 doesn't interfere
+        $fee = $this->service->calculateFee(10000, 1.0, 0.0, 'USD');
+        $this->assertEquals(100, $fee);
+    }
+
+    /**
+     * Test calculateFee with small amount and 0 minFee can return 0
+     */
+    public function testCalculateFeeSmallAmountZeroMinFeeCanReturnZero(): void
+    {
+        // 0.01% fee on $0.50 (50 cents) = 0.005 rounds to 0, minFee=0 means 0
+        $fee = $this->service->calculateFee(50, 0.01, 0.0, 'USD');
+        $this->assertEquals(0, $fee);
+    }
 }

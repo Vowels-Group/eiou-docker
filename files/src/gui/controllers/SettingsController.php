@@ -111,9 +111,9 @@ class SettingsController
             }
         }
 
-        // Minimum Fee
+        // Minimum Fee (0 allowed for free relaying)
         if (isset($_POST['minFee'])) {
-            $validation = InputValidator::validateAmountFee($_POST['minFee']);
+            $validation = InputValidator::validateFeeAmount($_POST['minFee']);
             if ($validation['valid']) {
                 $settings['minFee'] = $validation['value'];
             } else {

@@ -19,6 +19,7 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
+- Allow minimum fee (`minFee`) to be set to 0 — enables free relaying for friends and family while keeping the default at 0.01. Fee percent was already allowed at 0%; now the minimum fee floor can also be removed. Since fees are set per contact, operators can relay free for trusted contacts while charging fees for others. No technical issues: fees are excluded from hash/txid generation, all division-by-zero paths are guarded, and balance updates handle zero fees correctly
 
 ### Fixed
 - Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters
