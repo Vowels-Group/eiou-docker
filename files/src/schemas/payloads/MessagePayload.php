@@ -53,9 +53,11 @@ class MessagePayload extends BasePayload
      * @param bool $encode Encode payload in JSON
      * @param string|null $recipientSignature Optional recipient signature for dual-signature protocol
      * @param string|null $currency Optional currency that was accepted (for currency-specific acceptance)
+     * @param array $availableCreditByCurrency Per-currency available credit (e.g. ['USD' => 50000])
+     * @param int|null $creditCalculatedAt Microtime when credit was calculated
      * @return array|string Contact accepted payload (array if not encode, JSON otherwise)
      */
-    public function buildContactIsAccepted(string $address, $encode = false, ?string $recipientSignature = null, ?string $currency = null): array|string
+    public function buildContactIsAccepted(string $address, $encode = false, ?string $recipientSignature = null, ?string $currency = null, array $availableCreditByCurrency = [], ?int $creditCalculatedAt = null): array|string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $data = [
@@ -73,6 +75,13 @@ class MessagePayload extends BasePayload
 
         if ($currency !== null) {
             $data['currency'] = $currency;
+        }
+
+        if (!empty($availableCreditByCurrency)) {
+            $data['availableCreditByCurrency'] = $availableCreditByCurrency;
+            if ($creditCalculatedAt !== null) {
+                $data['creditCalculatedAt'] = $creditCalculatedAt;
+            }
         }
 
         if($encode){
@@ -130,15 +139,24 @@ class MessagePayload extends BasePayload
      * @param string $address The recipient address (the one who sent the acceptance)
      * @return string JSON-encoded acknowledgment payload
      */
-    public function buildContactAcceptanceAcknowledgment(string $address): string
+    public function buildContactAcceptanceAcknowledgment(string $address, array $availableCreditByCurrency = [], ?int $creditCalculatedAt = null): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
-        return json_encode([
+        $data = [
             'status' => Constants::STATUS_ACCEPTED,
             'message' => $myAddress . ' confirms contact acceptance was received and processed',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-        ]);
+        ];
+
+        if (!empty($availableCreditByCurrency)) {
+            $data['availableCreditByCurrency'] = $availableCreditByCurrency;
+            if ($creditCalculatedAt !== null) {
+                $data['creditCalculatedAt'] = $creditCalculatedAt;
+            }
+        }
+
+        return json_encode($data);
     }
 
     /**

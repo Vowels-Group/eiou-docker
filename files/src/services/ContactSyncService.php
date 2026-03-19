@@ -778,13 +778,18 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     'status' => 'accepted',
                 ]);
 
-                // Insert initial balance and credit entries for the new currency
+                // Insert initial balance entries for the new currency
                 $this->balanceRepository->insertInitialContactBalances($contact['pubkey'], $currency);
+
+                // Calculate and store actual available credit for the new currency
+                $creditData = $this->calculateAvailableCreditForContact($contact['pubkey'], $currency);
                 if ($this->contactCreditRepository !== null) {
                     try {
-                        $this->contactCreditRepository->createInitialCredit($contact['pubkey'], $currency);
+                        $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
+                        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+                        $this->contactCreditRepository->upsertAvailableCredit($pubkeyHash, (int) $availableCredit, $currency);
                     } catch (\Exception $e) {
-                        Logger::getInstance()->warning("Failed to create initial credit for new currency", [
+                        Logger::getInstance()->warning("Failed to store initial credit for new currency", [
                             'currency' => $currency,
                             'error' => $e->getMessage()
                         ]);
@@ -793,9 +798,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                 // Send acceptance notification so remote side marks their outgoing currency as accepted
                 // Use buildContactIsAccepted (not buildCreateRequest) to avoid triggering a new contact tx on the remote
-                $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency);
+                $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                 $messageId = 'currency-accept-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
-                $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
+                $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
+
+                // Save available credit from the acknowledgment response
+                if ($sendResult['success'] && !empty($sendResult['response'])) {
+                    $this->saveAvailableCreditFromResponse($contact['pubkey'], $sendResult['response']);
+                }
 
                 $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                 $contactData['currency'] = $currency;
@@ -822,9 +832,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Generate recipient signature for dual-signature protocol
                     $recipientSig = $this->generateAndStoreContactRecipientSignature($contact['pubkey']);
 
+                    // Calculate available credit to include in acceptance message
+                    $creditData = $this->calculateAvailableCreditForContact($contact['pubkey'], $currency);
+
                     // Send message of successful contact acceptance back to original contact requester with tracking
                     // Message ID format: unblock-accept-{hash} (message_type 'contact' provides context)
-                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig);
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                     $messageId = 'unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId);
 
@@ -832,6 +845,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Stage progression: pending -> sent -> received (from transport) -> inserted (local) -> completed
                     if ($sendResult['success'] && $this->messageDeliveryService !== null) {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    // Save available credit from the acknowledgment response
+                    if ($sendResult['success'] && !empty($sendResult['response'])) {
+                        $this->saveAvailableCreditFromResponse($contact['pubkey'], $sendResult['response']);
                     }
 
                     // Complete the received contact transaction (update status from 'accepted' to 'completed')
@@ -963,9 +981,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // Generate recipient signature for dual-signature protocol
                         $recipientSig = $this->generateAndStoreContactRecipientSignature($contact['pubkey']);
 
+                        // Calculate available credit to include in acceptance message
+                        $creditData = $this->calculateAvailableCreditForContact($contact['pubkey'], $currency);
+
                         // Send message of successful contact acceptance back to original contact requester with tracking
                         // Include the accepted currency so the remote can mark it as accepted
-                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency);
+                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                         $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                         $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false); // sync delivery
 
@@ -980,6 +1001,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         if ($sendResult['success'] && $this->messageDeliveryService !== null) {
                             $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                        }
+
+                        // Save available credit from the acknowledgment response
+                        if ($sendResult['success'] && !empty($sendResult['response'])) {
+                            $this->saveAvailableCreditFromResponse($contact['pubkey'], $sendResult['response']);
                         }
 
                         // Complete the received contact transaction (update status from 'accepted' to 'completed')
@@ -1150,8 +1176,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             // Generate recipient signature for dual-signature protocol
                             $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                            // Send acceptance message back with currency info
-                            $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency);
+                            // Calculate available credit to include in acceptance message
+                            $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+
+                            // Send acceptance message back with currency info and available credit
+                            $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                             $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
                             $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
 
@@ -1161,6 +1190,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                                     'message_id' => $acceptMessageId,
                                     'error' => $sendResult['tracking']['error'] ?? 'unknown'
                                 ]);
+                            }
+
+                            // Save available credit from the acknowledgment response
+                            if ($sendResult['success'] && !empty($sendResult['response'])) {
+                                $this->saveAvailableCreditFromResponse($senderPublicKey, $sendResult['response']);
                             }
 
                             // Complete the received contact transaction
@@ -1208,13 +1242,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
                     }
 
-                    // Initialize balance and credit for the new currency
+                    // Initialize balance for the new currency and calculate available credit
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
                     if ($this->contactCreditRepository !== null) {
                         try {
-                            $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
+                            $newCurrencyCreditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+                            $newCurrencyAvailableCredit = $newCurrencyCreditData['availableCreditByCurrency'][$currency] ?? 0;
+                            $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, (int) $newCurrencyAvailableCredit, $currency);
                         } catch (\Exception $e) {
-                            Logger::getInstance()->log('Credit may already exist for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
+                            Logger::getInstance()->log('Failed to store credit for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                         }
                     }
 
@@ -1327,6 +1363,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Store recipient signature from remote's response on our sent contact TX
                     // The remote generates the recipient signature and includes it in the acceptance response
                     $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
+
+                    // Save available credit from the remote's mutual acceptance response
+                    $this->saveAvailableCreditFromResponse($senderPublicKey, $responseData);
 
                     // Update delivery stage
                     if ($this->messageDeliveryService !== null) {
@@ -1633,7 +1672,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         $this->completeReceivedContactTransaction($senderPublicKey);
 
-                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid, $recipientSig);
+                        // Include available credit in mutual acceptance response
+                        $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid, $recipientSig, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                     }
 
                     // Contact exists as pending with name=null (they sent us a request first)
@@ -1687,13 +1728,17 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // We already sent a request for this currency — mutual match, auto-accept
                         $this->contactCurrencyRepository->updateCurrencyStatus($senderPublicKeyHash, $currency, 'accepted');
 
-                        // Ensure balance and credit entries exist for the new currency
+                        // Ensure balance entries exist for the new currency
                         $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                        // Calculate and store actual available credit (not 0)
                         if ($this->contactCreditRepository !== null) {
                             try {
-                                $this->contactCreditRepository->createInitialCredit($senderPublicKey, $currency);
+                                $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+                                $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
+                                $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, (int) $availableCredit, $currency);
                             } catch (\Exception $e) {
-                                Logger::getInstance()->log('Credit may already exist during acceptance for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
+                                Logger::getInstance()->log('Failed to store credit during currency acceptance for ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                             }
                         }
 
@@ -1775,7 +1820,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         $this->completeReceivedContactTransaction($senderPublicKey);
 
-                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid, $recipientSig);
+                        // Include available credit in mutual acceptance response
+                        $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+                        return $this->contactPayload->buildMutuallyAccepted($senderAddress, $myAddresses, $txid, $recipientSig, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                     }
 
                     // Contact is pending with name=null (they sent us a request first)
@@ -1890,8 +1937,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
             return false;
         }
 
-        // Build and send the acceptance message with currency info
-        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency);
+        // Calculate available credit to include in acceptance message
+        $creditData = $this->calculateAvailableCreditForContact($pubkey, $currency);
+
+        // Build and send the acceptance message with currency info and available credit
+        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
         $messageId = 'currency-accept-' . hash('sha256', $address . $pubkeyHash . $currency . $this->timeUtility->getCurrentMicrotime());
         $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
 
@@ -1902,6 +1952,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 'message_id' => $messageId,
                 'error' => $sendResult['tracking']['error'] ?? 'unknown'
             ]);
+        }
+
+        // Save available credit from the acknowledgment response
+        if ($sendResult['success'] && !empty($sendResult['response'])) {
+            $this->saveAvailableCreditFromResponse($pubkey, $sendResult['response']);
         }
 
         // If contact is still pending, upgrade to accepted (we now have a mutually accepted currency)
@@ -1979,6 +2034,89 @@ class ContactSyncService implements ContactSyncServiceInterface {
     }
 
     /**
+     * Calculate available credit for a contact in a given currency
+     *
+     * Formula: (sent_balance - received_balance) + credit_limit
+     * For new contacts with no transactions this equals the credit_limit.
+     *
+     * @param string $pubkey Contact's public key
+     * @param string $currency Currency code
+     * @return array ['availableCreditByCurrency' => [...], 'creditCalculatedAt' => int]
+     */
+    private function calculateAvailableCreditForContact(string $pubkey, string $currency): array
+    {
+        $availableCreditByCurrency = [];
+        $creditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
+
+        try {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+            $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
+            $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
+            $balance = $sentBalance - $receivedBalance;
+
+            $creditLimit = 0;
+            if ($this->contactCurrencyRepository !== null) {
+                $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0;
+            }
+
+            $availableCreditByCurrency[$currency] = $balance + $creditLimit;
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning("Failed to calculate available credit for contact", [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return [
+            'availableCreditByCurrency' => $availableCreditByCurrency,
+            'creditCalculatedAt' => $creditCalculatedAt,
+        ];
+    }
+
+    /**
+     * Save available credit received from a remote node's response
+     *
+     * @param string $contactPubkey Contact's public key
+     * @param array $responseData Decoded response containing availableCreditByCurrency and creditCalculatedAt
+     */
+    private function saveAvailableCreditFromResponse(string $contactPubkey, array $responseData): void
+    {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $responseData['availableCreditByCurrency'] ?? [];
+        $calculatedAt = $responseData['creditCalculatedAt'] ?? null;
+
+        if (!is_array($creditByCurrency) || empty($creditByCurrency)) {
+            return;
+        }
+
+        try {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+            foreach ($creditByCurrency as $cur => $credit) {
+                if ($calculatedAt !== null) {
+                    $this->contactCreditRepository->upsertAvailableCreditIfNewer(
+                        $pubkeyHash,
+                        (int) $credit,
+                        $cur,
+                        (int) $calculatedAt
+                    );
+                } else {
+                    $this->contactCreditRepository->upsertAvailableCredit(
+                        $pubkeyHash,
+                        (int) $credit,
+                        $cur
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning("Failed to save available credit from response", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Accept a contact request
      *
      * @param string $pubkey Contact pubkey
@@ -1993,17 +2131,6 @@ class ContactSyncService implements ContactSyncServiceInterface {
         if($success){
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
-
-            // Create initial contact credit entry (available_credit = 0 until first ping)
-            if ($this->contactCreditRepository !== null) {
-                try {
-                    $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
-                } catch (\Exception $e) {
-                    Logger::getInstance()->warning("Failed to create initial contact credit entry", [
-                        'error' => $e->getMessage()
-                    ]);
-                }
-            }
 
             // Ensure the accepted currency is tracked in contact_currencies (single row per pubkey+currency)
             if ($this->contactCurrencyRepository !== null) {
@@ -2029,6 +2156,26 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $syncTrigger->syncContactBalance($pubkey);
                 } catch (\Exception $e) {
                     Logger::getInstance()->warning("Failed to sync contact balance after acceptance", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Calculate and store actual available credit (not 0) now that balances
+            // and credit_limit are set. For new contacts: equals credit_limit.
+            // For re-added contacts with prior transactions: reflects real balance.
+            if ($this->contactCreditRepository !== null) {
+                try {
+                    $creditData = $this->calculateAvailableCreditForContact($pubkey, $currency);
+                    $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
+                    $pubkeyHash = $pubkeyHash ?? hash(Constants::HASH_ALGORITHM, $pubkey);
+                    $this->contactCreditRepository->upsertAvailableCredit(
+                        $pubkeyHash,
+                        (int) $availableCredit,
+                        $currency
+                    );
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to store initial available credit", [
                         'error' => $e->getMessage()
                     ]);
                 }

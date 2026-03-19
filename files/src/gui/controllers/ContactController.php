@@ -697,14 +697,23 @@ class ContactController
                 $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
             }
 
-            // Insert initial balance and credit entries for the newly accepted currency
+            // Insert initial balance and calculate available credit for the newly accepted currency
             $contactPubkey = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
             if ($contactPubkey) {
-                $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->insertInitialContactBalances($contactPubkey, $currency);
+                $balanceRepo = $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class);
+                $balanceRepo->insertInitialContactBalances($contactPubkey, $currency);
                 try {
-                    $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->createInitialCredit($contactPubkey, $currency);
+                    $sentBalance = $balanceRepo->getContactSentBalance($contactPubkey, $currency);
+                    $receivedBalance = $balanceRepo->getContactReceivedBalance($contactPubkey, $currency);
+                    $balance = $sentBalance - $receivedBalance;
+                    $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                    $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
+                        $pubkeyHash,
+                        (int) ($balance + $creditLimit),
+                        $currency
+                    );
                 } catch (\Exception $e) {
-                    Logger::getInstance()->warning("Failed to create initial credit for accepted currency", [
+                    Logger::getInstance()->warning("Failed to store initial credit for accepted currency", [
                         'currency' => $currency,
                         'error' => $e->getMessage()
                     ]);
@@ -831,11 +840,20 @@ class ContactController
                 // Re-fetch pubkey in case it was just established by the first currency acceptance
                 $currentPubkey = $contactPubkey ?: $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
                 if ($currentPubkey) {
-                    $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->insertInitialContactBalances($currentPubkey, $currency);
+                    $balanceRepo = $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class);
+                    $balanceRepo->insertInitialContactBalances($currentPubkey, $currency);
                     try {
-                        $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->createInitialCredit($currentPubkey, $currency);
+                        $sentBalance = $balanceRepo->getContactSentBalance($currentPubkey, $currency);
+                        $receivedBalance = $balanceRepo->getContactReceivedBalance($currentPubkey, $currency);
+                        $balance = $sentBalance - $receivedBalance;
+                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                        $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
+                            $pubkeyHash,
+                            (int) ($balance + $creditLimit),
+                            $currency
+                        );
                     } catch (\Exception $e) {
-                        // Credit may already exist
+                        // Non-fatal — credit will be corrected on next ping/pong
                     }
                 }
 

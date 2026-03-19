@@ -309,18 +309,8 @@ class ContactManagementService implements ContactManagementServiceInterface
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
 
-            // Create initial contact credit entry (available_credit = 0 until first ping)
-            if ($this->contactCreditRepository !== null) {
-                try {
-                    $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
-                } catch (\Exception $e) {
-                    $this->secureLogger->warning("Failed to create initial contact credit entry", [
-                        'error' => $e->getMessage()
-                    ]);
-                }
-            }
-
             // Create contact currency configuration entry
+            $pubkeyHash = null;
             if ($this->contactCurrencyRepository !== null) {
                 try {
                     $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
@@ -344,6 +334,34 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $this->syncTrigger->syncContactBalance($pubkey);
                 } catch (\Exception $e) {
                     $this->secureLogger->warning("Failed to sync contact balance after acceptance", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Calculate and store actual available credit (not 0) now that balances
+            // and credit_limit are set. For new contacts: equals credit_limit.
+            // For re-added contacts with prior transactions: reflects real balance.
+            if ($this->contactCreditRepository !== null) {
+                try {
+                    $pubkeyHash = $pubkeyHash ?? hash(Constants::HASH_ALGORITHM, $pubkey);
+                    $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
+                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
+                    $balance = $sentBalance - $receivedBalance;
+
+                    $creditLimit = 0;
+                    if ($this->contactCurrencyRepository !== null) {
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                    }
+
+                    $availableCredit = $balance + $creditLimit;
+                    $this->contactCreditRepository->upsertAvailableCredit(
+                        $pubkeyHash,
+                        (int) $availableCredit,
+                        $currency
+                    );
+                } catch (\Exception $e) {
+                    $this->secureLogger->warning("Failed to store initial available credit", [
                         'error' => $e->getMessage()
                     ]);
                 }
@@ -1399,9 +1417,25 @@ class ContactManagementService implements ContactManagementServiceInterface
         // Create initial balance entries for the new currency
         $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
 
-        // Create initial credit entry for the new currency
+        // Calculate and store available credit for the new currency
         if ($this->contactCreditRepository !== null) {
-            $this->contactCreditRepository->createInitialCredit($pubkey, $currency);
+            try {
+                $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
+                $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
+                $balance = $sentBalance - $receivedBalance;
+                $creditLimit = $this->contactCurrencyRepository !== null
+                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0)
+                    : 0;
+                $this->contactCreditRepository->upsertAvailableCredit(
+                    $pubkeyHash,
+                    (int) ($balance + $creditLimit),
+                    $currency
+                );
+            } catch (\Exception $e) {
+                $this->secureLogger->warning("Failed to store initial credit for new currency", [
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
 
         return true;
