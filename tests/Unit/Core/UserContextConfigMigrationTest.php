@@ -160,7 +160,7 @@ class UserContextConfigMigrationTest extends TestCase
     public function testGetConfigurableDefaultsHasExpectedCount(): void
     {
         $defaults = UserContext::getConfigurableDefaults();
-        $this->assertCount(42, $defaults);
+        $this->assertCount(41, $defaults);
     }
 
     /**
