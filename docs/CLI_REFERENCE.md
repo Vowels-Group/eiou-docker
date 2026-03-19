@@ -1011,8 +1011,7 @@ eiou changesettings [setting] [value]
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
-| `conversionFactors` | Minor-to-major unit conversion per currency (JSON) | `{"USD":100,"BTC":100000000}` |
-| `currencyDecimals` | Display decimal places per currency (JSON) | `{"USD":2,"BTC":8}` |
+| `conversionFactors` | Minor-to-major unit conversion per currency (JSON). Decimal places are inferred: `log10(factor)` (e.g. 100 → 2, 100000000 → 8) | `{"USD":100,"BTC":100000000}` |
 
 **Advanced Settings (Display):**
 
@@ -1049,7 +1048,6 @@ eiou changesettings cleanupDeliveryRetentionDays 60
 eiou changesettings httpTransportTimeoutSeconds 30
 eiou changesettings rateLimitEnabled false
 eiou changesettings conversionFactors '{"USD":100,"BTC":100000000}'
-eiou changesettings currencyDecimals '{"USD":2,"BTC":8}'
 eiou changesettings torCircuitMaxFailures 5
 eiou changesettings torFailureTransportFallback false
 eiou changesettings contactStatusEnabled false

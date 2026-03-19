@@ -259,39 +259,8 @@ class SettingsController
             }
         }
 
-        // Currency Decimals — textarea (CODE:DECIMALS per line)
-        if (isset($_POST['currencyDecimals']) && trim($_POST['currencyDecimals']) !== '') {
-            $rawLines = preg_split('/[\r\n]+/', trim($_POST['currencyDecimals']), -1, PREG_SPLIT_NO_EMPTY);
-            $decimals = [];
-            $decimalErrors = [];
-            foreach ($rawLines as $line) {
-                $line = trim($line);
-                if ($line === '') continue;
-                $parts = explode(':', $line, 2);
-                if (count($parts) !== 2) {
-                    $decimalErrors[] = "Invalid format: '{$line}' — use CODE:DECIMALS (e.g., USD:2)";
-                    continue;
-                }
-                $code = strtoupper(trim($parts[0]));
-                $dec = trim($parts[1]);
-                if (!preg_match('/^[A-Z0-9]{3,9}$/', $code)) {
-                    $decimalErrors[] = "Invalid currency code: '{$code}'";
-                    continue;
-                }
-                if (!ctype_digit($dec) || (int) $dec < 0 || (int) $dec > 18) {
-                    $decimalErrors[] = "Decimals for {$code} must be an integer 0-18, got '{$dec}'";
-                    continue;
-                }
-                $decimals[$code] = (int) $dec;
-            }
-            if (!empty($decimalErrors)) {
-                $errors = array_merge($errors, $decimalErrors);
-            } elseif (!empty($decimals)) {
-                $settings['currencyDecimals'] = json_encode($decimals);
-            }
-        }
-
-        // Allowed Currencies — cross-validate against submitted factors/decimals (not saved values)
+        // Allowed Currencies — cross-validate against submitted factors (not saved values)
+        // Decimal places are inferred from conversion factors, so only factors need checking.
         if (isset($_POST['allowedCurrencies'])) {
             $rawCurrencies = preg_split('/[\r\n,]+/', strtoupper($_POST['allowedCurrencies']), -1, PREG_SPLIT_NO_EMPTY);
             $currencies = array_filter(array_map('trim', $rawCurrencies));
@@ -301,9 +270,6 @@ class SettingsController
             $effectiveFactors = isset($settings['conversionFactors'])
                 ? json_decode($settings['conversionFactors'], true)
                 : UserContext::getInstance()->getConversionFactors();
-            $effectiveDecimals = isset($settings['currencyDecimals'])
-                ? json_decode($settings['currencyDecimals'], true)
-                : UserContext::getInstance()->getCurrencyDecimalsMap();
 
             foreach ($currencies as $c) {
                 if (!preg_match('/^[A-Z0-9]{' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ',' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . '}$/', $c)) {
@@ -312,9 +278,6 @@ class SettingsController
                 }
                 if (!isset($effectiveFactors[$c])) {
                     $currencyErrors[] = "Currency {$c}: no conversion factor defined. Add it to Conversion Factors first.";
-                }
-                if (!isset($effectiveDecimals[$c])) {
-                    $currencyErrors[] = "Currency {$c}: no decimal places defined. Add it to Currency Decimal Places first.";
                 }
             }
             if (!empty($currencyErrors)) {

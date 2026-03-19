@@ -78,10 +78,6 @@ class Constants {
     const CONVERSION_FACTORS = [
         'USD' => 100,
     ];
-    // Currency decimal places for display and validation (defaults)
-    const CURRENCY_DECIMALS = [
-        'USD' => 2,
-    ];
     // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
@@ -110,7 +106,8 @@ class Constants {
 
     /**
      * Get the number of decimal places for a given currency.
-     * Checks UserContext config first (persists across rebuilds), falls back to constants.
+     * Inferred from the conversion factor: decimals = log10(factor).
+     * E.g. factor=100 → 2 decimals (USD), factor=100000000 → 8 (BTC).
      *
      * @param string $currency Currency code (e.g., 'USD')
      * @return int Number of decimal places
@@ -122,7 +119,12 @@ class Constants {
         } catch (\Throwable $e) {
             // UserContext not initialized yet (startup/tests)
         }
-        return self::CURRENCY_DECIMALS[$currency] ?? self::DISPLAY_CURRENCY_DECIMALS;
+        if (isset(self::CONVERSION_FACTORS[$currency])) {
+            return self::CONVERSION_FACTORS[$currency] > 0
+                ? (int) log10(self::CONVERSION_FACTORS[$currency])
+                : 0;
+        }
+        return self::DISPLAY_CURRENCY_DECIMALS;
     }
 
     // Transaction processor polling intervals (milliseconds)

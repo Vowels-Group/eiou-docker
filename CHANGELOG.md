@@ -17,6 +17,9 @@ The project is currently in **ALPHA** status.
 - Include available credit in mutual acceptance responses (#768) — when both sides sent contact requests simultaneously, the inline `buildMutuallyAccepted` response now includes credit data
 - Include available credit in wallet restore pong (#768) — when a restored contact is auto-accepted during a ping, the pong response now includes the calculated credit instead of an empty array
 
+### Removed
+- Remove `CURRENCY_DECIMALS` constant and `currencyDecimals` setting — decimal places are now inferred from the conversion factor via `log10(factor)` (e.g. factor=100 → 2 decimals, factor=100000000 → 8 decimals). This eliminates a source of misconfiguration where conversion factors and decimal places could be set inconsistently. The `DISPLAY_CURRENCY_DECIMALS` fallback (default: 2) remains for unknown currencies. Removed from GUI settings, CLI `changesettings`, and `getConfigurableDefaults()`
+
 ### Changed
 - Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
 

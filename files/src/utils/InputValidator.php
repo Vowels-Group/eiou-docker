@@ -142,16 +142,11 @@ class InputValidator {
 
         try {
             $factors = UserContext::getInstance()->getConversionFactors();
-            $decimals = UserContext::getInstance()->getCurrencyDecimalsMap();
         } catch (\Throwable $e) {
             $factors = Constants::CONVERSION_FACTORS;
-            $decimals = Constants::CURRENCY_DECIMALS;
         }
         if (!isset($factors[$currency])) {
             return ['valid' => false, 'value' => null, 'error' => 'No conversion factor defined for currency: ' . $currency . '. Add conversion factor via changesettings before enabling.'];
-        }
-        if (!isset($decimals[$currency])) {
-            return ['valid' => false, 'value' => null, 'error' => 'No currency decimals defined for currency: ' . $currency . '. Add currency decimals via changesettings before enabling.'];
         }
 
         return ['valid' => true, 'value' => $currency, 'error' => null];

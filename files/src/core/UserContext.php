@@ -459,31 +459,19 @@ class UserContext {
     }
 
     /**
-     * Get currency decimal places map
-     *
-     * @return array<string, int> Map of currency code to decimal places (e.g., ['USD' => 2, 'BTC' => 8])
-     */
-    public function getCurrencyDecimalsMap(): array {
-        $decimals = $this->get('currencyDecimals');
-        if ($decimals === null) {
-            return Constants::CURRENCY_DECIMALS;
-        }
-        if (is_string($decimals)) {
-            $decoded = json_decode($decimals, true);
-            return is_array($decoded) ? $decoded : Constants::CURRENCY_DECIMALS;
-        }
-        return (array) $decimals;
-    }
-
-    /**
-     * Get the number of decimal places for a single currency
+     * Get the number of decimal places for a single currency.
+     * Inferred from the conversion factor: decimals = log10(factor).
      *
      * @param string $currency Currency code (e.g., 'USD')
      * @return int Number of decimal places
      */
     public function getCurrencyDecimals(string $currency): int {
-        $decimals = $this->getCurrencyDecimalsMap();
-        return (int) ($decimals[$currency] ?? Constants::DISPLAY_CURRENCY_DECIMALS);
+        try {
+            $factor = $this->getConversionFactor($currency);
+            return $factor > 0 ? (int) log10($factor) : 0;
+        } catch (\InvalidArgumentException $e) {
+            return Constants::DISPLAY_CURRENCY_DECIMALS;
+        }
     }
 
     /**
@@ -988,7 +976,6 @@ class UserContext {
             // Transaction settings (original 11)
             'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
             'conversionFactors' => json_encode(Constants::CONVERSION_FACTORS),
-            'currencyDecimals' => json_encode(Constants::CURRENCY_DECIMALS),
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,

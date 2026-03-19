@@ -372,25 +372,25 @@ class ConstantsTest extends TestCase
     }
 
     /**
-     * Test currency decimals constants are defined
+     * Test currency decimals are inferred from conversion factors
      */
-    public function testCurrencyDecimalsAreDefined(): void
+    public function testCurrencyDecimalsInferredFromConversionFactor(): void
     {
-        $this->assertEquals(2, Constants::CURRENCY_DECIMALS['USD']);
+        // USD: factor=100 → log10(100)=2 decimals
         $this->assertEquals(2, Constants::getCurrencyDecimals('USD'));
         // Unknown currency falls back to DISPLAY_CURRENCY_DECIMALS
         $this->assertEquals(Constants::DISPLAY_CURRENCY_DECIMALS, Constants::getCurrencyDecimals('EUR'));
     }
 
     /**
-     * Test BTC currency decimals when BTC is enabled
+     * Test BTC currency decimals inferred from conversion factor when BTC is enabled
      */
-    public function testBtcCurrencyDecimalsDefined(): void
+    public function testBtcCurrencyDecimalsInferred(): void
     {
-        if (!isset(Constants::CURRENCY_DECIMALS['BTC'])) {
-            $this->markTestSkipped('BTC not yet in CURRENCY_DECIMALS');
+        if (!isset(Constants::CONVERSION_FACTORS['BTC'])) {
+            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
         }
-        $this->assertEquals(8, Constants::CURRENCY_DECIMALS['BTC']);
+        // BTC: factor=100000000 → log10(100000000)=8 decimals
         $this->assertEquals(8, Constants::getCurrencyDecimals('BTC'));
     }
 

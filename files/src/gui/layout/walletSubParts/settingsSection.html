@@ -546,28 +546,13 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="currencyDecimals">Currency Decimal Places:</label>
-                            <textarea id="currencyDecimals" name="currencyDecimals" rows="4" class="default-value" placeholder="USD:2&#10;EUR:2&#10;BTC:8"><?php
-                                $decimals = $user->getCurrencyDecimalsMap();
-                                $lines = [];
-                                foreach ($decimals as $code => $dec) {
-                                    $lines[] = $code . ':' . $dec;
-                                }
-                                echo htmlspecialchars(implode("\n", $lines));
-                            ?></textarea>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Display decimal places per currency — one per line as CODE:DECIMALS (e.g., USD:2, BTC:8). Persists across container rebuilds.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
                             <label for="allowedCurrencies">Allowed Currencies:</label>
                             <textarea id="allowedCurrencies" name="allowedCurrencies" rows="4" class="default-value" placeholder="USD&#10;EUR"><?php
                                 $allowedCurrencyList = $user->getAllowedCurrencies();
                                 echo htmlspecialchars(implode("\n", $allowedCurrencyList));
                             ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined above. Set conversion factors and decimals first, then add the currency here.
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined above. Decimal places are inferred automatically from the factor.
                             </small>
                         </div>
                     </div>
