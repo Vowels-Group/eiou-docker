@@ -450,9 +450,32 @@ class MessageService implements MessageServiceInterface {
         // Handle inquiry about contact request status
         $address = $decodedMessage['senderAddress'];
         $pubkey = $decodedMessage['senderPublicKey'];
-        // Contact is already accepted
+        // Contact is already accepted — include available credit in response
         if($this->contactRepository->isAcceptedContactPubkey($pubkey)){
-            echo $this->messagePayload->buildContactIsAccepted($address,true);
+            $inquiryCreditByCurrency = [];
+            $inquiryCreditCalculatedAt = null;
+            if ($this->contactCurrencyRepository !== null) {
+                try {
+                    $inquiryPubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+                    $currencyConfigs = $this->contactCurrencyRepository->getContactCurrencies($inquiryPubkeyHash);
+                    foreach ($currencyConfigs as $cc) {
+                        if (($cc['status'] ?? '') === 'accepted') {
+                            $cur = $cc['currency'];
+                            $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $cur);
+                            $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $cur);
+                            $balance = $sentBalance - $receivedBalance;
+                            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? 0;
+                            $inquiryCreditByCurrency[$cur] = $balance + $creditLimit;
+                        }
+                    }
+                    if (!empty($inquiryCreditByCurrency)) {
+                        $inquiryCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
+                    }
+                } catch (\Exception $e) {
+                    // Non-fatal — inquiry response still works without credit
+                }
+            }
+            echo $this->messagePayload->buildContactIsAccepted($address, true, null, null, $inquiryCreditByCurrency, $inquiryCreditCalculatedAt);
         }
         // Contact is pending (they sent us a request we haven't accepted)
         elseif($this->contactRepository->hasPendingContact($pubkey)){
@@ -539,9 +562,32 @@ class MessageService implements MessageServiceInterface {
                 }
             }
 
-            // Return acknowledgment for delivery tracking
-            // This confirms the acceptance message was received and processed
-            echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress);
+            // Save available credit from the acceptance message (the acceptor calculated
+            // how much credit we have with them and included it in the message)
+            $this->saveAvailableCreditFromAcceptance($senderPublicKey, $decodedMessage);
+
+            // Calculate our available credit for the acceptor to include in the ack
+            $ackCreditByCurrency = [];
+            $ackCreditCalculatedAt = null;
+            $acceptedCurrency = $decodedMessage['currency'] ?? null;
+            if ($acceptedCurrency !== null && $this->contactCurrencyRepository !== null) {
+                try {
+                    $ackSenderPubkeyHash = $senderPubkeyHash ?? hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+                    $sentBalance = $this->balanceRepository->getContactSentBalance($senderPublicKey, $acceptedCurrency);
+                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPublicKey, $acceptedCurrency);
+                    $balance = $sentBalance - $receivedBalance;
+                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? 0;
+                    $ackCreditByCurrency[$acceptedCurrency] = $balance + $creditLimit;
+                    $ackCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to calculate available credit for acceptance ack", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Return acknowledgment with our available credit for delivery tracking
+            echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress, $ackCreditByCurrency, $ackCreditCalculatedAt);
         } else {
             // Log unexpected status for debugging
             Logger::getInstance()->info("Received contact message with non-accepted status", [
@@ -929,6 +975,53 @@ class MessageService implements MessageServiceInterface {
             }
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from completion", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Save available credit from a contact acceptance message
+     *
+     * When the remote node accepts our contact request, they include their
+     * calculated available credit for us. Save it so both sides start with
+     * accurate credit without waiting for the first ping/pong cycle.
+     *
+     * @param string $senderPublicKey The acceptor's public key
+     * @param array $message The decoded acceptance message
+     */
+    private function saveAvailableCreditFromAcceptance(string $senderPublicKey, array $message): void {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $message['availableCreditByCurrency'] ?? null;
+        $calculatedAt = $message['creditCalculatedAt'] ?? null;
+
+        if (!is_array($creditByCurrency) || empty($creditByCurrency)) {
+            return;
+        }
+
+        try {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+            foreach ($creditByCurrency as $currency => $credit) {
+                if ($calculatedAt !== null) {
+                    $this->contactCreditRepository->upsertAvailableCreditIfNewer(
+                        $pubkeyHash,
+                        (int) $credit,
+                        $currency,
+                        (int) $calculatedAt
+                    );
+                } else {
+                    $this->contactCreditRepository->upsertAvailableCredit(
+                        $pubkeyHash,
+                        (int) $credit,
+                        $currency
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning("Failed to save available credit from acceptance", [
                 'error' => $e->getMessage()
             ]);
         }
