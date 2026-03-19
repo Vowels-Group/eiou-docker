@@ -1487,7 +1487,7 @@ $hopBudget = computeHopBudget($minHops, $maxP2pLevel); // range: [3, 6]
 **Key properties:**
 - Only set on the originator — relays inherit `maxRequestLevel` unchanged
 - `HOP_BUDGET_MIN_RATIO` (default: 0.5) prevents uselessly low budgets (1 hop = direct contacts only)
-- When `EIOU_HOP_BUDGET_RANDOMIZED=false` (test default), returns `maxP2pLevel` for deterministic behavior
+- Controlled by the `hopBudgetRandomized` user setting (GUI/CLI/API toggle, default: enabled). When disabled, returns `maxP2pLevel` for full routing depth — recommended for sparse trust graphs where reachability matters more than traffic analysis resistance. Also overridable via `EIOU_HOP_BUDGET_RANDOMIZED` env variable (env takes precedence)
 - Dead-end behavior: when `requestLevel >= maxRequestLevel`, the relay stores as cancelled and sends `sendCancelNotificationForHash()` upstream immediately
 
 ### P2P Message Flow

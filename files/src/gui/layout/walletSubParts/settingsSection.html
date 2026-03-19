@@ -214,6 +214,22 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="hopBudgetRandomized">Hop Budget Randomization:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="hopBudgetRandomized" name="hopBudgetRandomized" value="1" <?php echo $user->getHopBudgetRandomized() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="hopBudgetRandomizedStatus" class="toggle-status <?php echo $user->getHopBudgetRandomized() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getHopBudgetRandomized() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, P2P hop depth is randomized for privacy. Disable to always use full routing depth (recommended for sparse networks).
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="apiEnabled">API Access:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">

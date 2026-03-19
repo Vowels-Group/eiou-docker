@@ -13,6 +13,13 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Add `hopBudgetRandomized` user setting to toggle geometric hop budget randomization — configurable via GUI toggle, CLI (`changesettings hopBudgetRandomized true/false`), API (`PUT /api/v1/system/settings` with `hop_budget_randomized`), and `EIOU_HOP_BUDGET_RANDOMIZED` env variable. Default: enabled. Disabling uses the full `maxP2pLevel` for every P2P transaction, maximizing routing depth at the cost of privacy. Intended for early/sparse trust graphs where reachability matters more than traffic analysis resistance; the toggle can be removed once the network has sufficient depth for geometric randomization to be always-on
+
+### Changed
+- `RouteCancellationService::computeHopBudget()` now accepts an optional `$randomized` parameter that overrides the global constant, allowing per-user control from `P2pService`
+
+### Fixed
+- Fix pre-existing `RouteCancellationServiceTest` constructor mismatch — updated to pass `RepositoryFactory` required by current constructor signature
 - Send available credit on contact acceptance (#768) — when a contact request is accepted, both nodes now exchange their calculated available credit in the E2E-encrypted acceptance message and acknowledgment. This eliminates the gap where available credit shows as 0 until the first ping/pong cycle or transaction. For new contacts the available credit equals the credit limit; for re-added contacts with prior transactions it reflects the real balance
 - Include available credit in mutual acceptance responses (#768) — when both sides sent contact requests simultaneously, the inline `buildMutuallyAccepted` response now includes credit data
 - Include available credit in wallet restore pong (#768) — when a restored contact is auto-accepted during a ping, the pong response now includes the calculated credit instead of an empty array

@@ -599,6 +599,24 @@ class UserContext {
     }
 
     /**
+     * Get hop budget randomization setting
+     *
+     * When enabled, P2P routing uses a geometric distribution to randomize the
+     * hop budget, improving privacy by preventing traffic analysis. When disabled,
+     * the full maxP2pLevel is used, allowing transactions to reach maximum depth
+     * (useful in sparse trust graphs where privacy can be sacrificed for reachability).
+     *
+     * @return bool
+     */
+    public function getHopBudgetRandomized(): bool {
+        $envValue = getenv('EIOU_HOP_BUDGET_RANDOMIZED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('hopBudgetRandomized') ?? Constants::HOP_BUDGET_RANDOMIZED);
+    }
+
+    /**
      * Get contact status sync on ping setting
      *
      * @return bool
@@ -1005,6 +1023,7 @@ class UserContext {
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
 
             // Feature toggles
+            'hopBudgetRandomized' => Constants::HOP_BUDGET_RANDOMIZED,
             'contactStatusEnabled' => Constants::CONTACT_STATUS_ENABLED,
             'contactStatusSyncOnPing' => Constants::CONTACT_STATUS_SYNC_ON_PING,
             'autoChainDropPropose' => Constants::AUTO_CHAIN_DROP_PROPOSE,
