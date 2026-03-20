@@ -547,17 +547,17 @@
                     </h4>
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="conversionFactors">Conversion Factors:</label>
-                            <textarea id="conversionFactors" name="conversionFactors" rows="4" class="default-value" placeholder="USD:100&#10;EUR:100&#10;BTC:100000000"><?php
-                                $factors = $user->getConversionFactors();
+                            <label for="displayDecimals">Display Decimals:</label>
+                            <textarea id="displayDecimals" name="displayDecimals" rows="4" class="default-value" placeholder="USD:2&#10;EUR:2&#10;BTC:8"><?php
+                                $decimals = $user->getAllDisplayDecimals();
                                 $lines = [];
-                                foreach ($factors as $code => $factor) {
-                                    $lines[] = $code . ':' . $factor;
+                                foreach ($decimals as $code => $dec) {
+                                    $lines[] = $code . ':' . $dec;
                                 }
                                 echo htmlspecialchars(implode("\n", $lines));
                             ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Minor-to-major unit conversion per currency — one per line as CODE:FACTOR (e.g., USD:100 means 100 cents per dollar, BTC:100000000 means satoshis per bitcoin). Persists across container rebuilds.
+                                <i class="fas fa-info-circle"></i> Display decimal places per currency — one per line as CODE:DECIMALS (e.g., USD:2 for dollars/cents, BTC:8 for satoshi precision). Controls UI display and input validation only. All currencies are stored internally at 8-decimal precision. Max: 8. Persists across container rebuilds.
                             </small>
                         </div>
 
@@ -568,7 +568,7 @@
                                 echo htmlspecialchars(implode("\n", $allowedCurrencyList));
                             ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined above. Decimal places are inferred automatically from the factor.
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have display decimals defined above.
                             </small>
                         </div>
                     </div>

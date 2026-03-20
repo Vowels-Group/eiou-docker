@@ -228,57 +228,56 @@ class SettingsController
         // Currency configuration — process conversion factors and decimals BEFORE allowed currencies
         // so that validateAllowedCurrency can check the updated factors
 
-        // Conversion Factors — textarea (CODE:FACTOR per line)
-        if (isset($_POST['conversionFactors']) && trim($_POST['conversionFactors']) !== '') {
-            $rawLines = preg_split('/[\r\n]+/', trim($_POST['conversionFactors']), -1, PREG_SPLIT_NO_EMPTY);
-            $factors = [];
-            $factorErrors = [];
+        // Display Decimals — textarea (CODE:DECIMALS per line)
+        if (isset($_POST['displayDecimals']) && trim($_POST['displayDecimals']) !== '') {
+            $rawLines = preg_split('/[\r\n]+/', trim($_POST['displayDecimals']), -1, PREG_SPLIT_NO_EMPTY);
+            $decimals = [];
+            $decimalErrors = [];
             foreach ($rawLines as $line) {
                 $line = trim($line);
                 if ($line === '') continue;
                 $parts = explode(':', $line, 2);
                 if (count($parts) !== 2) {
-                    $factorErrors[] = "Invalid format: '{$line}' — use CODE:FACTOR (e.g., USD:100)";
+                    $decimalErrors[] = "Invalid format: '{$line}' — use CODE:DECIMALS (e.g., USD:2)";
                     continue;
                 }
                 $code = strtoupper(trim($parts[0]));
-                $factor = trim($parts[1]);
+                $dec = trim($parts[1]);
                 if (!preg_match('/^[A-Z0-9]{3,9}$/', $code)) {
-                    $factorErrors[] = "Invalid currency code: '{$code}'";
+                    $decimalErrors[] = "Invalid currency code: '{$code}'";
                     continue;
                 }
-                if (!ctype_digit($factor) || (int) $factor <= 0) {
-                    $factorErrors[] = "Factor for {$code} must be a positive integer, got '{$factor}'";
+                if (!ctype_digit($dec) || (int) $dec < 0 || (int) $dec > Constants::INTERNAL_PRECISION) {
+                    $decimalErrors[] = "Decimals for {$code} must be 0-" . Constants::INTERNAL_PRECISION . ", got '{$dec}'";
                     continue;
                 }
-                $factors[$code] = (int) $factor;
+                $decimals[$code] = (int) $dec;
             }
-            if (!empty($factorErrors)) {
-                $errors = array_merge($errors, $factorErrors);
-            } elseif (!empty($factors)) {
-                $settings['conversionFactors'] = json_encode($factors);
+            if (!empty($decimalErrors)) {
+                $errors = array_merge($errors, $decimalErrors);
+            } elseif (!empty($decimals)) {
+                $settings['displayDecimals'] = json_encode($decimals);
             }
         }
 
-        // Allowed Currencies — cross-validate against submitted factors (not saved values)
-        // Decimal places are inferred from conversion factors, so only factors need checking.
+        // Allowed Currencies — cross-validate against submitted display decimals (not saved values)
         if (isset($_POST['allowedCurrencies'])) {
             $rawCurrencies = preg_split('/[\r\n,]+/', strtoupper($_POST['allowedCurrencies']), -1, PREG_SPLIT_NO_EMPTY);
             $currencies = array_filter(array_map('trim', $rawCurrencies));
             $currencyErrors = [];
 
             // Use submitted values if present, otherwise fall back to saved config
-            $effectiveFactors = isset($settings['conversionFactors'])
-                ? json_decode($settings['conversionFactors'], true)
-                : UserContext::getInstance()->getConversionFactors();
+            $effectiveDecimals = isset($settings['displayDecimals'])
+                ? json_decode($settings['displayDecimals'], true)
+                : UserContext::getInstance()->getAllDisplayDecimals();
 
             foreach ($currencies as $c) {
                 if (!preg_match('/^[A-Z0-9]{' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ',' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . '}$/', $c)) {
                     $currencyErrors[] = "Invalid currency code format: {$c}";
                     continue;
                 }
-                if (!isset($effectiveFactors[$c])) {
-                    $currencyErrors[] = "Currency {$c}: no conversion factor defined. Add it to Conversion Factors first.";
+                if (!isset($effectiveDecimals[$c])) {
+                    $currencyErrors[] = "Currency {$c}: no display decimals defined. Add it to Display Decimals first.";
                 }
             }
             if (!empty($currencyErrors)) {

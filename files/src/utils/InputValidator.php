@@ -55,12 +55,12 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $decimals = Constants::getCurrencyDecimals($currency);
+        $decimals = Constants::getDisplayDecimals($currency);
         $amount = round($amount, $decimals);
 
         // After rounding, amount may have become zero (e.g., 0.001 USD rounds to 0.00)
         if ($amount <= 0) {
-            $minimum = number_format(1 / Constants::getConversionFactor($currency), $decimals, '.', '');
+            $minimum = number_format(pow(10, -$decimals), $decimals, '.', '');
             return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
         }
 
@@ -87,12 +87,12 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $decimals = Constants::getCurrencyDecimals($currency);
+        $decimals = Constants::getDisplayDecimals($currency);
         $amount = round($amount, $decimals);
 
         // After rounding, amount may have become zero (e.g., 0.001 USD rounds to 0.00)
         if ($amount <= 0) {
-            $minimum = number_format(1 / Constants::getConversionFactor($currency), $decimals, '.', '');
+            $minimum = number_format(pow(10, -$decimals), $decimals, '.', '');
             return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
         }
 
@@ -120,7 +120,7 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Fee amount cannot be negative'];
         }
 
-        $amount = round($amount, Constants::getCurrencyDecimals($currency));
+        $amount = round($amount, Constants::getDisplayDecimals($currency));
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
@@ -181,12 +181,12 @@ class InputValidator {
         }
 
         try {
-            $factors = UserContext::getInstance()->getConversionFactors();
+            $decimals = UserContext::getInstance()->getAllDisplayDecimals();
         } catch (\Throwable $e) {
-            $factors = Constants::CONVERSION_FACTORS;
+            $decimals = Constants::DISPLAY_DECIMALS;
         }
-        if (!isset($factors[$currency])) {
-            return ['valid' => false, 'value' => null, 'error' => 'No conversion factor defined for currency: ' . $currency . '. Add conversion factor via changesettings before enabling.'];
+        if (!isset($decimals[$currency])) {
+            return ['valid' => false, 'value' => null, 'error' => 'No display decimals defined for currency: ' . $currency . '. Add display decimals via changesettings before enabling.'];
         }
 
         return ['valid' => true, 'value' => $currency, 'error' => null];
@@ -373,7 +373,7 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $credit = round($credit, Constants::getCurrencyDecimals($currency));
+        $credit = round($credit, Constants::getDisplayDecimals($currency));
 
         return ['valid' => true, 'value' => $credit, 'error' => null];
     }

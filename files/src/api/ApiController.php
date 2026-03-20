@@ -8,6 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Database\BalanceRepository;
@@ -1264,10 +1265,10 @@ class ApiController {
                     $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                     $currencyFields = [];
                     if (isset($data['fee_percent'])) {
-                        $currencyFields['fee_percent'] = (int) ($data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR);
+                        $currencyFields['fee_percent'] = CurrencyUtilityService::exactMajorToMinor($data['fee_percent'], Constants::FEE_CONVERSION_FACTOR);
                     }
                     if (isset($data['credit_limit'])) {
-                        $currencyFields['credit_limit'] = (int) ($data['credit_limit'] * Constants::getConversionFactor($data['currency']));
+                        $currencyFields['credit_limit'] = CurrencyUtilityService::exactMajorToMinor($data['credit_limit'], Constants::getConversionFactor($data['currency']));
                     }
                     if (!empty($currencyFields)) {
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);

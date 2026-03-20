@@ -139,7 +139,7 @@ if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
             'currency' => $bal['currency'],
-            'total' => number_format($currencyUtility->convertMinorToMajor((int)($bal['total_balance'] ?? 0), $bal['currency']), \Eiou\Core\Constants::getCurrencyDecimals($bal['currency']))
+            'total' => number_format($currencyUtility->convertMinorToMajor((int)($bal['total_balance'] ?? 0), $bal['currency']), \Eiou\Core\Constants::getDisplayDecimals($bal['currency']))
         ];
     }
 }
@@ -151,7 +151,7 @@ if (!empty($earningsRaw)) {
     foreach ($earningsRaw as $earn) {
         $totalEarningsByCurrency[] = [
             'currency' => $earn['currency'],
-            'total' => number_format($currencyUtility->convertMinorToMajor((int)($earn['total_amount'] ?? 0), $earn['currency']), \Eiou\Core\Constants::getCurrencyDecimals($earn['currency']))
+            'total' => number_format($currencyUtility->convertMinorToMajor((int)($earn['total_amount'] ?? 0), $earn['currency']), \Eiou\Core\Constants::getDisplayDecimals($earn['currency']))
         ];
     }
 }
@@ -560,7 +560,7 @@ try {
     foreach ($creditTotals as $row) {
         $totalAvailableCreditByCurrency[] = [
             'currency' => $row['currency'],
-            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::getConversionFactor($row['currency']), \Eiou\Core\Constants::getCurrencyDecimals($row['currency']))
+            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::getConversionFactor($row['currency']), \Eiou\Core\Constants::getDisplayDecimals($row['currency']))
         ];
     }
 } catch (Exception $e) {

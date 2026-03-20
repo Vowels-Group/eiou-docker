@@ -255,7 +255,7 @@ class TransactionService implements TransactionServiceInterface {
         $data['txType'] = 'standard';
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-        $data['amount'] = round($request[3] * Constants::getConversionFactor($data['currency']));
+        $data['amount'] = CurrencyUtilityService::exactMajorToMinor($request[3], Constants::getConversionFactor($data['currency']));
         $data['memo'] = 'standard';
         $data['description'] = $request[5] ?? null;
 

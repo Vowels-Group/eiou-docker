@@ -31,7 +31,7 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
     public function formatCurrency(float $amountInMinorUnits, string $currency = 'USD'): string
     {
         $amountInMajorUnits = $this->convertMinorToMajor($amountInMinorUnits, $currency);
-        return number_format($amountInMajorUnits, Constants::getCurrencyDecimals($currency)) . ' ' . $currency;
+        return number_format($amountInMajorUnits, Constants::getDisplayDecimals($currency)) . ' ' . $currency;
     }
 
     /**
@@ -55,7 +55,7 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
      */
     public function convertMajorToMinor(float $amountInMajorUnits, string $currency = 'USD'): int
     {
-        return (int) round($amountInMajorUnits * Constants::getConversionFactor($currency));
+        return self::exactMajorToMinor($amountInMajorUnits, Constants::getConversionFactor($currency));
     }
 
     /**
@@ -70,8 +70,8 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
     public function calculateFee(float $amount, float $feePercent, float $minumFee, string $currency = 'USD'): int
     {
         $conversionFactor = Constants::getConversionFactor($currency);
-        $feeAmount = (int) round($amount * $feePercent / 100);
-        $minFeeMinorUnits = (int) round($minumFee * $conversionFactor);
+        $feeAmount = self::exactMulDiv($amount, $feePercent, 100);
+        $minFeeMinorUnits = self::exactMajorToMinor($minumFee, $conversionFactor);
         if ($feeAmount < $minFeeMinorUnits) {
             return $minFeeMinorUnits;
         }
@@ -93,5 +93,45 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
 
         $feeAmount = $totalAmount - $baseAmount;
         return round(($feeAmount / $baseAmount) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
+    }
+
+    /**
+     * Exact major-to-minor conversion using bcmul when available, sprintf fallback otherwise.
+     * Avoids IEEE 754 float precision loss for large amounts.
+     *
+     * @param float $majorUnits Amount in major units
+     * @param int $factor Conversion factor (e.g., 10^8)
+     * @return int Amount in minor units
+     */
+    public static function exactMajorToMinor(float $majorUnits, int $factor): int
+    {
+        self::requireBcmath();
+        return (int) \bcmul((string) $majorUnits, (string) $factor, 0);
+    }
+
+    /**
+     * Exact multiplication then division using bcmath.
+     * Used for fee calculations: amount * percent / 100.
+     *
+     * @param float $amount Amount (minor units)
+     * @param float $multiplier Multiplier (e.g., fee percent)
+     * @param float $divisor Divisor (e.g., 100)
+     * @return int Result truncated to integer
+     */
+    public static function exactMulDiv(float $amount, float $multiplier, float $divisor): int
+    {
+        self::requireBcmath();
+        return (int) \bcdiv(\bcmul((string) $amount, (string) $multiplier, 8), (string) $divisor, 0);
+    }
+
+    /**
+     * Ensure bcmath extension is loaded. Throws if not.
+     * bcmath is required for exact-precision currency arithmetic.
+     */
+    private static function requireBcmath(): void
+    {
+        if (!function_exists('bcmul')) {
+            throw new \RuntimeException('The bcmath PHP extension is required. Install php-bcmath.');
+        }
     }
 }

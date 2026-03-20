@@ -16,6 +16,7 @@ use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Exceptions\FatalServiceException;
 use Eiou\Exceptions\ValidationServiceException;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Utils\InputValidator;
@@ -224,7 +225,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             $output->error("Invalid Fee: " . $feeValidation['error'], ErrorCodes::INVALID_FEE, 400);
             return;
         }
-        $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
+        $fee = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
         // Validate credit limit
         $creditValidation = $this->inputValidator->validateCreditLimit($data[5] ?? 0);
@@ -247,7 +248,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
         $currency = $currencyValidation['value'];
-        $credit = $creditValidation['value'] * Constants::getConversionFactor($currency);
+        $credit = CurrencyUtilityService::exactMajorToMinor($creditValidation['value'], Constants::getConversionFactor($currency));
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -651,8 +652,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                     }
                     echo "\t    Status: " . ($contact['status'] ?? 'N/A') . "\n";
                     $contactCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                    if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], Constants::getCurrencyDecimals($contactCurrency)) . "\n";
-                    if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], Constants::getCurrencyDecimals($contactCurrency)) . "\n";
+                    if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], Constants::getDisplayDecimals($contactCurrency)) . "\n";
+                    if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], Constants::getDisplayDecimals($contactCurrency)) . "\n";
                 }
                 echo "\nFound " . count($results) . " contact(s)\n";
             }
@@ -783,11 +784,11 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $cur = $c['currency'];
                         $fee = $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR;
                         $credit = $c['credit_limit'] / Constants::getConversionFactor($cur);
-                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getCurrencyDecimals($cur)) . "\n";
+                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getDisplayDecimals($cur)) . "\n";
                     }
                 }
-                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, Constants::getCurrencyDecimals($creditCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
-                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, Constants::getCurrencyDecimals($firstCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
+                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, Constants::getDisplayDecimals($creditCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
+                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, Constants::getDisplayDecimals($firstCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
             }
         } else {
             $output->error("Contact not found", ErrorCodes::CONTACT_NOT_FOUND, 404, ['query' => $data[2] ?? null]);
@@ -1324,11 +1325,11 @@ class ContactManagementService implements ContactManagementServiceInterface
                 $currencyFields = [];
                 if ($field === 'fee' || $field === 'all') {
                     $feeValue = ($field === 'fee') ? $value : $value2;
-                    $currencyFields['fee_percent'] = (int) ($feeValue * Constants::FEE_CONVERSION_FACTOR);
+                    $currencyFields['fee_percent'] = CurrencyUtilityService::exactMajorToMinor($feeValue, Constants::FEE_CONVERSION_FACTOR);
                 }
                 if ($field === 'credit' || $field === 'all') {
                     $creditValue = ($field === 'credit') ? $value : $value3;
-                    $currencyFields['credit_limit'] = (int) ($creditValue * Constants::getConversionFactor($currency));
+                    $currencyFields['credit_limit'] = CurrencyUtilityService::exactMajorToMinor($creditValue, Constants::getConversionFactor($currency));
                 }
                 if (!empty($currencyFields)) {
                     $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, $currencyFields);

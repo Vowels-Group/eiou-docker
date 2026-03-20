@@ -427,51 +427,56 @@ class UserContext {
     }
 
     /**
-     * Get currency conversion factors map
+     * Get the internal conversion factor for storage.
+     * Always returns the universal internal factor — same for all currencies.
      *
-     * @return array<string, int> Map of currency code to conversion factor (e.g., ['USD' => 100, 'BTC' => 100000000])
-     */
-    public function getConversionFactors(): array {
-        $factors = $this->get('conversionFactors');
-        if ($factors === null) {
-            return Constants::CONVERSION_FACTORS;
-        }
-        if (is_string($factors)) {
-            $decoded = json_decode($factors, true);
-            return is_array($decoded) ? $decoded : Constants::CONVERSION_FACTORS;
-        }
-        return (array) $factors;
-    }
-
-    /**
-     * Get the conversion factor for a single currency
-     *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Conversion factor (e.g., 100 for USD cents-to-dollars)
-     * @throws \InvalidArgumentException If currency has no defined factor
+     * @param string $currency Currency code (ignored)
+     * @return int Conversion factor (always 10^8)
      */
     public function getConversionFactor(string $currency): int {
-        $factors = $this->getConversionFactors();
-        if (!isset($factors[$currency])) {
-            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
-        }
-        return (int) $factors[$currency];
+        return Constants::INTERNAL_CONVERSION_FACTOR;
     }
 
     /**
-     * Get the number of decimal places for a single currency.
-     * Inferred from the conversion factor: decimals = log10(factor).
+     * Get the internal decimal precision for storage.
+     * Always returns INTERNAL_PRECISION (8).
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of decimal places
+     * @param string $currency Currency code (ignored)
+     * @return int Number of decimal places (always 8)
      */
     public function getCurrencyDecimals(string $currency): int {
-        try {
-            $factor = $this->getConversionFactor($currency);
-            return $factor > 0 ? (int) log10($factor) : 0;
-        } catch (\InvalidArgumentException $e) {
-            return Constants::DISPLAY_CURRENCY_DECIMALS;
+        return Constants::INTERNAL_PRECISION;
+    }
+
+    /**
+     * Get display decimals map for all currencies.
+     *
+     * @return array<string, int> Map of currency code to display decimal places (e.g., ['USD' => 2])
+     */
+    public function getAllDisplayDecimals(): array {
+        $decimals = $this->get('displayDecimals');
+        if ($decimals === null) {
+            return Constants::DISPLAY_DECIMALS;
         }
+        if (is_string($decimals)) {
+            $decoded = json_decode($decimals, true);
+            return is_array($decoded) ? $decoded : Constants::DISPLAY_DECIMALS;
+        }
+        return (array) $decimals;
+    }
+
+    /**
+     * Get the display decimal places for a single currency.
+     *
+     * @param string $currency Currency code (e.g., 'USD')
+     * @return int Number of display decimal places (e.g., 2 for USD)
+     */
+    public function getDisplayDecimals(string $currency): int {
+        $decimals = $this->getAllDisplayDecimals();
+        if (isset($decimals[$currency])) {
+            return (int) $decimals[$currency];
+        }
+        return Constants::INTERNAL_PRECISION;
     }
 
     /**
@@ -993,7 +998,7 @@ class UserContext {
         return [
             // Transaction settings (original 11)
             'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
-            'conversionFactors' => json_encode(Constants::CONVERSION_FACTORS),
+            'displayDecimals' => json_encode(Constants::DISPLAY_DECIMALS),
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,

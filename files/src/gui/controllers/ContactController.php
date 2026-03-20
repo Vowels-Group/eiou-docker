@@ -16,6 +16,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 
 /**
  * Contact Controller
@@ -555,8 +556,8 @@ class ContactController
                         $pubkeyHash = $contact['receiverPublicKeyHash'] ?? '';
 
                         // Convert to minor units
-                        $feeMinor = (int) ($contactFee * Constants::FEE_CONVERSION_FACTOR);
-                        $creditMinor = (int) ($contactCredit * Constants::getConversionFactor($contactCurrency));
+                        $feeMinor = CurrencyUtilityService::exactMajorToMinor($contactFee, Constants::FEE_CONVERSION_FACTOR);
+                        $creditMinor = CurrencyUtilityService::exactMajorToMinor($contactCredit, Constants::getConversionFactor($contactCurrency));
 
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
                             'fee_percent' => $feeMinor,
@@ -681,8 +682,8 @@ class ContactController
             $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
             // Convert to minor units for storage
-            $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
-            $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+            $creditMinor = CurrencyUtilityService::exactMajorToMinor($creditValidation['value'], Constants::getConversionFactor($currency));
+            $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
             // Update the pending currency with user's fee/credit and set status to accepted
             $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
@@ -824,8 +825,8 @@ class ContactController
                 }
 
                 // Convert to minor units for storage
-                $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
-                $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+                $creditMinor = CurrencyUtilityService::exactMajorToMinor($creditValidation['value'], Constants::getConversionFactor($currency));
+                $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
                 $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
                     'fee_percent' => $feeMinor,

@@ -79,17 +79,13 @@
             <div class="form-group">
                 <label for="currency">Currency:</label>
                 <?php
-                $conversionFactorsJson = [];
+                $displayDecimalsJson = [];
                 foreach ($user->getAllowedCurrencies() as $cur) {
-                    try {
-                        $conversionFactorsJson[$cur] = \Eiou\Core\Constants::getConversionFactor($cur);
-                    } catch (\Throwable $e) {
-                        $conversionFactorsJson[$cur] = 100; // fallback
-                    }
+                    $displayDecimalsJson[$cur] = \Eiou\Core\Constants::getDisplayDecimals($cur);
                 }
                 ?>
                 <select id="currency" name="currency" required
-                        data-conversion-factors='<?php echo htmlspecialchars(json_encode($conversionFactorsJson, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
+                        data-display-decimals='<?php echo htmlspecialchars(json_encode($displayDecimalsJson, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
                     <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
                         <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
                     <?php endforeach; ?>

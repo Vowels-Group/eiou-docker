@@ -73,58 +73,68 @@ class Constants {
     const TRANSACTION_MAX_AMOUNT = 999999999;
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
     const TRANSACTION_MINIMUM_FEE = 0.01;
-    // Currency conversion factors: minor unit to major unit (defaults)
-    // USD: 100 (cents → dollars). Additional currencies are configured via changesettings.
-    const CONVERSION_FACTORS = [
-        'USD' => 100,
+
+    // PROTOCOL CONSTANT — DO NOT CHANGE. Changing this value breaks compatibility
+    // with every other node. All currencies are stored as integers in minor units at
+    // this fixed precision. 10^8 covers all fiat (2-3 decimals) and Bitcoin (8 decimals).
+    // PHP_INT_MAX / 10^8 ≈ 92 billion — max representable amount.
+    // All major-to-minor conversions use bcmul() for exact precision at any amount.
+    const INTERNAL_CONVERSION_FACTOR = 100000000;
+    const INTERNAL_PRECISION = 8;
+
+    // Display decimals per currency (defaults): controls how many decimal places
+    // are shown in the UI and accepted as input. Does NOT affect internal storage.
+    // Configurable via changesettings displayDecimals.
+    const DISPLAY_DECIMALS = [
+        'USD' => 2,
     ];
     // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
     /**
-     * Get the conversion factor for a given currency.
-     * Checks UserContext config first (persists across rebuilds), falls back to constants.
+     * Get the internal conversion factor for storage.
+     * Always returns INTERNAL_CONVERSION_FACTOR — the same for all currencies.
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Conversion factor
-     * @throws \InvalidArgumentException If currency has no defined factor
+     * @param string $currency Currency code (ignored — factor is universal)
+     * @return int Conversion factor (always 10^8)
      */
     public static function getConversionFactor(string $currency): int
     {
-        try {
-            return UserContext::getInstance()->getConversionFactor($currency);
-        } catch (\InvalidArgumentException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            // UserContext not initialized yet (startup/tests)
-        }
-        if (!isset(self::CONVERSION_FACTORS[$currency])) {
-            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
-        }
-        return self::CONVERSION_FACTORS[$currency];
+        return self::INTERNAL_CONVERSION_FACTOR;
     }
 
     /**
-     * Get the number of decimal places for a given currency.
-     * Inferred from the conversion factor: decimals = log10(factor).
-     * E.g. factor=100 → 2 decimals (USD), factor=100000000 → 8 (BTC).
+     * Get the internal decimal precision for storage.
+     * Always returns INTERNAL_PRECISION (8) — the same for all currencies.
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of decimal places
+     * @param string $currency Currency code (ignored — precision is universal)
+     * @return int Number of decimal places (always 8)
      */
     public static function getCurrencyDecimals(string $currency): int
     {
+        return self::INTERNAL_PRECISION;
+    }
+
+    /**
+     * Get the display decimal places for a given currency.
+     * Checks UserContext config first, falls back to DISPLAY_DECIMALS defaults.
+     * Controls UI formatting, input rounding, and minimum amount validation.
+     * Default: INTERNAL_PRECISION (8) if not defined for a currency.
+     *
+     * @param string $currency Currency code (e.g., 'USD')
+     * @return int Number of display decimal places
+     */
+    public static function getDisplayDecimals(string $currency): int
+    {
         try {
-            return UserContext::getInstance()->getCurrencyDecimals($currency);
+            return UserContext::getInstance()->getDisplayDecimals($currency);
         } catch (\Throwable $e) {
             // UserContext not initialized yet (startup/tests)
         }
-        if (isset(self::CONVERSION_FACTORS[$currency])) {
-            return self::CONVERSION_FACTORS[$currency] > 0
-                ? (int) log10(self::CONVERSION_FACTORS[$currency])
-                : 0;
+        if (isset(self::DISPLAY_DECIMALS[$currency])) {
+            return (int) self::DISPLAY_DECIMALS[$currency];
         }
-        return self::DISPLAY_CURRENCY_DECIMALS;
+        return self::INTERNAL_PRECISION;
     }
 
     // Transaction processor polling intervals (milliseconds)
@@ -354,9 +364,10 @@ class Constants {
     const TIME_MINUTES_PER_HOUR = 60;
     const TIME_HOURS_PER_DAY = 24;
 
-    // Percentage/Math constants
-    // Credits use the same currency conversion system — use CONVERSION_FACTORS[$currency]
-    const FEE_CONVERSION_FACTOR = 100; // Convert percentage to basis points (0.1% = 10)
+    // Fee percentage storage: multiply by 100 to store as integer with 2 decimal precision.
+    // Example: 0.01% → stored as 1, 1.50% → stored as 150, 100% → stored as 10000.
+    // Display: stored_value / FEE_CONVERSION_FACTOR = original percentage.
+    const FEE_CONVERSION_FACTOR = 100;
     const FEE_PERCENT_DECIMAL_PRECISION = 2;
 
     // Adaptive polling thresholds
@@ -420,7 +431,7 @@ class Constants {
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
-    const DISPLAY_CURRENCY_DECIMALS = 2;
+    const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 

@@ -18,14 +18,29 @@ Currency support requires two settings that work together:
 
 | Setting | Purpose | Example |
 |---------|---------|---------|
-| `conversionFactors` | Maps currency codes to their minor-to-major unit factor | `{"USD": 100}` (100 cents per dollar) |
+| `displayDecimals` | Maps currency codes to their display decimal places | `{"USD": 2}` (show 2 decimals for dollars) |
 | `allowedCurrencies` | List of currency codes users can transact in | `USD,EUR` |
 
-Decimal places are **automatically inferred** from the conversion factor: `decimals = log10(factor)`. For example, a factor of 100 means 2 decimal places (USD), 100000000 means 8 (BTC), and 1 means 0 (JPY). There is no separate decimals setting to configure.
+All currencies are stored internally at **8-decimal precision** (10^8 minor units per major unit), regardless of display settings. This eliminates conversion factor mismatches between nodes — every node stores the same integers for the same amounts.
 
-The **minimum transaction amount** is also inferred: `1 / factor`. For USD (factor 100) the minimum is 0.01, for BTC (factor 100000000) it is 0.00000001. Amounts that round to zero at the currency's precision are rejected. This applies to transaction amounts and fee amounts; credit limits and minimum fees allow zero.
+The `displayDecimals` setting controls:
+- How many decimal places are shown in the UI
+- Input validation (minimum amount, rounding)
+- It does **NOT** affect internal storage or wire format
 
-Both settings must be configured for a currency to work. The `allowedCurrencies` setting validates that each listed currency has a conversion factor defined.
+**Minimum amount** is inferred from display decimals: for USD (2 decimals) the minimum is 0.01, for BTC (8 decimals) it is 0.00000001. Amounts that round to zero at the display precision are rejected. This applies to transaction amounts and fee amounts; credit limits and minimum fees allow zero.
+
+Both settings must be configured for a currency to work. The `allowedCurrencies` setting validates that each listed currency has display decimals defined.
+
+### Precision Limits
+
+| Limit | Value | Notes |
+|-------|-------|-------|
+| Internal precision | 8 decimals (10^8) | Fixed for all currencies |
+| Max display decimals | 8 | Cannot exceed internal precision |
+| Max amount | ~92 billion | PHP_INT_MAX / 10^8 |
+
+All major-to-minor unit conversions use `bcmul()` (arbitrary-precision math) — amounts are exact to all 8 decimals at any size up to the 92 billion maximum.
 
 ---
 
@@ -35,10 +50,10 @@ Both settings must be configured for a currency to work. The `allowedCurrencies`
 
 1. Open Settings and expand **Advanced Settings**.
 2. Select the **Currency** category from the dropdown.
-3. Add the currency to **Conversion Factors** (one per line, `CODE:FACTOR` format):
+3. Add the currency to **Display Decimals** (one per line, `CODE:DECIMALS` format):
    ```
-   USD:100
-   EUR:100
+   USD:2
+   EUR:2
    ```
 4. Add the currency code to **Allowed Currencies** (one per line):
    ```
@@ -47,13 +62,13 @@ Both settings must be configured for a currency to work. The `allowedCurrencies`
    ```
 5. Click **Save Settings**.
 
-Set conversion factors first, then add the currency to the allowed list. The allowed currencies validator checks that a conversion factor exists.
+Set display decimals first, then add the currency to the allowed list. The allowed currencies validator checks that display decimals are defined.
 
 ### Via the CLI
 
 ```bash
-# Step 1: Set conversion factors (JSON format)
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"EUR":100}'
+# Step 1: Set display decimals (JSON format)
+docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"EUR":2}'
 
 # Step 2: Add to allowed currencies (comma-separated)
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
@@ -70,7 +85,7 @@ curl -X PUT https://localhost/api/v1/system/settings \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "conversion_factors": "{\"USD\":100,\"EUR\":100}",
+    "display_decimals": "{\"USD\":2,\"EUR\":2}",
     "allowed_currencies": "USD,EUR"
   }'
 ```
@@ -79,17 +94,19 @@ curl -X PUT https://localhost/api/v1/system/settings \
 
 ## Configuration Reference
 
-### Conversion Factors
+### Display Decimals
 
-The conversion factor is the number of minor units in one major unit. This determines how amounts are stored internally (as integers in minor units) and converted for display. Both decimal places and the minimum transaction amount are inferred from the factor: `decimals = log10(factor)`, `minimum = 1 / factor`.
+The display decimals setting controls how many decimal places are shown in the UI and accepted as input. Internally, all amounts are stored at 8-decimal precision (10^8 minor units per major unit).
 
-| Currency | Factor | Decimals (inferred) | Minimum Amount (inferred) | Meaning |
-|----------|--------|---------------------|---------------------------|---------|
-| USD | 100 | 2 | 0.01 | 100 cents = 1 dollar |
-| EUR | 100 | 2 | 0.01 | 100 cents = 1 euro |
-| GBP | 100 | 2 | 0.01 | 100 pence = 1 pound |
-| JPY | 1 | 0 | 1 | No minor unit (yen is the smallest unit) |
-| BTC | 100000000 | 8 | 0.00000001 | 100,000,000 satoshis = 1 bitcoin |
+| Currency | Display Decimals | Minimum Amount (inferred) | Internal Storage | Meaning |
+|----------|-----------------|---------------------------|------------------|---------|
+| USD | 2 | 0.01 | 10^8 per dollar | Show cents |
+| EUR | 2 | 0.01 | 10^8 per euro | Show cents |
+| GBP | 2 | 0.01 | 10^8 per pound | Show pence |
+| JPY | 0 | 1 | 10^8 per yen | No sub-yen display |
+| BTC | 8 | 0.00000001 | 10^8 per bitcoin | Show satoshis |
+
+If display decimals are not defined for a currency, the default is 8 (full internal precision).
 
 ### Currency Code Format
 
@@ -114,21 +131,21 @@ The default values in the source code (`Constants.php`) are used only when no co
 ### Adding Euro Support
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"EUR":100}'
+docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"EUR":2}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
 ```
 
 ### Adding Bitcoin (Satoshi Precision)
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"BTC":100000000}'
+docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"BTC":8}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,BTC
 ```
 
 ### Adding Japanese Yen (No Decimal Places)
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"JPY":1}'
+docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"JPY":0}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,JPY
 ```
 
@@ -137,6 +154,6 @@ docker exec eiou-node eiou changesettings allowedCurrencies USD,JPY
 Remove the currency from both settings. Existing transactions in that currency remain in the database but new transactions cannot be created.
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100}'
+docker exec eiou-node eiou changesettings displayDecimals '{"USD":2}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD
 ```

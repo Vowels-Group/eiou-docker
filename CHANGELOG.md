@@ -14,7 +14,16 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - Add `hopBudgetRandomized` user setting to toggle geometric hop budget randomization — configurable via GUI toggle, CLI (`changesettings hopBudgetRandomized true/false`), API (`PUT /api/v1/system/settings` with `hop_budget_randomized`), and `EIOU_HOP_BUDGET_RANDOMIZED` env variable. Default: enabled. Disabling uses the full `maxP2pLevel` for every P2P transaction, maximizing routing depth at the cost of privacy. Intended for early/sparse trust graphs where reachability matters more than traffic analysis resistance; the toggle can be removed once the network has sufficient depth for geometric randomization to be always-on
-- Show minimum transaction amount hint on send form — dynamically displays the currency's smallest valid amount (inferred from conversion factor) below the amount/currency fields. Updates when currency changes or contact selection filters currencies. Also sets the HTML `min` and `step` attributes on the amount input to match
+- Show minimum transaction amount hint on send form — dynamically displays the currency's smallest valid amount (inferred from display decimals) below the amount/currency fields. Updates when currency changes or contact selection filters currencies. Also sets the HTML `min` and `step` attributes on the amount input to match
+- Fixed internal conversion factor of 10^8 for all currencies — eliminates conversion factor mismatch between nodes. All amounts are stored as integers at 8-decimal precision (BIGINT), ensuring both sides of a transaction always store the same value. Max representable amount: ~92 billion (PHP_INT_MAX / 10^8)
+
+### Changed
+- Rename `conversionFactors` setting to `displayDecimals` — the setting now controls display decimal places only (e.g., `{"USD":2}` instead of `{"USD":100}`). Internal storage precision is fixed at 8 decimals for all currencies. Configurable via GUI (Settings → Currency), CLI (`changesettings displayDecimals '{"USD":2}'`), and API
+- `Constants::getConversionFactor()` now always returns `INTERNAL_CONVERSION_FACTOR` (10^8) regardless of currency — the conversion factor is no longer per-node configurable
+- `Constants::getCurrencyDecimals()` now always returns `INTERNAL_PRECISION` (8) — use `Constants::getDisplayDecimals($currency)` for display formatting
+- `DISPLAY_CURRENCY_DECIMALS` fallback changed from 2 to 8 — undefined currencies default to full internal precision
+- All major-to-minor unit conversions now use `bcmul()` (php-bcmath) instead of float multiplication — eliminates IEEE 754 precision loss for all amounts up to the 92 billion maximum. Fee calculation (`calculateFee`) also switched to `bcmul()`/`bcdiv()` for exact results at any transaction size. All conversions go through `CurrencyUtilityService::exactMajorToMinor()` which throws `RuntimeException` if bcmath is not installed
+- Add `php-bcmath` to Dockerfile — required dependency for exact-precision currency arithmetic. Node will not start without it
 
 ### Changed
 - `RouteCancellationService::computeHopBudget()` now accepts an optional `$randomized` parameter that overrides the global constant, allowing per-user control from `P2pService`

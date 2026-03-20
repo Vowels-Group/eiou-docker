@@ -90,7 +90,7 @@ LABEL org.opencontainers.image.title="eiou-node" \
 # - mariadb-server: Database for wallet, transactions, contacts
 # - certbot: Let's Encrypt ACME client for automatic SSL certificates
 # - openssl: SSL certificate generation and cryptography
-# - php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
+# - php-bcmath, php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
 # - tini: Minimal init system for proper signal forwarding and zombie reaping
 # - tor: Anonymous network for .onion addresses
 RUN apt-get update && apt-get install -y \
@@ -101,6 +101,7 @@ RUN apt-get update && apt-get install -y \
     mariadb-server \
     nginx \
     openssl \
+    php-bcmath \
     php-cli \
     php-curl \
     php-fpm \

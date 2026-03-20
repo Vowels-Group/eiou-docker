@@ -339,16 +339,16 @@ class CliSettingsService
                     }
                 }
                 $value = implode(',', $currencies);
-            } elseif(strtolower($argv[2]) === 'conversionfactors'){
-                $key = 'conversionFactors';
+            } elseif(strtolower($argv[2]) === 'displaydecimals'){
+                $key = 'displayDecimals';
                 $decoded = json_decode($argv[3] ?? '', true);
                 if (!is_array($decoded) || empty($decoded)) {
-                    $output->validationError($key, 'Must be valid JSON object, e.g. {"USD":100,"BTC":100000000}');
+                    $output->validationError($key, 'Must be valid JSON object, e.g. {"USD":2,"BTC":8}');
                     return;
                 }
-                foreach ($decoded as $code => $factor) {
-                    if (!is_int($factor) || $factor <= 0) {
-                        $output->validationError($key, "Factor for {$code} must be a positive integer");
+                foreach ($decoded as $code => $dec) {
+                    if (!is_int($dec) || $dec < 0 || $dec > Constants::INTERNAL_PRECISION) {
+                        $output->validationError($key, "Decimals for {$code} must be an integer 0-" . Constants::INTERNAL_PRECISION);
                         return;
                     }
                 }
@@ -961,19 +961,19 @@ class CliSettingsService
                     break;
 
                 case '44a':
-                    $currentFactors = UserContext::getInstance()->getConversionFactors();
-                    echo "Current conversion factors: " . json_encode($currentFactors) . "\n";
-                    echo "Enter conversion factors as JSON (e.g., {\"USD\":100,\"BTC\":100000000}): ";
-                    $key = 'conversionFactors';
+                    $currentDecimals = UserContext::getInstance()->getAllDisplayDecimals();
+                    echo "Current display decimals: " . json_encode($currentDecimals) . "\n";
+                    echo "Enter display decimals as JSON (e.g., {\"USD\":2,\"BTC\":8}): ";
+                    $key = 'displayDecimals';
                     $input = trim(fgets(STDIN));
                     $decoded = json_decode($input, true);
                     if (!is_array($decoded) || empty($decoded)) {
                         echo "Error: Must be valid JSON object\n";
                         return;
                     }
-                    foreach ($decoded as $code => $factor) {
-                        if (!is_int($factor) || $factor <= 0) {
-                            echo "Error: Factor for {$code} must be a positive integer\n";
+                    foreach ($decoded as $code => $dec) {
+                        if (!is_int($dec) || $dec < 0 || $dec > Constants::INTERNAL_PRECISION) {
+                            echo "Error: Decimals for {$code} must be an integer 0-" . Constants::INTERNAL_PRECISION . "\n";
                             return;
                         }
                     }
@@ -1173,7 +1173,7 @@ class CliSettingsService
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
-            'conversion_factors' => $this->currentUser->getConversionFactors(),
+            'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
         ];
 
         if ($output->isJsonMode()) {
@@ -1237,10 +1237,9 @@ class CliSettingsService
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
-            echo "\tConversion factors (decimals inferred):\n";
-            foreach ($settings['conversion_factors'] as $code => $factor) {
-                $decimals = $factor > 0 ? (int) log10($factor) : 0;
-                echo "\t  {$code}: {$factor} ({$decimals} decimals)\n";
+            echo "\tDisplay decimals (internal precision: " . Constants::INTERNAL_PRECISION . "):\n";
+            foreach ($settings['display_decimals'] as $code => $dec) {
+                echo "\t  {$code}: {$dec} decimals\n";
             }
         }
     }
