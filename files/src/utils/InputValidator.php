@@ -55,7 +55,14 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $amount = round($amount, Constants::getCurrencyDecimals($currency));
+        $decimals = Constants::getCurrencyDecimals($currency);
+        $amount = round($amount, $decimals);
+
+        // After rounding, amount may have become zero (e.g., 0.001 USD rounds to 0.00)
+        if ($amount <= 0) {
+            $minimum = number_format(1 / Constants::getConversionFactor($currency), $decimals, '.', '');
+            return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
+        }
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
@@ -80,7 +87,14 @@ class InputValidator {
         }
 
         // Round to currency decimal precision
-        $amount = round($amount, Constants::getCurrencyDecimals($currency));
+        $decimals = Constants::getCurrencyDecimals($currency);
+        $amount = round($amount, $decimals);
+
+        // After rounding, amount may have become zero (e.g., 0.001 USD rounds to 0.00)
+        if ($amount <= 0) {
+            $minimum = number_format(1 / Constants::getConversionFactor($currency), $decimals, '.', '');
+            return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
+        }
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }

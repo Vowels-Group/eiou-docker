@@ -14,11 +14,18 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - Add `hopBudgetRandomized` user setting to toggle geometric hop budget randomization — configurable via GUI toggle, CLI (`changesettings hopBudgetRandomized true/false`), API (`PUT /api/v1/system/settings` with `hop_budget_randomized`), and `EIOU_HOP_BUDGET_RANDOMIZED` env variable. Default: enabled. Disabling uses the full `maxP2pLevel` for every P2P transaction, maximizing routing depth at the cost of privacy. Intended for early/sparse trust graphs where reachability matters more than traffic analysis resistance; the toggle can be removed once the network has sufficient depth for geometric randomization to be always-on
+- Show minimum transaction amount hint on send form — dynamically displays the currency's smallest valid amount (inferred from conversion factor) below the amount/currency fields. Updates when currency changes or contact selection filters currencies. Also sets the HTML `min` and `step` attributes on the amount input to match
 
 ### Changed
 - `RouteCancellationService::computeHopBudget()` now accepts an optional `$randomized` parameter that overrides the global constant, allowing per-user control from `P2pService`
 
 ### Fixed
+- Fix sub-minimum currency amounts passing validation — amounts like 0.001 USD passed the `> 0` check, then rounded to 0.00 and were accepted as valid zero-dollar transactions. `validateAmount()` and `validateAmountFee()` now re-check after rounding and reject amounts below the currency's smallest unit (e.g., 0.01 for USD). Credit limits and minimum fees still allow zero. Error messages now include the currency-specific minimum
+- Fix API endpoints missing `InputValidator` validation that CLI/GUI already enforce:
+  - **`POST /wallet/send`**: add `validateAddress()`, `validateNotSelfSend()`, `validateCurrency()`, `validateMemo()` for description — previously only validated amount
+  - **`POST /contacts`**: add `validateAddress()`, `validateContactName()`, `validateFeePercent()`, `validateCreditLimit()`, `validateCurrency()`, `validateMemo()` for description — previously no field validation at all
+  - **`PUT /contacts/:address`**: add `validateContactName()`, `validateCurrency()`, `validateFeePercent()`, `validateCreditLimit()` — previously accepted raw unvalidated values
+  - **`GET/POST /p2p/candidates`, `/p2p/approve`, `/p2p/reject`**: add `validateTxid()` for hash parameters
 - Fix pre-existing `RouteCancellationServiceTest` constructor mismatch — updated to pass `RepositoryFactory` required by current constructor signature
 - Send available credit on contact acceptance (#768) — when a contact request is accepted, both nodes now exchange their calculated available credit in the E2E-encrypted acceptance message and acknowledgment. This eliminates the gap where available credit shows as 0 until the first ping/pong cycle or transaction. For new contacts the available credit equals the credit limit; for re-added contacts with prior transactions it reflects the real balance
 - Include available credit in mutual acceptance responses (#768) — when both sides sent contact requests simultaneously, the inline `buildMutuallyAccepted` response now includes credit data
@@ -30,6 +37,11 @@ The project is currently in **ALPHA** status.
 ### Changed
 - Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
 - Allow minimum fee (`minFee`) to be set to 0 — enables free relaying for friends and family while keeping the default at 0.01. Fee percent was already allowed at 0%; now the minimum fee floor can also be removed. Since fees are set per contact, operators can relay free for trusted contacts while charging fees for others. No technical issues: fees are excluded from hash/txid generation, all division-by-zero paths are guarded, and balance updates handle zero fees correctly
+
+### Docs
+- Add minimum transaction amount (inferred) to `CURRENCY_CONFIGURATION.md` overview and conversion factors table
+- Update `API_REFERENCE.md` validation error codes table with new codes: `invalid_address`, `self_send`, `invalid_currency`, `invalid_name`, `invalid_fee`, `invalid_credit`, `invalid_description`, `invalid_hash`, `missing_currency`
+- Update `API_REFERENCE.md` field descriptions for `POST /wallet/send`, `POST /contacts`, and `PUT /contacts/:address` to document validation constraints (format, ranges, precision)
 
 ### Fixed
 - Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters

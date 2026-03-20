@@ -266,6 +266,7 @@ function initializeSendForm() {
                         currSelect.options[ri].style.display = '';
                     }
                 }
+                updateAmountPrecisionHint();
                 return;
             }
 
@@ -368,6 +369,7 @@ function initializeSendForm() {
                         currencySelect.value = contactCurrencies[0];
                     }
                 }
+                updateAmountPrecisionHint();
             }
 
             transactionTypeIndicator.style.display = 'block';
@@ -485,9 +487,42 @@ function initializeSendForm() {
     }
 }
 
+/**
+ * Update the amount precision hint and input attributes based on selected currency.
+ * Reads conversion factors from the currency select's data attribute and calculates
+ * the minimum amount and step for the current currency.
+ */
+function updateAmountPrecisionHint() {
+    var currencySelect = document.getElementById('currency');
+    var hintText = document.getElementById('amount-precision-text');
+    var amountInput = document.getElementById('amount');
+    if (!currencySelect || !hintText) return;
+
+    var currency = currencySelect.value;
+    var factors = {};
+    try { factors = JSON.parse(currencySelect.getAttribute('data-conversion-factors') || '{}'); } catch (e) {}
+    var factor = factors[currency] || 100;
+    var decimals = Math.round(Math.log(factor) / Math.LN10);
+    var minimum = (1 / factor).toFixed(decimals);
+    var step = minimum;
+
+    hintText.textContent = 'Minimum amount for ' + currency + ': ' + minimum + '. Values below this will be rejected.';
+
+    if (amountInput) {
+        amountInput.setAttribute('min', minimum);
+        amountInput.setAttribute('step', step);
+    }
+}
+
 // Initialize send form when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeSendForm();
+    updateAmountPrecisionHint();
+
+    var currencySelect = document.getElementById('currency');
+    if (currencySelect) {
+        currencySelect.addEventListener('change', updateAmountPrecisionHint);
+    }
 });
 
 // Edit contact modal functions

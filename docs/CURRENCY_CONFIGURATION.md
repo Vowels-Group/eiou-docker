@@ -23,6 +23,8 @@ Currency support requires two settings that work together:
 
 Decimal places are **automatically inferred** from the conversion factor: `decimals = log10(factor)`. For example, a factor of 100 means 2 decimal places (USD), 100000000 means 8 (BTC), and 1 means 0 (JPY). There is no separate decimals setting to configure.
 
+The **minimum transaction amount** is also inferred: `1 / factor`. For USD (factor 100) the minimum is 0.01, for BTC (factor 100000000) it is 0.00000001. Amounts that round to zero at the currency's precision are rejected. This applies to transaction amounts and fee amounts; credit limits and minimum fees allow zero.
+
 Both settings must be configured for a currency to work. The `allowedCurrencies` setting validates that each listed currency has a conversion factor defined.
 
 ---
@@ -79,15 +81,15 @@ curl -X PUT https://localhost/api/v1/system/settings \
 
 ### Conversion Factors
 
-The conversion factor is the number of minor units in one major unit. This determines how amounts are stored internally (as integers in minor units) and converted for display. Decimal places for display and input rounding are inferred as `log10(factor)`.
+The conversion factor is the number of minor units in one major unit. This determines how amounts are stored internally (as integers in minor units) and converted for display. Both decimal places and the minimum transaction amount are inferred from the factor: `decimals = log10(factor)`, `minimum = 1 / factor`.
 
-| Currency | Factor | Decimals (inferred) | Meaning |
-|----------|--------|---------------------|---------|
-| USD | 100 | 2 | 100 cents = 1 dollar |
-| EUR | 100 | 2 | 100 cents = 1 euro |
-| GBP | 100 | 2 | 100 pence = 1 pound |
-| JPY | 1 | 0 | No minor unit (yen is the smallest unit) |
-| BTC | 100000000 | 8 | 100,000,000 satoshis = 1 bitcoin |
+| Currency | Factor | Decimals (inferred) | Minimum Amount (inferred) | Meaning |
+|----------|--------|---------------------|---------------------------|---------|
+| USD | 100 | 2 | 0.01 | 100 cents = 1 dollar |
+| EUR | 100 | 2 | 0.01 | 100 cents = 1 euro |
+| GBP | 100 | 2 | 0.01 | 100 pence = 1 pound |
+| JPY | 1 | 0 | 1 | No minor unit (yen is the smallest unit) |
+| BTC | 100000000 | 8 | 0.00000001 | 100,000,000 satoshis = 1 bitcoin |
 
 ### Currency Code Format
 

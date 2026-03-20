@@ -360,9 +360,42 @@ class ApiController {
             }
         }
 
-        // Validate amount
-        if (!is_numeric($data['amount']) || $data['amount'] <= 0) {
-            return $this->errorResponse('Invalid amount', 400, 'invalid_amount');
+        // Validate recipient (address or contact name)
+        $addressValidation = InputValidator::validateAddress($data['address']);
+        $nameValidation = InputValidator::validateContactName($data['address']);
+        if (!$addressValidation['valid'] && !$nameValidation['valid']) {
+            return $this->errorResponse('Invalid recipient: ' . $addressValidation['error'], 400, 'invalid_address');
+        }
+
+        // Prevent self-send
+        if ($addressValidation['valid']) {
+            $selfSendValidation = InputValidator::validateNotSelfSend($data['address'], $this->services->getCurrentUser());
+            if (!$selfSendValidation['valid']) {
+                return $this->errorResponse($selfSendValidation['error'], 400, 'self_send');
+            }
+        }
+
+        // Validate currency
+        $currencyValidation = InputValidator::validateCurrency($data['currency']);
+        if (!$currencyValidation['valid']) {
+            return $this->errorResponse($currencyValidation['error'], 400, 'invalid_currency');
+        }
+        $data['currency'] = $currencyValidation['value'];
+
+        // Validate amount (currency-aware: checks minimum unit, e.g. 0.01 for USD)
+        $amountValidation = InputValidator::validateAmount($data['amount'], $data['currency']);
+        if (!$amountValidation['valid']) {
+            return $this->errorResponse($amountValidation['error'], 400, 'invalid_amount');
+        }
+        $data['amount'] = $amountValidation['value'];
+
+        // Validate description if provided
+        if (!empty($data['description'])) {
+            $descValidation = InputValidator::validateMemo($data['description']);
+            if (!$descValidation['valid']) {
+                return $this->errorResponse($descValidation['error'], 400, 'invalid_description');
+            }
+            $data['description'] = $descValidation['value'];
         }
 
         try {
@@ -897,21 +930,62 @@ class ApiController {
             }
         }
 
+        // Validate address
+        $addressValidation = InputValidator::validateAddress($data['address']);
+        if (!$addressValidation['valid']) {
+            return $this->errorResponse($addressValidation['error'], 400, 'invalid_address');
+        }
+
+        // Validate contact name
+        $nameValidation = InputValidator::validateContactName($data['name']);
+        if (!$nameValidation['valid']) {
+            return $this->errorResponse($nameValidation['error'], 400, 'invalid_name');
+        }
+
+        // Validate currency (needed before credit limit validation)
+        $currency = $data['currency'] ?? 'USD';
+        $currencyValidation = InputValidator::validateCurrency($currency);
+        if (!$currencyValidation['valid']) {
+            return $this->errorResponse($currencyValidation['error'], 400, 'invalid_currency');
+        }
+        $currency = $currencyValidation['value'];
+
+        // Validate fee percentage
+        $feeValidation = InputValidator::validateFeePercent($data['fee_percent'] ?? 1);
+        if (!$feeValidation['valid']) {
+            return $this->errorResponse($feeValidation['error'], 400, 'invalid_fee');
+        }
+
+        // Validate credit limit
+        $creditValidation = InputValidator::validateCreditLimit($data['credit_limit'] ?? 100, $currency);
+        if (!$creditValidation['valid']) {
+            return $this->errorResponse($creditValidation['error'], 400, 'invalid_credit');
+        }
+
+        // Validate description if provided
+        if (!empty($data['description'])) {
+            $descValidation = InputValidator::validateMemo($data['description']);
+            if (!$descValidation['valid']) {
+                return $this->errorResponse($descValidation['error'], 400, 'invalid_description');
+            }
+            $data['description'] = $descValidation['value'];
+        }
+
         try {
             $contactService = $this->services->getContactService();
 
             // Build argv-style array with --json flag for JSON output
             $argv = [
-                'eiou',                                  // $data[0] - command name
-                'add',                                   // $data[1] - subcommand
-                $data['address'],                        // $data[2] - contact address
-                $data['name'],                           // $data[3] - contact name
-                (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
-                (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
-                $data['currency'] ?? 'USD',              // $data[6] - currency
+                'eiou',                                      // $data[0] - command name
+                'add',                                       // $data[1] - subcommand
+                $addressValidation['value'],                 // $data[2] - contact address
+                $nameValidation['value'],                    // $data[3] - contact name
+                (string) $feeValidation['value'],            // $data[4] - fee percent
+                (string) $creditValidation['value'],         // $data[5] - credit limit
+                $currency,                                   // $data[6] - currency
             ];
             if (!empty($data['description'])) {
-                $argv[] = $data['description'];          // $data[7] - optional description
+                $argv[] = $data['description'];              // $data[7] - optional description
             }
             $argv[] = '--json';                          // Enable JSON output mode
 
@@ -1124,8 +1198,12 @@ class ApiController {
             $updatedData = ['address' => $address];
 
             if (isset($data['name'])) {
-                $updateFields['name'] = $data['name'];
-                $updatedData['name'] = $data['name'];
+                $nameValidation = InputValidator::validateContactName($data['name']);
+                if (!$nameValidation['valid']) {
+                    return $this->errorResponse($nameValidation['error'], 400, 'validation_error');
+                }
+                $updateFields['name'] = $nameValidation['value'];
+                $updatedData['name'] = $nameValidation['value'];
             }
             if (isset($data['fee_percent'])) {
                 $updatedData['fee_percent'] = $data['fee_percent'];
@@ -1144,6 +1222,33 @@ class ApiController {
             // Require currency when updating fee or credit
             if ((isset($data['fee_percent']) || isset($data['credit_limit'])) && !isset($data['currency'])) {
                 return $this->errorResponse('Currency is required when updating fee_percent or credit_limit', 400, 'missing_currency');
+            }
+
+            // Validate currency, fee_percent, and credit_limit when provided
+            if (isset($data['currency'])) {
+                $currencyValidation = InputValidator::validateCurrency($data['currency']);
+                if (!$currencyValidation['valid']) {
+                    return $this->errorResponse($currencyValidation['error'], 400, 'validation_error');
+                }
+                $data['currency'] = $currencyValidation['value'];
+                $updatedData['currency'] = $currencyValidation['value'];
+            }
+            if (isset($data['fee_percent'])) {
+                $feeValidation = InputValidator::validateFeePercent($data['fee_percent']);
+                if (!$feeValidation['valid']) {
+                    return $this->errorResponse($feeValidation['error'], 400, 'validation_error');
+                }
+                $data['fee_percent'] = $feeValidation['value'];
+                $updatedData['fee_percent'] = $feeValidation['value'];
+            }
+            if (isset($data['credit_limit'])) {
+                $currency = $data['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $creditValidation = InputValidator::validateCreditLimit($data['credit_limit'], $currency);
+                if (!$creditValidation['valid']) {
+                    return $this->errorResponse($creditValidation['error'], 400, 'validation_error');
+                }
+                $data['credit_limit'] = $creditValidation['value'];
+                $updatedData['credit_limit'] = $creditValidation['value'];
             }
 
             // Update name in contacts table if provided
@@ -2349,6 +2454,12 @@ class ApiController {
             return $this->permissionDenied('wallet:read');
         }
 
+        $hashValidation = InputValidator::validateTxid($hash);
+        if (!$hashValidation['valid']) {
+            return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
+        }
+        $hash = $hashValidation['value'];
+
         try {
             $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
             $p2p = $p2pRepo->getAwaitingApproval($hash);
@@ -2388,7 +2499,11 @@ class ApiController {
             return $this->errorResponse('Missing required field: hash', 400, 'missing_field');
         }
 
-        $hash = $data['hash'];
+        $hashValidation = InputValidator::validateTxid($data['hash']);
+        if (!$hashValidation['valid']) {
+            return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
+        }
+        $hash = $hashValidation['value'];
         $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : 0;
 
         try {
@@ -2518,7 +2633,11 @@ class ApiController {
             return $this->errorResponse('Missing required field: hash', 400, 'missing_field');
         }
 
-        $hash = $data['hash'];
+        $hashValidation = InputValidator::validateTxid($data['hash']);
+        if (!$hashValidation['valid']) {
+            return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
+        }
+        $hash = $hashValidation['value'];
 
         try {
             $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
