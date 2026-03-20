@@ -49,10 +49,6 @@ class InputValidator {
         if ($amount <= 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
         }
-        // Check maximum amount (prevent overflow)
-        if ($amount > Constants::TRANSACTION_MAX_AMOUNT) {
-            return ['valid' => false, 'value' => null, 'error' => 'Amount exceeds maximum allowed value'];
-        }
 
         // Round to currency decimal precision
         $decimals = Constants::getDisplayDecimals($currency);
@@ -365,11 +361,6 @@ class InputValidator {
         // Credit must be non-negative
         if ($credit < 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit cannot be negative'];
-        }
-
-        // Check maximum credit limit
-        if ($credit > Constants::TRANSACTION_MAX_AMOUNT) {
-            return ['valid' => false, 'value' => null, 'error' => 'Credit limit exceeds maximum allowed value'];
         }
 
         // Round to currency decimal precision

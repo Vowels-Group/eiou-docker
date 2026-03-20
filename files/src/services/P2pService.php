@@ -308,7 +308,10 @@ class P2pService implements P2pServiceInterface {
                     : $this->p2pRepository->getCreditInP2p($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
                 $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
 
-                if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
+                $totalAvailable = $availableFunds->add($creditLimit);
+                $requestedAmountSplit = ($requestedAmount instanceof \Eiou\Core\SplitAmount) ? $requestedAmount : \Eiou\Core\SplitAmount::fromArray($requestedAmount);
+                $totalNeeded = $requestedAmountSplit->add($fundsOnHold);
+                if ($totalAvailable->lt($totalNeeded)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
                     // Echoing here would cause duplicate JSON output breaking response parsing
                     return false;
@@ -354,7 +357,9 @@ class P2pService implements P2pServiceInterface {
             }
         }
 
-        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
+        $amount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+        $feeAmount = $this->currencyUtility->calculateFee($amount, $fee, $this->currentUser->getMinimumFee());
+        return $amount->add($feeAmount);
     }
 
     /**
@@ -751,7 +756,7 @@ class P2pService implements P2pServiceInterface {
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-        $data['amount'] = CurrencyUtilityService::exactMajorToMinor($validatedAmount, Constants::getConversionFactor($data['currency']));
+        $data['amount'] = \Eiou\Core\SplitAmount::fromMajorUnits($validatedAmount);
 
         // Additional data preparation - Use cryptographically secure random
         try {

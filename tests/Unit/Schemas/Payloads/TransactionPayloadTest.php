@@ -253,16 +253,19 @@ k5l5m5n5o5p5q5r5s5t5u5v5w5x5y5z5051525354555657585950515253545556
     }
 
     /**
-     * Test build sanitizes amount
+     * Test build serializes amount to split format
      */
     public function testBuildSanitizesAmount(): void
     {
         $data = $this->getValidBuildData();
-        $data['amount'] = '15000';
+        $data['amount'] = new \Eiou\Core\SplitAmount(15, 0);
 
         $result = $this->payload->build($data);
 
-        $this->assertIsNumeric($result['amount']);
+        $this->assertIsArray($result['amount']);
+        $this->assertArrayHasKey('whole', $result['amount']);
+        $this->assertArrayHasKey('frac', $result['amount']);
+        $this->assertEquals(['whole' => 15, 'frac' => 0], $result['amount']);
     }
 
     /**
@@ -1188,30 +1191,35 @@ k5l5m5n5o5p5q5r5s5t5u5v5w5x5y5z5051525354555657585950515253545556
     // =========================================================================
 
     /**
-     * Test build throws exception for non-numeric amount
+     * Test build handles non-numeric amount by treating as zero
+     *
+     * With split amount serialization, non-numeric strings fall through
+     * to SplitAmount::zero() instead of throwing an exception.
      */
-    public function testBuildThrowsExceptionForNonNumericAmount(): void
+    public function testBuildHandlesNonNumericAmountAsZero(): void
     {
         $data = $this->getValidBuildData();
         $data['amount'] = 'not-a-number';
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Value must be numeric');
+        $result = $this->payload->build($data);
 
-        $this->payload->build($data);
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
     }
 
     /**
-     * Test buildCompleted sanitizes amount
+     * Test buildCompleted serializes amount to split format
      */
     public function testBuildCompletedSanitizesAmount(): void
     {
         $request = $this->getValidTransactionRequest();
-        $request['amount'] = '25000';
+        $request['amount'] = new \Eiou\Core\SplitAmount(25, 0);
 
         $result = $this->payload->buildCompleted($request);
 
-        $this->assertIsNumeric($result['amount']);
+        $this->assertIsArray($result['amount']);
+        $this->assertArrayHasKey('whole', $result['amount']);
+        $this->assertArrayHasKey('frac', $result['amount']);
+        $this->assertEquals(['whole' => 25, 'frac' => 0], $result['amount']);
     }
 
     /**
@@ -1224,7 +1232,7 @@ k5l5m5n5o5p5q5r5s5t5u5v5w5x5y5z5051525354555657585950515253545556
 
         $result = $this->payload->buildCompleted($request);
 
-        $this->assertEquals(0, $result['amount']);
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
     }
 
     // =========================================================================

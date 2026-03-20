@@ -257,7 +257,7 @@ class ConstantsTest extends TestCase
      */
     public function testTransactionLimitConstantsAreDefined(): void
     {
-        $this->assertEquals(999999999, Constants::TRANSACTION_MAX_AMOUNT);
+        $this->assertEquals(2305843009213693951, Constants::TRANSACTION_MAX_AMOUNT); // PHP_INT_MAX / 4
         $this->assertEquals('USD', Constants::TRANSACTION_DEFAULT_CURRENCY);
         $this->assertEquals(0.01, Constants::TRANSACTION_MINIMUM_FEE);
         $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);

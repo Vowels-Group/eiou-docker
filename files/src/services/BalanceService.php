@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Contracts\BalanceServiceInterface;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionContactRepository;
 use Eiou\Database\AddressRepository;
@@ -105,7 +106,7 @@ class BalanceService implements BalanceServiceInterface
             // Build balances_by_currency (converted to major units)
             $balancesByCurrency = [];
             foreach ($contactBalances as $cur => $bal) {
-                $balancesByCurrency[$cur] = $bal ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
+                $balancesByCurrency[$cur] = ($bal instanceof SplitAmount) ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
             }
 
             // Build addresses associative array
@@ -127,7 +128,7 @@ class BalanceService implements BalanceServiceInterface
 
             $contactsWithBalances[] = array_merge($addressesAssociative, [
                 'name' => $contact['name'],
-                'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
+                'balance' => ($balance instanceof SplitAmount) ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
                 'balances_by_currency' => $balancesByCurrency,
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
@@ -159,22 +160,15 @@ class BalanceService implements BalanceServiceInterface
             return "0.00";
         }
 
-        // Sum all currency balances (typically just USD)
-        // Balance is already in minor units from BalanceRepository
-        $totalMinorUnits = 0;
-        $currency = !empty($balances) ? ($balances[0]['currency'] ?? 'USD') : 'USD';
-        $maxMinorUnits = PHP_INT_MAX;
+        // Sum all currency balances using SplitAmount arithmetic
+        $total = SplitAmount::zero();
         foreach ($balances as $balance) {
-            $totalMinorUnits += (int) ($balance['total_balance'] ?? 0);
+            if (isset($balance['total_balance']) && $balance['total_balance'] instanceof SplitAmount) {
+                $total = $total->add($balance['total_balance']);
+            }
         }
 
-        // Guard against integer overflow in balance accumulation
-        if (abs($totalMinorUnits) > $maxMinorUnits) {
-            \Eiou\Utils\Logger::getInstance()->warning("Balance overflow detected: totalMinorUnits={$totalMinorUnits} exceeds safe maximum={$maxMinorUnits}");
-            $totalMinorUnits = ($totalMinorUnits > 0) ? $maxMinorUnits : -$maxMinorUnits;
-        }
-
-        return $this->currencyUtility->convertMinorToMajor($totalMinorUnits);
+        return $this->currencyUtility->convertMinorToMajor($total);
     }
 
     /**
@@ -184,7 +178,7 @@ class BalanceService implements BalanceServiceInterface
      * @param string $contactPubkey Contact's public key
      * @return int Balance in minor units
      */
-    public function getContactBalance(string $userPubkey, string $contactPubkey): int
+    public function getContactBalance(string $userPubkey, string $contactPubkey): SplitAmount
     {
         return $this->transactionContactRepository->getContactBalance($userPubkey, $contactPubkey);
     }

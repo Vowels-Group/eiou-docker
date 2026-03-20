@@ -261,8 +261,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                         if (!empty($localPrevTxidsByCurrency) && $this->currentUser->getAutoAcceptRestoredContact()) {
                             // Transactions exist and auto-accept is enabled — accept the contact
-                            $defaultFee = CurrencyUtilityService::exactMajorToMinor($this->currentUser->getDefaultFee(), Constants::getConversionFactor(Constants::TRANSACTION_DEFAULT_CURRENCY));
-                            $defaultCredit = CurrencyUtilityService::exactMajorToMinor($this->currentUser->getDefaultCreditLimit(), Constants::getConversionFactor(Constants::TRANSACTION_DEFAULT_CURRENCY));
+                            $defaultFee = CurrencyUtilityService::exactMajorToMinor($this->currentUser->getDefaultFee(), Constants::FEE_CONVERSION_FACTOR);
+                            $defaultCredit = \Eiou\Core\SplitAmount::fromMajorUnits($this->currentUser->getDefaultCreditLimit());
 
                             $this->contactRepository->updateContactStatus($senderPubkey, 'accepted');
 

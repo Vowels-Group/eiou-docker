@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\P2pRepository;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOStatement;
 use PDOException;
@@ -210,7 +211,8 @@ class P2pRepositoryTest extends TestCase
         $expectedP2p = [
             'id' => 1,
             'hash' => 'abc123',
-            'amount' => 1000,
+            'amount_whole' => 1000,
+            'amount_frac' => 0,
             'currency' => 'USD',
             'status' => 'pending'
         ];
@@ -235,7 +237,10 @@ class P2pRepositoryTest extends TestCase
 
         $result = $this->repository->getByHash('abc123');
 
-        $this->assertEquals($expectedP2p, $result);
+        $this->assertEquals('abc123', $result['hash']);
+        $this->assertEquals('USD', $result['currency']);
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result['amount']);
+        $this->assertEquals(1000, $result['amount']->whole);
     }
 
     /**
@@ -279,8 +284,8 @@ class P2pRepositoryTest extends TestCase
             'time' => 1234567890,
             'expiration' => 1234568190,
             'currency' => 'USD',
-            'amount' => 1000,
-            'feeAmount' => 10,
+            'amount' => new SplitAmount(1000, 0),
+            'feeAmount' => new SplitAmount(10, 0),
             'requestLevel' => 1,
             'maxRequestLevel' => 6,
             'senderPublicKey' => 'pubkey_xyz',
@@ -321,7 +326,7 @@ class P2pRepositoryTest extends TestCase
             'time' => 1234567890,
             'expiration' => 1234568190,
             'currency' => 'USD',
-            'amount' => 1000,
+            'amount' => new SplitAmount(1000, 0),
             'requestLevel' => 1,
             'maxRequestLevel' => 6,
             'senderPublicKey' => 'pubkey_xyz',
@@ -527,7 +532,7 @@ class P2pRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SUM(amount)'))
+            ->with($this->stringContains('SUM(amount_whole)'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->atLeastOnce())
@@ -541,15 +546,17 @@ class P2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['total_amount' => 5000]);
+            ->willReturn(['sum_whole' => 5000, 'sum_frac' => 0]);
 
         $result = $this->repository->getCreditInP2p('pubkey_123');
 
-        $this->assertEquals(5000, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(5000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     /**
-     * Test getCreditInP2p returns 0 when no P2P on hold
+     * Test getCreditInP2p returns zero SplitAmount when no P2P on hold
      */
     public function testGetCreditInP2pReturnsZeroWhenNoP2pOnHold(): void
     {
@@ -567,11 +574,12 @@ class P2pRepositoryTest extends TestCase
 
         $this->stmt->expects($this->once())
             ->method('fetch')
-            ->willReturn(['total_amount' => null]);
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $result = $this->repository->getCreditInP2p('pubkey_no_p2p');
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     /**
@@ -582,7 +590,7 @@ class P2pRepositoryTest extends TestCase
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->with($this->logicalAnd(
-                $this->stringContains('SUM(amount)'),
+                $this->stringContains('SUM(amount_whole)'),
                 $this->stringContains('currency')
             ))
             ->willReturn($this->stmt);
@@ -598,11 +606,12 @@ class P2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['total_amount' => 3000]);
+            ->willReturn(['sum_whole' => 3000, 'sum_frac' => 0]);
 
         $result = $this->repository->getCreditInP2p('pubkey_123', 'DER');
 
-        $this->assertEquals(3000, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(3000, $result->whole);
     }
 
     // =========================================================================
@@ -616,7 +625,7 @@ class P2pRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SUM(my_fee_amount)'))
+            ->with($this->stringContains('SUM(my_fee_amount_whole)'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -624,16 +633,18 @@ class P2pRepositoryTest extends TestCase
             ->willReturn(true);
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
-            ->willReturn(250.50);
+            ->method('fetch')
+            ->willReturn(['sum_whole' => 250, 'sum_frac' => 50000000]);
 
         $result = $this->repository->getUserTotalEarnings();
 
-        $this->assertEquals(250.50, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(250, $result->whole);
+        $this->assertEquals(50000000, $result->frac);
     }
 
     /**
-     * Test getUserTotalEarnings returns 0 when no earnings
+     * Test getUserTotalEarnings returns zero SplitAmount when no earnings
      */
     public function testGetUserTotalEarningsReturnsZeroWhenNoEarnings(): void
     {
@@ -646,12 +657,13 @@ class P2pRepositoryTest extends TestCase
             ->willReturn(true);
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
-            ->willReturn(null);
+            ->method('fetch')
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $result = $this->repository->getUserTotalEarnings();
 
-        $this->assertEquals(0.00, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     // =========================================================================
@@ -813,7 +825,7 @@ class P2pRepositoryTest extends TestCase
     public function testGetBySenderAddressReturnsMessages(): void
     {
         $expectedMessages = [
-            ['id' => 1, 'sender_address' => 'addr_123', 'amount' => 1000]
+            ['id' => 1, 'sender_address' => 'addr_123', 'amount_whole' => 1000, 'amount_frac' => 0]
         ];
 
         $this->pdo->expects($this->once())
@@ -834,7 +846,9 @@ class P2pRepositoryTest extends TestCase
 
         $result = $this->repository->getBySenderAddress('addr_123');
 
-        $this->assertEquals($expectedMessages, $result);
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result[0]['amount']);
+        $this->assertEquals(1000, $result[0]['amount']->whole);
     }
 
     // =========================================================================
@@ -847,7 +861,7 @@ class P2pRepositoryTest extends TestCase
     public function testGetByDestinationAddressReturnsMessages(): void
     {
         $expectedMessages = [
-            ['id' => 1, 'destination_address' => 'dest_456', 'amount' => 2000]
+            ['id' => 1, 'destination_address' => 'dest_456', 'amount_whole' => 2000, 'amount_frac' => 0]
         ];
 
         $this->pdo->expects($this->once())
@@ -868,7 +882,9 @@ class P2pRepositoryTest extends TestCase
 
         $result = $this->repository->getByDestinationAddress('dest_456');
 
-        $this->assertEquals($expectedMessages, $result);
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result[0]['amount']);
+        $this->assertEquals(2000, $result[0]['amount']->whole);
     }
 
     // =========================================================================
@@ -964,10 +980,10 @@ class P2pRepositoryTest extends TestCase
      */
     public function testGetStatisticsReturnsP2pStatistics(): void
     {
-        $expectedStats = [
+        $dbRow = [
             'total_count' => 100,
-            'total_amount' => 100000,
-            'average_amount' => 1000.0,
+            'total_amount_whole' => 100000,
+            'total_amount_frac' => 0,
             'unique_senders' => 25,
             'completed_count' => 75,
             'queued_count' => 10,
@@ -988,11 +1004,19 @@ class P2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getStatistics();
 
-        $this->assertEquals($expectedStats, $result);
+        $this->assertEquals(100, $result['total_count']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total_amount']);
+        $this->assertEquals(100000, $result['total_amount']->whole);
+        $this->assertEquals(25, $result['unique_senders']);
+        $this->assertEquals(75, $result['completed_count']);
+        $this->assertEquals(10, $result['queued_count']);
+        $this->assertEquals(5, $result['sent_count']);
+        $this->assertEquals(8, $result['expired_count']);
+        $this->assertEquals(2, $result['cancelled_count']);
     }
 
     /**
@@ -1068,7 +1092,7 @@ class P2pRepositoryTest extends TestCase
             ->method('rowCount')
             ->willReturn(1);
 
-        $result = $this->repository->updateFeeAmount('hash_123', 15.50);
+        $result = $this->repository->updateFeeAmount('hash_123', new SplitAmount(15, 50000000));
 
         $this->assertTrue($result);
     }
@@ -1170,8 +1194,11 @@ class P2pRepositoryTest extends TestCase
         $allowedColumns = $property->getValue($this->repository);
 
         $expectedColumns = [
-            'id', 'hash', 'salt', 'time', 'expiration', 'currency', 'amount',
-            'my_fee_amount', 'destination_address', 'destination_pubkey',
+            'id', 'hash', 'salt', 'time', 'expiration', 'currency',
+            'amount_whole', 'amount_frac',
+            'my_fee_amount_whole', 'my_fee_amount_frac',
+            'rp2p_amount_whole', 'rp2p_amount_frac',
+            'destination_address', 'destination_pubkey',
             'destination_signature', 'request_level', 'max_request_level',
             'sender_public_key', 'sender_address', 'sender_signature',
             'description', 'status', 'created_at', 'incoming_txid',
@@ -1267,11 +1294,14 @@ class P2pRepositoryTest extends TestCase
         $expectedRows = [
             [
                 'hash' => 'abc123',
-                'amount' => 1000,
+                'amount_whole' => 1000,
+                'amount_frac' => 0,
                 'currency' => 'USD',
                 'destination_address' => 'http://bob:8080',
-                'my_fee_amount' => 10,
-                'rp2p_amount' => 1010,
+                'my_fee_amount_whole' => 10,
+                'my_fee_amount_frac' => 0,
+                'rp2p_amount_whole' => 1010,
+                'rp2p_amount_frac' => 0,
                 'fast' => 1,
                 'created_at' => '2026-02-26 10:00:00',
             ],

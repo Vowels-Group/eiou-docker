@@ -22,6 +22,7 @@ use Eiou\Schemas\Payloads\UtilPayload;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorCodes;
+use Eiou\Core\SplitAmount;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\CurrencyUtilityService;
@@ -73,9 +74,10 @@ class UtilPayloadTest extends TestCase
             });
 
         // Default currency formatting behavior
+        // formatCurrency now takes SplitAmount and formats using toMajorUnits()
         $this->mockCurrencyUtility->method('formatCurrency')
-            ->willReturnCallback(function ($amount) {
-                return '$' . number_format($amount / 100, 2);
+            ->willReturnCallback(function (SplitAmount $amount) {
+                return '$' . number_format($amount->toMajorUnits(), 2);
             });
 
         $this->payload = new UtilPayload(
@@ -122,10 +124,10 @@ class UtilPayloadTest extends TestCase
      */
     public function testBuildInsufficientBalanceReturnsJsonWithCorrectStructure(): void
     {
-        $availableFunds = 5000; // $50.00 in cents
-        $requestedAmount = 10000; // $100.00 in cents
-        $creditLimit = 2500; // $25.00 in cents
-        $fundsOnHold = 1000; // $10.00 in cents
+        $availableFunds = new SplitAmount(50, 0);
+        $requestedAmount = new SplitAmount(100, 0);
+        $creditLimit = new SplitAmount(25, 0);
+        $fundsOnHold = new SplitAmount(10, 0);
 
         $result = $this->payload->buildInsufficientBalance(
             $availableFunds,
@@ -152,7 +154,10 @@ class UtilPayloadTest extends TestCase
      */
     public function testBuildInsufficientBalanceReturnsRejectedStatus(): void
     {
-        $result = $this->payload->buildInsufficientBalance(5000, 10000, 2500, 1000);
+        $result = $this->payload->buildInsufficientBalance(
+            new SplitAmount(50, 0), new SplitAmount(100, 0),
+            new SplitAmount(25, 0), new SplitAmount(10, 0)
+        );
         $decoded = json_decode($result, true);
 
         $this->assertEquals(Constants::STATUS_REJECTED, $decoded['status']);
@@ -166,11 +171,14 @@ class UtilPayloadTest extends TestCase
     {
         $this->mockCurrencyUtility->expects($this->exactly(4))
             ->method('formatCurrency')
-            ->willReturnCallback(function ($amount) {
-                return '$' . number_format($amount / 100, 2);
+            ->willReturnCallback(function (SplitAmount $amount) {
+                return '$' . number_format($amount->toMajorUnits(), 2);
             });
 
-        $this->payload->buildInsufficientBalance(5000, 10000, 2500, 1000);
+        $this->payload->buildInsufficientBalance(
+            new SplitAmount(50, 0), new SplitAmount(100, 0),
+            new SplitAmount(25, 0), new SplitAmount(10, 0)
+        );
     }
 
     /**
@@ -178,7 +186,10 @@ class UtilPayloadTest extends TestCase
      */
     public function testBuildInsufficientBalanceFormatsAmountsCorrectly(): void
     {
-        $result = $this->payload->buildInsufficientBalance(5000, 10000, 2500, 1000);
+        $result = $this->payload->buildInsufficientBalance(
+            new SplitAmount(50, 0), new SplitAmount(100, 0),
+            new SplitAmount(25, 0), new SplitAmount(10, 0)
+        );
         $decoded = json_decode($result, true);
 
         $this->assertEquals('$50.00', $decoded['current_balance']);
@@ -192,7 +203,9 @@ class UtilPayloadTest extends TestCase
      */
     public function testBuildInsufficientBalanceWithZeroValues(): void
     {
-        $result = $this->payload->buildInsufficientBalance(0, 0, 0, 0);
+        $result = $this->payload->buildInsufficientBalance(
+            SplitAmount::zero(), SplitAmount::zero(), SplitAmount::zero(), SplitAmount::zero()
+        );
 
         $this->assertIsString($result);
         $this->assertJson($result);
@@ -208,9 +221,14 @@ class UtilPayloadTest extends TestCase
     /**
      * Test buildInsufficientBalance with float values
      */
-    public function testBuildInsufficientBalanceWithFloatValues(): void
+    public function testBuildInsufficientBalanceWithFractionalValues(): void
     {
-        $result = $this->payload->buildInsufficientBalance(5050.50, 10099.99, 2575.25, 1025.75);
+        $result = $this->payload->buildInsufficientBalance(
+            new SplitAmount(5050, 50000000),
+            new SplitAmount(10099, 99000000),
+            new SplitAmount(2575, 25000000),
+            new SplitAmount(1025, 75000000)
+        );
         $decoded = json_decode($result, true);
 
         $this->assertEquals(Constants::STATUS_REJECTED, $decoded['status']);
@@ -1116,7 +1134,10 @@ class UtilPayloadTest extends TestCase
     public function testJsonMethodsReturnValidJson(): void
     {
         // buildInsufficientBalance
-        $json1 = $this->payload->buildInsufficientBalance(1000, 2000, 500, 100);
+        $json1 = $this->payload->buildInsufficientBalance(
+            new SplitAmount(10, 0), new SplitAmount(20, 0),
+            new SplitAmount(5, 0), new SplitAmount(1, 0)
+        );
         $this->assertJson($json1);
         $this->assertNotNull(json_decode($json1, true));
 

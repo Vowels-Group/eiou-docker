@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\TransactionContactRepository;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use PDO;
 use PDOStatement;
@@ -67,7 +68,7 @@ class TransactionContactRepositoryTest extends TestCase
         $sentStmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['sent' => 5000]);
+            ->willReturn(['sum_whole' => 5000, 'sum_frac' => 0]);
 
         // Second query returns received amount
         $receivedStmt = $this->createMock(PDOStatement::class);
@@ -76,7 +77,7 @@ class TransactionContactRepositoryTest extends TestCase
         $receivedStmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['received' => 8000]);
+            ->willReturn(['sum_whole' => 8000, 'sum_frac' => 0]);
 
         $callCount = 0;
         $this->pdo->expects($this->exactly(2))
@@ -89,7 +90,9 @@ class TransactionContactRepositoryTest extends TestCase
         $result = $this->repository->getContactBalance($userPubkey, $contactPubkey);
 
         // Balance = received - sent = 8000 - 5000 = 3000
-        $this->assertEquals(3000, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(3000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     public function testGetContactBalanceReturnsZeroWhenNoTransactions(): void
@@ -99,14 +102,14 @@ class TransactionContactRepositoryTest extends TestCase
             ->method('execute');
         $sentStmt->expects($this->once())
             ->method('fetch')
-            ->willReturn(['sent' => 0]);
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $receivedStmt = $this->createMock(PDOStatement::class);
         $receivedStmt->expects($this->once())
             ->method('execute');
         $receivedStmt->expects($this->once())
             ->method('fetch')
-            ->willReturn(['received' => 0]);
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $callCount = 0;
         $this->pdo->expects($this->exactly(2))
@@ -118,7 +121,8 @@ class TransactionContactRepositoryTest extends TestCase
 
         $result = $this->repository->getContactBalance('user', 'contact');
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     public function testGetContactBalanceReturnsNegativeBalance(): void
@@ -129,14 +133,14 @@ class TransactionContactRepositoryTest extends TestCase
             ->method('execute');
         $sentStmt->expects($this->once())
             ->method('fetch')
-            ->willReturn(['sent' => 10000]);
+            ->willReturn(['sum_whole' => 10000, 'sum_frac' => 0]);
 
         $receivedStmt = $this->createMock(PDOStatement::class);
         $receivedStmt->expects($this->once())
             ->method('execute');
         $receivedStmt->expects($this->once())
             ->method('fetch')
-            ->willReturn(['received' => 3000]);
+            ->willReturn(['sum_whole' => 3000, 'sum_frac' => 0]);
 
         $callCount = 0;
         $this->pdo->expects($this->exactly(2))
@@ -149,7 +153,9 @@ class TransactionContactRepositoryTest extends TestCase
         $result = $this->repository->getContactBalance('user', 'contact');
 
         // Balance = 3000 - 10000 = -7000
-        $this->assertEquals(-7000, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(-7000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     // =========================================================================
@@ -173,14 +179,18 @@ class TransactionContactRepositoryTest extends TestCase
             [
                 'contact_hash' => hash(Constants::HASH_ALGORITHM, 'contact1'),
                 'currency' => 'USD',
-                'total_sent' => 1000,
-                'total_received' => 2000
+                'total_sent_whole' => 1000,
+                'total_sent_frac' => 0,
+                'total_received_whole' => 2000,
+                'total_received_frac' => 0
             ],
             [
                 'contact_hash' => hash(Constants::HASH_ALGORITHM, 'contact2'),
                 'currency' => 'USD',
-                'total_sent' => 500,
-                'total_received' => 500
+                'total_sent_whole' => 500,
+                'total_sent_frac' => 0,
+                'total_received_whole' => 500,
+                'total_received_frac' => 0
             ]
         ];
 
@@ -208,8 +218,10 @@ class TransactionContactRepositoryTest extends TestCase
         $this->assertArrayHasKey('contact1', $result);
         $this->assertArrayHasKey('contact2', $result);
         $this->assertArrayHasKey('contact3', $result);
-        $this->assertEquals(['USD' => 1000], $result['contact1']); // 2000 - 1000
-        $this->assertEquals(['USD' => 0], $result['contact2']); // 500 - 500
+        $this->assertInstanceOf(SplitAmount::class, $result['contact1']['USD']);
+        $this->assertEquals(1000, $result['contact1']['USD']->whole); // 2000 - 1000
+        $this->assertInstanceOf(SplitAmount::class, $result['contact2']['USD']);
+        $this->assertTrue($result['contact2']['USD']->isZero()); // 500 - 500
         $this->assertEquals([], $result['contact3']); // Default for missing
     }
 
@@ -238,11 +250,11 @@ class TransactionContactRepositoryTest extends TestCase
     {
         $sentStmt = $this->createMock(PDOStatement::class);
         $sentStmt->method('execute');
-        $sentStmt->method('fetch')->willReturn(['sent' => 5000]);
+        $sentStmt->method('fetch')->willReturn(['sum_whole' => 5000, 'sum_frac' => 0]);
 
         $receivedStmt = $this->createMock(PDOStatement::class);
         $receivedStmt->method('execute');
-        $receivedStmt->method('fetch')->willReturn(['received' => 8000]);
+        $receivedStmt->method('fetch')->willReturn(['sum_whole' => 8000, 'sum_frac' => 0]);
 
         $callCount = 0;
         $this->pdo->expects($this->exactly(2))
@@ -323,7 +335,8 @@ class TransactionContactRepositoryTest extends TestCase
                 'status' => 'completed',
                 'sender_address' => 'http://user.example',
                 'receiver_address' => 'http://contact.example',
-                'amount' => 1000,
+                'amount_whole' => 1000,
+                'amount_frac' => 0,
                 'currency' => 'USD',
                 'timestamp' => '2024-01-01 12:00:00',
                 'memo' => 'test',

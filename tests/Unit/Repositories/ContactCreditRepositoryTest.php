@@ -15,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOStatement;
 
@@ -37,11 +38,11 @@ class ContactCreditRepositoryTest extends TestCase
 
     public function testGetAvailableCreditReturnsData(): void
     {
-        $expectedResult = ['available_credit' => 5000, 'currency' => 'USD'];
+        $dbRow = ['available_credit_whole' => 5000, 'available_credit_frac' => 0, 'currency' => 'USD'];
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT available_credit, currency'))
+            ->with($this->stringContains('SELECT available_credit_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -50,12 +51,13 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->stmt->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedResult);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getAvailableCredit('some-pubkey-hash');
 
         $this->assertIsArray($result);
-        $this->assertEquals(5000, $result['available_credit']);
+        $this->assertInstanceOf(SplitAmount::class, $result['available_credit']);
+        $this->assertEquals(5000, $result['available_credit']->whole);
         $this->assertEquals('USD', $result['currency']);
     }
 
@@ -63,7 +65,7 @@ class ContactCreditRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT available_credit'))
+            ->with($this->stringContains('SELECT available_credit_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -106,7 +108,7 @@ class ContactCreditRepositoryTest extends TestCase
             ->method('execute')
             ->willReturn(true);
 
-        $result = $this->repository->upsertAvailableCredit('some-pubkey-hash', 5000, 'USD');
+        $result = $this->repository->upsertAvailableCredit('some-pubkey-hash', new SplitAmount(5000, 0), 'USD');
 
         $this->assertTrue($result);
     }
@@ -118,7 +120,7 @@ class ContactCreditRepositoryTest extends TestCase
             ->method('prepare')
             ->willThrowException(new \PDOException('Connection error'));
 
-        $result = $this->repository->upsertAvailableCredit('some-pubkey-hash', 5000, 'USD');
+        $result = $this->repository->upsertAvailableCredit('some-pubkey-hash', new SplitAmount(5000, 0), 'USD');
 
         $this->assertFalse($result);
     }
@@ -152,7 +154,8 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->assertTrue($result);
         $this->assertEquals($expectedHash, $boundValues[':pubkey_hash']);
-        $this->assertEquals(0, $boundValues[':available_credit']);
+        $this->assertEquals(0, $boundValues[':available_credit_whole']);
+        $this->assertEquals(0, $boundValues[':available_credit_frac']);
         $this->assertEquals('USD', $boundValues[':currency']);
     }
 
@@ -212,15 +215,15 @@ class ContactCreditRepositoryTest extends TestCase
 
     public function testGetTotalAvailableCreditByCurrencyReturnsSums(): void
     {
-        $expectedResult = [
-            ['currency' => 'USD', 'total_available_credit' => 15000],
-            ['currency' => 'EUR', 'total_available_credit' => 8000]
+        $dbRows = [
+            ['currency' => 'USD', 'sum_whole' => 15000, 'sum_frac' => 0],
+            ['currency' => 'EUR', 'sum_whole' => 8000, 'sum_frac' => 0]
         ];
 
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->with($this->logicalAnd(
-                $this->stringContains('SUM(available_credit)'),
+                $this->stringContains('SUM(available_credit_whole)'),
                 $this->stringContains('GROUP BY currency')
             ))
             ->willReturn($this->stmt);
@@ -231,15 +234,17 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->stmt->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedResult);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getTotalAvailableCreditByCurrency();
 
         $this->assertCount(2, $result);
         $this->assertEquals('USD', $result[0]['currency']);
-        $this->assertEquals(15000, $result[0]['total_available_credit']);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['total_available_credit']);
+        $this->assertEquals(15000, $result[0]['total_available_credit']->whole);
         $this->assertEquals('EUR', $result[1]['currency']);
-        $this->assertEquals(8000, $result[1]['total_available_credit']);
+        $this->assertInstanceOf(SplitAmount::class, $result[1]['total_available_credit']);
+        $this->assertEquals(8000, $result[1]['total_available_credit']->whole);
     }
 
     public function testGetTotalAvailableCreditByCurrencyReturnsEmptyOnFailure(): void
@@ -276,7 +281,7 @@ class ContactCreditRepositoryTest extends TestCase
 
     public function testGetAvailableCreditWithCurrencyParam(): void
     {
-        $expectedResult = ['available_credit' => 3000, 'currency' => 'USD'];
+        $dbRow = ['available_credit_whole' => 3000, 'available_credit_frac' => 0, 'currency' => 'USD'];
 
         $this->pdo->expects($this->once())
             ->method('prepare')
@@ -292,25 +297,26 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->stmt->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedResult);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getAvailableCredit('hash', 'USD');
 
         $this->assertIsArray($result);
-        $this->assertEquals(3000, $result['available_credit']);
+        $this->assertInstanceOf(SplitAmount::class, $result['available_credit']);
+        $this->assertEquals(3000, $result['available_credit']->whole);
         $this->assertEquals('USD', $result['currency']);
     }
 
     public function testGetAvailableCreditAllCurrenciesReturnsMultiple(): void
     {
-        $expectedResult = [
-            ['available_credit' => 5000, 'currency' => 'USD'],
-            ['available_credit' => 3000, 'currency' => 'EUR']
+        $dbRows = [
+            ['available_credit_whole' => 5000, 'available_credit_frac' => 0, 'currency' => 'USD'],
+            ['available_credit_whole' => 3000, 'available_credit_frac' => 0, 'currency' => 'EUR']
         ];
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT available_credit, currency'))
+            ->with($this->stringContains('SELECT available_credit_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -319,15 +325,17 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->stmt->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedResult);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getAvailableCreditAllCurrencies('some-pubkey-hash');
 
         $this->assertCount(2, $result);
         $this->assertEquals('USD', $result[0]['currency']);
-        $this->assertEquals(5000, $result[0]['available_credit']);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['available_credit']);
+        $this->assertEquals(5000, $result[0]['available_credit']->whole);
         $this->assertEquals('EUR', $result[1]['currency']);
-        $this->assertEquals(3000, $result[1]['available_credit']);
+        $this->assertInstanceOf(SplitAmount::class, $result[1]['available_credit']);
+        $this->assertEquals(3000, $result[1]['available_credit']->whole);
     }
 
     public function testGetAvailableCreditAllCurrenciesReturnsEmptyWhenNone(): void
@@ -382,7 +390,7 @@ class ContactCreditRepositoryTest extends TestCase
             ->willReturn(true);
 
         // Microtime integer: e.g. 17417499042270 = 2025-03-12 ~14:05:04
-        $result = $this->repository->upsertAvailableCreditIfNewer('some-pubkey-hash', 5000, 'USD', 17417499042270);
+        $result = $this->repository->upsertAvailableCreditIfNewer('some-pubkey-hash', new SplitAmount(5000, 0), 'USD', 17417499042270);
 
         $this->assertTrue($result);
     }
@@ -393,7 +401,7 @@ class ContactCreditRepositoryTest extends TestCase
             ->method('prepare')
             ->willThrowException(new \PDOException('Connection error'));
 
-        $result = $this->repository->upsertAvailableCreditIfNewer('some-pubkey-hash', 5000, 'USD', 17417499042270);
+        $result = $this->repository->upsertAvailableCreditIfNewer('some-pubkey-hash', new SplitAmount(5000, 0), 'USD', 17417499042270);
 
         $this->assertFalse($result);
     }
@@ -417,13 +425,14 @@ class ContactCreditRepositoryTest extends TestCase
             ->method('execute')
             ->willReturn(true);
 
-        $this->repository->upsertAvailableCreditIfNewer('test-hash', 9000, 'EUR', $microtimeInt);
+        $this->repository->upsertAvailableCreditIfNewer('test-hash', new SplitAmount(9000, 0), 'EUR', $microtimeInt);
 
-        // All three timestamp params should be the same converted value
+        // All timestamp params should be the same converted value
         $this->assertEquals($boundValues[':updated_at'], $boundValues[':updated_at2']);
         $this->assertEquals($boundValues[':updated_at'], $boundValues[':updated_at3']);
         $this->assertEquals('test-hash', $boundValues[':pubkey_hash']);
-        $this->assertEquals(9000, $boundValues[':available_credit']);
+        $this->assertEquals(9000, $boundValues[':available_credit_whole']);
+        $this->assertEquals(0, $boundValues[':available_credit_frac']);
         $this->assertEquals('EUR', $boundValues[':currency']);
     }
 

@@ -63,20 +63,20 @@ class InputValidatorTest extends TestCase
         $this->assertEquals('Amount must be a number', $result['error']);
     }
 
-    public function testValidateAmountExceedsMaximum(): void
+    public function testValidateAmountLargeAmountAccepted(): void
     {
-        $result = InputValidator::validateAmount(Constants::TRANSACTION_MAX_AMOUNT + 1);
-
-        $this->assertFalse($result['valid']);
-        $this->assertEquals('Amount exceeds maximum allowed value', $result['error']);
-    }
-
-    public function testValidateAmountAtMaximum(): void
-    {
-        $result = InputValidator::validateAmount(Constants::TRANSACTION_MAX_AMOUNT);
+        // With split amount storage, very large amounts are accepted
+        $result = InputValidator::validateAmount(999999999999.0);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(Constants::TRANSACTION_MAX_AMOUNT, $result['value']);
+    }
+
+    public function testValidateAmountAtReasonableMax(): void
+    {
+        $result = InputValidator::validateAmount(1000000000);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(1000000000.0, $result['value']);
     }
 
     public function testValidateAmountBelowMinimumAfterRounding(): void
@@ -668,12 +668,12 @@ class InputValidatorTest extends TestCase
         $this->assertEquals('Credit limit cannot be negative', $result['error']);
     }
 
-    public function testValidateCreditLimitExceedsMax(): void
+    public function testValidateCreditLimitLargeAmountAccepted(): void
     {
-        $result = InputValidator::validateCreditLimit(Constants::TRANSACTION_MAX_AMOUNT + 1);
+        // With split amount storage, large credit limits are accepted
+        $result = InputValidator::validateCreditLimit(999999999999.0);
 
-        $this->assertFalse($result['valid']);
-        $this->assertEquals('Credit limit exceeds maximum allowed value', $result['error']);
+        $this->assertTrue($result['valid']);
     }
 
     public function testValidateCreditLimitSubMinimumRoundsToZero(): void

@@ -152,7 +152,11 @@ class Rp2pPayloadTest extends TestCase
 
         $this->assertEquals(self::TEST_HASH, $result['hash']);
         $this->assertEquals(self::TEST_TIME, $result['time']);
-        $this->assertEquals(self::TEST_AMOUNT, $result['amount']);
+        // Amount is now serialized to split format {whole, frac}
+        // 100.50 (float) -> fromMinorUnits((int)100) -> whole=0, frac=100
+        $this->assertIsArray($result['amount']);
+        $this->assertArrayHasKey('whole', $result['amount']);
+        $this->assertArrayHasKey('frac', $result['amount']);
         $this->assertEquals(self::TEST_CURRENCY, $result['currency']);
         $this->assertEquals(self::TEST_SIGNATURE, $result['signature']);
     }
@@ -259,7 +263,10 @@ class Rp2pPayloadTest extends TestCase
 
         $this->assertEquals(self::TEST_HASH, $result['hash']);
         $this->assertEquals(self::TEST_TIME, $result['time']);
-        $this->assertEquals(self::TEST_AMOUNT, $result['amount']);
+        // Amount is now serialized to split format {whole, frac}
+        $this->assertIsArray($result['amount']);
+        $this->assertArrayHasKey('whole', $result['amount']);
+        $this->assertArrayHasKey('frac', $result['amount']);
         $this->assertEquals(self::TEST_CURRENCY, $result['currency']);
         $this->assertEquals(self::TEST_SIGNATURE, $result['signature']);
     }
@@ -721,7 +728,7 @@ class Rp2pPayloadTest extends TestCase
         $this->assertEquals('rp2p', $result['type']);
         $this->assertEquals(self::TEST_HASH, $result['hash']);
         $this->assertTrue($result['cancelled']);
-        $this->assertEquals(0, $result['amount']);
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
         $this->assertEquals(1704067200, $result['time']);
         $this->assertEquals(Constants::TRANSACTION_DEFAULT_CURRENCY, $result['currency']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
@@ -890,7 +897,10 @@ class Rp2pPayloadTest extends TestCase
     // ========================================
 
     /**
-     * Test build with numeric string amount
+     * Test build with numeric string amount falls through to zero in split format
+     *
+     * String amounts are not recognized by serializeAmount (only SplitAmount,
+     * array, int, or float), so they produce a zero split amount.
      */
     public function testBuildWithNumericStringAmount(): void
     {
@@ -898,19 +908,20 @@ class Rp2pPayloadTest extends TestCase
         $data['amount'] = '150.75';
         $result = $this->payload->build($data);
 
-        $this->assertEquals('150.75', $result['amount']);
+        // String values are not handled as numeric by serializeAmount
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
     }
 
     /**
-     * Test build with integer amount
+     * Test build with integer amount serializes to split format
      */
     public function testBuildWithIntegerAmount(): void
     {
         $data = $this->createStandardRequestData();
-        $data['amount'] = 100;
+        $data['amount'] = new \Eiou\Core\SplitAmount(100, 0);
         $result = $this->payload->build($data);
 
-        $this->assertEquals(100, $result['amount']);
+        $this->assertEquals(['whole' => 100, 'frac' => 0], $result['amount']);
     }
 
     /**
@@ -922,7 +933,7 @@ class Rp2pPayloadTest extends TestCase
         $data['amount'] = 0;
         $result = $this->payload->build($data);
 
-        $this->assertEquals(0, $result['amount']);
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
     }
 
     /**

@@ -130,7 +130,8 @@ if (isset($_SESSION[SessionKeys::MESSAGE])) {
 // Get user based data
 $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
-$totalEarnings = $currencyUtility->convertMinorToMajor($p2pService->getUserTotalEarnings());
+$totalEarningsSplit = $p2pService->getUserTotalEarnings();
+$totalEarnings = ($totalEarningsSplit instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($totalEarningsSplit) : 0;
 
 // Per-currency balance data for future-proof dashboard display
 $totalBalanceByCurrency = [];
@@ -139,7 +140,10 @@ if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
             'currency' => $bal['currency'],
-            'total' => number_format($currencyUtility->convertMinorToMajor((int)($bal['total_balance'] ?? 0), $bal['currency']), \Eiou\Core\Constants::getDisplayDecimals($bal['currency']))
+            'total' => number_format(
+                ($bal['total_balance'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($bal['total_balance'], $bal['currency']) : 0,
+                \Eiou\Core\Constants::getDisplayDecimals($bal['currency'])
+            )
         ];
     }
 }
@@ -151,7 +155,10 @@ if (!empty($earningsRaw)) {
     foreach ($earningsRaw as $earn) {
         $totalEarningsByCurrency[] = [
             'currency' => $earn['currency'],
-            'total' => number_format($currencyUtility->convertMinorToMajor((int)($earn['total_amount'] ?? 0), $earn['currency']), \Eiou\Core\Constants::getDisplayDecimals($earn['currency']))
+            'total' => number_format(
+                ($earn['total_amount'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($earn['total_amount'], $earn['currency']) : 0,
+                \Eiou\Core\Constants::getDisplayDecimals($earn['currency'])
+            )
         ];
     }
 }

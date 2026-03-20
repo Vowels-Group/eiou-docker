@@ -4,6 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOException;
 
@@ -26,7 +27,7 @@ class TransactionStatisticsRepository extends AbstractRepository
     protected array $allowedColumns = [
         'id', 'tx_type', 'type', 'status', 'sender_address', 'sender_public_key',
         'sender_public_key_hash', 'receiver_address', 'receiver_public_key',
-        'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
+        'receiver_public_key_hash', 'amount_whole', 'amount_frac', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
         'sending_started_at', 'recovery_count', 'needs_manual_review'
@@ -69,12 +70,20 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getTypeStatistics(): array
     {
-        $query = "SELECT type, COUNT(*) as count, SUM(amount) as total
+        $query = "SELECT type, COUNT(*) as count,
+                    SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
                   FROM {$this->tableName} GROUP BY type";
         $stmt = $this->pdo->prepare($query);
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return array_map(function ($row) {
+                return [
+                    'type' => $row['type'],
+                    'count' => $row['count'],
+                    'total' => self::sumCarry((int)$row['total_whole'], (int)$row['total_frac']),
+                ];
+            }, $rows);
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve type statistics", $e);
             return [];
@@ -89,7 +98,8 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getStatisticsByType(string $type): array
     {
-        $query = "SELECT type, COUNT(*) as count, SUM(amount) as total
+        $query = "SELECT type, COUNT(*) as count,
+                    SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
                   FROM {$this->tableName} WHERE type = :type";
         $stmt = $this->execute($query, [':type' => $type]);
 
@@ -97,7 +107,14 @@ class TransactionStatisticsRepository extends AbstractRepository
             return [];
         }
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        if (!$result) {
+            return [];
+        }
+        return [
+            'type' => $result['type'],
+            'count' => $result['count'],
+            'total' => self::sumCarry((int)($result['total_whole'] ?? 0), (int)($result['total_frac'] ?? 0)),
+        ];
     }
 
     /**
@@ -127,8 +144,7 @@ class TransactionStatisticsRepository extends AbstractRepository
     {
         $query = "SELECT
                     COUNT(*) as total_count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as average_amount,
+                    SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac,
                     COUNT(DISTINCT sender_address) as unique_senders,
                     COUNT(DISTINCT receiver_address) as unique_receivers,
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
@@ -142,7 +158,17 @@ class TransactionStatisticsRepository extends AbstractRepository
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        if (!$result) {
+            return [];
+        }
+        return [
+            'total_count' => $result['total_count'],
+            'total_amount' => self::sumCarry((int)($result['total_amount_whole'] ?? 0), (int)($result['total_amount_frac'] ?? 0)),
+            'unique_senders' => $result['unique_senders'],
+            'unique_receivers' => $result['unique_receivers'],
+            'completed_count' => $result['completed_count'],
+            'pending_count' => $result['pending_count'],
+        ];
     }
 
     /**
@@ -155,8 +181,7 @@ class TransactionStatisticsRepository extends AbstractRepository
     {
         $query = "SELECT
                     COUNT(*) as count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as average_amount
+                    SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac
                   FROM {$this->tableName}
                   WHERE status = :status";
 
@@ -167,7 +192,13 @@ class TransactionStatisticsRepository extends AbstractRepository
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        if (!$result) {
+            return [];
+        }
+        return [
+            'count' => $result['count'],
+            'total_amount' => self::sumCarry((int)($result['total_amount_whole'] ?? 0), (int)($result['total_amount_frac'] ?? 0)),
+        ];
     }
 
     /**
@@ -180,8 +211,7 @@ class TransactionStatisticsRepository extends AbstractRepository
     {
         $query = "SELECT
                     COUNT(*) as count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as average_amount
+                    SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac
                   FROM {$this->tableName}
                   WHERE currency = :currency";
 
@@ -192,7 +222,13 @@ class TransactionStatisticsRepository extends AbstractRepository
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        if (!$result) {
+            return [];
+        }
+        return [
+            'count' => $result['count'],
+            'total_amount' => self::sumCarry((int)($result['total_amount_whole'] ?? 0), (int)($result['total_amount_frac'] ?? 0)),
+        ];
     }
 
     /**
@@ -216,5 +252,18 @@ class TransactionStatisticsRepository extends AbstractRepository
         }
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Handle carry from summed fractional parts
+     *
+     * @param int $sumWhole Summed whole parts
+     * @param int $sumFrac Summed fractional parts (may exceed FRAC_MODULUS)
+     * @return SplitAmount Properly normalized SplitAmount
+     */
+    private static function sumCarry(int $sumWhole, int $sumFrac): SplitAmount {
+        $carry = intdiv($sumFrac, SplitAmount::FRAC_MODULUS);
+        $frac = $sumFrac % SplitAmount::FRAC_MODULUS;
+        return new SplitAmount($sumWhole + $carry, $frac);
     }
 }

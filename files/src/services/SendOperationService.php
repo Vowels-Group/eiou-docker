@@ -341,7 +341,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         $output->success("Transaction sent successfully to " . $data['receiverAddress'], [
             'status' => Constants::STATUS_SENT, 'type' => 'direct',
             'recipient' => $contactInfo['receiverName'] ?? $request[2], 'recipient_address' => $data['receiverAddress'] ?? null,
-            'amount' => ($data['amount'] ?? 0) / Constants::getConversionFactor($data['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY),
+            'amount' => $data['amount']->toMajorUnits(),
             'currency' => $data['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY,
             'description' => $data['description'] ?? null, 'txid' => $data['txid'] ?? null, 'timestamp' => $data['time'] ?? null
         ], "Direct transaction initiated");

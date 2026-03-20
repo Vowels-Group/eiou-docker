@@ -9,6 +9,7 @@ use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Contracts\TransactionServiceInterface;
 use Eiou\Contracts\LockingServiceInterface;
 use Eiou\Contracts\BalanceServiceInterface;
@@ -208,12 +209,16 @@ class TransactionService implements TransactionServiceInterface {
             throw new InvalidArgumentException("Missing required fields for txid creation");
         }
         $currency = $data['currency'] ?? '';
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $currency . $data['time']);
+        $amount = $data['amount'];
+        $amountStr = ($amount instanceof SplitAmount) ? (string) $amount : (string) $amount;
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $amountStr . $currency . $data['time']);
     }
 
     public function createUniqueDatabaseTxid(array $data, array $rp2p): string {
         $currency = $data['currency'] ?? $rp2p['currency'] ?? '';
-        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $currency . $rp2p['time']);
+        $amount = $data['amount'];
+        $amountStr = ($amount instanceof SplitAmount) ? (string) $amount : (string) $amount;
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $amountStr . $currency . $rp2p['time']);
     }
 
     public function createContactHash(string $receiverAddress, string $salt, string $time, string $inquiryToken = ''): string {
@@ -240,9 +245,11 @@ class TransactionService implements TransactionServiceInterface {
         return false;
     }
 
-    public function removeTransactionFee(array $request): float {
+    public function removeTransactionFee(array $request): SplitAmount {
         $p2p = $this->p2pRepository->getByHash($request['memo']);
-        return $request['amount'] - $p2p['my_fee_amount'];
+        $amount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : SplitAmount::fromArray($request['amount']);
+        $feeAmount = ($p2p['my_fee_amount'] instanceof SplitAmount) ? $p2p['my_fee_amount'] : SplitAmount::fromArray($p2p['my_fee_amount']);
+        return $amount->subtract($feeAmount);
     }
 
     // =========================================================================
@@ -255,7 +262,7 @@ class TransactionService implements TransactionServiceInterface {
         $data['txType'] = 'standard';
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-        $data['amount'] = CurrencyUtilityService::exactMajorToMinor($request[3], Constants::getConversionFactor($data['currency']));
+        $data['amount'] = SplitAmount::fromMajorUnits((float) $request[3]);
         $data['memo'] = 'standard';
         $data['description'] = $request[5] ?? null;
 
@@ -318,11 +325,13 @@ class TransactionService implements TransactionServiceInterface {
         // Inline fallback for backward compatibility
         $balances = $this->balanceRepository->getUserBalance();
         if ($balances === null || empty($balances)) return "0.00";
-        $totalMinorUnits = 0;
+        $total = SplitAmount::zero();
         foreach ($balances as $balance) {
-            $totalMinorUnits += (int) ($balance['total_balance'] ?? 0);
+            if (isset($balance['total_balance']) && $balance['total_balance'] instanceof SplitAmount) {
+                $total = $total->add($balance['total_balance']);
+            }
         }
-        return $this->currencyUtility->convertMinorToMajor($totalMinorUnits);
+        return $this->currencyUtility->convertMinorToMajor($total);
     }
 
     public function contactBalanceConversion($contacts, int $transactionLimit = 5): array {
@@ -343,7 +352,7 @@ class TransactionService implements TransactionServiceInterface {
 
             $balancesByCurrency = [];
             foreach ($contactBalances as $cur => $bal) {
-                $balancesByCurrency[$cur] = $bal ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
+                $balancesByCurrency[$cur] = ($bal instanceof SplitAmount) ? $this->currencyUtility->convertMinorToMajor($bal) : 0;
             }
 
             $addresses = [];
@@ -356,7 +365,7 @@ class TransactionService implements TransactionServiceInterface {
             $transactions = $this->transactionContactRepository->getTransactionsWithContact($contactAddrs, $transactionLimit);
             $result[] = array_merge($addresses, [
                 'name' => $contact['name'],
-                'balance' => $balance ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
+                'balance' => ($balance instanceof SplitAmount) ? $this->currencyUtility->convertMinorToMajor($balance) : $balance,
                 'balances_by_currency' => $balancesByCurrency,
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
@@ -370,7 +379,7 @@ class TransactionService implements TransactionServiceInterface {
         return $result;
     }
 
-    public function getContactBalance(string $userPubkey, string $contactPubkey): int {
+    public function getContactBalance(string $userPubkey, string $contactPubkey): SplitAmount {
         if ($this->balanceService !== null) {
             return $this->balanceService->getContactBalance($userPubkey, $contactPubkey);
         }
@@ -437,7 +446,9 @@ class TransactionService implements TransactionServiceInterface {
         $validationUtility = $this->utilityContainer->getValidationUtility();
         $available = $validationUtility->calculateAvailableFunds($request);
         $credit = $this->contactRepository->getCreditLimit($request['senderPublicKey'], $request['currency']);
-        return ($available + $credit) >= $request['amount'];
+        $totalAvailable = $available->add($credit);
+        $requestAmount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : SplitAmount::fromMajorUnits((float) $request['amount']);
+        return $totalAvailable->gte($requestAmount);
     }
 
     public function checkTransactionPossible(array $request, $echo = true): bool {

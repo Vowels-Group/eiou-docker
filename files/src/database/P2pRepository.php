@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOException;
 
@@ -22,14 +23,18 @@ class P2pRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'hash', 'salt', 'inquiry_token', 'inquiry_secret',
-        'time', 'expiration', 'currency', 'amount',
-        'my_fee_amount', 'rp2p_amount', 'destination_address', 'destination_pubkey',
+        'time', 'expiration', 'currency', 'amount_whole', 'amount_frac',
+        'my_fee_amount_whole', 'my_fee_amount_frac', 'rp2p_amount_whole', 'rp2p_amount_frac',
+        'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
         'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
         'phase1_sent', 'status', 'sending_started_at', 'sending_worker_pid',
         'created_at', 'incoming_txid', 'outgoing_txid', 'completed_at'
     ];
+
+    /** @var string[] Split amount column prefixes for automatic row mapping */
+    protected array $splitAmountColumns = ['amount', 'my_fee_amount', 'rp2p_amount'];
 
     /**
      * Constructor
@@ -78,7 +83,7 @@ class P2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**
@@ -90,8 +95,12 @@ class P2pRepository extends AbstractRepository {
      * @return string JSON response
      */
     public function insertP2pRequest(array $request, ?string $destinationAddress = null, ?string $description = null): string {
-        $myFeeAmount = $request['feeAmount'] ?? null;
         $status = $request['status'] ?? Constants::STATUS_INITIAL;
+
+        /** @var SplitAmount $amount */
+        $amount = $request['amount'];
+        /** @var SplitAmount|null $myFeeAmount */
+        $myFeeAmount = $request['feeAmount'] ?? null;
 
         $data = [
             'hash' => $request['hash'],
@@ -101,8 +110,10 @@ class P2pRepository extends AbstractRepository {
             'time' => $request['time'],
             'expiration' => $request['expiration'],
             'currency' => $request['currency'],
-            'amount' => $request['amount'],
-            'my_fee_amount' => $myFeeAmount,
+            'amount_whole' => $amount->whole,
+            'amount_frac' => $amount->frac,
+            'my_fee_amount_whole' => $myFeeAmount?->whole,
+            'my_fee_amount_frac' => $myFeeAmount?->frac,
             'request_level' => $request['requestLevel'],
             'max_request_level' => $request['maxRequestLevel'],
             'sender_public_key' => $request['senderPublicKey'],
@@ -154,7 +165,7 @@ class P2pRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve expiring P2P messages", $e);
             return [];
@@ -180,7 +191,7 @@ class P2pRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve queued P2P messages", $e);
             return [];
@@ -215,10 +226,10 @@ class P2pRepository extends AbstractRepository {
      * Retrieve credit currently on hold in P2P for a pubkey
      *
      * @param string $pubkey Sender pubkey
-     * @return int Total amount on hold
+     * @return SplitAmount Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey, ?string $currency = null): int {
-        $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): SplitAmount {
+        $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName}
                   WHERE sender_public_key = :pubkey
                     AND status NOT IN ('cancelled', 'completed', 'expired')";
         $params = [':pubkey' => $pubkey];
@@ -231,28 +242,28 @@ class P2pRepository extends AbstractRepository {
         $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
-            return 0;
+            return SplitAmount::zero();
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($result['total_amount'] ?? 0);
+        return self::sumCarry((int)$result['sum_whole'], (int)$result['sum_frac']);
     }
 
     /**
      * Get users earnings through fees
      *
-     * @return string Fee Balance
+     * @return SplitAmount Fee Balance
      */
-    function getUserTotalEarnings() {
-        $query = "SELECT SUM(my_fee_amount) as total_amount FROM {$this->tableName} WHERE status = 'completed'";
+    function getUserTotalEarnings(): SplitAmount {
+        $query = "SELECT COALESCE(SUM(my_fee_amount_whole), 0) AS sum_whole, COALESCE(SUM(my_fee_amount_frac), 0) AS sum_frac FROM {$this->tableName} WHERE status = 'completed'";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
-            return 0.00;
+            return SplitAmount::zero();
         }
 
-        $balance = $stmt->fetchColumn();
-        return $balance ?? 0.00;
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return self::sumCarry((int)$result['sum_whole'], (int)$result['sum_frac']);
     }
 
     /**
@@ -261,15 +272,23 @@ class P2pRepository extends AbstractRepository {
      * @return array Array of ['currency' => string, 'total_amount' => int] rows
      */
     public function getUserTotalEarningsByCurrency(): array {
-        $query = "SELECT currency, SUM(my_fee_amount) as total_amount FROM {$this->tableName} WHERE status = 'completed' GROUP BY currency";
+        $query = "SELECT currency, SUM(my_fee_amount_whole) AS sum_whole, SUM(my_fee_amount_frac) AS sum_frac FROM {$this->tableName} WHERE status = 'completed' GROUP BY currency";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
             return [];
         }
 
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            return [];
+        }
+        return array_map(function ($row) {
+            return [
+                'currency' => $row['currency'],
+                'total_amount' => self::sumCarry((int)$row['sum_whole'], (int)$row['sum_frac']),
+            ];
+        }, $rows);
     }
 
     /**
@@ -401,7 +420,7 @@ class P2pRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve expired P2P messages", $e);
             return [];
@@ -437,7 +456,7 @@ class P2pRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve expired originator P2Ps with candidates", $e);
             return [];
@@ -452,8 +471,7 @@ class P2pRepository extends AbstractRepository {
     public function getStatistics(): array {
         $query = "SELECT
                     COUNT(*) as total_count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as average_amount,
+                    COALESCE(SUM(amount_whole), 0) AS total_amount_whole, COALESCE(SUM(amount_frac), 0) AS total_amount_frac,
                     COUNT(DISTINCT sender_address) as unique_senders,
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
                     COUNT(CASE WHEN status = 'queued' THEN 1 END) as queued_count,
@@ -469,7 +487,19 @@ class P2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        if (!$result) {
+            return [];
+        }
+        return [
+            'total_count' => $result['total_count'],
+            'total_amount' => self::sumCarry((int)$result['total_amount_whole'], (int)$result['total_amount_frac']),
+            'unique_senders' => $result['unique_senders'],
+            'completed_count' => $result['completed_count'],
+            'queued_count' => $result['queued_count'],
+            'sent_count' => $result['sent_count'],
+            'expired_count' => $result['expired_count'],
+            'cancelled_count' => $result['cancelled_count'],
+        ];
     }
 
     /**
@@ -504,11 +534,14 @@ class P2pRepository extends AbstractRepository {
      * Update P2P fee amount
      *
      * @param string $hash P2P hash
-     * @param float $feeAmount Fee amount
+     * @param SplitAmount $feeAmount Fee amount
      * @return bool Success status
      */
-    public function updateFeeAmount(string $hash, float $feeAmount): bool {
-        $affectedRows = $this->update(['my_fee_amount' => $feeAmount], 'hash', $hash);
+    public function updateFeeAmount(string $hash, SplitAmount $feeAmount): bool {
+        $affectedRows = $this->update([
+            'my_fee_amount_whole' => $feeAmount->whole,
+            'my_fee_amount_frac' => $feeAmount->frac
+        ], 'hash', $hash);
         return $affectedRows >= 0;
     }
 
@@ -674,7 +707,7 @@ class P2pRepository extends AbstractRepository {
             $stmt->bindValue(':status', Constants::STATUS_SENDING, PDO::PARAM_STR);
             $stmt->bindValue(':timeout', $timeoutSeconds, PDO::PARAM_INT);
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve stuck sending P2Ps", $e);
             return [];
@@ -747,11 +780,14 @@ class P2pRepository extends AbstractRepository {
      * (including all relay fees) for the approval UI.
      *
      * @param string $hash P2P hash
-     * @param int $rp2pAmount Total amount from RP2P response
+     * @param SplitAmount $rp2pAmount Total amount from RP2P response
      * @return bool Success status
      */
-    public function setRp2pAmount(string $hash, int $rp2pAmount): bool {
-        $affectedRows = $this->update(['rp2p_amount' => $rp2pAmount], 'hash', $hash);
+    public function setRp2pAmount(string $hash, SplitAmount $rp2pAmount): bool {
+        $affectedRows = $this->update([
+            'rp2p_amount_whole' => $rp2pAmount->whole,
+            'rp2p_amount_frac' => $rp2pAmount->frac
+        ], 'hash', $hash);
         return $affectedRows >= 0;
     }
 
@@ -770,7 +806,7 @@ class P2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**
@@ -782,8 +818,9 @@ class P2pRepository extends AbstractRepository {
      * @return array Array of awaiting approval P2P records
      */
     public function getAwaitingApprovalList(): array {
-        $query = "SELECT hash, amount, currency, destination_address, my_fee_amount,
-                         rp2p_amount, fast, created_at
+        $query = "SELECT hash, amount_whole, amount_frac, currency, destination_address,
+                         my_fee_amount_whole, my_fee_amount_frac,
+                         rp2p_amount_whole, rp2p_amount_frac, fast, created_at
                   FROM {$this->tableName}
                   WHERE status = :status
                     AND destination_address IS NOT NULL
@@ -793,7 +830,7 @@ class P2pRepository extends AbstractRepository {
             $stmt = $this->pdo->prepare($query);
             $stmt->bindValue(':status', Constants::STATUS_AWAITING_APPROVAL, PDO::PARAM_STR);
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve awaiting approval P2P list", $e);
             return [];
@@ -821,5 +858,18 @@ class P2pRepository extends AbstractRepository {
             $this->logError("Failed to delete old expired P2P records", $e);
             return 0;
         }
+    }
+
+    /**
+     * Handle carry from summed fractional parts
+     *
+     * @param int $sumWhole Summed whole parts
+     * @param int $sumFrac Summed fractional parts (may exceed FRAC_MODULUS)
+     * @return SplitAmount Properly normalized SplitAmount
+     */
+    private static function sumCarry(int $sumWhole, int $sumFrac): SplitAmount {
+        $carry = intdiv($sumFrac, SplitAmount::FRAC_MODULUS);
+        $frac = $sumFrac % SplitAmount::FRAC_MODULUS;
+        return new SplitAmount($sumWhole + $carry, $frac);
     }
 }

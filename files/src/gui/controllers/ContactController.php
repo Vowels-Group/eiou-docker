@@ -555,9 +555,9 @@ class ContactController
                     if ($contact) {
                         $pubkeyHash = $contact['receiverPublicKeyHash'] ?? '';
 
-                        // Convert to minor units
+                        // Convert to storage units
                         $feeMinor = CurrencyUtilityService::exactMajorToMinor($contactFee, Constants::FEE_CONVERSION_FACTOR);
-                        $creditMinor = CurrencyUtilityService::exactMajorToMinor($contactCredit, Constants::getConversionFactor($contactCurrency));
+                        $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($contactCredit);
 
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
                             'fee_percent' => $feeMinor,
@@ -681,8 +681,8 @@ class ContactController
             $serviceContainer = $app->services;
             $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
-            // Convert to minor units for storage
-            $creditMinor = CurrencyUtilityService::exactMajorToMinor($creditValidation['value'], Constants::getConversionFactor($currency));
+            // Convert to storage units
+            $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($creditValidation['value']);
             $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
             // Update the pending currency with user's fee/credit and set status to accepted
@@ -824,8 +824,8 @@ class ContactController
                     continue;
                 }
 
-                // Convert to minor units for storage
-                $creditMinor = CurrencyUtilityService::exactMajorToMinor($creditValidation['value'], Constants::getConversionFactor($currency));
+                // Convert to storage units
+                $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($creditValidation['value']);
                 $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
                 $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [

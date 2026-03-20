@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Formatters\TransactionFormatter;
 use Eiou\Utils\Logger;
 use PDO;
@@ -36,7 +37,7 @@ class TransactionContactRepository extends AbstractRepository {
     protected array $allowedColumns = [
         'id', 'tx_type', 'type', 'status', 'sender_address', 'sender_public_key',
         'sender_public_key_hash', 'receiver_address', 'receiver_public_key',
-        'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
+        'receiver_public_key_hash', 'amount_whole', 'amount_frac', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
         'sending_started_at', 'recovery_count', 'needs_manual_review'
@@ -58,30 +59,32 @@ class TransactionContactRepository extends AbstractRepository {
      *
      * @param string $userPubkey
      * @param string $contactPubkey
-     * @return int Balance in cents
+     * @return SplitAmount Balance
      */
-    public function getContactBalance(string $userPubkey, string $contactPubkey): int
+    public function getContactBalance(string $userPubkey, string $contactPubkey): SplitAmount
     {
         $userHash = hash(Constants::HASH_ALGORITHM, $userPubkey);
         $contactHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
         try {
             // Calculate sent to this contact
-            $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
+            $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
             $stmt = $this->pdo->prepare($query);
             $stmt->execute([$userHash, $contactHash]);
-            $sent = $stmt->fetch(PDO::FETCH_ASSOC)['sent'];
+            $sentRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $sent = self::sumCarry((int)$sentRow['sum_whole'], (int)$sentRow['sum_frac']);
 
             // Calculate received from this contact
-            $query = "SELECT COALESCE(SUM(amount), 0) as received FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
+            $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
             $stmt = $this->pdo->prepare($query);
             $stmt->execute([$contactHash, $userHash]);
-            $received = $stmt->fetch(PDO::FETCH_ASSOC)['received'];
+            $receivedRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $received = self::sumCarry((int)$receivedRow['sum_whole'], (int)$receivedRow['sum_frac']);
 
-            return $received - $sent;
+            return $received->subtract($sent);
         } catch (PDOException $e) {
             Logger::getInstance()->log('Failed to get contact balance: ' . $e->getMessage(), 'WARNING');
-            return 0;
+            return SplitAmount::zero();
         }
     }
 
@@ -93,7 +96,7 @@ class TransactionContactRepository extends AbstractRepository {
      *
      * @param string $userPubkey
      * @param array $contactPubkeys
-     * @return array Associative array of pubkey => ['USD' => balance_int, 'GBY' => balance_int]
+     * @return array Associative array of pubkey => ['USD' => SplitAmount, 'GBY' => SplitAmount]
      */
     public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array
     {
@@ -117,15 +120,19 @@ class TransactionContactRepository extends AbstractRepository {
             SELECT
                 contact_hash,
                 currency,
-                SUM(sent) as total_sent,
-                SUM(received) as total_received
+                SUM(sent_whole) as total_sent_whole,
+                SUM(sent_frac) as total_sent_frac,
+                SUM(received_whole) as total_received_whole,
+                SUM(received_frac) as total_received_frac
             FROM (
                 -- Sent from user to contacts
                 SELECT
                     receiver_public_key_hash as contact_hash,
                     currency,
-                    SUM(amount) as sent,
-                    0 as received
+                    SUM(amount_whole) as sent_whole,
+                    SUM(amount_frac) as sent_frac,
+                    0 as received_whole,
+                    0 as received_frac
                 FROM {$this->tableName}
                 WHERE sender_public_key_hash = ?
                     AND receiver_public_key_hash IN ($placeholders)
@@ -138,8 +145,10 @@ class TransactionContactRepository extends AbstractRepository {
                 SELECT
                     sender_public_key_hash as contact_hash,
                     currency,
-                    0 as sent,
-                    SUM(amount) as received
+                    0 as sent_whole,
+                    0 as sent_frac,
+                    SUM(amount_whole) as received_whole,
+                    SUM(amount_frac) as received_frac
                 FROM {$this->tableName}
                 WHERE receiver_public_key_hash = ?
                     AND sender_public_key_hash IN ($placeholders)
@@ -168,8 +177,14 @@ class TransactionContactRepository extends AbstractRepository {
                     $balances[$pubkey] = [];
                 }
                 $currency = $row['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $balances[$pubkey][$currency] = ($balances[$pubkey][$currency] ?? 0)
-                    + $row['total_received'] - $row['total_sent'];
+                $received = self::sumCarry((int)$row['total_received_whole'], (int)$row['total_received_frac']);
+                $sent = self::sumCarry((int)$row['total_sent_whole'], (int)$row['total_sent_frac']);
+                $balance = $received->subtract($sent);
+                if (isset($balances[$pubkey][$currency])) {
+                    $balances[$pubkey][$currency] = $balances[$pubkey][$currency]->add($balance);
+                } else {
+                    $balances[$pubkey][$currency] = $balance;
+                }
             }
         }
 
@@ -206,7 +221,7 @@ class TransactionContactRepository extends AbstractRepository {
         $contactPlaceholders = $this->createPlaceholders($contactAddresses);
 
         // Get transactions where user sent to contact OR user received from contact
-        $query = "SELECT txid, tx_type, status, sender_address, receiver_address, amount, currency, timestamp, memo, description
+        $query = "SELECT txid, tx_type, status, sender_address, receiver_address, amount_whole, amount_frac, currency, timestamp, memo, description
                   FROM {$this->tableName}
                   WHERE (sender_address IN ($userPlaceholders) AND receiver_address IN ($contactPlaceholders))
                      OR (sender_address IN ($contactPlaceholders) AND receiver_address IN ($userPlaceholders))
@@ -384,5 +399,18 @@ class TransactionContactRepository extends AbstractRepository {
         ]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Handle carry from summed fractional parts
+     *
+     * @param int $sumWhole Summed whole parts
+     * @param int $sumFrac Summed fractional parts (may exceed FRAC_MODULUS)
+     * @return SplitAmount Properly normalized SplitAmount
+     */
+    private static function sumCarry(int $sumWhole, int $sumFrac): SplitAmount {
+        $carry = intdiv($sumFrac, SplitAmount::FRAC_MODULUS);
+        $frac = $sumFrac % SplitAmount::FRAC_MODULUS;
+        return new SplitAmount($sumWhole + $carry, $frac);
     }
 }

@@ -754,7 +754,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'address' => $address,
             'name' => $name,
             'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
-            'credit' => $credit / Constants::getConversionFactor($currency),
+            'credit' => $credit ? $credit->toMajorUnits() : 0,
             'currency' => $currency,
             'status' => $contact['status']
         ];
@@ -1103,7 +1103,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'address' => $address,
             'name' => $name,
             'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
-            'credit' => $credit / Constants::getConversionFactor($currency),
+            'credit' => $credit ? $credit->toMajorUnits() : 0,
             'currency' => $currency
         ];
 

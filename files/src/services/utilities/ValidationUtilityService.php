@@ -81,9 +81,9 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
      * Calculate available funds for user with contact
      *
      * @param array $request Request data with senderPublicKey
-     * @return int Available funds
+     * @return \Eiou\Core\SplitAmount Available funds
      */
-    public function calculateAvailableFunds(array $request): int
+    public function calculateAvailableFunds(array $request): \Eiou\Core\SplitAmount
     {
         $balanceRepository = $this->container->getRepositoryFactory()->get(BalanceRepository::class);
         $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
@@ -92,8 +92,6 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
         $totalReceived = $balanceRepository->getContactReceivedBalance($pubkey, $request['currency']);
         // Contact's available funds = what we've sent to them (they received) minus what they've sent to us (we received)
         // In the balances table: 'sent' is what WE sent TO contact, 'received' is what WE received FROM contact
-        $currentBalance = $totalSent - $totalReceived;
-
-        return $currentBalance;
+        return $totalSent->subtract($totalReceived);
     }
 }

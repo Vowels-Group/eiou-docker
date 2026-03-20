@@ -39,9 +39,9 @@ interface BalanceServiceInterface
      *
      * @param string $userPubkey User's public key
      * @param string $contactPubkey Contact's public key
-     * @return int Balance in cents
+     * @return \Eiou\Core\SplitAmount Balance
      */
-    public function getContactBalance(string $userPubkey, string $contactPubkey): int;
+    public function getContactBalance(string $userPubkey, string $contactPubkey): \Eiou\Core\SplitAmount;
 
     /**
      * Get all contact balances.

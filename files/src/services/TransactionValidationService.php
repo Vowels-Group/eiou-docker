@@ -262,9 +262,10 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             // Check if there is enough funds to complete the transaction (sufficient balance or credit limit)
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
             $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
-            $requestedAmount = $request['amount'];
+            $totalAvailable = $availableFunds->add($creditLimit);
+            $requestedAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromMajorUnits((float) $request['amount']);
 
-            if (($availableFunds + $creditLimit) < $requestedAmount) {
+            if ($totalAvailable->lt($requestedAmount)) {
                 // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response
                 // Echoing here would cause duplicate JSON output breaking response parsing
                 return false;

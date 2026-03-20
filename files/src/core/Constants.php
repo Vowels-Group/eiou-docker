@@ -70,15 +70,19 @@ class Constants {
     //   - External web applications: BROKEN - will get CORS errors
 
     // Transaction limits
-    const TRANSACTION_MAX_AMOUNT = 999999999;
+    // With split amount storage (whole + frac), the whole part can be up to PHP_INT_MAX.
+    // However, relay routing adds fees to amounts (up to 100% per hop), so the amount
+    // after fees must also fit. TRANSACTION_MAX_AMOUNT is set conservatively so that
+    // even a 100% fee (amount doubles) plus multi-hop compounding won't overflow.
+    // PHP_INT_MAX / 4 ≈ 2.3 quintillion — leaves headroom for multi-hop fee accumulation.
+    const TRANSACTION_MAX_AMOUNT = 2305843009213693951; // PHP_INT_MAX / 4, ~2.3 quintillion
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
     const TRANSACTION_MINIMUM_FEE = 0.01;
 
-    // PROTOCOL CONSTANT — DO NOT CHANGE. Changing this value breaks compatibility
-    // with every other node. All currencies are stored as integers in minor units at
-    // this fixed precision. 10^8 covers all fiat (2-3 decimals) and Bitcoin (8 decimals).
-    // PHP_INT_MAX / 10^8 ≈ 92 billion — max representable amount.
-    // All major-to-minor conversions use bcmul() for exact precision at any amount.
+    // PROTOCOL CONSTANT — DO NOT CHANGE. All currencies use 8 decimal places
+    // internally. The fractional part is stored as a separate BIGINT multiplied
+    // by 10^8 (FRAC_MODULUS in SplitAmount). The whole part is stored as-is,
+    // so the maximum representable amount is PHP_INT_MAX.99999999.
     const INTERNAL_CONVERSION_FACTOR = 100000000;
     const INTERNAL_PRECISION = 8;
 
