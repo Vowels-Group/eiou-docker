@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.0-alpha';
+    const APP_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
     // Database schema version — bump this when adding new migrations in DatabaseSetup.php.
