@@ -241,7 +241,16 @@ print(response.json())
 |------|-------------|
 | `invalid_json` | Request body is not valid JSON |
 | `missing_field` | Required field is missing |
-| `invalid_amount` | Transaction amount is invalid |
+| `invalid_amount` | Transaction amount is invalid (non-numeric, negative, or below currency minimum) |
+| `invalid_address` | Address format is invalid (must be HTTP, HTTPS, or Tor .onion) |
+| `invalid_currency` | Currency code is unsupported or invalid format |
+| `invalid_name` | Contact name is invalid (empty, too short/long, or contains invalid characters) |
+| `invalid_fee` | Fee percentage is out of range |
+| `invalid_credit` | Credit limit is invalid (negative or exceeds maximum) |
+| `invalid_description` | Description exceeds maximum length |
+| `invalid_hash` | Transaction hash is not a valid 64-character hex string |
+| `self_send` | Cannot send a transaction to yourself |
+| `missing_currency` | Currency is required when updating fee or credit limit |
 | `no_fields` | No fields provided for update |
 | `validation_error` | One or more setting values failed validation |
 | `unknown_setting` | Unrecognized setting name in update request |
@@ -491,10 +500,10 @@ Send a transaction to a contact.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) |
-| `amount` | number | Yes | Amount to send (must be > 0) |
-| `currency` | string | Yes | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
-| `description` | string | No | Optional transaction description |
+| `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) or contact name. Cannot be your own address |
+| `amount` | number | Yes | Amount to send (must be >= the currency's smallest unit, e.g., 0.01 for USD). Amounts below the minimum after rounding to the currency's decimal precision are rejected |
+| `currency` | string | Yes | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
+| `description` | string | No | Optional transaction description (max 255 characters). Only visible to the final recipient |
 | `best_fee` | boolean | No | **[Experimental]** Use best-fee routing: collects all P2P route responses and selects the lowest accumulated fee. May be slower than default fast mode. |
 
 **Response:**
@@ -604,12 +613,12 @@ Add a new contact.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `address` | string | Yes | - | Contact's node address |
-| `name` | string | Yes | - | Display name for contact |
-| `fee_percent` | number | No | 1.0 | Transaction fee percentage |
-| `credit_limit` | number | No | 100.0 | Credit limit for contact |
-| `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
-| `description` | string | No | - | A short message sent with the contact request. Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
+| `address` | string | Yes | - | Contact's node address (HTTP, HTTPS, or Tor .onion) |
+| `name` | string | Yes | - | Display name (2-50 characters, alphanumeric, spaces, dashes, underscores) |
+| `fee_percent` | number | No | 1.0 | Transaction fee percentage (0-100) |
+| `credit_limit` | number | No | 100.0 | Credit limit in the specified currency (>= 0, rounded to currency precision) |
+| `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
+| `description` | string | No | - | A short message sent with the contact request (max 255 characters). Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
 
 **Response (201 Created):**
 

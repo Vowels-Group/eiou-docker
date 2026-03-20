@@ -79,6 +79,89 @@ class InputValidatorTest extends TestCase
         $this->assertEquals(Constants::TRANSACTION_MAX_AMOUNT, $result['value']);
     }
 
+    public function testValidateAmountBelowMinimumAfterRounding(): void
+    {
+        // 0.001 USD rounds to 0.00 — should be rejected
+        $result = InputValidator::validateAmount(0.001, 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertNull($result['value']);
+        $this->assertStringContainsString('minimum', $result['error']);
+        $this->assertStringContainsString('0.01', $result['error']);
+    }
+
+    public function testValidateAmountBelowMinimumSmallFraction(): void
+    {
+        // 0.004 USD rounds to 0.00 — should be rejected
+        $result = InputValidator::validateAmount(0.004, 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('minimum', $result['error']);
+    }
+
+    public function testValidateAmountAtMinimum(): void
+    {
+        // 0.01 USD is the smallest valid amount
+        $result = InputValidator::validateAmount(0.01, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.01, $result['value']);
+    }
+
+    public function testValidateAmountRoundsUpToMinimum(): void
+    {
+        // 0.005 USD rounds to 0.01 — should pass
+        $result = InputValidator::validateAmount(0.005, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.01, $result['value']);
+    }
+
+    public function testValidateAmountErrorIncludesCurrencyCode(): void
+    {
+        $result = InputValidator::validateAmount(0.001, 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('USD', $result['error']);
+        $this->assertStringContainsString('0.01', $result['error']);
+    }
+
+    public function testValidateAmountBelowMinimumStringInput(): void
+    {
+        // String "0.001" should be handled the same as float
+        $result = InputValidator::validateAmount('0.001', 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('minimum', $result['error']);
+    }
+
+    public function testValidateAmountBelowMinimumBoundary(): void
+    {
+        // 0.0049 rounds to 0.00 (below 0.005 rounding threshold) — rejected
+        $result = InputValidator::validateAmount(0.0049, 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('minimum', $result['error']);
+    }
+
+    public function testValidateAmountRoundsValidAmount(): void
+    {
+        // 100.555 USD rounds to 100.56 (normal rounding, not sub-minimum)
+        $result = InputValidator::validateAmount(100.555, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(100.56, $result['value']);
+    }
+
+    public function testValidateAmountSmallValidAmount(): void
+    {
+        // 0.014 rounds to 0.01 — still valid (>= minimum)
+        $result = InputValidator::validateAmount(0.014, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.01, $result['value']);
+    }
+
     // =========================================================================
     // validateCurrency Tests
     // =========================================================================
@@ -500,6 +583,64 @@ class InputValidatorTest extends TestCase
     }
 
     // =========================================================================
+    // validateAmountFee Precision Tests
+    // =========================================================================
+
+    public function testValidateAmountFeeBelowMinimumAfterRounding(): void
+    {
+        // 0.001 USD rounds to 0.00 — should be rejected (fee must be > 0)
+        $result = InputValidator::validateAmountFee(0.001, 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertNull($result['value']);
+        $this->assertStringContainsString('minimum', $result['error']);
+        $this->assertStringContainsString('0.01', $result['error']);
+    }
+
+    public function testValidateAmountFeeAtMinimum(): void
+    {
+        $result = InputValidator::validateAmountFee(0.01, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.01, $result['value']);
+    }
+
+    public function testValidateAmountFeeErrorIncludesCurrencyCode(): void
+    {
+        $result = InputValidator::validateAmountFee(0.001, 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('USD', $result['error']);
+        $this->assertStringContainsString('0.01', $result['error']);
+    }
+
+    public function testValidateAmountFeeRoundsUpToMinimum(): void
+    {
+        // 0.005 USD rounds to 0.01 — should pass
+        $result = InputValidator::validateAmountFee(0.005, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.01, $result['value']);
+    }
+
+    public function testValidateAmountFeeStringBelowMinimum(): void
+    {
+        $result = InputValidator::validateAmountFee('0.004', 'USD');
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('minimum', $result['error']);
+    }
+
+    public function testValidateAmountFeeRoundsValidAmount(): void
+    {
+        // 5.999 rounds to 6.00 — valid
+        $result = InputValidator::validateAmountFee(5.999, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(6.0, $result['value']);
+    }
+
+    // =========================================================================
     // validateCreditLimit Tests
     // =========================================================================
 
@@ -533,6 +674,49 @@ class InputValidatorTest extends TestCase
 
         $this->assertFalse($result['valid']);
         $this->assertEquals('Credit limit exceeds maximum allowed value', $result['error']);
+    }
+
+    public function testValidateCreditLimitSubMinimumRoundsToZero(): void
+    {
+        // 0.001 USD rounds to 0.00 — valid because zero credit is allowed
+        $result = InputValidator::validateCreditLimit(0.001, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.0, $result['value']);
+    }
+
+    public function testValidateFeeAmountSubMinimumRoundsToZero(): void
+    {
+        // 0.001 USD rounds to 0.00 — valid because zero fee is allowed
+        $result = InputValidator::validateFeeAmount(0.001, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.0, $result['value']);
+    }
+
+    public function testValidateCreditLimitRoundsToPrecision(): void
+    {
+        // 100.555 USD rounds to 100.56
+        $result = InputValidator::validateCreditLimit(100.555, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(100.56, $result['value']);
+    }
+
+    public function testValidateCreditLimitNonNumeric(): void
+    {
+        $result = InputValidator::validateCreditLimit('abc');
+
+        $this->assertFalse($result['valid']);
+        $this->assertEquals('Credit limit must be a number', $result['error']);
+    }
+
+    public function testValidateCreditLimitStringInput(): void
+    {
+        $result = InputValidator::validateCreditLimit('500.00', 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(500.0, $result['value']);
     }
 
     // =========================================================================
