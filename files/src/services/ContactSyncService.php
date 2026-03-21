@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Database\TransactionContactRepository;
@@ -246,7 +247,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
         $name = $contactParams['name'];
         $fee = (int) $contactParams['fee'];
-        $credit = \Eiou\Core\SplitAmount::fromArray($contactParams['credit']);
+        $credit = SplitAmount::fromArray($contactParams['credit']);
         $currency = $contactParams['currency'];
 
         $status = $responseData['status'] ?? null;
@@ -796,7 +797,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function handleExistingContact(array $contact, string $address, string $name, int $fee, \Eiou\Core\SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
+    public function handleExistingContact(array $contact, string $address, string $name, int $fee, SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
         // $fee is a scaled integer (e.g., 10 for 0.1%), $credit is a SplitAmount
@@ -838,7 +839,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     try {
                         $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
                         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
-                        $this->contactCreditRepository->upsertAvailableCredit($pubkeyHash, \Eiou\Core\SplitAmount::fromMajorUnits((float) $availableCredit), $currency);
+                        $this->contactCreditRepository->upsertAvailableCredit($pubkeyHash, SplitAmount::fromMajorUnits((float) $availableCredit), $currency);
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to store initial credit for new currency", [
                             'currency' => $currency,
@@ -1146,7 +1147,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function handleNewContact(string $address, string $name, int $fee, \Eiou\Core\SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
+    public function handleNewContact(string $address, string $name, int $fee, SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
         // $fee is a scaled integer (e.g., 10 for 0.1%), $credit is a SplitAmount
@@ -1300,7 +1301,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         try {
                             $newCurrencyCreditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
                             $newCurrencyAvailableCredit = $newCurrencyCreditData['availableCreditByCurrency'][$currency] ?? 0;
-                            $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, \Eiou\Core\SplitAmount::fromMajorUnits((float) $newCurrencyAvailableCredit), $currency);
+                            $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, SplitAmount::fromMajorUnits((float) $newCurrencyAvailableCredit), $currency);
                         } catch (\Exception $e) {
                             Logger::getInstance()->log('Failed to store credit for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                         }
@@ -2106,9 +2107,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
             $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = \Eiou\Core\SplitAmount::zero();
+            $creditLimit = SplitAmount::zero();
             if ($this->contactCurrencyRepository !== null) {
-                $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+                $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
             }
 
             $availableCreditByCurrency[$currency] = $balance->add($creditLimit)->toMajorUnits();
@@ -2147,8 +2148,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
             foreach ($creditByCurrency as $cur => $credit) {
                 $creditSplit = (is_int($credit) || is_float($credit))
-                    ? \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit)
-                    : (\Eiou\Core\SplitAmount::from($credit) ?: \Eiou\Core\SplitAmount::fromMajorUnits(0.0));
+                    ? SplitAmount::fromMajorUnits((float) $credit)
+                    : (SplitAmount::from($credit) ?: SplitAmount::fromMajorUnits(0.0));
                 if ($calculatedAt !== null) {
                     $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                         $pubkeyHash,
@@ -2226,7 +2227,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $pubkeyHash = $pubkeyHash ?? hash(Constants::HASH_ALGORITHM, $pubkey);
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        \Eiou\Core\SplitAmount::fromMajorUnits((float) $availableCreditValue),
+                        SplitAmount::fromMajorUnits((float) $availableCreditValue),
                         $currency
                     );
                 } catch (\Exception $e) {

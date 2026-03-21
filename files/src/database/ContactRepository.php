@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use PDO;
 use PDOException;
@@ -525,7 +526,7 @@ class ContactRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @return float Credit limit (0 if not found)
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): \Eiou\Core\SplitAmount {
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): SplitAmount {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
         // Single row per (pubkey_hash, currency) — NULL means not yet configured
@@ -536,11 +537,11 @@ class ContactRepository extends AbstractRepository {
         if ($stmt) {
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($result && $result['credit_limit_whole'] !== null) {
-                return new \Eiou\Core\SplitAmount((int) $result['credit_limit_whole'], (int) ($result['credit_limit_frac'] ?? 0));
+                return new SplitAmount((int) $result['credit_limit_whole'], (int) ($result['credit_limit_frac'] ?? 0));
             }
         }
 
-        return \Eiou\Core\SplitAmount::zero();
+        return SplitAmount::zero();
     }
 
     /**

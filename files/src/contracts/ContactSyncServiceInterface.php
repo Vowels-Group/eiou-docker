@@ -4,6 +4,7 @@ namespace Eiou\Contracts;
 
 use Eiou\Cli\CliOutputManager;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Core\SplitAmount;
 use Eiou\Services\MessageDeliveryService;
 
 /**
@@ -84,7 +85,7 @@ interface ContactSyncServiceInterface
         string $address,
         string $name,
         int $fee,
-        \Eiou\Core\SplitAmount $credit,
+        SplitAmount $credit,
         string $currency,
         ?CliOutputManager $output = null,
         ?string $description = null
@@ -96,7 +97,7 @@ interface ContactSyncServiceInterface
      * @param string $address The contact's address
      * @param string $name The name to assign to the contact
      * @param int $fee The transaction fee (scaled by FEE_CONVERSION_FACTOR)
-     * @param \Eiou\Core\SplitAmount $credit The credit limit
+     * @param SplitAmount $credit The credit limit
      * @param string $currency The currency code
      * @param CliOutputManager|null $output Optional CLI output manager for feedback
      * @param string|null $description Optional description
@@ -106,7 +107,7 @@ interface ContactSyncServiceInterface
         string $address,
         string $name,
         int $fee,
-        \Eiou\Core\SplitAmount $credit,
+        SplitAmount $credit,
         string $currency,
         ?CliOutputManager $output = null,
         ?string $description = null

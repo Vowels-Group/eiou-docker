@@ -18,6 +18,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Schemas\Payloads\UtilPayload;
@@ -464,7 +465,7 @@ class MessageService implements MessageServiceInterface {
                             $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $cur);
                             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $cur);
                             $balance = $sentBalance->subtract($receivedBalance);
-                            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? \Eiou\Core\SplitAmount::zero();
+                            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? SplitAmount::zero();
                             $inquiryCreditByCurrency[$cur] = $balance->add($creditLimit)->toMajorUnits();
                         }
                     }
@@ -576,7 +577,7 @@ class MessageService implements MessageServiceInterface {
                     $sentBalance = $this->balanceRepository->getContactSentBalance($senderPublicKey, $acceptedCurrency);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPublicKey, $acceptedCurrency);
                     $balance = $sentBalance->subtract($receivedBalance);
-                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? \Eiou\Core\SplitAmount::zero();
+                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? SplitAmount::zero();
                     $ackCreditByCurrency[$acceptedCurrency] = $balance->add($creditLimit)->toMajorUnits();
                     $ackCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
                 } catch (\Exception $e) {
@@ -924,7 +925,7 @@ class MessageService implements MessageServiceInterface {
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
             $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
             $availableCredit = $balance->add($creditLimit)->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
@@ -968,7 +969,7 @@ class MessageService implements MessageServiceInterface {
             foreach ($creditByCurrency as $currency => $credit) {
                 $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                     $pubkeyHash,
-                    \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
+                    SplitAmount::fromMajorUnits((float) $credit),
                     $currency,
                     (int) $calculatedAt
                 );
@@ -1008,14 +1009,14 @@ class MessageService implements MessageServiceInterface {
                 if ($calculatedAt !== null) {
                     $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                         $pubkeyHash,
-                        \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
+                        SplitAmount::fromMajorUnits((float) $credit),
                         $currency,
                         (int) $calculatedAt
                     );
                 } else {
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
+                        SplitAmount::fromMajorUnits((float) $credit),
                         $currency
                     );
                 }

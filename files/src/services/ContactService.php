@@ -7,6 +7,8 @@ use Eiou\Cli\CliOutputManager;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\ContactManagementServiceInterface;
 use Eiou\Contracts\ContactSyncServiceInterface;
+use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Exceptions\ValidationServiceException; // Used by delegated services
 
 /**
@@ -299,9 +301,9 @@ class ContactService implements ContactServiceInterface
      *
      * @param string $senderPublicKey The sender's public key
      * @param string $currency Currency code
-     * @return \Eiou\Core\SplitAmount The credit limit
+     * @return SplitAmount The credit limit
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY): \Eiou\Core\SplitAmount
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): SplitAmount
     {
         return $this->managementService->getCreditLimit($senderPublicKey, $currency);
     }

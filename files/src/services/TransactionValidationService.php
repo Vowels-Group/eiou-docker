@@ -7,6 +7,7 @@ use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorHandler;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionServiceInterface;
@@ -263,7 +264,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
             $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
             $totalAvailable = $availableFunds->add($creditLimit);
-            $requestedAmount = \Eiou\Core\SplitAmount::from($request['amount']);
+            $requestedAmount = SplitAmount::from($request['amount']);
 
             if ($totalAvailable->lt($requestedAmount)) {
                 // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response

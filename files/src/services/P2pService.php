@@ -23,6 +23,7 @@ use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Schemas\Payloads\P2pPayload;
 use Eiou\Schemas\Payloads\Rp2pPayload;
 use Eiou\Schemas\Payloads\UtilPayload;
@@ -309,7 +310,7 @@ class P2pService implements P2pServiceInterface {
                 $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
 
                 $totalAvailable = $availableFunds->add($creditLimit);
-                $requestedAmountSplit = \Eiou\Core\SplitAmount::from($requestedAmount);
+                $requestedAmountSplit = SplitAmount::from($requestedAmount);
                 $totalNeeded = $requestedAmountSplit->add($fundsOnHold);
                 if ($totalAvailable->lt($totalNeeded)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
@@ -335,7 +336,7 @@ class P2pService implements P2pServiceInterface {
      * @param array $request The P2P request data
      * @return int Total amount needed for p2p transaction
      */
-    public function calculateRequestedAmount(array $request): \Eiou\Core\SplitAmount {
+    public function calculateRequestedAmount(array $request): SplitAmount {
          // Calculate total amount needed for p2p through user
         $address = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -357,7 +358,7 @@ class P2pService implements P2pServiceInterface {
             }
         }
 
-        $amount = \Eiou\Core\SplitAmount::from($request['amount']);
+        $amount = SplitAmount::from($request['amount']);
         $feeAmount = $this->currencyUtility->calculateFee($amount, $fee, $this->currentUser->getMinimumFee());
         return $amount->add($feeAmount);
     }
@@ -564,7 +565,7 @@ class P2pService implements P2pServiceInterface {
             } else {
                 // Calculate fees
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $request['feeAmount'] = $requestedAmount->subtract(\Eiou\Core\SplitAmount::from($request['amount']));
+                $request['feeAmount'] = $requestedAmount->subtract(SplitAmount::from($request['amount']));
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 // Max level boundary: requestLevel >= maxRequestLevel means the next hop
@@ -631,7 +632,7 @@ class P2pService implements P2pServiceInterface {
             // Create capacity reservation for this relay
             if ($this->capacityReservationRepository !== null) {
                 $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
-                $baseAmount = \Eiou\Core\SplitAmount::from($request['amount']);
+                $baseAmount = SplitAmount::from($request['amount']);
                 $totalAmount = $this->calculateRequestedAmount($request);
                 $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $this->capacityReservationRepository->createReservation(
@@ -756,7 +757,7 @@ class P2pService implements P2pServiceInterface {
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-        $data['amount'] = \Eiou\Core\SplitAmount::fromMajorUnits($validatedAmount);
+        $data['amount'] = SplitAmount::fromMajorUnits($validatedAmount);
 
         // Additional data preparation - Use cryptographically secure random
         try {
@@ -1458,7 +1459,7 @@ class P2pService implements P2pServiceInterface {
      * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey, ?string $currency = null): \Eiou\Core\SplitAmount {
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): SplitAmount {
         return $this->p2pRepository->getCreditInP2p($pubkey, $currency);
     }
 

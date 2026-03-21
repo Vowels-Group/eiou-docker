@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Utils\SecureSeedphraseDisplay;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Contracts\CliServiceInterface;
@@ -784,7 +785,7 @@ class CliService implements CliServiceInterface {
                 foreach($balances as $balance){
                     if ($contactResult) {
                         $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'], $balance['currency']);
-                        $contactNetBalance = \Eiou\Core\SplitAmount::zero();
+                        $contactNetBalance = SplitAmount::zero();
                         foreach($contactBalances as $cb){
                             $contactNetBalance = $contactNetBalance->add($cb['received']->subtract($cb['sent']));
                         }
@@ -836,7 +837,7 @@ class CliService implements CliServiceInterface {
                 foreach($balances as $balance){
                     if ($contactResult) {
                         $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
-                        $contactNetBalance = \Eiou\Core\SplitAmount::zero();
+                        $contactNetBalance = SplitAmount::zero();
                         foreach($contactBalances as $contactBalance){
                             $contactNetBalance = $contactNetBalance->add($contactBalance['received']->subtract($contactBalance['sent']));
                         }

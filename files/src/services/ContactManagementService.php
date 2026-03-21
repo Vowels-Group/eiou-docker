@@ -9,6 +9,7 @@ use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorCodes;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
@@ -248,7 +249,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
         $currency = $currencyValidation['value'];
-        $credit = \Eiou\Core\SplitAmount::fromMajorUnits($creditValidation['value']);
+        $credit = SplitAmount::fromMajorUnits($creditValidation['value']);
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -350,9 +351,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
                     $balance = $sentBalance->subtract($receivedBalance);
 
-                    $creditLimit = \Eiou\Core\SplitAmount::zero();
+                    $creditLimit = SplitAmount::zero();
                     if ($this->contactCurrencyRepository !== null) {
-                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
                     }
 
                     $availableCredit = $balance->add($creditLimit);
@@ -617,9 +618,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                     // Their available credit (calculated: sent - received + credit_limit)
                     if (isset($balancesByHash[$hash])) {
                         $b = $balancesByHash[$hash];
-                        $sent = $b['sent'] ?? \Eiou\Core\SplitAmount::zero();
-                        $received = $b['received'] ?? \Eiou\Core\SplitAmount::zero();
-                        $creditLimit = $result['credit_limit'] ?? \Eiou\Core\SplitAmount::zero();
+                        $sent = $b['sent'] ?? SplitAmount::zero();
+                        $received = $b['received'] ?? SplitAmount::zero();
+                        $creditLimit = $result['credit_limit'] ?? SplitAmount::zero();
                         $result['their_available_credit'] = $sent->subtract($received)->add($creditLimit)->toMajorUnits();
                     }
                 }
@@ -743,9 +744,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $balanceData = $this->balanceRepository->getContactBalanceByPubkeyHash($contactResult['pubkey_hash'], $firstCurrency);
                     if ($balanceData && count($balanceData) > 0) {
                         $b = $balanceData[0];
-                        $sent = $b['sent'] ?? \Eiou\Core\SplitAmount::zero();
-                        $received = $b['received'] ?? \Eiou\Core\SplitAmount::zero();
-                        $creditLimit = $currencies[0]['credit_limit'] ?? \Eiou\Core\SplitAmount::zero();
+                        $sent = $b['sent'] ?? SplitAmount::zero();
+                        $received = $b['received'] ?? SplitAmount::zero();
+                        $creditLimit = $currencies[0]['credit_limit'] ?? SplitAmount::zero();
                         $theirAvailableCredit = $sent->subtract($received)->add($creditLimit)->toMajorUnits();
                     }
                 } catch (\Exception $e) {
@@ -1330,7 +1331,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 }
                 if ($field === 'credit' || $field === 'all') {
                     $creditValue = ($field === 'credit') ? $value : $value3;
-                    $currencyFields['credit_limit'] = \Eiou\Core\SplitAmount::fromMajorUnits($creditValue);
+                    $currencyFields['credit_limit'] = SplitAmount::fromMajorUnits($creditValue);
                 }
                 if (!empty($currencyFields)) {
                     $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, $currencyFields);
@@ -1378,9 +1379,9 @@ class ContactManagementService implements ContactManagementServiceInterface
      *
      * @param string $senderPublicKey Sender's public key
      * @param string $currency Currency code
-     * @return \Eiou\Core\SplitAmount Credit limit
+     * @return SplitAmount Credit limit
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): \Eiou\Core\SplitAmount
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): SplitAmount
     {
         return $this->contactRepository->getCreditLimit($senderPublicKey, $currency);
     }
@@ -1426,8 +1427,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                 $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
                 $balance = $sentBalance->subtract($receivedBalance);
                 $creditLimit = $this->contactCurrencyRepository !== null
-                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero())
-                    : \Eiou\Core\SplitAmount::zero();
+                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero())
+                    : SplitAmount::zero();
                 $this->contactCreditRepository->upsertAvailableCredit(
                     $pubkeyHash,
                     $balance->add($creditLimit),
