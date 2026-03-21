@@ -83,34 +83,33 @@ interface ContactSyncServiceInterface
         array $contact,
         string $address,
         string $name,
-        float $fee,
-        float $credit,
+        int $fee,
+        \Eiou\Core\SplitAmount $credit,
         string $currency,
-        ?CliOutputManager $output = null
+        ?CliOutputManager $output = null,
+        ?string $description = null
     ): void;
 
     /**
      * Handle exchange for a new contact.
      *
-     * Called when initiating a new contact request. Creates the local
-     * contact record and sends the contact request message to the
-     * target address.
-     *
      * @param string $address The contact's address
      * @param string $name The name to assign to the contact
-     * @param float $fee The transaction fee for this contact
-     * @param float $credit The credit limit for this contact
+     * @param int $fee The transaction fee (scaled by FEE_CONVERSION_FACTOR)
+     * @param \Eiou\Core\SplitAmount $credit The credit limit
      * @param string $currency The currency code
      * @param CliOutputManager|null $output Optional CLI output manager for feedback
+     * @param string|null $description Optional description
      * @return void
      */
     public function handleNewContact(
         string $address,
         string $name,
-        float $fee,
-        float $credit,
+        int $fee,
+        \Eiou\Core\SplitAmount $credit,
         string $currency,
-        ?CliOutputManager $output = null
+        ?CliOutputManager $output = null,
+        ?string $description = null
     ): void;
 
     /**

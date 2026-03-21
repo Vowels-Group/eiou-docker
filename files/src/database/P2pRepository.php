@@ -97,10 +97,8 @@ class P2pRepository extends AbstractRepository {
     public function insertP2pRequest(array $request, ?string $destinationAddress = null, ?string $description = null): string {
         $status = $request['status'] ?? Constants::STATUS_INITIAL;
 
-        /** @var SplitAmount $amount */
-        $amount = $request['amount'];
-        /** @var SplitAmount|null $myFeeAmount */
-        $myFeeAmount = $request['feeAmount'] ?? null;
+        $amount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : (is_array($request['amount']) ? SplitAmount::fromArray($request['amount']) : SplitAmount::zero());
+        $myFeeAmount = isset($request['feeAmount']) ? (($request['feeAmount'] instanceof SplitAmount) ? $request['feeAmount'] : (is_array($request['feeAmount']) ? SplitAmount::fromArray($request['feeAmount']) : null)) : null;
 
         $data = [
             'hash' => $request['hash'],

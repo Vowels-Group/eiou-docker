@@ -706,11 +706,11 @@ class ContactController
                 try {
                     $sentBalance = $balanceRepo->getContactSentBalance($contactPubkey, $currency);
                     $receivedBalance = $balanceRepo->getContactReceivedBalance($contactPubkey, $currency);
-                    $balance = $sentBalance - $receivedBalance;
-                    $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                    $balance = $sentBalance->subtract($receivedBalance);
+                    $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
                     $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) ($balance + $creditLimit),
+                        $balance->add($creditLimit),
                         $currency
                     );
                 } catch (\Exception $e) {
@@ -846,11 +846,11 @@ class ContactController
                     try {
                         $sentBalance = $balanceRepo->getContactSentBalance($currentPubkey, $currency);
                         $receivedBalance = $balanceRepo->getContactReceivedBalance($currentPubkey, $currency);
-                        $balance = $sentBalance - $receivedBalance;
-                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                        $balance = $sentBalance->subtract($receivedBalance);
+                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
                         $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
                             $pubkeyHash,
-                            (int) ($balance + $creditLimit),
+                            $balance->add($creditLimit),
                             $currency
                         );
                     } catch (\Exception $e) {

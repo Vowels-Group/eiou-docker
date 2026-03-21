@@ -1042,7 +1042,9 @@ class Rp2pService implements Rp2pServiceInterface {
             // handleRp2pRequest adds the fee again, but the candidate amount
             // already includes our fee from handleRp2pCandidate, so subtract it
             if ($p2p) {
-                $request['amount'] -= ($p2p['my_fee_amount'] ?? 0);
+                $reqAmt = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+                $feeAmt = ($p2p['my_fee_amount'] instanceof \Eiou\Core\SplitAmount) ? $p2p['my_fee_amount'] : \Eiou\Core\SplitAmount::zero();
+                $request['amount'] = $reqAmt->subtract($feeAmt);
             }
 
             if ($this->handleRp2pRequest($request)) {

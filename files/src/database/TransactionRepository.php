@@ -709,8 +709,7 @@ class TransactionRepository extends AbstractRepository {
                 $previousTxid = $lookupResult ? $lookupResult['txid'] : null;
             }
 
-            /** @var SplitAmount $amount */
-            $amount = $request['amount'];
+            $amount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : (is_array($request['amount']) && isset($request['amount']['whole']) ? SplitAmount::fromArray($request['amount']) : SplitAmount::zero());
             $data = [
                 'tx_type' => $txType,
                 'type' => $type,

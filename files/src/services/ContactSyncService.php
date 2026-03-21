@@ -245,8 +245,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
         }
 
         $name = $contactParams['name'];
-        $fee = (float) $contactParams['fee'];
-        $credit = (float) $contactParams['credit'];
+        $fee = (int) $contactParams['fee'];
+        $credit = \Eiou\Core\SplitAmount::fromArray($contactParams['credit']);
         $currency = $contactParams['currency'];
 
         $status = $responseData['status'] ?? null;
@@ -300,7 +300,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             if ($this->contactCurrencyRepository !== null) {
                                 $this->contactCurrencyRepository->updateCurrencyConfig($senderPublicKeyHash, $currency, [
                                     'fee_percent' => (int) $fee,
-                                    'credit_limit' => (int) $credit,
+                                    'credit_limit' => $credit,
                                     'status' => 'accepted',
                                 ]);
                             }
@@ -320,7 +320,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                             if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
                                 $this->contactCurrencyRepository->insertCurrencyConfig(
-                                    $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                    $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
                                 );
                             }
                         }
@@ -339,7 +339,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                         if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
                             $this->contactCurrencyRepository->insertCurrencyConfig(
-                                $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
                             );
                         }
                     }
@@ -392,7 +392,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // Track outgoing currency request
                 if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                     $this->contactCurrencyRepository->insertCurrencyConfig(
-                        $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                        $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
                     );
                 }
 
@@ -746,15 +746,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
+    public function handleExistingContact(array $contact, string $address, string $name, int $fee, \Eiou\Core\SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
+        // $fee is a scaled integer (e.g., 10 for 0.1%), $credit is a SplitAmount
         // Build contact data for JSON response
         $contactData = [
             'address' => $address,
             'name' => $name,
             'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
-            'credit' => $credit ? $credit->toMajorUnits() : 0,
+            'credit' => $credit->toMajorUnits(),
             'currency' => $currency,
             'status' => $contact['status']
         ];
@@ -774,7 +775,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 // Accepting a pending incoming currency request — update the single row
                 $this->contactCurrencyRepository->updateCurrencyConfig($contact['pubkey_hash'], $currency, [
                     'fee_percent' => (int) $fee,
-                    'credit_limit' => (int) $credit,
+                    'credit_limit' => $credit,
                     'status' => 'accepted',
                 ]);
 
@@ -787,7 +788,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     try {
                         $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
                         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
-                        $this->contactCreditRepository->upsertAvailableCredit($pubkeyHash, (int) $availableCredit, $currency);
+                        $this->contactCreditRepository->upsertAvailableCredit($pubkeyHash, \Eiou\Core\SplitAmount::fromMajorUnits((float) $availableCredit), $currency);
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to store initial credit for new currency", [
                             'currency' => $currency,
@@ -873,7 +874,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                         if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
                             $this->contactCurrencyRepository->insertCurrencyConfig(
-                                $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                $contact['pubkey_hash'], $currency, (int) $fee, $credit, 'pending', 'outgoing'
                             );
                         }
                     }
@@ -974,7 +975,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         if ($this->contactCurrencyRepository !== null) {
                             $this->contactCurrencyRepository->updateCurrencyConfig($contact['pubkey_hash'], $currency, [
                                 'fee_percent' => (int) $fee,
-                                'credit_limit' => (int) $credit,
+                                'credit_limit' => $credit,
                                 'status' => 'accepted',
                             ]);
                         }
@@ -1030,7 +1031,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                         if (!$this->contactCurrencyRepository->hasCurrency($contact['pubkey_hash'], $currency, 'outgoing')) {
                             $this->contactCurrencyRepository->insertCurrencyConfig(
-                                $contact['pubkey_hash'], $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                $contact['pubkey_hash'], $currency, (int) $fee, $credit, 'pending', 'outgoing'
                             );
                         }
                     }
@@ -1095,15 +1096,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
+    public function handleNewContact(string $address, string $name, int $fee, \Eiou\Core\SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
+        // $fee is a scaled integer (e.g., 10 for 0.1%), $credit is a SplitAmount
         // Build contact data for JSON response
         $contactData = [
             'address' => $address,
             'name' => $name,
             'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
-            'credit' => $credit ? $credit->toMajorUnits() : 0,
+            'credit' => $credit->toMajorUnits(),
             'currency' => $currency
         ];
 
@@ -1118,7 +1120,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
         $payload['_contact_params'] = [
             'name' => $name,
             'fee' => $fee,
-            'credit' => $credit,
+            'credit' => $credit->toArray(),
             'currency' => $currency
         ];
 
@@ -1168,7 +1170,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             if ($this->contactCurrencyRepository !== null) {
                                 $this->contactCurrencyRepository->updateCurrencyConfig($senderPublicKeyHash, $currency, [
                                     'fee_percent' => (int) $fee,
-                                    'credit_limit' => (int) $credit,
+                                    'credit_limit' => $credit,
                                     'status' => 'accepted',
                                 ]);
                             }
@@ -1215,7 +1217,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                             if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
                                 $this->contactCurrencyRepository->insertCurrencyConfig(
-                                    $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                                    $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
                                 );
                             }
                         }
@@ -1237,7 +1239,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     if ($this->contactCurrencyRepository !== null) {
                         if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
                             $this->contactCurrencyRepository->insertCurrencyConfig(
-                                $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, $currencyStatus, 'outgoing'
+                                $senderPublicKeyHash, $currency, (int) $fee, $credit, $currencyStatus, 'outgoing'
                             );
                         }
                     }
@@ -1248,7 +1250,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         try {
                             $newCurrencyCreditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
                             $newCurrencyAvailableCredit = $newCurrencyCreditData['availableCreditByCurrency'][$currency] ?? 0;
-                            $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, (int) $newCurrencyAvailableCredit, $currency);
+                            $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, \Eiou\Core\SplitAmount::fromMajorUnits((float) $newCurrencyAvailableCredit), $currency);
                         } catch (\Exception $e) {
                             Logger::getInstance()->log('Failed to store credit for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                         }
@@ -1297,7 +1299,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // This records that WE requested this currency from them (direction=outgoing)
                     if ($this->contactCurrencyRepository !== null && !empty($currency)) {
                         $this->contactCurrencyRepository->insertCurrencyConfig(
-                            $senderPublicKeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing'
+                            $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
                         );
                     }
 
@@ -2052,14 +2054,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
             $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
-            $balance = $sentBalance - $receivedBalance;
+            $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = 0;
+            $creditLimit = \Eiou\Core\SplitAmount::zero();
             if ($this->contactCurrencyRepository !== null) {
-                $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
             }
 
-            $availableCreditByCurrency[$currency] = $balance + $creditLimit;
+            $availableCreditByCurrency[$currency] = $balance->add($creditLimit)->toMajorUnits();
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Failed to calculate available credit for contact", [
                 'error' => $e->getMessage()
@@ -2094,17 +2096,18 @@ class ContactSyncService implements ContactSyncServiceInterface {
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
             foreach ($creditByCurrency as $cur => $credit) {
+                $creditSplit = ($credit instanceof \Eiou\Core\SplitAmount) ? $credit : \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit);
                 if ($calculatedAt !== null) {
                     $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                         $pubkeyHash,
-                        (int) $credit,
+                        $creditSplit,
                         $cur,
                         (int) $calculatedAt
                     );
                 } else {
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) $credit,
+                        $creditSplit,
                         $cur
                     );
                 }
@@ -2126,7 +2129,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @return bool Success status
      */
-    private function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency): bool {
+    private function acceptContact(string $pubkey, string $name, int $fee, $credit, string $currency): bool {
         $success = $this->contactRepository->acceptContact($pubkey, $name, $fee, $credit, $currency);
         if($success){
             // Addresses already saved, just need to add initial contact balances
@@ -2137,12 +2140,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 $pubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
                 if (!$this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency)) {
                     $this->contactCurrencyRepository->insertCurrencyConfig(
-                        $pubkeyHash, $currency, (int) $fee, (int) $credit, 'accepted', 'incoming'
+                        $pubkeyHash, $currency, (int) $fee, $credit, 'accepted', 'incoming'
                     );
                 } else {
                     $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, [
                         'fee_percent' => (int) $fee,
-                        'credit_limit' => (int) $credit,
+                        'credit_limit' => $credit,
                         'status' => 'accepted',
                     ]);
                 }
@@ -2167,11 +2170,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
             if ($this->contactCreditRepository !== null) {
                 try {
                     $creditData = $this->calculateAvailableCreditForContact($pubkey, $currency);
-                    $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
+                    $availableCreditValue = $creditData['availableCreditByCurrency'][$currency] ?? 0;
                     $pubkeyHash = $pubkeyHash ?? hash(Constants::HASH_ALGORITHM, $pubkey);
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) $availableCredit,
+                        \Eiou\Core\SplitAmount::fromMajorUnits((float) $availableCreditValue),
                         $currency
                     );
                 } catch (\Exception $e) {

@@ -723,10 +723,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
             $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
-            $balance = $sentBalance - $receivedBalance;
+            $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
-            $availableCredit = $balance + $creditLimit;
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+            $availableCredit = $balance->add($creditLimit)->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
             $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();

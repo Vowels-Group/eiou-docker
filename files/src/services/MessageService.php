@@ -463,9 +463,9 @@ class MessageService implements MessageServiceInterface {
                             $cur = $cc['currency'];
                             $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $cur);
                             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $cur);
-                            $balance = $sentBalance - $receivedBalance;
+                            $balance = $sentBalance->subtract($receivedBalance);
                             $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? 0;
-                            $inquiryCreditByCurrency[$cur] = $balance + $creditLimit;
+                            $inquiryCreditByCurrency[$cur] = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
                         }
                     }
                     if (!empty($inquiryCreditByCurrency)) {
@@ -575,9 +575,9 @@ class MessageService implements MessageServiceInterface {
                     $ackSenderPubkeyHash = $senderPubkeyHash ?? hash(Constants::HASH_ALGORITHM, $senderPublicKey);
                     $sentBalance = $this->balanceRepository->getContactSentBalance($senderPublicKey, $acceptedCurrency);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPublicKey, $acceptedCurrency);
-                    $balance = $sentBalance - $receivedBalance;
+                    $balance = $sentBalance->subtract($receivedBalance);
                     $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? 0;
-                    $ackCreditByCurrency[$acceptedCurrency] = $balance + $creditLimit;
+                    $ackCreditByCurrency[$acceptedCurrency] = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
                     $ackCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
                 } catch (\Exception $e) {
                     Logger::getInstance()->warning("Failed to calculate available credit for acceptance ack", [
@@ -922,10 +922,10 @@ class MessageService implements MessageServiceInterface {
 
             $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
-            $balance = $sentBalance - $receivedBalance;
+            $balance = $sentBalance->subtract($receivedBalance);
 
             $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
-            $availableCredit = $balance + $creditLimit;
+            $availableCredit = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
             $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();
@@ -968,7 +968,7 @@ class MessageService implements MessageServiceInterface {
             foreach ($creditByCurrency as $currency => $credit) {
                 $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                     $pubkeyHash,
-                    (int) $credit,
+                    \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
                     $currency,
                     (int) $calculatedAt
                 );
@@ -1008,14 +1008,14 @@ class MessageService implements MessageServiceInterface {
                 if ($calculatedAt !== null) {
                     $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                         $pubkeyHash,
-                        (int) $credit,
+                        \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
                         $currency,
                         (int) $calculatedAt
                     );
                 } else {
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) $credit,
+                        \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
                         $currency
                     );
                 }

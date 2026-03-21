@@ -58,7 +58,7 @@ class ContactRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @return bool Success status
      */
-    public function acceptContact(string $senderPublicKey, string $name, float $fee, float $credit, string $currency): bool {
+    public function acceptContact(string $senderPublicKey, string $name, $fee, $credit, string $currency): bool {
         $data = [
             'name' => $name,
             'status' => 'accepted',
@@ -556,8 +556,8 @@ class ContactRepository extends AbstractRepository {
     public function insertContact(
         string $contactPublicKey,
         string $name,
-        float $fee,
-        float $credit,
+        $fee,
+        $credit,
         string $currency
     ): bool {
         $data = [
@@ -1206,8 +1206,8 @@ class ContactRepository extends AbstractRepository {
     public function updateUnblockContact(
         string $pubkey,
         string $name,
-        float $fee,
-        float $credit,
+        $fee,
+        $credit,
         string $currency
     ): bool {
         $data = [

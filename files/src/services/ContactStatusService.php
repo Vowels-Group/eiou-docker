@@ -293,13 +293,13 @@ class ContactStatusService implements ContactStatusServiceInterface {
                                     try {
                                         $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
                                         $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
-                                        $balance = $sentBalance - $receivedBalance;
+                                        $balance = $sentBalance->subtract($receivedBalance);
                                         $creditLimit = $this->contactCurrencyRepository !== null
-                                            ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur) ?? 0)
-                                            : 0;
+                                            ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur) ?? \Eiou\Core\SplitAmount::zero())
+                                            : \Eiou\Core\SplitAmount::zero();
                                         $this->contactCreditRepository->upsertAvailableCredit(
                                             $pubkeyHash,
-                                            (int) ($balance + $creditLimit),
+                                            $balance->add($creditLimit),
                                             $cur
                                         );
                                     } catch (\Exception $e) {
@@ -356,11 +356,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
                                 try {
                                     $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
                                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
-                                    $balance = $sentBalance - $receivedBalance;
+                                    $balance = $sentBalance->subtract($receivedBalance);
                                     $creditLimit = $this->contactCurrencyRepository !== null
-                                        ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur) ?? 0)
-                                        : 0;
-                                    $restoredAvailableCreditByCurrency[$cur] = $balance + $creditLimit;
+                                        ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur) ?? \Eiou\Core\SplitAmount::zero())
+                                        : \Eiou\Core\SplitAmount::zero();
+                                    $restoredAvailableCreditByCurrency[$cur] = $balance->add($creditLimit)->toMajorUnits();
                                 } catch (\Exception $e) {
                                     // Non-fatal
                                 }
@@ -477,14 +477,14 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 foreach ($contactCurrencies as $cur) {
                     $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
-                    $balance = $sentBalance - $receivedBalance;
+                    $balance = $sentBalance->subtract($receivedBalance);
 
                     // Get the credit limit we set for this contact in this currency
                     $creditLimit = 0;
                     if ($this->contactCurrencyRepository !== null) {
                         $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur);
                     }
-                    $availableCreditByCurrency[$cur] = $balance + $creditLimit;
+                    $availableCreditByCurrency[$cur] = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
                 }
             } catch (\Exception $e) {
                 Logger::getInstance()->warning("Failed to calculate available credit for ping response", [
@@ -805,7 +805,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
             foreach ($creditByCurrency as $currency => $credit) {
                 $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                     $pubkeyHash,
-                    (int) $credit,
+                    \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
                     $currency,
                     (int) $pongTime
                 );

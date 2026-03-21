@@ -348,17 +348,17 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $pubkeyHash = $pubkeyHash ?? hash(Constants::HASH_ALGORITHM, $pubkey);
                     $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
-                    $balance = $sentBalance - $receivedBalance;
+                    $balance = $sentBalance->subtract($receivedBalance);
 
-                    $creditLimit = 0;
+                    $creditLimit = \Eiou\Core\SplitAmount::zero();
                     if ($this->contactCurrencyRepository !== null) {
-                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
                     }
 
-                    $availableCredit = $balance + $creditLimit;
+                    $availableCredit = $balance->add($creditLimit);
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) $availableCredit,
+                        $availableCredit,
                         $currency
                     );
                 } catch (\Exception $e) {
@@ -1424,13 +1424,13 @@ class ContactManagementService implements ContactManagementServiceInterface
             try {
                 $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
                 $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
-                $balance = $sentBalance - $receivedBalance;
+                $balance = $sentBalance->subtract($receivedBalance);
                 $creditLimit = $this->contactCurrencyRepository !== null
-                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0)
-                    : 0;
+                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero())
+                    : \Eiou\Core\SplitAmount::zero();
                 $this->contactCreditRepository->upsertAvailableCredit(
                     $pubkeyHash,
-                    (int) ($balance + $creditLimit),
+                    $balance->add($creditLimit),
                     $currency
                 );
             } catch (\Exception $e) {

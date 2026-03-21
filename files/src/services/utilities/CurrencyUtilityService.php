@@ -95,21 +95,20 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
     }
 
     /**
-     * Convert major units to SplitAmount (static convenience).
-     * Replaces the old exactMajorToMinor that returned int.
+     * Convert major units to storage representation.
+     *
+     * For monetary amounts (factor = INTERNAL_CONVERSION_FACTOR): returns SplitAmount.
+     * For fee percentages (factor = FEE_CONVERSION_FACTOR): returns int (scaled integer,
+     * not a monetary amount — e.g., 0.01% → 1, 2.50% → 250).
      *
      * @param float $majorUnits Amount in major units
-     * @param int $factor Conversion factor (ignored — always uses SplitAmount)
-     * @return SplitAmount
+     * @param int $factor Conversion factor
+     * @return SplitAmount|int SplitAmount for amounts, int for fee percentages
      */
-    public static function exactMajorToMinor(float $majorUnits, int $factor): SplitAmount
+    public static function exactMajorToMinor(float $majorUnits, int $factor): SplitAmount|int
     {
-        // For fee_percent conversions where factor is FEE_CONVERSION_FACTOR (100),
-        // we still need the old integer behavior — fee_percent is a simple scaled int,
-        // not a monetary amount (e.g., 0.01% → stored as 1, 2.50% → stored as 250).
         if ($factor === Constants::FEE_CONVERSION_FACTOR) {
-            $result = (int) \bcmul((string) $majorUnits, (string) $factor, 0);
-            return new SplitAmount($result, 0);
+            return (int) \bcmul((string) $majorUnits, (string) $factor, 0);
         }
         return SplitAmount::fromMajorUnits($majorUnits);
     }
