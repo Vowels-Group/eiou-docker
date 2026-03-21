@@ -129,6 +129,27 @@ class SplitAmount implements \JsonSerializable
     }
 
     /**
+     * Universal factory — accepts any representation and returns a SplitAmount.
+     *
+     * Handles: SplitAmount (passthrough), {whole,frac} array (from JSON/payload),
+     * or null (returns zero). This is the single conversion point for all
+     * SplitAmount ↔ JSON/array boundaries.
+     *
+     * @param self|array|null $value Any amount representation
+     * @return self
+     */
+    public static function from(self|array|null $value): self
+    {
+        if ($value instanceof self) {
+            return $value;
+        }
+        if (is_array($value) && (isset($value['whole']) || isset($value['frac']))) {
+            return new self((int) ($value['whole'] ?? 0), (int) ($value['frac'] ?? 0));
+        }
+        return self::zero();
+    }
+
+    /**
      * Create from database row columns (whole + frac).
      */
     public static function fromDb(int $whole, int $frac): self

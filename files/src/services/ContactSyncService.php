@@ -2096,7 +2096,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
             foreach ($creditByCurrency as $cur => $credit) {
-                $creditSplit = ($credit instanceof \Eiou\Core\SplitAmount) ? $credit : \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit);
+                $creditSplit = \Eiou\Core\SplitAmount::from($credit) ?: \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit);
                 if ($calculatedAt !== null) {
                     $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                         $pubkeyHash,

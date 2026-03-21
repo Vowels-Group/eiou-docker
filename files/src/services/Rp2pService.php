@@ -290,7 +290,7 @@ class Rp2pService implements Rp2pServiceInterface {
             // Each relay charges its fee on the total including downstream fees, not the original base.
             // The exact rounded fee is saved to my_fee_amount so TransactionService::removeTransactionFee()
             // subtracts the identical value — preventing rounding discrepancies.
-            $requestAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+            $requestAmount = \Eiou\Core\SplitAmount::from($request['amount']);
             $recalculatedFee = $this->calculateFeeForP2p($p2p, $requestAmount);
             $this->p2pRepository->updateFeeAmount($request['hash'], $recalculatedFee);
             $request['amount'] = $requestAmount->add($recalculatedFee);
@@ -301,7 +301,7 @@ class Rp2pService implements Rp2pServiceInterface {
             $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
             $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
             $totalAvailable = $availableFunds->add($creditLimit);
-            $requestAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+            $requestAmount = \Eiou\Core\SplitAmount::from($request['amount']);
             if($totalAvailable->lt($requestAmount)){
                 output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 return false;
@@ -405,7 +405,7 @@ class Rp2pService implements Rp2pServiceInterface {
                             $feePercent = $contactFee / Constants::FEE_CONVERSION_FACTOR;
                         }
                     }
-                    $baseAmountSplit = ($baseAmount instanceof \Eiou\Core\SplitAmount) ? $baseAmount : \Eiou\Core\SplitAmount::fromArray($baseAmount);
+                    $baseAmountSplit = \Eiou\Core\SplitAmount::from($baseAmount);
                     $senderFee = $currencyUtility->calculateFee($baseAmountSplit, $feePercent, $minimumFee);
 
                     // Build per-sender RP2P payload with the correct fee
@@ -608,7 +608,7 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Recalculate fee on the accumulated RP2P amount (multiplicative/compounding fees).
         // Same logic as handleRp2pRequest — fee is based on accumulated total, not original base.
-        $requestAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+        $requestAmount = \Eiou\Core\SplitAmount::from($request['amount']);
         $feeAmount = $this->calculateFeeForP2p($p2p, $requestAmount);
         $this->p2pRepository->updateFeeAmount($request['hash'], $feeAmount);
         $request['amount'] = $requestAmount->add($feeAmount);
@@ -618,7 +618,7 @@ class Rp2pService implements Rp2pServiceInterface {
             $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
             $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
             $totalAvailable = $availableFunds->add($creditLimit);
-            $candidateAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+            $candidateAmount = \Eiou\Core\SplitAmount::from($request['amount']);
             if ($totalAvailable->lt($candidateAmount)) {
                 output(outputP2pUnableToAffordRp2p($p2p, $request), 'SILENT');
                 return;
@@ -1042,8 +1042,8 @@ class Rp2pService implements Rp2pServiceInterface {
             // handleRp2pRequest adds the fee again, but the candidate amount
             // already includes our fee from handleRp2pCandidate, so subtract it
             if ($p2p) {
-                $reqAmt = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
-                $feeAmt = ($p2p['my_fee_amount'] instanceof \Eiou\Core\SplitAmount) ? $p2p['my_fee_amount'] : \Eiou\Core\SplitAmount::zero();
+                $reqAmt = \Eiou\Core\SplitAmount::from($request['amount']);
+                $feeAmt = \Eiou\Core\SplitAmount::from($p2p['my_fee_amount']);
                 $request['amount'] = $reqAmt->subtract($feeAmt);
             }
 
@@ -1142,11 +1142,11 @@ class Rp2pService implements Rp2pServiceInterface {
      * @return float Fee percent of request
     */
     public function feeInformation(array $p2p, array $request): float {
-        $p2pAmount = ($p2p['amount'] instanceof \Eiou\Core\SplitAmount) ? $p2p['amount'] : \Eiou\Core\SplitAmount::fromArray($p2p['amount']);
+        $p2pAmount = \Eiou\Core\SplitAmount::from($p2p['amount']);
         if ($p2pAmount->isZero()) {
             return 0.0;
         }
-        $requestAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+        $requestAmount = \Eiou\Core\SplitAmount::from($request['amount']);
         $feeAmount = $requestAmount->subtract($p2pAmount);
         $feePercent = round(($feeAmount->toMajorUnits() / $p2pAmount->toMajorUnits()) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
         output(outputFeeInformation($feePercent,$request,$this->currentUser->getMaxFee()), 'SILENT');

@@ -263,7 +263,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
             $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
             $totalAvailable = $availableFunds->add($creditLimit);
-            $requestedAmount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromMajorUnits((float) $request['amount']);
+            $requestedAmount = \Eiou\Core\SplitAmount::from($request['amount']);
 
             if ($totalAvailable->lt($requestedAmount)) {
                 // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response

@@ -309,7 +309,7 @@ class P2pService implements P2pServiceInterface {
                 $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
 
                 $totalAvailable = $availableFunds->add($creditLimit);
-                $requestedAmountSplit = ($requestedAmount instanceof \Eiou\Core\SplitAmount) ? $requestedAmount : \Eiou\Core\SplitAmount::fromArray($requestedAmount);
+                $requestedAmountSplit = \Eiou\Core\SplitAmount::from($requestedAmount);
                 $totalNeeded = $requestedAmountSplit->add($fundsOnHold);
                 if ($totalAvailable->lt($totalNeeded)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
@@ -357,7 +357,7 @@ class P2pService implements P2pServiceInterface {
             }
         }
 
-        $amount = ($request['amount'] instanceof \Eiou\Core\SplitAmount) ? $request['amount'] : \Eiou\Core\SplitAmount::fromArray($request['amount']);
+        $amount = \Eiou\Core\SplitAmount::from($request['amount']);
         $feeAmount = $this->currencyUtility->calculateFee($amount, $fee, $this->currentUser->getMinimumFee());
         return $amount->add($feeAmount);
     }

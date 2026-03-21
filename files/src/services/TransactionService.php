@@ -247,8 +247,8 @@ class TransactionService implements TransactionServiceInterface {
 
     public function removeTransactionFee(array $request): SplitAmount {
         $p2p = $this->p2pRepository->getByHash($request['memo']);
-        $amount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : SplitAmount::fromArray($request['amount']);
-        $feeAmount = ($p2p['my_fee_amount'] instanceof SplitAmount) ? $p2p['my_fee_amount'] : SplitAmount::fromArray($p2p['my_fee_amount']);
+        $amount = SplitAmount::from($request['amount']);
+        $feeAmount = SplitAmount::from($p2p['my_fee_amount']);
         return $amount->subtract($feeAmount);
     }
 
@@ -447,7 +447,7 @@ class TransactionService implements TransactionServiceInterface {
         $available = $validationUtility->calculateAvailableFunds($request);
         $credit = $this->contactRepository->getCreditLimit($request['senderPublicKey'], $request['currency']);
         $totalAvailable = $available->add($credit);
-        $requestAmount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : SplitAmount::fromMajorUnits((float) $request['amount']);
+        $requestAmount = SplitAmount::from($request['amount']);
         return $totalAvailable->gte($requestAmount);
     }
 

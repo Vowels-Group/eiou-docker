@@ -75,7 +75,7 @@ class Rp2pRepository extends AbstractRepository {
      * @return string JSON response
      */
     public function insertRp2pRequest(array $request): string {
-        $amount = ($request['amount'] instanceof SplitAmount) ? $request['amount'] : (is_array($request['amount']) ? SplitAmount::fromArray($request['amount']) : SplitAmount::zero());
+        $amount = SplitAmount::from($request['amount']);
         $data = [
             'hash' => $request['hash'],
             'time' => $request['time'],
