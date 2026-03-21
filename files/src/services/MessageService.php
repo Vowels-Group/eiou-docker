@@ -464,8 +464,8 @@ class MessageService implements MessageServiceInterface {
                             $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $cur);
                             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $cur);
                             $balance = $sentBalance->subtract($receivedBalance);
-                            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? 0;
-                            $inquiryCreditByCurrency[$cur] = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
+                            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? \Eiou\Core\SplitAmount::zero();
+                            $inquiryCreditByCurrency[$cur] = $balance->add($creditLimit)->toMajorUnits();
                         }
                     }
                     if (!empty($inquiryCreditByCurrency)) {
@@ -576,8 +576,8 @@ class MessageService implements MessageServiceInterface {
                     $sentBalance = $this->balanceRepository->getContactSentBalance($senderPublicKey, $acceptedCurrency);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPublicKey, $acceptedCurrency);
                     $balance = $sentBalance->subtract($receivedBalance);
-                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? 0;
-                    $ackCreditByCurrency[$acceptedCurrency] = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
+                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? \Eiou\Core\SplitAmount::zero();
+                    $ackCreditByCurrency[$acceptedCurrency] = $balance->add($creditLimit)->toMajorUnits();
                     $ackCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
                 } catch (\Exception $e) {
                     Logger::getInstance()->warning("Failed to calculate available credit for acceptance ack", [
@@ -924,8 +924,8 @@ class MessageService implements MessageServiceInterface {
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
             $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
-            $availableCredit = $balance->add($creditLimit ?? \Eiou\Core\SplitAmount::zero())->toMajorUnits();
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+            $availableCredit = $balance->add($creditLimit)->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
             $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();

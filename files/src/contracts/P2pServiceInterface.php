@@ -56,9 +56,9 @@ interface P2pServiceInterface
      * Get the total credit in P2P for a public key.
      *
      * @param string $pubkey The public key to check
-     * @return float The total credit amount in P2P
+     * @return \Eiou\Core\SplitAmount The total credit amount in P2P
      */
-    public function getCreditInP2p(string $pubkey, ?string $currency = null): float;
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): \Eiou\Core\SplitAmount;
 
     /**
      * Get P2P statistics.

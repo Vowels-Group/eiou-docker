@@ -2,6 +2,20 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
+
+/**
+ * Convert an amount (SplitAmount, serialized array, or legacy int) to display value.
+ */
+function displayAmount($amount, string $currency = 'USD'): float {
+    if ($amount instanceof SplitAmount) {
+        return $amount->toMajorUnits();
+    }
+    if (is_array($amount) && isset($amount['whole'])) {
+        return (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)))->toMajorUnits();
+    }
+    return $amount / Constants::getConversionFactor($currency);
+}
 
 // ============================================================================
 // CONTACT SERVICE OUTPUT FUNCTIONS
@@ -152,7 +166,7 @@ function outputResponseTransactionTimes(int $httpExpectedResponseTime, int $torE
 }
 
 function outputSendTransaction(array $payload): string {
-    return "[Transaction] Sending " . $payload['amount']/Constants::getConversionFactor($payload['currency']) . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
+    return "[Transaction] Sending " . displayAmount($payload['amount'], $payload['currency']) . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
 }
 
 function outputSendTransactionCompletionMessageMemo(array $message): string {
@@ -172,7 +186,7 @@ function outputSendTransactionOnwards(array $message): string {
 }
 
 function outputTransactionAmountReceived(array $message): string {
-    return "[Transaction] Received " . $message['amount']/Constants::getConversionFactor($message['currency']) . " " . $message['currency'] . " from " . $message['sender_address']."\n";
+    return "[Transaction] Received " . displayAmount($message['amount'], $message['currency']) . " " . $message['currency'] . " from " . $message['sender_address']."\n";
 }
 
 function outputTransactionExpired(array $message): string {
@@ -188,11 +202,11 @@ function outputTransactionInquiryResponse(array $response): string {
 }
 
 function outputTransactionP2pSentSuccesfully(array $p2p): string {
-    return "[Transaction] Sent " . $p2p['amount']/Constants::getConversionFactor($p2p['currency']) . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
+    return "[Transaction] Sent " . displayAmount($p2p['amount'], $p2p['currency']) . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
 }
 
 function outputTransactionDirectSentSuccesfully(array $data): string {
-    return "[Transaction] Sent " . $data['amount']/Constants::getConversionFactor($data['currency']) . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
+    return "[Transaction] Sent " . displayAmount($data['amount'], $data['currency']) . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
 }
 
 function outputTransactionDescriptionUpdated(string $description, string $typeTransaction, string $memo): string {

@@ -9,6 +9,7 @@
 namespace Eiou\Utils;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 
 class InputValidator {
@@ -38,6 +39,13 @@ class InputValidator {
      * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
      */
     public static function validateAmount($amount, $currency = 'USD'): array {
+        // Handle SplitAmount objects and {whole, frac} arrays from network payloads
+        if ($amount instanceof SplitAmount) {
+            $amount = $amount->toMajorUnits();
+        } elseif (is_array($amount) && isset($amount['whole'])) {
+            $amount = (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)))->toMajorUnits();
+        }
+
         // Check if amount is numeric
         if (!is_numeric($amount)) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be a number'];
@@ -70,6 +78,13 @@ class InputValidator {
      * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
      */
     public static function validateAmountFee($amount, $currency = 'USD'): array {
+        // Handle SplitAmount objects and {whole, frac} arrays from network payloads
+        if ($amount instanceof SplitAmount) {
+            $amount = $amount->toMajorUnits();
+        } elseif (is_array($amount) && isset($amount['whole'])) {
+            $amount = (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)))->toMajorUnits();
+        }
+
         // Check if amount is numeric
         if (!is_numeric($amount)) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be a number'];
@@ -106,6 +121,13 @@ class InputValidator {
      * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
      */
     public static function validateFeeAmount($amount, $currency = 'USD'): array {
+        // Handle SplitAmount objects and {whole, frac} arrays from network payloads
+        if ($amount instanceof SplitAmount) {
+            $amount = $amount->toMajorUnits();
+        } elseif (is_array($amount) && isset($amount['whole'])) {
+            $amount = (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)))->toMajorUnits();
+        }
+
         if (!is_numeric($amount)) {
             return ['valid' => false, 'value' => null, 'error' => 'Fee amount must be a number'];
         }

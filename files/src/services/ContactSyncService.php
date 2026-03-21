@@ -332,8 +332,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             'pending_incoming' => $pendingIncomingCurrencies
                         ]);
                     }
-                } elseif ($status === Constants::DELIVERY_RECEIVED) {
-                    // Remote received our request — update name, store outgoing currency
+                } elseif ($status === Constants::DELIVERY_RECEIVED || $status === Constants::DELIVERY_WARNING) {
+                    // Remote received our request (or already had us) — update name, store outgoing currency
                     $this->contactRepository->updateContactFields($senderPublicKey, ['name' => $name]);
 
                     if ($this->contactCurrencyRepository !== null && !empty($currency)) {
@@ -347,9 +347,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Initialize balance for this currency if not already done
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
-                    Logger::getInstance()->info("Contact name updated after retry delivery (received)", [
+                    Logger::getInstance()->info("Contact name updated after retry delivery (received/warning)", [
                         'pubkey_hash' => $senderPublicKeyHash,
-                        'name' => $name
+                        'name' => $name,
+                        'response_status' => $status
                     ]);
                 } else {
                     // Other status — just update the name
@@ -460,8 +461,57 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     'name' => $name
                 ]);
             }
+        } elseif ($status === Constants::DELIVERY_WARNING) {
+            // Remote already has us as a contact ("contact already exists").
+            // This typically happens when our initial async send was received by the remote
+            // (or they added us independently) but we never got the response back.
+            // We still need to insert the contact locally — treat like DELIVERY_RECEIVED.
+            if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                    $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                }
+
+                $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+                    $this->contactCurrencyRepository->insertCurrencyConfig(
+                        $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
+                    );
+                }
+
+                $txid = $responseData['txid'] ?? null;
+                $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+
+                if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                    $this->transactionRepository->updateSignatureData(
+                        $txid,
+                        $signingData['signature'],
+                        $signingData['nonce']
+                    );
+                }
+
+                // Store recipient signature if included (re-add scenario provides it)
+                $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
+
+                if ($this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                }
+
+                Logger::getInstance()->info("Contact created after retry delivery (remote already had us)", [
+                    'pubkey_hash' => $senderPublicKeyHash,
+                    'name' => $name,
+                    'currency' => $currency
+                ]);
+            } else {
+                Logger::getInstance()->error("Failed to insert contact after retry delivery (warning status)", [
+                    'message_id' => $messageId,
+                    'pubkey_hash' => $senderPublicKeyHash
+                ]);
+            }
         } else {
-            // Other statuses (updated, warning, rejected) — log for investigation
+            // Other statuses (updated, rejected) — log for investigation
             Logger::getInstance()->warning("Unhandled contact response status after retry delivery", [
                 'message_id' => $messageId,
                 'status' => $status,
@@ -2096,7 +2146,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
             foreach ($creditByCurrency as $cur => $credit) {
-                $creditSplit = \Eiou\Core\SplitAmount::from($credit) ?: \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit);
+                $creditSplit = (is_int($credit) || is_float($credit))
+                    ? \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit)
+                    : (\Eiou\Core\SplitAmount::from($credit) ?: \Eiou\Core\SplitAmount::fromMajorUnits(0.0));
                 if ($calculatedAt !== null) {
                     $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                         $pubkeyHash,

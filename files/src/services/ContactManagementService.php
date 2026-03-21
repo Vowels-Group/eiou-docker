@@ -1378,9 +1378,9 @@ class ContactManagementService implements ContactManagementServiceInterface
      *
      * @param string $senderPublicKey Sender's public key
      * @param string $currency Currency code
-     * @return float Credit limit
+     * @return \Eiou\Core\SplitAmount Credit limit
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): \Eiou\Core\SplitAmount
     {
         return $this->contactRepository->getCreditLimit($senderPublicKey, $currency);
     }

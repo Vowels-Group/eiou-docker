@@ -335,7 +335,7 @@ class P2pService implements P2pServiceInterface {
      * @param array $request The P2P request data
      * @return int Total amount needed for p2p transaction
      */
-    public function calculateRequestedAmount(array $request): int {
+    public function calculateRequestedAmount(array $request): \Eiou\Core\SplitAmount {
          // Calculate total amount needed for p2p through user
         $address = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -564,7 +564,7 @@ class P2pService implements P2pServiceInterface {
             } else {
                 // Calculate fees
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $request['feeAmount'] = $requestedAmount - $request['amount'];
+                $request['feeAmount'] = $requestedAmount->subtract(\Eiou\Core\SplitAmount::from($request['amount']));
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 // Max level boundary: requestLevel >= maxRequestLevel means the next hop
@@ -631,7 +631,7 @@ class P2pService implements P2pServiceInterface {
             // Create capacity reservation for this relay
             if ($this->capacityReservationRepository !== null) {
                 $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
-                $baseAmount = (int) $request['amount'];
+                $baseAmount = \Eiou\Core\SplitAmount::from($request['amount']);
                 $totalAmount = $this->calculateRequestedAmount($request);
                 $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $this->capacityReservationRepository->createReservation(
@@ -1458,7 +1458,7 @@ class P2pService implements P2pServiceInterface {
      * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey, ?string $currency = null): float {
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): \Eiou\Core\SplitAmount {
         return $this->p2pRepository->getCreditInP2p($pubkey, $currency);
     }
 

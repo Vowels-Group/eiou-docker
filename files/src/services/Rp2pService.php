@@ -348,7 +348,7 @@ class Rp2pService implements Rp2pServiceInterface {
                 // Base amount before this node's fee — the accumulated downstream total.
                 // Each sender may have a different fee relationship with this node,
                 // so per-sender fees are recalculated on this accumulated base.
-                $baseAmount = $request['amount'] - $recalculatedFee;
+                $baseAmount = \Eiou\Core\SplitAmount::from($request['amount'])->subtract($recalculatedFee);
 
                 // Get all senders from p2p_senders table (multi-path tracking)
                 $senders = $this->p2pSenderRepository
