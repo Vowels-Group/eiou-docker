@@ -1213,6 +1213,38 @@ Each node maintains a MariaDB database with these primary tables:
 | `capacity_reservations` | Credit reserved at each relay hop during P2P routing (base_amount and total_amount including fees), status: active/released/committed |
 | `route_cancellations` | Audit trail for route cancellation messages sent to unselected P2P candidates after best-fee selection |
 
+### Amount Storage: SplitAmount
+
+All monetary amounts are stored as **two BIGINT columns** (`_whole` and `_frac`) instead of a single integer. This is implemented by the `SplitAmount` value object (`/src/core/SplitAmount.php`).
+
+**Storage format:**
+- `_whole`: integer part (e.g., 1234 for $1,234.56)
+- `_frac`: fractional part × 10^8 (e.g., 56000000 for .56)
+- Maximum representable amount: PHP_INT_MAX.99999999 (~9.2 quintillion)
+- `TRANSACTION_MAX_AMOUNT` (PHP_INT_MAX / 4) enforced at input to leave headroom for multi-hop fee accumulation
+
+**Tables using split columns:**
+
+| Table | Column pairs |
+|-------|-------------|
+| `transactions` | `amount_whole`/`_frac`, `my_fee_amount_whole`/`_frac`, `rp2p_amount_whole`/`_frac` |
+| `balances` | `received_whole`/`_frac`, `sent_whole`/`_frac` |
+| `contact_currencies` | `credit_limit_whole`/`_frac` |
+| `contact_credit` | `available_credit_whole`/`_frac` |
+| `p2p` | `amount_whole`/`_frac`, `my_fee_amount_whole`/`_frac`, `rp2p_amount_whole`/`_frac` |
+| `rp2p` | `amount_whole`/`_frac`, `fee_amount_whole`/`_frac` |
+| `capacity_reservations` | `base_amount_whole`/`_frac`, `total_amount_whole`/`_frac` |
+
+**Factory methods:**
+- `SplitAmount::fromString($str)` — precision-safe parsing via string operations (preferred for user input)
+- `SplitAmount::fromMajorUnits($float)` — float conversion (adequate for amounts < 10^15)
+- `SplitAmount::from($value)` — universal factory accepting string, float, int, array, or SplitAmount
+- `SplitAmount::fromDbRow($row, $prefix)` — extracts `{prefix}_whole`/`{prefix}_frac` from a database row
+
+**Arithmetic:** `add()`, `subtract()`, `multiplyPercent()`, `mulDiv()` use bcmath strings internally — no intermediate PHP integer can overflow regardless of amount size.
+
+**Input validation:** All validators (`validateAmount`, `validateAmountFee`, `validateFeeAmount`, `validateCreditLimit`) use bcmath string operations (`bccomp`/`bcadd`) and return decimal strings at 8-decimal precision. Display decimals (`DISPLAY_DECIMALS`) only affect UI formatting, not input acceptance.
+
 ### Repository Pattern
 
 Each table has a corresponding repository class extending `AbstractRepository`:

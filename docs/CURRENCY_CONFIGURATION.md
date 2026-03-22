@@ -24,11 +24,10 @@ Currency support requires two settings that work together:
 All currencies are stored internally at **8-decimal precision** (10^8 minor units per major unit), regardless of display settings. This eliminates conversion factor mismatches between nodes — every node stores the same integers for the same amounts.
 
 The `displayDecimals` setting controls:
-- How many decimal places are shown in the UI
-- Input validation (minimum amount, rounding)
-- It does **NOT** affect internal storage or wire format
+- How many decimal places are shown in the UI (CLI output, GUI display, API responses)
+- It does **NOT** affect input validation, internal storage, or wire format
 
-**Minimum amount** is inferred from display decimals: for USD (2 decimals) the minimum is 0.01, for BTC (8 decimals) it is 0.00000001. Amounts that round to zero at the display precision are rejected. This applies to transaction amounts and fee amounts; credit limits and minimum fees allow zero.
+Input validation always operates at the full internal precision (8 decimal places). An amount like 128.99999999 is accepted and stored exactly, regardless of display decimals. The minimum accepted amount is 0.00000001 (1 fractional unit) for all currencies.
 
 Both settings must be configured for a currency to work. The `allowedCurrencies` setting validates that each listed currency has display decimals defined.
 
@@ -38,9 +37,11 @@ Both settings must be configured for a currency to work. The `allowedCurrencies`
 |-------|-------|-------|
 | Internal precision | 8 decimals (10^8) | Fixed for all currencies |
 | Max display decimals | 8 | Cannot exceed internal precision |
-| Max amount | ~92 billion | PHP_INT_MAX / 10^8 |
+| Max transaction amount | ~2.3 quintillion | PHP_INT_MAX / 4, enforced at input validation |
+| Max credit limit | ~9.2 quintillion | PHP_INT_MAX, stored via split BIGINT columns |
+| Minimum amount | 0.00000001 | 1 fractional unit at 8-decimal precision |
 
-All major-to-minor unit conversions use `bcmul()` (arbitrary-precision math) — amounts are exact to all 8 decimals at any size up to the 92 billion maximum.
+Amounts are stored as two BIGINT columns (`_whole` and `_frac`) via the `SplitAmount` value object. All input validation uses bcmath string operations (`bccomp`/`bcadd`) to preserve full precision for large values. All arithmetic (fee calculations, balance updates) uses bcmath internally — no PHP integer overflow is possible regardless of amount size.
 
 ---
 
@@ -96,15 +97,14 @@ curl -X PUT https://localhost/api/v1/system/settings \
 
 ### Display Decimals
 
-The display decimals setting controls how many decimal places are shown in the UI and accepted as input. Internally, all amounts are stored at 8-decimal precision (10^8 minor units per major unit).
+The display decimals setting controls how many decimal places are shown in the UI. It does **not** affect input validation — all currencies accept up to 8 decimal places regardless of display setting. Internally, all amounts are stored as two BIGINT columns (whole + fractional × 10^8).
 
-| Currency | Display Decimals | Minimum Amount (inferred) | Internal Storage | Meaning |
-|----------|-----------------|---------------------------|------------------|---------|
-| USD | 2 | 0.01 | 10^8 per dollar | Show cents |
-| EUR | 2 | 0.01 | 10^8 per euro | Show cents |
-| GBP | 2 | 0.01 | 10^8 per pound | Show pence |
-| JPY | 0 | 1 | 10^8 per yen | No sub-yen display |
-| BTC | 8 | 0.00000001 | 10^8 per bitcoin | Show satoshis |
+| Currency | Display Decimals | UI Shows | Accepts Input Up To | Internal Storage |
+|----------|-----------------|----------|---------------------|------------------|
+| USD | 2 | $1,234.56 | 1234.56789012 (8 dp) | whole=1234, frac=56789012 |
+| EUR | 2 | €1,234.56 | 1234.56789012 (8 dp) | whole=1234, frac=56789012 |
+| JPY | 0 | ¥1,234 | 1234.56789012 (8 dp) | whole=1234, frac=56789012 |
+| BTC | 8 | ₿0.00000001 | 0.00000001 (8 dp) | whole=0, frac=1 |
 
 If display decimals are not defined for a currency, the default is 8 (full internal precision).
 
