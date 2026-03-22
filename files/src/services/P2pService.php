@@ -320,6 +320,14 @@ class P2pService implements P2pServiceInterface {
             }
             // If you are the end-recipient you do not need to pay
             return true;
+        } catch (\OverflowException $e) {
+            // Amount + fees exceeds PHP_INT_MAX — treat as insufficient funds
+            Logger::getInstance()->warning("P2P amount overflow: amount plus fees exceeds maximum representable value", [
+                'method' => 'checkAvailableFunds',
+                'error' => $e->getMessage(),
+                'hash' => $request['hash'] ?? 'unknown'
+            ]);
+            return false;
         } catch (PDOException $e) {
             // Use Logger's exception logging
             Logger::getInstance()->logException($e, [
@@ -757,7 +765,7 @@ class P2pService implements P2pServiceInterface {
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-        $data['amount'] = SplitAmount::fromMajorUnits($validatedAmount);
+        $data['amount'] = SplitAmount::from($validatedAmount);
 
         // Additional data preparation - Use cryptographically secure random
         try {
