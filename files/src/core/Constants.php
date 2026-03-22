@@ -87,7 +87,8 @@ class Constants {
     const INTERNAL_PRECISION = 8;
 
     // Display decimals per currency (defaults): controls how many decimal places
-    // are shown in the UI and accepted as input. Does NOT affect internal storage.
+    // are shown in the UI. Does NOT affect input validation or internal storage —
+    // all input is validated and stored at INTERNAL_PRECISION (8) decimal places.
     // Configurable via changesettings displayDecimals.
     const DISPLAY_DECIMALS = [
         'USD' => 2,
@@ -122,7 +123,7 @@ class Constants {
     /**
      * Get the display decimal places for a given currency.
      * Checks UserContext config first, falls back to DISPLAY_DECIMALS defaults.
-     * Controls UI formatting, input rounding, and minimum amount validation.
+     * Controls UI formatting only — input validation uses INTERNAL_PRECISION.
      * Default: INTERNAL_PRECISION (8) if not defined for a currency.
      *
      * @param string $currency Currency code (e.g., 'USD')

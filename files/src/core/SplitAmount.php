@@ -33,6 +33,9 @@ class SplitAmount implements \JsonSerializable
     /** Fractional modulus — 10^8, same as INTERNAL_CONVERSION_FACTOR */
     public const FRAC_MODULUS = 100000000;
 
+    /** Number of fractional digits (log10 of FRAC_MODULUS) */
+    private const FRAC_MODULUS_DIGITS = 8;
+
     public int $whole;
     public int $frac;
 
@@ -61,10 +64,16 @@ class SplitAmount implements \JsonSerializable
 
     /**
      * Create from a float in major units (e.g., 1234.56).
+     *
+     * WARNING: PHP floats have ~15-16 significant digits of precision.
+     * For values larger than ~10^15, use fromString() instead to avoid
+     * silent precision loss from float conversion.
      */
     public static function fromMajorUnits(float $major): self
     {
-        $str = (string) $major;
+        // Avoid scientific notation from (string) cast on very large/small floats
+        // by formatting with full decimal precision
+        $str = number_format($major, self::FRAC_MODULUS_DIGITS, '.', '');
         $parts = explode('.', $str);
         $whole = (int) $parts[0];
 
@@ -80,6 +89,68 @@ class SplitAmount implements \JsonSerializable
         if ($major < 0 && $frac > 0) {
             $whole -= 1;
             $frac = self::FRAC_MODULUS - $frac;
+        }
+
+        return new self($whole, $frac);
+    }
+
+    /**
+     * Create from a decimal string (e.g., "1234.56" or "9223372036854775807").
+     *
+     * Uses pure string operations — no float conversion — so arbitrarily large
+     * whole parts (up to PHP_INT_MAX) are handled without precision loss.
+     * This is the preferred factory for user-supplied input.
+     *
+     * @param string $value Decimal string (e.g., "1234.56789012")
+     * @return self
+     * @throws \OverflowException if whole part exceeds PHP_INT_MAX
+     */
+    public static function fromString(string $value): self
+    {
+        $value = trim($value);
+        if ($value === '' || $value === '0') {
+            return self::zero();
+        }
+
+        // Handle scientific notation by normalising to a plain decimal string
+        if (stripos($value, 'e') !== false) {
+            $value = \bcadd($value, '0', self::FRAC_MODULUS_DIGITS);
+        }
+
+        // Detect and strip sign
+        $negative = false;
+        if ($value[0] === '-') {
+            $negative = true;
+            $value = substr($value, 1);
+        }
+
+        // Split on decimal point
+        $parts = explode('.', $value, 2);
+        $wholeStr = ltrim($parts[0], '0') ?: '0';
+
+        // Validate whole part fits in PHP int
+        $maxStr = (string) PHP_INT_MAX;
+        if (strlen($wholeStr) > strlen($maxStr)
+            || (strlen($wholeStr) === strlen($maxStr) && strcmp($wholeStr, $maxStr) > 0)) {
+            throw new \OverflowException(
+                "Whole part exceeds PHP_INT_MAX: {$wholeStr}"
+            );
+        }
+
+        $whole = (int) $wholeStr;
+        $frac = 0;
+
+        if (isset($parts[1]) && $parts[1] !== '') {
+            $fracStr = str_pad(substr($parts[1], 0, 8), 8, '0');
+            $frac = (int) $fracStr;
+        }
+
+        if ($negative) {
+            $whole = -$whole;
+            if ($frac > 0) {
+                $whole -= 1;
+                $frac = self::FRAC_MODULUS - $frac;
+            }
         }
 
         return new self($whole, $frac);
@@ -132,19 +203,23 @@ class SplitAmount implements \JsonSerializable
      * Universal factory — accepts any representation and returns a SplitAmount.
      *
      * Handles: SplitAmount (passthrough), {whole,frac} array (from JSON/payload),
+     * string (decimal via fromString — preserves precision for large numbers),
      * int/float (from legacy code or major units), or null (returns zero).
      * This is the single conversion point for all SplitAmount ↔ JSON/array boundaries.
      *
-     * @param self|array|int|float|null $value Any amount representation
+     * @param self|array|int|float|string|null $value Any amount representation
      * @return self
      */
-    public static function from(self|array|int|float|null $value): self
+    public static function from(self|array|int|float|string|null $value): self
     {
         if ($value instanceof self) {
             return $value;
         }
         if (is_array($value) && (isset($value['whole']) || isset($value['frac']))) {
             return new self((int) ($value['whole'] ?? 0), (int) ($value['frac'] ?? 0));
+        }
+        if (is_string($value) && is_numeric($value)) {
+            return self::fromString($value);
         }
         if (is_int($value)) {
             return new self($value, 0);
@@ -299,20 +374,21 @@ class SplitAmount implements \JsonSerializable
         $carry = intdiv($frac, self::FRAC_MODULUS);
         $frac = $frac % self::FRAC_MODULUS;
 
-        // Overflow guard on whole: detect before it happens
-        $whole = $this->whole + $other->whole;
-        if ($other->whole > 0 && $whole < $this->whole) {
+        // Overflow guard: check BEFORE adding to avoid PHP silent int→float conversion
+        if ($other->whole > 0 && $this->whole > PHP_INT_MAX - $other->whole) {
             throw new OverflowException(
                 "SplitAmount::add overflow: {$this->whole} + {$other->whole} exceeds PHP_INT_MAX"
             );
         }
-        if ($other->whole < 0 && $whole > $this->whole) {
+        if ($other->whole < 0 && $this->whole < PHP_INT_MIN - $other->whole) {
             throw new OverflowException(
                 "SplitAmount::add underflow: {$this->whole} + {$other->whole} exceeds PHP_INT_MIN"
             );
         }
+        $whole = $this->whole + $other->whole;
+
         // carry is 0 or 1, so this can only overflow if whole is already PHP_INT_MAX
-        if ($carry > 0 && $whole === PHP_INT_MAX) {
+        if ($carry > 0 && $whole >= PHP_INT_MAX) {
             throw new OverflowException(
                 "SplitAmount::add overflow: whole {$whole} + carry {$carry} exceeds PHP_INT_MAX"
             );

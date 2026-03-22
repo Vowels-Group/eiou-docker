@@ -682,7 +682,7 @@ class ContactController
             $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
             // Convert to storage units
-            $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($creditValidation['value']);
+            $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
             $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
             // Update the pending currency with user's fee/credit and set status to accepted
@@ -825,7 +825,7 @@ class ContactController
                 }
 
                 // Convert to storage units
-                $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($creditValidation['value']);
+                $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
                 $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
                 $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [

@@ -1269,7 +1269,7 @@ class ApiController {
                         $currencyFields['fee_percent'] = CurrencyUtilityService::exactMajorToMinor($data['fee_percent'], Constants::FEE_CONVERSION_FACTOR);
                     }
                     if (isset($data['credit_limit'])) {
-                        $currencyFields['credit_limit'] = \Eiou\Core\SplitAmount::fromMajorUnits($data['credit_limit']);
+                        $currencyFields['credit_limit'] = \Eiou\Core\SplitAmount::from($data['credit_limit']);
                     }
                     if (!empty($currencyFields)) {
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);

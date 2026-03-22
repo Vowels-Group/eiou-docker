@@ -249,7 +249,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
         $currency = $currencyValidation['value'];
-        $credit = SplitAmount::fromMajorUnits($creditValidation['value']);
+        $credit = SplitAmount::from($creditValidation['value']);
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -1331,7 +1331,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 }
                 if ($field === 'credit' || $field === 'all') {
                     $creditValue = ($field === 'credit') ? $value : $value3;
-                    $currencyFields['credit_limit'] = SplitAmount::fromMajorUnits($creditValue);
+                    $currencyFields['credit_limit'] = SplitAmount::from($creditValue);
                 }
                 if (!empty($currencyFields)) {
                     $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, $currencyFields);
@@ -1398,7 +1398,7 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param float $credit Credit limit
      * @return bool True on success
      */
-    public function addCurrencyToContact(string $pubkey, string $currency, float $fee, float $credit): bool
+    public function addCurrencyToContact(string $pubkey, string $currency, float|string $fee, float|string $credit): bool
     {
         // Verify contact is accepted
         if (!$this->contactRepository->isAcceptedContactPubkey($pubkey)) {
@@ -1414,7 +1414,9 @@ class ContactManagementService implements ContactManagementServiceInterface
 
         // Insert into contact_currencies as outgoing (we are adding this currency)
         if ($this->contactCurrencyRepository !== null) {
-            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing');
+            $feeMinor = CurrencyUtilityService::exactMajorToMinor((float) $fee, Constants::FEE_CONVERSION_FACTOR);
+            $creditSplit = SplitAmount::from($credit);
+            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, $feeMinor, $creditSplit, 'pending', 'outgoing');
         }
 
         // Create initial balance entries for the new currency

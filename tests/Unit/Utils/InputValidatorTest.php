@@ -81,85 +81,84 @@ class InputValidatorTest extends TestCase
 
     public function testValidateAmountBelowMinimumAfterRounding(): void
     {
-        // 0.001 USD rounds to 0.00 — should be rejected
-        $result = InputValidator::validateAmount(0.001, 'USD');
+        // With 8-decimal internal precision, amounts below 0.00000001 are rejected
+        $result = InputValidator::validateAmount(0.000000001, 'USD');
 
         $this->assertFalse($result['valid']);
         $this->assertNull($result['value']);
         $this->assertStringContainsString('minimum', $result['error']);
-        $this->assertStringContainsString('0.01', $result['error']);
     }
 
-    public function testValidateAmountBelowMinimumSmallFraction(): void
+    public function testValidateAmountSmallFractionsAccepted(): void
     {
-        // 0.004 USD rounds to 0.00 — should be rejected
+        // 0.004 USD is valid with 8-decimal internal precision
         $result = InputValidator::validateAmount(0.004, 'USD');
 
-        $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('minimum', $result['error']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.004, $result['value']);
     }
 
     public function testValidateAmountAtMinimum(): void
     {
-        // 0.01 USD is the smallest valid amount
+        // 0.01 USD is a valid amount
         $result = InputValidator::validateAmount(0.01, 'USD');
 
         $this->assertTrue($result['valid']);
         $this->assertEquals(0.01, $result['value']);
     }
 
-    public function testValidateAmountRoundsUpToMinimum(): void
+    public function testValidateAmountSmallFractionValid(): void
     {
-        // 0.005 USD rounds to 0.01 — should pass
+        // 0.005 USD is valid — no rounding to 2 decimals
         $result = InputValidator::validateAmount(0.005, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.01, $result['value']);
+        $this->assertEquals(0.005, $result['value']);
     }
 
     public function testValidateAmountErrorIncludesCurrencyCode(): void
     {
-        $result = InputValidator::validateAmount(0.001, 'USD');
+        // Use a truly sub-minimum value (rounds to 0 at 8 decimal places)
+        $result = InputValidator::validateAmount(0.000000001, 'USD');
 
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('USD', $result['error']);
-        $this->assertStringContainsString('0.01', $result['error']);
     }
 
-    public function testValidateAmountBelowMinimumStringInput(): void
+    public function testValidateAmountSmallStringInputValid(): void
     {
-        // String "0.001" should be handled the same as float
+        // String "0.001" is valid with 8-decimal precision
         $result = InputValidator::validateAmount('0.001', 'USD');
 
-        $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('minimum', $result['error']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.001, $result['value']);
     }
 
-    public function testValidateAmountBelowMinimumBoundary(): void
+    public function testValidateAmountSmallFractionBoundary(): void
     {
-        // 0.0049 rounds to 0.00 (below 0.005 rounding threshold) — rejected
+        // 0.0049 is valid with 8-decimal precision
         $result = InputValidator::validateAmount(0.0049, 'USD');
 
-        $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('minimum', $result['error']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.0049, $result['value']);
     }
 
-    public function testValidateAmountRoundsValidAmount(): void
+    public function testValidateAmountPreservesDecimalPrecision(): void
     {
-        // 100.555 USD rounds to 100.56 (normal rounding, not sub-minimum)
+        // 100.555 preserves full precision at 8 decimal places
         $result = InputValidator::validateAmount(100.555, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(100.56, $result['value']);
+        $this->assertEquals(100.555, $result['value']);
     }
 
     public function testValidateAmountSmallValidAmount(): void
     {
-        // 0.014 rounds to 0.01 — still valid (>= minimum)
+        // 0.014 is valid — preserved at full precision
         $result = InputValidator::validateAmount(0.014, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.01, $result['value']);
+        $this->assertEquals(0.014, $result['value']);
     }
 
     // =========================================================================
@@ -574,12 +573,12 @@ class InputValidatorTest extends TestCase
         $this->assertStringContainsString('number', $result['error']);
     }
 
-    public function testValidateFeeAmountRoundsToCurrencyPrecision(): void
+    public function testValidateFeeAmountPreservesPrecision(): void
     {
         $result = InputValidator::validateFeeAmount(0.005, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.01, $result['value']); // rounded to 2 decimals
+        $this->assertEquals(0.005, $result['value']); // preserved at 8 decimal precision
     }
 
     // =========================================================================
@@ -588,13 +587,12 @@ class InputValidatorTest extends TestCase
 
     public function testValidateAmountFeeBelowMinimumAfterRounding(): void
     {
-        // 0.001 USD rounds to 0.00 — should be rejected (fee must be > 0)
-        $result = InputValidator::validateAmountFee(0.001, 'USD');
+        // With 8-decimal precision, amounts below 0.00000001 are rejected
+        $result = InputValidator::validateAmountFee(0.000000001, 'USD');
 
         $this->assertFalse($result['valid']);
         $this->assertNull($result['value']);
         $this->assertStringContainsString('minimum', $result['error']);
-        $this->assertStringContainsString('0.01', $result['error']);
     }
 
     public function testValidateAmountFeeAtMinimum(): void
@@ -607,37 +605,37 @@ class InputValidatorTest extends TestCase
 
     public function testValidateAmountFeeErrorIncludesCurrencyCode(): void
     {
-        $result = InputValidator::validateAmountFee(0.001, 'USD');
+        $result = InputValidator::validateAmountFee(0.000000001, 'USD');
 
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('USD', $result['error']);
-        $this->assertStringContainsString('0.01', $result['error']);
     }
 
-    public function testValidateAmountFeeRoundsUpToMinimum(): void
+    public function testValidateAmountFeeSmallFractionValid(): void
     {
-        // 0.005 USD rounds to 0.01 — should pass
+        // 0.005 USD is valid with 8-decimal precision
         $result = InputValidator::validateAmountFee(0.005, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.01, $result['value']);
+        $this->assertEquals(0.005, $result['value']);
     }
 
-    public function testValidateAmountFeeStringBelowMinimum(): void
+    public function testValidateAmountFeeSmallStringValid(): void
     {
+        // "0.004" is valid with 8-decimal precision
         $result = InputValidator::validateAmountFee('0.004', 'USD');
 
-        $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('minimum', $result['error']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(0.004, $result['value']);
     }
 
-    public function testValidateAmountFeeRoundsValidAmount(): void
+    public function testValidateAmountFeePreservesPrecision(): void
     {
-        // 5.999 rounds to 6.00 — valid
+        // 5.999 preserved at 8-decimal precision
         $result = InputValidator::validateAmountFee(5.999, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(6.0, $result['value']);
+        $this->assertEquals(5.999, $result['value']);
     }
 
     // =========================================================================
@@ -649,7 +647,8 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit(1000);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(1000, $result['value']);
+        // Returns bcmath string with 8 decimal places
+        $this->assertEquals('1000.00000000', $result['value']);
     }
 
     public function testValidateCreditLimitWithZero(): void
@@ -657,7 +656,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit(0);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0, $result['value']);
+        $this->assertEquals('0.00000000', $result['value']);
     }
 
     public function testValidateCreditLimitNegative(): void
@@ -676,31 +675,31 @@ class InputValidatorTest extends TestCase
         $this->assertTrue($result['valid']);
     }
 
-    public function testValidateCreditLimitSubMinimumRoundsToZero(): void
+    public function testValidateCreditLimitPreservesSmallFraction(): void
     {
-        // 0.001 USD rounds to 0.00 — valid because zero credit is allowed
+        // 0.001 preserves precision with 8 decimal places
         $result = InputValidator::validateCreditLimit(0.001, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.0, $result['value']);
+        $this->assertEquals('0.00100000', $result['value']);
     }
 
-    public function testValidateFeeAmountSubMinimumRoundsToZero(): void
+    public function testValidateFeeAmountSmallFractionPreserved(): void
     {
-        // 0.001 USD rounds to 0.00 — valid because zero fee is allowed
+        // 0.001 preserved with 8-decimal precision
         $result = InputValidator::validateFeeAmount(0.001, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.0, $result['value']);
+        $this->assertEquals(0.001, $result['value']);
     }
 
-    public function testValidateCreditLimitRoundsToPrecision(): void
+    public function testValidateCreditLimitPreservesPrecision(): void
     {
-        // 100.555 USD rounds to 100.56
+        // 100.555 preserved at 8 decimal places
         $result = InputValidator::validateCreditLimit(100.555, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(100.56, $result['value']);
+        $this->assertEquals('100.55500000', $result['value']);
     }
 
     public function testValidateCreditLimitNonNumeric(): void
@@ -716,7 +715,16 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit('500.00', 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(500.0, $result['value']);
+        $this->assertEquals('500.00000000', $result['value']);
+    }
+
+    public function testValidateCreditLimitPhpIntMax(): void
+    {
+        // PHP_INT_MAX should be preserved without precision loss
+        $result = InputValidator::validateCreditLimit((string) PHP_INT_MAX, 'USD');
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('9223372036854775807.00000000', $result['value']);
     }
 
     // =========================================================================

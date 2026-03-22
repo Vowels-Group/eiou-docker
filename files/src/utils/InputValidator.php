@@ -58,11 +58,12 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
         }
 
-        // Round to currency decimal precision
-        $decimals = Constants::getDisplayDecimals($currency);
+        // Round to internal precision (8 decimal places) — display decimals
+        // only affect UI formatting, not input validation or storage
+        $decimals = Constants::INTERNAL_PRECISION;
         $amount = round($amount, $decimals);
 
-        // After rounding, amount may have become zero (e.g., 0.001 USD rounds to 0.00)
+        // After rounding, amount may have become zero
         if ($amount <= 0) {
             $minimum = number_format(pow(10, -$decimals), $decimals, '.', '');
             return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
@@ -97,11 +98,11 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
         }
 
-        // Round to currency decimal precision
-        $decimals = Constants::getDisplayDecimals($currency);
+        // Round to internal precision (8 decimal places)
+        $decimals = Constants::INTERNAL_PRECISION;
         $amount = round($amount, $decimals);
 
-        // After rounding, amount may have become zero (e.g., 0.001 USD rounds to 0.00)
+        // After rounding, amount may have become zero
         if ($amount <= 0) {
             $minimum = number_format(pow(10, -$decimals), $decimals, '.', '');
             return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
@@ -138,7 +139,8 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Fee amount cannot be negative'];
         }
 
-        $amount = round($amount, Constants::getDisplayDecimals($currency));
+        // Round to internal precision (8 decimal places)
+        $amount = round($amount, Constants::INTERNAL_PRECISION);
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
@@ -370,25 +372,29 @@ class InputValidator {
     /**
      * Validate credit limit
      *
+     * Uses bcmath string operations to preserve precision for very large values
+     * (e.g., PHP_INT_MAX). Returns a decimal string, not a float.
+     *
      * @param mixed $credit Credit limit to validate
-     * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
      */
     public static function validateCreditLimit($credit, $currency = 'USD'): array {
         if (!is_numeric($credit)) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit must be a number'];
         }
 
-        $credit = floatval($credit);
+        // Keep as string to preserve precision for large numbers
+        $creditStr = (string) $credit;
 
         // Credit must be non-negative
-        if ($credit < 0) {
+        if (\bccomp($creditStr, '0', Constants::INTERNAL_PRECISION) < 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit cannot be negative'];
         }
 
-        // Round to currency decimal precision
-        $credit = round($credit, Constants::getDisplayDecimals($currency));
+        // Truncate to internal precision (8 decimal places) using bcadd
+        $creditStr = \bcadd($creditStr, '0', Constants::INTERNAL_PRECISION);
 
-        return ['valid' => true, 'value' => $credit, 'error' => null];
+        return ['valid' => true, 'value' => $creditStr, 'error' => null];
     }
 
     /**
