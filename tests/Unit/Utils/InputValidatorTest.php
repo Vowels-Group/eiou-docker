@@ -17,6 +17,13 @@ use Eiou\Core\Constants;
 #[CoversClass(InputValidator::class)]
 class InputValidatorTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!extension_loaded('bcmath')) {
+            $this->markTestSkipped('bcmath extension required for InputValidator tests');
+        }
+    }
+
     // =========================================================================
     // validateAmount Tests
     // =========================================================================
@@ -26,7 +33,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(100.50);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(100.50, $result['value']);
+        $this->assertSame('100.50000000', $result['value']);
         $this->assertNull($result['error']);
     }
 
@@ -35,7 +42,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount('250.75');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('250.75000000', $result['value']);
+        $this->assertSame('250.75000000', $result['value']);
     }
 
     public function testValidateAmountWithZero(): void
@@ -76,7 +83,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(1000000000);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('1000000000.00000000', $result['value']);
+        $this->assertSame('1000000000.00000000', $result['value']);
     }
 
     public function testValidateAmountExceedsMaxRejected(): void
@@ -104,7 +111,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(0.004, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00400000', $result['value']);
+        $this->assertSame('0.00400000', $result['value']);
     }
 
     public function testValidateAmountAtMinimum(): void
@@ -113,7 +120,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(0.01, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.01000000', $result['value']);
+        $this->assertSame('0.01000000', $result['value']);
     }
 
     public function testValidateAmountSmallFractionValid(): void
@@ -122,7 +129,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(0.005, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00500000', $result['value']);
+        $this->assertSame('0.00500000', $result['value']);
     }
 
     public function testValidateAmountErrorIncludesCurrencyCode(): void
@@ -140,7 +147,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount('0.001', 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00100000', $result['value']);
+        $this->assertSame('0.00100000', $result['value']);
     }
 
     public function testValidateAmountSmallFractionBoundary(): void
@@ -149,7 +156,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(0.0049, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00490000', $result['value']);
+        $this->assertSame('0.00490000', $result['value']);
     }
 
     public function testValidateAmountPreservesDecimalPrecision(): void
@@ -158,7 +165,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(100.555, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('100.55500000', $result['value']);
+        $this->assertSame('100.55500000', $result['value']);
     }
 
     public function testValidateAmountSmallValidAmount(): void
@@ -167,7 +174,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmount(0.014, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.01400000', $result['value']);
+        $this->assertSame('0.01400000', $result['value']);
     }
 
     // =========================================================================
@@ -547,7 +554,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateFeeAmount(0.05);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0.05, $result['value']);
+        $this->assertSame('0.05000000', $result['value']);
     }
 
     public function testValidateFeeAmountWithZero(): void
@@ -555,7 +562,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateFeeAmount(0);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0, $result['value']);
+        $this->assertSame('0.00000000', $result['value']);
     }
 
     public function testValidateFeeAmountWithZeroString(): void
@@ -563,7 +570,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateFeeAmount('0');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals(0, $result['value']);
+        $this->assertSame('0.00000000', $result['value']);
     }
 
     public function testValidateFeeAmountWithNegative(): void
@@ -587,7 +594,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateFeeAmount(0.005, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00500000', $result['value']); // preserved at 8 decimal precision
+        $this->assertSame('0.00500000', $result['value']); // preserved at 8 decimal precision
     }
 
     // =========================================================================
@@ -609,7 +616,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmountFee(0.01, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.01000000', $result['value']);
+        $this->assertSame('0.01000000', $result['value']);
     }
 
     public function testValidateAmountFeeErrorIncludesCurrencyCode(): void
@@ -626,7 +633,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmountFee(0.005, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00500000', $result['value']);
+        $this->assertSame('0.00500000', $result['value']);
     }
 
     public function testValidateAmountFeeSmallStringValid(): void
@@ -635,7 +642,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmountFee('0.004', 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00400000', $result['value']);
+        $this->assertSame('0.00400000', $result['value']);
     }
 
     public function testValidateAmountFeePreservesPrecision(): void
@@ -644,7 +651,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateAmountFee(5.999, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('5.99900000', $result['value']);
+        $this->assertSame('5.99900000', $result['value']);
     }
 
     // =========================================================================
@@ -657,7 +664,7 @@ class InputValidatorTest extends TestCase
 
         $this->assertTrue($result['valid']);
         // Returns bcmath string with 8 decimal places
-        $this->assertEquals('1000.00000000', $result['value']);
+        $this->assertSame('1000.00000000', $result['value']);
     }
 
     public function testValidateCreditLimitWithZero(): void
@@ -665,7 +672,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit(0);
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00000000', $result['value']);
+        $this->assertSame('0.00000000', $result['value']);
     }
 
     public function testValidateCreditLimitNegative(): void
@@ -690,7 +697,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit(0.001, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00100000', $result['value']);
+        $this->assertSame('0.00100000', $result['value']);
     }
 
     public function testValidateFeeAmountSmallFractionPreserved(): void
@@ -699,7 +706,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateFeeAmount(0.001, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('0.00100000', $result['value']);
+        $this->assertSame('0.00100000', $result['value']);
     }
 
     public function testValidateCreditLimitPreservesPrecision(): void
@@ -708,7 +715,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit(100.555, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('100.55500000', $result['value']);
+        $this->assertSame('100.55500000', $result['value']);
     }
 
     public function testValidateCreditLimitNonNumeric(): void
@@ -724,7 +731,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit('500.00', 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('500.00000000', $result['value']);
+        $this->assertSame('500.00000000', $result['value']);
     }
 
     public function testValidateCreditLimitPhpIntMax(): void
@@ -733,7 +740,7 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateCreditLimit((string) PHP_INT_MAX, 'USD');
 
         $this->assertTrue($result['valid']);
-        $this->assertEquals('9223372036854775807.00000000', $result['value']);
+        $this->assertSame('9223372036854775807.00000000', $result['value']);
     }
 
     // =========================================================================
@@ -1088,5 +1095,61 @@ class InputValidatorTest extends TestCase
         $result = InputValidator::validateBoolean(true);
         $this->assertTrue($result['valid']);
         $this->assertTrue($result['value']);
+    }
+
+    // =========================================================================
+    // End-to-end: validate → SplitAmount pipeline (requires bcmath)
+    // =========================================================================
+
+    public function testValidateAmountToSplitAmountPipeline(): void
+    {
+        $cases = [
+            ['128.001',      128, 100000],
+            ['0.1',          0,   10000000],
+            ['50.50',        50,  50000000],
+            ['100',          100, 0],
+            ['0.00000001',   0,   1],
+            ['999.99999999', 999, 99999999],
+            ['128.99999999', 128, 99999999],
+        ];
+
+        foreach ($cases as [$input, $expectedWhole, $expectedFrac]) {
+            $result = InputValidator::validateAmount($input, 'USD');
+            $this->assertTrue($result['valid'], "Input {$input} should be valid");
+            $this->assertIsString($result['value'], "Input {$input} should return string");
+
+            $sa = \Eiou\Core\SplitAmount::from($result['value']);
+            $this->assertSame($expectedWhole, $sa->whole, "Input {$input}: wrong whole");
+            $this->assertSame($expectedFrac, $sa->frac, "Input {$input}: wrong frac");
+        }
+    }
+
+    public function testValidateCreditLimitToSplitAmountPipeline(): void
+    {
+        // PHP_INT_MAX credit limit → SplitAmount preserves full precision
+        $result = InputValidator::validateCreditLimit((string) PHP_INT_MAX, 'USD');
+        $this->assertTrue($result['valid']);
+
+        $sa = \Eiou\Core\SplitAmount::from($result['value']);
+        $this->assertSame(PHP_INT_MAX, $sa->whole);
+        $this->assertSame(0, $sa->frac);
+    }
+
+    public function testValidateAmountMaxTransactionAmount(): void
+    {
+        // Exactly at TRANSACTION_MAX_AMOUNT — accepted
+        $maxStr = (string) Constants::TRANSACTION_MAX_AMOUNT;
+        $result = InputValidator::validateAmount($maxStr, 'USD');
+        $this->assertTrue($result['valid']);
+
+        $sa = \Eiou\Core\SplitAmount::from($result['value']);
+        $this->assertSame(Constants::TRANSACTION_MAX_AMOUNT, $sa->whole);
+        $this->assertSame(0, $sa->frac);
+
+        // One above — rejected
+        $overMax = \bcadd($maxStr, '1', 0);
+        $result = InputValidator::validateAmount($overMax, 'USD');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('maximum', $result['error']);
     }
 }
