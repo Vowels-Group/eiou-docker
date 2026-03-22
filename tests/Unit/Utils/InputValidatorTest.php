@@ -249,12 +249,13 @@ class InputValidatorTest extends TestCase
         $this->assertEquals('USD', $result['value']);
     }
 
-    public function testValidateAllowedCurrencyRejectsWithoutDisplayDecimals(): void
+    public function testValidateAllowedCurrencyAcceptsWithoutDisplayDecimals(): void
     {
+        // Currencies without explicit display decimals default to INTERNAL_PRECISION (8)
         $result = InputValidator::validateAllowedCurrency('EUR');
 
-        $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('No display decimals defined', $result['error']);
+        $this->assertTrue($result['valid']);
+        $this->assertEquals('EUR', $result['value']);
     }
 
     public function testValidateAllowedCurrencyRejectsInvalidLength(): void

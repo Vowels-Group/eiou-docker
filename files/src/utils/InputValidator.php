@@ -209,15 +209,8 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Currency code must be between ' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ' and ' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . ' characters'];
         }
 
-        try {
-            $decimals = UserContext::getInstance()->getAllDisplayDecimals();
-        } catch (\Throwable $e) {
-            $decimals = Constants::DISPLAY_DECIMALS;
-        }
-        if (!isset($decimals[$currency])) {
-            return ['valid' => false, 'value' => null, 'error' => 'No display decimals defined for currency: ' . $currency . '. Add display decimals via changesettings before enabling.'];
-        }
-
+        // No display decimals check needed — currencies without explicit display
+        // decimals default to INTERNAL_PRECISION (8 decimal places)
         return ['valid' => true, 'value' => $currency, 'error' => null];
     }
 

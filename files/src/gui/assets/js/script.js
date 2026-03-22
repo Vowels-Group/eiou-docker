@@ -498,10 +498,9 @@ function updateAmountPrecisionHint() {
     if (!currencySelect || !hintText) return;
 
     var currency = currencySelect.value;
-    var displayDecimals = {};
-    try { displayDecimals = JSON.parse(currencySelect.getAttribute('data-display-decimals') || '{}'); } catch (e) {}
-    var decimals = displayDecimals[currency] !== undefined ? displayDecimals[currency] : 8;
-    var minimum = decimals > 0 ? (1 / Math.pow(10, decimals)).toFixed(decimals) : '1';
+    // Input validation always uses internal precision, regardless of display decimals
+    var decimals = parseInt(currencySelect.getAttribute('data-internal-precision') || '8', 10);
+    var minimum = (1 / Math.pow(10, decimals)).toFixed(decimals);
     var step = minimum;
 
     hintText.textContent = 'Minimum amount for ' + currency + ': ' + minimum + '. Values below this will be rejected.';

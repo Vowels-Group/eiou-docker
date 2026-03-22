@@ -266,19 +266,13 @@ class SettingsController
             $currencies = array_filter(array_map('trim', $rawCurrencies));
             $currencyErrors = [];
 
-            // Use submitted values if present, otherwise fall back to saved config
-            $effectiveDecimals = isset($settings['displayDecimals'])
-                ? json_decode($settings['displayDecimals'], true)
-                : UserContext::getInstance()->getAllDisplayDecimals();
-
             foreach ($currencies as $c) {
                 if (!preg_match('/^[A-Z0-9]{' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ',' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . '}$/', $c)) {
                     $currencyErrors[] = "Invalid currency code format: {$c}";
                     continue;
                 }
-                if (!isset($effectiveDecimals[$c])) {
-                    $currencyErrors[] = "Currency {$c}: no display decimals defined. Add it to Display Decimals first.";
-                }
+                // No display decimals check — currencies without explicit display
+                // decimals default to INTERNAL_PRECISION (8 decimal places)
             }
             if (!empty($currencyErrors)) {
                 $errors = array_merge($errors, $currencyErrors);

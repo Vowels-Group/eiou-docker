@@ -85,7 +85,8 @@
                 }
                 ?>
                 <select id="currency" name="currency" required
-                        data-display-decimals='<?php echo htmlspecialchars(json_encode($displayDecimalsJson, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
+                        data-display-decimals='<?php echo htmlspecialchars(json_encode($displayDecimalsJson, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'
+                        data-internal-precision='<?php echo \Eiou\Core\Constants::INTERNAL_PRECISION; ?>'>
                     <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
                         <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
                     <?php endforeach; ?>
