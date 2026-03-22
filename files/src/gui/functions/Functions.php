@@ -558,7 +558,7 @@ try {
             $creditData = $contactCreditRepo->getAvailableCredit($hash);
             if ($creditData !== null) {
                 $contactCurrency = $c['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::getConversionFactor($contactCurrency);
+                $availableCreditByContact[$hash] = $creditData['available_credit']->toMajorUnits();
             }
         }
     }
@@ -567,7 +567,7 @@ try {
     foreach ($creditTotals as $row) {
         $totalAvailableCreditByCurrency[] = [
             'currency' => $row['currency'],
-            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::getConversionFactor($row['currency']), \Eiou\Core\Constants::getDisplayDecimals($row['currency']))
+            'total' => number_format($row['total_available_credit']->toMajorUnits(), \Eiou\Core\Constants::getDisplayDecimals($row['currency']))
         ];
     }
 } catch (Exception $e) {
@@ -599,7 +599,7 @@ try {
             $creditMap = [];
             foreach ($allCredits as $cr) {
                 $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $creditMap[$cur] = $cr['available_credit'] / \Eiou\Core\Constants::getConversionFactor($cur);
+                $creditMap[$cur] = $cr['available_credit']->toMajorUnits();
             }
             $availableCreditAllByHash[$hash] = $creditMap;
         }
@@ -629,7 +629,7 @@ foreach ($contactArraysForCredit as &$contacts) {
             $cur = $cc['currency'];
             $ccStatus = $cc['status'] ?? 'accepted';
             $ccDirection = $cc['direction'] ?? 'outgoing';
-            $creditLimitMajor = ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::getConversionFactor($cur);
+            $creditLimitMajor = ($cc['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
             $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
             $entry = [
                 'currency' => $cur,
