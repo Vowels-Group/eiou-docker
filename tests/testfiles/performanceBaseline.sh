@@ -522,9 +522,8 @@ if [[ -n "$realContactAddress" ]]; then
         elif [[ -z "$batchFirstError" ]]; then
             batchFirstError=$(echo "$_txResult" | head -c 200)
         fi
-        # Process queues on both sides so the transaction reaches completed state
-        wait_for_queue_processed ${testContainer} 2
-        wait_for_queue_processed ${realContactContainer} 2
+        # Wait for daemon processors to complete the transaction naturally
+        sleep 2
     done
     batchEnd=$(date +%s%N)
     batchTime=$(( (batchEnd - batchStart) / 1000000 ))
