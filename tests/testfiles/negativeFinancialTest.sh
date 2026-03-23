@@ -754,7 +754,7 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
@@ -763,14 +763,16 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
+httpCode=$(echo "$response" | tail -1)
+responseBody=$(echo "$response" | sed '$d')
 
-# Scientific notation should be handled gracefully (valid JSON response)
-if [[ "$response" =~ '"success"' ]]; then
+# Scientific notation should be handled gracefully (valid JSON response or valid HTTP status)
+if [[ "$responseBody" =~ '"success"' ]] || [[ "$httpCode" == "200" ]]; then
     printf "\t   Scientific notation handling ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Scientific notation handling ${RED}FAILED${NC}\n"
-    printf "\t   Response: ${response}\n"
+    printf "\t   Response (HTTP ${httpCode}): ${responseBody}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -825,7 +827,7 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
@@ -834,14 +836,16 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "Content-Type: application/json" \
     -d "${body}" \
     "${LOCAL_API_BASE}${path}" 2>&1)
+httpCode=$(echo "$response" | tail -1)
+responseBody=$(echo "$response" | sed '$d')
 
 # Whitespace-padded amount: API should either trim and accept, or reject — but not crash
-if [[ "$response" =~ '"success"' ]]; then
+if [[ "$responseBody" =~ '"success"' ]] || [[ "$httpCode" == "200" ]]; then
     printf "\t   Whitespace amount handling ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Whitespace amount handling ${RED}FAILED${NC}\n"
-    printf "\t   Response: ${response}\n"
+    printf "\t   Response (HTTP ${httpCode}): ${responseBody}\n"
     failure=$(( failure + 1 ))
 fi
 

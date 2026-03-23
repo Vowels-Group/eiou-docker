@@ -767,12 +767,12 @@ class BackupService implements BackupServiceInterface
             $tuples = $this->parseValueTuples($valuesBlock);
 
             foreach ($tuples as $tuple) {
-                // Verify the txid is in the correct column position (column index 13)
+                // Verify the txid is in the correct column position (column index 14)
                 // Column order: id(0), tx_type(1), type(2), status(3), sender_address(4),
                 // sender_public_key(5), sender_public_key_hash(6), receiver_address(7),
-                // receiver_public_key(8), receiver_public_key_hash(9), amount(10),
-                // currency(11), timestamp(12), txid(13), ...
-                if ($this->tupleHasTxidAtPosition($tuple, $txid, 13)) {
+                // receiver_public_key(8), receiver_public_key_hash(9), amount_whole(10),
+                // amount_frac(11), currency(12), timestamp(13), txid(14), ...
+                if ($this->tupleHasTxidAtPosition($tuple, $txid, 14)) {
                     return "INSERT IGNORE INTO `transactions` VALUES {$tuple};";
                 }
             }

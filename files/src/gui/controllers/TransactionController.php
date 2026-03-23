@@ -498,16 +498,16 @@ class TransactionController
         }
 
         $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
-        $baseAmount = (int) $p2p['amount'];
-        $myFeeAmount = (int) ($p2p['my_fee_amount'] ?? 0);
+        $baseAmount = ($p2p['amount'] instanceof \Eiou\Core\SplitAmount) ? $p2p['amount'] : \Eiou\Core\SplitAmount::from($p2p['amount']);
+        $myFeeAmount = isset($p2p['my_fee_amount']) && $p2p['my_fee_amount'] instanceof \Eiou\Core\SplitAmount ? $p2p['my_fee_amount'] : \Eiou\Core\SplitAmount::zero();
 
         $result = [];
         for ($i = 0; $i < count($candidates); $i++) {
             $c = $candidates[$i];
             $result[] = [
                 'id' => (int) $c['id'],
-                'amount' => (int) $c['amount'],
-                'fee_amount' => (int) $c['fee_amount'],
+                'amount' => ($c['amount'] instanceof \Eiou\Core\SplitAmount) ? $c['amount'] : \Eiou\Core\SplitAmount::from($c['amount']),
+                'fee_amount' => ($c['fee_amount'] instanceof \Eiou\Core\SplitAmount) ? $c['fee_amount'] : \Eiou\Core\SplitAmount::from($c['fee_amount']),
                 'sender_address' => $c['sender_address'],
             ];
         }

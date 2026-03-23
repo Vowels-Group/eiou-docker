@@ -97,7 +97,8 @@ payloadCheck=$(docker exec ${testSender} php -r "
         exit;
     }
     \$result = \$payload->buildCancelled('testhash123', 'http://test.example');
-    if (\$result['type'] !== 'rp2p' || \$result['cancelled'] !== true || \$result['amount'] !== 0) {
+    \$amountIsZero = (\$result['amount'] instanceof \Eiou\Core\SplitAmount) ? \$result['amount']->isZero() : (is_array(\$result['amount']) ? (\$result['amount']['whole'] === 0 && \$result['amount']['frac'] === 0) : \$result['amount'] === 0);
+    if (\$result['type'] !== 'rp2p' || \$result['cancelled'] !== true || !\$amountIsZero) {
         echo 'INVALID:' . json_encode(\$result);
         exit;
     }

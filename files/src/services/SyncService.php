@@ -1688,7 +1688,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         $messageContent['receiverAddress'] = $tx['receiver_address'];
         $messageContent['receiverPublicKey'] = $tx['receiver_public_key'];
-        $messageContent['amount'] = (int)$tx['amount'];
+        $messageContent['amount'] = ($tx['amount'] instanceof SplitAmount) ? $tx['amount']->toArray() : $tx['amount'];
         $messageContent['currency'] = $tx['currency'];
         $messageContent['txid'] = $tx['txid'];
         $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
