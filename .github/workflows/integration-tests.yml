@@ -88,7 +88,7 @@ jobs:
 
       - name: "Publish test report"
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         with:
           name: Integration Test Results
           path: tests/test-results/integration.xml

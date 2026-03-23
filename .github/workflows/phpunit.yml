@@ -113,7 +113,7 @@ jobs:
 
       - name: "Publish test report"
         if: always() && hashFiles('test-results/phpunit.xml') != ''
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         with:
           name: PHPUnit Results
           path: test-results/phpunit.xml
