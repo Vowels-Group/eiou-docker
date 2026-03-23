@@ -523,7 +523,7 @@ if [[ -n "$realContactAddress" ]]; then
             batchFirstError=$(echo "$_txResult" | head -c 200)
         fi
         # Wait for daemon processors to complete the transaction naturally
-        sleep 2
+        sleep 5
     done
     batchEnd=$(date +%s%N)
     batchTime=$(( (batchEnd - batchStart) / 1000000 ))
