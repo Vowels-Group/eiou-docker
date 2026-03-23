@@ -420,6 +420,31 @@ fi
 
 echo -e "\n[Section 4: Transaction Processing Performance]"
 
+# Clean up chain state from prior test suites to prevent chain-integrity errors.
+# When run after syncTestSuite/chainDropTestSuite, residual chain gaps block sends.
+echo -e "\n\t-> Resetting transaction chain state for clean performance measurement"
+for _perfContainer in "${containers[@]}"; do
+    docker exec ${_perfContainer} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$pdo->exec(\"DELETE FROM transactions WHERE memo != 'contact'\");
+        // Fix dangling previous_txid pointers
+        \$broken = \$pdo->query(\"
+            SELECT t1.txid FROM transactions t1
+            WHERE t1.previous_txid IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM transactions t2 WHERE t2.txid = t1.previous_txid)
+        \")->fetchAll(PDO::FETCH_COLUMN);
+        foreach (\$broken as \$txid) {
+            \$pdo->exec(\"UPDATE transactions SET previous_txid = NULL WHERE txid = '\" . addslashes(\$txid) . \"'\");
+        }
+        \$pdo->exec('DELETE FROM balances');
+        \$pdo->exec('DELETE FROM chain_drop_proposals');
+        \$pdo->exec('DELETE FROM p2p');
+        \$pdo->exec('DELETE FROM rp2p');
+    " 2>/dev/null || true
+done
+echo -e "\t   Chain state reset complete"
+
 # Skip transaction tests if no contact address available
 if [[ -n "$realContactAddress" ]]; then
 
