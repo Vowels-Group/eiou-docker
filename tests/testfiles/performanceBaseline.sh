@@ -517,7 +517,7 @@ if [[ -n "$realContactAddress" ]]; then
     batchFirstError=""
     for _batchI in $(seq 1 10); do
         _txResult=$(docker exec ${testContainer} eiou send ${realContactAddress} 0.01 USD --json 2>&1)
-        if echo "$_txResult" | grep -q '"success":true'; then
+        if echo "$_txResult" | grep -q '"success":\s*true'; then
             batchSuccessCount=$(( batchSuccessCount + 1 ))
         elif [[ -z "$batchFirstError" ]]; then
             batchFirstError=$(echo "$_txResult" | head -c 200)
