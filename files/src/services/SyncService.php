@@ -1121,11 +1121,12 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 return false;
             }
 
-            // Update the transaction with new signature and nonce
+            // Update the transaction with new signature, nonce, and signed message content
             $signatureUpdated = $this->transactionRepository->updateSignatureData(
                 $localTx['txid'],
                 $signResult['signature'],
-                $signResult['nonce']
+                $signResult['nonce'],
+                $signResult['signed_message'] ?? null
             );
 
             if (!$signatureUpdated) {

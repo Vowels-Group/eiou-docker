@@ -1243,11 +1243,12 @@ class ChainDropService implements ChainDropServiceInterface
                 return false;
             }
 
-            // Update signature in database
+            // Update signature in database (include signed_message_content for sync verification)
             $updated = $this->transactionRepository->updateSignatureData(
                 $txid,
                 $signResult['signature'],
-                $signResult['nonce']
+                $signResult['nonce'],
+                $signResult['signed_message'] ?? null
             );
 
             if (!$updated) {

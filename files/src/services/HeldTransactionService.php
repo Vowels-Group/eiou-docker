@@ -506,11 +506,12 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 return false;
             }
 
-            // Update signature data in database
+            // Update signature data in database (include signed_message_content for sync verification)
             $signatureUpdated = $this->transactionRepository->updateSignatureData(
                 $txid,
                 $signResult['signature'],
-                $signResult['nonce']
+                $signResult['nonce'],
+                $signResult['signed_message'] ?? null
             );
 
             if (!$signatureUpdated) {

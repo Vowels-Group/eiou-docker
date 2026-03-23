@@ -657,7 +657,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             return false;
         }
 
-        $this->transactionRepository->updateSignatureData($txid, $signResult['signature'], $signResult['nonce']);
+        $this->transactionRepository->updateSignatureData($txid, $signResult['signature'], $signResult['nonce'], $signResult['signed_message'] ?? null);
         return true;
     }
 

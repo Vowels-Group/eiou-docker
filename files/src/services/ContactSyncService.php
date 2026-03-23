@@ -407,7 +407,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $this->transactionRepository->updateSignatureData(
                         $txid,
                         $signingData['signature'],
-                        $signingData['nonce']
+                        $signingData['nonce'],
+                        $signingData['signed_message'] ?? null
                     );
                 }
 
@@ -489,7 +490,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $this->transactionRepository->updateSignatureData(
                         $txid,
                         $signingData['signature'],
-                        $signingData['nonce']
+                        $signingData['nonce'],
+                        $signingData['signed_message'] ?? null
                     );
                 }
 
