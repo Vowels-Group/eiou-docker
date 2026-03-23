@@ -441,8 +441,9 @@ if [[ -n "$realContactAddress" ]]; then
         if (\$result && isset(\$result['success']) && \$result['success'] === true) {
             echo \$elapsed_ms;
         } else {
-            // Return time but mark as error
-            echo 'ERROR:' . \$elapsed_ms;
+            // Return time but mark as error, include first 100 chars of output for diagnostics
+            \$preview = substr(\$output ?? 'NULL', 0, 100);
+            echo 'ERROR:' . \$elapsed_ms . ':' . \$preview;
         }
     " 2>/dev/null)
 
@@ -451,7 +452,9 @@ if [[ -n "$realContactAddress" ]]; then
         passed=$(( passed + 1 ))
     elif [[ "$singleTxTimeResult" == ERROR:* ]]; then
         txTime=$(echo "$singleTxTimeResult" | cut -d: -f2)
+        txError=$(echo "$singleTxTimeResult" | cut -d: -f3-)
         printf "\t   Single transaction ${RED}FAILED${NC} (transaction failed, took ${txTime}ms)\n"
+        printf "\t   Error: ${txError}\n"
         failure=$(( failure + 1 ))
     else
         printf "\t   Single transaction ${RED}FAILED${NC} (${singleTxTimeResult}ms >= ${MAX_SINGLE_TX_TIME_MS}ms)\n"

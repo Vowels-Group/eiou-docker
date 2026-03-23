@@ -55,7 +55,13 @@ class InputValidator {
         }
 
         // Keep as string to preserve precision for large numbers
-        $amountStr = (string) $amount;
+        $amountStr = trim((string) $amount);
+
+        // Normalize scientific notation (e.g., "1e2" → "100.00000000") before bcmath.
+        // PHP 8.x bcmath functions throw ValueError on scientific notation strings.
+        if (stripos($amountStr, 'e') !== false) {
+            $amountStr = number_format((float) $amountStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         // Check if amount is positive
         if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) <= 0) {
@@ -100,7 +106,10 @@ class InputValidator {
         }
 
         // Keep as string to preserve precision
-        $amountStr = (string) $amount;
+        $amountStr = trim((string) $amount);
+        if (stripos($amountStr, 'e') !== false) {
+            $amountStr = number_format((float) $amountStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         // Check if amount is positive
         if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) <= 0) {
@@ -142,7 +151,10 @@ class InputValidator {
         }
 
         // Keep as string to preserve precision
-        $amountStr = (string) $amount;
+        $amountStr = trim((string) $amount);
+        if (stripos($amountStr, 'e') !== false) {
+            $amountStr = number_format((float) $amountStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) < 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Fee amount cannot be negative'];
@@ -386,7 +398,10 @@ class InputValidator {
         }
 
         // Keep as string to preserve precision for large numbers
-        $creditStr = (string) $credit;
+        $creditStr = trim((string) $credit);
+        if (stripos($creditStr, 'e') !== false) {
+            $creditStr = number_format((float) $creditStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         // Credit must be non-negative
         if (\bccomp($creditStr, '0', Constants::INTERNAL_PRECISION) < 0) {
