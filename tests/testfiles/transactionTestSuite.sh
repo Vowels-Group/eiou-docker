@@ -57,7 +57,7 @@ tableStructure=$(docker exec ${testContainer} php -r "
     \$result = \$pdo->query(\"DESCRIBE transactions\");
     \$columns = \$result->fetchAll(PDO::FETCH_COLUMN);
 
-    \$required = ['txid', 'sender_address', 'receiver_address', 'amount', 'currency', 'status', 'timestamp', 'previous_txid'];
+    \$required = ['txid', 'sender_address', 'receiver_address', 'amount_whole', 'amount_frac', 'currency', 'status', 'timestamp', 'previous_txid'];
     \$missing = array_diff(\$required, \$columns);
 
     if (empty(\$missing)) {

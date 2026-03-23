@@ -36,7 +36,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     # Expected values
     expectedFee=$(awk '{print $1*$2}' <<<"${valueArray[0]} 100")
-    expectedCredit=$(awk '{print $1*$2}' <<<"${valueArray[1]} 100")
+    expectedCredit="${valueArray[1]}"
     expectedCurrency="${valueArray[2]}"
 
     echo -e "\n\t-> Verifying contact: ${containerKeys[0]} -> ${containerKeys[1]}"
@@ -92,7 +92,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
             feeCorrect="false"
         fi
 
-        if [[ "$contactData" =~ "\"credit_limit\":${expectedCredit}" ]] || [[ "$contactData" =~ "\"credit_limit\":\"${expectedCredit}\"" ]]; then
+        # credit_limit is now a SplitAmount object serialized as {"whole":N,"frac":N}
+        if [[ "$contactData" =~ "\"credit_limit\":{\"whole\":${expectedCredit},\"frac\":0}" ]]; then
             creditCorrect="true"
         else
             creditCorrect="false"

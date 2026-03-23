@@ -1696,8 +1696,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         // Get fee/credit from our outgoing currency config
                         $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
-                        $fee = (float) ($outgoingConfig['fee_percent'] ?? 0);
-                        $credit = (float) ($outgoingConfig['credit_limit'] ?? 0);
+                        $fee = (int) ($outgoingConfig['fee_percent'] ?? 0);
+                        $credit = $outgoingConfig['credit_limit'] ?? SplitAmount::zero();
 
                         $this->acceptContact(
                             $senderPublicKey,
@@ -1844,8 +1844,8 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // Mutual request with matching currency: auto-accept
                         // Get fee/credit from our outgoing currency config
                         $outgoingConfig = $this->contactCurrencyRepository->getCurrencyConfig($senderPublicKeyHash, $currency, 'outgoing');
-                        $fee = (float) ($outgoingConfig['fee_percent'] ?? 0);
-                        $credit = (float) ($outgoingConfig['credit_limit'] ?? 0);
+                        $fee = (int) ($outgoingConfig['fee_percent'] ?? 0);
+                        $credit = $outgoingConfig['credit_limit'] ?? SplitAmount::zero();
 
                         $this->acceptContact(
                             $senderPublicKey,

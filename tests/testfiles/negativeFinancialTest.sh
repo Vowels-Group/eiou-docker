@@ -143,13 +143,13 @@ fi
 
 echo -e "\n[Section 3: Excessive Amount Rejection (Exceeds MAX_AMOUNT)]"
 
-# Test 3.1: Send amount exceeding MAX_AMOUNT (999999999999)
+# Test 3.1: Send amount exceeding MAX_AMOUNT (TRANSACTION_MAX_AMOUNT + 1 = 2305843009213693952)
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing send with excessive amount (999999999999)"
+echo -e "\n\t-> Testing send with excessive amount (2305843009213693952)"
 
 timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
-body="{\"address\":\"${realContactAddress}\",\"amount\":\"999999999999\",\"currency\":\"USD\"}"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\"2305843009213693952\",\"currency\":\"USD\"}"
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
