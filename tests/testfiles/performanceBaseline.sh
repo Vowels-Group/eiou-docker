@@ -486,9 +486,24 @@ if [[ -n "$realContactAddress" ]]; then
         failure=$(( failure + 1 ))
     fi
 
-    # Ensure the single transaction completes before batch test
-    wait_for_queue_processed ${testContainer} 3
-    wait_for_queue_processed ${realContactContainer} 3
+    # Reset chain state before batch test — the single tx from test 4.1 may still
+    # be pending/sending and would block all batch sends with chain-integrity errors.
+    for _perfContainer in "${containers[@]}"; do
+        docker exec ${_perfContainer} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+            \$pdo->exec(\"DELETE FROM transactions WHERE memo != 'contact'\");
+            \$broken = \$pdo->query(\"
+                SELECT t1.txid FROM transactions t1
+                WHERE t1.previous_txid IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM transactions t2 WHERE t2.txid = t1.previous_txid)
+            \")->fetchAll(PDO::FETCH_COLUMN);
+            foreach (\$broken as \$txid) {
+                \$pdo->exec(\"UPDATE transactions SET previous_txid = NULL WHERE txid = '\" . addslashes(\$txid) . \"'\");
+            }
+            \$pdo->exec('DELETE FROM balances');
+        " 2>/dev/null || true
+    done
 
     # Test 4.2: Batch transaction throughput (10 transactions)
     totaltests=$(( totaltests + 1 ))
