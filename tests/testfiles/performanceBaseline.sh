@@ -499,10 +499,13 @@ if [[ -n "$realContactAddress" ]]; then
     # chain conflicts (duplicate previous_txid) and pending-tx blocking.
     batchStart=$(date +%s%N)
     batchSuccessCount=0
+    batchFirstError=""
     for _batchI in $(seq 1 10); do
         _txResult=$(docker exec ${testContainer} eiou send ${realContactAddress} 0.01 USD --json 2>&1)
         if echo "$_txResult" | grep -q '"success":true'; then
             batchSuccessCount=$(( batchSuccessCount + 1 ))
+        elif [[ -z "$batchFirstError" ]]; then
+            batchFirstError=$(echo "$_txResult" | head -c 200)
         fi
         # Process queues on both sides so the transaction reaches completed state
         wait_for_queue_processed ${testContainer} 2
@@ -516,6 +519,9 @@ if [[ -n "$realContactAddress" ]]; then
         passed=$(( passed + 1 ))
     else
         printf "\t   Batch transactions ${RED}FAILED${NC} (${batchSuccessCount}/10 succeeded, ${batchTime}ms)\n"
+        if [[ -n "$batchFirstError" ]]; then
+            printf "\t   First error: ${batchFirstError}\n"
+        fi
         failure=$(( failure + 1 ))
     fi
 
