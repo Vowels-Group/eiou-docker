@@ -486,6 +486,10 @@ if [[ -n "$realContactAddress" ]]; then
         failure=$(( failure + 1 ))
     fi
 
+    # Ensure the single transaction completes before batch test
+    wait_for_queue_processed ${testContainer} 3
+    wait_for_queue_processed ${realContactContainer} 3
+
     # Test 4.2: Batch transaction throughput (10 transactions)
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing batch transaction throughput (10 transactions)"
