@@ -240,7 +240,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         if ($this->contactCurrencyRepository !== null && !empty($remoteCurrencies)) {
                             foreach ($remoteCurrencies as $cur) {
                                 $this->contactCurrencyRepository->insertCurrencyConfig(
-                                    $pubkeyHash, $cur, 0, 0, 'pending', 'incoming'
+                                    $pubkeyHash, $cur, 0, null, 'pending', 'incoming'
                                 );
                             }
                         }

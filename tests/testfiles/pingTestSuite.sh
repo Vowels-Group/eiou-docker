@@ -781,44 +781,6 @@ elif [[ "$finalTxCountB" -ge 1 ]]; then
     passed=$(( passed + 1 ))
 else
     printf "\t   B transactions restoration ${RED}FAILED${NC} - 0/${originalTxCountB} transactions\n"
-
-    # Diagnostic: manually trigger sync from B to A and capture result
-    syncDiag=$(docker exec ${containerB} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$app = \Eiou\Core\Application::getInstance();
-        \$pdo = \$app->services->getPdo();
-
-        // Check contact status
-        \$contacts = \$pdo->query('SELECT pubkey, name, status FROM contacts')->fetchAll(PDO::FETCH_ASSOC);
-        echo 'Contacts: ' . json_encode(array_map(fn(\$c) => \$c['name'] . '(' . \$c['status'] . ')', \$contacts)) . '\n';
-
-        // Check if sync can find transactions
-        foreach (\$contacts as \$c) {
-            \$txCount = \$pdo->prepare('SELECT COUNT(*) FROM transactions WHERE sender_public_key = :pk OR receiver_public_key = :pk2');
-            \$txCount->execute([':pk' => \$c['pubkey'], ':pk2' => \$c['pubkey']]);
-            echo 'Txs with ' . \$c['name'] . ': ' . \$txCount->fetchColumn() . '\n';
-        }
-
-        // Check secure logger for recent signature failures
-        \$logDir = '/app/data/logs';
-        if (is_dir(\$logDir)) {
-            \$files = glob(\$logDir . '/*.log');
-            foreach (\$files as \$f) {
-                \$content = file_get_contents(\$f);
-                if (strpos(\$content, 'signature') !== false || strpos(\$content, 'Signature') !== false) {
-                    // Extract last 5 signature-related log lines
-                    \$lines = explode('\n', \$content);
-                    \$sigLines = array_filter(\$lines, fn(\$l) => stripos(\$l, 'signature') !== false);
-                    \$lastSigLines = array_slice(\$sigLines, -5);
-                    foreach (\$lastSigLines as \$l) {
-                        echo 'LOG: ' . substr(\$l, 0, 200) . '\n';
-                    }
-                }
-            }
-        }
-    " 2>/dev/null || echo "DIAGNOSTIC_ERROR")
-    printf "\t   Diagnostic: ${syncDiag}\n"
-
     failure=$(( failure + 1 ))
 fi
 
