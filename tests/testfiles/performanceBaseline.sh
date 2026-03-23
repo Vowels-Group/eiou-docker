@@ -452,7 +452,7 @@ if [[ -n "$realContactAddress" ]]; then
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing single transaction processing time"
 
-    singleTxTimeResult=$(docker exec ${testContainer} php -r "
+    singleTxTimeResult=$(docker exec -e EIOU_TEST_MODE=true ${testContainer} php -r "
         \$start = microtime(true);
 
         // Execute CLI command
@@ -516,7 +516,7 @@ if [[ -n "$realContactAddress" ]]; then
     batchSuccessCount=0
     batchFirstError=""
     for _batchI in $(seq 1 10); do
-        _txResult=$(docker exec ${testContainer} eiou send ${realContactAddress} 0.01 USD --json 2>&1)
+        _txResult=$(docker exec -e EIOU_TEST_MODE=true ${testContainer} eiou send ${realContactAddress} 0.01 USD --json 2>&1)
         if echo "$_txResult" | grep -q '"success":\s*true'; then
             batchSuccessCount=$(( batchSuccessCount + 1 ))
             # Extract txid and wait for it to reach completed status before next send.
