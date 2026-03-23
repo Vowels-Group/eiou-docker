@@ -535,7 +535,7 @@ if [[ -n "$realContactAddress" ]]; then
                 done
             fi
         elif [[ -z "$batchFirstError" ]]; then
-            batchFirstError=$(echo "$_txResult" | head -c 200)
+            batchFirstError="Send ${_batchI}/10: $(echo "$_txResult" | head -c 200)"
         fi
     done
     batchEnd=$(date +%s%N)
