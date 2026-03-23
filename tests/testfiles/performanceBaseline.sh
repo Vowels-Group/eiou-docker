@@ -48,7 +48,7 @@ echo -e "\t   Mode: ${MODE}"
 # These are baseline thresholds - adjust based on your environment
 
 MAX_SINGLE_TX_TIME_MS=5000       # Max time for single transaction processing
-MAX_BATCH_TX_TOTAL_TIME_MS=60000 # Max time for 10 transactions batch (1.5s inter-send delay)
+MAX_BATCH_TX_TOTAL_TIME_MS=120000 # Max time for 10 transactions batch (sequential with queue processing)
 MAX_API_RESPONSE_TIME_MS=2000    # Max time for API endpoint response
 MAX_DB_QUERY_TIME_MS=1000        # Max time for simple database query
 MAX_SIGNATURE_TIME_MS=500        # Max time for signature generation
@@ -490,30 +490,22 @@ if [[ -n "$realContactAddress" ]]; then
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing batch transaction throughput (10 transactions)"
 
-    batchTxTimeResult=$(docker exec ${testContainer} php -r "
-        \$start = microtime(true);
-        \$success_count = 0;
-
-        for (\$i = 0; \$i < 10; \$i++) {
-            \$output = shell_exec('eiou send ${realContactAddress} 0.01 USD --json 2>&1');
-            \$result = json_decode(\$output, true);
-            if (\$result && isset(\$result['success']) && \$result['success'] === true) {
-                \$success_count++;
-            }
-            // Delay between sends: each send must fully complete (sign, deliver,
-            // receive response) before the next can start, to avoid chain conflicts
-            // (two txs with the same previous_txid) and nonce collisions.
-            usleep(1500000); // 1.5s
-        }
-
-        \$end = microtime(true);
-        \$elapsed_ms = round((\$end - \$start) * 1000, 2);
-
-        echo \$success_count . ':' . \$elapsed_ms;
-    " 2>/dev/null)
-
-    batchSuccessCount=$(echo "$batchTxTimeResult" | cut -d: -f1)
-    batchTime=$(echo "$batchTxTimeResult" | cut -d: -f2)
+    # Send 10 transactions sequentially, processing queues between each to ensure
+    # the previous transaction completes before the next one starts. This prevents
+    # chain conflicts (duplicate previous_txid) and pending-tx blocking.
+    batchStart=$(date +%s%N)
+    batchSuccessCount=0
+    for _batchI in $(seq 1 10); do
+        _txResult=$(docker exec ${testContainer} eiou send ${realContactAddress} 0.01 USD --json 2>&1)
+        if echo "$_txResult" | grep -q '"success":true'; then
+            batchSuccessCount=$(( batchSuccessCount + 1 ))
+        fi
+        # Process queues on both sides so the transaction reaches completed state
+        wait_for_queue_processed ${testContainer} 2
+        wait_for_queue_processed ${realContactContainer} 2
+    done
+    batchEnd=$(date +%s%N)
+    batchTime=$(( (batchEnd - batchStart) / 1000000 ))
 
     if [[ "$batchSuccessCount" -ge 8 ]] && [[ $(awk "BEGIN {print ($batchTime < $MAX_BATCH_TX_TOTAL_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
         printf "\t   Batch transactions (${batchSuccessCount}/10 succeeded, ${batchTime}ms < ${MAX_BATCH_TX_TOTAL_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
