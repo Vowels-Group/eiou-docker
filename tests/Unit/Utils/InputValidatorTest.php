@@ -1153,4 +1153,200 @@ class InputValidatorTest extends TestCase
         $this->assertFalse($result['valid']);
         $this->assertStringContainsString('maximum', $result['error']);
     }
+
+    // =========================================================================
+    // Amount edge cases: scientific notation
+    // =========================================================================
+
+    public function testValidateAmountScientificNotationAccepted(): void
+    {
+        // is_numeric('1e5') returns true, bcadd normalises to 100000
+        $result = InputValidator::validateAmount('1e5', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('100000.00000000', $result['value']);
+    }
+
+    public function testValidateAmountScientificNotationSmall(): void
+    {
+        // 1.5e2 = 150
+        $result = InputValidator::validateAmount('1.5e2', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('150.00000000', $result['value']);
+    }
+
+    public function testValidateAmountScientificNotationNegativeExponent(): void
+    {
+        // 1.5e-2 = 0.015
+        $result = InputValidator::validateAmount('1.5e-2', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('0.01500000', $result['value']);
+    }
+
+    public function testValidateAmountScientificNotationExceedsMax(): void
+    {
+        // 1e20 far exceeds TRANSACTION_MAX_AMOUNT
+        $result = InputValidator::validateAmount('1e20', 'USD');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('maximum', $result['error']);
+    }
+
+    public function testValidateAmountScientificNotationTinyBelowMinimum(): void
+    {
+        // 1e-10 = 0.0000000001 → truncated to 0.00000000 at 8 decimals → rejected
+        $result = InputValidator::validateAmount('1e-10', 'USD');
+        $this->assertFalse($result['valid']);
+    }
+
+    // =========================================================================
+    // Amount edge cases: leading zeros, trailing zeros
+    // =========================================================================
+
+    public function testValidateAmountLeadingZeros(): void
+    {
+        $result = InputValidator::validateAmount('00100.50', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('100.50000000', $result['value']);
+    }
+
+    public function testValidateAmountTrailingZerosBeyondPrecision(): void
+    {
+        $result = InputValidator::validateAmount('100.5000000000000000', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('100.50000000', $result['value']);
+    }
+
+    // =========================================================================
+    // Amount edge cases: boundary values
+    // =========================================================================
+
+    public function testValidateAmountJustBelowMax(): void
+    {
+        // MAX_AMOUNT - 1 should be accepted
+        $justBelowMax = \bcsub((string) Constants::TRANSACTION_MAX_AMOUNT, '1', 0);
+        $result = InputValidator::validateAmount($justBelowMax, 'USD');
+        $this->assertTrue($result['valid']);
+    }
+
+    public function testValidateAmountMaxWithFraction(): void
+    {
+        // MAX_AMOUNT + 0.50 — whole part exceeds max
+        $maxWithFrac = \bcadd((string) Constants::TRANSACTION_MAX_AMOUNT, '0.50', 8);
+        $result = InputValidator::validateAmount($maxWithFrac, 'USD');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('maximum', $result['error']);
+    }
+
+    public function testValidateAmountSmallestPossible(): void
+    {
+        // 0.00000001 — the smallest representable amount at 8 decimal precision
+        $result = InputValidator::validateAmount('0.00000001', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('0.00000001', $result['value']);
+
+        $sa = \Eiou\Core\SplitAmount::from($result['value']);
+        $this->assertSame(0, $sa->whole);
+        $this->assertSame(1, $sa->frac);
+    }
+
+    public function testValidateAmountBelowSmallestRejected(): void
+    {
+        // 0.000000001 — 9 decimal places, truncated to 0.00000000 → rejected
+        $result = InputValidator::validateAmount('0.000000001', 'USD');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('minimum', $result['error']);
+    }
+
+    public function testValidateAmountPrecisionBoundary9Decimals(): void
+    {
+        // 0.000000009 → truncated to 0.00000000 → rejected (below minimum)
+        $result = InputValidator::validateAmount('0.000000009', 'USD');
+        $this->assertFalse($result['valid']);
+    }
+
+    // =========================================================================
+    // Amount edge cases: decimal truncation
+    // =========================================================================
+
+    public function testValidateAmountTruncatesNotRounds(): void
+    {
+        // 100.123456789 → truncated to 100.12345678 (not 100.12345679)
+        $result = InputValidator::validateAmount('100.123456789', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('100.12345678', $result['value']);
+    }
+
+    public function testValidateAmountMaxFracValue(): void
+    {
+        // 0.99999999 — maximum fractional value at 8 decimals
+        $result = InputValidator::validateAmount('0.99999999', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('0.99999999', $result['value']);
+
+        $sa = \Eiou\Core\SplitAmount::from($result['value']);
+        $this->assertSame(0, $sa->whole);
+        $this->assertSame(99999999, $sa->frac);
+    }
+
+    public function testValidateAmountLargeWithMaxFrac(): void
+    {
+        // Test a large whole part combined with max fractional
+        $result = InputValidator::validateAmount('999999999.99999999', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('999999999.99999999', $result['value']);
+    }
+
+    // =========================================================================
+    // Currency validation edge cases
+    // =========================================================================
+
+    public function testValidateCurrencyEmptyString(): void
+    {
+        $result = InputValidator::validateCurrency('');
+        $this->assertFalse($result['valid']);
+    }
+
+    public function testValidateCurrencyOnlyNumbers(): void
+    {
+        $result = InputValidator::validateCurrency('123', ['123']);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('uppercase letters', $result['error']);
+    }
+
+    // =========================================================================
+    // validateFeeAmount edge cases
+    // =========================================================================
+
+    public function testValidateFeeAmountSmallNegative(): void
+    {
+        $result = InputValidator::validateFeeAmount(-0.001);
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('negative', $result['error']);
+    }
+
+    public function testValidateFeeAmountVerySmall(): void
+    {
+        // 0.00000001 — smallest representable fee
+        $result = InputValidator::validateFeeAmount('0.00000001', 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('0.00000001', $result['value']);
+    }
+
+    // =========================================================================
+    // SplitAmount as validateAmount input
+    // =========================================================================
+
+    public function testValidateAmountAcceptsSplitAmountObject(): void
+    {
+        $sa = new \Eiou\Core\SplitAmount(50, 25000000); // 50.25
+        $result = InputValidator::validateAmount($sa, 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('50.25000000', $result['value']);
+    }
+
+    public function testValidateAmountAcceptsWholeFragArray(): void
+    {
+        $result = InputValidator::validateAmount(['whole' => 100, 'frac' => 50000000], 'USD');
+        $this->assertTrue($result['valid']);
+        $this->assertSame('100.50000000', $result['value']);
+    }
 }

@@ -219,4 +219,192 @@ class CurrencyUtilityServiceTest extends TestCase
         $this->assertEquals($usd->whole, $eur->whole);
         $this->assertEquals($usd->frac, $eur->frac);
     }
+
+    // =========================================================================
+    // formatCurrency display decimals tests
+    // =========================================================================
+
+    public function testFormatCurrencyUsesDisplayDecimals(): void
+    {
+        // USD has DISPLAY_DECIMALS = 2, so 100.12345678 should show as "100.12 USD"
+        $amount = new SplitAmount(100, 12345678);
+        $formatted = $this->service->formatCurrency($amount, 'USD');
+        $this->assertSame('100.12 USD', $formatted);
+    }
+
+    public function testFormatCurrencyUnknownCurrencyUsesInternalPrecision(): void
+    {
+        // Unknown currency defaults to INTERNAL_PRECISION (8) decimals
+        $amount = new SplitAmount(100, 12345678);
+        $formatted = $this->service->formatCurrency($amount, 'XYZ');
+        $this->assertSame('100.12345678 XYZ', $formatted);
+    }
+
+    public function testFormatCurrencyNegativeAmount(): void
+    {
+        // -5.50 stored as whole=-6, frac=50000000
+        $amount = new SplitAmount(-6, 50000000);
+        $formatted = $this->service->formatCurrency($amount, 'USD');
+        $this->assertSame('-5.50 USD', $formatted);
+    }
+
+    public function testFormatCurrencyVerySmallAmount(): void
+    {
+        // 0.00000001 — shows as 0.00 at USD 2-decimal display
+        $amount = new SplitAmount(0, 1);
+        $formatted = $this->service->formatCurrency($amount, 'USD');
+        $this->assertSame('0.00 USD', $formatted);
+    }
+
+    public function testFormatCurrencyVerySmallWithFullPrecision(): void
+    {
+        // Same amount but with unknown currency → full 8-decimal display
+        $amount = new SplitAmount(0, 1);
+        $formatted = $this->service->formatCurrency($amount, 'XYZ');
+        $this->assertSame('0.00000001 XYZ', $formatted);
+    }
+
+    public function testFormatCurrencyLargeAmountThousandsSeparator(): void
+    {
+        $amount = new SplitAmount(1000000, 50000000);
+        $formatted = $this->service->formatCurrency($amount, 'USD');
+        $this->assertSame('1,000,000.50 USD', $formatted);
+    }
+
+    // =========================================================================
+    // calculateFee edge cases
+    // =========================================================================
+
+    public function testCalculateFeeVerySmallPercentOnLargeAmount(): void
+    {
+        // 0.001% of $1 trillion = $10 million
+        $fee = $this->service->calculateFee(
+            new SplitAmount(1000000000000, 0),
+            0.001,
+            0.01,
+            'USD'
+        );
+        $this->assertEquals(10000000, $fee->whole);
+        $this->assertEquals(0, $fee->frac);
+    }
+
+    public function testCalculateFeeFractionalResult(): void
+    {
+        // 3% of $33.33 = $0.9999
+        $fee = $this->service->calculateFee(
+            new SplitAmount(33, 33000000),
+            3.0,
+            0.0,
+            'USD'
+        );
+        $this->assertEquals(0, $fee->whole);
+        // 3% of 33.33 = 0.9999 → frac=99990000
+        $this->assertEquals(99990000, $fee->frac);
+    }
+
+    public function testCalculateFeeBelowMinReturnsMin(): void
+    {
+        // 0.001% of $1.00 = $0.00001, but minFee=$0.05 → returns $0.05
+        $fee = $this->service->calculateFee(
+            new SplitAmount(1, 0),
+            0.001,
+            0.05,
+            'USD'
+        );
+        $this->assertEquals(0, $fee->whole);
+        $this->assertEquals(5000000, $fee->frac); // 0.05 = frac 5000000
+    }
+
+    public function testCalculateFee100Percent(): void
+    {
+        // 100% fee on $100 = $100
+        $fee = $this->service->calculateFee(
+            new SplitAmount(100, 0),
+            100.0,
+            0.0,
+            'USD'
+        );
+        $this->assertEquals(100, $fee->whole);
+        $this->assertEquals(0, $fee->frac);
+    }
+
+    // =========================================================================
+    // calculateFeePercent edge cases
+    // =========================================================================
+
+    public function testCalculateFeePercentWithFractionalAmounts(): void
+    {
+        // total=105.50, base=100.00 → fee=5.50, percent=5.50%
+        $percent = $this->service->calculateFeePercent(
+            new SplitAmount(105, 50000000),
+            new SplitAmount(100, 0)
+        );
+        $this->assertEqualsWithDelta(5.5, $percent, 0.01);
+    }
+
+    public function testCalculateFeePercentVerySmallDifference(): void
+    {
+        // total=100.00000001, base=100.00000000 → fee=0.00000001
+        $percent = $this->service->calculateFeePercent(
+            new SplitAmount(100, 1),
+            new SplitAmount(100, 0)
+        );
+        // Very small percentage, should be near 0 but > 0
+        $this->assertGreaterThanOrEqual(0.0, $percent);
+    }
+
+    // =========================================================================
+    // Conversion round-trip edge cases
+    // =========================================================================
+
+    public function testConversionRoundTripMaxFrac(): void
+    {
+        // 0.99999999 → toMajorUnits → convertMajorToMinor → should preserve
+        $original = new SplitAmount(0, 99999999);
+        $majorUnits = $this->service->convertMinorToMajor($original);
+        $backToSplit = $this->service->convertMajorToMinor($majorUnits);
+        $this->assertEquals(0, $backToSplit->whole);
+        $this->assertEquals(99999999, $backToSplit->frac);
+    }
+
+    public function testConversionRoundTripLargeWhole(): void
+    {
+        $original = new SplitAmount(1000000000, 50000000); // 1 billion + 0.50
+        $majorUnits = $this->service->convertMinorToMajor($original);
+        $backToSplit = $this->service->convertMajorToMinor($majorUnits);
+        $this->assertEquals($original->whole, $backToSplit->whole);
+        $this->assertEquals($original->frac, $backToSplit->frac);
+    }
+
+    // =========================================================================
+    // exactMajorToMinor and exactMulDiv
+    // =========================================================================
+
+    public function testExactMajorToMinorMonetaryReturnsSplitAmount(): void
+    {
+        $result = CurrencyUtilityService::exactMajorToMinor(100.50, Constants::INTERNAL_CONVERSION_FACTOR);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(100, $result->whole);
+        $this->assertEquals(50000000, $result->frac);
+    }
+
+    public function testExactMajorToMinorFeeReturnsInt(): void
+    {
+        $result = CurrencyUtilityService::exactMajorToMinor(2.50, Constants::FEE_CONVERSION_FACTOR);
+        $this->assertIsInt($result);
+        // 2.50 * FEE_CONVERSION_FACTOR
+        $this->assertEquals((int) \bcmul('2.50', (string) Constants::FEE_CONVERSION_FACTOR, 0), $result);
+    }
+
+    public function testExactMulDivBasic(): void
+    {
+        // $100 * 2.5 / 100 = $2.50
+        $result = CurrencyUtilityService::exactMulDiv(
+            new SplitAmount(100, 0),
+            2.5,
+            100.0
+        );
+        $this->assertEquals(2, $result->whole);
+        $this->assertEquals(50000000, $result->frac);
+    }
 }

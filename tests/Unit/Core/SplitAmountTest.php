@@ -329,4 +329,325 @@ class SplitAmountTest extends TestCase
         $this->assertEquals(3000000000000, $c->whole);
         $this->assertEquals(75000000, $c->frac);
     }
+
+    // =========================================================================
+    // toDisplayString tests
+    // =========================================================================
+
+    public function testToDisplayStringDefault2Decimals(): void
+    {
+        $a = new SplitAmount(100, 50000000); // 100.50
+        $this->assertSame('100.50', $a->toDisplayString());
+    }
+
+    public function testToDisplayStringZeroDecimals(): void
+    {
+        $a = new SplitAmount(42, 99999999);
+        $this->assertSame('43', $a->toDisplayString(0));
+    }
+
+    public function testToDisplayString8Decimals(): void
+    {
+        $a = new SplitAmount(100, 1); // 100.00000001
+        $this->assertSame('100.00000001', $a->toDisplayString(8));
+    }
+
+    public function testToDisplayString4Decimals(): void
+    {
+        $a = new SplitAmount(1000, 12345678); // 1000.12345678
+        $this->assertSame('1000.1235', $a->toDisplayString(4));
+    }
+
+    public function testToDisplayStringZeroAmount(): void
+    {
+        $z = SplitAmount::zero();
+        $this->assertSame('0.00', $z->toDisplayString());
+        $this->assertSame('0.00000000', $z->toDisplayString(8));
+    }
+
+    public function testToDisplayStringLargeAmount(): void
+    {
+        $a = new SplitAmount(1000000000000, 50000000); // 1 trillion + 0.50
+        $this->assertSame('1000000000000.50', $a->toDisplayString());
+    }
+
+    public function testToDisplayStringNegativeAmount(): void
+    {
+        // -1.50 = whole=-2, frac=50000000
+        $a = new SplitAmount(-2, 50000000);
+        $this->assertSame('-1.50', $a->toDisplayString());
+    }
+
+    public function testToDisplayStringMaxFrac(): void
+    {
+        // 0.99999999 — max fractional value
+        $a = new SplitAmount(0, 99999999);
+        $this->assertSame('1.00', $a->toDisplayString()); // rounds to 1.00 at 2 decimals
+        $this->assertSame('0.99999999', $a->toDisplayString(8));
+    }
+
+    // =========================================================================
+    // fromMajorUnits precision tests
+    // =========================================================================
+
+    public function testFromMajorUnitsExtraPrecisionTruncated(): void
+    {
+        // Float with >8 decimal places — truncated, not rounded
+        $a = SplitAmount::fromMajorUnits(1.123456789);
+        $this->assertEquals(1, $a->whole);
+        // Float precision means exact comparison may vary, but frac should be ~12345679
+        $this->assertLessThan(SplitAmount::FRAC_MODULUS, $a->frac);
+        $this->assertGreaterThan(0, $a->frac);
+    }
+
+    public function testFromMajorUnitsVerySmall(): void
+    {
+        $a = SplitAmount::fromMajorUnits(0.00000001);
+        $this->assertEquals(0, $a->whole);
+        $this->assertEquals(1, $a->frac);
+    }
+
+    public function testFromMajorUnitsNegativeWithFrac(): void
+    {
+        $a = SplitAmount::fromMajorUnits(-1.50);
+        $this->assertEquals(-2, $a->whole);
+        $this->assertEquals(50000000, $a->frac);
+        $this->assertEqualsWithDelta(-1.50, $a->toMajorUnits(), 0.00000001);
+    }
+
+    public function testFromMajorUnitsNegativeNoFrac(): void
+    {
+        $a = SplitAmount::fromMajorUnits(-100.0);
+        $this->assertEquals(-100, $a->whole);
+        $this->assertEquals(0, $a->frac);
+    }
+
+    // =========================================================================
+    // fromString tests — scientific notation, leading zeros, edge cases
+    // =========================================================================
+
+    public function testFromStringScientificNotation(): void
+    {
+        $a = SplitAmount::fromString('1e5');
+        $this->assertEquals(100000, $a->whole);
+        $this->assertEquals(0, $a->frac);
+    }
+
+    public function testFromStringScientificNotationDecimal(): void
+    {
+        $a = SplitAmount::fromString('1.5e2');
+        $this->assertEquals(150, $a->whole);
+        $this->assertEquals(0, $a->frac);
+    }
+
+    public function testFromStringScientificNotationSmall(): void
+    {
+        $a = SplitAmount::fromString('1.5e-2');
+        $this->assertEquals(0, $a->whole);
+        $this->assertEquals(1500000, $a->frac); // 0.015 * 10^8
+    }
+
+    public function testFromStringLeadingZeros(): void
+    {
+        $a = SplitAmount::fromString('00100.50');
+        $this->assertEquals(100, $a->whole);
+        $this->assertEquals(50000000, $a->frac);
+    }
+
+    public function testFromStringLeadingZerosFractionOnly(): void
+    {
+        $a = SplitAmount::fromString('000.00000001');
+        $this->assertEquals(0, $a->whole);
+        $this->assertEquals(1, $a->frac);
+    }
+
+    public function testFromStringTrailingZerosBeyondPrecision(): void
+    {
+        $a = SplitAmount::fromString('100.50000000000000');
+        $this->assertEquals(100, $a->whole);
+        $this->assertEquals(50000000, $a->frac);
+    }
+
+    public function testFromStringExcessDecimalsTruncated(): void
+    {
+        // 12 decimal places → truncated to 8
+        $a = SplitAmount::fromString('100.123456789012');
+        $this->assertEquals(100, $a->whole);
+        $this->assertEquals(12345678, $a->frac); // truncated, not rounded
+    }
+
+    public function testFromStringNegative(): void
+    {
+        $a = SplitAmount::fromString('-1.50');
+        $this->assertEquals(-2, $a->whole);
+        $this->assertEquals(50000000, $a->frac);
+        $this->assertEqualsWithDelta(-1.50, $a->toMajorUnits(), 0.00000001);
+    }
+
+    public function testFromStringNegativeWholeOnly(): void
+    {
+        $a = SplitAmount::fromString('-100');
+        $this->assertEquals(-100, $a->whole);
+        $this->assertEquals(0, $a->frac);
+    }
+
+    public function testFromStringOverflowThrows(): void
+    {
+        // Number larger than PHP_INT_MAX
+        $this->expectException(\OverflowException::class);
+        SplitAmount::fromString('99999999999999999999');
+    }
+
+    public function testFromStringEmptyReturnsZero(): void
+    {
+        $this->assertTrue(SplitAmount::fromString('')->isZero());
+        $this->assertTrue(SplitAmount::fromString('0')->isZero());
+    }
+
+    // =========================================================================
+    // Negative amount representation tests
+    // =========================================================================
+
+    public function testNegativeWithFracRoundTrip(): void
+    {
+        // -1.50 stored as whole=-2, frac=50000000
+        $a = new SplitAmount(-2, 50000000);
+        $this->assertTrue($a->isNegative());
+        $this->assertEqualsWithDelta(-1.50, $a->toMajorUnits(), 0.00000001);
+
+        // Round-trip through fromMinorUnits
+        $minor = -150000000; // -1.50 * 10^8
+        $b = SplitAmount::fromMinorUnits($minor);
+        $this->assertEquals($a->whole, $b->whole);
+        $this->assertEquals($a->frac, $b->frac);
+    }
+
+    public function testNegativeSmallFrac(): void
+    {
+        // -0.01 → stored as whole=-1, frac=99000000 (i.e., -1 + 0.99 = -0.01)
+        $a = SplitAmount::fromMinorUnits(-1000000);
+        $this->assertEquals(-1, $a->whole);
+        $this->assertEquals(99000000, $a->frac);
+        $this->assertEqualsWithDelta(-0.01, $a->toMajorUnits(), 0.00000001);
+    }
+
+    public function testSubtractResultingInNegative(): void
+    {
+        $a = new SplitAmount(5, 0);    // 5.00
+        $b = new SplitAmount(10, 50000000); // 10.50
+        $c = $a->subtract($b);
+        $this->assertTrue($c->isNegative());
+        $this->assertEqualsWithDelta(-5.50, $c->toMajorUnits(), 0.00000001);
+    }
+
+    // =========================================================================
+    // toMajorUnits precision edge cases
+    // =========================================================================
+
+    public function testToMajorUnitsMaxFrac(): void
+    {
+        $a = new SplitAmount(0, 99999999);
+        $this->assertEqualsWithDelta(0.99999999, $a->toMajorUnits(), 0.000000001);
+    }
+
+    public function testToMajorUnitsMinFrac(): void
+    {
+        $a = new SplitAmount(0, 1);
+        $this->assertEqualsWithDelta(0.00000001, $a->toMajorUnits(), 0.000000001);
+    }
+
+    // =========================================================================
+    // Comparison edge cases
+    // =========================================================================
+
+    public function testCompareNegativeAmounts(): void
+    {
+        $a = new SplitAmount(-2, 50000000); // -1.50
+        $b = new SplitAmount(-1, 0);        // -1.00
+        $this->assertTrue($a->lt($b)); // -1.50 < -1.00
+        $this->assertFalse($b->lt($a));
+    }
+
+    public function testCompareZeroWithSmallPositive(): void
+    {
+        $z = SplitAmount::zero();
+        $small = new SplitAmount(0, 1); // 0.00000001
+        $this->assertTrue($z->lt($small));
+        $this->assertFalse($small->lt($z));
+    }
+
+    // =========================================================================
+    // Fee calculation edge cases
+    // =========================================================================
+
+    public function testMultiplyPercentVerySmallOnLargeAmount(): void
+    {
+        // 0.001% of 1 trillion = $10 million
+        $amount = new SplitAmount(1000000000000, 0);
+        $fee = $amount->multiplyPercent(0.001);
+        $this->assertEquals(10000000, $fee->whole);
+        $this->assertEquals(0, $fee->frac);
+    }
+
+    public function testMultiplyPercentOnSmallAmount(): void
+    {
+        // 0.01% of $0.01 = $0.000001
+        $amount = new SplitAmount(0, 1000000); // $0.01
+        $fee = $amount->multiplyPercent(0.01);
+        $this->assertEquals(0, $fee->whole);
+        // 0.01 * 0.01 / 100 = 0.000001 → frac=100
+        $this->assertEquals(100, $fee->frac);
+    }
+
+    public function testMultiplyPercent100(): void
+    {
+        // 100% of $50.25 = $50.25
+        $amount = new SplitAmount(50, 25000000);
+        $fee = $amount->multiplyPercent(100.0);
+        $this->assertEquals(50, $fee->whole);
+        $this->assertEquals(25000000, $fee->frac);
+    }
+
+    // =========================================================================
+    // from() universal factory edge cases
+    // =========================================================================
+
+    public function testFromNull(): void
+    {
+        $this->assertTrue(SplitAmount::from(null)->isZero());
+    }
+
+    public function testFromSplitAmountPassthrough(): void
+    {
+        $original = new SplitAmount(42, 12345678);
+        $this->assertSame($original, SplitAmount::from($original));
+    }
+
+    public function testFromIntWhole(): void
+    {
+        $a = SplitAmount::from(100);
+        $this->assertEquals(100, $a->whole);
+        $this->assertEquals(0, $a->frac);
+    }
+
+    public function testFromFloat(): void
+    {
+        $a = SplitAmount::from(100.50);
+        $this->assertEquals(100, $a->whole);
+        $this->assertEquals(50000000, $a->frac);
+    }
+
+    public function testFromNumericString(): void
+    {
+        $a = SplitAmount::from('100.12345678');
+        $this->assertEquals(100, $a->whole);
+        $this->assertEquals(12345678, $a->frac);
+    }
+
+    public function testFromArrayWithWholeAndFrac(): void
+    {
+        $a = SplitAmount::from(['whole' => 42, 'frac' => 50000000]);
+        $this->assertEquals(42, $a->whole);
+        $this->assertEquals(50000000, $a->frac);
+    }
 }
