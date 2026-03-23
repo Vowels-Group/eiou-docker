@@ -307,13 +307,13 @@ currentBalance=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$balances = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getAllBalances();
-    \$total = 0;
+    \$total = \Eiou\Core\SplitAmount::zero();
     foreach (\$balances as \$b) {
         if (isset(\$b['received']) && isset(\$b['sent'])) {
-            \$total += \$b['received'] - \$b['sent'];
+            \$total = \$total->add(\$b['received']->subtract(\$b['sent']));
         }
     }
-    echo \$total;
+    echo \$total->toMajorUnits();
 " 2>/dev/null || echo "0")
 
 echo -e "\t   Current balance: ${currentBalance}"

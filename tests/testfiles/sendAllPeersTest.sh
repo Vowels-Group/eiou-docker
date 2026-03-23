@@ -81,7 +81,7 @@ for sender in "${containers[@]}"; do
             \$app = \Eiou\Core\Application::getInstance();
             \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${contactAddress}');
             \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-            echo \$balance/\Eiou\Core\Constants::INTERNAL_CONVERSION_FACTOR ?: '0';
+            echo \$balance->toMajorUnits() ?: '0';
         " 2>/dev/null || echo "0")
 
         # Send test amount
@@ -95,7 +95,7 @@ for sender in "${containers[@]}"; do
             \\\$app = \Eiou\Core\Application::getInstance();
             \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${contactAddress}');
             \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
-            echo \\\$balance/\Eiou\Core\Constants::INTERNAL_CONVERSION_FACTOR ?: '0';
+            echo \\\$balance->toMajorUnits() ?: '0';
         \""
         newBalance=$(wait_for_balance_change "${sender}" "$initialBalance" "$balance_cmd" 10 "tx processing")
 
