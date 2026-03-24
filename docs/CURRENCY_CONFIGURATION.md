@@ -14,12 +14,13 @@ eIOU supports multiple currencies. By default, only USD is configured. This guid
 
 ## Overview
 
-Currency support requires two settings:
+Currency support involves these settings:
 
 | Setting | Purpose | Example |
 |---------|---------|---------|
 | `allowedCurrencies` | List of currency codes users can transact in | `USD,EUR` |
 | `displayDecimals` | Number of decimal places shown in the UI (0-8) | `4` (default) |
+| `autoRejectUnknownCurrency` | Auto-reject incoming contact requests with unknown currencies | `true` (default) |
 
 All currencies are stored internally at **8-decimal precision** (10^8 minor units per major unit), regardless of display settings. This eliminates conversion factor mismatches between nodes — every node stores the same integers for the same amounts.
 
@@ -114,6 +115,25 @@ Input validation always accepts up to 8 decimal places regardless of the display
 ### Currency Code Format
 
 Currency codes must be 3-9 uppercase alphanumeric characters (`A-Z`, `0-9`). Standard ISO 4217 codes (USD, EUR, GBP) are recommended for fiat currencies, but any valid code can be used for custom units of account.
+
+### Unknown Currency Handling
+
+The `autoRejectUnknownCurrency` setting (default: **enabled**) controls what happens when another node sends a contact request with a currency not in your `allowedCurrencies`.
+
+| Setting | Behavior |
+|---------|----------|
+| **Enabled** (default) | The request is automatically rejected. The sender receives a "currency not accepted" response. |
+| **Disabled** | The request arrives as a pending contact for manual review. The GUI shows a warning that the currency is not in your allowed list. |
+
+When you manually accept a contact or currency request for a currency not in your allowed list, that currency is **automatically added** to `allowedCurrencies` and persisted to config. This applies regardless of the toggle — if a request somehow arrives as pending (e.g., the toggle was disabled when it arrived), accepting it always adds the currency.
+
+```bash
+# Disable auto-rejection to allow unknown currency requests through
+docker exec eiou-node eiou changesettings autoRejectUnknownCurrency false
+
+# Re-enable (default)
+docker exec eiou-node eiou changesettings autoRejectUnknownCurrency true
+```
 
 ---
 
