@@ -262,7 +262,7 @@ class ConstantsTest extends TestCase
         $this->assertEquals(0.01, Constants::TRANSACTION_MINIMUM_FEE);
         $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
         $this->assertEquals(8, Constants::INTERNAL_PRECISION);
-        $this->assertEquals(4, Constants::DISPLAY_DECIMALS);
+        $this->assertEquals(2, Constants::DISPLAY_DECIMALS);
     }
 
     /**
@@ -358,7 +358,7 @@ class ConstantsTest extends TestCase
     {
         $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
         $this->assertEquals(8, Constants::INTERNAL_PRECISION);
-        $this->assertEquals(4, Constants::DISPLAY_DECIMALS);
+        $this->assertEquals(2, Constants::DISPLAY_DECIMALS);
         $this->assertEquals(100, Constants::FEE_CONVERSION_FACTOR);
         $this->assertEquals(2, Constants::FEE_PERCENT_DECIMAL_PRECISION);
     }
@@ -390,7 +390,7 @@ class ConstantsTest extends TestCase
     public function testGetDisplayDecimalsReturnsGlobalDefault(): void
     {
         $this->assertEquals(Constants::DISPLAY_DECIMALS, Constants::getDisplayDecimals());
-        $this->assertEquals(4, Constants::getDisplayDecimals());
+        $this->assertEquals(2, Constants::getDisplayDecimals());
     }
 
     /**

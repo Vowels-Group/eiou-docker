@@ -155,7 +155,7 @@
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'Unknown'); ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>
                         </div>
                         <div class="tx-meta-row">
-                            <?php echo htmlspecialchars($tx['date']); ?>
+                            <?php echo htmlspecialchars(formatTimestamp($tx['date'])); ?>
                             <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
                                 <?php if ($tx['status'] === 'pending'): ?>
                                     <i class="fas fa-hourglass-half"></i>
@@ -239,7 +239,7 @@
             'tx_type' => $tx['tx_type'] ?? 'standard',
             'direction' => $tx['direction'] ?? $tx['type'],
             'status' => $tx['status'] ?? 'completed',
-            'date' => $tx['date'] ?? '',
+            'date' => !empty($tx['date']) ? formatTimestamp($tx['date']) : '',
             'type' => $tx['type'] ?? '',
             'amount' => $tx['amount'] ?? 0,
             'currency' => $tx['currency'] ?? 'USD',

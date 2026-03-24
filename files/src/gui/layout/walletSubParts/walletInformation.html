@@ -8,7 +8,7 @@
         
         <!-- Last Updated Status -->
         <div class="wallet-status-bar">
-            <i class="fas fa-clock"></i> Last updated: <?php echo date('M j, Y g:i:s A'); ?>
+            <i class="fas fa-clock"></i> Last updated: <?php echo date(displayDateFormat()); ?>
             <br>
             <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="link-refresh">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" class="link-logout">Logout</a></small>
         </div>

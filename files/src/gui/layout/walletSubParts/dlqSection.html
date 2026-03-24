@@ -127,7 +127,7 @@
                 $dateDisplay = '';
                 if ($createdAt) {
                     $ts = strtotime($createdAt);
-                    $dateDisplay = $ts ? date('Y-m-d H:i', $ts) : $createdAt;
+                    $dateDisplay = $ts ? date(displayDateFormat(), $ts) : $createdAt;
                 }
             ?>
             <tr class="dlq-row" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>">

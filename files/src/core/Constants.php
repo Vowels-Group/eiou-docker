@@ -90,7 +90,7 @@ class Constants {
     // shown in the UI for all currencies. Does NOT affect input validation or
     // internal storage — all input is validated and stored at INTERNAL_PRECISION
     // (8) decimal places. Configurable via changesettings displayDecimals (0-8).
-    const DISPLAY_DECIMALS = 4;
+    const DISPLAY_DECIMALS = 2;
     // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
