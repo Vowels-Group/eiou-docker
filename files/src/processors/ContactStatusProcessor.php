@@ -293,7 +293,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             foreach ($creditByCurrency as $currency => $credit) {
                 $this->contactCreditRepository->upsertAvailableCredit(
                     $pubkeyHash,
-                    (int) $credit,
+                    \Eiou\Core\SplitAmount::fromMajorUnits((float) $credit),
                     $currency
                 );
             }

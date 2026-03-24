@@ -22,6 +22,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Schemas\Payloads\Rp2pPayload;
 use Eiou\Contracts\RouteCancellationServiceInterface;
 use PDOException;
@@ -290,16 +291,19 @@ class Rp2pService implements Rp2pServiceInterface {
             // Each relay charges its fee on the total including downstream fees, not the original base.
             // The exact rounded fee is saved to my_fee_amount so TransactionService::removeTransactionFee()
             // subtracts the identical value — preventing rounding discrepancies.
-            $recalculatedFee = $this->calculateFeeForP2p($p2p, $request['amount']);
+            $requestAmount = SplitAmount::from($request['amount']);
+            $recalculatedFee = $this->calculateFeeForP2p($p2p, $requestAmount);
             $this->p2pRepository->updateFeeAmount($request['hash'], $recalculatedFee);
-            $request['amount'] += $recalculatedFee;
+            $request['amount'] = $requestAmount->add($recalculatedFee);
         }
 
         //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
         if(!isset($p2p['destination_address'])) {
-            $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
-            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
-            if(($creditLimit + $availableFunds) < $request['amount']){
+            $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
+            $totalAvailable = $availableFunds->add($creditLimit);
+            $requestAmount = SplitAmount::from($request['amount']);
+            if($totalAvailable->lt($requestAmount)){
                 output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 return false;
             }
@@ -345,7 +349,7 @@ class Rp2pService implements Rp2pServiceInterface {
                 // Base amount before this node's fee — the accumulated downstream total.
                 // Each sender may have a different fee relationship with this node,
                 // so per-sender fees are recalculated on this accumulated base.
-                $baseAmount = $request['amount'] - $recalculatedFee;
+                $baseAmount = SplitAmount::from($request['amount'])->subtract($recalculatedFee);
 
                 // Get all senders from p2p_senders table (multi-path tracking)
                 $senders = $this->p2pSenderRepository
@@ -402,11 +406,12 @@ class Rp2pService implements Rp2pServiceInterface {
                             $feePercent = $contactFee / Constants::FEE_CONVERSION_FACTOR;
                         }
                     }
-                    $senderFee = $currencyUtility->calculateFee($baseAmount, $feePercent, $minimumFee);
+                    $baseAmountSplit = SplitAmount::from($baseAmount);
+                    $senderFee = $currencyUtility->calculateFee($baseAmountSplit, $feePercent, $minimumFee);
 
                     // Build per-sender RP2P payload with the correct fee
                     $senderRequest = $request;
-                    $senderRequest['amount'] = $baseAmount + $senderFee;
+                    $senderRequest['amount'] = $baseAmountSplit->add($senderFee);
                     $rP2pPayload = $this->rp2pPayload->build($senderRequest);
 
                     // Use tracked delivery for reliable message sending
@@ -604,15 +609,18 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Recalculate fee on the accumulated RP2P amount (multiplicative/compounding fees).
         // Same logic as handleRp2pRequest — fee is based on accumulated total, not original base.
-        $feeAmount = $this->calculateFeeForP2p($p2p, $request['amount']);
+        $requestAmount = SplitAmount::from($request['amount']);
+        $feeAmount = $this->calculateFeeForP2p($p2p, $requestAmount);
         $this->p2pRepository->updateFeeAmount($request['hash'], $feeAmount);
-        $request['amount'] += $feeAmount;
+        $request['amount'] = $requestAmount->add($feeAmount);
 
         // Check if previous sender can afford the rp2p amount (same validation as handleRp2pRequest)
         if (!isset($p2p['destination_address'])) {
             $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
-            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY);
-            if (($creditLimit + $availableFunds) < $request['amount']) {
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key'], $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
+            $totalAvailable = $availableFunds->add($creditLimit);
+            $candidateAmount = SplitAmount::from($request['amount']);
+            if ($totalAvailable->lt($candidateAmount)) {
                 output(outputP2pUnableToAffordRp2p($p2p, $request), 'SILENT');
                 return;
             }
@@ -989,7 +997,7 @@ class Rp2pService implements Rp2pServiceInterface {
             && (int) ($p2p['fast'] ?? 1) === 0
         ) {
             // Set rp2p_amount to the best (lowest) candidate's amount for summary display
-            $bestAmount = (int) $candidates[0]['amount'];
+            $bestAmount = SplitAmount::from($candidates[0]['amount']);
             $this->p2pRepository->setRp2pAmount($hash, $bestAmount);
             $this->p2pRepository->updateStatus($hash, Constants::STATUS_AWAITING_APPROVAL);
 
@@ -1035,7 +1043,9 @@ class Rp2pService implements Rp2pServiceInterface {
             // handleRp2pRequest adds the fee again, but the candidate amount
             // already includes our fee from handleRp2pCandidate, so subtract it
             if ($p2p) {
-                $request['amount'] -= ($p2p['my_fee_amount'] ?? 0);
+                $reqAmt = SplitAmount::from($request['amount']);
+                $feeAmt = SplitAmount::from($p2p['my_fee_amount']);
+                $request['amount'] = $reqAmt->subtract($feeAmt);
             }
 
             if ($this->handleRp2pRequest($request)) {
@@ -1099,7 +1109,7 @@ class Rp2pService implements Rp2pServiceInterface {
      * @param int $amount The accumulated RP2P amount (downstream total) to calculate fee on
      * @return int The calculated fee in minor currency units (rounded)
      */
-    private function calculateFeeForP2p(array $p2p, int $amount): int {
+    private function calculateFeeForP2p(array $p2p, SplitAmount $amount): SplitAmount {
         $currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $defaultFee = $this->currentUser->getDefaultFee();
         $minimumFee = $this->currentUser->getMinimumFee();
@@ -1133,12 +1143,14 @@ class Rp2pService implements Rp2pServiceInterface {
      * @return float Fee percent of request
     */
     public function feeInformation(array $p2p, array $request): float {
-        if ($p2p['amount'] == 0) {
+        $p2pAmount = SplitAmount::from($p2p['amount']);
+        if ($p2pAmount->isZero()) {
             return 0.0;
         }
-        $feeAmount = $request['amount'] - $p2p['amount'];
-        $feePercent = round(($feeAmount / $p2p['amount']) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
-        output(outputFeeInformation($feePercent,$request,$this->currentUser->getMaxFee()), 'SILENT'); // output fee information into the log
+        $requestAmount = SplitAmount::from($request['amount']);
+        $feeAmount = $requestAmount->subtract($p2pAmount);
+        $feePercent = round(($feeAmount->toMajorUnits() / $p2pAmount->toMajorUnits()) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
+        output(outputFeeInformation($feePercent,$request,$this->currentUser->getMaxFee()), 'SILENT');
         return $feePercent;
     }
 }

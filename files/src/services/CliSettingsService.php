@@ -66,7 +66,7 @@ class CliSettingsService
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'minfee'){
                 $key = 'minFee';
-                $validation = InputValidator::validateAmountFee($argv[3]);
+                $validation = InputValidator::validateFeeAmount($argv[3]);
                 if (!$validation['valid']) {
                     $output->validationError('minFee', $validation['error']);
                     return;
@@ -164,6 +164,11 @@ class CliSettingsService
                 }
                 $value = trim($argv[3]);
             // Feature toggles
+            } elseif(strtolower($argv[2]) === 'hopbudgetrandomized'){
+                $key = 'hopBudgetRandomized';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'contactstatusenabled'){
                 $key = 'contactStatusEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -191,6 +196,11 @@ class CliSettingsService
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'autoacceptrestoredcontact'){
                 $key = 'autoAcceptRestoredContact';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autorejectunknowncurrency'){
+                $key = 'autoRejectUnknownCurrency';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
@@ -334,34 +344,14 @@ class CliSettingsService
                     }
                 }
                 $value = implode(',', $currencies);
-            } elseif(strtolower($argv[2]) === 'conversionfactors'){
-                $key = 'conversionFactors';
-                $decoded = json_decode($argv[3] ?? '', true);
-                if (!is_array($decoded) || empty($decoded)) {
-                    $output->validationError($key, 'Must be valid JSON object, e.g. {"USD":100,"BTC":100000000}');
+            } elseif(strtolower($argv[2]) === 'displaydecimals'){
+                $key = 'displayDecimals';
+                $dec = trim($argv[3] ?? '');
+                if (!ctype_digit($dec) || (int) $dec < 0 || (int) $dec > Constants::INTERNAL_PRECISION) {
+                    $output->validationError($key, 'Must be an integer 0-' . Constants::INTERNAL_PRECISION);
                     return;
                 }
-                foreach ($decoded as $code => $factor) {
-                    if (!is_int($factor) || $factor <= 0) {
-                        $output->validationError($key, "Factor for {$code} must be a positive integer");
-                        return;
-                    }
-                }
-                $value = json_encode($decoded);
-            } elseif(strtolower($argv[2]) === 'currencydecimals'){
-                $key = 'currencyDecimals';
-                $decoded = json_decode($argv[3] ?? '', true);
-                if (!is_array($decoded) || empty($decoded)) {
-                    $output->validationError($key, 'Must be valid JSON object, e.g. {"USD":2,"BTC":8}');
-                    return;
-                }
-                foreach ($decoded as $code => $dec) {
-                    if (!is_int($dec) || $dec < 0 || $dec > 18) {
-                        $output->validationError($key, "Decimals for {$code} must be an integer 0-18");
-                        return;
-                    }
-                }
-                $value = json_encode($decoded);
+                $value = (int) $dec;
             } else{
                 $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
@@ -403,6 +393,7 @@ class CliSettingsService
                 'Feature Toggles' => [
                     ['num' => '15', 'label' => 'Display name'],
                     ['num' => '16', 'label' => 'Auto-refresh transactions'],
+                    ['num' => '50', 'label' => 'Hop budget randomization'],
                     ['num' => '17', 'label' => 'Contact status pinging'],
                     ['num' => '18', 'label' => 'Contact status sync on ping'],
                     ['num' => '19', 'label' => 'Auto chain drop propose'],
@@ -438,11 +429,11 @@ class CliSettingsService
                     ['num' => '40', 'label' => 'Maximum lines of balance/transaction output'],
                     ['num' => '41', 'label' => 'Date format'],
                     ['num' => '43', 'label' => 'Recent transactions limit'],
+                    ['num' => '44a', 'label' => 'Display decimal places (0-8)'],
                 ],
                 'Currency Management' => [
                     ['num' => '44', 'label' => 'Allowed currencies'],
-                    ['num' => '44a', 'label' => 'Conversion factors (JSON)'],
-                    ['num' => '44b', 'label' => 'Currency decimals (JSON)'],
+                    ['num' => '51', 'label' => 'Auto-reject unknown currencies'],
                 ],
             ];
 
@@ -506,9 +497,9 @@ class CliSettingsService
                     break;
 
                 case '2':
-                    echo "Enter new minimum fee amount: ";
+                    echo "Enter new minimum fee amount (0 = free relaying): ";
                     $key = 'minFee';
-                    $validation = InputValidator::validateAmountFee(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateFeeAmount(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
                         return;
@@ -931,14 +922,25 @@ class CliSettingsService
                     break;
 
                 case '41':
-                    echo "Enter date format (e.g., Y-m-d H:i:s): ";
-                    $key = 'displayDateFormat';
-                    $validation = InputValidator::validateDateFormat(trim(fgets(STDIN)));
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
+                    $now = new \DateTime();
+                    echo "Available date formats:\n";
+                    foreach (Constants::VALID_DATE_FORMATS as $i => $fmt) {
+                        echo "  " . ($i + 1) . ". " . $now->format($fmt) . "  (" . $fmt . ")\n";
                     }
-                    $value = $validation['value'];
+                    echo "Enter format string or number (1-" . count(Constants::VALID_DATE_FORMATS) . "): ";
+                    $key = 'displayDateFormat';
+                    $input = trim(fgets(STDIN));
+                    // Allow selection by number
+                    if (ctype_digit($input) && (int) $input >= 1 && (int) $input <= count(Constants::VALID_DATE_FORMATS)) {
+                        $value = Constants::VALID_DATE_FORMATS[(int) $input - 1];
+                    } else {
+                        $validation = InputValidator::validateDateFormat($input);
+                        if (!$validation['valid']) {
+                            echo "Error: " . $validation['error'] . "\n";
+                            return;
+                        }
+                        $value = $validation['value'];
+                    }
                     break;
 
                 case '43':
@@ -970,43 +972,16 @@ class CliSettingsService
                     break;
 
                 case '44a':
-                    $currentFactors = UserContext::getInstance()->getConversionFactors();
-                    echo "Current conversion factors: " . json_encode($currentFactors) . "\n";
-                    echo "Enter conversion factors as JSON (e.g., {\"USD\":100,\"BTC\":100000000}): ";
-                    $key = 'conversionFactors';
+                    $currentDecimals = UserContext::getInstance()->getAllDisplayDecimals();
+                    echo "Current display decimal places: " . $currentDecimals . "\n";
+                    echo "Enter display decimal places (0-" . Constants::INTERNAL_PRECISION . "): ";
+                    $key = 'displayDecimals';
                     $input = trim(fgets(STDIN));
-                    $decoded = json_decode($input, true);
-                    if (!is_array($decoded) || empty($decoded)) {
-                        echo "Error: Must be valid JSON object\n";
+                    if (!ctype_digit($input) || (int) $input < 0 || (int) $input > Constants::INTERNAL_PRECISION) {
+                        echo "Error: Must be an integer 0-" . Constants::INTERNAL_PRECISION . "\n";
                         return;
                     }
-                    foreach ($decoded as $code => $factor) {
-                        if (!is_int($factor) || $factor <= 0) {
-                            echo "Error: Factor for {$code} must be a positive integer\n";
-                            return;
-                        }
-                    }
-                    $value = json_encode($decoded);
-                    break;
-
-                case '44b':
-                    $currentDecimals = UserContext::getInstance()->getCurrencyDecimalsMap();
-                    echo "Current currency decimals: " . json_encode($currentDecimals) . "\n";
-                    echo "Enter currency decimals as JSON (e.g., {\"USD\":2,\"BTC\":8}): ";
-                    $key = 'currencyDecimals';
-                    $input = trim(fgets(STDIN));
-                    $decoded = json_decode($input, true);
-                    if (!is_array($decoded) || empty($decoded)) {
-                        echo "Error: Must be valid JSON object\n";
-                        return;
-                    }
-                    foreach ($decoded as $code => $dec) {
-                        if (!is_int($dec) || $dec < 0 || $dec > 18) {
-                            echo "Error: Decimals for {$code} must be an integer 0-18\n";
-                            return;
-                        }
-                    }
-                    $value = json_encode($decoded);
+                    $value = (int) $input;
                     break;
 
                 // Tor Circuit Health
@@ -1057,6 +1032,28 @@ class CliSettingsService
                 case '49':
                     echo "Auto-accept restored contacts on wallet restore? (yes/no): ";
                     $key = 'autoAcceptRestoredContact';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '50':
+                    echo "Enable hop budget randomization? (yes/no): ";
+                    $key = 'hopBudgetRandomized';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '51':
+                    echo "Auto-reject contact requests with unknown currencies? (yes/no): ";
+                    $key = 'autoRejectUnknownCurrency';
                     $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
@@ -1152,6 +1149,7 @@ class CliSettingsService
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
             'auto_accept_transaction' => $this->currentUser->getAutoAcceptTransaction(),
             // Feature toggles
+            'hop_budget_randomized' => $this->currentUser->getHopBudgetRandomized(),
             'contact_status_enabled' => $this->currentUser->getContactStatusEnabled(),
             'contact_status_sync_on_ping' => $this->currentUser->getContactStatusSyncOnPing(),
             'auto_chain_drop_propose' => $this->currentUser->getAutoChainDropPropose(),
@@ -1188,10 +1186,10 @@ class CliSettingsService
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
+            'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
-            'conversion_factors' => $this->currentUser->getConversionFactors(),
-            'currency_decimals' => $this->currentUser->getCurrencyDecimalsMap(),
+            'auto_reject_unknown_currency' => $this->currentUser->getAutoRejectUnknownCurrency(),
         ];
 
         if ($output->isJsonMode()) {
@@ -1222,6 +1220,7 @@ class CliSettingsService
             echo "\n  Feature Toggles:\n";
             if ($settings['name']) echo "\tDisplay name: " . $settings['name'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tHop budget randomization: " . ($settings['hop_budget_randomized'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status pinging: " . ($settings['contact_status_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status sync on ping: " . ($settings['contact_status_sync_on_ping'] ? 'enabled' : 'disabled') . "\n";
             echo "\tAuto chain drop propose: " . ($settings['auto_chain_drop_propose'] ? 'enabled' : 'disabled') . "\n";
@@ -1252,16 +1251,10 @@ class CliSettingsService
             echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
+            echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
-            echo "\tConversion factors:\n";
-            foreach ($settings['conversion_factors'] as $code => $factor) {
-                echo "\t  {$code}: {$factor}\n";
-            }
-            echo "\tCurrency decimals:\n";
-            foreach ($settings['currency_decimals'] as $code => $dec) {
-                echo "\t  {$code}: {$dec}\n";
-            }
+            echo "\tAuto-reject unknown currencies: " . ($settings['auto_reject_unknown_currency'] ? 'enabled' : 'disabled') . "\n";
         }
     }
 

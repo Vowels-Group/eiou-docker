@@ -10,7 +10,84 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## 2026-03-15 
+## 2026-03-16 -- 2026-03-24 
+
+### Added
+- Add `autoRejectUnknownCurrency` setting (default: enabled) — automatically rejects incoming contact requests when the requested currency is not in the node's `allowedCurrencies`. When disabled, unknown currency requests arrive as pending for manual review. Configurable via GUI toggle (Settings → Currency), CLI (`changesettings autoRejectUnknownCurrency true/false`), and API (`auto_reject_unknown_currency`)
+- Auto-add currency on contact acceptance — when a user accepts a contact or currency request for a currency not in their allowed list, that currency is automatically added to `allowedCurrencies` and persisted to config. Covers all acceptance paths: GUI (accept contact, accept currency, accept all currencies) and CLI (`eiou add`)
+- GUI warning for unknown currency requests — pending contact/currency requests show a yellow alert when the requested currency is not in the user's allowed list, informing them that accepting will auto-add it
+- Add `hopBudgetRandomized` user setting to toggle geometric hop budget randomization — configurable via GUI toggle, CLI (`changesettings hopBudgetRandomized true/false`), API (`PUT /api/v1/system/settings` with `hop_budget_randomized`), and `EIOU_HOP_BUDGET_RANDOMIZED` env variable. Default: enabled. Disabling uses the full `maxP2pLevel` for every P2P transaction, maximizing routing depth at the cost of privacy. Intended for early/sparse trust graphs where reachability matters more than traffic analysis resistance; the toggle can be removed once the network has sufficient depth for geometric randomization to be always-on
+- Show minimum transaction amount hint on send form — dynamically displays the currency's smallest valid amount (inferred from display decimals) below the amount/currency fields. Updates when currency changes or contact selection filters currencies. Also sets the HTML `min` and `step` attributes on the amount input to match
+- Split amount storage: two BIGINTs (whole + frac) per amount column — replaces the single BIGINT representation (whole × 10^8 + frac). The `whole` column stores the integer part, `frac` stores the fractional part × 10^8 (e.g., 1234.56 → whole=1234, frac=56000000). This raises the maximum representable amount from ~92 billion to PHP_INT_MAX (~9.2 quintillion). Affected tables: `transactions`, `balances`, `p2p`, `rp2p`, `contact_currencies`, `contact_credit`, `capacity_reservations`
+- `SplitAmount` value object class — stores amounts as `{whole, frac}` pairs. Factory methods: `fromString()` (precision-safe string parsing via bcmath), `fromMajorUnits()` (float), `fromMinorUnits()` (legacy int), `from()` (universal factory accepting string, float, int, array, or SplitAmount). Arithmetic: `add()`, `subtract()`, `multiplyPercent()`, `mulDiv()` — all use bcmath internally to avoid overflow. JSON serialization emits `{whole, frac}` for wire format
+- `TRANSACTION_MAX_AMOUNT` enforcement — amounts above PHP_INT_MAX / 4 (~2.3 quintillion) are rejected at input validation. The headroom ensures fee accumulation across multi-hop P2P routes cannot overflow
+
+### Changed
+- Change `DISPLAY_DECIMALS` default from 4 to 2 — matches traditional currency display (e.g., $1,234.56)
+- Replace date format free-text input with validated dropdown — 20 predefined formats (ISO, US, EU, short, unix timestamp) defined in `VALID_DATE_FORMATS`. GUI shows live-formatted examples. CLI interactive mode shows numbered list. Validation rejects arbitrary strings via whitelist
+- Apply `displayDateFormat` to all GUI timestamps — transaction list, transaction/contact modals, wallet "last updated", DLQ timestamps all use the user's configured format via `formatTimestamp()` helper. Previously showed raw database timestamps
+- Fix 16 hardcoded `.toFixed(2)` calls in JavaScript — all currency amounts in transaction modals, contact modals, transaction history, and P2P candidate routes now use `EIOU_DISPLAY_DECIMALS` global. Fee percentages remain at 2 decimals
+- Simplify `displayDecimals` from per-currency map to a single global integer (0-8, default 2) — replaces the old `{"USD":2,"BTC":8}` JSON format with a plain number that applies to all currencies. Moved from Currency to Display section in both GUI and CLI. GUI now uses a dropdown instead of a textarea. Values are truncated (floored), not rounded, so displayed amounts never exceed the actual stored value. CLI: `changesettings displayDecimals 2`. API: `{"display_decimals": 2}`
+- `Constants::getDisplayDecimals()` no longer takes a currency parameter — the display precision is global, not per-currency
+- `formatCurrency()` uses display decimals (display-layer function); all internal calculations use `INTERNAL_PRECISION` (8)
+- Add `displayDecimals()` and `cspNonce()` template helper functions in `Functions.php` — shorthand for `\Eiou\Core\Constants::getDisplayDecimals()` and `\Eiou\Utils\Security::getCspNonce()` in GUI templates, replacing 23 verbose fully-qualified calls
+- Rename `conversionFactors` setting to `displayDecimals` — the setting now controls display decimal places only (e.g., `{"USD":2}` instead of `{"USD":100}`). Internal storage precision is fixed at 8 decimals for all currencies
+- `Constants::getConversionFactor()` now always returns `INTERNAL_CONVERSION_FACTOR` (10^8) regardless of currency — the conversion factor is no longer per-node configurable
+- `Constants::getCurrencyDecimals()` now always returns `INTERNAL_PRECISION` (8) — use `Constants::getDisplayDecimals($currency)` for display formatting
+- `DISPLAY_CURRENCY_DECIMALS` fallback changed from 2 to 8 — undefined currencies default to full internal precision
+- All major-to-minor unit conversions now use `bcmul()` (php-bcmath) instead of float multiplication — eliminates IEEE 754 precision loss for all amounts up to the 92 billion maximum. Fee calculation (`calculateFee`) also switched to `bcmul()`/`bcdiv()` for exact results at any transaction size. All conversions go through `CurrencyUtilityService::exactMajorToMinor()` which throws `RuntimeException` if bcmath is not installed
+- Add `php-bcmath` to Dockerfile — required dependency for exact-precision currency arithmetic. Node will not start without it
+- Decouple input validation precision from display decimals — `validateAmount()`, `validateAmountFee()`, `validateFeeAmount()`, and `validateCreditLimit()` now validate and truncate at `INTERNAL_PRECISION` (8 decimal places) instead of `DISPLAY_DECIMALS` (2 for USD). Display decimals only affect UI formatting, not input acceptance or storage. Amounts like 128.99999999 are now preserved instead of being rounded to 129
+- All input validators return bcmath decimal strings — `validateAmount()`, `validateAmountFee()`, `validateFeeAmount()`, and `validateCreditLimit()` replace `floatval()` with `bccomp()`/`bcadd()` string operations, preserving full precision for values up to PHP_INT_MAX. Return type changed from `float` to `string` (e.g., `"128.99999999"`)
+- Credit limit and amount callers updated from `SplitAmount::fromMajorUnits()` to `SplitAmount::from()` — handles the string return type from validators without float precision loss
+- `RouteCancellationService::computeHopBudget()` now accepts an optional `$randomized` parameter that overrides the global constant, allowing per-user control from `P2pService`
+- Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
+- Allow minimum fee (`minFee`) to be set to 0 — enables free relaying for friends and family while keeping the default at 0.01. Fee percent was already allowed at 0%; now the minimum fee floor can also be removed. Since fees are set per contact, operators can relay free for trusted contacts while charging fees for others. No technical issues: fees are excluded from hash/txid generation, all division-by-zero paths are guarded, and balance updates handle zero fees correctly
+
+### Fixed
+- Fix SplitAmount type mismatches in sync responses, backup restore, chain drop, and GUI display — multiple code paths still passed raw integers or floats where `SplitAmount` was expected after the split-column migration
+- Fix PHP 8.x bcmath `ValueError` on scientific notation and whitespace — `InputValidator` now sanitizes input strings (strips whitespace, converts scientific notation to decimal) before passing to `bccomp()`/`bcadd()` which reject non-numeric formats in PHP 8.x
+- Fix `TypeError` in ping handler preventing seedphrase restore sync — `ContactStatusService` passed wrong type to ping response builder, causing restored contacts to fail re-synchronization
+- Fix sub-minimum currency amounts passing validation — amounts like 0.001 USD passed the `> 0` check, then rounded to 0.00 and were accepted as valid zero-dollar transactions. `validateAmount()` and `validateAmountFee()` now re-check after rounding and reject amounts below the currency's smallest unit (0.00000001 at internal precision). Credit limits and minimum fees still allow zero. Error messages include the currency-specific minimum
+- Fix credit limit corruption for large values — `floatval()` converted PHP_INT_MAX to scientific notation (9.2233720368548E+18), which `SplitAmount::fromMajorUnits()` then mangled by splitting on the decimal point of the scientific notation string (9223372036854775807 → 9.22). `validateCreditLimit()` now uses bcmath string operations and `SplitAmount::fromString()` for precision-safe parsing
+- Fix `SplitAmount::fromMajorUnits()` scientific notation bug — `(string)` cast on large floats produced "9.2233720368548E+18" which `explode('.')` split incorrectly. Now uses `number_format()` to produce plain decimal strings
+- Fix `SplitAmount::add()` overflow detection — the post-addition overflow check (`$whole < $this->whole`) failed when PHP silently converted `PHP_INT_MAX + positive_int` to float, bypassing the comparison. Now checks before adding (`$this->whole > PHP_INT_MAX - $other->whole`). Throws `OverflowException` instead of `TypeError`
+- Fix P2P crash on amount overflow — when relay fee calculation pushed amounts past PHP_INT_MAX, `SplitAmount::add()` threw an unhandled exception crashing the request handler with a PHP fatal error and empty response. `checkAvailableFunds()` now catches `OverflowException` and returns an `insufficient_funds` rejection with a log entry
+- Fix `addCurrencyToContact()` type mismatch — passed `(int) $credit` where `?SplitAmount` was expected. Now properly creates a `SplitAmount` via `SplitAmount::from()`
+- Fix API endpoints missing `InputValidator` validation that CLI/GUI already enforce:
+  - **`POST /wallet/send`**: add `validateAddress()`, `validateNotSelfSend()`, `validateCurrency()`, `validateMemo()` for description — previously only validated amount
+  - **`POST /contacts`**: add `validateAddress()`, `validateContactName()`, `validateFeePercent()`, `validateCreditLimit()`, `validateCurrency()`, `validateMemo()` for description — previously no field validation at all
+  - **`PUT /contacts/:address`**: add `validateContactName()`, `validateCurrency()`, `validateFeePercent()`, `validateCreditLimit()` — previously accepted raw unvalidated values
+  - **`GET/POST /p2p/candidates`, `/p2p/approve`, `/p2p/reject`**: add `validateTxid()` for hash parameters
+- Fix pre-existing `RouteCancellationServiceTest` constructor mismatch — updated to pass `RepositoryFactory` required by current constructor signature
+- Send available credit on contact acceptance (#768) — when a contact request is accepted, both nodes now exchange their calculated available credit in the E2E-encrypted acceptance message and acknowledgment. This eliminates the gap where available credit shows as 0 until the first ping/pong cycle or transaction. For new contacts the available credit equals the credit limit; for re-added contacts with prior transactions it reflects the real balance
+- Include available credit in mutual acceptance responses (#768) — when both sides sent contact requests simultaneously, the inline `buildMutuallyAccepted` response now includes credit data
+- Include available credit in wallet restore pong (#768) — when a restored contact is auto-accepted during a ping, the pong response now includes the calculated credit instead of an empty array
+- Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters
+
+### Docs
+- Rewrite `CURRENCY_CONFIGURATION.md` for global display decimals — updated all GUI/CLI/API examples, added truncation (floor) explanation, removed per-currency format references
+- Update `CLI_REFERENCE.md` — move `displayDecimals` from Currency to Display section, update example from JSON to integer
+- Update `GUI_REFERENCE.md` — move `displayDecimals` from Currency to Display category
+- Add `displayDecimals` to `info changesettings` help text with truncation/floor description
+- Add minimum transaction amount (inferred) to `CURRENCY_CONFIGURATION.md` overview and conversion factors table
+- Update `API_REFERENCE.md` validation error codes table with new codes: `invalid_address`, `self_send`, `invalid_currency`, `invalid_name`, `invalid_fee`, `invalid_credit`, `invalid_description`, `invalid_hash`, `missing_currency`
+- Update `API_REFERENCE.md` field descriptions for `POST /wallet/send`, `POST /contacts`, and `PUT /contacts/:address` to document validation constraints (format, ranges, precision)
+
+### Tests
+- Fix 285 of 412 pre-existing unit test failures from SplitAmount migration — updated constructor signatures (P2pService, ContactStatusService, CleanupService, ChainDropService, ChainVerificationService), replaced removed setter calls with constructor injection (setSyncTrigger, setP2pRelayedContactRepository, setTransactionChainRepository), fixed mock return types for SplitAmount, updated getPreviousTxid → getPreviousTxidsByCurrency mock expectations
+- Fix batch transaction performance test race condition — the chain reset between single tx (4.1) and batch (4.2) deleted the tx while the daemon was still async-completing it, causing a broken `previous_txid` on re-insertion. Fix: let batch chain naturally from the single tx instead of resetting, wait for queue settlement, and fix dangling pointers before batch
+- Improve batch transaction performance test reliability — add queue processing between sends, reset chain state before benchmarks, increase timing margins, poll chain validity instead of transaction status
+- Add `EIOU_TEST_MODE` flag to bypass rate limiting in performance tests
+- Clear `held_transactions` and `capacity_reservations` in performance test chain reset to prevent interference from prior test suites
+
+### Removed
+- Remove `CURRENCY_DECIMALS` constant and `currencyDecimals` setting — decimal places are now inferred from the conversion factor via `log10(factor)` (e.g. factor=100 → 2 decimals, factor=100000000 → 8 decimals). This eliminates a source of misconfiguration where conversion factors and decimal places could be set inconsistently. The `DISPLAY_CURRENCY_DECIMALS` fallback (default: 2) remains for unknown currencies. Removed from GUI settings, CLI `changesettings`, and `getConfigurableDefaults()`
+
+
+---
+
+## 2026-03-15
 P2P fee fix, duplicate contact prevention, available credit on completion, watchdog fix, documentation updates, P2P inquiry token authentication.
 
 ### Added

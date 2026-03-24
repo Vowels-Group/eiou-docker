@@ -18,6 +18,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Schemas\Payloads\UtilPayload;
@@ -283,23 +284,20 @@ class MessageService implements MessageServiceInterface {
 
             if($p2p){
                 $isInquiry = !empty($decodedMessage['inquiry']);
-                $hasToken = !empty($p2p['inquiry_token']);
 
-                // For inquiry messages on P2Ps with an inquiry_token: require the secret.
-                // This prevents relay nodes (who have the token but not the pre-image)
-                // from forging completion inquiries to overwrite descriptions.
-                if ($isInquiry && $hasToken) {
+                // For inquiry messages: require the inquiry secret.
+                // The salt is derived from the secret (salt = hash(secret)), so only
+                // the original sender can produce the pre-image. This prevents relay
+                // nodes from forging completion inquiries.
+                if ($isInquiry) {
                     if (!isset($decodedMessage['inquirySecret'])) {
                         return false;
                     }
-                    return hash(Constants::HASH_ALGORITHM, $decodedMessage['inquirySecret']) === $p2p['inquiry_token'];
+                    return hash(Constants::HASH_ALGORITHM, $decodedMessage['inquirySecret']) === $p2p['salt'];
                 }
 
                 // Non-inquiry messages (completion relays, etc.): address-based hash check.
-                // These come from contacts (relay nodes) and are validated by the contact check above.
-                // This path also handles legacy P2Ps without inquiry_token.
-                $token = $p2p['inquiry_token'] ?? '';
-                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($senderAddress) . $p2p['salt'] . $p2p['time'] . $token)){
+                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($senderAddress) . $p2p['salt'] . $p2p['time'])){
                     return true;
                 }
                 return false;
@@ -450,9 +448,32 @@ class MessageService implements MessageServiceInterface {
         // Handle inquiry about contact request status
         $address = $decodedMessage['senderAddress'];
         $pubkey = $decodedMessage['senderPublicKey'];
-        // Contact is already accepted
+        // Contact is already accepted — include available credit in response
         if($this->contactRepository->isAcceptedContactPubkey($pubkey)){
-            echo $this->messagePayload->buildContactIsAccepted($address,true);
+            $inquiryCreditByCurrency = [];
+            $inquiryCreditCalculatedAt = null;
+            if ($this->contactCurrencyRepository !== null) {
+                try {
+                    $inquiryPubkeyHash = hash(Constants::HASH_ALGORITHM, $pubkey);
+                    $currencyConfigs = $this->contactCurrencyRepository->getContactCurrencies($inquiryPubkeyHash);
+                    foreach ($currencyConfigs as $cc) {
+                        if (($cc['status'] ?? '') === 'accepted') {
+                            $cur = $cc['currency'];
+                            $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $cur);
+                            $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $cur);
+                            $balance = $sentBalance->subtract($receivedBalance);
+                            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($inquiryPubkeyHash, $cur) ?? SplitAmount::zero();
+                            $inquiryCreditByCurrency[$cur] = $balance->add($creditLimit)->toMajorUnits();
+                        }
+                    }
+                    if (!empty($inquiryCreditByCurrency)) {
+                        $inquiryCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
+                    }
+                } catch (\Exception $e) {
+                    // Non-fatal — inquiry response still works without credit
+                }
+            }
+            echo $this->messagePayload->buildContactIsAccepted($address, true, null, null, $inquiryCreditByCurrency, $inquiryCreditCalculatedAt);
         }
         // Contact is pending (they sent us a request we haven't accepted)
         elseif($this->contactRepository->hasPendingContact($pubkey)){
@@ -539,9 +560,32 @@ class MessageService implements MessageServiceInterface {
                 }
             }
 
-            // Return acknowledgment for delivery tracking
-            // This confirms the acceptance message was received and processed
-            echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress);
+            // Save available credit from the acceptance message (the acceptor calculated
+            // how much credit we have with them and included it in the message)
+            $this->saveAvailableCreditFromAcceptance($senderPublicKey, $decodedMessage);
+
+            // Calculate our available credit for the acceptor to include in the ack
+            $ackCreditByCurrency = [];
+            $ackCreditCalculatedAt = null;
+            $acceptedCurrency = $decodedMessage['currency'] ?? null;
+            if ($acceptedCurrency !== null && $this->contactCurrencyRepository !== null) {
+                try {
+                    $ackSenderPubkeyHash = $senderPubkeyHash ?? hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+                    $sentBalance = $this->balanceRepository->getContactSentBalance($senderPublicKey, $acceptedCurrency);
+                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPublicKey, $acceptedCurrency);
+                    $balance = $sentBalance->subtract($receivedBalance);
+                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($ackSenderPubkeyHash, $acceptedCurrency) ?? SplitAmount::zero();
+                    $ackCreditByCurrency[$acceptedCurrency] = $balance->add($creditLimit)->toMajorUnits();
+                    $ackCreditCalculatedAt = $this->timeUtility->getCurrentMicrotime();
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to calculate available credit for acceptance ack", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Return acknowledgment with our available credit for delivery tracking
+            echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress, $ackCreditByCurrency, $ackCreditCalculatedAt);
         } else {
             // Log unexpected status for debugging
             Logger::getInstance()->info("Received contact message with non-accepted status", [
@@ -876,10 +920,10 @@ class MessageService implements MessageServiceInterface {
 
             $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
-            $balance = $sentBalance - $receivedBalance;
+            $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
-            $availableCredit = $balance + $creditLimit;
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
+            $availableCredit = $balance->add($creditLimit)->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
             $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();
@@ -922,13 +966,60 @@ class MessageService implements MessageServiceInterface {
             foreach ($creditByCurrency as $currency => $credit) {
                 $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                     $pubkeyHash,
-                    (int) $credit,
+                    SplitAmount::fromMajorUnits((float) $credit),
                     $currency,
                     (int) $calculatedAt
                 );
             }
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from completion", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Save available credit from a contact acceptance message
+     *
+     * When the remote node accepts our contact request, they include their
+     * calculated available credit for us. Save it so both sides start with
+     * accurate credit without waiting for the first ping/pong cycle.
+     *
+     * @param string $senderPublicKey The acceptor's public key
+     * @param array $message The decoded acceptance message
+     */
+    private function saveAvailableCreditFromAcceptance(string $senderPublicKey, array $message): void {
+        if ($this->contactCreditRepository === null) {
+            return;
+        }
+
+        $creditByCurrency = $message['availableCreditByCurrency'] ?? null;
+        $calculatedAt = $message['creditCalculatedAt'] ?? null;
+
+        if (!is_array($creditByCurrency) || empty($creditByCurrency)) {
+            return;
+        }
+
+        try {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+            foreach ($creditByCurrency as $currency => $credit) {
+                if ($calculatedAt !== null) {
+                    $this->contactCreditRepository->upsertAvailableCreditIfNewer(
+                        $pubkeyHash,
+                        SplitAmount::fromMajorUnits((float) $credit),
+                        $currency,
+                        (int) $calculatedAt
+                    );
+                } else {
+                    $this->contactCreditRepository->upsertAvailableCredit(
+                        $pubkeyHash,
+                        SplitAmount::fromMajorUnits((float) $credit),
+                        $currency
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->warning("Failed to save available credit from acceptance", [
                 'error' => $e->getMessage()
             ]);
         }

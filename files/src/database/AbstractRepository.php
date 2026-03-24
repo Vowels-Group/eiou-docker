@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use PDO;
@@ -48,6 +49,15 @@ abstract class AbstractRepository {
      * Child classes MUST define this to enable column validation
      */
     protected array $allowedColumns = [];
+
+    /**
+     * @var string[] Split amount column prefixes for this table.
+     * Child classes override this to list which columns are split amounts
+     * (e.g., ['amount', 'my_fee_amount']). When set, SELECT * rows are
+     * automatically post-processed to add $row['amount'] = SplitAmount
+     * from the $row['amount_whole'] / $row['amount_frac'] columns.
+     */
+    protected array $splitAmountColumns = [];
 
     /**
      * @var UserContext object of user data
@@ -167,6 +177,36 @@ abstract class AbstractRepository {
     }
 
     /**
+     * Map split amount columns in a database row.
+     * Converts {prefix}_whole/{prefix}_frac column pairs into
+     * $row[prefix] = SplitAmount for each prefix in $splitAmountColumns.
+     *
+     * @param array|null $row Database row (or null)
+     * @return array|null Row with SplitAmount objects, or null
+     */
+    protected function mapRow(?array $row): ?array
+    {
+        if ($row === null || empty($this->splitAmountColumns)) {
+            return $row;
+        }
+        return SplitAmount::mapDbRow($row, $this->splitAmountColumns);
+    }
+
+    /**
+     * Map split amount columns for an array of rows.
+     *
+     * @param array $rows Array of database rows
+     * @return array Rows with SplitAmount objects
+     */
+    protected function mapRows(array $rows): array
+    {
+        if (empty($this->splitAmountColumns)) {
+            return $rows;
+        }
+        return array_map(fn($row) => SplitAmount::mapDbRow($row, $this->splitAmountColumns), $rows);
+    }
+
+    /**
      * Fetch a single row by ID
      *
      * @param mixed $id Primary key value
@@ -181,7 +221,7 @@ abstract class AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**
@@ -202,7 +242,7 @@ abstract class AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**
@@ -231,7 +271,7 @@ abstract class AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to fetch multiple rows", $e);
             return [];
@@ -261,7 +301,7 @@ abstract class AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to fetch all rows", $e);
             return [];

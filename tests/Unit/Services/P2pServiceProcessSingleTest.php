@@ -26,6 +26,11 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\CapacityReservationRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -49,6 +54,7 @@ class P2pServiceProcessSingleTest extends TestCase
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pSenderRepository $p2pSenderRepository;
+    private MockObject|RepositoryFactory $repositoryFactory;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -73,6 +79,16 @@ class P2pServiceProcessSingleTest extends TestCase
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
+        $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->repositoryFactory->method('get')->willReturnCallback(function (string $class) {
+            return match ($class) {
+                P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                Rp2pRepository::class => $this->createMock(Rp2pRepository::class),
+                ContactCurrencyRepository::class => $this->createMock(ContactCurrencyRepository::class),
+                CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                default => $this->createMock($class),
+            };
+        });
 
         $this->utilityContainer->method('getValidationUtility')->willReturn($this->validationUtility);
         $this->utilityContainer->method('getTransportUtility')->willReturn($this->transportUtility);
@@ -92,6 +108,7 @@ class P2pServiceProcessSingleTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             $this->messageDeliveryService,
             $this->p2pSenderRepository
         );

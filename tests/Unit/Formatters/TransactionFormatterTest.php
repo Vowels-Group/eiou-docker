@@ -20,9 +20,9 @@ class TransactionFormatterTest extends TestCase
      */
     public function testConvertAmountWithValidMinorUnits(): void
     {
-        $this->assertEquals(1.00, TransactionFormatter::convertAmount(100));
-        $this->assertEquals(10.50, TransactionFormatter::convertAmount(1050));
-        $this->assertEquals(0.01, TransactionFormatter::convertAmount(1));
+        $this->assertEquals(1.00, TransactionFormatter::convertAmount(\Eiou\Core\SplitAmount::from(1)));
+        $this->assertEquals(10.50, TransactionFormatter::convertAmount(\Eiou\Core\SplitAmount::fromMajorUnits(10.50)));
+        $this->assertEquals(0.01, TransactionFormatter::convertAmount(\Eiou\Core\SplitAmount::fromMajorUnits(0.01)));
     }
 
     /**
@@ -38,7 +38,7 @@ class TransactionFormatterTest extends TestCase
      */
     public function testConvertAmountWithZero(): void
     {
-        $this->assertEquals(0.00, TransactionFormatter::convertAmount(0));
+        $this->assertEquals(0.00, TransactionFormatter::convertAmount(\Eiou\Core\SplitAmount::zero()));
     }
 
     /**

@@ -154,13 +154,14 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
      * Compute a hop budget, optionally randomized via geometric distribution.
      *
      * Static so P2pService can call it without an instance (avoids circular dependency).
-     * When EIOU_HOP_BUDGET_RANDOMIZED=false, returns maxHops for deterministic tests.
+     * When randomization is disabled, returns maxHops deterministically.
      *
      * @param int $minHops Minimum hop budget
      * @param int $maxHops Maximum hop budget
+     * @param bool|null $randomized Whether to use geometric randomization (null = use Constants default)
      * @return int Hop budget within [$minHops, $maxHops]
      */
-    public static function computeHopBudget(int $minHops, int $maxHops): int {
+    public static function computeHopBudget(int $minHops, int $maxHops, ?bool $randomized = null): int {
         if ($minHops < 0) {
             $minHops = 0;
         }
@@ -168,8 +169,9 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
             $maxHops = $minHops;
         }
 
-        // When randomization is disabled (tests), use full hop range
-        if (!Constants::isHopBudgetRandomized()) {
+        // When randomization is disabled, use full hop range
+        $isRandomized = $randomized ?? Constants::isHopBudgetRandomized();
+        if (!$isRandomized) {
             return $maxHops;
         }
 

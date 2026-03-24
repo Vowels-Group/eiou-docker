@@ -9,22 +9,22 @@ SELECT message FROM debug;
 SELECT name, status, online_status, valid_chain FROM contacts;
 
 # Contact Currencies - per-contact currency settings
-SELECT pubkey_hash, currency, fee_percent, credit_limit, status, direction FROM contact_currencies;
+SELECT pubkey_hash, currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction FROM contact_currencies;
 
 # Addresses - network addresses
 SELECT http, https, tor FROM addresses;
 
 # Balances - account balances
-SELECT received, sent, currency FROM balances;
+SELECT received_whole, received_frac, sent_whole, sent_frac, currency FROM balances;
 
 # P2P Requests - peer-to-peer routing
-SELECT hash, amount, currency, my_fee_amount, rp2p_amount, request_level, max_request_level, sender_address, destination_address, fast, status, contacts_sent_count, contacts_responded_count, incoming_txid, outgoing_txid FROM p2p;
+SELECT hash, amount_whole, amount_frac, currency, my_fee_amount_whole, my_fee_amount_frac, rp2p_amount_whole, rp2p_amount_frac, request_level, max_request_level, sender_address, destination_address, fast, status, contacts_sent_count, contacts_responded_count, incoming_txid, outgoing_txid FROM p2p;
 
 # RP2P Responses - responses to p2p requests
-SELECT hash, amount, currency, sender_address FROM rp2p;
+SELECT hash, amount_whole, amount_frac, currency, sender_address FROM rp2p;
 
 # RP2P Candidates - best-fee route selection
-SELECT hash, amount, currency, sender_address, fee_amount FROM rp2p_candidates;
+SELECT hash, amount_whole, amount_frac, currency, sender_address, fee_amount_whole, fee_amount_frac FROM rp2p_candidates;
 
 # P2P Senders - multi-path upstream senders per P2P hash
 SELECT hash, sender_address FROM p2p_senders;
@@ -36,13 +36,13 @@ SELECT hash, contact_address FROM p2p_relayed_contacts;
 SELECT hash, contact_address, status FROM route_cancellations;
 
 # Capacity Reservations - credit reserved during P2P routing
-SELECT hash, contact_pubkey_hash, base_amount, total_amount, currency, status, release_reason FROM capacity_reservations;
+SELECT hash, contact_pubkey_hash, base_amount_whole, base_amount_frac, total_amount_whole, total_amount_frac, currency, status, release_reason FROM capacity_reservations;
 
 # Chain Drop Proposals - mutual agreements to drop missing transactions
 SELECT proposal_id, contact_pubkey_hash, missing_txid, broken_txid, direction, status FROM chain_drop_proposals;
 
 # Transactions - transaction records
-SELECT status, tx_type, type, sender_address, receiver_address, amount, currency, description, txid, previous_txid, memo, needs_manual_review FROM transactions;
+SELECT status, tx_type, type, sender_address, receiver_address, amount_whole, amount_frac, currency, description, txid, previous_txid, memo, needs_manual_review FROM transactions;
 
 # Message Delivery - delivery tracking
 SELECT message_type, message_id, recipient_address, delivery_stage, retry_count, last_error FROM message_delivery;
@@ -69,4 +69,4 @@ SELECT identifier, action, attempts, blocked_until FROM rate_limits;
 SELECT contact_pubkey_hash, txid, transaction_type, hold_reason, sync_status, retry_count FROM held_transactions;
 
 # Contact Credit - available credit per contact
-SELECT pubkey_hash, available_credit, currency FROM contact_credit;
+SELECT pubkey_hash, available_credit_whole, available_credit_frac, currency FROM contact_credit;

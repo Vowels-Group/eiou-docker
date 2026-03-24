@@ -11,6 +11,7 @@ namespace Eiou\Tests\Repositories;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\TransactionStatisticsRepository;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOStatement;
 use PDOException;
@@ -110,10 +111,10 @@ class TransactionStatisticsRepositoryTest extends TestCase
 
     public function testGetTypeStatisticsReturnsGroupedData(): void
     {
-        $expectedStats = [
-            ['type' => 'standard', 'count' => 100, 'total' => 500000],
-            ['type' => 'p2p', 'count' => 50, 'total' => 250000],
-            ['type' => 'contact', 'count' => 25, 'total' => 0],
+        $dbRows = [
+            ['type' => 'standard', 'count' => 100, 'total_whole' => 500000, 'total_frac' => 0],
+            ['type' => 'p2p', 'count' => 50, 'total_whole' => 250000, 'total_frac' => 0],
+            ['type' => 'contact', 'count' => 25, 'total_whole' => 0, 'total_frac' => 0],
         ];
 
         $this->pdo->expects($this->once())
@@ -127,13 +128,15 @@ class TransactionStatisticsRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getTypeStatistics();
 
         $this->assertCount(3, $result);
         $this->assertEquals('standard', $result[0]['type']);
         $this->assertEquals(100, $result[0]['count']);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['total']);
+        $this->assertEquals(500000, $result[0]['total']->whole);
     }
 
     public function testGetTypeStatisticsReturnsEmptyArrayOnFailure(): void
@@ -177,10 +180,11 @@ class TransactionStatisticsRepositoryTest extends TestCase
 
     public function testGetStatisticsByTypeReturnsTypeData(): void
     {
-        $expectedStats = [
+        $dbRow = [
             'type' => 'standard',
             'count' => 150,
-            'total' => 750000
+            'total_whole' => 750000,
+            'total_frac' => 0
         ];
 
         $this->pdo->expects($this->once())
@@ -198,11 +202,14 @@ class TransactionStatisticsRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getStatisticsByType('standard');
 
-        $this->assertEquals($expectedStats, $result);
+        $this->assertEquals('standard', $result['type']);
+        $this->assertEquals(150, $result['count']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total']);
+        $this->assertEquals(750000, $result['total']->whole);
     }
 
     public function testGetStatisticsByTypeReturnsEmptyArrayWhenNotFound(): void
@@ -306,10 +313,10 @@ class TransactionStatisticsRepositoryTest extends TestCase
 
     public function testGetOverallStatisticsReturnsComprehensiveData(): void
     {
-        $expectedStats = [
+        $dbRow = [
             'total_count' => 500,
-            'total_amount' => 2500000,
-            'average_amount' => 5000,
+            'total_amount_whole' => 2500000,
+            'total_amount_frac' => 0,
             'unique_senders' => 100,
             'unique_receivers' => 120,
             'completed_count' => 400,
@@ -320,8 +327,7 @@ class TransactionStatisticsRepositoryTest extends TestCase
             ->method('prepare')
             ->with($this->logicalAnd(
                 $this->stringContains('COUNT(*) as total_count'),
-                $this->stringContains('SUM(amount) as total_amount'),
-                $this->stringContains('AVG(amount) as average_amount'),
+                $this->stringContains('SUM(amount_whole)'),
                 $this->stringContains('COUNT(DISTINCT sender_address)'),
                 $this->stringContains('COUNT(DISTINCT receiver_address)')
             ))
@@ -333,13 +339,13 @@ class TransactionStatisticsRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getOverallStatistics();
 
-        $this->assertEquals($expectedStats, $result);
         $this->assertEquals(500, $result['total_count']);
-        $this->assertEquals(2500000, $result['total_amount']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total_amount']);
+        $this->assertEquals(2500000, $result['total_amount']->whole);
         $this->assertEquals(100, $result['unique_senders']);
     }
 
@@ -363,8 +369,8 @@ class TransactionStatisticsRepositoryTest extends TestCase
     {
         $emptyStats = [
             'total_count' => 0,
-            'total_amount' => null,
-            'average_amount' => null,
+            'total_amount_whole' => null,
+            'total_amount_frac' => null,
             'unique_senders' => 0,
             'unique_receivers' => 0,
             'completed_count' => 0,
@@ -385,7 +391,8 @@ class TransactionStatisticsRepositoryTest extends TestCase
         $result = $this->repository->getOverallStatistics();
 
         $this->assertEquals(0, $result['total_count']);
-        $this->assertNull($result['total_amount']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total_amount']);
+        $this->assertTrue($result['total_amount']->isZero());
     }
 
     // =========================================================================
@@ -394,10 +401,10 @@ class TransactionStatisticsRepositoryTest extends TestCase
 
     public function testGetStatisticsByStatusReturnsFilteredData(): void
     {
-        $expectedStats = [
+        $dbRow = [
             'count' => 150,
-            'total_amount' => 750000,
-            'average_amount' => 5000
+            'total_amount_whole' => 750000,
+            'total_amount_frac' => 0
         ];
 
         $this->pdo->expects($this->once())
@@ -415,12 +422,13 @@ class TransactionStatisticsRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getStatisticsByStatus('completed');
 
         $this->assertEquals(150, $result['count']);
-        $this->assertEquals(750000, $result['total_amount']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total_amount']);
+        $this->assertEquals(750000, $result['total_amount']->whole);
     }
 
     public function testGetStatisticsByStatusHandlesDifferentStatuses(): void
@@ -436,7 +444,7 @@ class TransactionStatisticsRepositoryTest extends TestCase
                 ->method('execute');
             $stmt->expects($this->once())
                 ->method('fetch')
-                ->willReturn(['count' => 10, 'total_amount' => 50000, 'average_amount' => 5000]);
+                ->willReturn(['count' => 10, 'total_amount_whole' => 50000, 'total_amount_frac' => 0]);
 
             $pdo = $this->createMock(PDO::class);
             $pdo->expects($this->once())
@@ -491,10 +499,10 @@ class TransactionStatisticsRepositoryTest extends TestCase
 
     public function testGetStatisticsByCurrencyReturnsFilteredData(): void
     {
-        $expectedStats = [
+        $dbRow = [
             'count' => 200,
-            'total_amount' => 1000000,
-            'average_amount' => 5000
+            'total_amount_whole' => 1000000,
+            'total_amount_frac' => 0
         ];
 
         $this->pdo->expects($this->once())
@@ -512,12 +520,13 @@ class TransactionStatisticsRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getStatisticsByCurrency('USD');
 
         $this->assertEquals(200, $result['count']);
-        $this->assertEquals(1000000, $result['total_amount']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total_amount']);
+        $this->assertEquals(1000000, $result['total_amount']->whole);
     }
 
     public function testGetStatisticsByCurrencyHandlesDifferentCurrencies(): void
@@ -533,7 +542,7 @@ class TransactionStatisticsRepositoryTest extends TestCase
                 ->method('execute');
             $stmt->expects($this->once())
                 ->method('fetch')
-                ->willReturn(['count' => 50, 'total_amount' => 250000, 'average_amount' => 5000]);
+                ->willReturn(['count' => 50, 'total_amount_whole' => 250000, 'total_amount_frac' => 0]);
 
             $pdo = $this->createMock(PDO::class);
             $pdo->expects($this->once())

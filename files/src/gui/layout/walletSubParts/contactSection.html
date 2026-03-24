@@ -95,9 +95,9 @@
                                 $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                                 $displayCurrency = $primaryCur['currency'] ?? 'USD';
                             ?>
-                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], \Eiou\Core\Constants::getCurrencyDecimals($displayCurrency)); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
                             <?php if ($primaryCur): ?>
-                            <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($displayCurrency)); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
                             <div>Fee: <?php echo number_format($primaryCur['fee'] ?? 0, 2); ?>%</div>
                             <?php endif; ?>
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
@@ -153,7 +153,7 @@
                                 $pendCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                             ?>
                             <?php if ($pendCur): ?>
-                            <div>Credit: <?php echo number_format($pendCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($pendCur['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($pendCur['currency'] ?? 'USD'); ?></div>
+                            <div>Credit: <?php echo number_format($pendCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($pendCur['currency'] ?? 'USD'); ?></div>
                             <div>Fee: <?php echo number_format($pendCur['fee'] ?? 0, 2); ?>%</div>
                             <?php endif; ?>
                         </div>
@@ -197,9 +197,9 @@
                                 $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                                 $blkCurrency = $blkCur['currency'] ?? 'USD';
                             ?>
-                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($blkCurrency)); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
+                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
                             <?php if ($blkCur): ?>
-                            <div>Credit: <?php echo number_format($blkCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($blkCurrency)); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
+                            <div>Credit: <?php echo number_format($blkCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
                             <div>Fee: <?php echo number_format($blkCur['fee'] ?? 0, 2); ?>%</div>
                             <?php endif; ?>
                         </div>
@@ -632,6 +632,11 @@
                     <!-- Per-currency accept forms -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
                     <?php if ($pcIdx > 0): ?><hr class="currency-separator"><?php endif; ?>
+                    <?php if (!in_array($pc['currency'], $user->getAllowedCurrencies())): ?>
+                    <div class="alert alert-warning mb-sm">
+                        <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($pc['currency']); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
+                    </div>
+                    <?php endif; ?>
                     <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <?php if ($isExisting): ?>
@@ -697,6 +702,15 @@
                     <?php endif; ?>
                 <?php else: ?>
                     <!-- Fallback: single form for legacy contacts with no pending_currencies data -->
+                    <?php
+                        $fallbackCurrency = !empty($contact['pending_currencies']) ? ($contact['pending_currencies'][0]['currency'] ?? 'USD') : 'USD';
+                        $fallbackCurrencyUnknown = !in_array($fallbackCurrency, $user->getAllowedCurrencies());
+                    ?>
+                    <?php if ($fallbackCurrencyUnknown): ?>
+                    <div class="alert alert-warning mb-sm">
+                        <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($fallbackCurrency); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
+                    </div>
+                    <?php endif; ?>
                     <h4 class="pending-contact-accept-title">
                         <i class="fas fa-user-check"></i> Accept this contact request
                     </h4>

@@ -23,6 +23,7 @@ use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Schemas\Payloads\P2pPayload;
 use Eiou\Schemas\Payloads\Rp2pPayload;
 use Eiou\Schemas\Payloads\UtilPayload;
@@ -308,7 +309,10 @@ class P2pService implements P2pServiceInterface {
                     : $this->p2pRepository->getCreditInP2p($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
                 $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
 
-                if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
+                $totalAvailable = $availableFunds->add($creditLimit);
+                $requestedAmountSplit = SplitAmount::from($requestedAmount);
+                $totalNeeded = $requestedAmountSplit->add($fundsOnHold);
+                if ($totalAvailable->lt($totalNeeded)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
                     // Echoing here would cause duplicate JSON output breaking response parsing
                     return false;
@@ -316,6 +320,14 @@ class P2pService implements P2pServiceInterface {
             }
             // If you are the end-recipient you do not need to pay
             return true;
+        } catch (\OverflowException $e) {
+            // Amount + fees exceeds PHP_INT_MAX — treat as insufficient funds
+            Logger::getInstance()->warning("P2P amount overflow: amount plus fees exceeds maximum representable value", [
+                'method' => 'checkAvailableFunds',
+                'error' => $e->getMessage(),
+                'hash' => $request['hash'] ?? 'unknown'
+            ]);
+            return false;
         } catch (PDOException $e) {
             // Use Logger's exception logging
             Logger::getInstance()->logException($e, [
@@ -332,7 +344,7 @@ class P2pService implements P2pServiceInterface {
      * @param array $request The P2P request data
      * @return int Total amount needed for p2p transaction
      */
-    public function calculateRequestedAmount(array $request): int {
+    public function calculateRequestedAmount(array $request): SplitAmount {
          // Calculate total amount needed for p2p through user
         $address = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -354,7 +366,9 @@ class P2pService implements P2pServiceInterface {
             }
         }
 
-        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
+        $amount = SplitAmount::from($request['amount']);
+        $feeAmount = $this->currencyUtility->calculateFee($amount, $fee, $this->currentUser->getMinimumFee());
+        return $amount->add($feeAmount);
     }
 
     /**
@@ -518,6 +532,9 @@ class P2pService implements P2pServiceInterface {
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
+            // Normalize amount to SplitAmount early (wire payload may send int or {whole,frac})
+            $request['amount'] = SplitAmount::from($request['amount']);
+
             // Force fast mode when any part of the route uses Tor —
             // prevents best-fee mode over Tor where relay latency (~5s × 6 Tor
             // relays per eIOU hop) makes candidate collection impractical.
@@ -559,7 +576,7 @@ class P2pService implements P2pServiceInterface {
             } else {
                 // Calculate fees
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $request['feeAmount'] = $requestedAmount - $request['amount'];
+                $request['feeAmount'] = $requestedAmount->subtract($request['amount']);
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 // Max level boundary: requestLevel >= maxRequestLevel means the next hop
@@ -626,7 +643,7 @@ class P2pService implements P2pServiceInterface {
             // Create capacity reservation for this relay
             if ($this->capacityReservationRepository !== null) {
                 $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
-                $baseAmount = (int) $request['amount'];
+                $baseAmount = $request['amount'];
                 $totalAmount = $this->calculateRequestedAmount($request);
                 $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $this->capacityReservationRepository->createReservation(
@@ -667,12 +684,11 @@ class P2pService implements P2pServiceInterface {
             $addressTypes = array_merge([$transportIndex], array_diff($addressTypes, [$transportIndex]));
         }
 
-        $token = $request['inquiryToken'] ?? '';
         foreach ($contacts as $contact) {
             // Check all address types for this contact
             foreach ($addressTypes as $addrType) {
                 if (!empty($contact[$addrType])) {
-                    $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time'] . $token);
+                    $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time']);
                     if ($contactHash === $request['hash']) {
                         output(outputContactMatched($contactHash), 'SILENT');
                         return $contact;
@@ -691,10 +707,8 @@ class P2pService implements P2pServiceInterface {
      * @return bool True if user corresponds, false otherwise
      */
     public function matchYourselfP2P(array $request, string $address): bool {
-        // Check if p2p end recipient is user
-        $token = $request['inquiryToken'] ?? '';
         // First check the provided address (most likely match)
-        if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time'] . $token) === $request['hash']) {
+        if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']) {
             return true;
         }
 
@@ -708,7 +722,7 @@ class P2pService implements P2pServiceInterface {
             if ($userAddress === $address) {
                 continue;
             }
-            if (hash(Constants::HASH_ALGORITHM, $userAddress . $request['salt'] . $request['time'] . $token) === $request['hash']) {
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $request['salt'] . $request['time']) === $request['hash']) {
                 return true;
             }
         }
@@ -751,22 +765,21 @@ class P2pService implements P2pServiceInterface {
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-        $data['amount'] = round($validatedAmount * Constants::getConversionFactor($data['currency'])); // Convert to cents
+        $data['amount'] = SplitAmount::from($validatedAmount);
 
         // Additional data preparation - Use cryptographically secure random
         try {
-            $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
-            // Generate inquiry secret (only stored locally) and token (propagates through relay chain).
-            // The token is baked into the P2P hash so relay nodes can't swap it.
-            // Only the original sender can produce the pre-image to authenticate completion inquiries.
+            // Generate inquiry secret (only stored locally on originator).
+            // The salt is derived from the secret — only the original sender can
+            // produce the pre-image to authenticate completion inquiries.
             $data['inquirySecret'] = bin2hex(random_bytes(32));
-            $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
+            $data['salt'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
         } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Failed to generate inquiry secret", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time'] . $data['inquiryToken']);
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
@@ -778,12 +791,13 @@ class P2pService implements P2pServiceInterface {
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANGE_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANGE_HIGH) -
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH)
         ) + random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
-        // Hop budget: randomized geometric distribution when enabled,
-        // or deterministic maxP2pLevel when EIOU_HOP_BUDGET_RANDOMIZED=false (tests).
+        // Hop budget: randomized geometric distribution when enabled (default),
+        // or deterministic maxP2pLevel when disabled (sparse trust graphs / tests).
         // minHops = floor(maxP2pLevel * HOP_BUDGET_MIN_RATIO) to ensure useful routing depth.
         $maxP2pLevel = $this->currentUser->getMaxP2pLevel();
         $minHops = max(1, (int) floor($maxP2pLevel * Constants::HOP_BUDGET_MIN_RATIO));
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel);
+        $hopRandomized = $this->currentUser->getHopBudgetRandomized();
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel, $hopRandomized);
 
         // Thread fast flag from user request (default: true for backward compatibility)
         $data['fast'] = (int)($request['fast'] ?? true);
@@ -816,15 +830,14 @@ class P2pService implements P2pServiceInterface {
 
         // Additional data preparation - Use cryptographically secure random
         try {
-            $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
             $data['inquirySecret'] = bin2hex(random_bytes(32));
-            $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
+            $data['salt'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
         } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Failed to generate inquiry secret", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time'] . $data['inquiryToken']);
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
@@ -834,11 +847,12 @@ class P2pService implements P2pServiceInterface {
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANGE_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANGE_HIGH) -
             random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH)
         ) + random_int(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
-        // Hop budget: randomized geometric distribution when enabled,
-        // or deterministic maxP2pLevel when EIOU_HOP_BUDGET_RANDOMIZED=false (tests).
+        // Hop budget: randomized geometric distribution when enabled (default),
+        // or deterministic maxP2pLevel when disabled (sparse trust graphs / tests).
         $maxP2pLevel = $this->currentUser->getMaxP2pLevel();
         $minHops = max(1, (int) floor($maxP2pLevel * Constants::HOP_BUDGET_MIN_RATIO));
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel);
+        $hopRandomized = $this->currentUser->getHopBudgetRandomized();
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + RouteCancellationService::computeHopBudget($minHops, $maxP2pLevel, $hopRandomized);
 
         return $data;
     }
@@ -1451,7 +1465,7 @@ class P2pService implements P2pServiceInterface {
      * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey, ?string $currency = null): float {
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): SplitAmount {
         return $this->p2pRepository->getCreditInP2p($pubkey, $currency);
     }
 

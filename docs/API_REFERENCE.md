@@ -241,7 +241,16 @@ print(response.json())
 |------|-------------|
 | `invalid_json` | Request body is not valid JSON |
 | `missing_field` | Required field is missing |
-| `invalid_amount` | Transaction amount is invalid |
+| `invalid_amount` | Transaction amount is invalid (non-numeric, negative, or below currency minimum) |
+| `invalid_address` | Address format is invalid (must be HTTP, HTTPS, or Tor .onion) |
+| `invalid_currency` | Currency code is unsupported or invalid format |
+| `invalid_name` | Contact name is invalid (empty, too short/long, or contains invalid characters) |
+| `invalid_fee` | Fee percentage is out of range |
+| `invalid_credit` | Credit limit is invalid (negative or exceeds maximum) |
+| `invalid_description` | Description exceeds maximum length |
+| `invalid_hash` | Transaction hash is not a valid 64-character hex string |
+| `self_send` | Cannot send a transaction to yourself |
+| `missing_currency` | Currency is required when updating fee or credit limit |
 | `no_fields` | No fields provided for update |
 | `validation_error` | One or more setting values failed validation |
 | `unknown_setting` | Unrecognized setting name in update request |
@@ -491,10 +500,10 @@ Send a transaction to a contact.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) |
-| `amount` | number | Yes | Amount to send (must be > 0) |
-| `currency` | string | Yes | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
-| `description` | string | No | Optional transaction description |
+| `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) or contact name. Cannot be your own address |
+| `amount` | number | Yes | Amount to send (must be > 0, up to 8 decimal places). Minimum: 0.00000001. Maximum: ~2.3 quintillion (TRANSACTION_MAX_AMOUNT). Returned as a decimal string with 8-decimal precision |
+| `currency` | string | Yes | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
+| `description` | string | No | Optional transaction description (max 255 characters). Only visible to the final recipient |
 | `best_fee` | boolean | No | **[Experimental]** Use best-fee routing: collects all P2P route responses and selects the lowest accumulated fee. May be slower than default fast mode. |
 
 **Response:**
@@ -604,12 +613,12 @@ Add a new contact.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `address` | string | Yes | - | Contact's node address |
-| `name` | string | Yes | - | Display name for contact |
-| `fee_percent` | number | No | 1.0 | Transaction fee percentage |
-| `credit_limit` | number | No | 100.0 | Credit limit for contact |
-| `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
-| `description` | string | No | - | A short message sent with the contact request. Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
+| `address` | string | Yes | - | Contact's node address (HTTP, HTTPS, or Tor .onion) |
+| `name` | string | Yes | - | Display name (2-50 characters, alphanumeric, spaces, dashes, underscores) |
+| `fee_percent` | number | No | 1.0 | Transaction fee percentage (0-100) |
+| `credit_limit` | number | No | 100.0 | Credit limit in the specified currency (>= 0, up to 8 decimal places, max PHP_INT_MAX). Returned as a decimal string |
+| `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
+| `description` | string | No | - | A short message sent with the contact request (max 255 characters). Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
 
 **Response (201 Created):**
 
@@ -1070,6 +1079,7 @@ Get system settings.
             "auto_refresh_enabled": true,
             "auto_backup_enabled": true,
             "auto_accept_transaction": true,
+            "hop_budget_randomized": true,
             "contact_status_enabled": true,
             "contact_status_sync_on_ping": true,
             "auto_chain_drop_propose": true,
@@ -1110,7 +1120,7 @@ Get system settings.
 **Fields:**
 - `name`: Display name for this node
 - `default_currency`: Default currency code for transactions (e.g., "USD")
-- `minimum_fee_amount`: Minimum fee amount for transactions
+- `minimum_fee_amount`: Minimum fee amount for transactions (0 = free relaying)
 - `default_fee_percent`: Default fee percentage for new contacts
 - `maximum_fee_percent`: Maximum allowed fee percentage
 - `default_credit_limit`: Default credit limit for new contacts
@@ -1125,6 +1135,7 @@ Get system settings.
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
+- `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
 - `contact_status_sync_on_ping`: Whether to sync contact status during ping
 - `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
@@ -1181,7 +1192,7 @@ Update system settings.
 | `default_fee` | number | Default fee percentage for new contacts |
 | `default_credit_limit` | number | Default credit limit for new contacts |
 | `default_currency` | string | Default currency code (e.g., USD) |
-| `min_fee` | number | Minimum fee amount |
+| `min_fee` | number | Minimum fee amount (0 = free relaying) |
 | `max_fee` | number | Maximum fee percentage |
 | `max_p2p_level` | int | Maximum P2P relay depth |
 | `p2p_expiration` | int | P2P request expiration in seconds |
@@ -1194,6 +1205,7 @@ Update system settings.
 | `hostname` | string | Node hostname (triggers SSL cert regeneration) |
 | `name` | string | Node display name |
 | `allowed_currencies` | string | Allowed currencies (comma-separated, e.g., "USD,EUR") |
+| `hop_budget_randomized` | boolean | Randomize P2P hop depth (disable for max reachability) |
 | `contact_status_enabled` | boolean | Enable/disable contact status tracking |
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
 | `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |

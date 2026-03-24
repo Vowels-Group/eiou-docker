@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Eiou\Database\Rp2pRepository;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOStatement;
 use PDOException;
@@ -184,7 +185,7 @@ class Rp2pRepositoryTest extends TestCase
         $request = [
             'hash' => 'new-hash-123',
             'time' => 1700000000,
-            'amount' => 10000,
+            'amount' => new SplitAmount(10000, 0),
             'currency' => 'USD',
             'senderPublicKey' => 'pubkey-abc',
             'senderAddress' => 'http://sender.example',
@@ -215,7 +216,7 @@ class Rp2pRepositoryTest extends TestCase
         $request = [
             'hash' => 'fail-hash',
             'time' => 1700000000,
-            'amount' => 5000,
+            'amount' => new SplitAmount(5000, 0),
             'currency' => 'USD',
             'senderPublicKey' => 'pubkey',
             'senderAddress' => 'http://test.example',
@@ -247,7 +248,7 @@ class Rp2pRepositoryTest extends TestCase
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains("SELECT SUM(amount) as total_amount"))
+            ->with($this->stringContains("COALESCE(SUM(amount_whole), 0) AS sum_whole"))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -260,11 +261,13 @@ class Rp2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['total_amount' => 15000]);
+            ->willReturn(['sum_whole' => 15000, 'sum_frac' => 0]);
 
         $result = $this->repository->getCreditInRp2p($pubkey);
 
-        $this->assertEquals(15000.0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(15000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     public function testGetCreditInRp2pReturnsZeroWhenNoResults(): void
@@ -281,11 +284,12 @@ class Rp2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['total_amount' => null]);
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $result = $this->repository->getCreditInRp2p($pubkey);
 
-        $this->assertEquals(0.0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     public function testGetCreditInRp2pReturnsZeroOnQueryFailure(): void
@@ -302,7 +306,8 @@ class Rp2pRepositoryTest extends TestCase
 
         $result = $this->repository->getCreditInRp2p($pubkey);
 
-        $this->assertEquals(0.0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     // =========================================================================
@@ -436,7 +441,7 @@ class Rp2pRepositoryTest extends TestCase
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT SUM(amount) as total_amount'))
+            ->with($this->stringContains('COALESCE(SUM(amount_whole), 0) AS sum_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -445,11 +450,13 @@ class Rp2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['total_amount' => 25000]);
+            ->willReturn(['sum_whole' => 25000, 'sum_frac' => 0]);
 
         $result = $this->repository->getTotalAmountByAddress($address);
 
-        $this->assertEquals(25000.0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(25000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     public function testGetTotalAmountByAddressReturnsZeroWhenNull(): void
@@ -466,11 +473,12 @@ class Rp2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['total_amount' => null]);
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $result = $this->repository->getTotalAmountByAddress($address);
 
-        $this->assertEquals(0.0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     // =========================================================================
@@ -479,10 +487,10 @@ class Rp2pRepositoryTest extends TestCase
 
     public function testGetStatisticsReturnsAggregatedData(): void
     {
-        $expectedStats = [
+        $dbRow = [
             'total_count' => 100,
-            'total_amount' => 500000,
-            'average_amount' => 5000,
+            'total_amount_whole' => 500000,
+            'total_amount_frac' => 0,
             'unique_senders' => 25,
             'earliest_request' => 1699000000,
             'latest_request' => 1700000000
@@ -499,11 +507,16 @@ class Rp2pRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedStats);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getStatistics();
 
-        $this->assertEquals($expectedStats, $result);
+        $this->assertEquals(100, $result['total_count']);
+        $this->assertInstanceOf(SplitAmount::class, $result['total_amount']);
+        $this->assertEquals(500000, $result['total_amount']->whole);
+        $this->assertEquals(25, $result['unique_senders']);
+        $this->assertEquals(1699000000, $result['earliest_request']);
+        $this->assertEquals(1700000000, $result['latest_request']);
     }
 
     public function testGetStatisticsReturnsEmptyArrayOnFailure(): void
@@ -632,20 +645,19 @@ class Rp2pRepositoryTest extends TestCase
 
     public function testGetByMinAmountReturnsRecordsAboveThreshold(): void
     {
-        $minAmount = 10000.0;
+        $minAmount = new SplitAmount(10000, 0);
         $expectedRecords = [
-            ['id' => 1, 'amount' => 15000],
-            ['id' => 2, 'amount' => 20000],
+            ['id' => 1, 'amount_whole' => 15000, 'amount_frac' => 0],
+            ['id' => 2, 'amount_whole' => 20000, 'amount_frac' => 0],
         ];
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('WHERE amount >= :min_amount'))
+            ->with($this->stringContains('amount_whole > :min_whole'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->once())
-            ->method('bindValue')
-            ->with(':min_amount', $minAmount);
+        $this->stmt->expects($this->exactly(3))
+            ->method('bindValue');
 
         $this->stmt->expects($this->once())
             ->method('execute');
@@ -667,7 +679,7 @@ class Rp2pRepositoryTest extends TestCase
             ->with($this->stringContains('LIMIT :limit'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
         $this->stmt->expects($this->once())
@@ -677,7 +689,7 @@ class Rp2pRepositoryTest extends TestCase
             ->method('fetchAll')
             ->willReturn([]);
 
-        $this->repository->getByMinAmount(1000.0, 5);
+        $this->repository->getByMinAmount(new SplitAmount(1000, 0), 5);
     }
 
     public function testGetByMinAmountReturnsEmptyArrayOnFailure(): void
@@ -690,7 +702,7 @@ class Rp2pRepositoryTest extends TestCase
             ->method('execute')
             ->willThrowException(new PDOException('Query failed'));
 
-        $result = $this->repository->getByMinAmount(1000.0);
+        $result = $this->repository->getByMinAmount(new SplitAmount(1000, 0));
 
         $this->assertIsArray($result);
         $this->assertEmpty($result);

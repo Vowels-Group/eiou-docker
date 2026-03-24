@@ -32,9 +32,9 @@
 
     <p class="dlq-description">
         <i class="fas fa-info-circle"></i>
-        Messages that could not be delivered after <?php echo \Eiou\Core\Constants::DELIVERY_MAX_RETRIES; ?> automatic attempts.
+        Messages that could not be delivered after <?php echo deliveryMaxRetries(); ?> automatic attempts.
         <strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid.
-        <strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (<?php echo \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS; ?>s expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.
+        <strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (<?php echo p2pDefaultExpirationSeconds(); ?>s expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.
     </p>
 
     <?php if (!empty($dlqStats)): ?>
@@ -127,7 +127,7 @@
                 $dateDisplay = '';
                 if ($createdAt) {
                     $ts = strtotime($createdAt);
-                    $dateDisplay = $ts ? date('Y-m-d H:i', $ts) : $createdAt;
+                    $dateDisplay = $ts ? date(displayDateFormat(), $ts) : $createdAt;
                 }
             ?>
             <tr class="dlq-row" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>">
@@ -199,7 +199,7 @@
 
     <p class="dlq-footer-count">
         Showing <span id="dlq-visible-count"><?php echo count($dlqItems); ?></span> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
-        Resolved and abandoned items are automatically cleaned up after <?php echo \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS; ?> days.
+        Resolved and abandoned items are automatically cleaned up after <?php echo cleanupDlqRetentionDays(); ?> days.
     </p>
 
     <?php endif; ?>

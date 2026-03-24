@@ -5,6 +5,7 @@ namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 
 /**
  * Utility payload builder
@@ -37,10 +38,10 @@ class UtilPayload extends BasePayload
      * @return string JSON encoded insufficient balance payload
      */
     public function buildInsufficientBalance(
-        float $availableFunds,
-        float $requestedAmount,
-        float $creditLimit,
-        float $fundsOnHold
+        SplitAmount $availableFunds,
+        SplitAmount $requestedAmount,
+        SplitAmount $creditLimit,
+        SplitAmount $fundsOnHold
     ): string {
         return json_encode([
             'status' => Constants::STATUS_REJECTED,

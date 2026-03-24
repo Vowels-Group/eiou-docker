@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactService;
 use Eiou\Utils\InputValidator;
@@ -16,6 +17,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 
 /**
  * Contact Controller
@@ -227,6 +229,9 @@ class ContactController
             $contactFee = $feeValidation['value'];
             $contactCredit = $creditValidation['value'];
             $contactCurrency = $currencyValidation['value'];
+            // Auto-add currency to allowed list if not already present
+            $this->autoAddAllowedCurrency($contactCurrency);
+
             // Create argv array with --json flag for structured output
             $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency, '--json'];
 
@@ -554,9 +559,9 @@ class ContactController
                     if ($contact) {
                         $pubkeyHash = $contact['receiverPublicKeyHash'] ?? '';
 
-                        // Convert to minor units
-                        $feeMinor = (int) ($contactFee * Constants::FEE_CONVERSION_FACTOR);
-                        $creditMinor = (int) ($contactCredit * Constants::getConversionFactor($contactCurrency));
+                        // Convert to storage units
+                        $feeMinor = CurrencyUtilityService::exactMajorToMinor($contactFee, Constants::FEE_CONVERSION_FACTOR);
+                        $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($contactCredit);
 
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
                             'fee_percent' => $feeMinor,
@@ -680,9 +685,12 @@ class ContactController
             $serviceContainer = $app->services;
             $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
-            // Convert to minor units for storage
-            $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
-            $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+            // Convert to storage units
+            $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
+            $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
+
+            // Auto-add currency to allowed list if not already present
+            $this->autoAddAllowedCurrency($currency);
 
             // Update the pending currency with user's fee/credit and set status to accepted
             $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
@@ -697,14 +705,23 @@ class ContactController
                 $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
             }
 
-            // Insert initial balance and credit entries for the newly accepted currency
+            // Insert initial balance and calculate available credit for the newly accepted currency
             $contactPubkey = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
             if ($contactPubkey) {
-                $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->insertInitialContactBalances($contactPubkey, $currency);
+                $balanceRepo = $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class);
+                $balanceRepo->insertInitialContactBalances($contactPubkey, $currency);
                 try {
-                    $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->createInitialCredit($contactPubkey, $currency);
+                    $sentBalance = $balanceRepo->getContactSentBalance($contactPubkey, $currency);
+                    $receivedBalance = $balanceRepo->getContactReceivedBalance($contactPubkey, $currency);
+                    $balance = $sentBalance->subtract($receivedBalance);
+                    $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+                    $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
+                        $pubkeyHash,
+                        $balance->add($creditLimit),
+                        $currency
+                    );
                 } catch (\Exception $e) {
-                    Logger::getInstance()->warning("Failed to create initial credit for accepted currency", [
+                    Logger::getInstance()->warning("Failed to store initial credit for accepted currency", [
                         'currency' => $currency,
                         'error' => $e->getMessage()
                     ]);
@@ -766,6 +783,9 @@ class ContactController
                         $firstCredit = Security::sanitizeInput($firstEntry['credit'] ?? '');
 
                         if (!empty($firstCurrency) && $firstFee !== '' && $firstCredit !== '') {
+                            // Auto-add currency to allowed list if not already present
+                            $this->autoAddAllowedCurrency($firstCurrency);
+
                             // Accept the contact with the first currency via CLI addContact
                             $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstCurrency, '--json'];
                             CliOutputManager::resetInstance();
@@ -814,9 +834,12 @@ class ContactController
                     continue;
                 }
 
-                // Convert to minor units for storage
-                $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
-                $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+                // Auto-add currency to allowed list if not already present
+                $this->autoAddAllowedCurrency($currency);
+
+                // Convert to storage units
+                $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
+                $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
                 $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
                     'fee_percent' => $feeMinor,
@@ -831,11 +854,20 @@ class ContactController
                 // Re-fetch pubkey in case it was just established by the first currency acceptance
                 $currentPubkey = $contactPubkey ?: $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
                 if ($currentPubkey) {
-                    $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->insertInitialContactBalances($currentPubkey, $currency);
+                    $balanceRepo = $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class);
+                    $balanceRepo->insertInitialContactBalances($currentPubkey, $currency);
                     try {
-                        $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->createInitialCredit($currentPubkey, $currency);
+                        $sentBalance = $balanceRepo->getContactSentBalance($currentPubkey, $currency);
+                        $receivedBalance = $balanceRepo->getContactReceivedBalance($currentPubkey, $currency);
+                        $balance = $sentBalance->subtract($receivedBalance);
+                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
+                        $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
+                            $pubkeyHash,
+                            $balance->add($creditLimit),
+                            $currency
+                        );
                     } catch (\Exception $e) {
-                        // Credit may already exist
+                        // Non-fatal — credit will be corrected on next ping/pong
                     }
                 }
 
@@ -1072,6 +1104,34 @@ class ContactController
                 'error' => 'internal_error',
                 'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
             ]);
+        }
+    }
+
+    /**
+     * Auto-add a currency to allowedCurrencies if not already present.
+     *
+     * Called when a user manually accepts a contact/currency request
+     * for a currency not in their allowed list. Persists the change
+     * to defaultconfig.json so the setting survives restarts.
+     */
+    private function autoAddAllowedCurrency(string $currency): void
+    {
+        $user = UserContext::getInstance();
+        $allowedCurrencies = $user->getAllowedCurrencies();
+
+        if (in_array($currency, $allowedCurrencies)) {
+            return;
+        }
+
+        $allowedCurrencies[] = $currency;
+        $newValue = implode(',', $allowedCurrencies);
+        $user->set('allowedCurrencies', $newValue);
+
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true) ?? [];
+            $config['allowedCurrencies'] = $newValue;
+            file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX);
         }
     }
 }

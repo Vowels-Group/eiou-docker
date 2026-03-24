@@ -2894,17 +2894,17 @@ docker exec ${contactA} eiou send ${addressC} 1 USD "P2P-AC-${timestamp18}" 2>&1
 docker exec ${contactC} eiou send ${addressA} 1 USD "P2P-CA-${timestamp18}" 2>&1 > /dev/null &
 wait
 
-# Process queues (more cycles for simultaneous sync recovery with broken chain)
-# Broken chain + simultaneous sends requires more cycles than single-direction tests
+# Process queues — 2 non-consecutive gaps need: sync AB1+AB3 from A, repair chain,
+# THEN relay A's P2P to C. This is more round-trips than single-gap tests.
 echo -e "\t   Processing message queues..."
-for i in {1..18}; do
+for i in {1..25}; do
     process_all_queues
 done
 
 # Verify both end-recipients received transactions (with retry for timing - longer delay)
-# Increased delay to match tests 13-14 which also deal with broken chains
-countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp18}" 1 30)
-countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp18}" 1 30)
+# 2 gaps + simultaneous P2P needs extra time for full sync-recover-relay cycle
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp18}" 1 45)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp18}" 1 45)
 countB_ab_t18_after=$(get_tx_count ${contactB} "AB%-${timestamp18}")
 echo -e "\t   After sync:      B recovered ${countB_ab_t18_after} of ${countB_ab_t18} AB txs, A received ${countA_p2p} P2P, C received ${countC_p2p} P2P"
 

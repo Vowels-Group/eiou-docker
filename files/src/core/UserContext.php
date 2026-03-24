@@ -427,64 +427,53 @@ class UserContext {
     }
 
     /**
-     * Get currency conversion factors map
+     * Get the internal conversion factor for storage.
+     * Always returns the universal internal factor — same for all currencies.
      *
-     * @return array<string, int> Map of currency code to conversion factor (e.g., ['USD' => 100, 'BTC' => 100000000])
-     */
-    public function getConversionFactors(): array {
-        $factors = $this->get('conversionFactors');
-        if ($factors === null) {
-            return Constants::CONVERSION_FACTORS;
-        }
-        if (is_string($factors)) {
-            $decoded = json_decode($factors, true);
-            return is_array($decoded) ? $decoded : Constants::CONVERSION_FACTORS;
-        }
-        return (array) $factors;
-    }
-
-    /**
-     * Get the conversion factor for a single currency
-     *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Conversion factor (e.g., 100 for USD cents-to-dollars)
-     * @throws \InvalidArgumentException If currency has no defined factor
+     * @param string $currency Currency code (ignored)
+     * @return int Conversion factor (always 10^8)
      */
     public function getConversionFactor(string $currency): int {
-        $factors = $this->getConversionFactors();
-        if (!isset($factors[$currency])) {
-            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
-        }
-        return (int) $factors[$currency];
+        return Constants::INTERNAL_CONVERSION_FACTOR;
     }
 
     /**
-     * Get currency decimal places map
+     * Get the internal decimal precision for storage.
+     * Always returns INTERNAL_PRECISION (8).
      *
-     * @return array<string, int> Map of currency code to decimal places (e.g., ['USD' => 2, 'BTC' => 8])
-     */
-    public function getCurrencyDecimalsMap(): array {
-        $decimals = $this->get('currencyDecimals');
-        if ($decimals === null) {
-            return Constants::CURRENCY_DECIMALS;
-        }
-        if (is_string($decimals)) {
-            $decoded = json_decode($decimals, true);
-            return is_array($decoded) ? $decoded : Constants::CURRENCY_DECIMALS;
-        }
-        return (array) $decimals;
-    }
-
-    /**
-     * Get the number of decimal places for a single currency
-     *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of decimal places
+     * @param string $currency Currency code (ignored)
+     * @return int Number of decimal places (always 8)
      */
     public function getCurrencyDecimals(string $currency): int {
-        $decimals = $this->getCurrencyDecimalsMap();
-        return (int) ($decimals[$currency] ?? Constants::DISPLAY_CURRENCY_DECIMALS);
+        return Constants::INTERNAL_PRECISION;
     }
+
+    /**
+     * Get the global display decimal places setting.
+     *
+     * @return int Display decimal places (0-8), default DISPLAY_DECIMALS (4)
+     */
+    public function getAllDisplayDecimals(): int {
+        $decimals = $this->get('displayDecimals');
+        if ($decimals === null) {
+            return Constants::DISPLAY_DECIMALS;
+        }
+        // Backward compat: if stored as JSON object (old per-currency format), use default
+        if (is_string($decimals)) {
+            $decoded = json_decode($decimals, true);
+            if (is_array($decoded)) {
+                return Constants::DISPLAY_DECIMALS;
+            }
+            $decimals = (int) $decimals;
+        }
+        $decimals = (int) $decimals;
+        if ($decimals < 0 || $decimals > Constants::INTERNAL_PRECISION) {
+            return Constants::DISPLAY_DECIMALS;
+        }
+        return $decimals;
+    }
+
+
 
     /**
      * Get maximum fee percentage
@@ -573,6 +562,18 @@ class UserContext {
     }
 
     /**
+     * Get auto-reject unknown currency setting.
+     *
+     * When true, incoming contact requests with currencies not in allowedCurrencies
+     * are automatically rejected. When false, they arrive as pending for manual review.
+     *
+     * @return bool
+     */
+    public function getAutoRejectUnknownCurrency(): bool {
+        return (bool) ($this->get('autoRejectUnknownCurrency') ?? Constants::AUTO_REJECT_UNKNOWN_CURRENCY);
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string
@@ -596,6 +597,24 @@ class UserContext {
             return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
         }
         return (bool) ($this->get('contactStatusEnabled') ?? Constants::CONTACT_STATUS_ENABLED);
+    }
+
+    /**
+     * Get hop budget randomization setting
+     *
+     * When enabled, P2P routing uses a geometric distribution to randomize the
+     * hop budget, improving privacy by preventing traffic analysis. When disabled,
+     * the full maxP2pLevel is used, allowing transactions to reach maximum depth
+     * (useful in sparse trust graphs where privacy can be sacrificed for reachability).
+     *
+     * @return bool
+     */
+    public function getHopBudgetRandomized(): bool {
+        $envValue = getenv('EIOU_HOP_BUDGET_RANDOMIZED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('hopBudgetRandomized') ?? Constants::HOP_BUDGET_RANDOMIZED);
     }
 
     /**
@@ -987,8 +1006,7 @@ class UserContext {
         return [
             // Transaction settings (original 11)
             'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
-            'conversionFactors' => json_encode(Constants::CONVERSION_FACTORS),
-            'currencyDecimals' => json_encode(Constants::CURRENCY_DECIMALS),
+            'displayDecimals' => Constants::DISPLAY_DECIMALS,
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,
@@ -1002,9 +1020,11 @@ class UserContext {
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
+            'autoRejectUnknownCurrency' => Constants::AUTO_REJECT_UNKNOWN_CURRENCY,
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
 
             // Feature toggles
+            'hopBudgetRandomized' => Constants::HOP_BUDGET_RANDOMIZED,
             'contactStatusEnabled' => Constants::CONTACT_STATUS_ENABLED,
             'contactStatusSyncOnPing' => Constants::CONTACT_STATUS_SYNC_ON_PING,
             'autoChainDropPropose' => Constants::AUTO_CHAIN_DROP_PROPOSE,

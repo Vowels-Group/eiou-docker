@@ -406,193 +406,112 @@ class ValidationUtilityServiceTest extends TestCase
      */
     public function testCalculateAvailableFundsWithPositiveBalance(): void
     {
-        $request = [
-            'senderPublicKey' => 'test-pubkey-123',
-            'currency' => 'USD'
-        ];
+        $request = ['senderPublicKey' => 'test-pubkey-123', 'currency' => 'USD'];
 
         $this->balanceRepository->expects($this->once())
             ->method('getContactSentBalance')
-            ->with('test-pubkey-123', 'USD')
-            ->willReturn(10000); // Sent to contact
-
+            ->willReturn(new \Eiou\Core\SplitAmount(100, 0));
         $this->balanceRepository->expects($this->once())
             ->method('getContactReceivedBalance')
-            ->with('test-pubkey-123', 'USD')
-            ->willReturn(3000); // Received from contact
+            ->willReturn(new \Eiou\Core\SplitAmount(30, 0));
 
         $result = $this->service->calculateAvailableFunds($request);
 
-        // Available funds = sent - received = 10000 - 3000 = 7000
-        $this->assertEquals(7000, $result);
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result);
+        $this->assertEquals(70, $result->whole);
     }
 
-    /**
-     * Test calculateAvailableFunds with zero balance
-     */
     public function testCalculateAvailableFundsWithZeroBalance(): void
     {
-        $request = [
-            'senderPublicKey' => 'test-pubkey-123',
-            'currency' => 'USD'
-        ];
+        $request = ['senderPublicKey' => 'test-pubkey-123', 'currency' => 'USD'];
 
         $this->balanceRepository->expects($this->once())
             ->method('getContactSentBalance')
-            ->with('test-pubkey-123', 'USD')
-            ->willReturn(5000);
-
+            ->willReturn(new \Eiou\Core\SplitAmount(50, 0));
         $this->balanceRepository->expects($this->once())
             ->method('getContactReceivedBalance')
-            ->with('test-pubkey-123', 'USD')
-            ->willReturn(5000);
+            ->willReturn(new \Eiou\Core\SplitAmount(50, 0));
 
         $result = $this->service->calculateAvailableFunds($request);
-
-        $this->assertEquals(0, $result);
+        $this->assertTrue($result->isZero());
     }
 
-    /**
-     * Test calculateAvailableFunds with negative balance
-     */
     public function testCalculateAvailableFundsWithNegativeBalance(): void
     {
-        $request = [
-            'senderPublicKey' => 'test-pubkey-123',
-            'currency' => 'USD'
-        ];
+        $request = ['senderPublicKey' => 'test-pubkey-123', 'currency' => 'USD'];
 
         $this->balanceRepository->expects($this->once())
             ->method('getContactSentBalance')
-            ->with('test-pubkey-123', 'USD')
-            ->willReturn(2000);
-
+            ->willReturn(new \Eiou\Core\SplitAmount(20, 0));
         $this->balanceRepository->expects($this->once())
             ->method('getContactReceivedBalance')
-            ->with('test-pubkey-123', 'USD')
-            ->willReturn(5000);
+            ->willReturn(new \Eiou\Core\SplitAmount(50, 0));
 
         $result = $this->service->calculateAvailableFunds($request);
-
-        // Available funds = 2000 - 5000 = -3000
-        $this->assertEquals(-3000, $result);
+        $this->assertTrue($result->isNegative());
+        $this->assertEquals(-30, $result->whole);
     }
 
-    /**
-     * Test calculateAvailableFunds with alternative public key field
-     */
     public function testCalculateAvailableFundsWithAlternativePublicKeyField(): void
     {
-        $request = [
-            'sender_public_key' => 'alternate-pubkey',
-            'currency' => 'EUR'
-        ];
+        $request = ['sender_public_key' => 'alternate-pubkey', 'currency' => 'EUR'];
 
         $this->balanceRepository->expects($this->once())
             ->method('getContactSentBalance')
-            ->with('alternate-pubkey', 'EUR')
-            ->willReturn(15000);
-
+            ->willReturn(new \Eiou\Core\SplitAmount(150, 0));
         $this->balanceRepository->expects($this->once())
             ->method('getContactReceivedBalance')
-            ->with('alternate-pubkey', 'EUR')
-            ->willReturn(10000);
+            ->willReturn(new \Eiou\Core\SplitAmount(100, 0));
 
         $result = $this->service->calculateAvailableFunds($request);
-
-        $this->assertEquals(5000, $result);
+        $this->assertEquals(50, $result->whole);
     }
 
-    /**
-     * Test calculateAvailableFunds prefers senderPublicKey over sender_public_key
-     */
     public function testCalculateAvailableFundsPrefersStandardField(): void
     {
-        $request = [
-            'senderPublicKey' => 'primary-pubkey',
-            'sender_public_key' => 'alternate-pubkey',
-            'currency' => 'USD'
-        ];
+        $request = ['senderPublicKey' => 'primary-pubkey', 'sender_public_key' => 'alternate-pubkey', 'currency' => 'USD'];
 
-        // Should use 'senderPublicKey' value
         $this->balanceRepository->expects($this->once())
             ->method('getContactSentBalance')
             ->with('primary-pubkey', 'USD')
-            ->willReturn(8000);
-
+            ->willReturn(new \Eiou\Core\SplitAmount(80, 0));
         $this->balanceRepository->expects($this->once())
             ->method('getContactReceivedBalance')
             ->with('primary-pubkey', 'USD')
-            ->willReturn(3000);
+            ->willReturn(new \Eiou\Core\SplitAmount(30, 0));
 
         $result = $this->service->calculateAvailableFunds($request);
-
-        $this->assertEquals(5000, $result);
+        $this->assertEquals(50, $result->whole);
     }
 
-    /**
-     * Test calculateAvailableFunds with different currencies
-     */
     public function testCalculateAvailableFundsWithDifferentCurrencies(): void
     {
-        $requestUSD = [
-            'senderPublicKey' => 'test-pubkey',
-            'currency' => 'USD'
-        ];
-
-        $requestEUR = [
-            'senderPublicKey' => 'test-pubkey',
-            'currency' => 'EUR'
-        ];
-
-        // Set up expectations for USD
         $this->balanceRepository->expects($this->exactly(2))
             ->method('getContactSentBalance')
-            ->willReturnCallback(function ($pubkey, $currency) {
-                if ($currency === 'USD') {
-                    return 10000;
-                }
-                return 5000;
-            });
-
+            ->willReturnCallback(fn($p, $c) => $c === 'USD' ? new \Eiou\Core\SplitAmount(100, 0) : new \Eiou\Core\SplitAmount(50, 0));
         $this->balanceRepository->expects($this->exactly(2))
             ->method('getContactReceivedBalance')
-            ->willReturnCallback(function ($pubkey, $currency) {
-                if ($currency === 'USD') {
-                    return 2000;
-                }
-                return 1000;
-            });
+            ->willReturnCallback(fn($p, $c) => $c === 'USD' ? new \Eiou\Core\SplitAmount(20, 0) : new \Eiou\Core\SplitAmount(10, 0));
 
-        $resultUSD = $this->service->calculateAvailableFunds($requestUSD);
-        $resultEUR = $this->service->calculateAvailableFunds($requestEUR);
+        $resultUSD = $this->service->calculateAvailableFunds(['senderPublicKey' => 'test', 'currency' => 'USD']);
+        $resultEUR = $this->service->calculateAvailableFunds(['senderPublicKey' => 'test', 'currency' => 'EUR']);
 
-        $this->assertEquals(8000, $resultUSD);
-        $this->assertEquals(4000, $resultEUR);
+        $this->assertEquals(80, $resultUSD->whole);
+        $this->assertEquals(40, $resultEUR->whole);
     }
 
-    /**
-     * Test calculateAvailableFunds with no transactions (zero balances)
-     */
     public function testCalculateAvailableFundsWithNoTransactions(): void
     {
-        $request = [
-            'senderPublicKey' => 'new-contact-pubkey',
-            'currency' => 'USD'
-        ];
+        $request = ['senderPublicKey' => 'new-contact-pubkey', 'currency' => 'USD'];
 
         $this->balanceRepository->expects($this->once())
             ->method('getContactSentBalance')
-            ->with('new-contact-pubkey', 'USD')
-            ->willReturn(0);
-
+            ->willReturn(\Eiou\Core\SplitAmount::zero());
         $this->balanceRepository->expects($this->once())
             ->method('getContactReceivedBalance')
-            ->with('new-contact-pubkey', 'USD')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::zero());
 
         $result = $this->service->calculateAvailableFunds($request);
-
-        $this->assertEquals(0, $result);
+        $this->assertTrue($result->isZero());
     }
 }

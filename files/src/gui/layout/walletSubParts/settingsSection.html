@@ -39,10 +39,10 @@
             <!-- Minimum Fee -->
             <div class="form-group">
                 <label for="minFee">Minimum Fee Amount:</label>
-                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="<?php echo \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE; ?>" class="default-value">
+                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="0" class="default-value">
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
-                    Minimum fee amount in default currency (cannot be lower than <?php echo \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE; ?>)
+                    Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo transactionMinimumFee(); ?>
                 </small>
             </div>
 
@@ -72,7 +72,7 @@
                 <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
                     <?php
                     // Dynamically generate transport options from available types
-                    $transportTypes = \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
+                    $transportTypes = validTransportIndices();
                     $currentTransport = $user->getDefaultTransportMode();
                     foreach ($transportTypes as $type):
                         $displayName = strtoupper($type);
@@ -214,6 +214,22 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="hopBudgetRandomized">Hop Budget Randomization:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="hopBudgetRandomized" name="hopBudgetRandomized" value="1" <?php echo $user->getHopBudgetRandomized() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="hopBudgetRandomizedStatus" class="toggle-status <?php echo $user->getHopBudgetRandomized() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getHopBudgetRandomized() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, P2P hop depth is randomized for privacy. Disable to always use full routing depth (recommended for sparse networks).
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="apiEnabled">API Access:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
@@ -258,6 +274,22 @@
                             </div>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
                             </small>
                         </div>
 
@@ -488,17 +520,17 @@
 
                         <div class="form-group">
                             <label for="maxP2pLevel">Max P2P Routing Level:</label>
-                            <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
+                            <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo p2pMaxRoutingLevel(); ?>" class="default-value">
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Maximum number of hops for P2P routing (1-<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>)
+                                <i class="fas fa-info-circle"></i> Maximum number of hops for P2P routing (1-<?php echo p2pMaxRoutingLevel(); ?>)
                             </small>
                         </div>
 
                         <div class="form-group">
                             <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
-                            <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
+                            <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo p2pMinExpirationSeconds(); ?>" class="default-value">
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
+                                <i class="fas fa-info-circle"></i> How long P2P routing requests remain valid (minimum <?php echo p2pMinExpirationSeconds(); ?> seconds)
                             </small>
                         </div>
 
@@ -531,43 +563,13 @@
                     </h4>
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="conversionFactors">Conversion Factors:</label>
-                            <textarea id="conversionFactors" name="conversionFactors" rows="4" class="default-value" placeholder="USD:100&#10;EUR:100&#10;BTC:100000000"><?php
-                                $factors = $user->getConversionFactors();
-                                $lines = [];
-                                foreach ($factors as $code => $factor) {
-                                    $lines[] = $code . ':' . $factor;
-                                }
-                                echo htmlspecialchars(implode("\n", $lines));
-                            ?></textarea>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Minor-to-major unit conversion per currency — one per line as CODE:FACTOR (e.g., USD:100 means 100 cents per dollar, BTC:100000000 means satoshis per bitcoin). Persists across container rebuilds.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="currencyDecimals">Currency Decimal Places:</label>
-                            <textarea id="currencyDecimals" name="currencyDecimals" rows="4" class="default-value" placeholder="USD:2&#10;EUR:2&#10;BTC:8"><?php
-                                $decimals = $user->getCurrencyDecimalsMap();
-                                $lines = [];
-                                foreach ($decimals as $code => $dec) {
-                                    $lines[] = $code . ':' . $dec;
-                                }
-                                echo htmlspecialchars(implode("\n", $lines));
-                            ?></textarea>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Display decimal places per currency — one per line as CODE:DECIMALS (e.g., USD:2, BTC:8). Persists across container rebuilds.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
                             <label for="allowedCurrencies">Allowed Currencies:</label>
                             <textarea id="allowedCurrencies" name="allowedCurrencies" rows="4" class="default-value" placeholder="USD&#10;EUR"><?php
                                 $allowedCurrencyList = $user->getAllowedCurrencies();
                                 echo htmlspecialchars(implode("\n", $allowedCurrencyList));
                             ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Each must have a conversion factor defined above. Set conversion factors and decimals first, then add the currency here.
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. All currencies use the global display decimal places setting.
                             </small>
                         </div>
                     </div>
@@ -613,10 +615,28 @@
                     </h4>
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="displayDateFormat">Date Format:</label>
-                            <input type="text" id="displayDateFormat" name="displayDateFormat" value="<?php echo htmlspecialchars($user->getDisplayDateFormat()); ?>" class="default-value" placeholder="Y-m-d H:i:s.u">
+                            <label for="displayDecimals">Display Decimal Places:</label>
+                            <select id="displayDecimals" name="displayDecimals" class="default-value">
+                                <?php $currentDecimals = $user->getAllDisplayDecimals(); ?>
+                                <?php for ($i = 0; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>" <?php echo ($i === $currentDecimals) ? 'selected' : ''; ?>><?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> PHP date format string for timestamps in the GUI (e.g., Y-m-d H:i:s)
+                                <i class="fas fa-info-circle"></i> Number of decimal places shown in the UI for all currencies (0-8). Values are truncated (floored), not rounded, so displayed amounts never exceed the actual value. Does not affect internal storage — all currencies use 8-decimal precision internally.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="displayDateFormat">Date Format:</label>
+                            <?php $currentDateFormat = $user->getDisplayDateFormat(); $now = new \DateTime(); ?>
+                            <select id="displayDateFormat" name="displayDateFormat" class="default-value">
+                                <?php foreach (\Eiou\Core\Constants::VALID_DATE_FORMATS as $fmt): ?>
+                                    <option value="<?php echo htmlspecialchars($fmt); ?>" <?php echo ($fmt === $currentDateFormat) ? 'selected' : ''; ?>><?php echo htmlspecialchars($now->format($fmt)); ?> (<?php echo htmlspecialchars($fmt); ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Date format for timestamps in the GUI
                             </small>
                         </div>
 
@@ -878,7 +898,7 @@
                 <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
                 <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
                 <tr><td><strong>Server Software</strong></td><td><?php echo htmlspecialchars($_SERVER['SERVER_SOFTWARE'] ?? 'N/A'); ?></td></tr>
-                <tr><td><strong>App Debug Mode</strong></td><td><?php echo \Eiou\Core\Constants::isDebug() ? 'Enabled' : 'Disabled'; ?></td></tr>
+                <tr><td><strong>App Debug Mode</strong></td><td><?php echo isDebugMode() ? 'Enabled' : 'Disabled'; ?></td></tr>
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
                 <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>
@@ -914,7 +934,7 @@
 
             <!-- Constants.php Values (Collapsible) -->
             <?php
-            $constantsValues = \Eiou\Core\Constants::all();
+            $constantsValues = allConstants();
             $constantsFormatted = '';
             foreach ($constantsValues as $key => $value) {
                 $displayValue = is_bool($value) ? ($value ? 'true' : 'false') : (is_array($value) ? json_encode($value) : $value);

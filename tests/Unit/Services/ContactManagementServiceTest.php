@@ -22,6 +22,8 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Contracts\SyncTriggerInterface;
 
 #[CoversClass(ContactManagementService::class)]
 class ContactManagementServiceTest extends TestCase
@@ -35,6 +37,8 @@ class ContactManagementServiceTest extends TestCase
     private UserContext $currentUser;
     private ContactCreditRepository $contactCreditRepo;
     private ContactCurrencyRepository $contactCurrencyRepo;
+    private RepositoryFactory $repoFactory;
+    private SyncTriggerInterface $syncTrigger;
     private ContactManagementService $service;
 
     protected function setUp(): void
@@ -46,6 +50,7 @@ class ContactManagementServiceTest extends TestCase
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->inputValidator = new InputValidator();
         $this->currentUser = $this->createMock(UserContext::class);
+        $this->syncTrigger = $this->createMock(SyncTriggerInterface::class);
 
         $this->utilityContainer->method('getTransportUtility')
             ->willReturn($this->transportUtility);
@@ -53,17 +58,24 @@ class ContactManagementServiceTest extends TestCase
         $this->contactCreditRepo = $this->createMock(ContactCreditRepository::class);
         $this->contactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
 
+        $this->repoFactory = $this->createMock(RepositoryFactory::class);
+        $this->repoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                if ($class === ContactCreditRepository::class) return $this->contactCreditRepo;
+                if ($class === ContactCurrencyRepository::class) return $this->contactCurrencyRepo;
+                return null;
+            });
+
         $this->service = new ContactManagementService(
             $this->contactRepo,
             $this->addressRepo,
             $this->balanceRepo,
             $this->utilityContainer,
             $this->inputValidator,
-            $this->currentUser
+            $this->currentUser,
+            $this->repoFactory,
+            $this->syncTrigger
         );
-
-        $this->service->setContactCreditRepository($this->contactCreditRepo);
-        $this->service->setContactCurrencyRepository($this->contactCurrencyRepo);
     }
 
     // =========================================================================
@@ -296,7 +308,7 @@ class ContactManagementServiceTest extends TestCase
 
         $this->contactCurrencyRepo->expects($this->once())
             ->method('upsertCurrencyConfig')
-            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit)
+            ->with($pubkeyHash, $currency, (int) $fee, $this->isInstanceOf(\Eiou\Core\SplitAmount::class))
             ->willReturn(true);
 
         $result = $this->service->acceptContact($pubkey, $name, $fee, $credit, $currency);
@@ -316,11 +328,11 @@ class ContactManagementServiceTest extends TestCase
         $this->contactRepo->expects($this->once())
             ->method('getCreditLimit')
             ->with('pubkey', 'EUR')
-            ->willReturn(500.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(500));
 
         $result = $this->service->getCreditLimit('pubkey', 'EUR');
 
-        $this->assertEquals(500.0, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(500), $result);
     }
 
     // =========================================================================
@@ -348,15 +360,22 @@ class ContactManagementServiceTest extends TestCase
 
         $this->contactCurrencyRepo->expects($this->once())
             ->method('insertCurrencyConfig')
-            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit);
+            ->with($pubkeyHash, $currency, $this->anything(), $this->isInstanceOf(\Eiou\Core\SplitAmount::class));
 
         $this->balanceRepo->expects($this->once())
             ->method('insertInitialContactBalances')
             ->with($pubkey, $currency);
 
+        $this->balanceRepo->method('getContactSentBalance')
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $this->balanceRepo->method('getContactReceivedBalance')
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $this->contactCurrencyRepo->method('getCreditLimit')
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
+
         $this->contactCreditRepo->expects($this->once())
-            ->method('createInitialCredit')
-            ->with($pubkey, $currency);
+            ->method('upsertAvailableCredit')
+            ->with($pubkeyHash, $this->equalTo(\Eiou\Core\SplitAmount::from(0)), $currency);
 
         $result = $this->service->addCurrencyToContact($pubkey, $currency, $fee, $credit);
 

@@ -2,6 +2,8 @@
 namespace Eiou\Contracts;
 
 use Eiou\Cli\CliOutputManager;
+use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Exceptions\ValidationServiceException;
 
 /**
@@ -159,9 +161,9 @@ interface ContactServiceInterface
      *
      * @param string $senderPublicKey The sender's public key
      * @param string $currency Currency code
-     * @return float The credit limit
+     * @return SplitAmount The credit limit
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY): float;
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): SplitAmount;
 
     /**
      * Get the public key for a contact by address.

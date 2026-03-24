@@ -4,6 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOException;
 
@@ -11,9 +12,13 @@ class CapacityReservationRepository extends AbstractRepository {
     use QueryBuilder;
 
     protected array $allowedColumns = [
-        'id', 'hash', 'contact_pubkey_hash', 'base_amount', 'total_amount',
+        'id', 'hash', 'contact_pubkey_hash', 'base_amount_whole', 'base_amount_frac',
+        'total_amount_whole', 'total_amount_frac',
         'currency', 'status', 'created_at', 'released_at', 'release_reason'
     ];
+
+    /** @var string[] Split amount column prefixes for automatic row mapping */
+    protected array $splitAmountColumns = ['base_amount', 'total_amount'];
 
     public function __construct(?PDO $pdo = null) {
         parent::__construct($pdo);
@@ -27,16 +32,18 @@ class CapacityReservationRepository extends AbstractRepository {
     public function createReservation(
         string $hash,
         string $contactPubkeyHash,
-        int $baseAmount,
-        int $totalAmount,
+        SplitAmount $baseAmount,
+        SplitAmount $totalAmount,
         string $currency
     ): bool {
         $query = "INSERT INTO {$this->tableName}
-                  (hash, contact_pubkey_hash, base_amount, total_amount, currency, status)
-                  VALUES (:hash, :pubkey_hash, :base_amount, :total_amount, :currency, 'active')
+                  (hash, contact_pubkey_hash, base_amount_whole, base_amount_frac, total_amount_whole, total_amount_frac, currency, status)
+                  VALUES (:hash, :pubkey_hash, :base_amount_whole, :base_amount_frac, :total_amount_whole, :total_amount_frac, :currency, 'active')
                   ON DUPLICATE KEY UPDATE
-                  base_amount = VALUES(base_amount),
-                  total_amount = VALUES(total_amount),
+                  base_amount_whole = VALUES(base_amount_whole),
+                  base_amount_frac = VALUES(base_amount_frac),
+                  total_amount_whole = VALUES(total_amount_whole),
+                  total_amount_frac = VALUES(total_amount_frac),
                   status = 'active',
                   released_at = NULL,
                   release_reason = NULL";
@@ -44,8 +51,10 @@ class CapacityReservationRepository extends AbstractRepository {
         $stmt = $this->execute($query, [
             ':hash' => $hash,
             ':pubkey_hash' => $contactPubkeyHash,
-            ':base_amount' => $baseAmount,
-            ':total_amount' => $totalAmount,
+            ':base_amount_whole' => $baseAmount->whole,
+            ':base_amount_frac' => $baseAmount->frac,
+            ':total_amount_whole' => $totalAmount->whole,
+            ':total_amount_frac' => $totalAmount->frac,
             ':currency' => $currency,
         ]);
 
@@ -58,8 +67,8 @@ class CapacityReservationRepository extends AbstractRepository {
      * Returns the sum of total_amount for all active reservations
      * where the sender's pubkey hash matches.
      */
-    public function getTotalReservedForPubkey(string $contactPubkeyHash, ?string $currency = null): int {
-        $query = "SELECT COALESCE(SUM(total_amount), 0) as total
+    public function getTotalReservedForPubkey(string $contactPubkeyHash, ?string $currency = null): SplitAmount {
+        $query = "SELECT COALESCE(SUM(total_amount_whole), 0) AS sum_whole, COALESCE(SUM(total_amount_frac), 0) AS sum_frac
                   FROM {$this->tableName}
                   WHERE contact_pubkey_hash = :pubkey_hash
                     AND status = 'active'";
@@ -72,11 +81,11 @@ class CapacityReservationRepository extends AbstractRepository {
 
         $stmt = $this->execute($query, $params);
         if (!$stmt) {
-            return 0;
+            return SplitAmount::zero();
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($result['total'] ?? 0);
+        return self::sumCarry((int)$result['sum_whole'], (int)$result['sum_frac']);
     }
 
     /**
@@ -157,7 +166,7 @@ class CapacityReservationRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     /**
@@ -177,5 +186,18 @@ class CapacityReservationRepository extends AbstractRepository {
             $this->logError("Failed to delete old capacity reservations", $e);
             return 0;
         }
+    }
+
+    /**
+     * Handle carry from summed fractional parts
+     *
+     * @param int $sumWhole Summed whole parts
+     * @param int $sumFrac Summed fractional parts (may exceed FRAC_MODULUS)
+     * @return SplitAmount Properly normalized SplitAmount
+     */
+    private static function sumCarry(int $sumWhole, int $sumFrac): SplitAmount {
+        $carry = intdiv($sumFrac, SplitAmount::FRAC_MODULUS);
+        $frac = $sumFrac % SplitAmount::FRAC_MODULUS;
+        return new SplitAmount($sumWhole + $carry, $frac);
     }
 }

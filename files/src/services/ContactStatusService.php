@@ -18,6 +18,8 @@ use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Schemas\Payloads\ContactStatusPayload;
 use Eiou\Processors\AbstractMessageProcessor;
 use RuntimeException;
@@ -238,7 +240,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         if ($this->contactCurrencyRepository !== null && !empty($remoteCurrencies)) {
                             foreach ($remoteCurrencies as $cur) {
                                 $this->contactCurrencyRepository->insertCurrencyConfig(
-                                    $pubkeyHash, $cur, 0, 0, 'pending', 'incoming'
+                                    $pubkeyHash, $cur, 0, null, 'pending', 'incoming'
                                 );
                             }
                         }
@@ -260,21 +262,14 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                         if (!empty($localPrevTxidsByCurrency) && $this->currentUser->getAutoAcceptRestoredContact()) {
                             // Transactions exist and auto-accept is enabled — accept the contact
-                            $defaultFee = (int) ($this->currentUser->getDefaultFee() * Constants::getConversionFactor(Constants::TRANSACTION_DEFAULT_CURRENCY));
-                            $defaultCredit = (int) ($this->currentUser->getDefaultCreditLimit() * Constants::getConversionFactor(Constants::TRANSACTION_DEFAULT_CURRENCY));
+                            $defaultFee = CurrencyUtilityService::exactMajorToMinor($this->currentUser->getDefaultFee(), Constants::FEE_CONVERSION_FACTOR);
+                            $defaultCredit = SplitAmount::fromMajorUnits($this->currentUser->getDefaultCreditLimit());
 
                             $this->contactRepository->updateContactStatus($senderPubkey, 'accepted');
 
-                            // Create credit and currency entries for each restored currency
+                            // Create currency entries for each restored currency
                             $restoredCurrencies = array_unique(array_merge($remoteCurrencies, array_keys($localPrevTxidsByCurrency)));
                             foreach ($restoredCurrencies as $cur) {
-                                if ($this->contactCreditRepository !== null) {
-                                    try {
-                                        $this->contactCreditRepository->createInitialCredit($senderPubkey, $cur);
-                                    } catch (\Exception $e) {
-                                        // Ignore duplicate key errors
-                                    }
-                                }
                                 if ($this->contactCurrencyRepository !== null) {
                                     // Upsert both directions as accepted with default fee/credit
                                     $this->contactCurrencyRepository->upsertCurrencyConfig(
@@ -291,6 +286,28 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             // Recalculate balances from the synced transactions instead of
                             // initializing to 0/0 — the sync brought real transaction history
                             $this->getSyncTrigger()->syncContactBalance($senderPubkey);
+
+                            // Calculate and store actual available credit per currency
+                            // (after balance sync so values reflect real transaction history)
+                            if ($this->contactCreditRepository !== null && $this->balanceRepository !== null) {
+                                foreach ($restoredCurrencies as $cur) {
+                                    try {
+                                        $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
+                                        $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
+                                        $balance = $sentBalance->subtract($receivedBalance);
+                                        $creditLimit = $this->contactCurrencyRepository !== null
+                                            ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur) ?? SplitAmount::zero())
+                                            : SplitAmount::zero();
+                                        $this->contactCreditRepository->upsertAvailableCredit(
+                                            $pubkeyHash,
+                                            $balance->add($creditLimit),
+                                            $cur
+                                        );
+                                    } catch (\Exception $e) {
+                                        // Non-fatal — credit will be corrected on next ping/pong
+                                    }
+                                }
+                            }
 
                             Logger::getInstance()->info("Auto-accepted restored contact after sync", [
                                 'sender_address' => $senderAddress,
@@ -322,9 +339,38 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         // Update online status for the newly created contact
                         $this->updateContactOnlineStatus($senderPubkey);
 
-                        // Respond with pong including per-currency chain status
+                        // Calculate available credit for the pong response if contact was auto-accepted
+                        $restoredAvailableCreditByCurrency = [];
+                        if ($this->contactRepository->isAcceptedContactPubkey($senderPubkey)
+                            && $this->balanceRepository !== null
+                        ) {
+                            $acceptedCurrencies = [];
+                            if ($this->contactCurrencyRepository !== null) {
+                                $currencyConfigs = $this->contactCurrencyRepository->getContactCurrencies($pubkeyHash);
+                                foreach ($currencyConfigs as $cc) {
+                                    if (($cc['status'] ?? '') === 'accepted') {
+                                        $acceptedCurrencies[] = $cc['currency'];
+                                    }
+                                }
+                            }
+                            foreach ($acceptedCurrencies as $cur) {
+                                try {
+                                    $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
+                                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
+                                    $balance = $sentBalance->subtract($receivedBalance);
+                                    $creditLimit = $this->contactCurrencyRepository !== null
+                                        ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur) ?? SplitAmount::zero())
+                                        : SplitAmount::zero();
+                                    $restoredAvailableCreditByCurrency[$cur] = $balance->add($creditLimit)->toMajorUnits();
+                                } catch (\Exception $e) {
+                                    // Non-fatal
+                                }
+                            }
+                        }
+
+                        // Respond with pong including per-currency chain status and available credit
                         [$prRunning, $prTotal] = $this->checkProcessorHealth();
-                        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, [], $prRunning, $prTotal);
+                        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $restoredAvailableCreditByCurrency, $prRunning, $prTotal);
                         return;
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to auto-create pending contact from ping", [
@@ -432,14 +478,14 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 foreach ($contactCurrencies as $cur) {
                     $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $cur);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $cur);
-                    $balance = $sentBalance - $receivedBalance;
+                    $balance = $sentBalance->subtract($receivedBalance);
 
                     // Get the credit limit we set for this contact in this currency
                     $creditLimit = 0;
                     if ($this->contactCurrencyRepository !== null) {
                         $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $cur);
                     }
-                    $availableCreditByCurrency[$cur] = $balance + $creditLimit;
+                    $availableCreditByCurrency[$cur] = $balance->add($creditLimit ?? SplitAmount::zero())->toMajorUnits();
                 }
             } catch (\Exception $e) {
                 Logger::getInstance()->warning("Failed to calculate available credit for ping response", [
@@ -760,7 +806,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
             foreach ($creditByCurrency as $currency => $credit) {
                 $this->contactCreditRepository->upsertAvailableCreditIfNewer(
                     $pubkeyHash,
-                    (int) $credit,
+                    SplitAmount::fromMajorUnits((float) $credit),
                     $currency,
                     (int) $pongTime
                 );

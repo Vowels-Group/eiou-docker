@@ -14,15 +14,38 @@ eIOU supports multiple currencies. By default, only USD is configured. This guid
 
 ## Overview
 
-Currency support requires three settings that work together:
+Currency support involves these settings:
 
 | Setting | Purpose | Example |
 |---------|---------|---------|
-| `conversionFactors` | Maps currency codes to their minor-to-major unit factor | `{"USD": 100}` (100 cents per dollar) |
-| `currencyDecimals` | Maps currency codes to their display decimal places | `{"USD": 2}` (show 2 decimal places) |
 | `allowedCurrencies` | List of currency codes users can transact in | `USD,EUR` |
+| `displayDecimals` | Number of decimal places shown in the UI (0-8) | `4` (default) |
+| `autoRejectUnknownCurrency` | Auto-reject incoming contact requests with unknown currencies | `true` (default) |
 
-All three must be configured for a currency to work. The `allowedCurrencies` setting validates that each listed currency has a conversion factor defined.
+All currencies are stored internally at **8-decimal precision** (10^8 minor units per major unit), regardless of display settings. This eliminates conversion factor mismatches between nodes — every node stores the same integers for the same amounts.
+
+The `displayDecimals` setting is a **global** value (0-8) that applies to all currencies equally. It controls:
+- How many decimal places are shown in the UI (GUI display)
+- Values are **truncated (floored)**, not rounded — displayed amounts never exceed the actual value
+
+It does **NOT** affect:
+- Input validation (always accepts up to 8 decimal places)
+- Internal storage or wire format
+- CLI and API output (always uses full 8-decimal precision)
+
+Input validation always operates at the full internal precision (8 decimal places). An amount like 128.99999999 is accepted and stored exactly, regardless of display decimals. The minimum accepted amount is 0.00000001 (1 fractional unit) for all currencies.
+
+### Precision Limits
+
+| Limit | Value | Notes |
+|-------|-------|-------|
+| Internal precision | 8 decimals (10^8) | Fixed for all currencies |
+| Display decimals | 0-8 (default 2) | Global setting, truncates (floors) |
+| Max transaction amount | ~2.3 quintillion | PHP_INT_MAX / 4, enforced at input validation |
+| Max credit limit | ~9.2 quintillion | PHP_INT_MAX, stored via split BIGINT columns |
+| Minimum amount | 0.00000001 | 1 fractional unit at 8-decimal precision |
+
+Amounts are stored as two BIGINT columns (`_whole` and `_frac`) via the `SplitAmount` value object. All input validation uses bcmath string operations (`bccomp`/`bcadd`) to preserve full precision for large values. All arithmetic (fee calculations, balance updates) uses bcmath internally — no PHP integer overflow is possible regardless of amount size.
 
 ---
 
@@ -32,36 +55,26 @@ All three must be configured for a currency to work. The `allowedCurrencies` set
 
 1. Open Settings and expand **Advanced Settings**.
 2. Select the **Currency** category from the dropdown.
-3. Add the currency to **Conversion Factors** (one per line, `CODE:FACTOR` format):
-   ```
-   USD:100
-   EUR:100
-   ```
-4. Add the currency to **Currency Decimal Places** (one per line, `CODE:DECIMALS` format):
-   ```
-   USD:2
-   EUR:2
-   ```
-5. Add the currency code to **Allowed Currencies** (one per line):
+3. Add the currency code to **Allowed Currencies** (one per line):
    ```
    USD
    EUR
    ```
-6. Click **Save Settings**.
+4. Click **Save Settings**.
 
-Set conversion factors and decimals first, then add the currency to the allowed list. The allowed currencies validator checks that a conversion factor exists.
+To change the display decimal places:
+1. Select the **Display** category from the dropdown.
+2. Choose the desired value (0-8) from the **Display Decimal Places** dropdown.
+3. Click **Save Settings**.
 
 ### Via the CLI
 
 ```bash
-# Step 1: Set conversion factors (JSON format)
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"EUR":100}'
-
-# Step 2: Set currency decimals (JSON format)
-docker exec eiou-node eiou changesettings currencyDecimals '{"USD":2,"EUR":2}'
-
-# Step 3: Add to allowed currencies (comma-separated)
+# Add to allowed currencies (comma-separated)
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
+
+# Optionally change display decimal places (0-8, default 2)
+docker exec eiou-node eiou changesettings displayDecimals 2
 
 # Verify
 docker exec eiou-node eiou viewsettings
@@ -71,13 +84,12 @@ docker exec eiou-node eiou viewsettings
 
 ```bash
 # Update settings via the API
-curl -X POST https://localhost/api/settings \
+curl -X PUT https://localhost/api/v1/system/settings \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "conversionFactors": "{\"USD\":100,\"EUR\":100}",
-    "currencyDecimals": "{\"USD\":2,\"EUR\":2}",
-    "allowedCurrencies": "USD,EUR"
+    "allowed_currencies": "USD,EUR",
+    "display_decimals": 4
   }'
 ```
 
@@ -85,32 +97,43 @@ curl -X POST https://localhost/api/settings \
 
 ## Configuration Reference
 
-### Conversion Factors
+### Display Decimals
 
-The conversion factor is the number of minor units in one major unit. This determines how amounts are stored internally (as integers in minor units) and converted for display.
+The display decimals setting controls how many decimal places are shown in the UI for all currencies. It is a single global value (0-8, default 2).
 
-| Currency | Factor | Meaning |
-|----------|--------|---------|
-| USD | 100 | 100 cents = 1 dollar |
-| EUR | 100 | 100 cents = 1 euro |
-| GBP | 100 | 100 pence = 1 pound |
-| JPY | 1 | No minor unit (yen is the smallest unit) |
-| BTC | 100000000 | 100,000,000 satoshis = 1 bitcoin |
+Values are **truncated (floored)**, not rounded. This ensures displayed amounts never exceed the actual stored value. For example, with display decimals set to 2, an amount of 1.999 displays as 1.99, not 2.00.
 
-### Currency Decimals
+| Display Decimals | Amount Stored | UI Shows | Internal Storage |
+|-----------------|---------------|----------|------------------|
+| 0 | 1234.56789012 | 1,234 | whole=1234, frac=56789012 |
+| 2 (default) | 1234.56789012 | 1,234.56 | whole=1234, frac=56789012 |
+| 4 | 1234.56789012 | 1,234.5678 | whole=1234, frac=56789012 |
+| 8 | 1234.56789012 | 1,234.56789012 | whole=1234, frac=56789012 |
 
-The number of decimal places used for input rounding and display formatting. The `round()` and `number_format()` functions both accept 0 as a valid value. Display examples below use PHP's default `number_format()` output, which uses `,` as the thousands separator and `.` as the decimal separator. Locale-aware formatting is not currently implemented.
-
-| Currency | Decimals | Display Example |
-|----------|----------|-----------------|
-| USD | 2 | 10.50 |
-| EUR | 2 | 10.50 |
-| JPY | 0 | 1,500 |
-| BTC | 8 | 0.00100000 |
+Input validation always accepts up to 8 decimal places regardless of the display setting.
 
 ### Currency Code Format
 
 Currency codes must be 3-9 uppercase alphanumeric characters (`A-Z`, `0-9`). Standard ISO 4217 codes (USD, EUR, GBP) are recommended for fiat currencies, but any valid code can be used for custom units of account.
+
+### Unknown Currency Handling
+
+The `autoRejectUnknownCurrency` setting (default: **enabled**) controls what happens when another node sends a contact request with a currency not in your `allowedCurrencies`.
+
+| Setting | Behavior |
+|---------|----------|
+| **Enabled** (default) | The request is automatically rejected. The sender receives a "currency not accepted" response. |
+| **Disabled** | The request arrives as a pending contact for manual review. The GUI shows a warning that the currency is not in your allowed list. |
+
+When you manually accept a contact or currency request for a currency not in your allowed list, that currency is **automatically added** to `allowedCurrencies` and persisted to config. This applies regardless of the toggle — if a request somehow arrives as pending (e.g., the toggle was disabled when it arrived), accepting it always adds the currency.
+
+```bash
+# Disable auto-rejection to allow unknown currency requests through
+docker exec eiou-node eiou changesettings autoRejectUnknownCurrency false
+
+# Re-enable (default)
+docker exec eiou-node eiou changesettings autoRejectUnknownCurrency true
+```
 
 ---
 
@@ -131,33 +154,31 @@ The default values in the source code (`Constants.php`) are used only when no co
 ### Adding Euro Support
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"EUR":100}'
-docker exec eiou-node eiou changesettings currencyDecimals '{"USD":2,"EUR":2}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
 ```
 
-### Adding Bitcoin (Satoshi Precision)
+### Adding Bitcoin
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"BTC":100000000}'
-docker exec eiou-node eiou changesettings currencyDecimals '{"USD":2,"BTC":8}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,BTC
 ```
 
-### Adding Japanese Yen (No Decimal Places)
+### Showing Full Precision (8 Decimal Places)
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100,"JPY":1}'
-docker exec eiou-node eiou changesettings currencyDecimals '{"USD":2,"JPY":0}'
-docker exec eiou-node eiou changesettings allowedCurrencies USD,JPY
+docker exec eiou-node eiou changesettings displayDecimals 8
+```
+
+### Showing Whole Numbers Only (0 Decimal Places)
+
+```bash
+docker exec eiou-node eiou changesettings displayDecimals 0
 ```
 
 ### Removing a Currency
 
-Remove the currency from all three settings. Existing transactions in that currency remain in the database but new transactions cannot be created.
+Remove the currency from the allowed list. Existing transactions in that currency remain in the database but new transactions cannot be created.
 
 ```bash
-docker exec eiou-node eiou changesettings conversionFactors '{"USD":100}'
-docker exec eiou-node eiou changesettings currencyDecimals '{"USD":2}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD
 ```

@@ -8,6 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Database\BalanceRepository;
@@ -330,9 +331,10 @@ class ApiController {
                 'contact_name' => $contact['name'] ?? 'Unknown',
                 'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null,
                 'currency' => $balance['currency'],
-                'received' => $balance['received'] / Constants::getConversionFactor($balance['currency']),
-                'sent' => $balance['sent'] / Constants::getConversionFactor($balance['currency']),
-                'net_balance' => ($balance['received'] - $balance['sent']) / Constants::getConversionFactor($balance['currency'])
+                'received' => (new \Eiou\Core\SplitAmount((int)($balance['received_whole'] ?? 0), (int)($balance['received_frac'] ?? 0)))->toMajorUnits(),
+                'sent' => (new \Eiou\Core\SplitAmount((int)($balance['sent_whole'] ?? 0), (int)($balance['sent_frac'] ?? 0)))->toMajorUnits(),
+                'net_balance' => (new \Eiou\Core\SplitAmount((int)($balance['received_whole'] ?? 0), (int)($balance['received_frac'] ?? 0)))
+                    ->subtract(new \Eiou\Core\SplitAmount((int)($balance['sent_whole'] ?? 0), (int)($balance['sent_frac'] ?? 0)))->toMajorUnits()
             ];
         }
 
@@ -360,9 +362,42 @@ class ApiController {
             }
         }
 
-        // Validate amount
-        if (!is_numeric($data['amount']) || $data['amount'] <= 0) {
-            return $this->errorResponse('Invalid amount', 400, 'invalid_amount');
+        // Validate recipient (address or contact name)
+        $addressValidation = InputValidator::validateAddress($data['address']);
+        $nameValidation = InputValidator::validateContactName($data['address']);
+        if (!$addressValidation['valid'] && !$nameValidation['valid']) {
+            return $this->errorResponse('Invalid recipient: ' . $addressValidation['error'], 400, 'invalid_address');
+        }
+
+        // Prevent self-send
+        if ($addressValidation['valid']) {
+            $selfSendValidation = InputValidator::validateNotSelfSend($data['address'], $this->services->getCurrentUser());
+            if (!$selfSendValidation['valid']) {
+                return $this->errorResponse($selfSendValidation['error'], 400, 'self_send');
+            }
+        }
+
+        // Validate currency
+        $currencyValidation = InputValidator::validateCurrency($data['currency']);
+        if (!$currencyValidation['valid']) {
+            return $this->errorResponse($currencyValidation['error'], 400, 'invalid_currency');
+        }
+        $data['currency'] = $currencyValidation['value'];
+
+        // Validate amount (currency-aware: checks minimum unit, e.g. 0.01 for USD)
+        $amountValidation = InputValidator::validateAmount($data['amount'], $data['currency']);
+        if (!$amountValidation['valid']) {
+            return $this->errorResponse($amountValidation['error'], 400, 'invalid_amount');
+        }
+        $data['amount'] = $amountValidation['value'];
+
+        // Validate description if provided
+        if (!empty($data['description'])) {
+            $descValidation = InputValidator::validateMemo($data['description']);
+            if (!$descValidation['valid']) {
+                return $this->errorResponse($descValidation['error'], 400, 'invalid_description');
+            }
+            $data['description'] = $descValidation['value'];
         }
 
         try {
@@ -504,7 +539,7 @@ class ApiController {
                 'type' => $tx['type'],
                 'tx_type' => $tx['tx_type'],
                 'status' => $tx['status'],
-                'amount' => $tx['amount'] / Constants::getConversionFactor($tx['currency']),
+                'amount' => (new \Eiou\Core\SplitAmount((int)($tx['amount_whole'] ?? 0), (int)($tx['amount_frac'] ?? 0)))->toMajorUnits(),
                 'currency' => $tx['currency'],
                 'sender_address' => $tx['sender_address'],
                 'receiver_address' => $tx['receiver_address'],
@@ -556,7 +591,7 @@ class ApiController {
         foreach ($earningsRows as $row) {
             $feeEarnings[] = [
                 'currency' => $row['currency'],
-                'total_amount' => $row['total_amount'] / Constants::getConversionFactor($row['currency'])
+                'total_amount' => ($row['total_amount'] instanceof \Eiou\Core\SplitAmount) ? $row['total_amount']->toMajorUnits() : 0
             ];
         }
 
@@ -567,7 +602,7 @@ class ApiController {
         foreach ($creditRows as $row) {
             $availableCredit[] = [
                 'currency' => $row['currency'],
-                'total_available_credit' => $row['total_available_credit'] / Constants::getConversionFactor($row['currency'])
+                'total_available_credit' => ($row['total_available_credit'] instanceof \Eiou\Core\SplitAmount) ? $row['total_available_credit']->toMajorUnits() : 0
             ];
         }
 
@@ -605,7 +640,7 @@ class ApiController {
             foreach ($balances as $balance) {
                 $balanceResult[] = [
                     'currency' => $balance['currency'],
-                    'total_balance' => $balance['total_balance'] / Constants::getConversionFactor($balance['currency'])
+                    'total_balance' => ($balance['total_balance'] instanceof \Eiou\Core\SplitAmount) ? $balance['total_balance']->toMajorUnits() : 0
                 ];
             }
         }
@@ -620,7 +655,7 @@ class ApiController {
                 'type' => $tx['direction'] ?? $tx['type'] ?? null,
                 'tx_type' => $tx['tx_type'] ?? null,
                 'status' => $tx['status'] ?? null,
-                'amount' => is_numeric($tx['amount'] ?? null) ? $tx['amount'] : 0,
+                'amount' => (new \Eiou\Core\SplitAmount((int)($tx['amount_whole'] ?? 0), (int)($tx['amount_frac'] ?? 0)))->toMajorUnits(),
                 'currency' => $tx['currency'] ?? null,
                 'counterparty_name' => $tx['counterparty_name'] ?? null,
                 'sender_address' => $tx['sender_address'] ?? null,
@@ -637,7 +672,7 @@ class ApiController {
         foreach ($creditRows as $row) {
             $totalAvailableCredit[] = [
                 'currency' => $row['currency'],
-                'total_available_credit' => $row['total_available_credit'] / Constants::getConversionFactor($row['currency'])
+                'total_available_credit' => ($row['total_available_credit'] instanceof \Eiou\Core\SplitAmount) ? $row['total_available_credit']->toMajorUnits() : 0
             ];
         }
 
@@ -689,7 +724,7 @@ class ApiController {
             $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
             if ($creditData !== null) {
                 $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+                $myAvailableCredit = ($creditData['available_credit'] instanceof \Eiou\Core\SplitAmount) ? $creditData['available_credit']->toMajorUnits() : 0;
             }
 
             $result[] = [
@@ -700,7 +735,7 @@ class ApiController {
                     return [
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
-                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'credit_limit' => ($c['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $c['credit_limit']->toMajorUnits() : 0,
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -821,7 +856,7 @@ class ApiController {
                     $creditData = $creditRepo->getAvailableCredit($hash);
                     if ($creditData !== null) {
                         $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+                        $myAvailableCredit = ($creditData['available_credit'] instanceof \Eiou\Core\SplitAmount) ? $creditData['available_credit']->toMajorUnits() : 0;
                     }
                 }
 
@@ -897,21 +932,62 @@ class ApiController {
             }
         }
 
+        // Validate address
+        $addressValidation = InputValidator::validateAddress($data['address']);
+        if (!$addressValidation['valid']) {
+            return $this->errorResponse($addressValidation['error'], 400, 'invalid_address');
+        }
+
+        // Validate contact name
+        $nameValidation = InputValidator::validateContactName($data['name']);
+        if (!$nameValidation['valid']) {
+            return $this->errorResponse($nameValidation['error'], 400, 'invalid_name');
+        }
+
+        // Validate currency (needed before credit limit validation)
+        $currency = $data['currency'] ?? 'USD';
+        $currencyValidation = InputValidator::validateCurrency($currency);
+        if (!$currencyValidation['valid']) {
+            return $this->errorResponse($currencyValidation['error'], 400, 'invalid_currency');
+        }
+        $currency = $currencyValidation['value'];
+
+        // Validate fee percentage
+        $feeValidation = InputValidator::validateFeePercent($data['fee_percent'] ?? 1);
+        if (!$feeValidation['valid']) {
+            return $this->errorResponse($feeValidation['error'], 400, 'invalid_fee');
+        }
+
+        // Validate credit limit
+        $creditValidation = InputValidator::validateCreditLimit($data['credit_limit'] ?? 100, $currency);
+        if (!$creditValidation['valid']) {
+            return $this->errorResponse($creditValidation['error'], 400, 'invalid_credit');
+        }
+
+        // Validate description if provided
+        if (!empty($data['description'])) {
+            $descValidation = InputValidator::validateMemo($data['description']);
+            if (!$descValidation['valid']) {
+                return $this->errorResponse($descValidation['error'], 400, 'invalid_description');
+            }
+            $data['description'] = $descValidation['value'];
+        }
+
         try {
             $contactService = $this->services->getContactService();
 
             // Build argv-style array with --json flag for JSON output
             $argv = [
-                'eiou',                                  // $data[0] - command name
-                'add',                                   // $data[1] - subcommand
-                $data['address'],                        // $data[2] - contact address
-                $data['name'],                           // $data[3] - contact name
-                (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
-                (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
-                $data['currency'] ?? 'USD',              // $data[6] - currency
+                'eiou',                                      // $data[0] - command name
+                'add',                                       // $data[1] - subcommand
+                $addressValidation['value'],                 // $data[2] - contact address
+                $nameValidation['value'],                    // $data[3] - contact name
+                (string) $feeValidation['value'],            // $data[4] - fee percent
+                (string) $creditValidation['value'],         // $data[5] - credit limit
+                $currency,                                   // $data[6] - currency
             ];
             if (!empty($data['description'])) {
-                $argv[] = $data['description'];          // $data[7] - optional description
+                $argv[] = $data['description'];              // $data[7] - optional description
             }
             $argv[] = '--json';                          // Enable JSON output mode
 
@@ -994,7 +1070,7 @@ class ApiController {
         $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
         if ($creditData !== null) {
             $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-            $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+            $myAvailableCredit = ($creditData['available_credit'] instanceof \Eiou\Core\SplitAmount) ? $creditData['available_credit']->toMajorUnits() : 0;
         }
 
         // Fetch all currencies for this contact from contact_currencies table
@@ -1017,15 +1093,15 @@ class ApiController {
                 'my_available_credit' => $myAvailableCredit,
                 'addresses' => $addresses,
                 'balance' => $balance ? [
-                    'received' => $balance['received'] / Constants::getConversionFactor($balanceCurrency),
-                    'sent' => $balance['sent'] / Constants::getConversionFactor($balanceCurrency),
-                    'net' => ($balance['received'] - $balance['sent']) / Constants::getConversionFactor($balanceCurrency)
+                    'received' => $balance['received']->toMajorUnits(),
+                    'sent' => $balance['sent']->toMajorUnits(),
+                    'net' => $balance['received']->subtract($balance['sent'])->toMajorUnits()
                 ] : null,
                 'currencies' => array_map(function ($c) {
                     return [
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
-                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'credit_limit' => ($c['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $c['credit_limit']->toMajorUnits() : 0,
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -1124,8 +1200,12 @@ class ApiController {
             $updatedData = ['address' => $address];
 
             if (isset($data['name'])) {
-                $updateFields['name'] = $data['name'];
-                $updatedData['name'] = $data['name'];
+                $nameValidation = InputValidator::validateContactName($data['name']);
+                if (!$nameValidation['valid']) {
+                    return $this->errorResponse($nameValidation['error'], 400, 'validation_error');
+                }
+                $updateFields['name'] = $nameValidation['value'];
+                $updatedData['name'] = $nameValidation['value'];
             }
             if (isset($data['fee_percent'])) {
                 $updatedData['fee_percent'] = $data['fee_percent'];
@@ -1146,6 +1226,33 @@ class ApiController {
                 return $this->errorResponse('Currency is required when updating fee_percent or credit_limit', 400, 'missing_currency');
             }
 
+            // Validate currency, fee_percent, and credit_limit when provided
+            if (isset($data['currency'])) {
+                $currencyValidation = InputValidator::validateCurrency($data['currency']);
+                if (!$currencyValidation['valid']) {
+                    return $this->errorResponse($currencyValidation['error'], 400, 'validation_error');
+                }
+                $data['currency'] = $currencyValidation['value'];
+                $updatedData['currency'] = $currencyValidation['value'];
+            }
+            if (isset($data['fee_percent'])) {
+                $feeValidation = InputValidator::validateFeePercent($data['fee_percent']);
+                if (!$feeValidation['valid']) {
+                    return $this->errorResponse($feeValidation['error'], 400, 'validation_error');
+                }
+                $data['fee_percent'] = $feeValidation['value'];
+                $updatedData['fee_percent'] = $feeValidation['value'];
+            }
+            if (isset($data['credit_limit'])) {
+                $currency = $data['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $creditValidation = InputValidator::validateCreditLimit($data['credit_limit'], $currency);
+                if (!$creditValidation['valid']) {
+                    return $this->errorResponse($creditValidation['error'], 400, 'validation_error');
+                }
+                $data['credit_limit'] = $creditValidation['value'];
+                $updatedData['credit_limit'] = $creditValidation['value'];
+            }
+
             // Update name in contacts table if provided
             $contactUpdateOk = true;
             if (!empty($updateFields)) {
@@ -1159,10 +1266,10 @@ class ApiController {
                     $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                     $currencyFields = [];
                     if (isset($data['fee_percent'])) {
-                        $currencyFields['fee_percent'] = (int) ($data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR);
+                        $currencyFields['fee_percent'] = CurrencyUtilityService::exactMajorToMinor($data['fee_percent'], Constants::FEE_CONVERSION_FACTOR);
                     }
                     if (isset($data['credit_limit'])) {
-                        $currencyFields['credit_limit'] = (int) ($data['credit_limit'] * Constants::getConversionFactor($data['currency']));
+                        $currencyFields['credit_limit'] = \Eiou\Core\SplitAmount::from($data['credit_limit']);
                     }
                     if (!empty($currencyFields)) {
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);
@@ -1383,6 +1490,7 @@ class ApiController {
                 'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
                 'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
                 // Feature toggles
+                'hop_budget_randomized' => $currentUser->getHopBudgetRandomized(),
                 'contact_status_enabled' => $currentUser->getContactStatusEnabled(),
                 'contact_status_sync_on_ping' => $currentUser->getContactStatusSyncOnPing(),
                 'auto_chain_drop_propose' => $currentUser->getAutoChainDropPropose(),
@@ -1446,7 +1554,7 @@ class ApiController {
             'default_fee' => ['key' => 'defaultFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
             'default_credit_limit' => ['key' => 'defaultCreditLimit', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
             'default_currency' => ['key' => 'defaultCurrency', 'validate' => 'validateCurrency', 'config' => 'defaultconfig.json'],
-            'min_fee' => ['key' => 'minFee', 'validate' => 'validateAmountFee', 'config' => 'defaultconfig.json'],
+            'min_fee' => ['key' => 'minFee', 'validate' => 'validateFeeAmount', 'config' => 'defaultconfig.json'],
             'max_fee' => ['key' => 'maxFee', 'validate' => 'validateFeePercent', 'config' => 'defaultconfig.json'],
             'max_p2p_level' => ['key' => 'maxP2pLevel', 'validate' => 'validateRequestLevel', 'config' => 'defaultconfig.json'],
             'p2p_expiration' => ['key' => 'p2pExpiration', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
@@ -1460,6 +1568,7 @@ class ApiController {
             'hostname' => ['key' => 'hostname', 'validate' => 'validateHostname', 'config' => 'userconfig.json'],
             'name' => ['key' => 'name', 'validate' => null, 'config' => 'userconfig.json'],
             // Feature toggles
+            'hop_budget_randomized' => ['key' => 'hopBudgetRandomized', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'contact_status_enabled' => ['key' => 'contactStatusEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'contact_status_sync_on_ping' => ['key' => 'contactStatusSyncOnPing', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'auto_chain_drop_propose' => ['key' => 'autoChainDropPropose', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
@@ -1469,6 +1578,7 @@ class ApiController {
             'api_enabled' => ['key' => 'apiEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
             'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],
+            'auto_reject_unknown_currency' => ['key' => 'autoRejectUnknownCurrency', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Backup & logging
             'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
@@ -2347,6 +2457,12 @@ class ApiController {
             return $this->permissionDenied('wallet:read');
         }
 
+        $hashValidation = InputValidator::validateTxid($hash);
+        if (!$hashValidation['valid']) {
+            return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
+        }
+        $hash = $hashValidation['value'];
+
         try {
             $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
             $p2p = $p2pRepo->getAwaitingApproval($hash);
@@ -2386,7 +2502,11 @@ class ApiController {
             return $this->errorResponse('Missing required field: hash', 400, 'missing_field');
         }
 
-        $hash = $data['hash'];
+        $hashValidation = InputValidator::validateTxid($data['hash']);
+        if (!$hashValidation['valid']) {
+            return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
+        }
+        $hash = $hashValidation['value'];
         $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : 0;
 
         try {
@@ -2516,7 +2636,11 @@ class ApiController {
             return $this->errorResponse('Missing required field: hash', 400, 'missing_field');
         }
 
-        $hash = $data['hash'];
+        $hashValidation = InputValidator::validateTxid($data['hash']);
+        if (!$hashValidation['valid']) {
+            return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
+        }
+        $hash = $hashValidation['value'];
 
         try {
             $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);

@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Core\SplitAmount;
+
 /**
  * Validation Utility Service Interface
  *
@@ -29,7 +31,7 @@ interface ValidationUtilityServiceInterface
      * Calculate available funds for user with contact
      *
      * @param array $request Request data with senderPublicKey
-     * @return int Available funds
+     * @return SplitAmount Available funds
      */
-    public function calculateAvailableFunds(array $request): int;
+    public function calculateAvailableFunds(array $request): SplitAmount;
 }

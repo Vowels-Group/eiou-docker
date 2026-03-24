@@ -31,6 +31,7 @@ use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Core\SplitAmount;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\HeldTransactionServiceInterface;
 use RuntimeException;
@@ -86,7 +87,8 @@ class TransactionProcessingServiceTest extends TestCase
             $this->mockTimeUtility,
             $this->mockUserContext,
             $this->mockLogger,
-            $this->mockMessageDeliveryService
+            $this->mockMessageDeliveryService,
+            $this->mockSyncTrigger
         );
     }
 
@@ -111,7 +113,8 @@ class TransactionProcessingServiceTest extends TestCase
             $this->mockTimeUtility,
             $this->mockUserContext,
             $this->mockLogger,
-            $this->mockMessageDeliveryService
+            $this->mockMessageDeliveryService,
+            $this->mockSyncTrigger
         );
 
         $this->assertInstanceOf(TransactionProcessingService::class, $service);
@@ -134,19 +137,24 @@ class TransactionProcessingServiceTest extends TestCase
             $this->mockTimeUtility,
             $this->mockUserContext,
             $this->mockLogger,
-            null
+            null,
+            $this->mockSyncTrigger
         );
 
         $this->assertInstanceOf(TransactionProcessingService::class, $service);
     }
 
     /**
-     * Test setSyncTrigger sets the sync trigger
+     * Test syncTrigger is injected via constructor
      */
-    public function testSetSyncTriggerSetsTheSyncTrigger(): void
+    public function testSyncTriggerIsInjectedViaConstructor(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
-        $this->expectNotToPerformAssertions();
+        // syncTrigger is now passed as a constructor argument (already done in setUp)
+        // Verify it was set by using reflection
+        $reflection = new \ReflectionClass($this->service);
+        $property = $reflection->getProperty('syncTrigger');
+        $property->setAccessible(true);
+        $this->assertSame($this->mockSyncTrigger, $property->getValue($this->service));
     }
 
     /**
@@ -288,7 +296,6 @@ class TransactionProcessingServiceTest extends TestCase
     public function testProcessPendingTransactionsProcessesStandardOutgoingTransaction(): void
     {
         $this->service->setP2pService($this->mockP2pService);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
         $this->service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $pendingMessage = [
@@ -401,7 +408,6 @@ class TransactionProcessingServiceTest extends TestCase
     public function testProcessPendingTransactionsHandlesRejectedTransactionWithInvalidPreviousTxid(): void
     {
         $this->service->setP2pService($this->mockP2pService);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
         $this->service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $pendingMessage = [
@@ -488,13 +494,14 @@ class TransactionProcessingServiceTest extends TestCase
      */
     public function testProcessPendingTransactionsProcessesIncomingDirectTransaction(): void
     {
+        $amount = new SplitAmount(1000, 0);
         $pendingMessage = [
             'memo' => 'standard',
             'txid' => 'test-txid-12345',
             'sender_address' => 'http://sender.example.com',
             'receiver_address' => 'http://user.example.com',
             'sender_public_key' => 'sender-public-key',
-            'amount' => 1000,
+            'amount' => $amount,
             'currency' => 'USD'
         ];
 
@@ -513,7 +520,7 @@ class TransactionProcessingServiceTest extends TestCase
 
         $this->mockBalanceRepo->expects($this->once())
             ->method('updateBalance')
-            ->with('sender-public-key', 'received', 1000, 'USD');
+            ->with('sender-public-key', 'received', $amount, 'USD');
 
         $this->mockTransactionPayload->expects($this->once())
             ->method('buildCompleted')
@@ -549,7 +556,6 @@ class TransactionProcessingServiceTest extends TestCase
     public function testProcessPendingTransactionsProcessesP2pOutgoingTransaction(): void
     {
         $this->service->setP2pService($this->mockP2pService);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
         $this->service->setHeldTransactionService($this->mockHeldTransactionService);
 
         $pendingMessage = [
@@ -816,7 +822,7 @@ class TransactionProcessingServiceTest extends TestCase
             'receiver_address' => $userAddress,
             'sender_public_key' => 'sender-public-key',
             'receiver_public_key' => 'receiver-public-key',
-            'amount' => 1000,
+            'amount' => new SplitAmount(1000, 0),
             'currency' => 'USD',
             'description' => 'test payment',
         ];
@@ -857,7 +863,7 @@ class TransactionProcessingServiceTest extends TestCase
 
         $this->mockBalanceRepo->expects($this->once())
             ->method('updateBalance')
-            ->with('sender-public-key', 'received', 1000, 'USD');
+            ->with('sender-public-key', 'received', $this->isInstanceOf(SplitAmount::class), 'USD');
 
         $this->mockP2pRepo->expects($this->once())
             ->method('updateIncomingTxid')
@@ -907,7 +913,7 @@ class TransactionProcessingServiceTest extends TestCase
             'receiver_address' => $userAddress,
             'sender_public_key' => 'sender-public-key',
             'receiver_public_key' => 'receiver-public-key',
-            'amount' => 1000,
+            'amount' => new SplitAmount(1000, 0),
             'currency' => 'USD',
             'description' => 'test payment',
         ];
@@ -982,8 +988,23 @@ class TransactionProcessingServiceTest extends TestCase
      */
     public function testGetSyncTriggerThrowsRuntimeExceptionWhenNotInjected(): void
     {
-        $this->service->setP2pService($this->mockP2pService);
-        // Don't set sync trigger
+        // Create service WITHOUT syncTrigger (pass null explicitly)
+        $serviceWithoutSync = new TransactionProcessingService(
+            $this->mockTransactionRepo,
+            $this->mockRecoveryRepo,
+            $this->mockChainRepo,
+            $this->mockP2pRepo,
+            $this->mockRp2pRepo,
+            $this->mockBalanceRepo,
+            $this->mockTransactionPayload,
+            $this->mockTransportUtility,
+            $this->mockTimeUtility,
+            $this->mockUserContext,
+            $this->mockLogger,
+            $this->mockMessageDeliveryService,
+            null
+        );
+        $serviceWithoutSync->setP2pService($this->mockP2pService);
 
         $pendingMessage = [
             'memo' => 'standard',
@@ -1035,7 +1056,7 @@ class TransactionProcessingServiceTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('SyncTrigger not injected');
 
-        $this->service->processPendingTransactions();
+        $serviceWithoutSync->processPendingTransactions();
     }
 
     /**
@@ -1043,7 +1064,6 @@ class TransactionProcessingServiceTest extends TestCase
      */
     public function testGetP2pServiceThrowsRuntimeExceptionWhenNotInjected(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
         $this->service->setHeldTransactionService($this->mockHeldTransactionService);
         // Don't set P2P service
 

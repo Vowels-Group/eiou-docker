@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Utils\SecureSeedphraseDisplay;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Contracts\CliServiceInterface;
@@ -284,7 +285,7 @@ class CliService implements CliServiceInterface {
                 foreach ($earningsRows as $row) {
                     $totalEarnings[] = [
                         'currency' => $row['currency'],
-                        'total_earnings' => number_format(((int)($row['total_amount'] ?? 0)) / Constants::getConversionFactor($row['currency']), Constants::getCurrencyDecimals($row['currency']))
+                        'total_earnings' => number_format($row['total_amount']->toMajorUnits(), Constants::getDisplayDecimals())
                     ];
                 }
             } catch (\Exception $e) {
@@ -300,7 +301,7 @@ class CliService implements CliServiceInterface {
                 foreach ($creditRows as $row) {
                     $totalAvailableCredit[] = [
                         'currency' => $row['currency'],
-                        'total_available_credit' => number_format($row['total_available_credit'] / Constants::getConversionFactor($row['currency']), Constants::getCurrencyDecimals($row['currency']))
+                        'total_available_credit' => number_format($row['total_available_credit']->toMajorUnits(), Constants::getDisplayDecimals())
                     ];
                 }
             } catch (\Exception $e) {
@@ -328,7 +329,7 @@ class CliService implements CliServiceInterface {
                 foreach($balances as $balance){
                     $balanceData = [
                         'currency' => $balance['currency'],
-                        'total_balance' => number_format($balance['total_balance'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency'])),
+                        'total_balance' => number_format($balance['total_balance']->toMajorUnits(), Constants::getDisplayDecimals()),
                         'received' => [],
                         'sent' => []
                     ];
@@ -442,7 +443,7 @@ class CliService implements CliServiceInterface {
                 $balances = $this->balanceRepository->getUserBalance();
                 if(isset($balances)){
                     foreach($balances as $balance){
-                        printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency'])));
+                        printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance']->toMajorUnits(), Constants::getDisplayDecimals()));
                         $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactions(PHP_INT_MAX, $balance['currency']), $displayLimit);
                         $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactions(PHP_INT_MAX, $balance['currency']), $displayLimit);
                     }
@@ -607,7 +608,7 @@ class CliService implements CliServiceInterface {
             foreach ($balances as $balance) {
                 $overviewData['balances'][] = [
                     'currency' => $balance['currency'],
-                    'total_balance' => number_format($balance['total_balance'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency']))
+                    'total_balance' => number_format($balance['total_balance']->toMajorUnits(), Constants::getDisplayDecimals())
                 ];
             }
         }
@@ -688,7 +689,7 @@ class CliService implements CliServiceInterface {
                         str_pad($date, 20),
                         str_pad($tx['type'], 10),
                         str_pad($contactDisplay, 25),
-                        str_pad(number_format($tx['amount'], Constants::getCurrencyDecimals($tx['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY)), 10),
+                        str_pad(number_format($tx['amount'], Constants::getDisplayDecimals()), 10),
                         $tx['currency']
                     );
                 }
@@ -720,7 +721,7 @@ class CliService implements CliServiceInterface {
                     "|",
                     $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($res['counterparty']),$res['counterparty']),
                     $this->generalUtility->truncateAddress($res['counterparty'],30),
-                    number_format($res['amount'], Constants::getCurrencyDecimals($res['currency'])),
+                    number_format($res['amount'], Constants::getDisplayDecimals()),
                     $res['currency']);
             if($displayLimit > 0 && ($countrows >= $displayLimit)){
                 break;
@@ -784,28 +785,28 @@ class CliService implements CliServiceInterface {
                 foreach($balances as $balance){
                     if ($contactResult) {
                         $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'], $balance['currency']);
-                        $contactNetBalance = 0;
+                        $contactNetBalance = SplitAmount::zero();
                         foreach($contactBalances as $cb){
-                            $contactNetBalance += ($cb['received'] - $cb['sent']);
+                            $contactNetBalance = $contactNetBalance->add($cb['received']->subtract($cb['sent']));
                         }
                         $balanceData['user']['balances'][] = [
                             'currency' => $balance['currency'],
-                            'contact_balance' => number_format($contactNetBalance / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency'])),
-                            'total_balance' => number_format($balance['total_balance'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency']))
+                            'contact_balance' => number_format($contactNetBalance->toMajorUnits(), Constants::getDisplayDecimals()),
+                            'total_balance' => number_format($balance['total_balance']->toMajorUnits(), Constants::getDisplayDecimals())
                         ];
                         foreach($contactBalances as $contactBalance){
                             $balanceData['contacts'][] = [
                                 'name' => $contactResult['name'],
                                 'address' => $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'currency' => $contactBalance['currency'],
-                                'received' => number_format($contactBalance['received'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency'])),
-                                'sent' => number_format($contactBalance['sent'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency']))
+                                'received' => number_format($contactBalance['received']->toMajorUnits(), Constants::getDisplayDecimals()),
+                                'sent' => number_format($contactBalance['sent']->toMajorUnits(), Constants::getDisplayDecimals())
                             ];
                         }
                     } else {
                         $balanceData['user']['balances'][] = [
                             'currency' => $balance['currency'],
-                            'total_balance' => number_format($balance['total_balance'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency']))
+                            'total_balance' => number_format($balance['total_balance']->toMajorUnits(), Constants::getDisplayDecimals())
                         ];
                         if(isset($contacts)){
                             foreach($contacts as $contact){
@@ -815,8 +816,8 @@ class CliService implements CliServiceInterface {
                                         'name' => $contact['name'],
                                         'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                         'currency' => $contactBalance['currency'],
-                                        'received' => number_format($contactBalance['received'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency'])),
-                                        'sent' => number_format($contactBalance['sent'] / Constants::getConversionFactor($balance['currency']), Constants::getCurrencyDecimals($balance['currency']))
+                                        'received' => number_format($contactBalance['received']->toMajorUnits(), Constants::getDisplayDecimals()),
+                                        'sent' => number_format($contactBalance['sent']->toMajorUnits(), Constants::getDisplayDecimals())
                                     ];
                                 }
                             }
@@ -836,27 +837,27 @@ class CliService implements CliServiceInterface {
                 foreach($balances as $balance){
                     if ($contactResult) {
                         $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
-                        $contactNetBalance = 0;
+                        $contactNetBalance = SplitAmount::zero();
                         foreach($contactBalances as $contactBalance){
-                            $contactNetBalance += ($contactBalance['received'] - $contactBalance['sent']);
+                            $contactNetBalance = $contactNetBalance->add($contactBalance['received']->subtract($contactBalance['sent']));
                         }
-                        $decimals = Constants::getCurrencyDecimals($balance['currency']);
-                        printf("%s %s, Balance %s with %s: %s\n", 'me', $additionalInfo, $balance['currency'], $contactResult['name'], number_format($contactNetBalance / Constants::getConversionFactor($balance['currency']), $decimals));
+                        $decimals = Constants::getDisplayDecimals();
+                        printf("%s %s, Balance %s with %s: %s\n", 'me', $additionalInfo, $balance['currency'], $contactResult['name'], number_format($contactNetBalance->toMajorUnits(), $decimals));
                         foreach($contactBalances as $contactBalance){
                             printf("\t%s (%s), Balance (%s | %s): %s | %s %s\n",
                                 $contactResult['name'],
                                 $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'received',
                                 'sent',
-                                number_format($contactBalance['received'] / Constants::getConversionFactor($balance['currency']), $decimals),
-                                number_format($contactBalance['sent'] / Constants::getConversionFactor($balance['currency']), $decimals),
+                                number_format($contactBalance['received']->toMajorUnits(), $decimals),
+                                number_format($contactBalance['sent']->toMajorUnits(), $decimals),
                                 $contactBalance['currency']
                             );
                         }
                         return;
                     } else{
-                        $decimals = Constants::getCurrencyDecimals($balance['currency']);
-                        printf("%s %s, Balance %s : %s\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::getConversionFactor($balance['currency']), $decimals));
+                        $decimals = Constants::getDisplayDecimals();
+                        printf("%s %s, Balance %s : %s\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance']->toMajorUnits(), $decimals));
                         if(!isset($contacts) || !$contacts){
                             echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
                             continue;
@@ -869,8 +870,8 @@ class CliService implements CliServiceInterface {
                                         $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                         'received',
                                         'sent',
-                                        number_format($contactBalance['received'] / Constants::getConversionFactor($balance['currency']), $decimals),
-                                        number_format($contactBalance['sent'] / Constants::getConversionFactor($balance['currency']), $decimals),
+                                        number_format($contactBalance['received']->toMajorUnits(), $decimals),
+                                        number_format($contactBalance['sent']->toMajorUnits(), $decimals),
                                         $contactBalance['currency']
                                     );
                                 }

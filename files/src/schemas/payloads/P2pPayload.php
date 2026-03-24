@@ -4,6 +4,7 @@
 namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 
 /**
  * P2P (Peer to Peer) payload builder
@@ -63,7 +64,7 @@ class P2pPayload extends BasePayload
             'time' => $data['time'],
             'expiration' => $data['time'] + $this->timeUtility->convertMicrotimeToInt($expirationSeconds),
             'currency' => $this->sanitizeString($data['currency']),
-            'amount' => $this->sanitizeNumber($data['amount']),
+            'amount' => $this->serializeAmount($data['amount']),
             'requestLevel' => (int) $data['minRequestLevel'],
             'maxRequestLevel' => (int) $data['maxRequestLevel'],
             'senderAddress' => $userAddress,
@@ -71,12 +72,6 @@ class P2pPayload extends BasePayload
             'fast' => (bool) ($data['fast'] ?? true),
             'hopWait' => $hopWait,
         ];
-
-        // Include inquiry token (hash commitment) — propagates through relay chain.
-        // Only the original sender knows the pre-image (inquiry_secret).
-        if (isset($data['inquiryToken'])) {
-            $payload['inquiryToken'] = $data['inquiryToken'];
-        }
 
         return $payload;
     }
@@ -103,7 +98,7 @@ class P2pPayload extends BasePayload
             'time' => $data['time'],
             'expiration' => $data['expiration'],
             'currency' => $this->sanitizeString($data['currency']),
-            'amount' => $this->sanitizeNumber($data['amount']),
+            'amount' => $this->serializeAmount($data['amount']),
             'requestLevel' => ((int) $data['request_level']) + 1, // Increment request level for forwarding
             'maxRequestLevel' => (int) $data['max_request_level'],
             'senderAddress' => $userAddress,
@@ -111,10 +106,6 @@ class P2pPayload extends BasePayload
             'fast' => (bool) ($data['fast'] ?? true),
             'hopWait' => (int) ($data['hop_wait'] ?? 0),
         ];
-
-        if (!empty($data['inquiry_token'])) {
-            $payload['inquiryToken'] = $data['inquiry_token'];
-        }
 
         return $payload;
     }
@@ -269,7 +260,7 @@ class P2pPayload extends BasePayload
             'type' => 'rp2p',
             'hash' => $hash,
             'cancelled' => true,
-            'amount' => 0,
+            'amount' => SplitAmount::zero()->toArray(),
             'time' => $this->timeUtility->getCurrentMicrotime(),
             'currency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($recipientAddress),

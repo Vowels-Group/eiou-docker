@@ -77,7 +77,7 @@
                     <div class="tx-in-progress-details tx-ip-details">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
                         <?php if (!empty($ipTx['fee_amount'])): ?>
-                        <div><i class="fas fa-coins"></i> Fee: <?php echo number_format($ipTx['fee_amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
+                        <div><i class="fas fa-coins"></i> Fee: <?php echo isSplitAmount($ipTx['fee_amount']) ? $ipTx['fee_amount']->toDisplayString(displayDecimals()) : number_format($ipTx['fee_amount'] / conversionFactor(), displayDecimals()); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -100,8 +100,8 @@
                         <!-- Single rp2p (fast mode): existing approval UI -->
                         <?php if (!empty($ipTx['rp2p_amount'])): ?>
                         <div class="p2p-approval-callout">
-                            <div>Route Fee: <?php echo number_format(($ipTx['rp2p_amount'] - $ipTx['amount']) / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
-                            <div><strong>Total Cost: <?php echo number_format($ipTx['rp2p_amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
+                            <div>Route Fee: <?php echo $ipTx['rp2p_amount']->subtract($ipTx['amount'])->toDisplayString(displayDecimals()); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
+                            <div><strong>Total Cost: <?php echo $ipTx['rp2p_amount']->toDisplayString(displayDecimals()); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex gap-sm">
@@ -123,7 +123,7 @@
                 </div>
                 <?php if (($ipTx['phase'] ?? '') !== 'awaiting_approval'): ?>
                 <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
-                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo number_format($ipTx['amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getCurrencyDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
+                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo $ipTx['amount']->toDisplayString(displayDecimals()); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
                 </div>
                 <?php endif; ?>
             </div>
@@ -155,7 +155,7 @@
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'Unknown'); ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>
                         </div>
                         <div class="tx-meta-row">
-                            <?php echo htmlspecialchars($tx['date']); ?>
+                            <?php echo htmlspecialchars(formatTimestamp($tx['date'])); ?>
                             <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
                                 <?php if ($tx['status'] === 'pending'): ?>
                                     <i class="fas fa-hourglass-half"></i>
@@ -196,7 +196,7 @@
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], \Eiou\Core\Constants::getCurrencyDecimals($tx['currency'])); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
                         <i class="fas fa-chevron-right chevron-indicator"></i>
                     </div>
                 </div>
@@ -221,7 +221,7 @@
 </div>
 
 <!-- Store transaction data for JavaScript -->
-<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+<script nonce="<?php echo cspNonce(); ?>">
     // Count syncing transactions for toast notification
     var syncingTransactionCount = <?php
         $syncingCount = 0;
@@ -239,7 +239,7 @@
             'tx_type' => $tx['tx_type'] ?? 'standard',
             'direction' => $tx['direction'] ?? $tx['type'],
             'status' => $tx['status'] ?? 'completed',
-            'date' => $tx['date'] ?? '',
+            'date' => !empty($tx['date']) ? formatTimestamp($tx['date']) : '',
             'type' => $tx['type'] ?? '',
             'amount' => $tx['amount'] ?? 0,
             'currency' => $tx['currency'] ?? 'USD',
@@ -408,8 +408,8 @@
                                 var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
                                 html = html + '<div class="p2p-candidate-row">';
                                 html = html + '<div class="p2p-candidate-info">';
-                                html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(2) + ' ' + currency + '</strong></div>';
-                                html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(2) + ' ' + currency + '</div>';
+                                html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</strong></div>';
+                                html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</div>';
                                 html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
                                 html = html + '</div>';
                                 html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';

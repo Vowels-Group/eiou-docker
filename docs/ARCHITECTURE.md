@@ -1213,6 +1213,38 @@ Each node maintains a MariaDB database with these primary tables:
 | `capacity_reservations` | Credit reserved at each relay hop during P2P routing (base_amount and total_amount including fees), status: active/released/committed |
 | `route_cancellations` | Audit trail for route cancellation messages sent to unselected P2P candidates after best-fee selection |
 
+### Amount Storage: SplitAmount
+
+All monetary amounts are stored as **two BIGINT columns** (`_whole` and `_frac`) instead of a single integer. This is implemented by the `SplitAmount` value object (`/src/core/SplitAmount.php`).
+
+**Storage format:**
+- `_whole`: integer part (e.g., 1234 for $1,234.56)
+- `_frac`: fractional part × 10^8 (e.g., 56000000 for .56)
+- Maximum representable amount: PHP_INT_MAX.99999999 (~9.2 quintillion)
+- `TRANSACTION_MAX_AMOUNT` (PHP_INT_MAX / 4) enforced at input to leave headroom for multi-hop fee accumulation
+
+**Tables using split columns:**
+
+| Table | Column pairs |
+|-------|-------------|
+| `transactions` | `amount_whole`/`_frac`, `my_fee_amount_whole`/`_frac`, `rp2p_amount_whole`/`_frac` |
+| `balances` | `received_whole`/`_frac`, `sent_whole`/`_frac` |
+| `contact_currencies` | `credit_limit_whole`/`_frac` |
+| `contact_credit` | `available_credit_whole`/`_frac` |
+| `p2p` | `amount_whole`/`_frac`, `my_fee_amount_whole`/`_frac`, `rp2p_amount_whole`/`_frac` |
+| `rp2p` | `amount_whole`/`_frac`, `fee_amount_whole`/`_frac` |
+| `capacity_reservations` | `base_amount_whole`/`_frac`, `total_amount_whole`/`_frac` |
+
+**Factory methods:**
+- `SplitAmount::fromString($str)` — precision-safe parsing via string operations (preferred for user input)
+- `SplitAmount::fromMajorUnits($float)` — float conversion (adequate for amounts < 10^15)
+- `SplitAmount::from($value)` — universal factory accepting string, float, int, array, or SplitAmount
+- `SplitAmount::fromDbRow($row, $prefix)` — extracts `{prefix}_whole`/`{prefix}_frac` from a database row
+
+**Arithmetic:** `add()`, `subtract()`, `multiplyPercent()`, `mulDiv()` use bcmath strings internally — no intermediate PHP integer can overflow regardless of amount size.
+
+**Input validation:** All validators (`validateAmount`, `validateAmountFee`, `validateFeeAmount`, `validateCreditLimit`) use bcmath string operations (`bccomp`/`bcadd`) and return decimal strings at 8-decimal precision. Display decimals (`DISPLAY_DECIMALS`) only affect UI formatting, not input acceptance.
+
 ### Repository Pattern
 
 Each table has a corresponding repository class extending `AbstractRepository`:
@@ -1487,7 +1519,7 @@ $hopBudget = computeHopBudget($minHops, $maxP2pLevel); // range: [3, 6]
 **Key properties:**
 - Only set on the originator — relays inherit `maxRequestLevel` unchanged
 - `HOP_BUDGET_MIN_RATIO` (default: 0.5) prevents uselessly low budgets (1 hop = direct contacts only)
-- When `EIOU_HOP_BUDGET_RANDOMIZED=false` (test default), returns `maxP2pLevel` for deterministic behavior
+- Controlled by the `hopBudgetRandomized` user setting (GUI/CLI/API toggle, default: enabled). When disabled, returns `maxP2pLevel` for full routing depth — recommended for sparse trust graphs where reachability matters more than traffic analysis resistance. Also overridable via `EIOU_HOP_BUDGET_RANDOMIZED` env variable (env takes precedence)
 - Dead-end behavior: when `requestLevel >= maxRequestLevel`, the relay stores as cancelled and sends `sendCancelNotificationForHash()` upstream immediately
 
 ### P2P Message Flow
@@ -1931,6 +1963,17 @@ RP2P candidates at originator (sorted by amount ASC):
 **Selection:** `ORDER BY amount ASC` — cheapest route wins. If the cheapest fails
 validation (relay can't afford or fee exceeds originator's `maxFee`), the next
 cheapest is tried. All candidates are deleted after selection regardless of outcome.
+
+**Zero-fee relaying:** Both the contact fee percentage and the system minimum fee
+(`minFee`) can be set to 0, enabling completely free relaying. This is safe because
+fees are excluded from hash/txid generation (hashes use sender pubkey, receiver
+pubkey, amount, currency, and time — never fees), all division operations involving
+fees have zero guards, and balance updates use the final amount which simply equals
+the base amount when fee is 0. Since fees are configured per contact, operators can
+relay free for friends and family while charging fees for other contacts. Setting
+`minFee` to 0 removes the global fee floor, so a 0% contact fee truly results in
+zero relay cost. The default `minFee` of 0.01 preserves incentives; 0 is an
+intentional opt-in for operators who prioritize reachability over relay compensation.
 
 ### Multi-Path Sender Tracking
 
@@ -2419,10 +2462,21 @@ currency's chain heads don't match.
     |                                             |
     |                                             +-- eiou accept <name>
     |                                             |     +-- Update contact to 'accepted'
-    |<---------- Send acceptance message ---------+     +-- Complete contact transaction
+    |                                             |     +-- Calculate available credit
+    |<-- Send acceptance (+ availableCredit) -----+     +-- Complete contact transaction
     +-- Update contact to 'accepted'              |
-    +-- Complete contact transaction              |
+    +-- Save B's available credit                 |
+    +-- Calculate own available credit            |
+    +-- Return ack (+ availableCredit) ---------->|
+    +-- Complete contact transaction              +-- Save A's available credit
 ```
+
+Both nodes start with accurate available credit immediately after acceptance,
+without waiting for the first ping/pong cycle. The credit data is included in
+the E2E-encrypted acceptance message and acknowledgment response. For new
+contacts, available credit equals the credit limit. For re-added contacts with
+prior transactions, it reflects the real balance:
+`availableCredit = (sentBalance - receivedBalance) + creditLimit`.
 
 ### Ping/Pong Credit Exchange
 
@@ -2448,11 +2502,15 @@ and available credit synchronization.
 | `availableCreditByCurrency` | `{currency: amount}` — how much credit the contact has available for us |
 | `chainStatusByCurrency` | Per-currency chain validity flags |
 
-**Available credit update:** On receiving a pong, the processor calls
-`saveAvailableCreditFromPong()` which upserts each currency's credit into the
-`contact_credit` table via `ContactCreditRepository::upsertAvailableCredit()`. This
-is the **only mechanism** that updates available credit — it is not calculated from
-transactions but explicitly reported by the contact during pong.
+**Available credit update:** Available credit is explicitly reported by the remote
+contact and stored in the `contact_credit` table. There are three update paths:
+1. **Ping/pong:** The processor calls `saveAvailableCreditFromPong()` which upserts
+   each currency's credit via `ContactCreditRepository::upsertAvailableCredit()`.
+2. **Contact acceptance:** The acceptance message and acknowledgment both include
+   `availableCreditByCurrency`, saved via `saveAvailableCreditFromAcceptance()`
+   and `saveAvailableCreditFromResponse()` respectively.
+3. **Transaction completion:** The completion response includes the sender's
+   available credit with a timestamp, saved via `upsertAvailableCreditIfNewer()`.
 
 **Chain validation and sync trigger:** The processor compares `prevTxidsByCurrency`
 from the pong against local chain heads. If any currency's chain heads don't match,

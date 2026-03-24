@@ -68,7 +68,12 @@ class ContactDataBuilder
             'balance' => $contact['balance'] ?? 0,
             'balances_by_currency' => $contact['balances_by_currency'] ?? [],
             'contact_id' => $contact['contact_id'] ?? '',
-            'transactions' => $contact['transactions'] ?? [],
+            'transactions' => array_map(function($tx) {
+                if (!empty($tx['date']) && function_exists('formatTimestamp')) {
+                    $tx['date'] = formatTimestamp($tx['date']);
+                }
+                return $tx;
+            }, $contact['transactions'] ?? []),
             'online_status' => $contact['online_status'] ?? 'unknown',
             'valid_chain' => $contact['valid_chain'] ?? null,
             'pubkey_hash' => $contact['pubkey_hash'] ?? '',

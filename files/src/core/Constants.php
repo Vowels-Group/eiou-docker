@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.0-alpha';
+    const APP_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
     // Database schema version — bump this when adding new migrations in DatabaseSetup.php.
@@ -70,59 +70,69 @@ class Constants {
     //   - External web applications: BROKEN - will get CORS errors
 
     // Transaction limits
-    const TRANSACTION_MAX_AMOUNT = 999999999;
+    // With split amount storage (whole + frac), the whole part can be up to PHP_INT_MAX.
+    // However, relay routing adds fees to amounts (up to 100% per hop), so the amount
+    // after fees must also fit. TRANSACTION_MAX_AMOUNT is set conservatively so that
+    // even a 100% fee (amount doubles) plus multi-hop compounding won't overflow.
+    // PHP_INT_MAX / 4 ≈ 2.3 quintillion — leaves headroom for multi-hop fee accumulation.
+    const TRANSACTION_MAX_AMOUNT = 2305843009213693951; // PHP_INT_MAX / 4, ~2.3 quintillion
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
     const TRANSACTION_MINIMUM_FEE = 0.01;
-    // Currency conversion factors: minor unit to major unit (defaults)
-    // USD: 100 (cents → dollars). Additional currencies are configured via changesettings.
-    const CONVERSION_FACTORS = [
-        'USD' => 100,
-    ];
-    // Currency decimal places for display and validation (defaults)
-    const CURRENCY_DECIMALS = [
-        'USD' => 2,
-    ];
+
+    // PROTOCOL CONSTANT — DO NOT CHANGE. All currencies use 8 decimal places
+    // internally. The fractional part is stored as a separate BIGINT multiplied
+    // by 10^8 (FRAC_MODULUS in SplitAmount). The whole part is stored as-is,
+    // so the maximum representable amount is PHP_INT_MAX.99999999.
+    const INTERNAL_CONVERSION_FACTOR = 100000000;
+    const INTERNAL_PRECISION = 8;
+
+    // Display decimal places (default): controls how many decimal places are
+    // shown in the UI for all currencies. Does NOT affect input validation or
+    // internal storage — all input is validated and stored at INTERNAL_PRECISION
+    // (8) decimal places. Configurable via changesettings displayDecimals (0-8).
+    const DISPLAY_DECIMALS = 2;
     // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
     /**
-     * Get the conversion factor for a given currency.
-     * Checks UserContext config first (persists across rebuilds), falls back to constants.
+     * Get the internal conversion factor for storage.
+     * Always returns INTERNAL_CONVERSION_FACTOR — the same for all currencies.
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Conversion factor
-     * @throws \InvalidArgumentException If currency has no defined factor
+     * @param string $currency Currency code (ignored — factor is universal)
+     * @return int Conversion factor (always 10^8)
      */
     public static function getConversionFactor(string $currency): int
     {
-        try {
-            return UserContext::getInstance()->getConversionFactor($currency);
-        } catch (\InvalidArgumentException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            // UserContext not initialized yet (startup/tests)
-        }
-        if (!isset(self::CONVERSION_FACTORS[$currency])) {
-            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
-        }
-        return self::CONVERSION_FACTORS[$currency];
+        return self::INTERNAL_CONVERSION_FACTOR;
     }
 
     /**
-     * Get the number of decimal places for a given currency.
-     * Checks UserContext config first (persists across rebuilds), falls back to constants.
+     * Get the internal decimal precision for storage.
+     * Always returns INTERNAL_PRECISION (8) — the same for all currencies.
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of decimal places
+     * @param string $currency Currency code (ignored — precision is universal)
+     * @return int Number of decimal places (always 8)
      */
     public static function getCurrencyDecimals(string $currency): int
     {
+        return self::INTERNAL_PRECISION;
+    }
+
+    /**
+     * Get the display decimal places (global setting, applies to all currencies).
+     * Checks UserContext config first, falls back to DISPLAY_DECIMALS default.
+     * Controls UI formatting only — input validation uses INTERNAL_PRECISION.
+     *
+     * @return int Number of display decimal places (0-8)
+     */
+    public static function getDisplayDecimals(): int
+    {
         try {
-            return UserContext::getInstance()->getCurrencyDecimals($currency);
+            return UserContext::getInstance()->getAllDisplayDecimals();
         } catch (\Throwable $e) {
             // UserContext not initialized yet (startup/tests)
         }
-        return self::CURRENCY_DECIMALS[$currency] ?? self::DISPLAY_CURRENCY_DECIMALS;
+        return self::DISPLAY_DECIMALS;
     }
 
     // Transaction processor polling intervals (milliseconds)
@@ -352,9 +362,10 @@ class Constants {
     const TIME_MINUTES_PER_HOUR = 60;
     const TIME_HOURS_PER_DAY = 24;
 
-    // Percentage/Math constants
-    // Credits use the same currency conversion system — use CONVERSION_FACTORS[$currency]
-    const FEE_CONVERSION_FACTOR = 100; // Convert percentage to basis points (0.1% = 10)
+    // Fee percentage storage: multiply by 100 to store as integer with 2 decimal precision.
+    // Example: 0.01% → stored as 1, 1.50% → stored as 150, 100% → stored as 10000.
+    // Display: stored_value / FEE_CONVERSION_FACTOR = original percentage.
+    const FEE_CONVERSION_FACTOR = 100;
     const FEE_PERCENT_DECIMAL_PRECISION = 2;
 
     // Adaptive polling thresholds
@@ -418,7 +429,29 @@ class Constants {
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
-    const DISPLAY_CURRENCY_DECIMALS = 2;
+    const VALID_DATE_FORMATS = [
+        'Y-m-d H:i:s.u',   // 2026-03-24 17:43:20.123456 (default, microseconds)
+        'Y-m-d H:i:s',     // 2026-03-24 17:43:20
+        'Y-m-d H:i',       // 2026-03-24 17:43
+        'Y-m-d',           // 2026-03-24
+        'd/m/Y H:i:s',     // 24/03/2026 17:43:20
+        'd/m/Y H:i',       // 24/03/2026 17:43
+        'd/m/Y',           // 24/03/2026
+        'm/d/Y H:i:s',     // 03/24/2026 17:43:20
+        'm/d/Y H:i',       // 03/24/2026 17:43
+        'm/d/Y',           // 03/24/2026
+        'd-m-Y H:i:s',     // 24-03-2026 17:43:20
+        'd-m-Y H:i',       // 24-03-2026 17:43
+        'd-m-Y',           // 24-03-2026
+        'd M Y H:i:s',     // 24 Mar 2026 17:43:20
+        'd M Y H:i',       // 24 Mar 2026 17:43
+        'd M Y',           // 24 Mar 2026
+        'M d, Y H:i:s',    // Mar 24, 2026 17:43:20
+        'M d, Y H:i',      // Mar 24, 2026 17:43
+        'M d, Y',          // Mar 24, 2026
+        'U',               // Unix timestamp
+    ];
+    const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
@@ -460,6 +493,7 @@ class Constants {
     const AUTO_CHAIN_DROP_ACCEPT_GUARD = true;     // Balance guard for auto-accept: compares stored vs calculated balances to block acceptance when missing transactions would erase debt owed to us. Disable to accept unconditionally.
     const AUTO_ACCEPT_RESTORED_CONTACT = true;     // Auto-accept contacts on wallet restore when transaction history proves prior relationship - default ON; when OFF, restored contacts stay pending for manual review
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
+    const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

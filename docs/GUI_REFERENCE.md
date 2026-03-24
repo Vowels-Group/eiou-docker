@@ -214,14 +214,14 @@ Handles settings and debug operations.
 
 | Category | Settings |
 |----------|----------|
-| Feature Toggles | `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled` |
+| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled` |
 | Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
 | Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
 | Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
-| Currency | `conversionFactors`, `currencyDecimals`, `allowedCurrencies` |
-| Display | `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
+| Currency | `allowedCurrencies` |
+| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
 
 ---
 

@@ -4,6 +4,7 @@
 namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 
 /**
  * Return Peer-to-Peer (RP2P) payload builder
@@ -28,7 +29,7 @@ class Rp2pPayload extends BasePayload
             'type' => 'rp2p', // Return Peer to peer request type
             'hash' => $data['hash'],
             'time' => $data['time'],
-            'amount' => $data['amount'],
+            'amount' => $this->serializeAmount($data['amount']),
             'currency' => $data['currency'],
             'signature' => $data['signature'],
             'senderAddress' => $userAddress,
@@ -50,7 +51,7 @@ class Rp2pPayload extends BasePayload
             'type' => 'rp2p', // Return Peer to peer request type
             'hash' => $data['hash'],
             'time' => $data['time'],
-            'amount' => $data['amount'],
+            'amount' => $this->serializeAmount($data['amount']),
             'currency' => $data['currency'],
             'signature' => $data['signature'],
             'senderAddress' => $userAddress,
@@ -75,7 +76,7 @@ class Rp2pPayload extends BasePayload
             'type' => 'rp2p',
             'hash' => $hash,
             'cancelled' => true,
-            'amount' => 0,
+            'amount' => SplitAmount::zero()->toArray(),
             'time' => $this->timeUtility->getCurrentMicrotime(),
             'currency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($recipientAddress),

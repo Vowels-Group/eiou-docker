@@ -2,7 +2,7 @@
 
 <!-- Toast notifications for operation results -->
 <?php if (!empty($messageForDisplay)): ?>
-    <script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+    <script nonce="<?php echo cspNonce(); ?>">
     document.addEventListener('DOMContentLoaded', function() {
         var msgType = <?php echo json_encode($messageTypeForDisplay, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
         var msg = <?php echo json_encode($messageForDisplay, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
@@ -70,7 +70,7 @@
     </div>
 </div>
 <?php elseif ($torStatusType === 'recovered' && $torStatusAge <= 300): ?>
-<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+<script nonce="<?php echo cspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof showToast === 'function') {
         showToast('Tor Restored', 'Tor connectivity has been restored. Transactions should resume normally.', 'success');
@@ -212,13 +212,13 @@ foreach ($acceptedContacts as $c) {
 
 <!-- Toast notifications for newly completed transactions (sent by user) -->
 <?php if (!empty($newlyCompletedTransactions)): ?>
-<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+<script nonce="<?php echo cspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
     <?php foreach ($newlyCompletedTransactions as $tx): ?>
     if (typeof showToast === 'function') {
         showToast(
             'Transaction Complete',
-            'Your <?php echo number_format($tx['amount'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($tx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> transfer has completed successfully.',
+            'Your <?php echo number_format($tx['amount'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> transfer has completed successfully.',
             'success'
         );
     }
@@ -229,13 +229,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Toast notifications for newly received transactions -->
 <?php if (!empty($newlyReceivedTransactions)): ?>
-<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+<script nonce="<?php echo cspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
     <?php foreach ($newlyReceivedTransactions as $tx): ?>
     if (typeof showToast === 'function') {
         showToast(
             'Payment Received',
-            'You received <?php echo number_format($tx['amount'] ?? 0, \Eiou\Core\Constants::getCurrencyDecimals($tx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> from <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'a contact'); ?>.',
+            'You received <?php echo number_format($tx['amount'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> from <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'a contact'); ?>.',
             'success'
         );
     }
@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Dead Letter Queue notification data (consumed by showDlqToasts in script.js) -->
 <?php if (!empty($newlyAddedToDlq)): ?>
-<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+<script nonce="<?php echo cspNonce(); ?>">
 var dlqNotifications = [
 <?php
     $dlqNotificationItems = [];

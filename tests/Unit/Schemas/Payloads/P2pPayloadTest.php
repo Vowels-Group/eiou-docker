@@ -159,18 +159,19 @@ class P2pPayloadTest extends TestCase
     }
 
     /**
-     * Test build sanitizes currency and amount
+     * Test build sanitizes currency and serializes amount to split format
      */
     public function testBuildSanitizesCurrencyAndAmount(): void
     {
         $data = $this->getValidBuildData();
         $data['currency'] = '  USD  '; // With whitespace
-        $data['amount'] = '100.50'; // As string
+        $data['amount'] = new \Eiou\Core\SplitAmount(100, 50000000); // $100.50
 
         $result = $this->payload->build($data);
 
         $this->assertEquals('USD', $result['currency']);
-        $this->assertEquals(100.50, $result['amount']);
+        $this->assertIsArray($result['amount']);
+        $this->assertEquals(['whole' => 100, 'frac' => 50000000], $result['amount']);
     }
 
     /**
@@ -328,18 +329,19 @@ class P2pPayloadTest extends TestCase
     }
 
     /**
-     * Test buildFromDatabase sanitizes currency and amount
+     * Test buildFromDatabase sanitizes currency and serializes amount to split format
      */
     public function testBuildFromDatabaseSanitizesCurrencyAndAmount(): void
     {
         $data = $this->getValidDatabaseData();
         $data['currency'] = '  EUR  ';
-        $data['amount'] = '250.75';
+        $data['amount'] = new \Eiou\Core\SplitAmount(250, 75000000); // $250.75
 
         $result = $this->payload->buildFromDatabase($data);
 
         $this->assertEquals('EUR', $result['currency']);
-        $this->assertEquals(250.75, $result['amount']);
+        $this->assertIsArray($result['amount']);
+        $this->assertEquals(['whole' => 250, 'frac' => 75000000], $result['amount']);
     }
 
     /**
@@ -847,7 +849,7 @@ class P2pPayloadTest extends TestCase
 
         $result = $this->payload->build($data);
 
-        $this->assertEquals(0, $result['amount']);
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
     }
 
     /**
@@ -856,11 +858,12 @@ class P2pPayloadTest extends TestCase
     public function testBuildWithLargeAmount(): void
     {
         $data = $this->getValidBuildData();
-        $data['amount'] = 999999999.99;
+        $data['amount'] = new \Eiou\Core\SplitAmount(999999999, 99999999);
 
         $result = $this->payload->build($data);
 
-        $this->assertEquals(999999999.99, $result['amount']);
+        $this->assertIsArray($result['amount']);
+        $this->assertEquals(['whole' => 999999999, 'frac' => 99999999], $result['amount']);
     }
 
     /**
@@ -936,7 +939,7 @@ class P2pPayloadTest extends TestCase
         $result = $this->payload->buildCancelled(self::TEST_HASH, self::TEST_HTTP_ADDRESS);
 
         $this->assertArrayHasKey('amount', $result);
-        $this->assertEquals(0, $result['amount']);
+        $this->assertEquals(['whole' => 0, 'frac' => 0], $result['amount']);
     }
 
     /**

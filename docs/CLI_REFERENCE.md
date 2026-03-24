@@ -930,7 +930,7 @@ eiou changesettings [setting] [value]
 | `defaultFee` | Default fee percentage | `0.01` |
 | `defaultCreditLimit` | Default credit limit for new contacts | `100` |
 | `defaultCurrency` | Default currency code | `USD` |
-| `minFee` | Minimum fee amount | `0.01` |
+| `minFee` | Minimum fee amount (0 = free relaying) | `0.01` |
 | `maxFee` | Maximum fee percentage | `5.0` |
 | `maxP2pLevel` | Maximum P2P routing hops | `3` |
 | `p2pExpiration` | P2P routing request timeout (seconds); P2P transactions get an extra 120s delivery window after this expires | `300` |
@@ -949,6 +949,7 @@ eiou changesettings [setting] [value]
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
+| `hopBudgetRandomized` | Randomize P2P hop depth for privacy (disable for max reachability in sparse networks) | `true`, `false` |
 | `contactStatusEnabled` | Enable contact status tracking | `true`, `false` |
 | `contactStatusSyncOnPing` | Sync status during ping operations | `true`, `false` |
 | `autoChainDropPropose` | Auto-propose chain-drop operations | `true`, `false` |
@@ -1007,17 +1008,11 @@ eiou changesettings [setting] [value]
 | `syncMaxChunks` | Max sync chunks per cycle (10-1000) | `100` |
 | `heldTxSyncTimeoutSeconds` | Held tx sync timeout in seconds (30-299) | `120` |
 
-**Advanced Settings (Currency):**
-
-| Setting | Description | Example Value |
-|---------|-------------|---------------|
-| `conversionFactors` | Minor-to-major unit conversion per currency (JSON) | `{"USD":100,"BTC":100000000}` |
-| `currencyDecimals` | Display decimal places per currency (JSON) | `{"USD":2,"BTC":8}` |
-
 **Advanced Settings (Display):**
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
+| `displayDecimals` | Display decimal places for all currencies (0-8, default 2). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage. | `2` |
 | `displayDateFormat` | PHP date format string | `Y-m-d H:i:s.u` |
 | `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
 
@@ -1048,8 +1043,7 @@ eiou changesettings backupRetentionCount 5
 eiou changesettings cleanupDeliveryRetentionDays 60
 eiou changesettings httpTransportTimeoutSeconds 30
 eiou changesettings rateLimitEnabled false
-eiou changesettings conversionFactors '{"USD":100,"BTC":100000000}'
-eiou changesettings currencyDecimals '{"USD":2,"BTC":8}'
+eiou changesettings displayDecimals 4
 eiou changesettings torCircuitMaxFailures 5
 eiou changesettings torFailureTransportFallback false
 eiou changesettings contactStatusEnabled false

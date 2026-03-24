@@ -86,23 +86,9 @@ class MessageServiceTest extends TestCase
             $this->transactionContactRepository,
             $this->utilityContainer,
             $this->userContext,
-            $this->messageDeliveryService
+            $this->messageDeliveryService,
+            $this->syncTrigger
         );
-    }
-
-    // =========================================================================
-    // setSyncTrigger() Tests
-    // =========================================================================
-
-    /**
-     * Test setSyncTrigger sets the sync trigger
-     */
-    public function testSetSyncTriggerSetsTrigger(): void
-    {
-        $this->service->setSyncTrigger($this->syncTrigger);
-
-        // No exception means success
-        $this->assertTrue(true);
     }
 
     // =========================================================================
@@ -467,8 +453,6 @@ class MessageServiceTest extends TestCase
         $this->contactRepository->method('contactExistsPubkey')
             ->willReturn(true);
 
-        $this->service->setSyncTrigger($this->syncTrigger);
-
         $this->syncTrigger->expects($this->once())
             ->method('handleTransactionSyncRequest')
             ->with($request);
@@ -505,6 +489,19 @@ class MessageServiceTest extends TestCase
      */
     public function testHandleMessageRequestThrowsWhenSyncTriggerNotSet(): void
     {
+        // Create service without sync trigger to test the error path
+        $serviceWithoutSync = new MessageService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->transactionRepository,
+            $this->transactionContactRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null // no sync trigger
+        );
+
         $request = [
             'typeMessage' => 'sync',
             'senderAddress' => self::TEST_ADDRESS,
@@ -516,12 +513,10 @@ class MessageServiceTest extends TestCase
         $this->contactRepository->method('contactExistsPubkey')
             ->willReturn(true);
 
-        // Don't set sync trigger
-
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('SyncTrigger not injected');
 
-        $this->service->handleMessageRequest($request);
+        $serviceWithoutSync->handleMessageRequest($request);
     }
 
     // =========================================================================

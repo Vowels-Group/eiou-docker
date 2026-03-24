@@ -45,7 +45,8 @@ class ChainVerificationServiceTest extends TestCase
         $this->service = new ChainVerificationService(
             $this->mockChainRepo,
             $this->mockUserContext,
-            $this->logger
+            $this->logger,
+            $this->mockSyncTrigger
         );
     }
 
@@ -114,7 +115,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncTriggersSyncWhenGapsDetected(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         $this->mockUserContext->expects($this->once())
             ->method('getPublicKey')
@@ -156,7 +156,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncHandlesSyncFailureWithChainStillInvalid(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         // getPublicKey is called twice: once for initial check, once for recheck after sync failure
         $this->mockUserContext->expects($this->exactly(2))
@@ -210,7 +209,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncSucceedsWhenSyncFailsButChainBecomesValid(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         // getPublicKey is called twice: once for initial check, once for recheck after sync failure
         $this->mockUserContext->expects($this->exactly(2))
@@ -262,7 +260,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncHandlesUnknownSyncError(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         // getPublicKey is called twice: once for initial check, once for recheck after sync failure
         $this->mockUserContext->expects($this->exactly(2))
@@ -309,12 +306,25 @@ class ChainVerificationServiceTest extends TestCase
     }
 
     /**
-     * Test verifySenderChainAndSync throws exception when sync trigger not injected
+     * Test constructor requires SyncTriggerInterface (TypeError if omitted)
      */
-    public function testVerifySenderChainAndSyncThrowsExceptionWhenSyncTriggerNotInjected(): void
+    public function testConstructorRequiresSyncTrigger(): void
     {
-        // Do NOT call setSyncTrigger - leave it null
+        $this->expectException(\TypeError::class);
 
+        // @phpstan-ignore-next-line - intentionally passing wrong arg count
+        new ChainVerificationService(
+            $this->mockChainRepo,
+            $this->mockUserContext,
+            $this->logger
+        );
+    }
+
+    /**
+     * Test constructor injection of sync trigger enables sync operations
+     */
+    public function testConstructorInjectedSyncTriggerEnablesSyncOperations(): void
+    {
         $this->mockUserContext->expects($this->once())
             ->method('getPublicKey')
             ->willReturn(self::TEST_USER_PUBKEY);
@@ -329,50 +339,6 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => []
             ]);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('SyncTrigger not injected');
-
-        $this->service->verifySenderChainAndSync(
-            self::TEST_CONTACT_ADDRESS,
-            self::TEST_CONTACT_PUBKEY
-        );
-    }
-
-    /**
-     * Test setSyncTrigger properly sets the sync trigger
-     */
-    public function testSetSyncTriggerProperlySetsTheSyncTrigger(): void
-    {
-        // First, verify that calling without sync trigger throws exception
-        $this->mockUserContext->expects($this->exactly(2))
-            ->method('getPublicKey')
-            ->willReturn(self::TEST_USER_PUBKEY);
-
-        $this->mockChainRepo->expects($this->exactly(2))
-            ->method('verifyChainIntegrity')
-            ->willReturn([
-                'valid' => false,
-                'has_transactions' => true,
-                'transaction_count' => 5,
-                'gaps' => ['missing-txid-1'],
-                'broken_txids' => []
-            ]);
-
-        // First call without sync trigger should throw
-        try {
-            $this->service->verifySenderChainAndSync(
-                self::TEST_CONTACT_ADDRESS,
-                self::TEST_CONTACT_PUBKEY
-            );
-            $this->fail('Expected RuntimeException was not thrown');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('SyncTrigger not injected', $e->getMessage());
-        }
-
-        // Now set the sync trigger
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
-
-        // Configure mock for second call
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
             ->willReturn([
@@ -380,7 +346,7 @@ class ChainVerificationServiceTest extends TestCase
                 'synced_count' => 1
             ]);
 
-        // Second call with sync trigger set should work
+        // Sync trigger was injected via constructor in setUp — should work
         $result = $this->service->verifySenderChainAndSync(
             self::TEST_CONTACT_ADDRESS,
             self::TEST_CONTACT_PUBKEY
@@ -394,7 +360,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncTriggersWhenGapsDetected(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         $this->mockUserContext->expects($this->once())
             ->method('getPublicKey')
@@ -430,7 +395,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncDoesNotSyncWhenChainIsAlreadyValid(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         $this->mockUserContext->expects($this->once())
             ->method('getPublicKey')
@@ -496,7 +460,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncPassesCorrectParametersToSync(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         $customContactAddress = '172.16.0.1:7777';
         $customContactPubkey = 'specific-contact-pubkey-for-sync';
@@ -563,7 +526,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncWithMultipleGapsTriggerSync(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         $this->mockUserContext->expects($this->once())
             ->method('getPublicKey')
@@ -600,7 +562,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncOnlyRechecksChainWhenSyncReportsFailure(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         $this->mockUserContext->expects($this->once())
             ->method('getPublicKey')
@@ -635,7 +596,6 @@ class ChainVerificationServiceTest extends TestCase
      */
     public function testVerifySenderChainAndSyncRechecksChainWhenSyncFails(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
 
         // getPublicKey is called twice: once for initial check, once for recheck after sync failure
         $this->mockUserContext->expects($this->exactly(2))

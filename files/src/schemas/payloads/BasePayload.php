@@ -3,6 +3,7 @@
 
 namespace Eiou\Schemas\Payloads;
 
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Contracts\CurrencyUtilityServiceInterface;
@@ -137,5 +138,41 @@ abstract class BasePayload
             throw new \InvalidArgumentException("Value must be numeric, got: " . gettype($value));
         }
         return is_int($value) ? (int) $value : (float) $value;
+    }
+
+    /**
+     * Serialize an amount for payload transmission.
+     * Accepts SplitAmount or array with whole/frac keys.
+     *
+     * @param SplitAmount|array $amount The amount to serialize
+     * @return array {whole: int, frac: int}
+     */
+    protected function serializeAmount($amount): array
+    {
+        if ($amount instanceof SplitAmount) {
+            return $amount->toArray();
+        }
+        if (is_array($amount) && isset($amount['whole'])) {
+            return ['whole' => (int) $amount['whole'], 'frac' => (int) ($amount['frac'] ?? 0)];
+        }
+        return SplitAmount::zero()->toArray();
+    }
+
+    /**
+     * Deserialize an amount from payload data.
+     * Accepts SplitAmount or {whole, frac} array.
+     *
+     * @param SplitAmount|array $amount The amount data from payload
+     * @return SplitAmount
+     */
+    protected function deserializeAmount($amount): SplitAmount
+    {
+        if ($amount instanceof SplitAmount) {
+            return $amount;
+        }
+        if (is_array($amount) && isset($amount['whole'])) {
+            return SplitAmount::fromArray($amount);
+        }
+        return SplitAmount::zero();
     }
 }

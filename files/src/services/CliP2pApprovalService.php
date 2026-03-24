@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
@@ -115,10 +116,10 @@ class CliP2pApprovalService
             foreach ($p2pData as $i => $p2p) {
                 $mode = $p2p['fast'] ? 'fast' : 'best-fee';
                 $totalCost = $p2p['rp2p_amount'] !== null
-                    ? $this->currencyUtility->formatCurrency($p2p['rp2p_amount'], $p2p['currency'])
+                    ? $this->currencyUtility->formatCurrency(SplitAmount::from($p2p['rp2p_amount']), $p2p['currency'])
                     : 'pending';
                 echo ($i + 1) . ". Hash: " . $p2p['hash'] . "\n";
-                echo "   Amount: " . $this->currencyUtility->formatCurrency($p2p['amount'], $p2p['currency']) . " " . $p2p['currency'] . "\n";
+                echo "   Amount: " . $this->currencyUtility->formatCurrency(SplitAmount::from($p2p['amount']), $p2p['currency']) . " " . $p2p['currency'] . "\n";
                 echo "   Total cost: " . $totalCost . " | Mode: " . $mode . "\n";
                 echo "   Candidates: " . $p2p['candidate_count'] . " | Created: " . $p2p['created_at'] . "\n";
                 echo "\n";
@@ -179,7 +180,7 @@ class CliP2pApprovalService
         } else {
             echo "Route Candidates for P2P: " . $hash . "\n";
             echo "==========================================\n";
-            echo "Amount: " . $this->currencyUtility->formatCurrency((int) $p2p['amount'], $p2p['currency']) . " " . $p2p['currency'] . "\n\n";
+            echo "Amount: " . $this->currencyUtility->formatCurrency(SplitAmount::from($p2p['amount']), $p2p['currency']) . " " . $p2p['currency'] . "\n\n";
 
             if (!empty($candidates)) {
                 echo "Available routes (ordered by fee, lowest first):\n";
@@ -187,8 +188,8 @@ class CliP2pApprovalService
                 foreach ($candidates as $i => $candidate) {
                     $num = $i + 1;
                     echo "  [{$num}] Via: " . $candidate['sender_address'] . "\n";
-                    echo "      Total amount: " . $this->currencyUtility->formatCurrency((int) $candidate['amount'], $candidate['currency']) . " " . $candidate['currency'] . "\n";
-                    echo "      Fee: " . $this->currencyUtility->formatCurrency((int) $candidate['fee_amount'], $candidate['currency']) . "\n";
+                    echo "      Total amount: " . $this->currencyUtility->formatCurrency(SplitAmount::from($candidate['amount']), $candidate['currency']) . " " . $candidate['currency'] . "\n";
+                    echo "      Fee: " . $this->currencyUtility->formatCurrency(SplitAmount::from($candidate['fee_amount']), $candidate['currency']) . "\n";
                     echo "\n";
                 }
                 echo "Use: eiou p2p approve {$hash} <number>  to approve a route\n";
@@ -196,7 +197,7 @@ class CliP2pApprovalService
                 echo "Single route (fast mode):\n";
                 echo "-------------------------------------------\n";
                 echo "  Via: " . $rp2p['sender_address'] . "\n";
-                echo "  Total amount: " . $this->currencyUtility->formatCurrency((int) $rp2p['amount'], $rp2p['currency']) . " " . $rp2p['currency'] . "\n";
+                echo "  Total amount: " . $this->currencyUtility->formatCurrency(SplitAmount::from($rp2p['amount']), $rp2p['currency']) . " " . $rp2p['currency'] . "\n";
                 echo "\nUse: eiou p2p approve {$hash}  to approve\n";
             } else {
                 echo "No route candidates available yet. Routes may still be arriving.\n";

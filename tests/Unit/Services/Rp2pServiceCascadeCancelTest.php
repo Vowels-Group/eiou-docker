@@ -22,10 +22,13 @@ use Eiou\Database\Rp2pRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Core\UserContext;
@@ -42,6 +45,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
     private MockObject|ValidationUtilityService $validationUtility;
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|TimeUtilityService $timeUtility;
+    private MockObject|CurrencyUtilityService $currencyUtility;
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pTransactionSenderInterface $p2pTransactionSender;
@@ -66,6 +70,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         $this->validationUtility = $this->createMock(ValidationUtilityService::class);
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->timeUtility = $this->createMock(TimeUtilityService::class);
+        $this->currencyUtility = $this->createMock(CurrencyUtilityService::class);
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pTransactionSender = $this->createMock(P2pTransactionSenderInterface::class);
@@ -79,6 +84,12 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             ->willReturn($this->transportUtility);
         $this->utilityContainer->method('getTimeUtility')
             ->willReturn($this->timeUtility);
+        $this->utilityContainer->method('getCurrencyUtility')
+            ->willReturn($this->currencyUtility);
+
+        // Setup currency utility to return SplitAmount::zero() by default
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::zero());
 
         // Setup transport utility to return address as-is
         $this->transportUtility->method('resolveUserAddressForTransport')
@@ -87,6 +98,10 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         // Setup default user context
         $this->userContext->method('getMaxFee')
             ->willReturn(5.0);
+        $this->userContext->method('getDefaultFee')
+            ->willReturn(1.0);
+        $this->userContext->method('getMinimumFee')
+            ->willReturn(10.0);
         $this->userContext->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
 
@@ -109,6 +124,20 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         ?MockObject $p2pRelayedContactRepo = null
     ): Rp2pService {
         $rp2pCandidateRepo = $rp2pCandidateRepo ?? $this->createMock(Rp2pCandidateRepository::class);
+        $repositoryFactory = null;
+        if ($p2pRelayedContactRepo) {
+            $repositoryFactory = $this->createMock(RepositoryFactory::class);
+            $repositoryFactory->method('get')
+                ->willReturnCallback(function (string $class) use ($p2pRelayedContactRepo) {
+                    if ($class === P2pRelayedContactRepository::class) {
+                        return $p2pRelayedContactRepo;
+                    }
+                    if ($class === ContactCurrencyRepository::class) {
+                        return $this->createMock(ContactCurrencyRepository::class);
+                    }
+                    return $this->createMock($class);
+                });
+        }
         $service = new Rp2pService(
             $this->contactRepository,
             $this->balanceRepository,
@@ -118,12 +147,10 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $repositoryFactory
         );
         $service->setP2pService($this->p2pService);
-        if ($p2pRelayedContactRepo) {
-            $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
-        }
         return $service;
     }
 
@@ -584,9 +611,9 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             ]);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->timeUtility->method('getCurrentMicrotime')
@@ -785,7 +812,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
                 $this->callback(function ($payload) {
                     return $payload['type'] === 'rp2p'
                         && $payload['cancelled'] === true
-                        && $payload['amount'] === 0
+                        && $payload['amount'] === ['whole' => 0, 'frac' => 0]
                         && $payload['hash'] === self::TEST_HASH;
                 }),
                 $this->anything(),

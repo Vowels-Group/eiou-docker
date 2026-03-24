@@ -257,10 +257,12 @@ class ConstantsTest extends TestCase
      */
     public function testTransactionLimitConstantsAreDefined(): void
     {
-        $this->assertEquals(999999999, Constants::TRANSACTION_MAX_AMOUNT);
+        $this->assertEquals(2305843009213693951, Constants::TRANSACTION_MAX_AMOUNT); // PHP_INT_MAX / 4
         $this->assertEquals('USD', Constants::TRANSACTION_DEFAULT_CURRENCY);
         $this->assertEquals(0.01, Constants::TRANSACTION_MINIMUM_FEE);
-        $this->assertEquals(100, Constants::CONVERSION_FACTORS['USD']);
+        $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
+        $this->assertEquals(8, Constants::INTERNAL_PRECISION);
+        $this->assertEquals(2, Constants::DISPLAY_DECIMALS);
     }
 
     /**
@@ -311,7 +313,7 @@ class ConstantsTest extends TestCase
     public function testUIDisplayConstantsAreDefined(): void
     {
         $this->assertEquals('Y-m-d H:i:s.u', Constants::DISPLAY_DATE_FORMAT);
-        $this->assertEquals(2, Constants::DISPLAY_CURRENCY_DECIMALS);
+        $this->assertEquals(8, Constants::DISPLAY_CURRENCY_DECIMALS);
         $this->assertEquals(5, Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX);
         $this->assertFalse(Constants::AUTO_REFRESH_ENABLED);
     }
@@ -350,66 +352,45 @@ class ConstantsTest extends TestCase
     }
 
     /**
-     * Test conversion factor constants are defined
+     * Test internal conversion factor and display decimals are defined
      */
-    public function testConversionFactorConstantsAreDefined(): void
+    public function testInternalConversionFactorAndDisplayDecimalsDefined(): void
     {
-        $this->assertEquals(100, Constants::CONVERSION_FACTORS['USD']);
+        $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
+        $this->assertEquals(8, Constants::INTERNAL_PRECISION);
+        $this->assertEquals(2, Constants::DISPLAY_DECIMALS);
         $this->assertEquals(100, Constants::FEE_CONVERSION_FACTOR);
         $this->assertEquals(2, Constants::FEE_PERCENT_DECIMAL_PRECISION);
     }
 
     /**
-     * Test BTC conversion factor is defined when BTC is enabled
+     * Test getConversionFactor always returns internal factor
      */
-    public function testBtcConversionFactorDefined(): void
+    public function testGetConversionFactorReturnsInternalFactor(): void
     {
-        if (!isset(Constants::CONVERSION_FACTORS['BTC'])) {
-            $this->markTestSkipped('BTC not yet in CONVERSION_FACTORS');
-        }
-        $this->assertEquals(100000000, Constants::CONVERSION_FACTORS['BTC']);
+        // Always returns INTERNAL_CONVERSION_FACTOR regardless of currency
+        $this->assertEquals(100000000, Constants::getConversionFactor('USD'));
         $this->assertEquals(100000000, Constants::getConversionFactor('BTC'));
+        $this->assertEquals(100000000, Constants::getConversionFactor('XYZ'));
     }
 
     /**
-     * Test currency decimals constants are defined
+     * Test getCurrencyDecimals always returns internal precision
      */
-    public function testCurrencyDecimalsAreDefined(): void
+    public function testGetCurrencyDecimalsReturnsInternalPrecision(): void
     {
-        $this->assertEquals(2, Constants::CURRENCY_DECIMALS['USD']);
-        $this->assertEquals(2, Constants::getCurrencyDecimals('USD'));
-        // Unknown currency falls back to DISPLAY_CURRENCY_DECIMALS
-        $this->assertEquals(Constants::DISPLAY_CURRENCY_DECIMALS, Constants::getCurrencyDecimals('EUR'));
-    }
-
-    /**
-     * Test BTC currency decimals when BTC is enabled
-     */
-    public function testBtcCurrencyDecimalsDefined(): void
-    {
-        if (!isset(Constants::CURRENCY_DECIMALS['BTC'])) {
-            $this->markTestSkipped('BTC not yet in CURRENCY_DECIMALS');
-        }
-        $this->assertEquals(8, Constants::CURRENCY_DECIMALS['BTC']);
+        $this->assertEquals(8, Constants::getCurrencyDecimals('USD'));
         $this->assertEquals(8, Constants::getCurrencyDecimals('BTC'));
+        $this->assertEquals(8, Constants::getCurrencyDecimals('EUR'));
     }
 
     /**
-     * Test getConversionFactor returns correct value for known currencies
+     * Test getDisplayDecimals returns global default (no currency parameter)
      */
-    public function testGetConversionFactorReturnsValueForKnownCurrency(): void
+    public function testGetDisplayDecimalsReturnsGlobalDefault(): void
     {
-        $this->assertEquals(100, Constants::getConversionFactor('USD'));
-    }
-
-    /**
-     * Test getConversionFactor throws for unknown currency
-     */
-    public function testGetConversionFactorThrowsForUnknownCurrency(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('No conversion factor defined for currency: XYZ');
-        Constants::getConversionFactor('XYZ');
+        $this->assertEquals(Constants::DISPLAY_DECIMALS, Constants::getDisplayDecimals());
+        $this->assertEquals(2, Constants::getDisplayDecimals());
     }
 
     /**
@@ -471,7 +452,8 @@ class ConstantsTest extends TestCase
         // Transaction constants
         $expectedTransactionConstants = [
             'TRANSACTION_MAX_AMOUNT', 'TRANSACTION_DEFAULT_CURRENCY',
-            'TRANSACTION_MINIMUM_FEE', 'CONVERSION_FACTORS',
+            'TRANSACTION_MINIMUM_FEE', 'INTERNAL_CONVERSION_FACTOR',
+            'INTERNAL_PRECISION', 'DISPLAY_DECIMALS',
             'TRANSACTION_MIN_INTERVAL_MS', 'TRANSACTION_MAX_INTERVAL_MS',
             'TRANSACTION_IDLE_INTERVAL_MS', 'TRANSACTION_ADAPTIVE_POLLING'
         ];

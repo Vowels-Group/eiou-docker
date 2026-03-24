@@ -8,6 +8,7 @@ use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Contracts\SyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\BackupServiceInterface;
@@ -1687,7 +1688,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         $messageContent['receiverAddress'] = $tx['receiver_address'];
         $messageContent['receiverPublicKey'] = $tx['receiver_public_key'];
-        $messageContent['amount'] = (int)$tx['amount'];
+        $messageContent['amount'] = ($tx['amount'] instanceof SplitAmount) ? $tx['amount']->toArray() : $tx['amount'];
         $messageContent['currency'] = $tx['currency'];
         $messageContent['txid'] = $tx['txid'];
         $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
@@ -1800,18 +1801,19 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 // Initialize currency if not exists
                 if (!isset($balancesByCurrency[$currency])) {
                     $balancesByCurrency[$currency] = [
-                        'received' => 0,
-                        'sent' => 0
+                        'received' => SplitAmount::zero(),
+                        'sent' => SplitAmount::zero()
                     ];
                 }
 
                 // Determine if user sent or received this transaction
+                $txAmount = SplitAmount::from($transaction['amount']);
                 if (in_array($transaction['sender_address'], $userAddresses)) {
                     // User sent this transaction
-                    $balancesByCurrency[$currency]['sent'] += $transaction['amount'];
+                    $balancesByCurrency[$currency]['sent'] = $balancesByCurrency[$currency]['sent']->add($txAmount);
                 } elseif (in_array($transaction['receiver_address'], $userAddresses)) {
                     // User received this transaction
-                    $balancesByCurrency[$currency]['received'] += $transaction['amount'];
+                    $balancesByCurrency[$currency]['received'] = $balancesByCurrency[$currency]['received']->add($txAmount);
                 }
             }
 
@@ -1986,18 +1988,19 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     // Initialize currency if not exists
                     if (!isset($balancesByCurrency[$currency])) {
                         $balancesByCurrency[$currency] = [
-                            'received' => 0,
-                            'sent' => 0
+                            'received' => SplitAmount::zero(),
+                            'sent' => SplitAmount::zero()
                         ];
                     }
 
                     // Determine if user sent or received this transaction
+                    $txAmount = SplitAmount::from($transaction['amount']);
                     if (in_array($transaction['sender_address'], $userAddresses)) {
                         // User sent this transaction
-                        $balancesByCurrency[$currency]['sent'] += $transaction['amount'];
+                        $balancesByCurrency[$currency]['sent'] = $balancesByCurrency[$currency]['sent']->add($txAmount);
                     } elseif (in_array($transaction['receiver_address'], $userAddresses)) {
                         // User received this transaction
-                        $balancesByCurrency[$currency]['received'] += $transaction['amount'];
+                        $balancesByCurrency[$currency]['received'] = $balancesByCurrency[$currency]['received']->add($txAmount);
                     }
                 }
 

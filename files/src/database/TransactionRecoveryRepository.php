@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
@@ -27,12 +28,17 @@ class TransactionRecoveryRepository extends AbstractRepository {
     use QueryBuilder;
 
     /**
+     * @var array Split amount column prefixes for automatic SplitAmount hydration
+     */
+    protected array $splitAmountColumns = ['amount'];
+
+    /**
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
         'id', 'tx_type', 'type', 'status', 'sender_address', 'sender_public_key',
         'sender_public_key_hash', 'receiver_address', 'receiver_public_key',
-        'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
+        'receiver_public_key_hash', 'amount_whole', 'amount_frac', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
         'sending_started_at', 'recovery_count', 'needs_manual_review'
@@ -66,7 +72,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve pending transactions", $e);
             return [];
@@ -143,7 +149,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve stuck sending transactions", $e);
             return [];
@@ -244,7 +250,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve transactions needing review", $e);
             return [];
@@ -320,13 +326,15 @@ class TransactionRecoveryRepository extends AbstractRepository {
         // Build base query for regular transactions
         $heldExclusion = $heldTableExists ? "AND txid NOT IN (SELECT txid FROM held_transactions)" : "";
 
+        $fracMod = SplitAmount::FRAC_MODULUS;
+
         $query = "SELECT
                     txid,
                     tx_type,
                     status,
                     sender_address,
                     receiver_address,
-                    amount,
+                    (amount_whole * {$fracMod} + amount_frac) as amount,
                     currency,
                     memo,
                     timestamp,
@@ -361,7 +369,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     t.status,
                     t.sender_address,
                     t.receiver_address,
-                    t.amount,
+                    (t.amount_whole * {$fracMod} + t.amount_frac) as amount,
                     t.currency,
                     t.memo,
                     t.timestamp,
@@ -389,14 +397,14 @@ class TransactionRecoveryRepository extends AbstractRepository {
                     status,
                     sender_address,
                     destination_address as receiver_address,
-                    amount,
+                    (amount_whole * {$fracMod} + amount_frac) as amount,
                     currency,
                     hash as memo,
                     created_at as timestamp,
                     'p2p_request' as source_type,
                     destination_address,
-                    my_fee_amount as fee_amount,
-                    rp2p_amount,
+                    (my_fee_amount_whole * {$fracMod} + my_fee_amount_frac) as fee_amount,
+                    (rp2p_amount_whole * {$fracMod} + rp2p_amount_frac) as rp2p_amount,
                     CASE
                         WHEN status IN ('initial', 'queued') THEN 'pending'
                         WHEN status = 'sent' THEN 'route_search'

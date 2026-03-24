@@ -4,6 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
@@ -723,10 +724,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
             $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
-            $balance = $sentBalance - $receivedBalance;
+            $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
-            $availableCredit = $balance + $creditLimit;
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
+            $availableCredit = $balance->add($creditLimit)->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
             $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();
@@ -762,9 +763,8 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private function matchYourselfTransaction(array $request, string $address): bool
     {
         $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
-        $token = $p2pRequest['inquiry_token'] ?? '';
 
-        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time'] . $token) === $request['memo']) {
+        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
             return true;
         }
 
@@ -773,7 +773,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             if ($userAddress === $address) {
                 continue;
             }
-            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time'] . $token) === $request['memo']) {
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
                 return true;
             }
         }

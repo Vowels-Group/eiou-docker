@@ -9,6 +9,7 @@
 namespace Eiou\Utils;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 
 class InputValidator {
@@ -33,31 +34,56 @@ class InputValidator {
     /**
      * Validate transaction amount
      *
+     * Uses bcmath string operations to preserve precision for large values.
+     * Returns a decimal string, not a float.
+     *
      * @param mixed $amount Amount to validate
      * @param string $currency Currency code (default: USD)
-     * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
      */
     public static function validateAmount($amount, $currency = 'USD'): array {
+        // Handle SplitAmount objects and {whole, frac} arrays from network payloads
+        if ($amount instanceof SplitAmount) {
+            $amount = (string) $amount;
+        } elseif (is_array($amount) && isset($amount['whole'])) {
+            $amount = (string) (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)));
+        }
+
         // Check if amount is numeric
         if (!is_numeric($amount)) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be a number'];
         }
 
-        $amount = floatval($amount);
+        // Keep as string to preserve precision for large numbers
+        $amountStr = trim((string) $amount);
+
+        // Normalize scientific notation (e.g., "1e2" → "100.00000000") before bcmath.
+        // PHP 8.x bcmath functions throw ValueError on scientific notation strings.
+        if (stripos($amountStr, 'e') !== false) {
+            $amountStr = number_format((float) $amountStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         // Check if amount is positive
-        if ($amount <= 0) {
+        if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) <= 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
         }
-        // Check maximum amount (prevent overflow)
-        if ($amount > Constants::TRANSACTION_MAX_AMOUNT) {
-            return ['valid' => false, 'value' => null, 'error' => 'Amount exceeds maximum allowed value'];
+
+        // Truncate to internal precision (8 decimal places)
+        $amountStr = \bcadd($amountStr, '0', Constants::INTERNAL_PRECISION);
+
+        // After truncation, amount may have become zero
+        if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) <= 0) {
+            $minimum = '0.' . str_repeat('0', Constants::INTERNAL_PRECISION - 1) . '1';
+            return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
         }
 
-        // Round to currency decimal precision
-        $amount = round($amount, Constants::getCurrencyDecimals($currency));
+        // Check against maximum transaction amount
+        $maxAmount = (string) Constants::TRANSACTION_MAX_AMOUNT;
+        if (\bccomp($amountStr, $maxAmount, 0) > 0) {
+            return ['valid' => false, 'value' => null, 'error' => 'Amount exceeds maximum transaction limit'];
+        }
 
-        return ['valid' => true, 'value' => $amount, 'error' => null];
+        return ['valid' => true, 'value' => $amountStr, 'error' => null];
     }
 
     /**
@@ -67,22 +93,77 @@ class InputValidator {
      * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
      */
     public static function validateAmountFee($amount, $currency = 'USD'): array {
+        // Handle SplitAmount objects and {whole, frac} arrays from network payloads
+        if ($amount instanceof SplitAmount) {
+            $amount = (string) $amount;
+        } elseif (is_array($amount) && isset($amount['whole'])) {
+            $amount = (string) (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)));
+        }
+
         // Check if amount is numeric
         if (!is_numeric($amount)) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be a number'];
         }
 
-        $amount = floatval($amount);
+        // Keep as string to preserve precision
+        $amountStr = trim((string) $amount);
+        if (stripos($amountStr, 'e') !== false) {
+            $amountStr = number_format((float) $amountStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         // Check if amount is positive
-        if ($amount <= 0) {
+        if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) <= 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
         }
 
-        // Round to currency decimal precision
-        $amount = round($amount, Constants::getCurrencyDecimals($currency));
+        // Truncate to internal precision (8 decimal places)
+        $amountStr = \bcadd($amountStr, '0', Constants::INTERNAL_PRECISION);
 
-        return ['valid' => true, 'value' => $amount, 'error' => null];
+        // After truncation, amount may have become zero
+        if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) <= 0) {
+            $minimum = '0.' . str_repeat('0', Constants::INTERNAL_PRECISION - 1) . '1';
+            return ['valid' => false, 'value' => null, 'error' => "Amount is below the minimum for {$currency} ({$minimum})"];
+        }
+
+        return ['valid' => true, 'value' => $amountStr, 'error' => null];
+    }
+
+    /**
+     * Validate a fee amount that may be zero
+     *
+     * Like validateAmountFee but allows 0 (e.g. for minFee where free
+     * relaying is intentional). Negative values are still rejected.
+     *
+     * @param mixed $amount Fee amount to validate
+     * @param string $currency Currency code for decimal precision
+     * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
+     */
+    public static function validateFeeAmount($amount, $currency = 'USD'): array {
+        // Handle SplitAmount objects and {whole, frac} arrays from network payloads
+        if ($amount instanceof SplitAmount) {
+            $amount = (string) $amount;
+        } elseif (is_array($amount) && isset($amount['whole'])) {
+            $amount = (string) (new SplitAmount((int)$amount['whole'], (int)($amount['frac'] ?? 0)));
+        }
+
+        if (!is_numeric($amount)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Fee amount must be a number'];
+        }
+
+        // Keep as string to preserve precision
+        $amountStr = trim((string) $amount);
+        if (stripos($amountStr, 'e') !== false) {
+            $amountStr = number_format((float) $amountStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
+
+        if (\bccomp($amountStr, '0', Constants::INTERNAL_PRECISION) < 0) {
+            return ['valid' => false, 'value' => null, 'error' => 'Fee amount cannot be negative'];
+        }
+
+        // Truncate to internal precision (8 decimal places)
+        $amountStr = \bcadd($amountStr, '0', Constants::INTERNAL_PRECISION);
+
+        return ['valid' => true, 'value' => $amountStr, 'error' => null];
     }
 
     /**
@@ -140,20 +221,8 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Currency code must be between ' . Constants::VALIDATION_CURRENCY_CODE_MIN_LENGTH . ' and ' . Constants::VALIDATION_CURRENCY_CODE_MAX_LENGTH . ' characters'];
         }
 
-        try {
-            $factors = UserContext::getInstance()->getConversionFactors();
-            $decimals = UserContext::getInstance()->getCurrencyDecimalsMap();
-        } catch (\Throwable $e) {
-            $factors = Constants::CONVERSION_FACTORS;
-            $decimals = Constants::CURRENCY_DECIMALS;
-        }
-        if (!isset($factors[$currency])) {
-            return ['valid' => false, 'value' => null, 'error' => 'No conversion factor defined for currency: ' . $currency . '. Add conversion factor via changesettings before enabling.'];
-        }
-        if (!isset($decimals[$currency])) {
-            return ['valid' => false, 'value' => null, 'error' => 'No currency decimals defined for currency: ' . $currency . '. Add currency decimals via changesettings before enabling.'];
-        }
-
+        // No display decimals check needed — currencies without explicit display
+        // decimals default to INTERNAL_PRECISION (8 decimal places)
         return ['valid' => true, 'value' => $currency, 'error' => null];
     }
 
@@ -317,30 +386,32 @@ class InputValidator {
     /**
      * Validate credit limit
      *
+     * Uses bcmath string operations to preserve precision for very large values
+     * (e.g., PHP_INT_MAX). Returns a decimal string, not a float.
+     *
      * @param mixed $credit Credit limit to validate
-     * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
      */
     public static function validateCreditLimit($credit, $currency = 'USD'): array {
         if (!is_numeric($credit)) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit must be a number'];
         }
 
-        $credit = floatval($credit);
+        // Keep as string to preserve precision for large numbers
+        $creditStr = trim((string) $credit);
+        if (stripos($creditStr, 'e') !== false) {
+            $creditStr = number_format((float) $creditStr, Constants::INTERNAL_PRECISION, '.', '');
+        }
 
         // Credit must be non-negative
-        if ($credit < 0) {
+        if (\bccomp($creditStr, '0', Constants::INTERNAL_PRECISION) < 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit cannot be negative'];
         }
 
-        // Check maximum credit limit
-        if ($credit > Constants::TRANSACTION_MAX_AMOUNT) {
-            return ['valid' => false, 'value' => null, 'error' => 'Credit limit exceeds maximum allowed value'];
-        }
+        // Truncate to internal precision (8 decimal places) using bcadd
+        $creditStr = \bcadd($creditStr, '0', Constants::INTERNAL_PRECISION);
 
-        // Round to currency decimal precision
-        $credit = round($credit, Constants::getCurrencyDecimals($currency));
-
-        return ['valid' => true, 'value' => $credit, 'error' => null];
+        return ['valid' => true, 'value' => $creditStr, 'error' => null];
     }
 
     /**
@@ -701,10 +772,8 @@ class InputValidator {
 
         $format = trim($format);
 
-        // Validate by attempting to format the current date
-        $result = date($format);
-        if ($result === false) {
-            return ['valid' => false, 'value' => null, 'error' => 'Invalid PHP date format string'];
+        if (!in_array($format, Constants::VALID_DATE_FORMATS)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Invalid date format. Allowed: ' . implode(', ', Constants::VALID_DATE_FORMATS)];
         }
 
         return ['valid' => true, 'value' => $format, 'error' => null];
