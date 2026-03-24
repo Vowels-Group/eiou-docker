@@ -95,9 +95,9 @@
                                 $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                                 $displayCurrency = $primaryCur['currency'] ?? 'USD';
                             ?>
-                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], \Eiou\Core\Constants::getDisplayDecimals($displayCurrency)); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
                             <?php if ($primaryCur): ?>
-                            <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getDisplayDecimals($displayCurrency)); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
                             <div>Fee: <?php echo number_format($primaryCur['fee'] ?? 0, 2); ?>%</div>
                             <?php endif; ?>
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
@@ -153,7 +153,7 @@
                                 $pendCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                             ?>
                             <?php if ($pendCur): ?>
-                            <div>Credit: <?php echo number_format($pendCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getDisplayDecimals($pendCur['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($pendCur['currency'] ?? 'USD'); ?></div>
+                            <div>Credit: <?php echo number_format($pendCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($pendCur['currency'] ?? 'USD'); ?></div>
                             <div>Fee: <?php echo number_format($pendCur['fee'] ?? 0, 2); ?>%</div>
                             <?php endif; ?>
                         </div>
@@ -197,9 +197,9 @@
                                 $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                                 $blkCurrency = $blkCur['currency'] ?? 'USD';
                             ?>
-                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, \Eiou\Core\Constants::getDisplayDecimals($blkCurrency)); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
+                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
                             <?php if ($blkCur): ?>
-                            <div>Credit: <?php echo number_format($blkCur['credit_limit'] ?? 0, \Eiou\Core\Constants::getDisplayDecimals($blkCurrency)); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
+                            <div>Credit: <?php echo number_format($blkCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
                             <div>Fee: <?php echo number_format($blkCur['fee'] ?? 0, 2); ?>%</div>
                             <?php endif; ?>
                         </div>

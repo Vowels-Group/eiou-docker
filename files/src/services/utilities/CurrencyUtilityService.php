@@ -28,7 +28,7 @@ class CurrencyUtilityService implements CurrencyUtilityServiceInterface
      */
     public function formatCurrency(SplitAmount $amount, string $currency = 'USD'): string
     {
-        return number_format($amount->toMajorUnits(), Constants::getDisplayDecimals($currency)) . ' ' . $currency;
+        return number_format($amount->toMajorUnits(), Constants::getDisplayDecimals()) . ' ' . $currency;
     }
 
     /**

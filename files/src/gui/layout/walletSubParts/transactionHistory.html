@@ -77,7 +77,7 @@
                     <div class="tx-in-progress-details tx-ip-details">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
                         <?php if (!empty($ipTx['fee_amount'])): ?>
-                        <div><i class="fas fa-coins"></i> Fee: <?php echo ($ipTx['fee_amount'] instanceof \Eiou\Core\SplitAmount) ? $ipTx['fee_amount']->toDisplayString(\Eiou\Core\Constants::getDisplayDecimals($ipTx['currency'] ?? 'USD')) : number_format($ipTx['fee_amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), \Eiou\Core\Constants::getDisplayDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
+                        <div><i class="fas fa-coins"></i> Fee: <?php echo ($ipTx['fee_amount'] instanceof \Eiou\Core\SplitAmount) ? $ipTx['fee_amount']->toDisplayString(displayDecimals()) : number_format($ipTx['fee_amount'] / \Eiou\Core\Constants::getConversionFactor($ipTx['currency'] ?? 'USD'), displayDecimals()); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
@@ -100,8 +100,8 @@
                         <!-- Single rp2p (fast mode): existing approval UI -->
                         <?php if (!empty($ipTx['rp2p_amount'])): ?>
                         <div class="p2p-approval-callout">
-                            <div>Route Fee: <?php echo $ipTx['rp2p_amount']->subtract($ipTx['amount'])->toDisplayString(\Eiou\Core\Constants::getDisplayDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
-                            <div><strong>Total Cost: <?php echo $ipTx['rp2p_amount']->toDisplayString(\Eiou\Core\Constants::getDisplayDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
+                            <div>Route Fee: <?php echo $ipTx['rp2p_amount']->subtract($ipTx['amount'])->toDisplayString(displayDecimals()); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></div>
+                            <div><strong>Total Cost: <?php echo $ipTx['rp2p_amount']->toDisplayString(displayDecimals()); ?> <?php echo htmlspecialchars($ipTx['currency'] ?? 'USD'); ?></strong></div>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex gap-sm">
@@ -123,7 +123,7 @@
                 </div>
                 <?php if (($ipTx['phase'] ?? '') !== 'awaiting_approval'): ?>
                 <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
-                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo $ipTx['amount']->toDisplayString(\Eiou\Core\Constants::getDisplayDecimals($ipTx['currency'] ?? 'USD')); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
+                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?><?php echo $ipTx['amount']->toDisplayString(displayDecimals()); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
                 </div>
                 <?php endif; ?>
             </div>
@@ -196,7 +196,7 @@
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], \Eiou\Core\Constants::getDisplayDecimals($tx['currency'])); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
                         <i class="fas fa-chevron-right chevron-indicator"></i>
                     </div>
                 </div>
@@ -221,7 +221,7 @@
 </div>
 
 <!-- Store transaction data for JavaScript -->
-<script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
+<script nonce="<?php echo cspNonce(); ?>">
     // Count syncing transactions for toast notification
     var syncingTransactionCount = <?php
         $syncingCount = 0;

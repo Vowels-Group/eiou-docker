@@ -449,35 +449,31 @@ class UserContext {
     }
 
     /**
-     * Get display decimals map for all currencies.
+     * Get the global display decimal places setting.
      *
-     * @return array<string, int> Map of currency code to display decimal places (e.g., ['USD' => 2])
+     * @return int Display decimal places (0-8), default DISPLAY_DECIMALS (4)
      */
-    public function getAllDisplayDecimals(): array {
+    public function getAllDisplayDecimals(): int {
         $decimals = $this->get('displayDecimals');
         if ($decimals === null) {
             return Constants::DISPLAY_DECIMALS;
         }
+        // Backward compat: if stored as JSON object (old per-currency format), use default
         if (is_string($decimals)) {
             $decoded = json_decode($decimals, true);
-            return is_array($decoded) ? $decoded : Constants::DISPLAY_DECIMALS;
+            if (is_array($decoded)) {
+                return Constants::DISPLAY_DECIMALS;
+            }
+            $decimals = (int) $decimals;
         }
-        return (array) $decimals;
+        $decimals = (int) $decimals;
+        if ($decimals < 0 || $decimals > Constants::INTERNAL_PRECISION) {
+            return Constants::DISPLAY_DECIMALS;
+        }
+        return $decimals;
     }
 
-    /**
-     * Get the display decimal places for a single currency.
-     *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of display decimal places (e.g., 2 for USD)
-     */
-    public function getDisplayDecimals(string $currency): int {
-        $decimals = $this->getAllDisplayDecimals();
-        if (isset($decimals[$currency])) {
-            return (int) $decimals[$currency];
-        }
-        return Constants::INTERNAL_PRECISION;
-    }
+
 
     /**
      * Get maximum fee percentage
@@ -998,7 +994,7 @@ class UserContext {
         return [
             // Transaction settings (original 11)
             'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
-            'displayDecimals' => json_encode(Constants::DISPLAY_DECIMALS),
+            'displayDecimals' => Constants::DISPLAY_DECIMALS,
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,

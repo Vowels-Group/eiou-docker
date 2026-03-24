@@ -225,38 +225,13 @@ class SettingsController
             $settings['apiCorsAllowedOrigins'] = implode(',', $sanitizedOrigins);
         }
 
-        // Currency configuration — process conversion factors and decimals BEFORE allowed currencies
-        // so that validateAllowedCurrency can check the updated factors
-
-        // Display Decimals — textarea (CODE:DECIMALS per line)
-        if (isset($_POST['displayDecimals']) && trim($_POST['displayDecimals']) !== '') {
-            $rawLines = preg_split('/[\r\n]+/', trim($_POST['displayDecimals']), -1, PREG_SPLIT_NO_EMPTY);
-            $decimals = [];
-            $decimalErrors = [];
-            foreach ($rawLines as $line) {
-                $line = trim($line);
-                if ($line === '') continue;
-                $parts = explode(':', $line, 2);
-                if (count($parts) !== 2) {
-                    $decimalErrors[] = "Invalid format: '{$line}' — use CODE:DECIMALS (e.g., USD:2)";
-                    continue;
-                }
-                $code = strtoupper(trim($parts[0]));
-                $dec = trim($parts[1]);
-                if (!preg_match('/^[A-Z0-9]{3,9}$/', $code)) {
-                    $decimalErrors[] = "Invalid currency code: '{$code}'";
-                    continue;
-                }
-                if (!ctype_digit($dec) || (int) $dec < 0 || (int) $dec > Constants::INTERNAL_PRECISION) {
-                    $decimalErrors[] = "Decimals for {$code} must be 0-" . Constants::INTERNAL_PRECISION . ", got '{$dec}'";
-                    continue;
-                }
-                $decimals[$code] = (int) $dec;
-            }
-            if (!empty($decimalErrors)) {
-                $errors = array_merge($errors, $decimalErrors);
-            } elseif (!empty($decimals)) {
-                $settings['displayDecimals'] = json_encode($decimals);
+        // Display Decimals — simple integer 0-8
+        if (isset($_POST['displayDecimals'])) {
+            $dec = trim($_POST['displayDecimals']);
+            if ($dec !== '' && ctype_digit($dec) && (int) $dec >= 0 && (int) $dec <= Constants::INTERNAL_PRECISION) {
+                $settings['displayDecimals'] = (int) $dec;
+            } elseif ($dec !== '') {
+                $errors[] = "Display decimal places must be 0-" . Constants::INTERNAL_PRECISION;
             }
         }
 

@@ -226,18 +226,18 @@ class CurrencyUtilityServiceTest extends TestCase
 
     public function testFormatCurrencyUsesDisplayDecimals(): void
     {
-        // USD has DISPLAY_DECIMALS = 2, so 100.12345678 should show as "100.12 USD"
+        // Global DISPLAY_DECIMALS = 4, so 100.12345678 displays as "100.1235 USD"
         $amount = new SplitAmount(100, 12345678);
         $formatted = $this->service->formatCurrency($amount, 'USD');
-        $this->assertSame('100.12 USD', $formatted);
+        $this->assertSame('100.1235 USD', $formatted);
     }
 
-    public function testFormatCurrencyUnknownCurrencyUsesInternalPrecision(): void
+    public function testFormatCurrencyAnyCurrencyUsesGlobalDisplayDecimals(): void
     {
-        // Unknown currency defaults to INTERNAL_PRECISION (8) decimals
+        // All currencies use global DISPLAY_DECIMALS (4)
         $amount = new SplitAmount(100, 12345678);
         $formatted = $this->service->formatCurrency($amount, 'XYZ');
-        $this->assertSame('100.12345678 XYZ', $formatted);
+        $this->assertSame('100.1235 XYZ', $formatted);
     }
 
     public function testFormatCurrencyNegativeAmount(): void

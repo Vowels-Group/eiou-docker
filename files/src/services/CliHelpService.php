@@ -335,6 +335,7 @@ class CliHelpService
                     'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
                     'displayDateFormat' => 'Date format (e.g., Y-m-d H:i:s)',
                     'displayRecentTransactionsLimit' => 'Recent transactions display limit (minimum 1)',
+                    'displayDecimals' => 'Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage.',
                     // Currency Management
                     'allowedCurrencies' => 'Allowed currencies (comma-separated, e.g., USD,EUR)',
                 ],

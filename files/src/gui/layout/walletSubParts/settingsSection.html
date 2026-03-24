@@ -547,21 +547,6 @@
                     </h4>
                     <div class="settings-grid">
                         <div class="form-group">
-                            <label for="displayDecimals">Display Decimals:</label>
-                            <textarea id="displayDecimals" name="displayDecimals" rows="4" class="default-value" placeholder="USD:2&#10;EUR:2&#10;BTC:8"><?php
-                                $decimals = $user->getAllDisplayDecimals();
-                                $lines = [];
-                                foreach ($decimals as $code => $dec) {
-                                    $lines[] = $code . ':' . $dec;
-                                }
-                                echo htmlspecialchars(implode("\n", $lines));
-                            ?></textarea>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Display decimal places per currency — one per line as CODE:DECIMALS (e.g., USD:2 for dollars/cents, BTC:8 for satoshi precision). Controls UI display and input validation only. All currencies are stored internally at 8-decimal precision. Max: 8. Persists across container rebuilds.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
                             <label for="allowedCurrencies">Allowed Currencies:</label>
                             <textarea id="allowedCurrencies" name="allowedCurrencies" rows="4" class="default-value" placeholder="USD&#10;EUR"><?php
                                 $allowedCurrencyList = $user->getAllowedCurrencies();
@@ -613,6 +598,19 @@
                         <i class="fas fa-desktop"></i> Display
                     </h4>
                     <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="displayDecimals">Display Decimal Places:</label>
+                            <select id="displayDecimals" name="displayDecimals" class="default-value">
+                                <?php $currentDecimals = $user->getAllDisplayDecimals(); ?>
+                                <?php for ($i = 0; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>" <?php echo ($i === $currentDecimals) ? 'selected' : ''; ?>><?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Number of decimal places shown in the UI for all currencies (0-8). Values are truncated (floored), not rounded, so displayed amounts never exceed the actual value. Does not affect internal storage — all currencies use 8-decimal precision internally.
+                            </small>
+                        </div>
+
                         <div class="form-group">
                             <label for="displayDateFormat">Date Format:</label>
                             <input type="text" id="displayDateFormat" name="displayDateFormat" value="<?php echo htmlspecialchars($user->getDisplayDateFormat()); ?>" class="default-value" placeholder="Y-m-d H:i:s.u">

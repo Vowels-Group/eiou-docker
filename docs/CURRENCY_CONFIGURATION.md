@@ -14,29 +14,32 @@ eIOU supports multiple currencies. By default, only USD is configured. This guid
 
 ## Overview
 
-Currency support requires two settings that work together:
+Currency support requires two settings:
 
 | Setting | Purpose | Example |
 |---------|---------|---------|
-| `displayDecimals` | Maps currency codes to their display decimal places | `{"USD": 2}` (show 2 decimals for dollars) |
 | `allowedCurrencies` | List of currency codes users can transact in | `USD,EUR` |
+| `displayDecimals` | Number of decimal places shown in the UI (0-8) | `4` (default) |
 
 All currencies are stored internally at **8-decimal precision** (10^8 minor units per major unit), regardless of display settings. This eliminates conversion factor mismatches between nodes — every node stores the same integers for the same amounts.
 
-The `displayDecimals` setting controls:
-- How many decimal places are shown in the UI (CLI output, GUI display, API responses)
-- It does **NOT** affect input validation, internal storage, or wire format
+The `displayDecimals` setting is a **global** value (0-8) that applies to all currencies equally. It controls:
+- How many decimal places are shown in the UI (GUI display)
+- Values are **truncated (floored)**, not rounded — displayed amounts never exceed the actual value
+
+It does **NOT** affect:
+- Input validation (always accepts up to 8 decimal places)
+- Internal storage or wire format
+- CLI and API output (always uses full 8-decimal precision)
 
 Input validation always operates at the full internal precision (8 decimal places). An amount like 128.99999999 is accepted and stored exactly, regardless of display decimals. The minimum accepted amount is 0.00000001 (1 fractional unit) for all currencies.
-
-Both settings must be configured for a currency to work. The `allowedCurrencies` setting validates that each listed currency has display decimals defined.
 
 ### Precision Limits
 
 | Limit | Value | Notes |
 |-------|-------|-------|
 | Internal precision | 8 decimals (10^8) | Fixed for all currencies |
-| Max display decimals | 8 | Cannot exceed internal precision |
+| Display decimals | 0-8 (default 4) | Global setting, truncates (floors) |
 | Max transaction amount | ~2.3 quintillion | PHP_INT_MAX / 4, enforced at input validation |
 | Max credit limit | ~9.2 quintillion | PHP_INT_MAX, stored via split BIGINT columns |
 | Minimum amount | 0.00000001 | 1 fractional unit at 8-decimal precision |
@@ -51,28 +54,26 @@ Amounts are stored as two BIGINT columns (`_whole` and `_frac`) via the `SplitAm
 
 1. Open Settings and expand **Advanced Settings**.
 2. Select the **Currency** category from the dropdown.
-3. Add the currency to **Display Decimals** (one per line, `CODE:DECIMALS` format):
-   ```
-   USD:2
-   EUR:2
-   ```
-4. Add the currency code to **Allowed Currencies** (one per line):
+3. Add the currency code to **Allowed Currencies** (one per line):
    ```
    USD
    EUR
    ```
-5. Click **Save Settings**.
+4. Click **Save Settings**.
 
-Set display decimals first, then add the currency to the allowed list. The allowed currencies validator checks that display decimals are defined.
+To change the display decimal places:
+1. Select the **Display** category from the dropdown.
+2. Choose the desired value (0-8) from the **Display Decimal Places** dropdown.
+3. Click **Save Settings**.
 
 ### Via the CLI
 
 ```bash
-# Step 1: Set display decimals (JSON format)
-docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"EUR":2}'
-
-# Step 2: Add to allowed currencies (comma-separated)
+# Add to allowed currencies (comma-separated)
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
+
+# Optionally change display decimal places (0-8, default 4)
+docker exec eiou-node eiou changesettings displayDecimals 4
 
 # Verify
 docker exec eiou-node eiou viewsettings
@@ -86,8 +87,8 @@ curl -X PUT https://localhost/api/v1/system/settings \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "display_decimals": "{\"USD\":2,\"EUR\":2}",
-    "allowed_currencies": "USD,EUR"
+    "allowed_currencies": "USD,EUR",
+    "display_decimals": 4
   }'
 ```
 
@@ -97,16 +98,18 @@ curl -X PUT https://localhost/api/v1/system/settings \
 
 ### Display Decimals
 
-The display decimals setting controls how many decimal places are shown in the UI. It does **not** affect input validation — all currencies accept up to 8 decimal places regardless of display setting. Internally, all amounts are stored as two BIGINT columns (whole + fractional × 10^8).
+The display decimals setting controls how many decimal places are shown in the UI for all currencies. It is a single global value (0-8, default 4).
 
-| Currency | Display Decimals | UI Shows | Accepts Input Up To | Internal Storage |
-|----------|-----------------|----------|---------------------|------------------|
-| USD | 2 | $1,234.56 | 1234.56789012 (8 dp) | whole=1234, frac=56789012 |
-| EUR | 2 | €1,234.56 | 1234.56789012 (8 dp) | whole=1234, frac=56789012 |
-| JPY | 0 | ¥1,234 | 1234.56789012 (8 dp) | whole=1234, frac=56789012 |
-| BTC | 8 | ₿0.00000001 | 0.00000001 (8 dp) | whole=0, frac=1 |
+Values are **truncated (floored)**, not rounded. This ensures displayed amounts never exceed the actual stored value. For example, with display decimals set to 2, an amount of 1.999 displays as 1.99, not 2.00.
 
-If display decimals are not defined for a currency, the default is 8 (full internal precision).
+| Display Decimals | Amount Stored | UI Shows | Internal Storage |
+|-----------------|---------------|----------|------------------|
+| 0 | 1234.56789012 | 1,234 | whole=1234, frac=56789012 |
+| 2 | 1234.56789012 | 1,234.56 | whole=1234, frac=56789012 |
+| 4 (default) | 1234.56789012 | 1,234.5678 | whole=1234, frac=56789012 |
+| 8 | 1234.56789012 | 1,234.56789012 | whole=1234, frac=56789012 |
+
+Input validation always accepts up to 8 decimal places regardless of the display setting.
 
 ### Currency Code Format
 
@@ -131,29 +134,31 @@ The default values in the source code (`Constants.php`) are used only when no co
 ### Adding Euro Support
 
 ```bash
-docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"EUR":2}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
 ```
 
-### Adding Bitcoin (Satoshi Precision)
+### Adding Bitcoin
 
 ```bash
-docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"BTC":8}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD,BTC
 ```
 
-### Adding Japanese Yen (No Decimal Places)
+### Showing Full Precision (8 Decimal Places)
 
 ```bash
-docker exec eiou-node eiou changesettings displayDecimals '{"USD":2,"JPY":0}'
-docker exec eiou-node eiou changesettings allowedCurrencies USD,JPY
+docker exec eiou-node eiou changesettings displayDecimals 8
+```
+
+### Showing Whole Numbers Only (0 Decimal Places)
+
+```bash
+docker exec eiou-node eiou changesettings displayDecimals 0
 ```
 
 ### Removing a Currency
 
-Remove the currency from both settings. Existing transactions in that currency remain in the database but new transactions cannot be created.
+Remove the currency from the allowed list. Existing transactions in that currency remain in the database but new transactions cannot be created.
 
 ```bash
-docker exec eiou-node eiou changesettings displayDecimals '{"USD":2}'
 docker exec eiou-node eiou changesettings allowedCurrencies USD
 ```

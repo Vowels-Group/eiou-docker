@@ -341,18 +341,12 @@ class CliSettingsService
                 $value = implode(',', $currencies);
             } elseif(strtolower($argv[2]) === 'displaydecimals'){
                 $key = 'displayDecimals';
-                $decoded = json_decode($argv[3] ?? '', true);
-                if (!is_array($decoded) || empty($decoded)) {
-                    $output->validationError($key, 'Must be valid JSON object, e.g. {"USD":2,"BTC":8}');
+                $dec = trim($argv[3] ?? '');
+                if (!ctype_digit($dec) || (int) $dec < 0 || (int) $dec > Constants::INTERNAL_PRECISION) {
+                    $output->validationError($key, 'Must be an integer 0-' . Constants::INTERNAL_PRECISION);
                     return;
                 }
-                foreach ($decoded as $code => $dec) {
-                    if (!is_int($dec) || $dec < 0 || $dec > Constants::INTERNAL_PRECISION) {
-                        $output->validationError($key, "Decimals for {$code} must be an integer 0-" . Constants::INTERNAL_PRECISION);
-                        return;
-                    }
-                }
-                $value = json_encode($decoded);
+                $value = (int) $dec;
             } else{
                 $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
@@ -430,10 +424,10 @@ class CliSettingsService
                     ['num' => '40', 'label' => 'Maximum lines of balance/transaction output'],
                     ['num' => '41', 'label' => 'Date format'],
                     ['num' => '43', 'label' => 'Recent transactions limit'],
+                    ['num' => '44a', 'label' => 'Display decimal places (0-8)'],
                 ],
                 'Currency Management' => [
                     ['num' => '44', 'label' => 'Allowed currencies'],
-                    ['num' => '44a', 'label' => 'Conversion factors (JSON)'],
                 ],
             ];
 
@@ -962,22 +956,15 @@ class CliSettingsService
 
                 case '44a':
                     $currentDecimals = UserContext::getInstance()->getAllDisplayDecimals();
-                    echo "Current display decimals: " . json_encode($currentDecimals) . "\n";
-                    echo "Enter display decimals as JSON (e.g., {\"USD\":2,\"BTC\":8}): ";
+                    echo "Current display decimal places: " . $currentDecimals . "\n";
+                    echo "Enter display decimal places (0-" . Constants::INTERNAL_PRECISION . "): ";
                     $key = 'displayDecimals';
                     $input = trim(fgets(STDIN));
-                    $decoded = json_decode($input, true);
-                    if (!is_array($decoded) || empty($decoded)) {
-                        echo "Error: Must be valid JSON object\n";
+                    if (!ctype_digit($input) || (int) $input < 0 || (int) $input > Constants::INTERNAL_PRECISION) {
+                        echo "Error: Must be an integer 0-" . Constants::INTERNAL_PRECISION . "\n";
                         return;
                     }
-                    foreach ($decoded as $code => $dec) {
-                        if (!is_int($dec) || $dec < 0 || $dec > Constants::INTERNAL_PRECISION) {
-                            echo "Error: Decimals for {$code} must be an integer 0-" . Constants::INTERNAL_PRECISION . "\n";
-                            return;
-                        }
-                    }
-                    $value = json_encode($decoded);
+                    $value = (int) $input;
                     break;
 
                 // Tor Circuit Health
@@ -1171,9 +1158,9 @@ class CliSettingsService
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
+            'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
-            'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
         ];
 
         if ($output->isJsonMode()) {
@@ -1235,12 +1222,9 @@ class CliSettingsService
             echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
+            echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
-            echo "\tDisplay decimals (internal precision: " . Constants::INTERNAL_PRECISION . "):\n";
-            foreach ($settings['display_decimals'] as $code => $dec) {
-                echo "\t  {$code}: {$dec} decimals\n";
-            }
         }
     }
 

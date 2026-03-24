@@ -20,7 +20,11 @@ The project is currently in **ALPHA** status.
 - `TRANSACTION_MAX_AMOUNT` enforcement — amounts above PHP_INT_MAX / 4 (~2.3 quintillion) are rejected at input validation. The headroom ensures fee accumulation across multi-hop P2P routes cannot overflow
 
 ### Changed
-- Rename `conversionFactors` setting to `displayDecimals` — the setting now controls display decimal places only (e.g., `{"USD":2}` instead of `{"USD":100}`). Internal storage precision is fixed at 8 decimals for all currencies. Configurable via GUI (Settings → Currency), CLI (`changesettings displayDecimals '{"USD":2}'`), and API
+- Simplify `displayDecimals` from per-currency map to a single global integer (0-8, default 4) — replaces the old `{"USD":2,"BTC":8}` JSON format with a plain number that applies to all currencies. Moved from Currency to Display section in both GUI and CLI. GUI now uses a dropdown instead of a textarea. Values are truncated (floored), not rounded, so displayed amounts never exceed the actual stored value. CLI: `changesettings displayDecimals 4`. API: `{"display_decimals": 4}`
+- `Constants::getDisplayDecimals()` no longer takes a currency parameter — the display precision is global, not per-currency
+- `formatCurrency()` uses display decimals (display-layer function); all internal calculations use `INTERNAL_PRECISION` (8)
+- Add `displayDecimals()` and `cspNonce()` template helper functions in `Functions.php` — shorthand for `\Eiou\Core\Constants::getDisplayDecimals()` and `\Eiou\Utils\Security::getCspNonce()` in GUI templates, replacing 23 verbose fully-qualified calls
+- Rename `conversionFactors` setting to `displayDecimals` — the setting now controls display decimal places only (e.g., `{"USD":2}` instead of `{"USD":100}`). Internal storage precision is fixed at 8 decimals for all currencies
 - `Constants::getConversionFactor()` now always returns `INTERNAL_CONVERSION_FACTOR` (10^8) regardless of currency — the conversion factor is no longer per-node configurable
 - `Constants::getCurrencyDecimals()` now always returns `INTERNAL_PRECISION` (8) — use `Constants::getDisplayDecimals($currency)` for display formatting
 - `DISPLAY_CURRENCY_DECIMALS` fallback changed from 2 to 8 — undefined currencies default to full internal precision
@@ -34,6 +38,9 @@ The project is currently in **ALPHA** status.
 - `RouteCancellationService::computeHopBudget()` now accepts an optional `$randomized` parameter that overrides the global constant, allowing per-user control from `P2pService`
 
 ### Fixed
+- Fix SplitAmount type mismatches in sync responses, backup restore, chain drop, and GUI display — multiple code paths still passed raw integers or floats where `SplitAmount` was expected after the split-column migration
+- Fix PHP 8.x bcmath `ValueError` on scientific notation and whitespace — `InputValidator` now sanitizes input strings (strips whitespace, converts scientific notation to decimal) before passing to `bccomp()`/`bcadd()` which reject non-numeric formats in PHP 8.x
+- Fix `TypeError` in ping handler preventing seedphrase restore sync — `ContactStatusService` passed wrong type to ping response builder, causing restored contacts to fail re-synchronization
 - Fix sub-minimum currency amounts passing validation — amounts like 0.001 USD passed the `> 0` check, then rounded to 0.00 and were accepted as valid zero-dollar transactions. `validateAmount()` and `validateAmountFee()` now re-check after rounding and reject amounts below the currency's smallest unit (0.00000001 at internal precision). Credit limits and minimum fees still allow zero. Error messages include the currency-specific minimum
 - Fix credit limit corruption for large values — `floatval()` converted PHP_INT_MAX to scientific notation (9.2233720368548E+18), which `SplitAmount::fromMajorUnits()` then mangled by splitting on the decimal point of the scientific notation string (9223372036854775807 → 9.22). `validateCreditLimit()` now uses bcmath string operations and `SplitAmount::fromString()` for precision-safe parsing
 - Fix `SplitAmount::fromMajorUnits()` scientific notation bug — `(string)` cast on large floats produced "9.2233720368548E+18" which `explode('.')` split incorrectly. Now uses `number_format()` to produce plain decimal strings
@@ -58,9 +65,17 @@ The project is currently in **ALPHA** status.
 - Allow minimum fee (`minFee`) to be set to 0 — enables free relaying for friends and family while keeping the default at 0.01. Fee percent was already allowed at 0%; now the minimum fee floor can also be removed. Since fees are set per contact, operators can relay free for trusted contacts while charging fees for others. No technical issues: fees are excluded from hash/txid generation, all division-by-zero paths are guarded, and balance updates handle zero fees correctly
 
 ### Docs
+- Rewrite `CURRENCY_CONFIGURATION.md` for global display decimals — updated all GUI/CLI/API examples, added truncation (floor) explanation, removed per-currency format references
+- Update `CLI_REFERENCE.md` — move `displayDecimals` from Currency to Display section, update example from JSON to integer
+- Update `GUI_REFERENCE.md` — move `displayDecimals` from Currency to Display category
+- Add `displayDecimals` to `info changesettings` help text with truncation/floor description
 - Add minimum transaction amount (inferred) to `CURRENCY_CONFIGURATION.md` overview and conversion factors table
 - Update `API_REFERENCE.md` validation error codes table with new codes: `invalid_address`, `self_send`, `invalid_currency`, `invalid_name`, `invalid_fee`, `invalid_credit`, `invalid_description`, `invalid_hash`, `missing_currency`
 - Update `API_REFERENCE.md` field descriptions for `POST /wallet/send`, `POST /contacts`, and `PUT /contacts/:address` to document validation constraints (format, ranges, precision)
+
+### Tests
+- Improve batch transaction performance test reliability — add queue processing between sends, reset chain state before benchmarks, increase timing margins, poll chain validity instead of transaction status
+- Add `EIOU_TEST_MODE` flag to bypass rate limiting in performance tests
 
 ### Fixed
 - Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters

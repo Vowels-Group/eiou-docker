@@ -262,7 +262,7 @@ class ConstantsTest extends TestCase
         $this->assertEquals(0.01, Constants::TRANSACTION_MINIMUM_FEE);
         $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
         $this->assertEquals(8, Constants::INTERNAL_PRECISION);
-        $this->assertEquals(2, Constants::DISPLAY_DECIMALS['USD']);
+        $this->assertEquals(4, Constants::DISPLAY_DECIMALS);
     }
 
     /**
@@ -358,7 +358,7 @@ class ConstantsTest extends TestCase
     {
         $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
         $this->assertEquals(8, Constants::INTERNAL_PRECISION);
-        $this->assertEquals(2, Constants::DISPLAY_DECIMALS['USD']);
+        $this->assertEquals(4, Constants::DISPLAY_DECIMALS);
         $this->assertEquals(100, Constants::FEE_CONVERSION_FACTOR);
         $this->assertEquals(2, Constants::FEE_PERCENT_DECIMAL_PRECISION);
     }
@@ -385,19 +385,12 @@ class ConstantsTest extends TestCase
     }
 
     /**
-     * Test getDisplayDecimals returns configured value for known currencies
+     * Test getDisplayDecimals returns global default (no currency parameter)
      */
-    public function testGetDisplayDecimalsForKnownCurrency(): void
+    public function testGetDisplayDecimalsReturnsGlobalDefault(): void
     {
-        $this->assertEquals(2, Constants::getDisplayDecimals('USD'));
-    }
-
-    /**
-     * Test getDisplayDecimals returns internal precision for unknown currencies
-     */
-    public function testGetDisplayDecimalsForUnknownCurrency(): void
-    {
-        $this->assertEquals(Constants::INTERNAL_PRECISION, Constants::getDisplayDecimals('XYZ'));
+        $this->assertEquals(Constants::DISPLAY_DECIMALS, Constants::getDisplayDecimals());
+        $this->assertEquals(4, Constants::getDisplayDecimals());
     }
 
     /**

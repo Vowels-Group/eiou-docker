@@ -86,13 +86,11 @@ class Constants {
     const INTERNAL_CONVERSION_FACTOR = 100000000;
     const INTERNAL_PRECISION = 8;
 
-    // Display decimals per currency (defaults): controls how many decimal places
-    // are shown in the UI. Does NOT affect input validation or internal storage —
-    // all input is validated and stored at INTERNAL_PRECISION (8) decimal places.
-    // Configurable via changesettings displayDecimals.
-    const DISPLAY_DECIMALS = [
-        'USD' => 2,
-    ];
+    // Display decimal places (default): controls how many decimal places are
+    // shown in the UI for all currencies. Does NOT affect input validation or
+    // internal storage — all input is validated and stored at INTERNAL_PRECISION
+    // (8) decimal places. Configurable via changesettings displayDecimals (0-8).
+    const DISPLAY_DECIMALS = 4;
     // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
@@ -121,25 +119,20 @@ class Constants {
     }
 
     /**
-     * Get the display decimal places for a given currency.
-     * Checks UserContext config first, falls back to DISPLAY_DECIMALS defaults.
+     * Get the display decimal places (global setting, applies to all currencies).
+     * Checks UserContext config first, falls back to DISPLAY_DECIMALS default.
      * Controls UI formatting only — input validation uses INTERNAL_PRECISION.
-     * Default: INTERNAL_PRECISION (8) if not defined for a currency.
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of display decimal places
+     * @return int Number of display decimal places (0-8)
      */
-    public static function getDisplayDecimals(string $currency): int
+    public static function getDisplayDecimals(): int
     {
         try {
-            return UserContext::getInstance()->getDisplayDecimals($currency);
+            return UserContext::getInstance()->getAllDisplayDecimals();
         } catch (\Throwable $e) {
             // UserContext not initialized yet (startup/tests)
         }
-        if (isset(self::DISPLAY_DECIMALS[$currency])) {
-            return (int) self::DISPLAY_DECIMALS[$currency];
-        }
-        return self::INTERNAL_PRECISION;
+        return self::DISPLAY_DECIMALS;
     }
 
     // Transaction processor polling intervals (milliseconds)

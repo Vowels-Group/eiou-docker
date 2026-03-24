@@ -34,6 +34,20 @@ use Eiou\Gui\Includes\SessionKeys;
  * $serviceContainer to be initialized before inclusion.
  */
 
+// =========================================================================
+// Template helper functions — shorthand for FQN calls used in .html templates
+// =========================================================================
+
+function displayDecimals(): int {
+    return displayDecimals();
+}
+
+function cspNonce(): string {
+    return \Eiou\Utils\Security::getCspNonce();
+}
+
+// =========================================================================
+
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -142,7 +156,7 @@ if (!empty($balancesRaw)) {
             'currency' => $bal['currency'],
             'total' => number_format(
                 ($bal['total_balance'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($bal['total_balance'], $bal['currency']) : 0,
-                \Eiou\Core\Constants::getDisplayDecimals($bal['currency'])
+                displayDecimals()
             )
         ];
     }
@@ -157,7 +171,7 @@ if (!empty($earningsRaw)) {
             'currency' => $earn['currency'],
             'total' => number_format(
                 ($earn['total_amount'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($earn['total_amount'], $earn['currency']) : 0,
-                \Eiou\Core\Constants::getDisplayDecimals($earn['currency'])
+                displayDecimals()
             )
         ];
     }
@@ -567,7 +581,7 @@ try {
     foreach ($creditTotals as $row) {
         $totalAvailableCreditByCurrency[] = [
             'currency' => $row['currency'],
-            'total' => number_format($row['total_available_credit']->toMajorUnits(), \Eiou\Core\Constants::getDisplayDecimals($row['currency']))
+            'total' => number_format($row['total_available_credit']->toMajorUnits(), displayDecimals())
         ];
     }
 } catch (Exception $e) {
