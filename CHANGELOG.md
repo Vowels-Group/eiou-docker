@@ -10,7 +10,7 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## [Unreleased]
+## 2026-03-16 -- 2026-03-24 
 
 ### Added
 - Add `autoRejectUnknownCurrency` setting (default: enabled) — automatically rejects incoming contact requests when the requested currency is not in the node's `allowedCurrencies`. When disabled, unknown currency requests arrive as pending for manual review. Configurable via GUI toggle (Settings → Currency), CLI (`changesettings autoRejectUnknownCurrency true/false`), and API (`auto_reject_unknown_currency`)
@@ -40,9 +40,9 @@ The project is currently in **ALPHA** status.
 - Decouple input validation precision from display decimals — `validateAmount()`, `validateAmountFee()`, `validateFeeAmount()`, and `validateCreditLimit()` now validate and truncate at `INTERNAL_PRECISION` (8 decimal places) instead of `DISPLAY_DECIMALS` (2 for USD). Display decimals only affect UI formatting, not input acceptance or storage. Amounts like 128.99999999 are now preserved instead of being rounded to 129
 - All input validators return bcmath decimal strings — `validateAmount()`, `validateAmountFee()`, `validateFeeAmount()`, and `validateCreditLimit()` replace `floatval()` with `bccomp()`/`bcadd()` string operations, preserving full precision for values up to PHP_INT_MAX. Return type changed from `float` to `string` (e.g., `"128.99999999"`)
 - Credit limit and amount callers updated from `SplitAmount::fromMajorUnits()` to `SplitAmount::from()` — handles the string return type from validators without float precision loss
-
-### Changed
 - `RouteCancellationService::computeHopBudget()` now accepts an optional `$randomized` parameter that overrides the global constant, allowing per-user control from `P2pService`
+- Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
+- Allow minimum fee (`minFee`) to be set to 0 — enables free relaying for friends and family while keeping the default at 0.01. Fee percent was already allowed at 0%; now the minimum fee floor can also be removed. Since fees are set per contact, operators can relay free for trusted contacts while charging fees for others. No technical issues: fees are excluded from hash/txid generation, all division-by-zero paths are guarded, and balance updates handle zero fees correctly
 
 ### Fixed
 - Fix SplitAmount type mismatches in sync responses, backup restore, chain drop, and GUI display — multiple code paths still passed raw integers or floats where `SplitAmount` was expected after the split-column migration
@@ -63,13 +63,7 @@ The project is currently in **ALPHA** status.
 - Send available credit on contact acceptance (#768) — when a contact request is accepted, both nodes now exchange their calculated available credit in the E2E-encrypted acceptance message and acknowledgment. This eliminates the gap where available credit shows as 0 until the first ping/pong cycle or transaction. For new contacts the available credit equals the credit limit; for re-added contacts with prior transactions it reflects the real balance
 - Include available credit in mutual acceptance responses (#768) — when both sides sent contact requests simultaneously, the inline `buildMutuallyAccepted` response now includes credit data
 - Include available credit in wallet restore pong (#768) — when a restored contact is auto-accepted during a ping, the pong response now includes the calculated credit instead of an empty array
-
-### Removed
-- Remove `CURRENCY_DECIMALS` constant and `currencyDecimals` setting — decimal places are now inferred from the conversion factor via `log10(factor)` (e.g. factor=100 → 2 decimals, factor=100000000 → 8 decimals). This eliminates a source of misconfiguration where conversion factors and decimal places could be set inconsistently. The `DISPLAY_CURRENCY_DECIMALS` fallback (default: 2) remains for unknown currencies. Removed from GUI settings, CLI `changesettings`, and `getConfigurableDefaults()`
-
-### Changed
-- Replace `createInitialCredit(0)` with actual credit calculation at all acceptance paths (#768) — `acceptContact()`, currency acceptance, unblock, wallet restore auto-accept, and GUI currency acceptance all now compute `(sentBalance - receivedBalance) + creditLimit`
-- Allow minimum fee (`minFee`) to be set to 0 — enables free relaying for friends and family while keeping the default at 0.01. Fee percent was already allowed at 0%; now the minimum fee floor can also be removed. Since fees are set per contact, operators can relay free for trusted contacts while charging fees for others. No technical issues: fees are excluded from hash/txid generation, all division-by-zero paths are guarded, and balance updates handle zero fees correctly
+- Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters
 
 ### Docs
 - Rewrite `CURRENCY_CONFIGURATION.md` for global display decimals — updated all GUI/CLI/API examples, added truncation (floor) explanation, removed per-currency format references
@@ -87,8 +81,9 @@ The project is currently in **ALPHA** status.
 - Add `EIOU_TEST_MODE` flag to bypass rate limiting in performance tests
 - Clear `held_transactions` and `capacity_reservations` in performance test chain reset to prevent interference from prior test suites
 
-### Fixed
-- Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters
+### Removed
+- Remove `CURRENCY_DECIMALS` constant and `currencyDecimals` setting — decimal places are now inferred from the conversion factor via `log10(factor)` (e.g. factor=100 → 2 decimals, factor=100000000 → 8 decimals). This eliminates a source of misconfiguration where conversion factors and decimal places could be set inconsistently. The `DISPLAY_CURRENCY_DECIMALS` fallback (default: 2) remains for unknown currencies. Removed from GUI settings, CLI `changesettings`, and `getConfigurableDefaults()`
+
 
 ---
 
