@@ -228,9 +228,9 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
+            ->method('getPreviousTxidsByCurrency')
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
-            ->willReturn(self::TEST_PREV_TXID);
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // On incoming ping, only last_ping_at is updated (not online_status —
         // that requires a pong with processorsRunning from the next ping/pong cycle)
@@ -271,8 +271,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn($localPrevTxid);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => $localPrevTxid]);
 
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
@@ -310,8 +310,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn($localPrevTxid);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => $localPrevTxid]);
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
@@ -353,8 +353,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn($localPrevTxid);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => $localPrevTxid]);
 
         // Sync should never be called
         $this->mockSyncTrigger->expects($this->never())
@@ -385,8 +385,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
@@ -527,8 +527,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $pongResponse = json_encode([
             'status' => 'pong',
@@ -580,8 +580,8 @@ class ContactStatusServiceTest extends TestCase
         $remotePrevTxid = 'remote-txid-222';
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn($localPrevTxid);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => $localPrevTxid]);
 
         $pongResponse = json_encode([
             'status' => 'pong',
@@ -632,8 +632,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $rejectedResponse = json_encode([
             'status' => 'rejected',
@@ -679,8 +679,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Return invalid/empty response
         $this->mockTransportUtility->expects($this->once())
@@ -721,8 +721,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $this->mockTransportUtility->expects($this->once())
             ->method('send')
@@ -766,8 +766,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Verify the Tor address is used
         $this->mockTransportUtility->expects($this->once())
@@ -810,8 +810,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Verify the HTTPS address is used
         $this->mockTransportUtility->expects($this->once())
@@ -854,8 +854,8 @@ class ContactStatusServiceTest extends TestCase
         $this->mockContactRepo->method('getContactByNameOrAddress')
             ->willReturn($contact);
 
-        $this->mockTransactionRepo->method('getPreviousTxid')
-            ->willReturn('local-txid');
+        $this->mockTransactionRepo->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => 'local-txid']);
 
         // Mismatched chain to trigger sync
         $pongResponse = json_encode([
@@ -943,8 +943,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Simulate exception when updating contact status
         $this->mockContactRepo->expects($this->once())
@@ -979,8 +979,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn('local-txid');
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => 'local-txid']);
 
         // Sync trigger throws exception
         $this->mockSyncTrigger->expects($this->once())
@@ -1058,8 +1058,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $pongResponse = json_encode([
             'status' => 'pong',
@@ -1116,8 +1116,8 @@ class ContactStatusServiceTest extends TestCase
 
         // Local prevTxid matches remote (same chain head)
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Inject chain repo and set it to return internal gaps
 
@@ -1158,8 +1158,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
 
         $this->mockChainRepo->expects($this->once())
@@ -1201,8 +1201,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Internal gap detected
         $this->mockChainRepo->expects($this->once())
@@ -1248,8 +1248,8 @@ class ContactStatusServiceTest extends TestCase
             ]);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Remote responds: pong, chain valid, same prevTxid
         $this->mockTransportUtility->expects($this->once())
@@ -1316,8 +1316,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
@@ -1360,8 +1360,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Pong with degraded processors
         $pongResponse = json_encode([
@@ -1417,8 +1417,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Pong with all processors running
         $pongResponse = json_encode([
@@ -1466,8 +1466,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn($contact);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Pong without processor fields (older node)
         $pongResponse = json_encode([
@@ -1514,9 +1514,9 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
+            ->method('getPreviousTxidsByCurrency')
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
-            ->willReturn(self::TEST_PREV_TXID);
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Inject balance repo to enable credit calculation path
 
@@ -1585,9 +1585,9 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(true);
 
         $this->mockTransactionRepo->expects($this->once())
-            ->method('getPreviousTxid')
+            ->method('getPreviousTxidsByCurrency')
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
-            ->willReturn(self::TEST_PREV_TXID);
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         // Inject balance repo to enable credit calculation path
 
