@@ -116,10 +116,10 @@ class CliP2pApprovalService
             foreach ($p2pData as $i => $p2p) {
                 $mode = $p2p['fast'] ? 'fast' : 'best-fee';
                 $totalCost = $p2p['rp2p_amount'] !== null
-                    ? $this->currencyUtility->formatCurrency($p2p['rp2p_amount'], $p2p['currency'])
+                    ? $this->currencyUtility->formatCurrency(SplitAmount::from($p2p['rp2p_amount']), $p2p['currency'])
                     : 'pending';
                 echo ($i + 1) . ". Hash: " . $p2p['hash'] . "\n";
-                echo "   Amount: " . $this->currencyUtility->formatCurrency($p2p['amount'], $p2p['currency']) . " " . $p2p['currency'] . "\n";
+                echo "   Amount: " . $this->currencyUtility->formatCurrency(SplitAmount::from($p2p['amount']), $p2p['currency']) . " " . $p2p['currency'] . "\n";
                 echo "   Total cost: " . $totalCost . " | Mode: " . $mode . "\n";
                 echo "   Candidates: " . $p2p['candidate_count'] . " | Created: " . $p2p['created_at'] . "\n";
                 echo "\n";
