@@ -997,7 +997,7 @@ class Rp2pService implements Rp2pServiceInterface {
             && (int) ($p2p['fast'] ?? 1) === 0
         ) {
             // Set rp2p_amount to the best (lowest) candidate's amount for summary display
-            $bestAmount = (int) $candidates[0]['amount'];
+            $bestAmount = SplitAmount::from($candidates[0]['amount']);
             $this->p2pRepository->setRp2pAmount($hash, $bestAmount);
             $this->p2pRepository->updateStatus($hash, Constants::STATUS_AWAITING_APPROVAL);
 

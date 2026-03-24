@@ -532,6 +532,9 @@ class P2pService implements P2pServiceInterface {
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
+            // Normalize amount to SplitAmount early (wire payload may send int or {whole,frac})
+            $request['amount'] = SplitAmount::from($request['amount']);
+
             // Force fast mode when any part of the route uses Tor —
             // prevents best-fee mode over Tor where relay latency (~5s × 6 Tor
             // relays per eIOU hop) makes candidate collection impractical.
@@ -573,7 +576,7 @@ class P2pService implements P2pServiceInterface {
             } else {
                 // Calculate fees
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $request['feeAmount'] = $requestedAmount->subtract(SplitAmount::from($request['amount']));
+                $request['feeAmount'] = $requestedAmount->subtract($request['amount']);
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 // Max level boundary: requestLevel >= maxRequestLevel means the next hop
@@ -640,7 +643,7 @@ class P2pService implements P2pServiceInterface {
             // Create capacity reservation for this relay
             if ($this->capacityReservationRepository !== null) {
                 $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
-                $baseAmount = SplitAmount::from($request['amount']);
+                $baseAmount = $request['amount'];
                 $totalAmount = $this->calculateRequestedAmount($request);
                 $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $this->capacityReservationRepository->createReservation(
@@ -681,12 +684,11 @@ class P2pService implements P2pServiceInterface {
             $addressTypes = array_merge([$transportIndex], array_diff($addressTypes, [$transportIndex]));
         }
 
-        $token = $request['inquiryToken'] ?? '';
         foreach ($contacts as $contact) {
             // Check all address types for this contact
             foreach ($addressTypes as $addrType) {
                 if (!empty($contact[$addrType])) {
-                    $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time'] . $token);
+                    $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time']);
                     if ($contactHash === $request['hash']) {
                         output(outputContactMatched($contactHash), 'SILENT');
                         return $contact;
@@ -705,10 +707,8 @@ class P2pService implements P2pServiceInterface {
      * @return bool True if user corresponds, false otherwise
      */
     public function matchYourselfP2P(array $request, string $address): bool {
-        // Check if p2p end recipient is user
-        $token = $request['inquiryToken'] ?? '';
         // First check the provided address (most likely match)
-        if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time'] . $token) === $request['hash']) {
+        if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']) {
             return true;
         }
 
@@ -722,7 +722,7 @@ class P2pService implements P2pServiceInterface {
             if ($userAddress === $address) {
                 continue;
             }
-            if (hash(Constants::HASH_ALGORITHM, $userAddress . $request['salt'] . $request['time'] . $token) === $request['hash']) {
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $request['salt'] . $request['time']) === $request['hash']) {
                 return true;
             }
         }
@@ -769,18 +769,17 @@ class P2pService implements P2pServiceInterface {
 
         // Additional data preparation - Use cryptographically secure random
         try {
-            $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
-            // Generate inquiry secret (only stored locally) and token (propagates through relay chain).
-            // The token is baked into the P2P hash so relay nodes can't swap it.
-            // Only the original sender can produce the pre-image to authenticate completion inquiries.
+            // Generate inquiry secret (only stored locally on originator).
+            // The salt is derived from the secret — only the original sender can
+            // produce the pre-image to authenticate completion inquiries.
             $data['inquirySecret'] = bin2hex(random_bytes(32));
-            $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
+            $data['salt'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
         } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Failed to generate inquiry secret", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time'] . $data['inquiryToken']);
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
@@ -831,15 +830,14 @@ class P2pService implements P2pServiceInterface {
 
         // Additional data preparation - Use cryptographically secure random
         try {
-            $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
             $data['inquirySecret'] = bin2hex(random_bytes(32));
-            $data['inquiryToken'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
+            $data['salt'] = hash(Constants::HASH_ALGORITHM, $data['inquirySecret']);
         } catch (Exception $e) {
-            Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Failed to generate inquiry secret", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time'] . $data['inquiryToken']);
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']);
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 

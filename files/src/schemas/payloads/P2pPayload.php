@@ -73,12 +73,6 @@ class P2pPayload extends BasePayload
             'hopWait' => $hopWait,
         ];
 
-        // Include inquiry token (hash commitment) — propagates through relay chain.
-        // Only the original sender knows the pre-image (inquiry_secret).
-        if (isset($data['inquiryToken'])) {
-            $payload['inquiryToken'] = $data['inquiryToken'];
-        }
-
         return $payload;
     }
 
@@ -112,10 +106,6 @@ class P2pPayload extends BasePayload
             'fast' => (bool) ($data['fast'] ?? true),
             'hopWait' => (int) ($data['hop_wait'] ?? 0),
         ];
-
-        if (!empty($data['inquiry_token'])) {
-            $payload['inquiryToken'] = $data['inquiry_token'];
-        }
 
         return $payload;
     }
