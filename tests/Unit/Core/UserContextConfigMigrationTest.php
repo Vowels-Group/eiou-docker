@@ -58,6 +58,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertArrayHasKey('autoRefreshEnabled', $defaults);
         $this->assertArrayHasKey('autoBackupEnabled', $defaults);
         $this->assertArrayHasKey('autoAcceptTransaction', $defaults);
+        $this->assertArrayHasKey('autoRejectUnknownCurrency', $defaults);
 
         // Feature toggles
         $this->assertArrayHasKey('contactStatusEnabled', $defaults);
@@ -123,6 +124,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::AUTO_REFRESH_ENABLED, $defaults['autoRefreshEnabled']);
         $this->assertSame(Constants::BACKUP_AUTO_ENABLED, $defaults['autoBackupEnabled']);
         $this->assertSame(Constants::AUTO_ACCEPT_TRANSACTION, $defaults['autoAcceptTransaction']);
+        $this->assertSame(Constants::AUTO_REJECT_UNKNOWN_CURRENCY, $defaults['autoRejectUnknownCurrency']);
         $this->assertSame(Constants::CONTACT_STATUS_ENABLED, $defaults['contactStatusEnabled']);
         $this->assertSame(Constants::CONTACT_STATUS_SYNC_ON_PING, $defaults['contactStatusSyncOnPing']);
         $this->assertSame(Constants::AUTO_CHAIN_DROP_PROPOSE, $defaults['autoChainDropPropose']);
@@ -160,7 +162,7 @@ class UserContextConfigMigrationTest extends TestCase
     public function testGetConfigurableDefaultsHasExpectedCount(): void
     {
         $defaults = UserContext::getConfigurableDefaults();
-        $this->assertCount(41, $defaults);
+        $this->assertCount(52, $defaults);
     }
 
     /**
@@ -196,6 +198,7 @@ class UserContextConfigMigrationTest extends TestCase
             'apiCorsAllowedOrigins' => 'https://example.com',
             'rateLimitEnabled' => false,
             'autoAcceptTransaction' => false,
+            'autoRejectUnknownCurrency' => false,
         ]);
 
         $this->assertFalse($context->getContactStatusEnabled());
@@ -206,6 +209,7 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame('https://example.com', $context->getApiCorsAllowedOrigins());
         $this->assertFalse($context->getRateLimitEnabled());
         $this->assertFalse($context->getAutoAcceptTransaction());
+        $this->assertFalse($context->getAutoRejectUnknownCurrency());
     }
 
     /**
@@ -251,8 +255,8 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $existingConfig['httpTransportTimeoutSeconds']);
         $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $existingConfig['displayDateFormat']);
 
-        // Total should be 42
-        $this->assertCount(42, $existingConfig);
+        // Total should match configurable defaults count + 1 (for the pre-existing key)
+        $this->assertCount(52, $existingConfig);
     }
 
     /**

@@ -1657,9 +1657,9 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Extract sender's preferred currency (falls back to receiver's default)
         $currency = $request['currency'] ?? $this->currentUser->getDefaultCurrency();
 
-        // Validate currency against allowed currencies — auto-reject if not allowed
+        // Validate currency against allowed currencies — auto-reject if setting enabled
         $allowedCurrencies = $this->currentUser->getAllowedCurrencies();
-        if (!in_array($currency, $allowedCurrencies)) {
+        if (!in_array($currency, $allowedCurrencies) && $this->currentUser->getAutoRejectUnknownCurrency()) {
             return $this->contactPayload->buildRejection(
                 $senderAddress,
                 'Currency ' . $currency . ' is not accepted by this node'

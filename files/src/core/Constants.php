@@ -471,6 +471,7 @@ class Constants {
     const AUTO_CHAIN_DROP_ACCEPT_GUARD = true;     // Balance guard for auto-accept: compares stored vs calculated balances to block acceptance when missing transactions would erase debt owed to us. Disable to accept unconditionally.
     const AUTO_ACCEPT_RESTORED_CONTACT = true;     // Auto-accept contacts on wallet restore when transaction history proves prior relationship - default ON; when OFF, restored contacts stay pending for manual review
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
+    const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

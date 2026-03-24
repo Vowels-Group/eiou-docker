@@ -214,7 +214,8 @@ class CliServiceTest extends TestCase
                     && $settings['tor_transport_timeout_seconds'] === 30
                     && $settings['display_date_format'] === 'Y-m-d H:i:s.u'
                     && $settings['display_recent_transactions_limit'] === 5
-                    && array_key_exists('display_decimals', $settings);
+                    && array_key_exists('display_decimals', $settings)
+                    && array_key_exists('auto_reject_unknown_currency', $settings);
             }));
 
         $this->service->displayCurrentSettings($this->outputManager);

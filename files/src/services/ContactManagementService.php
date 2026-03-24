@@ -251,6 +251,20 @@ class ContactManagementService implements ContactManagementServiceInterface
         $currency = $currencyValidation['value'];
         $credit = SplitAmount::from($creditValidation['value']);
 
+        // Auto-add currency to allowed list if not already present
+        $allowedCurrencies = $this->currentUser->getAllowedCurrencies();
+        if (!in_array($currency, $allowedCurrencies)) {
+            $allowedCurrencies[] = $currency;
+            $newValue = implode(',', $allowedCurrencies);
+            $this->currentUser->set('allowedCurrencies', $newValue);
+            $configFile = '/etc/eiou/config/defaultconfig.json';
+            if (file_exists($configFile)) {
+                $config = json_decode(file_get_contents($configFile), true) ?? [];
+                $config['allowedCurrencies'] = $newValue;
+                file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX);
+            }
+        }
+
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
             'address_type' => $addressValidation['type'] ?? 'unknown',

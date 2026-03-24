@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactService;
 use Eiou\Utils\InputValidator;
@@ -228,6 +229,9 @@ class ContactController
             $contactFee = $feeValidation['value'];
             $contactCredit = $creditValidation['value'];
             $contactCurrency = $currencyValidation['value'];
+            // Auto-add currency to allowed list if not already present
+            $this->autoAddAllowedCurrency($contactCurrency);
+
             // Create argv array with --json flag for structured output
             $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency, '--json'];
 
@@ -685,6 +689,9 @@ class ContactController
             $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
             $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
+            // Auto-add currency to allowed list if not already present
+            $this->autoAddAllowedCurrency($currency);
+
             // Update the pending currency with user's fee/credit and set status to accepted
             $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
                 'fee_percent' => $feeMinor,
@@ -776,6 +783,9 @@ class ContactController
                         $firstCredit = Security::sanitizeInput($firstEntry['credit'] ?? '');
 
                         if (!empty($firstCurrency) && $firstFee !== '' && $firstCredit !== '') {
+                            // Auto-add currency to allowed list if not already present
+                            $this->autoAddAllowedCurrency($firstCurrency);
+
                             // Accept the contact with the first currency via CLI addContact
                             $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstCurrency, '--json'];
                             CliOutputManager::resetInstance();
@@ -823,6 +833,9 @@ class ContactController
                     $errors[] = "{$currency}: invalid credit";
                     continue;
                 }
+
+                // Auto-add currency to allowed list if not already present
+                $this->autoAddAllowedCurrency($currency);
 
                 // Convert to storage units
                 $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
@@ -1091,6 +1104,34 @@ class ContactController
                 'error' => 'internal_error',
                 'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
             ]);
+        }
+    }
+
+    /**
+     * Auto-add a currency to allowedCurrencies if not already present.
+     *
+     * Called when a user manually accepts a contact/currency request
+     * for a currency not in their allowed list. Persists the change
+     * to defaultconfig.json so the setting survives restarts.
+     */
+    private function autoAddAllowedCurrency(string $currency): void
+    {
+        $user = UserContext::getInstance();
+        $allowedCurrencies = $user->getAllowedCurrencies();
+
+        if (in_array($currency, $allowedCurrencies)) {
+            return;
+        }
+
+        $allowedCurrencies[] = $currency;
+        $newValue = implode(',', $allowedCurrencies);
+        $user->set('allowedCurrencies', $newValue);
+
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true) ?? [];
+            $config['allowedCurrencies'] = $newValue;
+            file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX);
         }
     }
 }

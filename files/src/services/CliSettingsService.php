@@ -199,6 +199,11 @@ class CliSettingsService
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autorejectunknowncurrency'){
+                $key = 'autoRejectUnknownCurrency';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'apienabled'){
                 $key = 'apiEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -428,6 +433,7 @@ class CliSettingsService
                 ],
                 'Currency Management' => [
                     ['num' => '44', 'label' => 'Allowed currencies'],
+                    ['num' => '51', 'label' => 'Auto-reject unknown currencies'],
                 ],
             ];
 
@@ -1034,6 +1040,17 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
+                case '51':
+                    echo "Auto-reject contact requests with unknown currencies? (yes/no): ";
+                    $key = 'autoRejectUnknownCurrency';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -1161,6 +1178,7 @@ class CliSettingsService
             'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
+            'auto_reject_unknown_currency' => $this->currentUser->getAutoRejectUnknownCurrency(),
         ];
 
         if ($output->isJsonMode()) {
@@ -1225,6 +1243,7 @@ class CliSettingsService
             echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
+            echo "\tAuto-reject unknown currencies: " . ($settings['auto_reject_unknown_currency'] ? 'enabled' : 'disabled') . "\n";
         }
     }
 

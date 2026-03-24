@@ -338,6 +338,7 @@ class CliHelpService
                     'displayDecimals' => 'Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage.',
                     // Currency Management
                     'allowedCurrencies' => 'Allowed currencies (comma-separated, e.g., USD,EUR)',
+                    'autoRejectUnknownCurrency' => 'Auto-reject incoming contact requests with currencies not in your allowed list (true/false). When disabled, unknown currency requests arrive as pending; accepting them auto-adds the currency.',
                 ],
                 'examples' => [
                     'changesettings' => 'Interactive mode (prompts for setting)',
