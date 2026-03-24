@@ -28,6 +28,7 @@ use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Core\UserContext;
@@ -44,6 +45,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
     private MockObject|ValidationUtilityService $validationUtility;
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|TimeUtilityService $timeUtility;
+    private MockObject|CurrencyUtilityService $currencyUtility;
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pTransactionSenderInterface $p2pTransactionSender;
@@ -68,6 +70,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         $this->validationUtility = $this->createMock(ValidationUtilityService::class);
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->timeUtility = $this->createMock(TimeUtilityService::class);
+        $this->currencyUtility = $this->createMock(CurrencyUtilityService::class);
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pTransactionSender = $this->createMock(P2pTransactionSenderInterface::class);
@@ -81,6 +84,12 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             ->willReturn($this->transportUtility);
         $this->utilityContainer->method('getTimeUtility')
             ->willReturn($this->timeUtility);
+        $this->utilityContainer->method('getCurrencyUtility')
+            ->willReturn($this->currencyUtility);
+
+        // Setup currency utility to return SplitAmount::zero() by default
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::zero());
 
         // Setup transport utility to return address as-is
         $this->transportUtility->method('resolveUserAddressForTransport')
@@ -89,6 +98,10 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         // Setup default user context
         $this->userContext->method('getMaxFee')
             ->willReturn(5.0);
+        $this->userContext->method('getDefaultFee')
+            ->willReturn(1.0);
+        $this->userContext->method('getMinimumFee')
+            ->willReturn(10.0);
         $this->userContext->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
 

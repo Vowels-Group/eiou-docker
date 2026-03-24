@@ -878,7 +878,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P should be stored with status 'cancelled' (not 'queued')
         $this->p2pRepository->expects($this->once())
@@ -982,7 +982,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P should be stored with status 'cancelled'
         $this->p2pRepository->expects($this->once())
@@ -1104,7 +1104,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // reAdjustP2pLevel: maxP2pLevel=0, requestLevel(5)+0=5 < maxRequestLevel(10),
         // so returns requestLevel+0 = 5. Now requestLevel(5) >= maxRequestLevel(5).
@@ -1202,7 +1202,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P should be stored (not with cancelled status)
         $this->p2pRepository->expects($this->once())

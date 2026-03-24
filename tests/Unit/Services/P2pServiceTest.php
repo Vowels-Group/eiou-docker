@@ -335,6 +335,11 @@ class P2pServiceTest extends TestCase
         $this->userContext->method('getUserLocaters')
             ->willReturn(['http' => 'http://me.test']);
 
+        // calculateRequestedAmount is called before calculateAvailableFunds,
+        // so calculateFee must return a proper SplitAmount
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
+
         $this->validationUtility->method('calculateAvailableFunds')
             ->willThrowException(new PDOException('Database error'));
 
@@ -481,6 +486,16 @@ class P2pServiceTest extends TestCase
             ->willReturn(self::TEST_ADDRESS);
         $this->userContext->method('getUserLocaters')
             ->willReturn(['http' => 'http://me.test']);
+
+        // checkAvailableFunds calls calculateRequestedAmount which calls calculateFee
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $this->contactService->method('getCreditLimit')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->p2pRepository->method('p2pExists')
             ->with(self::TEST_HASH)

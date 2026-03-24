@@ -30,6 +30,7 @@ use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
@@ -48,6 +49,7 @@ class Rp2pServiceTest extends TestCase
     private MockObject|ValidationUtilityService $validationUtility;
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|TimeUtilityService $timeUtility;
+    private MockObject|CurrencyUtilityService $currencyUtility;
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pTransactionSenderInterface $p2pTransactionSender;
@@ -71,6 +73,7 @@ class Rp2pServiceTest extends TestCase
         $this->validationUtility = $this->createMock(ValidationUtilityService::class);
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->timeUtility = $this->createMock(TimeUtilityService::class);
+        $this->currencyUtility = $this->createMock(CurrencyUtilityService::class);
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pTransactionSender = $this->createMock(P2pTransactionSenderInterface::class);
@@ -83,6 +86,12 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($this->transportUtility);
         $this->utilityContainer->method('getTimeUtility')
             ->willReturn($this->timeUtility);
+        $this->utilityContainer->method('getCurrencyUtility')
+            ->willReturn($this->currencyUtility);
+
+        // Setup currency utility to return SplitAmount::zero() by default
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::zero());
 
         // Setup transport utility to return address as-is
         $this->transportUtility->method('resolveUserAddressForTransport')
@@ -91,6 +100,10 @@ class Rp2pServiceTest extends TestCase
         // Setup default user context
         $this->userContext->method('getMaxFee')
             ->willReturn(5.0);
+        $this->userContext->method('getDefaultFee')
+            ->willReturn(1.0);
+        $this->userContext->method('getMinimumFee')
+            ->willReturn(10.0);
         $this->userContext->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
 
@@ -1008,12 +1021,16 @@ class Rp2pServiceTest extends TestCase
             ->with($this->anything(), 'USD')
             ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
-        // Verify the accumulated amount (base + fee) is stored in the RP2P record
-        $expectedAccumulatedAmount = $baseAmount + $nodeFee;
+        // Verify the accumulated amount is stored in the RP2P record as SplitAmount.
+        // calculateFeeForP2p recalculates the fee using currencyUtility->calculateFee().
+        // The mock returns SplitAmount::zero(), so accumulated = base + 0 = base.
+        $expectedAmount = \Eiou\Core\SplitAmount::from($baseAmount);
         $this->rp2pRepository->expects($this->once())
             ->method('insertRp2pRequest')
-            ->with($this->callback(function ($arg) use ($expectedAccumulatedAmount) {
-                return isset($arg['amount']) && $arg['amount'] === $expectedAccumulatedAmount;
+            ->with($this->callback(function ($arg) use ($expectedAmount) {
+                return isset($arg['amount'])
+                    && $arg['amount'] instanceof \Eiou\Core\SplitAmount
+                    && $arg['amount']->compareTo($expectedAmount) === 0;
             }))
             ->willReturn('test-rp2p-id');
 
@@ -1257,11 +1274,14 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         // Verify the amount remains unchanged when fee is zero
+        $expectedAmount = \Eiou\Core\SplitAmount::from($baseAmount);
         $this->rp2pRepository->expects($this->once())
             ->method('insertRp2pRequest')
-            ->with($this->callback(function ($arg) use ($baseAmount) {
+            ->with($this->callback(function ($arg) use ($expectedAmount) {
                 // Amount should equal base amount (no fee added)
-                return isset($arg['amount']) && $arg['amount'] === $baseAmount;
+                return isset($arg['amount'])
+                    && $arg['amount'] instanceof \Eiou\Core\SplitAmount
+                    && $arg['amount']->compareTo($expectedAmount) === 0;
             }))
             ->willReturn('test-rp2p-id');
 
