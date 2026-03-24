@@ -632,6 +632,11 @@
                     <!-- Per-currency accept forms -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
                     <?php if ($pcIdx > 0): ?><hr class="currency-separator"><?php endif; ?>
+                    <?php if (!in_array($pc['currency'], $user->getAllowedCurrencies())): ?>
+                    <div class="alert alert-warning mb-sm">
+                        <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($pc['currency']); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
+                    </div>
+                    <?php endif; ?>
                     <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <?php if ($isExisting): ?>
@@ -697,6 +702,15 @@
                     <?php endif; ?>
                 <?php else: ?>
                     <!-- Fallback: single form for legacy contacts with no pending_currencies data -->
+                    <?php
+                        $fallbackCurrency = !empty($contact['pending_currencies']) ? ($contact['pending_currencies'][0]['currency'] ?? 'USD') : 'USD';
+                        $fallbackCurrencyUnknown = !in_array($fallbackCurrency, $user->getAllowedCurrencies());
+                    ?>
+                    <?php if ($fallbackCurrencyUnknown): ?>
+                    <div class="alert alert-warning mb-sm">
+                        <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($fallbackCurrency); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
+                    </div>
+                    <?php endif; ?>
                     <h4 class="pending-contact-accept-title">
                         <i class="fas fa-user-check"></i> Accept this contact request
                     </h4>
