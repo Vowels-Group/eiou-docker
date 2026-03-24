@@ -42,7 +42,7 @@
                 <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="0" class="default-value">
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
-                    Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE; ?>
+                    Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo transactionMinimumFee(); ?>
                 </small>
             </div>
 
@@ -72,7 +72,7 @@
                 <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
                     <?php
                     // Dynamically generate transport options from available types
-                    $transportTypes = \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
+                    $transportTypes = validTransportIndices();
                     $currentTransport = $user->getDefaultTransportMode();
                     foreach ($transportTypes as $type):
                         $displayName = strtoupper($type);
@@ -504,17 +504,17 @@
 
                         <div class="form-group">
                             <label for="maxP2pLevel">Max P2P Routing Level:</label>
-                            <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
+                            <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo p2pMaxRoutingLevel(); ?>" class="default-value">
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Maximum number of hops for P2P routing (1-<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>)
+                                <i class="fas fa-info-circle"></i> Maximum number of hops for P2P routing (1-<?php echo p2pMaxRoutingLevel(); ?>)
                             </small>
                         </div>
 
                         <div class="form-group">
                             <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
-                            <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
+                            <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo p2pMinExpirationSeconds(); ?>" class="default-value">
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
+                                <i class="fas fa-info-circle"></i> How long P2P routing requests remain valid (minimum <?php echo p2pMinExpirationSeconds(); ?> seconds)
                             </small>
                         </div>
 
@@ -877,7 +877,7 @@
                 <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
                 <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
                 <tr><td><strong>Server Software</strong></td><td><?php echo htmlspecialchars($_SERVER['SERVER_SOFTWARE'] ?? 'N/A'); ?></td></tr>
-                <tr><td><strong>App Debug Mode</strong></td><td><?php echo \Eiou\Core\Constants::isDebug() ? 'Enabled' : 'Disabled'; ?></td></tr>
+                <tr><td><strong>App Debug Mode</strong></td><td><?php echo isDebugMode() ? 'Enabled' : 'Disabled'; ?></td></tr>
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
                 <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>
@@ -913,7 +913,7 @@
 
             <!-- Constants.php Values (Collapsible) -->
             <?php
-            $constantsValues = \Eiou\Core\Constants::all();
+            $constantsValues = allConstants();
             $constantsFormatted = '';
             foreach ($constantsValues as $key => $value) {
                 $displayValue = is_bool($value) ? ($value ? 'true' : 'false') : (is_array($value) ? json_encode($value) : $value);

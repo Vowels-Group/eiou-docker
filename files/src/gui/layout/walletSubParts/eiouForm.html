@@ -80,7 +80,7 @@
                 <label for="currency">Currency:</label>
                 <select id="currency" name="currency" required
                         data-display-decimals='<?php echo $user->getAllDisplayDecimals(); ?>'
-                        data-internal-precision='<?php echo \Eiou\Core\Constants::INTERNAL_PRECISION; ?>'>
+                        data-internal-precision='<?php echo internalPrecision(); ?>'>
                     <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
                         <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
                     <?php endforeach; ?>

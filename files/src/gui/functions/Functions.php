@@ -39,11 +39,59 @@ use Eiou\Gui\Includes\SessionKeys;
 // =========================================================================
 
 function displayDecimals(): int {
-    return displayDecimals();
+    return \Eiou\Core\Constants::getDisplayDecimals();
 }
 
 function cspNonce(): string {
     return \Eiou\Utils\Security::getCspNonce();
+}
+
+function internalPrecision(): int {
+    return \Eiou\Core\Constants::INTERNAL_PRECISION;
+}
+
+function conversionFactor(): int {
+    return \Eiou\Core\Constants::INTERNAL_CONVERSION_FACTOR;
+}
+
+function isSplitAmount($value): bool {
+    return $value instanceof \Eiou\Core\SplitAmount;
+}
+
+function transactionMinimumFee(): float {
+    return \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE;
+}
+
+function validTransportIndices(): array {
+    return \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
+}
+
+function p2pMaxRoutingLevel(): int {
+    return \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL;
+}
+
+function p2pMinExpirationSeconds(): int {
+    return \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS;
+}
+
+function isDebugMode(): bool {
+    return \Eiou\Core\Constants::isDebug();
+}
+
+function allConstants(): array {
+    return \Eiou\Core\Constants::all();
+}
+
+function deliveryMaxRetries(): int {
+    return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
+}
+
+function p2pDefaultExpirationSeconds(): int {
+    return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
+}
+
+function cleanupDlqRetentionDays(): int {
+    return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
 }
 
 // =========================================================================
