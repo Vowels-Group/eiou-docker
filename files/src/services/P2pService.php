@@ -576,7 +576,7 @@ class P2pService implements P2pServiceInterface {
             } else {
                 // Calculate fees
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $request['feeAmount'] = $requestedAmount->subtract(SplitAmount::from($request['amount']));
+                $request['feeAmount'] = $requestedAmount->subtract($request['amount']);
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 // Max level boundary: requestLevel >= maxRequestLevel means the next hop
@@ -643,7 +643,7 @@ class P2pService implements P2pServiceInterface {
             // Create capacity reservation for this relay
             if ($this->capacityReservationRepository !== null) {
                 $senderPubkeyHash = hash('sha256', $request['senderPublicKey']);
-                $baseAmount = SplitAmount::from($request['amount']);
+                $baseAmount = $request['amount'];
                 $totalAmount = $this->calculateRequestedAmount($request);
                 $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $this->capacityReservationRepository->createReservation(
