@@ -29,6 +29,9 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -56,6 +59,9 @@ class P2pServiceTest extends TestCase
     private MockObject|P2pSenderRepository $p2pSenderRepository;
     private MockObject|ContactCurrencyRepository $contactCurrencyRepository;
     private MockObject|CapacityReservationRepository $capacityReservationRepository;
+    private MockObject|P2pRelayedContactRepository $p2pRelayedContactRepository;
+    private MockObject|Rp2pRepository $rp2pRepository;
+    private MockObject|RepositoryFactory $repositoryFactory;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -81,6 +87,18 @@ class P2pServiceTest extends TestCase
         $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
         $this->contactCurrencyRepository = $this->createMock(ContactCurrencyRepository::class);
         $this->capacityReservationRepository = $this->createMock(CapacityReservationRepository::class);
+        $this->p2pRelayedContactRepository = $this->createMock(P2pRelayedContactRepository::class);
+        $this->rp2pRepository = $this->createMock(Rp2pRepository::class);
+        $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->repositoryFactory->method('get')->willReturnCallback(function (string $class) {
+            return match ($class) {
+                P2pRelayedContactRepository::class => $this->p2pRelayedContactRepository,
+                Rp2pRepository::class => $this->rp2pRepository,
+                ContactCurrencyRepository::class => $this->contactCurrencyRepository,
+                CapacityReservationRepository::class => $this->capacityReservationRepository,
+                default => $this->createMock($class),
+            };
+        });
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -111,11 +129,10 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             $this->messageDeliveryService,
             $this->p2pSenderRepository
         );
-        $this->service->setContactCurrencyRepository($this->contactCurrencyRepository);
-        $this->service->setCapacityReservationRepository($this->capacityReservationRepository);
     }
 
     // =========================================================================
@@ -1259,6 +1276,7 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             null
         );
 
@@ -1276,7 +1294,8 @@ class P2pServiceTest extends TestCase
             $this->p2pRepository,
             $this->transactionRepository,
             $this->utilityContainer,
-            $this->userContext
+            $this->userContext,
+            $this->repositoryFactory
         );
 
         $this->assertInstanceOf(P2pService::class, $service);
@@ -1499,6 +1518,7 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             null // No MessageDeliveryService
         );
 
