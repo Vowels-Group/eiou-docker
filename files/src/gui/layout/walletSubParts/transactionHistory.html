@@ -408,8 +408,8 @@
                                 var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
                                 html = html + '<div class="p2p-candidate-row">';
                                 html = html + '<div class="p2p-candidate-info">';
-                                html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(2) + ' ' + currency + '</strong></div>';
-                                html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(2) + ' ' + currency + '</div>';
+                                html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</strong></div>';
+                                html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</div>';
                                 html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
                                 html = html + '</div>';
                                 html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';

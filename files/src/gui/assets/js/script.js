@@ -650,7 +650,7 @@ function openTransactionModal(index) {
     // Header with amount
     var headerClass = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
     html += '<div class="tx-modal-header ' + headerClass + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
     html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
@@ -719,7 +719,7 @@ function openTransactionModal(index) {
         if (tx.p2p_amount) {
             html += '<div class="tx-detail-row">';
             html += '<div class="tx-detail-label">Amount to Recipient</div>';
-            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -727,7 +727,7 @@ function openTransactionModal(index) {
         if (tx.p2p_fee) {
             html += '<div class="tx-detail-row">';
             html += '<div class="tx-detail-label">Transaction Fee</div>';
-            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_fee).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
+            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_fee).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -1863,7 +1863,7 @@ function openContactModal(contact, openTab) {
     // Set balance (no color styling)
     var balance = parseFloat(contact.balance) || 0;
     var balanceEl = document.getElementById('modal_balance');
-    balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
+    balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(EIOU_DISPLAY_DECIMALS);
     balanceEl.className = 'balance-amount';
     // Derive initial currency, credit_limit, and fee from first accepted currency
     var primaryCur = (contact.currencies && contact.currencies.length > 0) ? contact.currencies[0] : null;
@@ -1872,7 +1872,7 @@ function openContactModal(contact, openTab) {
 
     // Set credit limit, available credits (both directions), and fee
     var creditLimit = primaryCur ? (parseFloat(primaryCur.credit_limit) || 0) : 0;
-    document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
+    document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(EIOU_DISPLAY_DECIMALS);
     document.getElementById('modal_credit_currency').textContent = currency;
 
     // My available credit with them (from pong)
@@ -1880,7 +1880,7 @@ function openContactModal(contact, openTab) {
     if (myAvailableCreditEl) {
         var myAvailCredit = primaryCur ? primaryCur.my_available_credit : contact.my_available_credit;
         myAvailableCreditEl.textContent = (myAvailCredit !== null && myAvailCredit !== undefined)
-            ? parseFloat(myAvailCredit).toFixed(2) : '—';
+            ? parseFloat(myAvailCredit).toFixed(EIOU_DISPLAY_DECIMALS) : '—';
     }
     var myCreditCurrencyEl = document.getElementById('modal_my_credit_currency');
     if (myCreditCurrencyEl) myCreditCurrencyEl.textContent = currency;
@@ -1890,7 +1890,7 @@ function openContactModal(contact, openTab) {
     if (theirAvailableCreditEl) {
         var theirAvailCredit = primaryCur ? primaryCur.their_available_credit : contact.their_available_credit;
         theirAvailableCreditEl.textContent = (theirAvailCredit !== null && theirAvailCredit !== undefined)
-            ? parseFloat(theirAvailCredit).toFixed(2) : '—';
+            ? parseFloat(theirAvailCredit).toFixed(EIOU_DISPLAY_DECIMALS) : '—';
     }
     var theirCreditCurrencyEl = document.getElementById('modal_their_credit_currency');
     if (theirCreditCurrencyEl) theirCreditCurrencyEl.textContent = currency;
@@ -2193,7 +2193,7 @@ function openContactModal(contact, openTab) {
             html += '<div class="tx-type">' + typeLabel + '</div>';
             html += '<div class="tx-date">' + escapeHtml(tx.date || 'Unknown date') + '</div>';
             html += '</div>';
-            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right chevron-indicator"></i></div>';
+            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right chevron-indicator"></i></div>';
             html += '</div>';
         }
         transactionsEl.innerHTML = html;
@@ -2284,7 +2284,7 @@ function switchContactCurrency(selectedCurrency) {
     var balance = parseFloat(currentContactBalances[selectedCurrency]) || 0;
     var balanceEl = document.getElementById('modal_balance');
     if (balanceEl) {
-        balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
+        balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(EIOU_DISPLAY_DECIMALS);
         balanceEl.className = 'balance-amount';
     }
     var balanceCurrencyEl = document.getElementById('modal_balance_currency');
@@ -2294,7 +2294,7 @@ function switchContactCurrency(selectedCurrency) {
         // Update credit limit
         var creditLimit = parseFloat(currencyConfig.credit_limit) || 0;
         var creditLimitEl = document.getElementById('modal_credit_limit');
-        if (creditLimitEl) creditLimitEl.textContent = creditLimit.toFixed(2);
+        if (creditLimitEl) creditLimitEl.textContent = creditLimit.toFixed(EIOU_DISPLAY_DECIMALS);
 
         var creditCurrencyEl = document.getElementById('modal_credit_currency');
         if (creditCurrencyEl) creditCurrencyEl.textContent = selectedCurrency;
@@ -2308,7 +2308,7 @@ function switchContactCurrency(selectedCurrency) {
         var myAvailEl = document.getElementById('modal_my_available_credit');
         if (myAvailEl) {
             myAvailEl.textContent = (currencyConfig.my_available_credit !== null && currencyConfig.my_available_credit !== undefined)
-                ? parseFloat(currencyConfig.my_available_credit).toFixed(2) : '\u2014';
+                ? parseFloat(currencyConfig.my_available_credit).toFixed(EIOU_DISPLAY_DECIMALS) : '\u2014';
         }
         var myCreditCurEl = document.getElementById('modal_my_credit_currency');
         if (myCreditCurEl) myCreditCurEl.textContent = selectedCurrency;
@@ -2316,7 +2316,7 @@ function switchContactCurrency(selectedCurrency) {
         var theirAvailEl = document.getElementById('modal_their_available_credit');
         if (theirAvailEl) {
             theirAvailEl.textContent = (currencyConfig.their_available_credit !== null && currencyConfig.their_available_credit !== undefined)
-                ? parseFloat(currencyConfig.their_available_credit).toFixed(2) : '\u2014';
+                ? parseFloat(currencyConfig.their_available_credit).toFixed(EIOU_DISPLAY_DECIMALS) : '\u2014';
         }
         var theirCreditCurEl = document.getElementById('modal_their_credit_currency');
         if (theirCreditCurEl) theirCreditCurEl.textContent = selectedCurrency;
@@ -2733,7 +2733,7 @@ function showContactTxDetail(index) {
     // Header with amount
     var headerClass2 = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
     html += '<div class="tx-modal-header ' + headerClass2 + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
+    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
     html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
