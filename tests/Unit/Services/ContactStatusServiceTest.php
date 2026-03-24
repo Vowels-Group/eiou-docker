@@ -17,9 +17,12 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\ContactStatusService;
 use Eiou\Services\RateLimiterService;
+use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
@@ -50,6 +53,7 @@ class ContactStatusServiceTest extends TestCase
     private RateLimiterService $mockRateLimiter;
     private BalanceRepository $mockBalanceRepo;
     private ContactCurrencyRepository $mockContactCurrencyRepo;
+    private RepositoryFactory $mockRepositoryFactory;
 
     private const TEST_USER_PUBKEY = 'test-user-public-key-abc123';
     private const TEST_USER_PUBKEY_HASH = 'test-user-pubkey-hash';
@@ -75,6 +79,20 @@ class ContactStatusServiceTest extends TestCase
         $this->mockRateLimiter = $this->createMock(RateLimiterService::class);
         $this->mockBalanceRepo = $this->createMock(BalanceRepository::class);
         $this->mockContactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
+
+        // Mock RepositoryFactory to return the appropriate repository mocks
+        $this->mockRepositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->mockRepositoryFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    TransactionChainRepository::class => $this->mockChainRepo,
+                    AddressRepository::class => $this->createMock(AddressRepository::class),
+                    BalanceRepository::class => $this->mockBalanceRepo,
+                    ContactCreditRepository::class => $this->createMock(ContactCreditRepository::class),
+                    ContactCurrencyRepository::class => $this->mockContactCurrencyRepo,
+                    default => $this->createMock($class),
+                };
+            });
 
         // Configure utility container to return all required concrete mock utilities
         $this->mockUtilityContainer->method('getTransportUtility')
@@ -106,7 +124,9 @@ class ContactStatusServiceTest extends TestCase
             $this->mockContactRepo,
             $this->mockTransactionRepo,
             $this->mockUtilityContainer,
-            $this->mockUserContext
+            $this->mockUserContext,
+            $this->mockRepositoryFactory,
+            $this->mockSyncTrigger
         );
     }
 
@@ -283,7 +303,7 @@ class ContactStatusServiceTest extends TestCase
             'requestSync' => true
         ];
 
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
 
         $this->mockContactRepo->expects($this->once())
             ->method('isAcceptedContactPubkey')
@@ -326,7 +346,7 @@ class ContactStatusServiceTest extends TestCase
             'requestSync' => false
         ];
 
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
 
         $this->mockContactRepo->expects($this->once())
             ->method('isAcceptedContactPubkey')
@@ -539,7 +559,7 @@ class ContactStatusServiceTest extends TestCase
     public function testPingContactReturnsOnlineWithChainNeedsSync(): void
     {
         $this->service->setRateLimiterService($this->mockRateLimiter);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
 
         $this->mockRateLimiter->expects($this->once())
             ->method('checkLimit')
@@ -813,13 +833,11 @@ class ContactStatusServiceTest extends TestCase
     // ============================================================
 
     /**
-     * Test setSyncTrigger properly sets the sync trigger
+     * Test sync trigger is available via constructor injection
      */
-    public function testSetSyncTriggerProperlySetsSyncTrigger(): void
+    public function testSyncTriggerAvailableViaConstructor(): void
     {
-        // Without setting sync trigger, accessing it should throw when needed
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
-
+        // Sync trigger is injected via constructor, so it should be available immediately
         // Set up a scenario where sync would be triggered
         $this->service->setRateLimiterService($this->mockRateLimiter);
 
@@ -954,7 +972,7 @@ class ContactStatusServiceTest extends TestCase
             'requestSync' => true
         ];
 
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
 
         $this->mockContactRepo->expects($this->once())
             ->method('isAcceptedContactPubkey')
@@ -998,7 +1016,9 @@ class ContactStatusServiceTest extends TestCase
             $this->mockContactRepo,
             $this->mockTransactionRepo,
             $this->mockUtilityContainer,
-            $mockUserContext
+            $mockUserContext,
+            $this->mockRepositoryFactory,
+            $this->mockSyncTrigger
         );
 
         $service->setRateLimiterService($this->mockRateLimiter);
@@ -1100,7 +1120,7 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(self::TEST_PREV_TXID);
 
         // Inject chain repo and set it to return internal gaps
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
+
         $this->mockChainRepo->expects($this->once())
             ->method('verifyChainIntegrity')
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
@@ -1141,7 +1161,7 @@ class ContactStatusServiceTest extends TestCase
             ->method('getPreviousTxid')
             ->willReturn(self::TEST_PREV_TXID);
 
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
+
         $this->mockChainRepo->expects($this->once())
             ->method('verifyChainIntegrity')
             ->willReturn([
@@ -1166,8 +1186,8 @@ class ContactStatusServiceTest extends TestCase
      */
     public function testHandlePingRequestTriggersSyncOnInternalGap(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
+
+
 
         $request = [
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
@@ -1210,9 +1230,9 @@ class ContactStatusServiceTest extends TestCase
      */
     public function testPingContactDetectsInternalGapsWhenRemoteReportsValid(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
         $this->service->setRateLimiterService($this->mockRateLimiter);
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
+
 
         $this->mockRateLimiter->expects($this->once())
             ->method('checkLimit')
@@ -1260,18 +1280,19 @@ class ContactStatusServiceTest extends TestCase
     }
 
     /**
-     * Test setTransactionChainRepository sets the repository
+     * Test constructor injects TransactionChainRepository via RepositoryFactory
      */
-    public function testSetTransactionChainRepositorySetsTheRepository(): void
+    public function testConstructorInjectsTransactionChainRepository(): void
     {
         $service = new ContactStatusService(
             $this->mockContactRepo,
             $this->mockTransactionRepo,
             $this->mockUtilityContainer,
-            $this->mockUserContext
+            $this->mockUserContext,
+            $this->mockRepositoryFactory,
+            $this->mockSyncTrigger
         );
 
-        $service->setTransactionChainRepository($this->mockChainRepo);
         $this->assertInstanceOf(ContactStatusService::class, $service);
     }
 
@@ -1498,8 +1519,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(self::TEST_PREV_TXID);
 
         // Inject balance repo to enable credit calculation path
-        $this->service->setBalanceRepository($this->mockBalanceRepo);
-        $this->service->setContactCurrencyRepository($this->mockContactCurrencyRepo);
+
+
 
         // Contact data with a credit_limit that should NOT be used
         $this->mockContactRepo->expects($this->once())
@@ -1569,8 +1590,8 @@ class ContactStatusServiceTest extends TestCase
             ->willReturn(self::TEST_PREV_TXID);
 
         // Inject balance repo to enable credit calculation path
-        $this->service->setBalanceRepository($this->mockBalanceRepo);
-        $this->service->setContactCurrencyRepository($this->mockContactCurrencyRepo);
+
+
 
         // Contact data with credit_limit that SHOULD be used as fallback
         $this->mockContactRepo->expects($this->once())

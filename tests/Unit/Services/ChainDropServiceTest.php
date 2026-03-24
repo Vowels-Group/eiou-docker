@@ -25,6 +25,8 @@ use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Contracts\SyncTriggerInterface;
 
 #[CoversClass(ChainDropService::class)]
 class ChainDropServiceTest extends TestCase
@@ -37,6 +39,8 @@ class ChainDropServiceTest extends TestCase
     private MockObject|UtilityServiceContainer $utilityContainer;
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|UserContext $userContext;
+    private MockObject|RepositoryFactory $repositoryFactory;
+    private MockObject|SyncTriggerInterface $syncTrigger;
     private ChainDropService $service;
 
     /**
@@ -62,6 +66,13 @@ class ChainDropServiceTest extends TestCase
         $this->utilityContainer = $this->createMock(UtilityServiceContainer::class);
         $this->transportUtility = $this->createMock(TransportUtilityService::class);
         $this->userContext = $this->createMock(UserContext::class);
+        $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->syncTrigger = $this->createMock(SyncTriggerInterface::class);
+
+        // Configure RepositoryFactory to return balance repository mock
+        $this->repositoryFactory->method('get')
+            ->with(\Eiou\Database\BalanceRepository::class)
+            ->willReturn($this->balanceRepository);
 
         // Configure UtilityServiceContainer to return transport mock
         $this->utilityContainer->method('getTransportUtility')
@@ -99,7 +110,9 @@ class ChainDropServiceTest extends TestCase
             $this->transactionRepository,
             $this->contactRepository,
             $this->utilityContainer,
-            $this->userContext
+            $this->userContext,
+            $this->repositoryFactory,
+            $this->syncTrigger
         );
     }
 
@@ -324,7 +337,9 @@ class ChainDropServiceTest extends TestCase
             $this->transactionRepository,
             $this->contactRepository,
             $this->utilityContainer,
-            $userContext
+            $userContext,
+            $this->repositoryFactory,
+            $this->syncTrigger
         );
     }
 
@@ -707,9 +722,6 @@ class ChainDropServiceTest extends TestCase
 
         $senderPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
 
-        // Wire BalanceRepository for balance guard
-        $this->service->setBalanceRepository($this->balanceRepository);
-
         // No existing active proposal
         $this->proposalRepository->method('getActiveProposalForGap')
             ->willReturn(null);
@@ -792,9 +804,6 @@ class ChainDropServiceTest extends TestCase
         $this->userContext->method('getAutoChainDropAcceptGuard')
             ->willReturn(true);
 
-        // Wire BalanceRepository for balance guard
-        $this->service->setBalanceRepository($this->balanceRepository);
-
         // No existing active proposal
         $this->proposalRepository->method('getActiveProposalForGap')
             ->willReturn(null);
@@ -855,9 +864,6 @@ class ChainDropServiceTest extends TestCase
     public function testAutoAcceptSkippedWhenToggleOff(): void
     {
         // Default is OFF — no env var needed
-        // Wire BalanceRepository (would be safe, but toggle is OFF)
-        $this->service->setBalanceRepository($this->balanceRepository);
-
         $this->proposalRepository->method('getActiveProposalForGap')
             ->willReturn(null);
 
@@ -1011,9 +1017,6 @@ class ChainDropServiceTest extends TestCase
             ->willReturn(false);
 
         $senderPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
-
-        // Wire BalanceRepository — would block if guard were enabled
-        $this->service->setBalanceRepository($this->balanceRepository);
 
         $this->proposalRepository->method('getActiveProposalForGap')
             ->willReturn(null);

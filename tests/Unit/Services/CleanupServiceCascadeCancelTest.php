@@ -27,6 +27,12 @@ use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\RouteCancellationRepository;
 use Exception;
 
 #[CoversClass(CleanupService::class)]
@@ -98,6 +104,19 @@ class CleanupServiceCascadeCancelTest extends TestCase
         $this->messageDeliveryService->method('processRetryQueue')
             ->willReturn(['processed' => 0, 'failed' => 0, 'moved_to_dlq' => 0]);
 
+        $repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $repositoryFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    Rp2pCandidateRepository::class => $this->createMock(Rp2pCandidateRepository::class),
+                    P2pSenderRepository::class => $this->createMock(P2pSenderRepository::class),
+                    P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                    CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                    RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
+                    default => null,
+                };
+            });
+
         $this->service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
@@ -105,7 +124,8 @@ class CleanupServiceCascadeCancelTest extends TestCase
             $this->balanceRepository,
             $this->utilityContainer,
             $this->userContext,
-            $this->messageDeliveryService
+            $this->messageDeliveryService,
+            $repositoryFactory
         );
     }
 
@@ -353,10 +373,10 @@ class CleanupServiceCascadeCancelTest extends TestCase
             ->method('sendCancelNotificationForHash')
             ->with(self::TEST_HASH);
 
-        // Should also cancel the pending transaction
+        // Should also cancel pending transactions via cancelPendingByMemo
         $this->transactionRepository->expects($this->once())
-            ->method('updateStatus')
-            ->with(self::TEST_HASH, Constants::STATUS_CANCELLED);
+            ->method('cancelPendingByMemo')
+            ->with(self::TEST_HASH);
 
         $this->service->expireMessage($message);
     }
@@ -375,7 +395,8 @@ class CleanupServiceCascadeCancelTest extends TestCase
 
         $this->service->setP2pService($p2pService);
         $this->service->setRp2pService($rp2pService);
-        $this->service->setRp2pCandidateRepository($rp2pCandidateRepo);
+        $ref = new \ReflectionProperty($this->service, 'rp2pCandidateRepository');
+        $ref->setValue($this->service, $rp2pCandidateRepo);
 
         // Relay node in best-fee mode
         $message = [

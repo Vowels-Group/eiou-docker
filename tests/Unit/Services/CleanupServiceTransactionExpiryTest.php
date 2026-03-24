@@ -26,6 +26,12 @@ use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\RouteCancellationRepository;
 
 #[CoversClass(CleanupService::class)]
 class CleanupServiceTransactionExpiryTest extends TestCase
@@ -81,6 +87,19 @@ class CleanupServiceTransactionExpiryTest extends TestCase
         $this->messageDeliveryService->method('processRetryQueue')
             ->willReturn(['processed' => 0, 'failed' => 0, 'moved_to_dlq' => 0]);
 
+        $repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $repositoryFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    Rp2pCandidateRepository::class => $this->createMock(Rp2pCandidateRepository::class),
+                    P2pSenderRepository::class => $this->createMock(P2pSenderRepository::class),
+                    P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                    CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                    RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
+                    default => null,
+                };
+            });
+
         $this->service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
@@ -88,7 +107,8 @@ class CleanupServiceTransactionExpiryTest extends TestCase
             $this->balanceRepository,
             $this->utilityContainer,
             $this->userContext,
-            $this->messageDeliveryService
+            $this->messageDeliveryService,
+            $repositoryFactory
         );
     }
 
@@ -202,9 +222,9 @@ class CleanupServiceTransactionExpiryTest extends TestCase
             ->method('getExpiredTransactions')
             ->willThrowException(new \Exception('DB error'));
 
-        // Should not throw — exception is caught and logged
-        $result = $this->service->expireStaleTransactions();
-        $this->assertSame(0, $result);
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('DB error');
+        $this->service->expireStaleTransactions();
     }
 
     // =========================================================================
