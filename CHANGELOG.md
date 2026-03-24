@@ -74,8 +74,10 @@ The project is currently in **ALPHA** status.
 - Update `API_REFERENCE.md` field descriptions for `POST /wallet/send`, `POST /contacts`, and `PUT /contacts/:address` to document validation constraints (format, ranges, precision)
 
 ### Tests
+- Fix batch transaction performance test race condition — the chain reset between single tx (4.1) and batch (4.2) deleted the tx while the daemon was still async-completing it, causing a broken `previous_txid` on re-insertion. Fix: let batch chain naturally from the single tx instead of resetting, wait for queue settlement, and fix dangling pointers before batch
 - Improve batch transaction performance test reliability — add queue processing between sends, reset chain state before benchmarks, increase timing margins, poll chain validity instead of transaction status
 - Add `EIOU_TEST_MODE` flag to bypass rate limiting in performance tests
+- Clear `held_transactions` and `capacity_reservations` in performance test chain reset to prevent interference from prior test suites
 
 ### Fixed
 - Fix pre-existing test constructor mismatches in `ContactManagementServiceTest` and `MessageServiceTest` (#768) — updated to match current constructor signatures for `RepositoryFactory` and `SyncTriggerInterface` parameters
