@@ -429,6 +429,28 @@ class Constants {
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
+    const VALID_DATE_FORMATS = [
+        'Y-m-d H:i:s.u',   // 2026-03-24 17:43:20.123456 (default, microseconds)
+        'Y-m-d H:i:s',     // 2026-03-24 17:43:20
+        'Y-m-d H:i',       // 2026-03-24 17:43
+        'Y-m-d',           // 2026-03-24
+        'd/m/Y H:i:s',     // 24/03/2026 17:43:20
+        'd/m/Y H:i',       // 24/03/2026 17:43
+        'd/m/Y',           // 24/03/2026
+        'm/d/Y H:i:s',     // 03/24/2026 17:43:20
+        'm/d/Y H:i',       // 03/24/2026 17:43
+        'm/d/Y',           // 03/24/2026
+        'd-m-Y H:i:s',     // 24-03-2026 17:43:20
+        'd-m-Y H:i',       // 24-03-2026 17:43
+        'd-m-Y',           // 24-03-2026
+        'd M Y H:i:s',     // 24 Mar 2026 17:43:20
+        'd M Y H:i',       // 24 Mar 2026 17:43
+        'd M Y',           // 24 Mar 2026
+        'M d, Y H:i:s',    // Mar 24, 2026 17:43:20
+        'M d, Y H:i',      // Mar 24, 2026 17:43
+        'M d, Y',          // Mar 24, 2026
+        'U',               // Unix timestamp
+    ];
     const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings

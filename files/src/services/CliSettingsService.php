@@ -922,14 +922,25 @@ class CliSettingsService
                     break;
 
                 case '41':
-                    echo "Enter date format (e.g., Y-m-d H:i:s): ";
-                    $key = 'displayDateFormat';
-                    $validation = InputValidator::validateDateFormat(trim(fgets(STDIN)));
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
+                    $now = new \DateTime();
+                    echo "Available date formats:\n";
+                    foreach (Constants::VALID_DATE_FORMATS as $i => $fmt) {
+                        echo "  " . ($i + 1) . ". " . $now->format($fmt) . "  (" . $fmt . ")\n";
                     }
-                    $value = $validation['value'];
+                    echo "Enter format string or number (1-" . count(Constants::VALID_DATE_FORMATS) . "): ";
+                    $key = 'displayDateFormat';
+                    $input = trim(fgets(STDIN));
+                    // Allow selection by number
+                    if (ctype_digit($input) && (int) $input >= 1 && (int) $input <= count(Constants::VALID_DATE_FORMATS)) {
+                        $value = Constants::VALID_DATE_FORMATS[(int) $input - 1];
+                    } else {
+                        $validation = InputValidator::validateDateFormat($input);
+                        if (!$validation['valid']) {
+                            echo "Error: " . $validation['error'] . "\n";
+                            return;
+                        }
+                        $value = $validation['value'];
+                    }
                     break;
 
                 case '43':

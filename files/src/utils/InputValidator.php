@@ -772,10 +772,8 @@ class InputValidator {
 
         $format = trim($format);
 
-        // Validate by attempting to format the current date
-        $result = date($format);
-        if ($result === false) {
-            return ['valid' => false, 'value' => null, 'error' => 'Invalid PHP date format string'];
+        if (!in_array($format, Constants::VALID_DATE_FORMATS)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Invalid date format. Allowed: ' . implode(', ', Constants::VALID_DATE_FORMATS)];
         }
 
         return ['valid' => true, 'value' => $format, 'error' => null];

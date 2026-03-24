@@ -629,9 +629,14 @@
 
                         <div class="form-group">
                             <label for="displayDateFormat">Date Format:</label>
-                            <input type="text" id="displayDateFormat" name="displayDateFormat" value="<?php echo htmlspecialchars($user->getDisplayDateFormat()); ?>" class="default-value" placeholder="Y-m-d H:i:s.u">
+                            <?php $currentDateFormat = $user->getDisplayDateFormat(); $now = new \DateTime(); ?>
+                            <select id="displayDateFormat" name="displayDateFormat" class="default-value">
+                                <?php foreach (\Eiou\Core\Constants::VALID_DATE_FORMATS as $fmt): ?>
+                                    <option value="<?php echo htmlspecialchars($fmt); ?>" <?php echo ($fmt === $currentDateFormat) ? 'selected' : ''; ?>><?php echo htmlspecialchars($now->format($fmt)); ?> (<?php echo htmlspecialchars($fmt); ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> PHP date format string for timestamps in the GUI (e.g., Y-m-d H:i:s)
+                                <i class="fas fa-info-circle"></i> Date format for timestamps in the GUI
                             </small>
                         </div>
 
