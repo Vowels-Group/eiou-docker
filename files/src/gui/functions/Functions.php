@@ -34,6 +34,68 @@ use Eiou\Gui\Includes\SessionKeys;
  * $serviceContainer to be initialized before inclusion.
  */
 
+// =========================================================================
+// Template helper functions — shorthand for FQN calls used in .html templates
+// =========================================================================
+
+function displayDecimals(): int {
+    return \Eiou\Core\Constants::getDisplayDecimals();
+}
+
+function cspNonce(): string {
+    return \Eiou\Utils\Security::getCspNonce();
+}
+
+function internalPrecision(): int {
+    return \Eiou\Core\Constants::INTERNAL_PRECISION;
+}
+
+function conversionFactor(): int {
+    return \Eiou\Core\Constants::INTERNAL_CONVERSION_FACTOR;
+}
+
+function isSplitAmount($value): bool {
+    return $value instanceof \Eiou\Core\SplitAmount;
+}
+
+function transactionMinimumFee(): float {
+    return \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE;
+}
+
+function validTransportIndices(): array {
+    return \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
+}
+
+function p2pMaxRoutingLevel(): int {
+    return \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL;
+}
+
+function p2pMinExpirationSeconds(): int {
+    return \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS;
+}
+
+function isDebugMode(): bool {
+    return \Eiou\Core\Constants::isDebug();
+}
+
+function allConstants(): array {
+    return \Eiou\Core\Constants::all();
+}
+
+function deliveryMaxRetries(): int {
+    return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
+}
+
+function p2pDefaultExpirationSeconds(): int {
+    return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
+}
+
+function cleanupDlqRetentionDays(): int {
+    return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
+}
+
+// =========================================================================
+
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -130,7 +192,8 @@ if (isset($_SESSION[SessionKeys::MESSAGE])) {
 // Get user based data
 $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
-$totalEarnings = $currencyUtility->convertMinorToMajor($p2pService->getUserTotalEarnings());
+$totalEarningsSplit = $p2pService->getUserTotalEarnings();
+$totalEarnings = ($totalEarningsSplit instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($totalEarningsSplit) : 0;
 
 // Per-currency balance data for future-proof dashboard display
 $totalBalanceByCurrency = [];
@@ -139,7 +202,10 @@ if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
             'currency' => $bal['currency'],
-            'total' => number_format($currencyUtility->convertMinorToMajor((int)($bal['total_balance'] ?? 0), $bal['currency']), \Eiou\Core\Constants::getCurrencyDecimals($bal['currency']))
+            'total' => number_format(
+                ($bal['total_balance'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($bal['total_balance'], $bal['currency']) : 0,
+                displayDecimals()
+            )
         ];
     }
 }
@@ -151,7 +217,10 @@ if (!empty($earningsRaw)) {
     foreach ($earningsRaw as $earn) {
         $totalEarningsByCurrency[] = [
             'currency' => $earn['currency'],
-            'total' => number_format($currencyUtility->convertMinorToMajor((int)($earn['total_amount'] ?? 0), $earn['currency']), \Eiou\Core\Constants::getCurrencyDecimals($earn['currency']))
+            'total' => number_format(
+                ($earn['total_amount'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($earn['total_amount'], $earn['currency']) : 0,
+                displayDecimals()
+            )
         ];
     }
 }
@@ -551,7 +620,7 @@ try {
             $creditData = $contactCreditRepo->getAvailableCredit($hash);
             if ($creditData !== null) {
                 $contactCurrency = $c['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $availableCreditByContact[$hash] = $creditData['available_credit'] / \Eiou\Core\Constants::getConversionFactor($contactCurrency);
+                $availableCreditByContact[$hash] = $creditData['available_credit']->toMajorUnits();
             }
         }
     }
@@ -560,7 +629,7 @@ try {
     foreach ($creditTotals as $row) {
         $totalAvailableCreditByCurrency[] = [
             'currency' => $row['currency'],
-            'total' => number_format($row['total_available_credit'] / \Eiou\Core\Constants::getConversionFactor($row['currency']), \Eiou\Core\Constants::getCurrencyDecimals($row['currency']))
+            'total' => number_format($row['total_available_credit']->toMajorUnits(), displayDecimals())
         ];
     }
 } catch (Exception $e) {
@@ -592,7 +661,7 @@ try {
             $creditMap = [];
             foreach ($allCredits as $cr) {
                 $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $creditMap[$cur] = $cr['available_credit'] / \Eiou\Core\Constants::getConversionFactor($cur);
+                $creditMap[$cur] = $cr['available_credit']->toMajorUnits();
             }
             $availableCreditAllByHash[$hash] = $creditMap;
         }
@@ -622,7 +691,7 @@ foreach ($contactArraysForCredit as &$contacts) {
             $cur = $cc['currency'];
             $ccStatus = $cc['status'] ?? 'accepted';
             $ccDirection = $cc['direction'] ?? 'outgoing';
-            $creditLimitMajor = ($cc['credit_limit'] ?? 0) / \Eiou\Core\Constants::getConversionFactor($cur);
+            $creditLimitMajor = ($cc['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
             $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
             $entry = [
                 'currency' => $cur,

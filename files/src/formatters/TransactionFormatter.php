@@ -4,6 +4,7 @@
 namespace Eiou\Formatters;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 
 /**
  * Transaction Formatter
@@ -12,35 +13,56 @@ use Eiou\Core\Constants;
  * Provides consistent transformation of raw database records into
  * API-ready response formats.
  *
- * Format Types:
- * - Simple: Basic sent/received list format (date, type, amount, currency, counterparty)
- * - History: Full transaction history with joins and P2P info
- * - Contact: Transaction format for contact-related queries
- * - InProgress: In-progress transaction format with routing info
+ * All amounts are SplitAmount objects (whole + frac) from the database.
+ * Database rows contain amount_whole/amount_frac column pairs.
  *
  * @package Formatters
  */
 class TransactionFormatter
 {
     /**
-     * Convert amount from minor units to display value
+     * Extract a SplitAmount from a database row.
      *
-     * @param int|null $minorAmount Amount in minor units (e.g. cents)
-     * @param string $currency Currency code (default: USD)
-     * @return float|null Amount in major units (e.g. dollars)
+     * Reads {$prefix}_whole and {$prefix}_frac columns from the row.
+     * Returns null if both columns are null.
+     *
+     * @param array $row Database row
+     * @param string $prefix Column name prefix (e.g., 'amount', 'p2p_amount')
+     * @return SplitAmount|null
      */
-    public static function convertAmount(?int $minorAmount, string $currency = 'USD'): ?float
+    public static function extractAmount(array $row, string $prefix = 'amount'): ?SplitAmount
     {
-        if ($minorAmount === null) {
+        $wholeKey = $prefix . '_whole';
+        $fracKey = $prefix . '_frac';
+
+        if (!isset($row[$wholeKey]) && !isset($row[$fracKey])) {
             return null;
         }
-        return $minorAmount / Constants::getConversionFactor($currency);
+
+        return new SplitAmount(
+            (int) ($row[$wholeKey] ?? 0),
+            (int) ($row[$fracKey] ?? 0)
+        );
+    }
+
+    /**
+     * Convert a SplitAmount to display value (major units float)
+     *
+     * @param SplitAmount|null $amount Amount as SplitAmount
+     * @return float|null Amount in major units (e.g. dollars)
+     */
+    public static function convertAmount(?SplitAmount $amount): ?float
+    {
+        if ($amount === null) {
+            return null;
+        }
+        return $amount->toMajorUnits();
     }
 
     /**
      * Format a simple transaction for sent/received lists
      *
-     * @param array $tx Raw transaction data
+     * @param array $tx Raw transaction data (with amount_whole/amount_frac columns)
      * @param string $type Transaction type (Constants::TX_TYPE_SENT or TX_TYPE_RECEIVED)
      * @param string $counterparty Counterparty address
      * @return array Formatted transaction
@@ -50,7 +72,7 @@ class TransactionFormatter
         return [
             'date' => $tx['timestamp'],
             'type' => $type,
-            'amount' => self::convertAmount((int)$tx['amount'], $tx['currency']),
+            'amount' => self::convertAmount(self::extractAmount($tx, 'amount')),
             'currency' => $tx['currency'],
             'counterparty' => $counterparty
         ];
@@ -86,7 +108,6 @@ class TransactionFormatter
         $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
         $counterpartyName = $isSent ? ($tx['receiver_name'] ?? null) : ($tx['sender_name'] ?? null);
 
-        // Build display string: "Name (address)" or just "address" if no name
         $counterpartyDisplay = $counterpartyName
             ? $counterpartyName . ' (' . $counterpartyAddress . ')'
             : $counterpartyAddress;
@@ -99,7 +120,7 @@ class TransactionFormatter
             'status' => $tx['status'],
             'date' => $tx['timestamp'],
             'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-            'amount' => self::convertAmount((int)$tx['amount'], $tx['currency']),
+            'amount' => self::convertAmount(self::extractAmount($tx, 'amount')),
             'currency' => $tx['currency'],
             'counterparty' => $counterpartyDisplay,
             'counterparty_address' => $counterpartyAddress,
@@ -114,17 +135,13 @@ class TransactionFormatter
             'end_recipient_address' => $tx['end_recipient_address'] ?? null,
             'initial_sender_address' => $tx['initial_sender_address'] ?? null,
             'p2p_destination' => $tx['p2p_destination'] ?? null,
-            'p2p_amount' => isset($tx['p2p_amount']) ? self::convertAmount((int)$tx['p2p_amount'], $tx['currency']) : null,
-            'p2p_fee' => isset($tx['p2p_fee']) ? self::convertAmount((int)$tx['p2p_fee'], $tx['currency']) : null
+            'p2p_amount' => self::convertAmount(self::extractAmount($tx, 'p2p_amount')),
+            'p2p_fee' => self::convertAmount(self::extractAmount($tx, 'p2p_fee'))
         ];
     }
 
     /**
      * Format multiple transactions for history view
-     *
-     * @param array $transactions Raw transactions
-     * @param array $userAddresses User's addresses
-     * @return array Formatted transactions
      */
     public static function formatHistoryMany(array $transactions, array $userAddresses): array
     {
@@ -137,10 +154,6 @@ class TransactionFormatter
 
     /**
      * Format a transaction for contact view
-     *
-     * @param array $tx Raw transaction data
-     * @param array $userAddresses User's addresses for determining direction
-     * @return array Formatted transaction
      */
     public static function formatContact(array $tx, array $userAddresses): array
     {
@@ -152,7 +165,7 @@ class TransactionFormatter
             'status' => $tx['status'] ?? Constants::STATUS_COMPLETED,
             'date' => $tx['timestamp'],
             'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-            'amount' => self::convertAmount((int)$tx['amount'], $tx['currency']),
+            'amount' => self::convertAmount(self::extractAmount($tx, 'amount')),
             'currency' => $tx['currency'],
             'sender_address' => $tx['sender_address'] ?? '',
             'receiver_address' => $tx['receiver_address'] ?? '',
@@ -163,10 +176,6 @@ class TransactionFormatter
 
     /**
      * Format multiple transactions for contact view
-     *
-     * @param array $transactions Raw transactions
-     * @param array $userAddresses User's addresses
-     * @return array Formatted transactions
      */
     public static function formatContactMany(array $transactions, array $userAddresses): array
     {

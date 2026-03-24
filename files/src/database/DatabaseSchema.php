@@ -59,7 +59,8 @@ function getContactCreditTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contact_credit (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         pubkey_hash VARCHAR(64) NOT NULL,
-        available_credit BIGINT DEFAULT 0,
+        available_credit_whole BIGINT DEFAULT 0,
+        available_credit_frac BIGINT DEFAULT 0,
         currency VARCHAR(10),
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE INDEX idx_contact_credit_hash_currency (pubkey_hash, currency),
@@ -74,7 +75,8 @@ function getContactCurrenciesTableSchema() {
         pubkey_hash VARCHAR(64) NOT NULL,
         currency VARCHAR(10) NOT NULL,
         fee_percent INT NOT NULL,
-        credit_limit BIGINT DEFAULT NULL,
+        credit_limit_whole BIGINT DEFAULT NULL,
+        credit_limit_frac BIGINT DEFAULT 0,
         status ENUM('accepted', 'pending', 'blocked') DEFAULT 'pending',
         direction ENUM('incoming', 'outgoing') DEFAULT 'incoming',
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
@@ -89,8 +91,10 @@ function getBalancesTableSchema() {
     return "CREATE TABLE IF NOT EXISTS balances (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         pubkey_hash TEXT NOT NULL,
-        received BIGINT NOT NULL,
-        sent BIGINT NOT NULL,
+        received_whole BIGINT NOT NULL,
+        received_frac BIGINT NOT NULL,
+        sent_whole BIGINT NOT NULL,
+        sent_frac BIGINT NOT NULL,
         currency VARCHAR(10),
         INDEX idx_balances_pubkey_hash (pubkey_hash)
     )";
@@ -131,7 +135,8 @@ function getTransactionsTableSchema() {
         receiver_address VARCHAR(255) NOT NULL,
         receiver_public_key TEXT NOT NULL,
         receiver_public_key_hash VARCHAR(64),
-        amount BIGINT NOT NULL,
+        amount_whole BIGINT NOT NULL,
+        amount_frac BIGINT NOT NULL,
         currency VARCHAR(10) NOT NULL,
         timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
         txid VARCHAR(255) UNIQUE NOT NULL,
@@ -253,9 +258,12 @@ function getP2pTableSchema() {
         time BIGINT NOT NULL,
         expiration BIGINT NOT NULL, /* unix epoch (micro) seconds */
         currency VARCHAR(10) NOT NULL,
-        amount BIGINT NOT NULL,
-        my_fee_amount BIGINT,
-        rp2p_amount BIGINT,  /* Total amount from RP2P response (including all relay fees) - set when awaiting_approval */
+        amount_whole BIGINT NOT NULL,
+        amount_frac BIGINT NOT NULL,
+        my_fee_amount_whole BIGINT,
+        my_fee_amount_frac BIGINT,
+        rp2p_amount_whole BIGINT,  /* Total amount from RP2P response (including all relay fees) - set when awaiting_approval */
+        rp2p_amount_frac BIGINT,
         destination_address VARCHAR(255), /* only set if you are the original sender */
         destination_pubkey TEXT,
         destination_signature TEXT,
@@ -337,7 +345,8 @@ function getRp2pTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL UNIQUE, /* sha256(receiver_address + salt + time + inquiry_token) */
         time BIGINT NOT NULL,
-        amount BIGINT NOT NULL,
+        amount_whole BIGINT NOT NULL,
+        amount_frac BIGINT NOT NULL,
         currency VARCHAR(10) NOT NULL,
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
@@ -355,15 +364,17 @@ function getRp2pCandidatesTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL,
         time BIGINT NOT NULL,
-        amount BIGINT NOT NULL,
+        amount_whole BIGINT NOT NULL,
+        amount_frac BIGINT NOT NULL,
         currency VARCHAR(10) NOT NULL,
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT NOT NULL,
-        fee_amount BIGINT NOT NULL,
+        fee_amount_whole BIGINT NOT NULL,
+        fee_amount_frac BIGINT NOT NULL,
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_rp2p_cand_hash (hash),
-        INDEX idx_rp2p_cand_hash_amount (hash, amount ASC),
+        INDEX idx_rp2p_cand_hash_amount (hash, amount_whole ASC, amount_frac ASC),
         INDEX idx_rp2p_cand_created_at (created_at)
     )";
 }
@@ -551,8 +562,10 @@ function getCapacityReservationsTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(128) NOT NULL,
         contact_pubkey_hash VARCHAR(64) NOT NULL,
-        base_amount BIGINT NOT NULL,
-        total_amount BIGINT NOT NULL,
+        base_amount_whole BIGINT NOT NULL,
+        base_amount_frac BIGINT NOT NULL,
+        total_amount_whole BIGINT NOT NULL,
+        total_amount_frac BIGINT NOT NULL,
         currency VARCHAR(10) NOT NULL,
         status ENUM('active', 'released', 'committed') DEFAULT 'active',
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),

@@ -7,6 +7,7 @@ use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorHandler;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionServiceInterface;
@@ -262,9 +263,10 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             // Check if there is enough funds to complete the transaction (sufficient balance or credit limit)
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
             $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey'], $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY);
-            $requestedAmount = $request['amount'];
+            $totalAvailable = $availableFunds->add($creditLimit);
+            $requestedAmount = SplitAmount::from($request['amount']);
 
-            if (($availableFunds + $creditLimit) < $requestedAmount) {
+            if ($totalAvailable->lt($requestedAmount)) {
                 // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response
                 // Echoing here would cause duplicate JSON output breaking response parsing
                 return false;

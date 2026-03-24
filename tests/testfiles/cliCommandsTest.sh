@@ -200,7 +200,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'viewsettings' JSON includes new settings keys"
 settingsJsonHasNew=true
-for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format conversion_factors; do
+for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format display_decimals; do
     if ! echo "$settingsJsonOutput" | grep -q "\"${key}\""; then
         settingsJsonHasNew=false
         printf "\t   Missing key: ${key}\n"

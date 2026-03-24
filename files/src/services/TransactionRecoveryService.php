@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use Eiou\Contracts\TransactionRecoveryServiceInterface;
 use Eiou\Database\TransactionRecoveryRepository;
 use Eiou\Database\TransactionRepository;
@@ -219,8 +220,8 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
             }
 
             // Verify the transaction belongs to the current user
-            $userAddresses = \Eiou\Core\UserContext::getInstance()->getUserAddresses();
-            $userPubkey = \Eiou\Core\UserContext::getInstance()->getPublicKey();
+            $userAddresses = UserContext::getInstance()->getUserAddresses();
+            $userPubkey = UserContext::getInstance()->getPublicKey();
             $isSender = in_array($transaction['sender_address'] ?? '', $userAddresses, true)
                 || ($transaction['sender_public_key'] ?? '') === $userPubkey;
             $isReceiver = in_array($transaction['receiver_address'] ?? '', $userAddresses, true)

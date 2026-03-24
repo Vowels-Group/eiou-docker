@@ -225,12 +225,12 @@ insertResult=$(docker exec ${receiver} php -r "
         \$stmt = \$pdo->prepare('INSERT INTO transactions (
             txid, previous_txid, sender_address, sender_public_key, sender_public_key_hash,
             receiver_address, receiver_public_key, receiver_public_key_hash,
-            amount, currency, memo, description, status, timestamp, time,
+            amount_whole, amount_frac, currency, memo, description, status, timestamp, time,
             sender_signature, signature_nonce, recipient_signature, type
         ) VALUES (
             :txid, :prev_txid, :sender_addr, :sender_pk, :sender_pk_hash,
             :recv_addr, :recv_pk, :recv_pk_hash,
-            :amount, :currency, :memo, :description, :status, :timestamp, :time,
+            :amount_whole, :amount_frac, :currency, :memo, :description, :status, :timestamp, :time,
             :signature, :nonce, :recv_sig, :type
         )');
 
@@ -243,7 +243,8 @@ insertResult=$(docker exec ${receiver} php -r "
             ':recv_addr' => \$myAddress,
             ':recv_pk' => \$myPubkey,
             ':recv_pk_hash' => \$myPubkeyHash,
-            ':amount' => 100,
+            ':amount_whole' => 100,
+            ':amount_frac' => 0,
             ':currency' => 'USD',
             ':memo' => 'standard',
             ':description' => 'chunked-sync-test-${timestamp}-' . \$i,
@@ -382,12 +383,12 @@ insertResult2=$(docker exec ${receiver} php -r "
         \$stmt = \$pdo->prepare('INSERT INTO transactions (
             txid, previous_txid, sender_address, sender_public_key, sender_public_key_hash,
             receiver_address, receiver_public_key, receiver_public_key_hash,
-            amount, currency, memo, description, status, timestamp, time,
+            amount_whole, amount_frac, currency, memo, description, status, timestamp, time,
             sender_signature, signature_nonce, recipient_signature, type
         ) VALUES (
             :txid, :prev_txid, :sender_addr, :sender_pk, :sender_pk_hash,
             :recv_addr, :recv_pk, :recv_pk_hash,
-            :amount, :currency, :memo, :description, :status, :timestamp, :time,
+            :amount_whole, :amount_frac, :currency, :memo, :description, :status, :timestamp, :time,
             :signature, :nonce, :recv_sig, :type
         )');
 
@@ -400,7 +401,8 @@ insertResult2=$(docker exec ${receiver} php -r "
             ':recv_addr' => \$myAddress,
             ':recv_pk' => \$myPubkey,
             ':recv_pk_hash' => \$myPubkeyHash,
-            ':amount' => 100,
+            ':amount_whole' => 100,
+            ':amount_frac' => 0,
             ':currency' => 'USD',
             ':memo' => 'standard',
             ':description' => 'small-sync-test-${timestamp2}-' . \$i,
@@ -512,12 +514,12 @@ cursorResult=$(docker exec ${receiver} php -r "
         \$stmt = \$pdo->prepare('INSERT INTO transactions (
             txid, previous_txid, sender_address, sender_public_key, sender_public_key_hash,
             receiver_address, receiver_public_key, receiver_public_key_hash,
-            amount, currency, memo, description, status, timestamp, time,
+            amount_whole, amount_frac, currency, memo, description, status, timestamp, time,
             sender_signature, signature_nonce, recipient_signature, type
         ) VALUES (
             :txid, :prev_txid, :sender_addr, :sender_pk, :sender_pk_hash,
             :recv_addr, :recv_pk, :recv_pk_hash,
-            :amount, :currency, :memo, :description, :status, :timestamp, :time,
+            :amount_whole, :amount_frac, :currency, :memo, :description, :status, :timestamp, :time,
             :signature, :nonce, :recv_sig, :type
         )');
 
@@ -530,7 +532,8 @@ cursorResult=$(docker exec ${receiver} php -r "
             ':recv_addr' => \$myAddress,
             ':recv_pk' => \$myPubkey,
             ':recv_pk_hash' => \$myPubkeyHash,
-            ':amount' => 100,
+            ':amount_whole' => 100,
+            ':amount_frac' => 0,
             ':currency' => 'USD',
             ':memo' => 'standard',
             ':description' => 'cursor-sync-test-${timestamp3}-' . \$i,

@@ -220,8 +220,8 @@ Handles settings and debug operations.
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
 | Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
-| Currency | `conversionFactors`, `allowedCurrencies` |
-| Display | `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
+| Currency | `allowedCurrencies` |
+| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
 
 ---
 

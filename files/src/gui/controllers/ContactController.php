@@ -16,6 +16,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 
 /**
  * Contact Controller
@@ -554,9 +555,9 @@ class ContactController
                     if ($contact) {
                         $pubkeyHash = $contact['receiverPublicKeyHash'] ?? '';
 
-                        // Convert to minor units
-                        $feeMinor = (int) ($contactFee * Constants::FEE_CONVERSION_FACTOR);
-                        $creditMinor = (int) ($contactCredit * Constants::getConversionFactor($contactCurrency));
+                        // Convert to storage units
+                        $feeMinor = CurrencyUtilityService::exactMajorToMinor($contactFee, Constants::FEE_CONVERSION_FACTOR);
+                        $creditMinor = \Eiou\Core\SplitAmount::fromMajorUnits($contactCredit);
 
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $contactCurrency, [
                             'fee_percent' => $feeMinor,
@@ -680,9 +681,9 @@ class ContactController
             $serviceContainer = $app->services;
             $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
-            // Convert to minor units for storage
-            $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
-            $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+            // Convert to storage units
+            $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
+            $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
             // Update the pending currency with user's fee/credit and set status to accepted
             $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
@@ -705,11 +706,11 @@ class ContactController
                 try {
                     $sentBalance = $balanceRepo->getContactSentBalance($contactPubkey, $currency);
                     $receivedBalance = $balanceRepo->getContactReceivedBalance($contactPubkey, $currency);
-                    $balance = $sentBalance - $receivedBalance;
-                    $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                    $balance = $sentBalance->subtract($receivedBalance);
+                    $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
                     $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) ($balance + $creditLimit),
+                        $balance->add($creditLimit),
                         $currency
                     );
                 } catch (\Exception $e) {
@@ -823,9 +824,9 @@ class ContactController
                     continue;
                 }
 
-                // Convert to minor units for storage
-                $creditMinor = (int) ($creditValidation['value'] * Constants::getConversionFactor($currency));
-                $feeMinor = (int) ($feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR);
+                // Convert to storage units
+                $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
+                $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
                 $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
                     'fee_percent' => $feeMinor,
@@ -845,11 +846,11 @@ class ContactController
                     try {
                         $sentBalance = $balanceRepo->getContactSentBalance($currentPubkey, $currency);
                         $receivedBalance = $balanceRepo->getContactReceivedBalance($currentPubkey, $currency);
-                        $balance = $sentBalance - $receivedBalance;
-                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                        $balance = $sentBalance->subtract($receivedBalance);
+                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
                         $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
                             $pubkeyHash,
-                            (int) ($balance + $creditLimit),
+                            $balance->add($creditLimit),
                             $currency
                         );
                     } catch (\Exception $e) {

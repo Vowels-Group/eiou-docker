@@ -43,7 +43,7 @@ for container in "${containers[@]}"; do
             \$total_string = '';
             foreach (\$balances as \$balance) {
                 \$contactResult = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->lookupByPubkeyHash(\$balance['pubkey_hash']);
-                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http'] ?? \$contactResult['https']) . ') (received | sent): ' . \$balance['received']/\Eiou\Core\Constants::CONVERSION_FACTORS['USD']  . ' | ' . \$balance['sent']/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] . ' ' . \$balance['currency'] . '\n';
+                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http'] ?? \$contactResult['https']) . ') (received | sent): ' . \$balance['received']->toMajorUnits()  . ' | ' . \$balance['sent']->toMajorUnits() . ' ' . \$balance['currency'] . '\n';
             }
             echo \$total_string;
         } else {
@@ -82,7 +82,7 @@ if [[ "$firstLink" ]]; then
         \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
         \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
+        echo \$balance->toMajorUnits() ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverInitial=$(docker exec ${receiver} php -r "
@@ -90,7 +90,7 @@ if [[ "$firstLink" ]]; then
         \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
+        echo \$balance->toMajorUnits() ?: '0';
     " 2>/dev/null || echo "0")
 
     echo -e "\n\t   Initial balances:"
@@ -110,7 +110,7 @@ if [[ "$firstLink" ]]; then
         \\\$app = \Eiou\Core\Application::getInstance();
         \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
-        echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
+        echo \\\$balance->toMajorUnits() ?: '0';
     \""
     receiverFinal=$(wait_for_balance_change "${receiver}" "$receiverInitial" "$balance_cmd" 20 "balance change")
 
@@ -120,7 +120,7 @@ if [[ "$firstLink" ]]; then
         \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
         \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
+        echo \$balance->toMajorUnits() ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverFinal=$(docker exec ${receiver} php -r "
@@ -128,7 +128,7 @@ if [[ "$firstLink" ]]; then
         \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'] ?: '0';
+        echo \$balance->toMajorUnits() ?: '0';
     " 2>/dev/null || echo "0")
 
     echo -e "\n\t   Final balances:"

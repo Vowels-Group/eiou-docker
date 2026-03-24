@@ -9,6 +9,7 @@ use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorCodes;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
@@ -16,6 +17,7 @@ use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Exceptions\FatalServiceException;
 use Eiou\Exceptions\ValidationServiceException;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Utils\InputValidator;
@@ -224,7 +226,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             $output->error("Invalid Fee: " . $feeValidation['error'], ErrorCodes::INVALID_FEE, 400);
             return;
         }
-        $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
+        $fee = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
         // Validate credit limit
         $creditValidation = $this->inputValidator->validateCreditLimit($data[5] ?? 0);
@@ -247,7 +249,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             return;
         }
         $currency = $currencyValidation['value'];
-        $credit = $creditValidation['value'] * Constants::getConversionFactor($currency);
+        $credit = SplitAmount::from($creditValidation['value']);
 
         // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
@@ -347,17 +349,17 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $pubkeyHash = $pubkeyHash ?? hash(Constants::HASH_ALGORITHM, $pubkey);
                     $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
                     $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
-                    $balance = $sentBalance - $receivedBalance;
+                    $balance = $sentBalance->subtract($receivedBalance);
 
-                    $creditLimit = 0;
+                    $creditLimit = SplitAmount::zero();
                     if ($this->contactCurrencyRepository !== null) {
-                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0;
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
                     }
 
-                    $availableCredit = $balance + $creditLimit;
+                    $availableCredit = $balance->add($creditLimit);
                     $this->contactCreditRepository->upsertAvailableCredit(
                         $pubkeyHash,
-                        (int) $availableCredit,
+                        $availableCredit,
                         $currency
                     );
                 } catch (\Exception $e) {
@@ -611,15 +613,15 @@ class ContactManagementService implements ContactManagementServiceInterface
                 if ($hash) {
                     // My available credit (from contact_credit table, received via pong)
                     if (isset($creditsByHash[$hash])) {
-                        $resultCurrency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $result['my_available_credit'] = $creditsByHash[$hash]['available_credit'] / Constants::getConversionFactor($resultCurrency);
+                        $result['my_available_credit'] = $creditsByHash[$hash]['available_credit']->toMajorUnits();
                     }
                     // Their available credit (calculated: sent - received + credit_limit)
                     if (isset($balancesByHash[$hash])) {
                         $b = $balancesByHash[$hash];
-                        $currency = $result['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)($result['credit_limit'] ?? 0));
-                        $result['their_available_credit'] = $theirMinorUnits / Constants::getConversionFactor($currency);
+                        $sent = $b['sent'] ?? SplitAmount::zero();
+                        $received = $b['received'] ?? SplitAmount::zero();
+                        $creditLimit = $result['credit_limit'] ?? SplitAmount::zero();
+                        $result['their_available_credit'] = $sent->subtract($received)->add($creditLimit)->toMajorUnits();
                     }
                 }
             }
@@ -651,8 +653,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                     }
                     echo "\t    Status: " . ($contact['status'] ?? 'N/A') . "\n";
                     $contactCurrency = $contact['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                    if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], Constants::getCurrencyDecimals($contactCurrency)) . "\n";
-                    if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], Constants::getCurrencyDecimals($contactCurrency)) . "\n";
+                    if ($contact['my_available_credit'] !== null) echo "\t    Your Available Credit: " . number_format($contact['my_available_credit'], Constants::getDisplayDecimals()) . "\n";
+                    if ($contact['their_available_credit'] !== null) echo "\t    Their Available Credit: " . number_format($contact['their_available_credit'], Constants::getDisplayDecimals()) . "\n";
                 }
                 echo "\nFound " . count($results) . " contact(s)\n";
             }
@@ -727,7 +729,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $creditData = $this->contactCreditRepository->getAvailableCredit($contactResult['pubkey_hash']);
                     if ($creditData !== null) {
                         $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+                        $myAvailableCredit = $creditData['available_credit']->toMajorUnits();
                     }
                 } catch (\Exception $e) {
                     // Non-critical — skip available credit display
@@ -742,9 +744,10 @@ class ContactManagementService implements ContactManagementServiceInterface
                     $balanceData = $this->balanceRepository->getContactBalanceByPubkeyHash($contactResult['pubkey_hash'], $firstCurrency);
                     if ($balanceData && count($balanceData) > 0) {
                         $b = $balanceData[0];
-                        $creditLimit = $currencies[0]['credit_limit'] ?? 0;
-                        $theirMinorUnits = ((int)($b['sent'] ?? 0)) - ((int)($b['received'] ?? 0)) + ((int)$creditLimit);
-                        $theirAvailableCredit = $theirMinorUnits / Constants::getConversionFactor($firstCurrency);
+                        $sent = $b['sent'] ?? SplitAmount::zero();
+                        $received = $b['received'] ?? SplitAmount::zero();
+                        $creditLimit = $currencies[0]['credit_limit'] ?? SplitAmount::zero();
+                        $theirAvailableCredit = $sent->subtract($received)->add($creditLimit)->toMajorUnits();
                     }
                 } catch (\Exception $e) {
                     // Non-critical
@@ -764,7 +767,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                     return [
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
-                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'credit_limit' => $c['credit_limit']->toMajorUnits(),
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -782,12 +785,12 @@ class ContactManagementService implements ContactManagementServiceInterface
                     foreach ($currencies as $c) {
                         $cur = $c['currency'];
                         $fee = $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR;
-                        $credit = $c['credit_limit'] / Constants::getConversionFactor($cur);
-                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getCurrencyDecimals($cur)) . "\n";
+                        $credit = $c['credit_limit']->toMajorUnits();
+                        echo "\t  {$cur}: Fee {$fee}%, Credit Limit " . number_format($credit, Constants::getDisplayDecimals()) . "\n";
                     }
                 }
-                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, Constants::getCurrencyDecimals($creditCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
-                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, Constants::getCurrencyDecimals($firstCurrency ?? Constants::TRANSACTION_DEFAULT_CURRENCY)) . "\n";
+                if ($myAvailableCredit !== null) echo "\tYour Available Credit: " . number_format($myAvailableCredit, Constants::getDisplayDecimals()) . "\n";
+                if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, Constants::getDisplayDecimals()) . "\n";
             }
         } else {
             $output->error("Contact not found", ErrorCodes::CONTACT_NOT_FOUND, 404, ['query' => $data[2] ?? null]);
@@ -1324,11 +1327,11 @@ class ContactManagementService implements ContactManagementServiceInterface
                 $currencyFields = [];
                 if ($field === 'fee' || $field === 'all') {
                     $feeValue = ($field === 'fee') ? $value : $value2;
-                    $currencyFields['fee_percent'] = (int) ($feeValue * Constants::FEE_CONVERSION_FACTOR);
+                    $currencyFields['fee_percent'] = CurrencyUtilityService::exactMajorToMinor($feeValue, Constants::FEE_CONVERSION_FACTOR);
                 }
                 if ($field === 'credit' || $field === 'all') {
                     $creditValue = ($field === 'credit') ? $value : $value3;
-                    $currencyFields['credit_limit'] = (int) ($creditValue * Constants::getConversionFactor($currency));
+                    $currencyFields['credit_limit'] = SplitAmount::from($creditValue);
                 }
                 if (!empty($currencyFields)) {
                     $this->contactCurrencyRepository->updateCurrencyConfig($pubkeyHash, $currency, $currencyFields);
@@ -1376,9 +1379,9 @@ class ContactManagementService implements ContactManagementServiceInterface
      *
      * @param string $senderPublicKey Sender's public key
      * @param string $currency Currency code
-     * @return float Credit limit
+     * @return SplitAmount Credit limit
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): SplitAmount
     {
         return $this->contactRepository->getCreditLimit($senderPublicKey, $currency);
     }
@@ -1395,7 +1398,7 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param float $credit Credit limit
      * @return bool True on success
      */
-    public function addCurrencyToContact(string $pubkey, string $currency, float $fee, float $credit): bool
+    public function addCurrencyToContact(string $pubkey, string $currency, float|string $fee, float|string $credit): bool
     {
         // Verify contact is accepted
         if (!$this->contactRepository->isAcceptedContactPubkey($pubkey)) {
@@ -1411,7 +1414,9 @@ class ContactManagementService implements ContactManagementServiceInterface
 
         // Insert into contact_currencies as outgoing (we are adding this currency)
         if ($this->contactCurrencyRepository !== null) {
-            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, (int) $fee, (int) $credit, 'pending', 'outgoing');
+            $feeMinor = CurrencyUtilityService::exactMajorToMinor((float) $fee, Constants::FEE_CONVERSION_FACTOR);
+            $creditSplit = SplitAmount::from($credit);
+            $this->contactCurrencyRepository->insertCurrencyConfig($pubkeyHash, $currency, $feeMinor, $creditSplit, 'pending', 'outgoing');
         }
 
         // Create initial balance entries for the new currency
@@ -1422,13 +1427,13 @@ class ContactManagementService implements ContactManagementServiceInterface
             try {
                 $sentBalance = $this->balanceRepository->getContactSentBalance($pubkey, $currency);
                 $receivedBalance = $this->balanceRepository->getContactReceivedBalance($pubkey, $currency);
-                $balance = $sentBalance - $receivedBalance;
+                $balance = $sentBalance->subtract($receivedBalance);
                 $creditLimit = $this->contactCurrencyRepository !== null
-                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? 0)
-                    : 0;
+                    ? ($this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero())
+                    : SplitAmount::zero();
                 $this->contactCreditRepository->upsertAvailableCredit(
                     $pubkeyHash,
-                    (int) ($balance + $creditLimit),
+                    $balance->add($creditLimit),
                     $currency
                 );
             } catch (\Exception $e) {

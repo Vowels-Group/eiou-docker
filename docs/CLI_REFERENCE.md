@@ -1008,16 +1008,11 @@ eiou changesettings [setting] [value]
 | `syncMaxChunks` | Max sync chunks per cycle (10-1000) | `100` |
 | `heldTxSyncTimeoutSeconds` | Held tx sync timeout in seconds (30-299) | `120` |
 
-**Advanced Settings (Currency):**
-
-| Setting | Description | Example Value |
-|---------|-------------|---------------|
-| `conversionFactors` | Minor-to-major unit conversion per currency (JSON). Decimal places are inferred: `log10(factor)` (e.g. 100 → 2, 100000000 → 8) | `{"USD":100,"BTC":100000000}` |
-
 **Advanced Settings (Display):**
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
+| `displayDecimals` | Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage. | `4` |
 | `displayDateFormat` | PHP date format string | `Y-m-d H:i:s.u` |
 | `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
 
@@ -1048,7 +1043,7 @@ eiou changesettings backupRetentionCount 5
 eiou changesettings cleanupDeliveryRetentionDays 60
 eiou changesettings httpTransportTimeoutSeconds 30
 eiou changesettings rateLimitEnabled false
-eiou changesettings conversionFactors '{"USD":100,"BTC":100000000}'
+eiou changesettings displayDecimals 4
 eiou changesettings torCircuitMaxFailures 5
 eiou changesettings torFailureTransportFallback false
 eiou changesettings contactStatusEnabled false

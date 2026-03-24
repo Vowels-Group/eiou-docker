@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Core\SplitAmount;
+
 /**
  * Interface for balance-related operations.
  *
@@ -39,9 +41,9 @@ interface BalanceServiceInterface
      *
      * @param string $userPubkey User's public key
      * @param string $contactPubkey Contact's public key
-     * @return int Balance in cents
+     * @return SplitAmount Balance
      */
-    public function getContactBalance(string $userPubkey, string $contactPubkey): int;
+    public function getContactBalance(string $userPubkey, string $contactPubkey): SplitAmount;
 
     /**
      * Get all contact balances.

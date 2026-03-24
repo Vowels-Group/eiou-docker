@@ -18,6 +18,7 @@ namespace Eiou\Tests\Repositories;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOStatement;
 
@@ -31,7 +32,8 @@ class ContactCurrencyRepositoryTest extends TestCase
     private const TEST_PUBKEY_HASH = '5a9f3e8b1c2d4f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
     private const TEST_CURRENCY = 'USD';
     private const TEST_FEE_PERCENT = 250;
-    private const TEST_CREDIT_LIMIT = 50000;
+    private const TEST_CREDIT_LIMIT_WHOLE = 50000;
+    private const TEST_CREDIT_LIMIT_FRAC = 0;
 
     protected function setUp(): void
     {
@@ -67,12 +69,13 @@ class ContactCurrencyRepositoryTest extends TestCase
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->with($this->logicalAnd(
-                $this->stringContains('INSERT INTO'),
+                $this->stringContains('INSERT'),
                 $this->stringContains('contact_currencies'),
                 $this->stringContains('pubkey_hash'),
                 $this->stringContains('currency'),
                 $this->stringContains('fee_percent'),
-                $this->stringContains('credit_limit')
+                $this->stringContains('credit_limit_whole'),
+                $this->stringContains('credit_limit_frac')
             ))
             ->willReturn($this->stmt);
 
@@ -87,7 +90,7 @@ class ContactCurrencyRepositoryTest extends TestCase
             self::TEST_PUBKEY_HASH,
             self::TEST_CURRENCY,
             self::TEST_FEE_PERCENT,
-            self::TEST_CREDIT_LIMIT
+            new SplitAmount(self::TEST_CREDIT_LIMIT_WHOLE, self::TEST_CREDIT_LIMIT_FRAC)
         );
 
         $this->assertTrue($result);
@@ -103,7 +106,7 @@ class ContactCurrencyRepositoryTest extends TestCase
             self::TEST_PUBKEY_HASH,
             self::TEST_CURRENCY,
             self::TEST_FEE_PERCENT,
-            self::TEST_CREDIT_LIMIT
+            new SplitAmount(self::TEST_CREDIT_LIMIT_WHOLE, self::TEST_CREDIT_LIMIT_FRAC)
         );
 
         $this->assertFalse($result);
@@ -115,10 +118,13 @@ class ContactCurrencyRepositoryTest extends TestCase
 
     public function testGetCurrencyConfigReturnsData(): void
     {
-        $expectedResult = [
+        $dbRow = [
             'currency' => 'USD',
             'fee_percent' => 250,
-            'credit_limit' => 50000
+            'credit_limit_whole' => 50000,
+            'credit_limit_frac' => 0,
+            'status' => 'accepted',
+            'direction' => 'incoming'
         ];
 
         $this->pdo->expects($this->once())
@@ -141,14 +147,15 @@ class ContactCurrencyRepositoryTest extends TestCase
 
         $this->stmt->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedResult);
+            ->willReturn($dbRow);
 
         $result = $this->repository->getCurrencyConfig(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
 
         $this->assertIsArray($result);
         $this->assertEquals('USD', $result['currency']);
         $this->assertEquals(250, $result['fee_percent']);
-        $this->assertEquals(50000, $result['credit_limit']);
+        $this->assertInstanceOf(SplitAmount::class, $result['credit_limit']);
+        $this->assertEquals(50000, $result['credit_limit']->whole);
     }
 
     public function testGetCurrencyConfigReturnsNullWhenNotFound(): void
@@ -192,8 +199,8 @@ class ContactCurrencyRepositoryTest extends TestCase
     public function testGetContactCurrenciesReturnsData(): void
     {
         $expectedResult = [
-            ['currency' => 'USD', 'fee_percent' => 250, 'credit_limit' => 50000],
-            ['currency' => 'EUR', 'fee_percent' => 300, 'credit_limit' => 40000]
+            ['currency' => 'USD', 'fee_percent' => 250, 'credit_limit_whole' => 50000, 'credit_limit_frac' => 0, 'status' => 'accepted', 'direction' => 'incoming'],
+            ['currency' => 'EUR', 'fee_percent' => 300, 'credit_limit_whole' => 40000, 'credit_limit_frac' => 0, 'status' => 'accepted', 'direction' => 'incoming']
         ];
 
         $this->pdo->expects($this->once())
@@ -345,14 +352,16 @@ class ContactCurrencyRepositoryTest extends TestCase
 
         $this->stmt->method('fetch')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['credit_limit' => 50000]);
+            ->willReturn(['credit_limit_whole' => 50000, 'credit_limit_frac' => 0]);
 
         $result = $this->repository->getCreditLimit(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
 
-        $this->assertEquals(50000, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(50000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
-    public function testGetCreditLimitReturnsZeroWhenNotFound(): void
+    public function testGetCreditLimitReturnsNullWhenNotFound(): void
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
@@ -371,10 +380,10 @@ class ContactCurrencyRepositoryTest extends TestCase
 
         $result = $this->repository->getCreditLimit(self::TEST_PUBKEY_HASH, 'NONEXISTENT');
 
-        $this->assertEquals(0, $result);
+        $this->assertNull($result);
     }
 
-    public function testGetCreditLimitReturnsZeroOnFailure(): void
+    public function testGetCreditLimitReturnsNullOnFailure(): void
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
@@ -382,7 +391,7 @@ class ContactCurrencyRepositoryTest extends TestCase
 
         $result = $this->repository->getCreditLimit(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
 
-        $this->assertEquals(0, $result);
+        $this->assertNull($result);
     }
 
     // =========================================================================
@@ -502,7 +511,7 @@ class ContactCurrencyRepositoryTest extends TestCase
         $result = $this->repository->updateCurrencyConfig(
             self::TEST_PUBKEY_HASH,
             self::TEST_CURRENCY,
-            ['fee_percent' => 300, 'credit_limit' => 60000]
+            ['fee_percent' => 300, 'credit_limit' => new SplitAmount(60000, 0)]
         );
 
         $this->assertTrue($result);
@@ -573,7 +582,7 @@ class ContactCurrencyRepositoryTest extends TestCase
             self::TEST_PUBKEY_HASH,
             self::TEST_CURRENCY,
             self::TEST_FEE_PERCENT,
-            self::TEST_CREDIT_LIMIT
+            new SplitAmount(self::TEST_CREDIT_LIMIT_WHOLE, self::TEST_CREDIT_LIMIT_FRAC)
         );
 
         $this->assertTrue($result);
@@ -589,7 +598,7 @@ class ContactCurrencyRepositoryTest extends TestCase
             self::TEST_PUBKEY_HASH,
             self::TEST_CURRENCY,
             self::TEST_FEE_PERCENT,
-            self::TEST_CREDIT_LIMIT
+            new SplitAmount(self::TEST_CREDIT_LIMIT_WHOLE, self::TEST_CREDIT_LIMIT_FRAC)
         );
 
         $this->assertFalse($result);
@@ -617,13 +626,14 @@ class ContactCurrencyRepositoryTest extends TestCase
             self::TEST_PUBKEY_HASH,
             self::TEST_CURRENCY,
             self::TEST_FEE_PERCENT,
-            self::TEST_CREDIT_LIMIT
+            new SplitAmount(self::TEST_CREDIT_LIMIT_WHOLE, self::TEST_CREDIT_LIMIT_FRAC)
         );
 
         $this->assertEquals(self::TEST_PUBKEY_HASH, $boundValues[':pubkey_hash']);
         $this->assertEquals(self::TEST_CURRENCY, $boundValues[':currency']);
         $this->assertEquals(self::TEST_FEE_PERCENT, $boundValues[':fee_percent']);
-        $this->assertEquals(self::TEST_CREDIT_LIMIT, $boundValues[':credit_limit']);
+        $this->assertEquals(self::TEST_CREDIT_LIMIT_WHOLE, $boundValues[':credit_limit_whole']);
+        $this->assertEquals(self::TEST_CREDIT_LIMIT_FRAC, $boundValues[':credit_limit_frac']);
     }
 
     // =========================================================================

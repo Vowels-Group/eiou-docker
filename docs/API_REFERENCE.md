@@ -501,7 +501,7 @@ Send a transaction to a contact.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) or contact name. Cannot be your own address |
-| `amount` | number | Yes | Amount to send (must be >= the currency's smallest unit, e.g., 0.01 for USD). Amounts below the minimum after rounding to the currency's decimal precision are rejected |
+| `amount` | number | Yes | Amount to send (must be > 0, up to 8 decimal places). Minimum: 0.00000001. Maximum: ~2.3 quintillion (TRANSACTION_MAX_AMOUNT). Returned as a decimal string with 8-decimal precision |
 | `currency` | string | Yes | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
 | `description` | string | No | Optional transaction description (max 255 characters). Only visible to the final recipient |
 | `best_fee` | boolean | No | **[Experimental]** Use best-fee routing: collects all P2P route responses and selects the lowest accumulated fee. May be slower than default fast mode. |
@@ -616,7 +616,7 @@ Add a new contact.
 | `address` | string | Yes | - | Contact's node address (HTTP, HTTPS, or Tor .onion) |
 | `name` | string | Yes | - | Display name (2-50 characters, alphanumeric, spaces, dashes, underscores) |
 | `fee_percent` | number | No | 1.0 | Transaction fee percentage (0-100) |
-| `credit_limit` | number | No | 100.0 | Credit limit in the specified currency (>= 0, rounded to currency precision) |
+| `credit_limit` | number | No | 100.0 | Credit limit in the specified currency (>= 0, up to 8 decimal places, max PHP_INT_MAX). Returned as a decimal string |
 | `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
 | `description` | string | No | - | A short message sent with the contact request (max 255 characters). Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
 

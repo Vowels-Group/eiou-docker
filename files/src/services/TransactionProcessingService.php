@@ -4,6 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
@@ -723,10 +724,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
             $sentBalance = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
             $receivedBalance = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
-            $balance = $sentBalance - $receivedBalance;
+            $balance = $sentBalance->subtract($receivedBalance);
 
-            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency);
-            $availableCredit = $balance + $creditLimit;
+            $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency) ?? SplitAmount::zero();
+            $availableCredit = $balance->add($creditLimit)->toMajorUnits();
 
             $message['availableCreditByCurrency'] = [$currency => $availableCredit];
             $message['creditCalculatedAt'] = $this->timeUtility->getCurrentMicrotime();

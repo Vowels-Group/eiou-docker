@@ -4,6 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
@@ -21,9 +22,12 @@ class Rp2pRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'hash', 'time', 'amount', 'currency', 'sender_public_key',
+        'id', 'hash', 'time', 'amount_whole', 'amount_frac', 'currency', 'sender_public_key',
         'sender_address', 'sender_signature', 'created_at'
     ];
+
+    /** @var string[] Split amount column prefixes for automatic row mapping */
+    protected array $splitAmountColumns = ['amount'];
 
     /**
      * Constructor
@@ -61,7 +65,7 @@ class Rp2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**
@@ -71,10 +75,12 @@ class Rp2pRepository extends AbstractRepository {
      * @return string JSON response
      */
     public function insertRp2pRequest(array $request): string {
+        $amount = SplitAmount::from($request['amount']);
         $data = [
             'hash' => $request['hash'],
             'time' => $request['time'],
-            'amount' => $request['amount'],
+            'amount_whole' => $amount->whole,
+            'amount_frac' => $amount->frac,
             'currency' => $request['currency'],
             'sender_public_key' => $request['senderPublicKey'],
             'sender_address' => $request['senderAddress'],
@@ -110,20 +116,20 @@ class Rp2pRepository extends AbstractRepository {
      * Retrieve credit currently in RP2P for a pubkey
      *
      * @param string $pubkey Sender pubkey
-     * @return float Total amount on hold
+     * @return SplitAmount Total amount on hold
      */
-    public function getCreditInRp2p(string $pubkey): float {
-        $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
+    public function getCreditInRp2p(string $pubkey): SplitAmount {
+        $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName}
                   WHERE sender_public_key = :pubkey
                     AND status NOT IN ('cancelled', 'completed')";
         $stmt = $this->execute($query, [':pubkey' => $pubkey]);
 
         if (!$stmt) {
-            return 0;
+            return SplitAmount::zero();
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_amount'] ?? 0);
+        return self::sumCarry((int)$result['sum_whole'], (int)$result['sum_frac']);
     }
 
     /**
@@ -153,7 +159,7 @@ class Rp2pRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve recent RP2P requests", $e);
             return [];
@@ -181,26 +187,26 @@ class Rp2pRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     /**
      * Get total amount requested by address
      *
      * @param string $address Sender address
-     * @return float Total amount requested
+     * @return SplitAmount Total amount requested
      */
-    public function getTotalAmountByAddress(string $address): float {
-        $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
+    public function getTotalAmountByAddress(string $address): SplitAmount {
+        $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName}
                   WHERE sender_address = :address";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
-            return 0;
+            return SplitAmount::zero();
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_amount'] ?? 0);
+        return self::sumCarry((int)$result['sum_whole'], (int)$result['sum_frac']);
     }
 
     /**
@@ -211,8 +217,7 @@ class Rp2pRepository extends AbstractRepository {
     public function getStatistics(): array {
         $query = "SELECT
                     COUNT(*) as total_count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as average_amount,
+                    COALESCE(SUM(amount_whole), 0) AS total_amount_whole, COALESCE(SUM(amount_frac), 0) AS total_amount_frac,
                     COUNT(DISTINCT sender_address) as unique_senders,
                     MIN(time) as earliest_request,
                     MAX(time) as latest_request
@@ -225,7 +230,16 @@ class Rp2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
+        if (!$result) {
+            return [];
+        }
+        return [
+            'total_count' => $result['total_count'],
+            'total_amount' => self::sumCarry((int)$result['total_amount_whole'], (int)$result['total_amount_frac']),
+            'unique_senders' => $result['unique_senders'],
+            'earliest_request' => $result['earliest_request'],
+            'latest_request' => $result['latest_request'],
+        ];
     }
 
     /**
@@ -274,21 +288,24 @@ class Rp2pRepository extends AbstractRepository {
     /**
      * Get RP2P requests with amount greater than specified value
      *
-     * @param float $minAmount Minimum amount
+     * @param SplitAmount $minAmount Minimum amount
      * @param int $limit Maximum number of requests
      * @return array Array of RP2P requests
      */
-    public function getByMinAmount(float $minAmount, int $limit = 0): array {
+    public function getByMinAmount(SplitAmount $minAmount, int $limit = 0): array {
+        // Compare using (whole, frac) tuple ordering
         $query = "SELECT * FROM {$this->tableName}
-                  WHERE amount >= :min_amount
-                  ORDER BY amount DESC";
+                  WHERE (amount_whole > :min_whole OR (amount_whole = :min_whole2 AND amount_frac >= :min_frac))
+                  ORDER BY amount_whole DESC, amount_frac DESC";
 
         if ($limit > 0) {
             $query .= " LIMIT :limit";
         }
 
         $stmt = $this->pdo->prepare($query);
-        $stmt->bindValue(':min_amount', $minAmount);
+        $stmt->bindValue(':min_whole', $minAmount->whole, PDO::PARAM_INT);
+        $stmt->bindValue(':min_whole2', $minAmount->whole, PDO::PARAM_INT);
+        $stmt->bindValue(':min_frac', $minAmount->frac, PDO::PARAM_INT);
 
         if ($limit > 0) {
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
@@ -296,7 +313,7 @@ class Rp2pRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve RP2P by min amount", $e);
             return [];
@@ -340,5 +357,18 @@ class Rp2pRepository extends AbstractRepository {
         }
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Handle carry from summed fractional parts
+     *
+     * @param int $sumWhole Summed whole parts
+     * @param int $sumFrac Summed fractional parts (may exceed FRAC_MODULUS)
+     * @return SplitAmount Properly normalized SplitAmount
+     */
+    private static function sumCarry(int $sumWhole, int $sumFrac): SplitAmount {
+        $carry = intdiv($sumFrac, SplitAmount::FRAC_MODULUS);
+        $frac = $sumFrac % SplitAmount::FRAC_MODULUS;
+        return new SplitAmount($sumWhole + $carry, $frac);
     }
 }

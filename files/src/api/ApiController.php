@@ -8,6 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Database\BalanceRepository;
@@ -330,9 +331,10 @@ class ApiController {
                 'contact_name' => $contact['name'] ?? 'Unknown',
                 'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null,
                 'currency' => $balance['currency'],
-                'received' => $balance['received'] / Constants::getConversionFactor($balance['currency']),
-                'sent' => $balance['sent'] / Constants::getConversionFactor($balance['currency']),
-                'net_balance' => ($balance['received'] - $balance['sent']) / Constants::getConversionFactor($balance['currency'])
+                'received' => (new \Eiou\Core\SplitAmount((int)($balance['received_whole'] ?? 0), (int)($balance['received_frac'] ?? 0)))->toMajorUnits(),
+                'sent' => (new \Eiou\Core\SplitAmount((int)($balance['sent_whole'] ?? 0), (int)($balance['sent_frac'] ?? 0)))->toMajorUnits(),
+                'net_balance' => (new \Eiou\Core\SplitAmount((int)($balance['received_whole'] ?? 0), (int)($balance['received_frac'] ?? 0)))
+                    ->subtract(new \Eiou\Core\SplitAmount((int)($balance['sent_whole'] ?? 0), (int)($balance['sent_frac'] ?? 0)))->toMajorUnits()
             ];
         }
 
@@ -537,7 +539,7 @@ class ApiController {
                 'type' => $tx['type'],
                 'tx_type' => $tx['tx_type'],
                 'status' => $tx['status'],
-                'amount' => $tx['amount'] / Constants::getConversionFactor($tx['currency']),
+                'amount' => (new \Eiou\Core\SplitAmount((int)($tx['amount_whole'] ?? 0), (int)($tx['amount_frac'] ?? 0)))->toMajorUnits(),
                 'currency' => $tx['currency'],
                 'sender_address' => $tx['sender_address'],
                 'receiver_address' => $tx['receiver_address'],
@@ -589,7 +591,7 @@ class ApiController {
         foreach ($earningsRows as $row) {
             $feeEarnings[] = [
                 'currency' => $row['currency'],
-                'total_amount' => $row['total_amount'] / Constants::getConversionFactor($row['currency'])
+                'total_amount' => ($row['total_amount'] instanceof \Eiou\Core\SplitAmount) ? $row['total_amount']->toMajorUnits() : 0
             ];
         }
 
@@ -600,7 +602,7 @@ class ApiController {
         foreach ($creditRows as $row) {
             $availableCredit[] = [
                 'currency' => $row['currency'],
-                'total_available_credit' => $row['total_available_credit'] / Constants::getConversionFactor($row['currency'])
+                'total_available_credit' => ($row['total_available_credit'] instanceof \Eiou\Core\SplitAmount) ? $row['total_available_credit']->toMajorUnits() : 0
             ];
         }
 
@@ -638,7 +640,7 @@ class ApiController {
             foreach ($balances as $balance) {
                 $balanceResult[] = [
                     'currency' => $balance['currency'],
-                    'total_balance' => $balance['total_balance'] / Constants::getConversionFactor($balance['currency'])
+                    'total_balance' => ($balance['total_balance'] instanceof \Eiou\Core\SplitAmount) ? $balance['total_balance']->toMajorUnits() : 0
                 ];
             }
         }
@@ -653,7 +655,7 @@ class ApiController {
                 'type' => $tx['direction'] ?? $tx['type'] ?? null,
                 'tx_type' => $tx['tx_type'] ?? null,
                 'status' => $tx['status'] ?? null,
-                'amount' => is_numeric($tx['amount'] ?? null) ? $tx['amount'] : 0,
+                'amount' => (new \Eiou\Core\SplitAmount((int)($tx['amount_whole'] ?? 0), (int)($tx['amount_frac'] ?? 0)))->toMajorUnits(),
                 'currency' => $tx['currency'] ?? null,
                 'counterparty_name' => $tx['counterparty_name'] ?? null,
                 'sender_address' => $tx['sender_address'] ?? null,
@@ -670,7 +672,7 @@ class ApiController {
         foreach ($creditRows as $row) {
             $totalAvailableCredit[] = [
                 'currency' => $row['currency'],
-                'total_available_credit' => $row['total_available_credit'] / Constants::getConversionFactor($row['currency'])
+                'total_available_credit' => ($row['total_available_credit'] instanceof \Eiou\Core\SplitAmount) ? $row['total_available_credit']->toMajorUnits() : 0
             ];
         }
 
@@ -722,7 +724,7 @@ class ApiController {
             $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
             if ($creditData !== null) {
                 $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+                $myAvailableCredit = ($creditData['available_credit'] instanceof \Eiou\Core\SplitAmount) ? $creditData['available_credit']->toMajorUnits() : 0;
             }
 
             $result[] = [
@@ -733,7 +735,7 @@ class ApiController {
                     return [
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
-                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'credit_limit' => ($c['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $c['credit_limit']->toMajorUnits() : 0,
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -854,7 +856,7 @@ class ApiController {
                     $creditData = $creditRepo->getAvailableCredit($hash);
                     if ($creditData !== null) {
                         $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-                        $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+                        $myAvailableCredit = ($creditData['available_credit'] instanceof \Eiou\Core\SplitAmount) ? $creditData['available_credit']->toMajorUnits() : 0;
                     }
                 }
 
@@ -1068,7 +1070,7 @@ class ApiController {
         $creditData = $creditRepo->getAvailableCredit($contact['pubkey_hash']);
         if ($creditData !== null) {
             $creditCurrency = $creditData['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
-            $myAvailableCredit = $creditData['available_credit'] / Constants::getConversionFactor($creditCurrency);
+            $myAvailableCredit = ($creditData['available_credit'] instanceof \Eiou\Core\SplitAmount) ? $creditData['available_credit']->toMajorUnits() : 0;
         }
 
         // Fetch all currencies for this contact from contact_currencies table
@@ -1091,15 +1093,15 @@ class ApiController {
                 'my_available_credit' => $myAvailableCredit,
                 'addresses' => $addresses,
                 'balance' => $balance ? [
-                    'received' => $balance['received'] / Constants::getConversionFactor($balanceCurrency),
-                    'sent' => $balance['sent'] / Constants::getConversionFactor($balanceCurrency),
-                    'net' => ($balance['received'] - $balance['sent']) / Constants::getConversionFactor($balanceCurrency)
+                    'received' => $balance['received']->toMajorUnits(),
+                    'sent' => $balance['sent']->toMajorUnits(),
+                    'net' => $balance['received']->subtract($balance['sent'])->toMajorUnits()
                 ] : null,
                 'currencies' => array_map(function ($c) {
                     return [
                         'currency' => $c['currency'],
                         'fee_percent' => $c['fee_percent'] / Constants::FEE_CONVERSION_FACTOR,
-                        'credit_limit' => $c['credit_limit'] / Constants::getConversionFactor($c['currency']),
+                        'credit_limit' => ($c['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $c['credit_limit']->toMajorUnits() : 0,
                         'status' => $c['status'] ?? null,
                         'direction' => $c['direction'] ?? null,
                     ];
@@ -1264,10 +1266,10 @@ class ApiController {
                     $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                     $currencyFields = [];
                     if (isset($data['fee_percent'])) {
-                        $currencyFields['fee_percent'] = (int) ($data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR);
+                        $currencyFields['fee_percent'] = CurrencyUtilityService::exactMajorToMinor($data['fee_percent'], Constants::FEE_CONVERSION_FACTOR);
                     }
                     if (isset($data['credit_limit'])) {
-                        $currencyFields['credit_limit'] = (int) ($data['credit_limit'] * Constants::getConversionFactor($data['currency']));
+                        $currencyFields['credit_limit'] = \Eiou\Core\SplitAmount::from($data['credit_limit']);
                     }
                     if (!empty($currencyFields)) {
                         $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $data['currency'], $currencyFields);

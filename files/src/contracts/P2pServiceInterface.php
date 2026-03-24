@@ -1,6 +1,8 @@
 <?php
 namespace Eiou\Contracts;
 
+use Eiou\Core\SplitAmount;
+
 /**
  * Interface for P2P (peer-to-peer) services.
  *
@@ -56,9 +58,9 @@ interface P2pServiceInterface
      * Get the total credit in P2P for a public key.
      *
      * @param string $pubkey The public key to check
-     * @return float The total credit amount in P2P
+     * @return SplitAmount The total credit amount in P2P
      */
-    public function getCreditInP2p(string $pubkey, ?string $currency = null): float;
+    public function getCreditInP2p(string $pubkey, ?string $currency = null): SplitAmount;
 
     /**
      * Get P2P statistics.

@@ -319,7 +319,7 @@ class UtilityServiceContainerTest extends TestCase
     {
         $currencyUtility = $this->utilityContainer->getCurrencyUtility();
 
-        $majorUnits = $currencyUtility->convertMinorToMajor(100);
+        $majorUnits = $currencyUtility->convertMinorToMajor(new \Eiou\Core\SplitAmount(1, 0));
 
         $this->assertEquals(1.0, $majorUnits);
     }

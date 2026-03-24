@@ -25,7 +25,7 @@ SELECT id, contact_id, name, status, online_status, valid_chain, created_at, las
 # ============================================================
 # Per-contact currency settings (fee, credit limit, direction)
 # Replaced the old fee_percent/credit_limit/currency columns on contacts
-SELECT id, pubkey_hash, currency, fee_percent, credit_limit, status, direction, created_at, updated_at FROM contact_currencies;
+SELECT id, pubkey_hash, currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction, created_at, updated_at FROM contact_currencies;
 
 # ============================================================
 # ADDRESSES TABLE
@@ -37,31 +37,31 @@ SELECT id, http, https, tor FROM addresses;
 # BALANCES TABLE
 # ============================================================
 # Account balances (excludes pubkey_hash)
-SELECT id, received, sent, currency FROM balances;
+SELECT id, received_whole, received_frac, sent_whole, sent_frac, currency FROM balances;
 
 # ============================================================
 # TRANSACTIONS TABLE
 # ============================================================
 # Full transactions (excludes pubkey, pubkey_hash, signatures, nonce, signed_message_content)
-SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, timestamp, time, txid, previous_txid, memo, description, sending_started_at, recovery_count, needs_manual_review, expires_at FROM transactions;
+SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount_whole, amount_frac, currency, timestamp, time, txid, previous_txid, memo, description, sending_started_at, recovery_count, needs_manual_review, expires_at FROM transactions;
 
 # ============================================================
 # P2P TABLE
 # ============================================================
 # Peer-to-peer requests (excludes pubkey, signatures, salt)
-SELECT id, hash, time, expiration, currency, amount, my_fee_amount, rp2p_amount, destination_address, request_level, max_request_level, sender_address, description, fast, contacts_sent_count, contacts_responded_count, hop_wait, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, status, sending_started_at, sending_worker_pid, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
+SELECT id, hash, time, expiration, currency, amount_whole, amount_frac, my_fee_amount_whole, my_fee_amount_frac, rp2p_amount_whole, rp2p_amount_frac, destination_address, request_level, max_request_level, sender_address, description, fast, contacts_sent_count, contacts_responded_count, hop_wait, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, status, sending_started_at, sending_worker_pid, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
 
 # ============================================================
 # RP2P TABLE
 # ============================================================
 # Responses to p2p requests (excludes pubkey, signatures)
-SELECT id, hash, time, amount, currency, sender_address, created_at FROM rp2p;
+SELECT id, hash, time, amount_whole, amount_frac, currency, sender_address, created_at FROM rp2p;
 
 # ============================================================
 # RP2P_CANDIDATES TABLE
 # ============================================================
 # Best-fee route selection candidates (excludes pubkey, signatures)
-SELECT id, hash, time, amount, currency, sender_address, fee_amount, created_at FROM rp2p_candidates;
+SELECT id, hash, time, amount_whole, amount_frac, currency, sender_address, fee_amount_whole, fee_amount_frac, created_at FROM rp2p_candidates;
 
 # ============================================================
 # P2P_SENDERS TABLE
@@ -85,7 +85,7 @@ SELECT id, hash, candidate_id, contact_address, status, created_at, acknowledged
 # CAPACITY_RESERVATIONS TABLE
 # ============================================================
 # Credit capacity reserved during P2P routing (released on cancel/expire/commit)
-SELECT id, hash, contact_pubkey_hash, base_amount, total_amount, currency, status, created_at, released_at, release_reason FROM capacity_reservations;
+SELECT id, hash, contact_pubkey_hash, base_amount_whole, base_amount_frac, total_amount_whole, total_amount_frac, currency, status, created_at, released_at, release_reason FROM capacity_reservations;
 
 # ============================================================
 # CHAIN_DROP_PROPOSALS TABLE
@@ -145,4 +145,4 @@ SELECT id, contact_pubkey_hash, txid, original_previous_txid, expected_previous_
 # CONTACT_CREDIT TABLE
 # ============================================================
 # Available credit per contact (updated during ping)
-SELECT id, pubkey_hash, available_credit, currency, updated_at FROM contact_credit;
+SELECT id, pubkey_hash, available_credit_whole, available_credit_frac, currency, updated_at FROM contact_credit;

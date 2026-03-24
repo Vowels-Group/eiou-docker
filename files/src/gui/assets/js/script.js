@@ -489,8 +489,7 @@ function initializeSendForm() {
 
 /**
  * Update the amount precision hint and input attributes based on selected currency.
- * Reads conversion factors from the currency select's data attribute and calculates
- * the minimum amount and step for the current currency.
+ * Reads display decimals from the currency select's data attribute.
  */
 function updateAmountPrecisionHint() {
     var currencySelect = document.getElementById('currency');
@@ -499,11 +498,9 @@ function updateAmountPrecisionHint() {
     if (!currencySelect || !hintText) return;
 
     var currency = currencySelect.value;
-    var factors = {};
-    try { factors = JSON.parse(currencySelect.getAttribute('data-conversion-factors') || '{}'); } catch (e) {}
-    var factor = factors[currency] || 100;
-    var decimals = Math.round(Math.log(factor) / Math.LN10);
-    var minimum = (1 / factor).toFixed(decimals);
+    // Input validation always uses internal precision, regardless of display decimals
+    var decimals = parseInt(currencySelect.getAttribute('data-internal-precision') || '8', 10);
+    var minimum = (1 / Math.pow(10, decimals)).toFixed(decimals);
     var step = minimum;
 
     hintText.textContent = 'Minimum amount for ' + currency + ': ' + minimum + '. Values below this will be rejected.';

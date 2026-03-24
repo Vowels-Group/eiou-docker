@@ -17,6 +17,7 @@ use Eiou\Schemas\Payloads\MessagePayload;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Events\ChainDropEvents;
 use Eiou\Events\EventDispatcher;
 use Eiou\Contracts\SyncTriggerInterface;
@@ -794,12 +795,12 @@ class ChainDropService implements ChainDropServiceInterface
             }
             $currency = $tx['currency'];
             if (!isset($currencies[$currency])) {
-                $currencies[$currency] = ['received' => 0, 'sent' => 0];
+                $currencies[$currency] = ['received' => SplitAmount::zero(), 'sent' => SplitAmount::zero()];
             }
             if (in_array($tx['sender_address'], $userAddresses)) {
-                $currencies[$currency]['sent'] += $tx['amount'];
+                $currencies[$currency]['sent'] = $currencies[$currency]['sent']->add($tx['amount']);
             } elseif (in_array($tx['receiver_address'], $userAddresses)) {
-                $currencies[$currency]['received'] += $tx['amount'];
+                $currencies[$currency]['received'] = $currencies[$currency]['received']->add($tx['amount']);
             }
         }
 
@@ -808,11 +809,11 @@ class ChainDropService implements ChainDropServiceInterface
             $storedReceived = $this->balanceRepository->getContactReceivedBalance($senderPubkey, $currency);
             $storedSent = $this->balanceRepository->getContactSentBalance($senderPubkey, $currency);
 
-            $missingReceived = $storedReceived - $txAmounts['received'];
-            $missingSent = $storedSent - $txAmounts['sent'];
-            $netMissing = $missingReceived - $missingSent;
+            $missingReceived = $storedReceived->subtract($txAmounts['received']);
+            $missingSent = $storedSent->subtract($txAmounts['sent']);
+            $netMissing = $missingReceived->subtract($missingSent);
 
-            if ($netMissing > 0) {
+            if ($netMissing->isPositive()) {
                 // Missing transactions include net payments TO us
                 // Proposer may be trying to erase their debt
                 Logger::getInstance()->info("Chain drop auto-accept blocked: missing txs favor proposer", [

@@ -143,13 +143,13 @@ fi
 
 echo -e "\n[Section 3: Excessive Amount Rejection (Exceeds MAX_AMOUNT)]"
 
-# Test 3.1: Send amount exceeding MAX_AMOUNT (999999999999)
+# Test 3.1: Send amount exceeding MAX_AMOUNT (TRANSACTION_MAX_AMOUNT + 1 = 2305843009213693952)
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing send with excessive amount (999999999999)"
+echo -e "\n\t-> Testing send with excessive amount (2305843009213693952)"
 
 timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
-body="{\"address\":\"${realContactAddress}\",\"amount\":\"999999999999\",\"currency\":\"USD\"}"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\"2305843009213693952\",\"currency\":\"USD\"}"
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
@@ -307,13 +307,13 @@ currentBalance=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
     \$balances = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getAllBalances();
-    \$total = 0;
+    \$total = \Eiou\Core\SplitAmount::zero();
     foreach (\$balances as \$b) {
         if (isset(\$b['received']) && isset(\$b['sent'])) {
-            \$total += \$b['received'] - \$b['sent'];
+            \$total = \$total->add(\$b['received']->subtract(\$b['sent']));
         }
     }
-    echo \$total;
+    echo \$total->toMajorUnits();
 " 2>/dev/null || echo "0")
 
 echo -e "\t   Current balance: ${currentBalance}"
@@ -659,6 +659,193 @@ if [[ "$response" =~ '"success"' ]]; then
 else
     printf "\t   Excessive decimal precision handling ${RED}FAILED${NC}\n"
     printf "\t   Response: ${response}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ SECTION 11: PRECISION BOUNDARY AMOUNTS ############################
+
+echo -e "\n[Section 11: Precision Boundary Amounts]"
+
+# Test 11.1: Send smallest representable amount (0.00000001)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing send with smallest representable amount (0.00000001)"
+
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
+path="/api/v1/wallet/send"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\"0.00000001\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
+    -H "Content-Type: application/json" \
+    -d "${body}" \
+    "${LOCAL_API_BASE}${path}" 2>&1)
+
+# Smallest amount should be accepted (valid JSON response with success field)
+if [[ "$response" =~ '"success"' ]]; then
+    printf "\t   Smallest representable amount ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Smallest representable amount ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${response}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.2: Send below smallest representable amount (0.000000001 — 9 decimals)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing send with sub-precision amount (0.000000001)"
+
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
+path="/api/v1/wallet/send"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\"0.000000001\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
+    -H "Content-Type: application/json" \
+    -d "${body}" \
+    "${LOCAL_API_BASE}${path}" 2>&1)
+
+# Sub-precision amount should be rejected (truncates to 0 at 8 decimal places)
+if [[ "$response" =~ "false" ]] && [[ "$response" =~ "minimum" || "$response" =~ "amount" || "$response" =~ "Amount" || "$response" =~ "zero" ]]; then
+    printf "\t   Sub-precision amount rejection ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Sub-precision amount rejection ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${response}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.3: Send with scientific notation (1e2 = 100)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing send with scientific notation amount (1e2)"
+
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
+path="/api/v1/wallet/send"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\"1e2\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
+    -H "Content-Type: application/json" \
+    -d "${body}" \
+    "${LOCAL_API_BASE}${path}" 2>&1)
+httpCode=$(echo "$response" | tail -1)
+responseBody=$(echo "$response" | sed '$d')
+
+# Scientific notation should be handled gracefully (valid JSON response or valid HTTP status)
+if [[ "$responseBody" =~ '"success"' ]] || [[ "$httpCode" == "200" ]]; then
+    printf "\t   Scientific notation handling ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Scientific notation handling ${RED}FAILED${NC}\n"
+    printf "\t   Response (HTTP ${httpCode}): ${responseBody}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.4: Send with multiple decimal points (should fail)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing send with multiple decimal points (100.50.50)"
+
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
+path="/api/v1/wallet/send"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\"100.50.50\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
+    -H "Content-Type: application/json" \
+    -d "${body}" \
+    "${LOCAL_API_BASE}${path}" 2>&1)
+
+if [[ "$response" =~ "false" ]]; then
+    printf "\t   Multiple decimal points rejection ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Multiple decimal points rejection ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${response}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.5: Send with whitespace-padded amount
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing send with whitespace in amount (\" 100 \")"
+
+timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
+path="/api/v1/wallet/send"
+body="{\"address\":\"${realContactAddress}\",\"amount\":\" 100 \",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n${nonce}\\n\" . \$body;
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "X-API-Nonce: ${nonce}" \
+    -H "Content-Type: application/json" \
+    -d "${body}" \
+    "${LOCAL_API_BASE}${path}" 2>&1)
+httpCode=$(echo "$response" | tail -1)
+responseBody=$(echo "$response" | sed '$d')
+
+# Whitespace-padded amount: API should either trim and accept, or reject — but not crash
+if [[ "$responseBody" =~ '"success"' ]] || [[ "$httpCode" == "200" ]]; then
+    printf "\t   Whitespace amount handling ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Whitespace amount handling ${RED}FAILED${NC}\n"
+    printf "\t   Response (HTTP ${httpCode}): ${responseBody}\n"
     failure=$(( failure + 1 ))
 fi
 

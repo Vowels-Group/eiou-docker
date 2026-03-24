@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use PDO;
 use PDOException;
@@ -58,7 +59,7 @@ class ContactRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @return bool Success status
      */
-    public function acceptContact(string $senderPublicKey, string $name, float $fee, float $credit, string $currency): bool {
+    public function acceptContact(string $senderPublicKey, string $name, $fee, $credit, string $currency): bool {
         $data = [
             'name' => $name,
             'status' => 'accepted',
@@ -525,22 +526,22 @@ class ContactRepository extends AbstractRepository {
      * @param string $currency Currency code
      * @return float Credit limit (0 if not found)
      */
-    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): float {
+    public function getCreditLimit(string $senderPublicKey, string $currency = Constants::TRANSACTION_DEFAULT_CURRENCY): SplitAmount {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
         // Single row per (pubkey_hash, currency) — NULL means not yet configured
-        $query = "SELECT credit_limit FROM contact_currencies
+        $query = "SELECT credit_limit_whole, credit_limit_frac FROM contact_currencies
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
 
         if ($stmt) {
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($result && $result['credit_limit'] !== null) {
-                return (float) $result['credit_limit'];
+            if ($result && $result['credit_limit_whole'] !== null) {
+                return new SplitAmount((int) $result['credit_limit_whole'], (int) ($result['credit_limit_frac'] ?? 0));
             }
         }
 
-        return 0;
+        return SplitAmount::zero();
     }
 
     /**
@@ -556,8 +557,8 @@ class ContactRepository extends AbstractRepository {
     public function insertContact(
         string $contactPublicKey,
         string $name,
-        float $fee,
-        float $credit,
+        $fee,
+        $credit,
         string $currency
     ): bool {
         $data = [
@@ -1206,8 +1207,8 @@ class ContactRepository extends AbstractRepository {
     public function updateUnblockContact(
         string $pubkey,
         string $name,
-        float $fee,
-        float $credit,
+        $fee,
+        $credit,
         string $currency
     ): bool {
         $data = [

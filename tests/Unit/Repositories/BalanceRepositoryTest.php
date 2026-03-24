@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\BalanceRepository;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use PDO;
 use PDOStatement;
 use PDOException;
@@ -77,8 +78,10 @@ class BalanceRepositoryTest extends TestCase
 
         $this->assertContains('id', $allowedColumns);
         $this->assertContains('pubkey_hash', $allowedColumns);
-        $this->assertContains('received', $allowedColumns);
-        $this->assertContains('sent', $allowedColumns);
+        $this->assertContains('received_whole', $allowedColumns);
+        $this->assertContains('received_frac', $allowedColumns);
+        $this->assertContains('sent_whole', $allowedColumns);
+        $this->assertContains('sent_frac', $allowedColumns);
         $this->assertContains('currency', $allowedColumns);
     }
 
@@ -147,8 +150,8 @@ class BalanceRepositoryTest extends TestCase
     public function testGetAllBalancesReturnsAllBalanceRecords(): void
     {
         $expectedBalances = [
-            ['pubkey_hash' => 'hash1', 'received' => 1000, 'sent' => 500, 'currency' => 'USD'],
-            ['pubkey_hash' => 'hash2', 'received' => 2000, 'sent' => 800, 'currency' => 'USD'],
+            ['pubkey_hash' => 'hash1', 'received_whole' => 1000, 'received_frac' => 0, 'sent_whole' => 500, 'sent_frac' => 0, 'currency' => 'USD'],
+            ['pubkey_hash' => 'hash2', 'received_whole' => 2000, 'received_frac' => 0, 'sent_whole' => 800, 'sent_frac' => 0, 'currency' => 'USD'],
         ];
 
         $this->pdo->expects($this->once())
@@ -165,7 +168,11 @@ class BalanceRepositoryTest extends TestCase
 
         $result = $this->repository->getAllBalances();
 
-        $this->assertEquals($expectedBalances, $result);
+        $this->assertCount(2, $result);
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result[0]['received']);
+        $this->assertEquals(1000, $result[0]['received']->whole);
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result[0]['sent']);
+        $this->assertEquals(500, $result[0]['sent']->whole);
     }
 
     /**
@@ -215,8 +222,8 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkey = 'test-public-key';
         $currency = 'USD';
-        $expectedBalance = [
-            ['received' => 1000, 'sent' => 300]
+        $dbRows = [
+            ['received_whole' => 1000, 'received_frac' => 0, 'sent_whole' => 300, 'sent_frac' => 0]
         ];
 
         $this->pdo->expects($this->once())
@@ -232,11 +239,17 @@ class BalanceRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedBalance);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getContactBalance($pubkey, $currency);
 
-        $this->assertEquals($expectedBalance, $result);
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['received']);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['sent']);
+        $this->assertEquals(1000, $result[0]['received']->whole);
+        $this->assertEquals(0, $result[0]['received']->frac);
+        $this->assertEquals(300, $result[0]['sent']->whole);
+        $this->assertEquals(0, $result[0]['sent']->frac);
     }
 
     /**
@@ -275,8 +288,8 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, 'test-key');
         $currency = 'USD';
-        $expectedBalance = [
-            ['received' => 500, 'sent' => 100]
+        $dbRows = [
+            ['received_whole' => 500, 'received_frac' => 0, 'sent_whole' => 100, 'sent_frac' => 0]
         ];
 
         $this->pdo->expects($this->once())
@@ -292,11 +305,14 @@ class BalanceRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedBalance);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getContactBalanceByPubkeyHash($pubkeyHash, $currency);
 
-        $this->assertEquals($expectedBalance, $result);
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['received']);
+        $this->assertEquals(500, $result[0]['received']->whole);
+        $this->assertEquals(100, $result[0]['sent']->whole);
     }
 
     /**
@@ -306,7 +322,7 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, 'test-key');
         $expectedBalance = [
-            ['received' => 500, 'sent' => 100]
+            ['received_whole' => 500, 'received_frac' => 0, 'sent_whole' => 100, 'sent_frac' => 0]
         ];
 
         $boundParams = [];
@@ -355,16 +371,18 @@ class BalanceRepositoryTest extends TestCase
         $repository->expects($this->once())
             ->method('getContactReceivedBalance')
             ->with($pubkey, $currency)
-            ->willReturn(1000);
+            ->willReturn(new SplitAmount(1000, 0));
 
         $repository->expects($this->once())
             ->method('getContactSentBalance')
             ->with($pubkey, $currency)
-            ->willReturn(300);
+            ->willReturn(new SplitAmount(300, 0));
 
         $result = $repository->getCurrentContactBalance($pubkey, $currency);
 
-        $this->assertEquals(700, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(700, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     /**
@@ -382,15 +400,17 @@ class BalanceRepositoryTest extends TestCase
 
         $repository->expects($this->once())
             ->method('getContactReceivedBalance')
-            ->willReturn(500);
+            ->willReturn(new SplitAmount(500, 0));
 
         $repository->expects($this->once())
             ->method('getContactSentBalance')
-            ->willReturn(1000);
+            ->willReturn(new SplitAmount(1000, 0));
 
         $result = $repository->getCurrentContactBalance($pubkey, $currency);
 
-        $this->assertEquals(-500, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(-500, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     // =========================================================================
@@ -416,12 +436,15 @@ class BalanceRepositoryTest extends TestCase
             ->method('execute');
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
-            ->willReturn(1500);
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['received_whole' => 1500, 'received_frac' => 0]);
 
         $result = $this->repository->getContactReceivedBalance($pubkey, $currency);
 
-        $this->assertEquals(1500, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(1500, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     /**
@@ -438,7 +461,8 @@ class BalanceRepositoryTest extends TestCase
 
         $result = $this->repository->getContactReceivedBalance($pubkey, $currency);
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     /**
@@ -457,12 +481,14 @@ class BalanceRepositoryTest extends TestCase
             ->method('execute');
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
             ->willReturn(false);
 
         $result = $this->repository->getContactReceivedBalance($pubkey, $currency);
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     // =========================================================================
@@ -488,12 +514,15 @@ class BalanceRepositoryTest extends TestCase
             ->method('execute');
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
-            ->willReturn(800);
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['sent_whole' => 800, 'sent_frac' => 0]);
 
         $result = $this->repository->getContactSentBalance($pubkey, $currency);
 
-        $this->assertEquals(800, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(800, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     /**
@@ -510,7 +539,8 @@ class BalanceRepositoryTest extends TestCase
 
         $result = $this->repository->getContactSentBalance($pubkey, $currency);
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     // =========================================================================
@@ -523,9 +553,9 @@ class BalanceRepositoryTest extends TestCase
     public function testGetContactBalancesReturnsAllCurrencyBalances(): void
     {
         $pubkey = 'test-public-key';
-        $expectedBalances = [
-            ['received' => 1000, 'sent' => 300, 'currency' => 'USD'],
-            ['received' => 500, 'sent' => 100, 'currency' => 'EUR'],
+        $dbRows = [
+            ['received_whole' => 1000, 'received_frac' => 0, 'sent_whole' => 300, 'sent_frac' => 0, 'currency' => 'USD'],
+            ['received_whole' => 500, 'received_frac' => 0, 'sent_whole' => 100, 'sent_frac' => 0, 'currency' => 'EUR'],
         ];
 
         $this->pdo->expects($this->once())
@@ -538,11 +568,17 @@ class BalanceRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedBalances);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getContactBalances($pubkey);
 
-        $this->assertEquals($expectedBalances, $result);
+        $this->assertCount(2, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['received']);
+        $this->assertEquals(1000, $result[0]['received']->whole);
+        $this->assertEquals('USD', $result[0]['currency']);
+        $this->assertInstanceOf(SplitAmount::class, $result[1]['received']);
+        $this->assertEquals(500, $result[1]['received']->whole);
+        $this->assertEquals('EUR', $result[1]['currency']);
     }
 
     /**
@@ -579,8 +615,8 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkey = 'test-public-key';
         $currency = 'USD';
-        $expectedBalances = [
-            ['received' => 1000, 'sent' => 300, 'currency' => 'USD']
+        $dbRows = [
+            ['received_whole' => 1000, 'received_frac' => 0, 'sent_whole' => 300, 'sent_frac' => 0, 'currency' => 'USD']
         ];
 
         $this->pdo->expects($this->once())
@@ -596,11 +632,15 @@ class BalanceRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedBalances);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getContactBalancesCurrency($pubkey, $currency);
 
-        $this->assertEquals($expectedBalances, $result);
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['received']);
+        $this->assertEquals(1000, $result[0]['received']->whole);
+        $this->assertEquals(300, $result[0]['sent']->whole);
+        $this->assertEquals('USD', $result[0]['currency']);
     }
 
     // =========================================================================
@@ -612,9 +652,9 @@ class BalanceRepositoryTest extends TestCase
      */
     public function testGetUserBalanceReturnsTotalBalanceGroupedByCurrency(): void
     {
-        $expectedBalances = [
-            ['currency' => 'USD', 'total_balance' => 2500],
-            ['currency' => 'EUR', 'total_balance' => 1200],
+        $dbRows = [
+            ['currency' => 'USD', 'sum_received_whole' => 3000, 'sum_received_frac' => 0, 'sum_sent_whole' => 500, 'sum_sent_frac' => 0],
+            ['currency' => 'EUR', 'sum_received_whole' => 1500, 'sum_received_frac' => 0, 'sum_sent_whole' => 300, 'sum_sent_frac' => 0],
         ];
 
         $this->pdo->expects($this->once())
@@ -627,11 +667,17 @@ class BalanceRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedBalances);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getUserBalance();
 
-        $this->assertEquals($expectedBalances, $result);
+        $this->assertCount(2, $result);
+        $this->assertEquals('USD', $result[0]['currency']);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['total_balance']);
+        $this->assertEquals(2500, $result[0]['total_balance']->whole);
+        $this->assertEquals('EUR', $result[1]['currency']);
+        $this->assertInstanceOf(SplitAmount::class, $result[1]['total_balance']);
+        $this->assertEquals(1200, $result[1]['total_balance']->whole);
     }
 
     /**
@@ -692,12 +738,15 @@ class BalanceRepositoryTest extends TestCase
             ->method('execute');
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
-            ->willReturn(5000);
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['sum_received_whole' => 6000, 'sum_received_frac' => 0, 'sum_sent_whole' => 1000, 'sum_sent_frac' => 0]);
 
         $result = $this->repository->getUserBalanceCurrency($currency);
 
-        $this->assertEquals(5000, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertEquals(5000, $result->whole);
+        $this->assertEquals(0, $result->frac);
     }
 
     /**
@@ -713,7 +762,8 @@ class BalanceRepositoryTest extends TestCase
 
         $result = $this->repository->getUserBalanceCurrency($currency);
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     /**
@@ -731,12 +781,14 @@ class BalanceRepositoryTest extends TestCase
             ->method('execute');
 
         $this->stmt->expects($this->once())
-            ->method('fetchColumn')
-            ->willReturn(false);
+            ->method('fetch')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn(['sum_received_whole' => null, 'sum_received_frac' => null, 'sum_sent_whole' => null, 'sum_sent_frac' => null]);
 
         $result = $this->repository->getUserBalanceCurrency($currency);
 
-        $this->assertEquals(0, $result);
+        $this->assertInstanceOf(SplitAmount::class, $result);
+        $this->assertTrue($result->isZero());
     }
 
     // =========================================================================
@@ -749,9 +801,9 @@ class BalanceRepositoryTest extends TestCase
     public function testGetUserBalanceContactReturnsBalanceGroupedByCurrency(): void
     {
         $pubkey = 'test-public-key';
-        $expectedBalances = [
-            ['currency' => 'USD', 'total_balance' => 700],
-            ['currency' => 'EUR', 'total_balance' => 400],
+        $dbRows = [
+            ['currency' => 'USD', 'sum_received_whole' => 1000, 'sum_received_frac' => 0, 'sum_sent_whole' => 300, 'sum_sent_frac' => 0],
+            ['currency' => 'EUR', 'sum_received_whole' => 600, 'sum_received_frac' => 0, 'sum_sent_whole' => 200, 'sum_sent_frac' => 0],
         ];
 
         $this->pdo->expects($this->once())
@@ -764,11 +816,17 @@ class BalanceRepositoryTest extends TestCase
         $this->stmt->expects($this->once())
             ->method('fetchAll')
             ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedBalances);
+            ->willReturn($dbRows);
 
         $result = $this->repository->getUserBalanceContact($pubkey);
 
-        $this->assertEquals($expectedBalances, $result);
+        $this->assertCount(2, $result);
+        $this->assertEquals('USD', $result[0]['currency']);
+        $this->assertInstanceOf(SplitAmount::class, $result[0]['total_balance']);
+        $this->assertEquals(700, $result[0]['total_balance']->whole);
+        $this->assertEquals('EUR', $result[1]['currency']);
+        $this->assertInstanceOf(SplitAmount::class, $result[1]['total_balance']);
+        $this->assertEquals(400, $result[1]['total_balance']->whole);
     }
 
     // =========================================================================
@@ -781,15 +839,15 @@ class BalanceRepositoryTest extends TestCase
     public function testInsertBalanceCreatesNewBalanceRecord(): void
     {
         $pubkey = 'test-public-key';
-        $receivedAmount = 1000;
-        $sentAmount = 0;
+        $receivedAmount = new SplitAmount(1000, 0);
+        $sentAmount = SplitAmount::zero();
         $currency = 'USD';
 
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(6))
             ->method('bindValue');
 
         $this->stmt->expects($this->once())
@@ -810,8 +868,8 @@ class BalanceRepositoryTest extends TestCase
     public function testInsertBalanceReturnsFalseOnFailure(): void
     {
         $pubkey = 'test-public-key';
-        $receivedAmount = 1000;
-        $sentAmount = 0;
+        $receivedAmount = new SplitAmount(1000, 0);
+        $sentAmount = SplitAmount::zero();
         $currency = 'USD';
 
         $this->pdo->expects($this->once())
@@ -836,7 +894,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(6))
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$boundParams) {
                 $boundParams[$key] = $value;
@@ -850,7 +908,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('lastInsertId')
             ->willReturn('1');
 
-        $this->repository->insertBalance($pubkey, 100, 0, 'USD');
+        $this->repository->insertBalance($pubkey, new SplitAmount(100, 0), SplitAmount::zero(), 'USD');
 
         $this->assertEquals($expectedHash, $boundParams[':pubkey_hash']);
     }
@@ -872,7 +930,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(6))
             ->method('bindValue')
             ->willReturnCallback(function ($key, $value) use (&$boundParams) {
                 $boundParams[$key] = $value;
@@ -888,8 +946,10 @@ class BalanceRepositoryTest extends TestCase
 
         $this->repository->insertInitialContactBalances($pubkey, $currency);
 
-        $this->assertEquals(0, $boundParams[':received']);
-        $this->assertEquals(0, $boundParams[':sent']);
+        $this->assertEquals(0, $boundParams[':received_whole']);
+        $this->assertEquals(0, $boundParams[':received_frac']);
+        $this->assertEquals(0, $boundParams[':sent_whole']);
+        $this->assertEquals(0, $boundParams[':sent_frac']);
     }
 
     // =========================================================================
@@ -903,14 +963,14 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkey = 'test-public-key';
         $direction = 'sent';
-        $amount = 500;
+        $amount = new SplitAmount(500, 0);
         $currency = 'USD';
 
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(3))
+        $this->stmt->expects($this->exactly(5))
             ->method('bindValue');
 
         $this->stmt->expects($this->once())
@@ -928,14 +988,14 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkey = 'test-public-key';
         $direction = 'received';
-        $amount = 1000;
+        $amount = new SplitAmount(1000, 0);
         $currency = 'USD';
 
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(3))
+        $this->stmt->expects($this->exactly(5))
             ->method('bindValue');
 
         $this->stmt->expects($this->once())
@@ -953,7 +1013,7 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkey = 'test-public-key';
         $direction = 'invalid';
-        $amount = 500;
+        $amount = new SplitAmount(500, 0);
         $currency = 'USD';
 
         $result = $this->repository->updateBalance($pubkey, $direction, $amount, $currency);
@@ -968,7 +1028,7 @@ class BalanceRepositoryTest extends TestCase
     {
         $pubkey = 'test-public-key';
         $direction = 'sent';
-        $amount = 500;
+        $amount = new SplitAmount(500, 0);
         $currency = 'USD';
 
         $this->pdo->expects($this->once())
@@ -989,7 +1049,7 @@ class BalanceRepositoryTest extends TestCase
      */
     public function testUpdateBothDirectionBalanceUpdatesBothValues(): void
     {
-        $amounts = ['received' => 1500, 'sent' => 800];
+        $amounts = ['received' => new SplitAmount(1500, 0), 'sent' => new SplitAmount(800, 0)];
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, 'test-key');
         $currency = 'USD';
 
@@ -997,7 +1057,7 @@ class BalanceRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(6))
             ->method('bindValue');
 
         $this->stmt->expects($this->once())
@@ -1013,7 +1073,7 @@ class BalanceRepositoryTest extends TestCase
      */
     public function testUpdateBothDirectionBalanceReturnsFalseOnFailure(): void
     {
-        $amounts = ['received' => 1500, 'sent' => 800];
+        $amounts = ['received' => new SplitAmount(1500, 0), 'sent' => new SplitAmount(800, 0)];
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, 'test-key');
         $currency = 'USD';
 
@@ -1038,6 +1098,6 @@ class TestableBalanceRepository extends BalanceRepository
         $this->pdo = $pdo;
         $this->tableName = 'balances';
         $this->primaryKey = 'pubkey_hash';
-        $this->allowedColumns = ['id', 'pubkey_hash', 'received', 'sent', 'currency'];
+        $this->allowedColumns = ['id', 'pubkey_hash', 'received_whole', 'received_frac', 'sent_whole', 'sent_frac', 'currency'];
     }
 }

@@ -5,6 +5,7 @@ namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Database\TransactionRepository;
 
 /**
@@ -37,7 +38,7 @@ class TransactionPayload extends BasePayload
             'time' => $data['time'],
             'receiverAddress' => $data['receiverAddress'],
             'receiverPublicKey' => $data['receiverPublicKey'],
-            'amount' => $this->sanitizeNumber($data['amount']),
+            'amount' => $this->serializeAmount($data['amount']),
             'currency' => $this->sanitizeString($data['currency']),
             'txid' => $data['txid'],
             'previousTxid' => $data['previousTxid'] ?? null,
@@ -80,7 +81,7 @@ class TransactionPayload extends BasePayload
             'time' => $data['time'],   
             'receiverAddress' => $data['receiver_address'],
             'receiverPublicKey' => $data['receiver_public_key'],
-            'amount' => $this->sanitizeNumber($data['amount']),
+            'amount' => $this->serializeAmount($data['amount']),
             'currency' => $this->sanitizeString($data['currency']),
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'] ?? null,
@@ -111,7 +112,7 @@ class TransactionPayload extends BasePayload
             'time' => $data['time'] ?? null, // Include time for receiver to store
             'receiverAddress' => $data['receiver_address'],
             'receiverPublicKey' => $data['receiver_public_key'],
-            'amount' => $this->sanitizeNumber($data['amount']),
+            'amount' => $this->serializeAmount($data['amount']),
             'currency' => $this->sanitizeString($data['currency']),
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'] ?? null,
@@ -225,7 +226,8 @@ class TransactionPayload extends BasePayload
 
             $messageContent['receiverAddress'] = $request['receiverAddress'] ?? null;
             $messageContent['receiverPublicKey'] = $request['receiverPublicKey'] ?? null;
-            $messageContent['amount'] = (int)($request['amount'] ?? 0);
+            $amount = $request['amount'] ?? SplitAmount::zero();
+            $messageContent['amount'] = ($amount instanceof SplitAmount) ? $amount->toArray() : $amount;
             $messageContent['currency'] = $request['currency'] ?? 'USD';
             $messageContent['txid'] = $request['txid'] ?? null;
             $messageContent['previousTxid'] = $request['previousTxid'] ?? null;
@@ -273,7 +275,7 @@ class TransactionPayload extends BasePayload
             'status' => Constants::STATUS_COMPLETED,
             'hash' => $hashInfo['value'],
             'hashType' => $hashInfo['type'],
-            'amount' => $this->sanitizeNumber($request['amount'] ?? 0),
+            'amount' => $this->serializeAmount($request['amount'] ?? SplitAmount::zero()),
             'currency' => $this->sanitizeString($request['currency'] ?? 'EIOU'),
             'message' => "transaction for hash {$hashInfo['value']} was successfully completed through intermediary",
             'senderAddress' => $userAddress,

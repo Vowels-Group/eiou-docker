@@ -45,7 +45,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'${testCurrency}');
-        echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
+        echo \$balance->toMajorUnits();
     " 2>/dev/null || echo "0")
 
     # Send the message
@@ -58,7 +58,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         \\\$app = \Eiou\Core\Application::getInstance();
         \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'${testCurrency}');
-        echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
+        echo \\\$balance->toMajorUnits();
     \""
     newBalance=$(wait_for_balance_change "${containerKeys[1]}" "$initialBalance" "$balance_cmd" 20 "tx processing")
 
@@ -109,7 +109,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
             \$app = \Eiou\Core\Application::getInstance();
             \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
             \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-            echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
+            echo \$balance->toMajorUnits();
         " 2>/dev/null || echo "0")
 
         # Send using NAME instead of address
@@ -122,7 +122,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
             \\\$app = \Eiou\Core\Application::getInstance();
             \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
             \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
-            echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
+            echo \\\$balance->toMajorUnits();
         \""
         newBalanceByName=$(wait_for_balance_change "${receiverContainer}" "$initialBalanceByName" "$balance_cmd_name" 20 "send by name")
 
@@ -191,7 +191,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
         \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \$balance = \$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
+        echo \$balance->toMajorUnits();
     " 2>/dev/null || echo "0")
 
     # Send from httpA to httpD (multi-hop)
@@ -204,7 +204,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
         \\\$app = \Eiou\Core\Application::getInstance();
         \\\$pubkey = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \\\$balance = \\\$app->services->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getCurrentContactBalance(\\\$pubkey,'USD');
-        echo \\\$balance/\Eiou\Core\Constants::CONVERSION_FACTORS['USD'];
+        echo \\\$balance->toMajorUnits();
     \""
     newBalanceD=$(wait_for_balance_change "httpD" "$initialBalanceD" "$balance_cmd_d" 30 "multi-hop routing")
 

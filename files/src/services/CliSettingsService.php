@@ -339,20 +339,14 @@ class CliSettingsService
                     }
                 }
                 $value = implode(',', $currencies);
-            } elseif(strtolower($argv[2]) === 'conversionfactors'){
-                $key = 'conversionFactors';
-                $decoded = json_decode($argv[3] ?? '', true);
-                if (!is_array($decoded) || empty($decoded)) {
-                    $output->validationError($key, 'Must be valid JSON object, e.g. {"USD":100,"BTC":100000000}');
+            } elseif(strtolower($argv[2]) === 'displaydecimals'){
+                $key = 'displayDecimals';
+                $dec = trim($argv[3] ?? '');
+                if (!ctype_digit($dec) || (int) $dec < 0 || (int) $dec > Constants::INTERNAL_PRECISION) {
+                    $output->validationError($key, 'Must be an integer 0-' . Constants::INTERNAL_PRECISION);
                     return;
                 }
-                foreach ($decoded as $code => $factor) {
-                    if (!is_int($factor) || $factor <= 0) {
-                        $output->validationError($key, "Factor for {$code} must be a positive integer");
-                        return;
-                    }
-                }
-                $value = json_encode($decoded);
+                $value = (int) $dec;
             } else{
                 $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
@@ -430,10 +424,10 @@ class CliSettingsService
                     ['num' => '40', 'label' => 'Maximum lines of balance/transaction output'],
                     ['num' => '41', 'label' => 'Date format'],
                     ['num' => '43', 'label' => 'Recent transactions limit'],
+                    ['num' => '44a', 'label' => 'Display decimal places (0-8)'],
                 ],
                 'Currency Management' => [
                     ['num' => '44', 'label' => 'Allowed currencies'],
-                    ['num' => '44a', 'label' => 'Conversion factors (JSON)'],
                 ],
             ];
 
@@ -961,23 +955,16 @@ class CliSettingsService
                     break;
 
                 case '44a':
-                    $currentFactors = UserContext::getInstance()->getConversionFactors();
-                    echo "Current conversion factors: " . json_encode($currentFactors) . "\n";
-                    echo "Enter conversion factors as JSON (e.g., {\"USD\":100,\"BTC\":100000000}): ";
-                    $key = 'conversionFactors';
+                    $currentDecimals = UserContext::getInstance()->getAllDisplayDecimals();
+                    echo "Current display decimal places: " . $currentDecimals . "\n";
+                    echo "Enter display decimal places (0-" . Constants::INTERNAL_PRECISION . "): ";
+                    $key = 'displayDecimals';
                     $input = trim(fgets(STDIN));
-                    $decoded = json_decode($input, true);
-                    if (!is_array($decoded) || empty($decoded)) {
-                        echo "Error: Must be valid JSON object\n";
+                    if (!ctype_digit($input) || (int) $input < 0 || (int) $input > Constants::INTERNAL_PRECISION) {
+                        echo "Error: Must be an integer 0-" . Constants::INTERNAL_PRECISION . "\n";
                         return;
                     }
-                    foreach ($decoded as $code => $factor) {
-                        if (!is_int($factor) || $factor <= 0) {
-                            echo "Error: Factor for {$code} must be a positive integer\n";
-                            return;
-                        }
-                    }
-                    $value = json_encode($decoded);
+                    $value = (int) $input;
                     break;
 
                 // Tor Circuit Health
@@ -1171,9 +1158,9 @@ class CliSettingsService
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
+            'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
-            'conversion_factors' => $this->currentUser->getConversionFactors(),
         ];
 
         if ($output->isJsonMode()) {
@@ -1235,13 +1222,9 @@ class CliSettingsService
             echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
+            echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
-            echo "\tConversion factors (decimals inferred):\n";
-            foreach ($settings['conversion_factors'] as $code => $factor) {
-                $decimals = $factor > 0 ? (int) log10($factor) : 0;
-                echo "\t  {$code}: {$factor} ({$decimals} decimals)\n";
-            }
         }
     }
 

@@ -4,6 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
@@ -23,9 +24,12 @@ class Rp2pCandidateRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'hash', 'time', 'amount', 'currency', 'sender_public_key',
-        'sender_address', 'sender_signature', 'fee_amount', 'created_at'
+        'id', 'hash', 'time', 'amount_whole', 'amount_frac', 'currency', 'sender_public_key',
+        'sender_address', 'sender_signature', 'fee_amount_whole', 'fee_amount_frac', 'created_at'
     ];
+
+    /** @var string[] Split amount column prefixes for automatic row mapping */
+    protected array $splitAmountColumns = ['amount', 'fee_amount'];
 
     /**
      * Constructor
@@ -42,19 +46,23 @@ class Rp2pCandidateRepository extends AbstractRepository {
      * Insert a new RP2P candidate
      *
      * @param array $request RP2P candidate data
-     * @param int $feeAmount The accumulated fee amount for this route
+     * @param SplitAmount $feeAmount The accumulated fee amount for this route
      * @return string|false Last insert ID or false on failure
      */
-    public function insertCandidate(array $request, int $feeAmount) {
+    public function insertCandidate(array $request, SplitAmount $feeAmount) {
+        /** @var SplitAmount $amount */
+        $amount = $request['amount'];
         $data = [
             'hash' => $request['hash'],
             'time' => $request['time'],
-            'amount' => $request['amount'],
+            'amount_whole' => $amount->whole,
+            'amount_frac' => $amount->frac,
             'currency' => $request['currency'],
             'sender_public_key' => $request['senderPublicKey'],
             'sender_address' => $request['senderAddress'],
             'sender_signature' => $request['signature'],
-            'fee_amount' => $feeAmount,
+            'fee_amount_whole' => $feeAmount->whole,
+            'fee_amount_frac' => $feeAmount->frac,
         ];
 
         return $this->insert($data);
@@ -69,7 +77,7 @@ class Rp2pCandidateRepository extends AbstractRepository {
     public function getCandidatesByHash(string $hash): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE hash = :hash
-                  ORDER BY amount ASC";
+                  ORDER BY amount_whole ASC, amount_frac ASC";
 
         $stmt = $this->execute($query, [':hash' => $hash]);
 
@@ -77,7 +85,7 @@ class Rp2pCandidateRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     /**
@@ -98,7 +106,7 @@ class Rp2pCandidateRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**
@@ -110,7 +118,7 @@ class Rp2pCandidateRepository extends AbstractRepository {
     public function getBestCandidate(string $hash): ?array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE hash = :hash
-                  ORDER BY amount ASC
+                  ORDER BY amount_whole ASC, amount_frac ASC
                   LIMIT 1";
 
         $stmt = $this->execute($query, [':hash' => $hash]);
@@ -120,7 +128,7 @@ class Rp2pCandidateRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $this->mapRow($result ?: null);
     }
 
     /**

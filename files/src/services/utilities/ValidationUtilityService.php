@@ -4,6 +4,8 @@
 namespace Eiou\Services\Utilities;
 
 use Eiou\Contracts\ValidationUtilityServiceInterface;
+use Eiou\Core\SplitAmount;
+use Eiou\Core\UserContext;
 use Eiou\Database\BalanceRepository;
 use Eiou\Services\ServiceContainer;
 
@@ -45,7 +47,7 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
 
         $requestLevel = (int) $request['requestLevel'];
         // Use server-side max to prevent client-supplied values from bypassing limits
-        $serverMax = \Eiou\Core\UserContext::getInstance()->getMaxP2pLevel();
+        $serverMax = UserContext::getInstance()->getMaxP2pLevel();
         $maxRequestLevel = min((int) $request['maxRequestLevel'], $requestLevel + $serverMax);
 
         return $requestLevel >= 0 && $requestLevel <= $maxRequestLevel;
@@ -81,9 +83,9 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
      * Calculate available funds for user with contact
      *
      * @param array $request Request data with senderPublicKey
-     * @return int Available funds
+     * @return SplitAmount Available funds
      */
-    public function calculateAvailableFunds(array $request): int
+    public function calculateAvailableFunds(array $request): SplitAmount
     {
         $balanceRepository = $this->container->getRepositoryFactory()->get(BalanceRepository::class);
         $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
@@ -92,8 +94,6 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
         $totalReceived = $balanceRepository->getContactReceivedBalance($pubkey, $request['currency']);
         // Contact's available funds = what we've sent to them (they received) minus what they've sent to us (we received)
         // In the balances table: 'sent' is what WE sent TO contact, 'received' is what WE received FROM contact
-        $currentBalance = $totalSent - $totalReceived;
-
-        return $currentBalance;
+        return $totalSent->subtract($totalReceived);
     }
 }

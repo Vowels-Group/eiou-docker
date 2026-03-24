@@ -427,52 +427,53 @@ class UserContext {
     }
 
     /**
-     * Get currency conversion factors map
+     * Get the internal conversion factor for storage.
+     * Always returns the universal internal factor — same for all currencies.
      *
-     * @return array<string, int> Map of currency code to conversion factor (e.g., ['USD' => 100, 'BTC' => 100000000])
-     */
-    public function getConversionFactors(): array {
-        $factors = $this->get('conversionFactors');
-        if ($factors === null) {
-            return Constants::CONVERSION_FACTORS;
-        }
-        if (is_string($factors)) {
-            $decoded = json_decode($factors, true);
-            return is_array($decoded) ? $decoded : Constants::CONVERSION_FACTORS;
-        }
-        return (array) $factors;
-    }
-
-    /**
-     * Get the conversion factor for a single currency
-     *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Conversion factor (e.g., 100 for USD cents-to-dollars)
-     * @throws \InvalidArgumentException If currency has no defined factor
+     * @param string $currency Currency code (ignored)
+     * @return int Conversion factor (always 10^8)
      */
     public function getConversionFactor(string $currency): int {
-        $factors = $this->getConversionFactors();
-        if (!isset($factors[$currency])) {
-            throw new \InvalidArgumentException("No conversion factor defined for currency: {$currency}");
-        }
-        return (int) $factors[$currency];
+        return Constants::INTERNAL_CONVERSION_FACTOR;
     }
 
     /**
-     * Get the number of decimal places for a single currency.
-     * Inferred from the conversion factor: decimals = log10(factor).
+     * Get the internal decimal precision for storage.
+     * Always returns INTERNAL_PRECISION (8).
      *
-     * @param string $currency Currency code (e.g., 'USD')
-     * @return int Number of decimal places
+     * @param string $currency Currency code (ignored)
+     * @return int Number of decimal places (always 8)
      */
     public function getCurrencyDecimals(string $currency): int {
-        try {
-            $factor = $this->getConversionFactor($currency);
-            return $factor > 0 ? (int) log10($factor) : 0;
-        } catch (\InvalidArgumentException $e) {
-            return Constants::DISPLAY_CURRENCY_DECIMALS;
-        }
+        return Constants::INTERNAL_PRECISION;
     }
+
+    /**
+     * Get the global display decimal places setting.
+     *
+     * @return int Display decimal places (0-8), default DISPLAY_DECIMALS (4)
+     */
+    public function getAllDisplayDecimals(): int {
+        $decimals = $this->get('displayDecimals');
+        if ($decimals === null) {
+            return Constants::DISPLAY_DECIMALS;
+        }
+        // Backward compat: if stored as JSON object (old per-currency format), use default
+        if (is_string($decimals)) {
+            $decoded = json_decode($decimals, true);
+            if (is_array($decoded)) {
+                return Constants::DISPLAY_DECIMALS;
+            }
+            $decimals = (int) $decimals;
+        }
+        $decimals = (int) $decimals;
+        if ($decimals < 0 || $decimals > Constants::INTERNAL_PRECISION) {
+            return Constants::DISPLAY_DECIMALS;
+        }
+        return $decimals;
+    }
+
+
 
     /**
      * Get maximum fee percentage
@@ -993,7 +994,7 @@ class UserContext {
         return [
             // Transaction settings (original 11)
             'allowedCurrencies' => implode(',', Constants::ALLOWED_CURRENCIES),
-            'conversionFactors' => json_encode(Constants::CONVERSION_FACTORS),
+            'displayDecimals' => Constants::DISPLAY_DECIMALS,
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,

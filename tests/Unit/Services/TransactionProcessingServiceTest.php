@@ -31,6 +31,7 @@ use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Core\SplitAmount;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\HeldTransactionServiceInterface;
 use RuntimeException;
@@ -488,13 +489,14 @@ class TransactionProcessingServiceTest extends TestCase
      */
     public function testProcessPendingTransactionsProcessesIncomingDirectTransaction(): void
     {
+        $amount = new SplitAmount(1000, 0);
         $pendingMessage = [
             'memo' => 'standard',
             'txid' => 'test-txid-12345',
             'sender_address' => 'http://sender.example.com',
             'receiver_address' => 'http://user.example.com',
             'sender_public_key' => 'sender-public-key',
-            'amount' => 1000,
+            'amount' => $amount,
             'currency' => 'USD'
         ];
 
@@ -513,7 +515,7 @@ class TransactionProcessingServiceTest extends TestCase
 
         $this->mockBalanceRepo->expects($this->once())
             ->method('updateBalance')
-            ->with('sender-public-key', 'received', 1000, 'USD');
+            ->with('sender-public-key', 'received', $amount, 'USD');
 
         $this->mockTransactionPayload->expects($this->once())
             ->method('buildCompleted')
@@ -816,7 +818,7 @@ class TransactionProcessingServiceTest extends TestCase
             'receiver_address' => $userAddress,
             'sender_public_key' => 'sender-public-key',
             'receiver_public_key' => 'receiver-public-key',
-            'amount' => 1000,
+            'amount' => new SplitAmount(1000, 0),
             'currency' => 'USD',
             'description' => 'test payment',
         ];
@@ -857,7 +859,7 @@ class TransactionProcessingServiceTest extends TestCase
 
         $this->mockBalanceRepo->expects($this->once())
             ->method('updateBalance')
-            ->with('sender-public-key', 'received', 1000, 'USD');
+            ->with('sender-public-key', 'received', $this->isInstanceOf(SplitAmount::class), 'USD');
 
         $this->mockP2pRepo->expects($this->once())
             ->method('updateIncomingTxid')
@@ -907,7 +909,7 @@ class TransactionProcessingServiceTest extends TestCase
             'receiver_address' => $userAddress,
             'sender_public_key' => 'sender-public-key',
             'receiver_public_key' => 'receiver-public-key',
-            'amount' => 1000,
+            'amount' => new SplitAmount(1000, 0),
             'currency' => 'USD',
             'description' => 'test payment',
         ];

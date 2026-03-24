@@ -596,11 +596,13 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> First chain drop: resolving gap for tx2"
 
 proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
-wait_for_queue_processed ${sender} 3
-wait_for_queue_processed ${receiver} 3
+sleep 5
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 proposalId=$(get_pending_proposal ${receiver})
 if [[ "$proposalId" == "NONE" ]]; then
+    sleep 5
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     proposalId=$(get_pending_proposal ${receiver})
@@ -608,8 +610,9 @@ fi
 
 if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
-    wait_for_queue_processed ${sender} 3
-    wait_for_queue_processed ${receiver} 3
+    sleep 5
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
 fi
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
@@ -650,11 +653,13 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Second chain drop: resolving gap for tx4"
 
 proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
-wait_for_queue_processed ${sender} 3
-wait_for_queue_processed ${receiver} 3
+sleep 5
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 proposalId=$(get_pending_proposal ${receiver})
 if [[ "$proposalId" == "NONE" ]]; then
+    sleep 5
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     proposalId=$(get_pending_proposal ${receiver})
@@ -662,8 +667,9 @@ fi
 
 if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
-    wait_for_queue_processed ${sender} 3
-    wait_for_queue_processed ${receiver} 3
+    sleep 5
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
 fi
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})

@@ -225,9 +225,9 @@ create_test_tx() {
         require_once('${BOOTSTRAP_PATH}');
         \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
         \$sql = \"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-                receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count, needs_manual_review)
+                receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo, sending_started_at, recovery_count, needs_manual_review)
                 VALUES ('${txid}', 'standard', 'sent', '${status}', 'test_sender', 'test_pubkey',
-                'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', ${started}, ${count}, ${review})\";
+                'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test', ${started}, ${count}, ${review})\";
         \$pdo->exec(\$sql);
         echo 'CREATED';
     " 2>/dev/null || echo "ERROR"
@@ -256,9 +256,9 @@ claimResult=$(docker exec ${testContainer} php -r "
 
     \$txid = 'test_recovery_claim_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo)
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo)
         VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test')\");
 
     \$claimed = \$repo->claimPendingTransaction(\$txid);
     \$stmt = \$pdo->prepare('SELECT status FROM transactions WHERE txid = ?');
@@ -288,9 +288,9 @@ dupResult=$(docker exec ${testContainer} php -r "
 
     \$txid = 'test_recovery_dup_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo)
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo)
         VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test')\");
 
     \$first = \$repo->claimPendingTransaction(\$txid);
     \$second = \$repo->claimPendingTransaction(\$txid);
@@ -318,9 +318,9 @@ sentResult=$(docker exec ${testContainer} php -r "
 
     \$txid = 'test_recovery_sent_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo)
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo)
         VALUES ('\$txid', 'standard', 'sent', 'sent', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test')\");
 
     \$claimed = \$repo->claimPendingTransaction(\$txid);
 
@@ -347,9 +347,9 @@ markResult=$(docker exec ${testContainer} php -r "
 
     \$txid = 'test_recovery_mark_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo)
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo)
         VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test')\");
 
     \$repo->claimPendingTransaction(\$txid);
     \$marked = \$repo->markAsSent(\$txid);
@@ -382,9 +382,9 @@ stuckResult=$(docker exec ${testContainer} php -r "
     \$txid = 'test_recovery_stuck_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo, sending_started_at)
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo, sending_started_at)
         VALUES ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', '\$oldTime')\");
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test', '\$oldTime')\");
 
     \$stuck = \$repo->getStuckSendingTransactions(60);
     \$found = false;
@@ -414,9 +414,9 @@ resetResult=$(docker exec ${testContainer} php -r "
     \$txid = 'test_recovery_reset_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count)
-        VALUES ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', '\$oldTime', 0)\");
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo, sending_started_at, recovery_count)
+        Values ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test', '\$oldTime', 0)\");
 
     \$result = \$repo->recoverStuckTransaction(\$txid, 3);
 
@@ -448,9 +448,9 @@ maxRetryResult=$(docker exec ${testContainer} php -r "
     \$txid = 'test_recovery_maxretry_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count)
-        VALUES ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', '\$oldTime', 3)\");
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo, sending_started_at, recovery_count)
+        Values ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test', '\$oldTime', 3)\");
 
     \$result = \$repo->recoverStuckTransaction(\$txid, 3);
 
@@ -481,9 +481,9 @@ concurrentResult=$(docker exec ${testContainer} php -r "
 
     \$txid = 'test_recovery_concurrent_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-        receiver_address, receiver_public_key, amount, currency, memo)
+        receiver_address, receiver_public_key, amount_whole, amount_frac, currency, memo)
         VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
-        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+        'test_receiver', 'test_recv_pubkey', 100, 0, 'USD', 'test')\");
 
     \$c1 = \$repo->claimPendingTransaction(\$txid);
     \$c2 = \$repo->claimPendingTransaction(\$txid);

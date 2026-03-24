@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Formatters\TransactionFormatter;
 use Eiou\Utils\Logger;
 use PDO;
@@ -35,12 +36,15 @@ class TransactionRepository extends AbstractRepository {
     protected array $allowedColumns = [
         'id', 'tx_type', 'type', 'status', 'sender_address', 'sender_public_key',
         'sender_public_key_hash', 'receiver_address', 'receiver_public_key',
-        'receiver_public_key_hash', 'amount', 'currency', 'timestamp', 'txid',
+        'receiver_public_key_hash', 'amount_whole', 'amount_frac', 'currency', 'timestamp', 'txid',
         'previous_txid', 'sender_signature', 'recipient_signature', 'signature_nonce',
         'time', 'memo', 'description', 'initial_sender_address', 'end_recipient_address',
         'sending_started_at', 'recovery_count', 'needs_manual_review', 'expires_at',
         'signed_message_content'
     ];
+
+    /** @var string[] Split amount column prefixes for automatic row mapping */
+    protected array $splitAmountColumns = ['amount'];
 
     /**
      * Constructor
@@ -294,7 +298,7 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
+        $query = "SELECT receiver_address, amount_whole, amount_frac, currency, timestamp FROM transactions
                     WHERE sender_address IN ($placeholders)";
 
         if ($currency !== null) {
@@ -333,7 +337,7 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
+        $query = "SELECT sender_address, amount_whole, amount_frac, currency, timestamp FROM transactions
                     WHERE receiver_address IN ($placeholders)";
 
         if ($currency !== null) {
@@ -373,7 +377,7 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
+        $query = "SELECT sender_address, amount_whole, amount_frac, currency, timestamp FROM transactions
                     WHERE receiver_address IN ($placeholders) AND LOWER(sender_address) = LOWER(?)";
 
         $additionalParams = [$senderAddress];
@@ -415,7 +419,7 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
+        $query = "SELECT receiver_address, amount_whole, amount_frac, currency, timestamp FROM transactions
                     WHERE sender_address IN ($placeholders) AND LOWER(receiver_address) = LOWER(?)";
 
         $additionalParams = [$receiverAddress];
@@ -472,7 +476,7 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return $transactions ?: [];
+        return $transactions ? $this->mapRows($transactions) : [];
     }
 
     /**
@@ -504,7 +508,8 @@ class TransactionRepository extends AbstractRepository {
                     t.receiver_address,
                     t.sender_public_key,
                     t.receiver_public_key,
-                    t.amount,
+                    t.amount_whole,
+                    t.amount_frac,
                     t.currency,
                     t.timestamp,
                     t.memo,
@@ -515,8 +520,10 @@ class TransactionRepository extends AbstractRepository {
                     sender_contact.name AS sender_name,
                     receiver_contact.name AS receiver_name,
                     p2p.destination_address AS p2p_destination,
-                    p2p.amount AS p2p_amount,
-                    p2p.my_fee_amount AS p2p_fee
+                    p2p.amount_whole AS p2p_amount_whole,
+                    p2p.amount_frac AS p2p_amount_frac,
+                    p2p.my_fee_amount_whole AS p2p_fee_whole,
+                    p2p.my_fee_amount_frac AS p2p_fee_frac
                   FROM {$this->tableName} t
                   LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
                   LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
@@ -573,7 +580,7 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $result ? $this->mapRows($result) : null;
     }
 
     /**
@@ -620,7 +627,7 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $result ? $this->mapRows($result) : null;
     }
 
     /**
@@ -656,7 +663,7 @@ class TransactionRepository extends AbstractRepository {
 
         // Determine transaction type
         // 'contact' for contact requests (amount=0), 'standard' for direct transactions, 'p2p' for p2p routing
-        if ($request['memo'] === 'contact' || (isset($request['amount']) && $request['amount'] == 0)) {
+        if ($request['memo'] === 'contact' || (isset($request['amount']) && $request['amount'] instanceof SplitAmount && $request['amount']->isZero())) {
             $txType = 'contact';
         } elseif ($request['memo'] === 'standard') {
             $txType = 'standard';
@@ -702,6 +709,7 @@ class TransactionRepository extends AbstractRepository {
                 $previousTxid = $lookupResult ? $lookupResult['txid'] : null;
             }
 
+            $amount = SplitAmount::from($request['amount']);
             $data = [
                 'tx_type' => $txType,
                 'type' => $type,
@@ -712,7 +720,8 @@ class TransactionRepository extends AbstractRepository {
                 'receiver_address' => $request['receiverAddress'],
                 'receiver_public_key' => $request['receiverPublicKey'],
                 'receiver_public_key_hash' => $receiverPublicKeyHash,
-                'amount' => $request['amount'],
+                'amount_whole' => $amount->whole,
+                'amount_frac' => $amount->frac,
                 'currency' => $request['currency'],
                 'txid' => $request['txid'],
                 'previous_txid' => $previousTxid,
@@ -843,7 +852,7 @@ class TransactionRepository extends AbstractRepository {
         $stmt = $this->pdo->prepare($query);
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve expired transactions", $e);
             return [];
@@ -952,7 +961,7 @@ class TransactionRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve transactions between addresses", $e);
             return [];
@@ -995,7 +1004,7 @@ class TransactionRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve transactions between pubkeys", $e);
             return [];
@@ -1040,7 +1049,7 @@ class TransactionRepository extends AbstractRepository {
 
         try {
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve non-contact transactions between pubkeys", $e);
             return [];

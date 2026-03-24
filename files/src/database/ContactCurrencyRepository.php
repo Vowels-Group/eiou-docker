@@ -5,6 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use PDO;
 
 /**
@@ -21,8 +22,11 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit', 'status', 'direction', 'created_at', 'updated_at'
+        'id', 'pubkey_hash', 'currency', 'fee_percent', 'credit_limit_whole', 'credit_limit_frac', 'status', 'direction', 'created_at', 'updated_at'
     ];
+
+    /** @var string[] Split amount column prefixes for automatic row mapping */
+    protected array $splitAmountColumns = ['credit_limit'];
 
     /**
      * Constructor
@@ -46,15 +50,16 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $direction Direction ('incoming' = they requested, 'outgoing' = we requested)
      * @return bool True on success
      */
-    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $status = 'accepted', string $direction = 'incoming'): bool {
-        $query = "INSERT IGNORE INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, status, direction)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :status, :direction)";
+    public function insertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?SplitAmount $creditLimit = null, string $status = 'accepted', string $direction = 'incoming'): bool {
+        $query = "INSERT IGNORE INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit_whole, :credit_limit_frac, :status, :direction)";
 
         $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
-            ':credit_limit' => $creditLimit,
+            ':credit_limit_whole' => $creditLimit?->whole,
+            ':credit_limit_frac' => $creditLimit?->frac,
             ':status' => $status,
             ':direction' => $direction
         ]);
@@ -76,7 +81,7 @@ class ContactCurrencyRepository extends AbstractRepository {
             ':currency' => $currency
         ];
 
-        $query = "SELECT currency, fee_percent, credit_limit, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
@@ -92,7 +97,18 @@ class ContactCurrencyRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        if (!$result) {
+            return null;
+        }
+        return [
+            'currency' => $result['currency'],
+            'fee_percent' => $result['fee_percent'],
+            'credit_limit' => ($result['credit_limit_whole'] !== null)
+                ? new SplitAmount((int)$result['credit_limit_whole'], (int)$result['credit_limit_frac'])
+                : null,
+            'status' => $result['status'],
+            'direction' => $result['direction'],
+        ];
     }
 
     /**
@@ -105,7 +121,7 @@ class ContactCurrencyRepository extends AbstractRepository {
     public function getContactCurrencies(string $pubkeyHash, ?string $direction = null): array {
         $params = [':pubkey_hash' => $pubkeyHash];
 
-        $query = "SELECT currency, fee_percent, credit_limit, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash";
 
@@ -120,7 +136,21 @@ class ContactCurrencyRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            return [];
+        }
+        return array_map(function ($row) {
+            return [
+                'currency' => $row['currency'],
+                'fee_percent' => $row['fee_percent'],
+                'credit_limit' => ($row['credit_limit_whole'] !== null)
+                    ? new SplitAmount((int)$row['credit_limit_whole'], (int)$row['credit_limit_frac'])
+                    : null,
+                'status' => $row['status'],
+                'direction' => $row['direction'],
+            ];
+        }, $rows);
     }
 
     /**
@@ -161,10 +191,10 @@ class ContactCurrencyRepository extends AbstractRepository {
      *
      * @param string $pubkeyHash Contact's public key hash
      * @param string $currency Currency code
-     * @return int Credit limit (0 if not found)
+     * @return SplitAmount|null Credit limit or null if not found
      */
-    public function getCreditLimit(string $pubkeyHash, string $currency): ?int {
-        $query = "SELECT credit_limit FROM {$this->tableName}
+    public function getCreditLimit(string $pubkeyHash, string $currency): ?SplitAmount {
+        $query = "SELECT credit_limit_whole, credit_limit_frac FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
 
         $stmt = $this->execute($query, [
@@ -177,8 +207,8 @@ class ContactCurrencyRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($result && $result['credit_limit'] !== null) {
-            return (int) $result['credit_limit'];
+        if ($result && $result['credit_limit_whole'] !== null) {
+            return new SplitAmount((int)$result['credit_limit_whole'], (int)$result['credit_limit_frac']);
         }
         return null;
     }
@@ -232,7 +262,18 @@ class ContactCurrencyRepository extends AbstractRepository {
         ];
 
         foreach ($fields as $field => $value) {
-            if (in_array($field, ['fee_percent', 'credit_limit', 'status'], true)) {
+            if ($field === 'credit_limit') {
+                // credit_limit is a SplitAmount
+                $setClauses[] = "credit_limit_whole = :credit_limit_whole";
+                $setClauses[] = "credit_limit_frac = :credit_limit_frac";
+                if ($value instanceof SplitAmount) {
+                    $params[':credit_limit_whole'] = $value->whole;
+                    $params[':credit_limit_frac'] = $value->frac;
+                } else {
+                    $params[':credit_limit_whole'] = null;
+                    $params[':credit_limit_frac'] = null;
+                }
+            } elseif (in_array($field, ['fee_percent', 'status'], true)) {
                 $setClauses[] = "{$field} = :{$field}";
                 $params[":{$field}"] = $value;
             }
@@ -265,18 +306,20 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $direction Direction ('incoming' or 'outgoing')
      * @return bool True on success
      */
-    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?int $creditLimit = null, string $direction = 'incoming'): bool {
-        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit, direction)
-                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit, :direction)
+    public function upsertCurrencyConfig(string $pubkeyHash, string $currency, int $feePercent, ?SplitAmount $creditLimit = null, string $direction = 'incoming'): bool {
+        $query = "INSERT INTO {$this->tableName} (pubkey_hash, currency, fee_percent, credit_limit_whole, credit_limit_frac, direction)
+                  VALUES (:pubkey_hash, :currency, :fee_percent, :credit_limit_whole, :credit_limit_frac, :direction)
                   ON DUPLICATE KEY UPDATE
                   fee_percent = VALUES(fee_percent),
-                  credit_limit = VALUES(credit_limit)";
+                  credit_limit_whole = VALUES(credit_limit_whole),
+                  credit_limit_frac = VALUES(credit_limit_frac)";
 
         $stmt = $this->execute($query, [
             ':pubkey_hash' => $pubkeyHash,
             ':currency' => $currency,
             ':fee_percent' => $feePercent,
-            ':credit_limit' => $creditLimit,
+            ':credit_limit_whole' => $creditLimit?->whole,
+            ':credit_limit_frac' => $creditLimit?->frac,
             ':direction' => $direction
         ]);
 
@@ -333,7 +376,7 @@ class ContactCurrencyRepository extends AbstractRepository {
     public function getPendingCurrencies(string $pubkeyHash, ?string $direction = null): array {
         $params = [':pubkey_hash' => $pubkeyHash];
 
-        $query = "SELECT currency, fee_percent, credit_limit, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND status = 'pending'";
 
@@ -348,7 +391,21 @@ class ContactCurrencyRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            return [];
+        }
+        return array_map(function ($row) {
+            return [
+                'currency' => $row['currency'],
+                'fee_percent' => $row['fee_percent'],
+                'credit_limit' => ($row['credit_limit_whole'] !== null)
+                    ? new SplitAmount((int)$row['credit_limit_whole'], (int)$row['credit_limit_frac'])
+                    : null,
+                'status' => $row['status'],
+                'direction' => $row['direction'],
+            ];
+        }, $rows);
     }
 
     /**
