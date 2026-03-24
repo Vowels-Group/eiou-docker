@@ -532,6 +532,9 @@ class P2pService implements P2pServiceInterface {
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
+            // Normalize amount to SplitAmount early (wire payload may send int or {whole,frac})
+            $request['amount'] = SplitAmount::from($request['amount']);
+
             // Force fast mode when any part of the route uses Tor —
             // prevents best-fee mode over Tor where relay latency (~5s × 6 Tor
             // relays per eIOU hop) makes candidate collection impractical.
