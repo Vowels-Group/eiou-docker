@@ -423,6 +423,10 @@ echo -e "\n[Section 4: Transaction Processing Performance]"
 # Clean up chain state from prior test suites to prevent chain-integrity errors.
 # When run after syncTestSuite/chainDropTestSuite, residual chain gaps block sends.
 echo -e "\n\t-> Resetting transaction chain state for clean performance measurement"
+# Flush message queues first so no in-flight deliveries re-insert deleted txs
+for _perfContainer in "${containers[@]}"; do
+    wait_for_queue_processed ${_perfContainer} 5
+done
 for _perfContainer in "${containers[@]}"; do
     docker exec ${_perfContainer} php -r "
         require_once('${BOOTSTRAP_PATH}');
@@ -441,6 +445,8 @@ for _perfContainer in "${containers[@]}"; do
         \$pdo->exec('DELETE FROM chain_drop_proposals');
         \$pdo->exec('DELETE FROM p2p');
         \$pdo->exec('DELETE FROM rp2p');
+        \$pdo->exec('DELETE FROM held_transactions');
+        \$pdo->exec('DELETE FROM capacity_reservations');
     " 2>/dev/null || true
 done
 echo -e "\t   Chain state reset complete"
@@ -486,13 +492,19 @@ if [[ -n "$realContactAddress" ]]; then
         failure=$(( failure + 1 ))
     fi
 
-    # Reset chain state before batch test — the single tx from test 4.1 may still
-    # be pending/sending and would block all batch sends with chain-integrity errors.
+    # Wait for the single tx to fully settle on both sides before batch test.
+    # The daemon may still be delivering/completing the tx from 4.1 — if we
+    # reset the chain now, the async completion will re-insert a broken record.
+    # Instead, let the batch test chain naturally from the single tx.
+    echo -e "\t   Waiting for single tx to settle..."
+    wait_for_queue_processed ${testContainer} 5
+    wait_for_queue_processed ${realContactContainer} 5
+    # Verify chain is valid before proceeding
     for _perfContainer in "${containers[@]}"; do
         docker exec ${_perfContainer} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-            \$pdo->exec(\"DELETE FROM transactions WHERE memo != 'contact'\");
+            // Fix any dangling previous_txid from earlier test suites
             \$broken = \$pdo->query(\"
                 SELECT t1.txid FROM transactions t1
                 WHERE t1.previous_txid IS NOT NULL
@@ -501,7 +513,6 @@ if [[ -n "$realContactAddress" ]]; then
             foreach (\$broken as \$txid) {
                 \$pdo->exec(\"UPDATE transactions SET previous_txid = NULL WHERE txid = '\" . addslashes(\$txid) . \"'\");
             }
-            \$pdo->exec('DELETE FROM balances');
         " 2>/dev/null || true
     done
 
