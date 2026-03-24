@@ -251,10 +251,9 @@ function getChainDropProposalsTableSchema() {
 function getP2pTableSchema() {
     return "CREATE TABLE IF NOT EXISTS p2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL UNIQUE, /* sha256(receiver_address + salt + time + inquiry_token) */
-        salt VARCHAR(255) NOT NULL,
-        inquiry_token VARCHAR(64), /* sha256(inquiry_secret) — propagates through relay chain; baked into P2P hash */
-        inquiry_secret VARCHAR(64), /* pre-image of inquiry_token — only stored on original sender, never sent through relay chain */
+        hash VARCHAR(255) NOT NULL UNIQUE, /* sha256(receiver_address + salt + time) */
+        salt VARCHAR(255) NOT NULL, /* hash(inquiry_secret) — derived from secret, serves as both salt and token */
+        inquiry_secret VARCHAR(64), /* only stored on original sender; hash(secret) = salt for inquiry verification */
         time BIGINT NOT NULL,
         expiration BIGINT NOT NULL, /* unix epoch (micro) seconds */
         currency VARCHAR(10) NOT NULL,
@@ -343,7 +342,7 @@ function getP2pRelayedContactsTableSchema() {
 function getRp2pTableSchema() {
     return "CREATE TABLE IF NOT EXISTS rp2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        hash VARCHAR(255) NOT NULL UNIQUE, /* sha256(receiver_address + salt + time + inquiry_token) */
+        hash VARCHAR(255) NOT NULL UNIQUE, /* sha256(receiver_address + salt + time) */
         time BIGINT NOT NULL,
         amount_whole BIGINT NOT NULL,
         amount_frac BIGINT NOT NULL,

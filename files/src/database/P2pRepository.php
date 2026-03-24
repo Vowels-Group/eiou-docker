@@ -22,7 +22,7 @@ class P2pRepository extends AbstractRepository {
      * @var array Allowed column names for SQL injection prevention
      */
     protected array $allowedColumns = [
-        'id', 'hash', 'salt', 'inquiry_token', 'inquiry_secret',
+        'id', 'hash', 'salt', 'inquiry_secret',
         'time', 'expiration', 'currency', 'amount_whole', 'amount_frac',
         'my_fee_amount_whole', 'my_fee_amount_frac', 'rp2p_amount_whole', 'rp2p_amount_frac',
         'destination_address', 'destination_pubkey',
@@ -103,8 +103,7 @@ class P2pRepository extends AbstractRepository {
         $data = [
             'hash' => $request['hash'],
             'salt' => $request['salt'],
-            'inquiry_token' => $request['inquiryToken'] ?? null,
-            'inquiry_secret' => $request['inquirySecret'] ?? null, // Only stored on originator, never sent through relay chain
+            'inquiry_secret' => $request['inquirySecret'] ?? null, // Only stored on originator; hash(secret) = salt
             'time' => $request['time'],
             'expiration' => $request['expiration'],
             'currency' => $request['currency'],

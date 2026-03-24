@@ -763,9 +763,8 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private function matchYourselfTransaction(array $request, string $address): bool
     {
         $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
-        $token = $p2pRequest['inquiry_token'] ?? '';
 
-        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time'] . $token) === $request['memo']) {
+        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
             return true;
         }
 
@@ -774,7 +773,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             if ($userAddress === $address) {
                 continue;
             }
-            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time'] . $token) === $request['memo']) {
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
                 return true;
             }
         }

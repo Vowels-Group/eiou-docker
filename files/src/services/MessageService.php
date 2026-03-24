@@ -284,23 +284,20 @@ class MessageService implements MessageServiceInterface {
 
             if($p2p){
                 $isInquiry = !empty($decodedMessage['inquiry']);
-                $hasToken = !empty($p2p['inquiry_token']);
 
-                // For inquiry messages on P2Ps with an inquiry_token: require the secret.
-                // This prevents relay nodes (who have the token but not the pre-image)
-                // from forging completion inquiries to overwrite descriptions.
-                if ($isInquiry && $hasToken) {
+                // For inquiry messages: require the inquiry secret.
+                // The salt is derived from the secret (salt = hash(secret)), so only
+                // the original sender can produce the pre-image. This prevents relay
+                // nodes from forging completion inquiries.
+                if ($isInquiry) {
                     if (!isset($decodedMessage['inquirySecret'])) {
                         return false;
                     }
-                    return hash(Constants::HASH_ALGORITHM, $decodedMessage['inquirySecret']) === $p2p['inquiry_token'];
+                    return hash(Constants::HASH_ALGORITHM, $decodedMessage['inquirySecret']) === $p2p['salt'];
                 }
 
                 // Non-inquiry messages (completion relays, etc.): address-based hash check.
-                // These come from contacts (relay nodes) and are validated by the contact check above.
-                // This path also handles legacy P2Ps without inquiry_token.
-                $token = $p2p['inquiry_token'] ?? '';
-                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($senderAddress) . $p2p['salt'] . $p2p['time'] . $token)){
+                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($senderAddress) . $p2p['salt'] . $p2p['time'])){
                     return true;
                 }
                 return false;
