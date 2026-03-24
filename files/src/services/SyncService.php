@@ -1807,12 +1807,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 }
 
                 // Determine if user sent or received this transaction
+                $txAmount = SplitAmount::from($transaction['amount']);
                 if (in_array($transaction['sender_address'], $userAddresses)) {
                     // User sent this transaction
-                    $balancesByCurrency[$currency]['sent'] = $balancesByCurrency[$currency]['sent']->add($transaction['amount']);
+                    $balancesByCurrency[$currency]['sent'] = $balancesByCurrency[$currency]['sent']->add($txAmount);
                 } elseif (in_array($transaction['receiver_address'], $userAddresses)) {
                     // User received this transaction
-                    $balancesByCurrency[$currency]['received'] = $balancesByCurrency[$currency]['received']->add($transaction['amount']);
+                    $balancesByCurrency[$currency]['received'] = $balancesByCurrency[$currency]['received']->add($txAmount);
                 }
             }
 
@@ -1993,12 +1994,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     }
 
                     // Determine if user sent or received this transaction
+                    $txAmount = SplitAmount::from($transaction['amount']);
                     if (in_array($transaction['sender_address'], $userAddresses)) {
                         // User sent this transaction
-                        $balancesByCurrency[$currency]['sent'] = $balancesByCurrency[$currency]['sent']->add($transaction['amount']);
+                        $balancesByCurrency[$currency]['sent'] = $balancesByCurrency[$currency]['sent']->add($txAmount);
                     } elseif (in_array($transaction['receiver_address'], $userAddresses)) {
                         // User received this transaction
-                        $balancesByCurrency[$currency]['received'] = $balancesByCurrency[$currency]['received']->add($transaction['amount']);
+                        $balancesByCurrency[$currency]['received'] = $balancesByCurrency[$currency]['received']->add($txAmount);
                     }
                 }
 

@@ -334,7 +334,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                         $pubkeyHash,
                         $currency,
                         (int) $fee,
-                        (int) $credit
+                        $credit
                     );
                 } catch (\Exception $e) {
                     $this->secureLogger->warning("Failed to create contact currency config", [
