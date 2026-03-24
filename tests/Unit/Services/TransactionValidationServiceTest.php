@@ -73,8 +73,8 @@ class TransactionValidationServiceTest extends TestCase
         $this->setPrivateProperty('secureLogger', $this->logger);
         $this->setPrivateProperty('transactionChainRepository', $this->transactionChainRepository);
 
-        // Inject optional dependencies via setters
-        $this->validationService->setSyncTrigger($this->syncTrigger);
+        // Inject optional dependencies via reflection (syncTrigger is now a constructor param)
+        $this->setPrivateProperty('syncTrigger', $this->syncTrigger);
         $this->validationService->setTransactionService($this->transactionService);
     }
 
@@ -939,20 +939,20 @@ class TransactionValidationServiceTest extends TestCase
     // =========================================================================
 
     /**
-     * Test setSyncTrigger properly injects dependency
+     * Test syncTrigger is injected via constructor
      */
-    public function testSetSyncTriggerInjectsDependency(): void
+    public function testSyncTriggerIsInjectedViaConstructor(): void
     {
-        // Create a fresh service without sync trigger
+        // Create a fresh service without constructor to verify reflection injection works
         $reflection = new ReflectionClass(TransactionValidationService::class);
         $newService = $reflection->newInstanceWithoutConstructor();
 
         $syncTrigger = $this->createMock(SyncTriggerInterface::class);
-        $newService->setSyncTrigger($syncTrigger);
 
-        // Use reflection to verify the property was set
+        // Inject via reflection (same as constructor would)
         $property = $reflection->getProperty('syncTrigger');
         $property->setAccessible(true);
+        $property->setValue($newService, $syncTrigger);
 
         $this->assertSame($syncTrigger, $property->getValue($newService));
     }

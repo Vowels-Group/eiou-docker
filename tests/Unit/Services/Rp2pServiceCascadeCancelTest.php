@@ -22,6 +22,8 @@ use Eiou\Database\Rp2pRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -109,6 +111,20 @@ class Rp2pServiceCascadeCancelTest extends TestCase
         ?MockObject $p2pRelayedContactRepo = null
     ): Rp2pService {
         $rp2pCandidateRepo = $rp2pCandidateRepo ?? $this->createMock(Rp2pCandidateRepository::class);
+        $repositoryFactory = null;
+        if ($p2pRelayedContactRepo) {
+            $repositoryFactory = $this->createMock(RepositoryFactory::class);
+            $repositoryFactory->method('get')
+                ->willReturnCallback(function (string $class) use ($p2pRelayedContactRepo) {
+                    if ($class === P2pRelayedContactRepository::class) {
+                        return $p2pRelayedContactRepo;
+                    }
+                    if ($class === ContactCurrencyRepository::class) {
+                        return $this->createMock(ContactCurrencyRepository::class);
+                    }
+                    return $this->createMock($class);
+                });
+        }
         $service = new Rp2pService(
             $this->contactRepository,
             $this->balanceRepository,
@@ -118,12 +134,10 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $repositoryFactory
         );
         $service->setP2pService($this->p2pService);
-        if ($p2pRelayedContactRepo) {
-            $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
-        }
         return $service;
     }
 

@@ -24,6 +24,8 @@ use Eiou\Database\Rp2pRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -101,6 +103,27 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService
         );
+    }
+
+    /**
+     * Create a mock RepositoryFactory that returns the given P2pRelayedContactRepository
+     * (and a stub ContactCurrencyRepository).
+     */
+    private function createRepositoryFactoryMock(
+        P2pRelayedContactRepository $p2pRelayedContactRepo
+    ): RepositoryFactory {
+        $factory = $this->createMock(RepositoryFactory::class);
+        $factory->method('get')
+            ->willReturnCallback(function (string $class) use ($p2pRelayedContactRepo) {
+                if ($class === P2pRelayedContactRepository::class) {
+                    return $p2pRelayedContactRepo;
+                }
+                if ($class === ContactCurrencyRepository::class) {
+                    return $this->createMock(ContactCurrencyRepository::class);
+                }
+                return $this->createMock($class);
+            });
+        return $factory;
     }
 
     // =========================================================================
@@ -1791,9 +1814,9 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $this->createRepositoryFactoryMock($p2pRelayedContactRepo)
         );
-        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
 
         $request = [
             'hash' => self::TEST_HASH,
@@ -1892,9 +1915,9 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $this->createRepositoryFactoryMock($p2pRelayedContactRepo)
         );
-        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
 
         $request = [
             'hash' => self::TEST_HASH,
@@ -1972,9 +1995,9 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $this->createRepositoryFactoryMock($p2pRelayedContactRepo)
         );
-        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
 
         $request = [
             'hash' => self::TEST_HASH,
@@ -2028,15 +2051,29 @@ class Rp2pServiceTest extends TestCase
     }
 
     /**
-     * Test setP2pRelayedContactRepository sets the repository
+     * Test p2pRelayedContactRepository is injected via RepositoryFactory in constructor
      */
-    public function testSetP2pRelayedContactRepositorySetsRepository(): void
+    public function testP2pRelayedContactRepositoryIsInjectedViaRepositoryFactory(): void
     {
         $repo = $this->createMock(P2pRelayedContactRepository::class);
-        $this->service->setP2pRelayedContactRepository($repo);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null,
+            null,
+            $this->createRepositoryFactoryMock($repo)
+        );
 
-        // No exception means success
-        $this->assertTrue(true);
+        // Verify via reflection that the property was set
+        $reflection = new \ReflectionClass($service);
+        $property = $reflection->getProperty('p2pRelayedContactRepository');
+        $property->setAccessible(true);
+        $this->assertSame($repo, $property->getValue($service));
     }
 
     // =========================================================================
@@ -2063,9 +2100,9 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $this->createRepositoryFactoryMock($p2pRelayedContactRepo)
         );
-        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
 
         // rp2pExists: false initially (not yet processed), then checked again in sendBestCandidateToRelayedContacts
         $this->rp2pRepository->method('rp2pExists')
@@ -2158,9 +2195,9 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             $rp2pCandidateRepo,
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $this->createRepositoryFactoryMock($p2pRelayedContactRepo)
         );
-        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
 
         $this->rp2pRepository->method('rp2pExists')
             ->willReturn(false);
@@ -2240,9 +2277,9 @@ class Rp2pServiceTest extends TestCase
             $this->userContext,
             $this->messageDeliveryService,
             null, // rp2pCandidateRepository
-            $this->p2pSenderRepository
+            $this->p2pSenderRepository,
+            $this->createRepositoryFactoryMock($p2pRelayedContactRepo)
         );
-        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
 
         $request = [
             'hash' => self::TEST_HASH,

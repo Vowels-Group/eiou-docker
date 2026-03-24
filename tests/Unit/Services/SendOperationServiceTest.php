@@ -28,6 +28,7 @@ use Eiou\Utils\InputValidator;
 use Eiou\Core\UserContext;
 use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Contracts\LockingServiceInterface;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
@@ -57,6 +58,7 @@ class SendOperationServiceTest extends TestCase
     private TransactionChainRepository $mockChainRepo;
     private TransactionService $mockTransactionService;
     private ChainDropServiceInterface $mockChainDropService;
+    private RepositoryFactory $mockRepositoryFactory;
 
     protected function setUp(): void
     {
@@ -78,6 +80,15 @@ class SendOperationServiceTest extends TestCase
         $this->mockTransactionService = $this->createMock(TransactionService::class);
         $this->mockChainDropService = $this->createMock(ChainDropServiceInterface::class);
 
+        $this->mockRepositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->mockRepositoryFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                if ($class === TransactionChainRepository::class) {
+                    return $this->mockChainRepo;
+                }
+                return $this->createMock($class);
+            });
+
         $this->service = new SendOperationService(
             $this->mockTransactionRepo,
             $this->mockAddressRepo,
@@ -89,7 +100,9 @@ class SendOperationServiceTest extends TestCase
             $this->mockUserContext,
             $this->mockLogger,
             $this->mockMessageDeliveryService,
-            $this->mockLockingService
+            $this->mockLockingService,
+            $this->mockRepositoryFactory,
+            $this->mockSyncTrigger
         );
     }
 
@@ -113,7 +126,9 @@ class SendOperationServiceTest extends TestCase
             $this->mockUserContext,
             $this->mockLogger,
             $this->mockMessageDeliveryService,
-            $this->mockLockingService
+            $this->mockLockingService,
+            $this->mockRepositoryFactory,
+            $this->mockSyncTrigger
         );
 
         $this->assertInstanceOf(SendOperationService::class, $service);
@@ -134,6 +149,8 @@ class SendOperationServiceTest extends TestCase
             $this->mockInputValidator,
             $this->mockUserContext,
             $this->mockLogger,
+            null,
+            null,
             null,
             null
         );
@@ -163,12 +180,15 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test setSyncTrigger sets the sync trigger
+     * Test syncTrigger is injected via constructor
      */
-    public function testSetSyncTriggerSetsTheSyncTrigger(): void
+    public function testSyncTriggerIsInjectedViaConstructor(): void
     {
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
-        $this->expectNotToPerformAssertions();
+        // syncTrigger is now passed as a constructor argument (already done in setUp)
+        $reflection = new \ReflectionClass($this->service);
+        $property = $reflection->getProperty('syncTrigger');
+        $property->setAccessible(true);
+        $this->assertSame($this->mockSyncTrigger, $property->getValue($this->service));
     }
 
     /**
@@ -181,12 +201,15 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test setTransactionChainRepository sets the chain repository
+     * Test transactionChainRepository is injected via RepositoryFactory in constructor
      */
-    public function testSetTransactionChainRepositorySetsTheChainRepository(): void
+    public function testTransactionChainRepositoryIsInjectedViaRepositoryFactory(): void
     {
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
-        $this->expectNotToPerformAssertions();
+        // transactionChainRepository is now resolved from RepositoryFactory (already done in setUp)
+        $reflection = new \ReflectionClass($this->service);
+        $property = $reflection->getProperty('transactionChainRepository');
+        $property->setAccessible(true);
+        $this->assertSame($this->mockChainRepo, $property->getValue($this->service));
     }
 
     /**
@@ -506,11 +529,23 @@ class SendOperationServiceTest extends TestCase
      */
     public function testGetSyncTriggerThrowsRuntimeExceptionWhenNotInjected(): void
     {
-        // This test verifies the internal getSyncTrigger method behavior
-        // We test this indirectly through verifySenderChainAndSync
-
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
-        $this->service->setContactService($this->mockContactService);
+        // Create service WITHOUT syncTrigger (pass null explicitly)
+        $serviceWithoutSync = new SendOperationService(
+            $this->mockTransactionRepo,
+            $this->mockAddressRepo,
+            $this->mockP2pRepo,
+            $this->mockTransactionPayload,
+            $this->mockTransportUtility,
+            $this->mockTimeUtility,
+            $this->mockInputValidator,
+            $this->mockUserContext,
+            $this->mockLogger,
+            $this->mockMessageDeliveryService,
+            $this->mockLockingService,
+            $this->mockRepositoryFactory,
+            null
+        );
+        $serviceWithoutSync->setContactService($this->mockContactService);
         $this->mockUserContext->expects($this->any())
             ->method('getPublicKey')
             ->willReturn('user-public-key');
@@ -853,8 +888,7 @@ class SendOperationServiceTest extends TestCase
             ->willReturn('receiverAddress');
 
         // Chain verification fails after sync
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        // transactionChainRepository and syncTrigger are now injected via constructor
 
         $this->mockUserContext->expects($this->any())
             ->method('getPublicKey')
@@ -924,8 +958,7 @@ class SendOperationServiceTest extends TestCase
             ->method('fallbackTransportType')
             ->willReturn('receiverAddress');
 
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        // transactionChainRepository and syncTrigger are now injected via constructor
 
         $this->mockUserContext->expects($this->any())
             ->method('getPublicKey')
@@ -990,8 +1023,7 @@ class SendOperationServiceTest extends TestCase
             ->method('fallbackTransportType')
             ->willReturn('receiverAddress');
 
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        // transactionChainRepository and syncTrigger are now injected via constructor
         // Do NOT set chainDropService — it remains null
 
         $this->mockUserContext->expects($this->any())
@@ -1055,8 +1087,7 @@ class SendOperationServiceTest extends TestCase
             ->method('fallbackTransportType')
             ->willReturn('receiverAddress');
 
-        $this->service->setTransactionChainRepository($this->mockChainRepo);
-        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        // transactionChainRepository and syncTrigger are now injected via constructor
 
         $this->mockUserContext->expects($this->any())
             ->method('getPublicKey')
