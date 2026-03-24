@@ -85,8 +85,8 @@ class CapacityReservationRepositoryTest extends TestCase
         $result = $this->repository->createReservation(
             self::TEST_HASH,
             self::TEST_PUBKEY_HASH,
-            1000,
-            1050,
+            \Eiou\Core\SplitAmount::from(1000),
+            \Eiou\Core\SplitAmount::from(1050),
             self::TEST_CURRENCY
         );
 
@@ -107,11 +107,11 @@ class CapacityReservationRepositoryTest extends TestCase
         $this->mockStmt->method('execute')
             ->willReturn(true);
         $this->mockStmt->method('fetch')
-            ->willReturn(['total' => 5000]);
+            ->willReturn(['sum_whole' => 5000, 'sum_frac' => 0]);
 
         $result = $this->repository->getTotalReservedForPubkey(self::TEST_PUBKEY_HASH);
 
-        $this->assertEquals(5000, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(5000), $result);
     }
 
     /**
@@ -124,11 +124,11 @@ class CapacityReservationRepositoryTest extends TestCase
         $this->mockStmt->method('execute')
             ->willReturn(true);
         $this->mockStmt->method('fetch')
-            ->willReturn(['total' => 0]);
+            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
 
         $result = $this->repository->getTotalReservedForPubkey(self::TEST_PUBKEY_HASH);
 
-        $this->assertEquals(0, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::zero(), $result);
     }
 
     /**
@@ -143,11 +143,11 @@ class CapacityReservationRepositoryTest extends TestCase
         $this->mockStmt->method('execute')
             ->willReturn(true);
         $this->mockStmt->method('fetch')
-            ->willReturn(['total' => 3000]);
+            ->willReturn(['sum_whole' => 3000, 'sum_frac' => 0]);
 
         $result = $this->repository->getTotalReservedForPubkey(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY);
 
-        $this->assertEquals(3000, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(3000), $result);
     }
 
     // =========================================================================

@@ -275,13 +275,13 @@ class AvailableCreditOnAcceptanceTest extends TestCase
         $mocks['balanceRepo']->method('insertInitialContactBalances')->willReturn(true);
 
         // No prior transactions — balances are 0
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(0);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(0);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         // Credit limit is set
         $mocks['contactCurrencyRepo']->method('getCreditLimit')
             ->with($pubkeyHash, 'USD')
-            ->willReturn($creditLimit);
+            ->willReturn(\Eiou\Core\SplitAmount::from($creditLimit));
 
         $mocks['contactCurrencyRepo']->method('hasCurrency')->willReturn(false);
         $mocks['contactCurrencyRepo']->method('insertCurrencyConfig')->willReturn(true);
@@ -290,7 +290,7 @@ class AvailableCreditOnAcceptanceTest extends TestCase
         // Key assertion: available credit should equal credit_limit (not 0)
         $mocks['contactCreditRepo']->expects($this->once())
             ->method('upsertAvailableCredit')
-            ->with($pubkeyHash, $creditLimit, 'USD')
+            ->with($pubkeyHash, $this->equalTo(\Eiou\Core\SplitAmount::from($creditLimit)), 'USD')
             ->willReturn(true);
 
         $result = $service->acceptContact($pubkey, 'Alice', 0.0, (float) $creditLimit, 'USD');
@@ -315,16 +315,16 @@ class AvailableCreditOnAcceptanceTest extends TestCase
 
         $mocks['contactRepo']->method('acceptContact')->willReturn(true);
         $mocks['balanceRepo']->method('insertInitialContactBalances')->willReturn(true);
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn($sentBalance);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn($receivedBalance);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn($creditLimit);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from($sentBalance));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from($receivedBalance));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from($creditLimit));
         $mocks['contactCurrencyRepo']->method('hasCurrency')->willReturn(false);
         $mocks['contactCurrencyRepo']->method('insertCurrencyConfig')->willReturn(true);
         $mocks['syncTrigger']->method('syncContactBalance')->willReturn(['success' => true, 'currencies' => []]);
 
         $mocks['contactCreditRepo']->expects($this->once())
             ->method('upsertAvailableCredit')
-            ->with($pubkeyHash, $expectedAvailableCredit, 'USD')
+            ->with($pubkeyHash, $this->equalTo(\Eiou\Core\SplitAmount::from($expectedAvailableCredit)), 'USD')
             ->willReturn(true);
 
         $result = $service->acceptContact($pubkey, 'Alice', 0.0, (float) $creditLimit, 'USD');
@@ -349,16 +349,16 @@ class AvailableCreditOnAcceptanceTest extends TestCase
 
         $mocks['contactRepo']->method('acceptContact')->willReturn(true);
         $mocks['balanceRepo']->method('insertInitialContactBalances')->willReturn(true);
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn($sentBalance);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn($receivedBalance);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn($creditLimit);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from($sentBalance));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from($receivedBalance));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from($creditLimit));
         $mocks['contactCurrencyRepo']->method('hasCurrency')->willReturn(false);
         $mocks['contactCurrencyRepo']->method('insertCurrencyConfig')->willReturn(true);
         $mocks['syncTrigger']->method('syncContactBalance')->willReturn(['success' => true, 'currencies' => []]);
 
         $mocks['contactCreditRepo']->expects($this->once())
             ->method('upsertAvailableCredit')
-            ->with($pubkeyHash, $expectedAvailableCredit, 'USD')
+            ->with($pubkeyHash, $this->equalTo(\Eiou\Core\SplitAmount::from($expectedAvailableCredit)), 'USD')
             ->willReturn(true);
 
         $result = $service->acceptContact($pubkey, 'Alice', 0.0, (float) $creditLimit, 'USD');
@@ -409,9 +409,9 @@ class AvailableCreditOnAcceptanceTest extends TestCase
         $mocks['contactCurrencyRepo']->method('updateCurrencyStatus')->willReturn(true);
 
         // Set up balance/credit calculations for the ack response
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(0);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(0);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(0);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from(0));
         $mocks['timeUtility']->method('getCurrentMicrotime')->willReturn(99999);
 
         // Key assertion: credit from the acceptance message should be saved
@@ -419,7 +419,7 @@ class AvailableCreditOnAcceptanceTest extends TestCase
             ->method('upsertAvailableCreditIfNewer')
             ->with(
                 $pubkeyHash,
-                50000,
+                $this->equalTo(\Eiou\Core\SplitAmount::from(50000)),
                 'USD',
                 17417499042270
             )
@@ -463,11 +463,11 @@ class AvailableCreditOnAcceptanceTest extends TestCase
         $mocks['contactCreditRepo']->method('upsertAvailableCreditIfNewer')->willReturn(true);
 
         // Our balance with the contact: we sent 10000, received 5000
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(10000);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(5000);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(10000));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(5000));
         $mocks['contactCurrencyRepo']->method('getCreditLimit')
             ->with($pubkeyHash, 'USD')
-            ->willReturn(30000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(30000));
 
         // Expected credit in ack: (10000 - 5000) + 30000 = 35000
         $mocks['timeUtility']->method('getCurrentMicrotime')->willReturn(99999);
@@ -505,9 +505,9 @@ class AvailableCreditOnAcceptanceTest extends TestCase
         $mocks['contactRepo']->method('updateStatus')->willReturn(true);
         $mocks['transactionContactRepo']->method('completeContactTransaction')->willReturn(true);
         $mocks['transactionContactRepo']->method('getContactTransactionByParties')->willReturn(null);
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(0);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(0);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(0);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from(0));
         $mocks['timeUtility']->method('getCurrentMicrotime')->willReturn(99999);
 
         // No credit data in message — should not call upsertAvailableCreditIfNewer
@@ -543,15 +543,15 @@ class AvailableCreditOnAcceptanceTest extends TestCase
         $mocks['contactRepo']->method('updateStatus')->willReturn(true);
         $mocks['transactionContactRepo']->method('completeContactTransaction')->willReturn(true);
         $mocks['transactionContactRepo']->method('getContactTransactionByParties')->willReturn(null);
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(0);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(0);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(0);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from(0));
         $mocks['timeUtility']->method('getCurrentMicrotime')->willReturn(99999);
 
         // When no timestamp, should use upsertAvailableCredit (not IfNewer)
         $mocks['contactCreditRepo']->expects($this->once())
             ->method('upsertAvailableCredit')
-            ->with($pubkeyHash, 50000, 'USD')
+            ->with($pubkeyHash, $this->equalTo(\Eiou\Core\SplitAmount::from(50000)), 'USD')
             ->willReturn(true);
 
         $request = [
@@ -585,9 +585,9 @@ class AvailableCreditOnAcceptanceTest extends TestCase
 
         $mocks['contactRepo']->method('acceptContact')->willReturn(true);
         $mocks['balanceRepo']->method('insertInitialContactBalances')->willReturn(true);
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(0);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(0);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn($creditLimit);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from($creditLimit));
         $mocks['contactCurrencyRepo']->method('hasCurrency')->willReturn(false);
         $mocks['contactCurrencyRepo']->method('insertCurrencyConfig')->willReturn(true);
         $mocks['syncTrigger']->method('syncContactBalance')->willReturn(['success' => true, 'currencies' => []]);
@@ -597,7 +597,7 @@ class AvailableCreditOnAcceptanceTest extends TestCase
             ->method('upsertAvailableCredit')
             ->with(
                 $this->anything(),
-                $creditLimit,
+                $this->equalTo(\Eiou\Core\SplitAmount::from($creditLimit)),
                 'USD'
             );
 
@@ -617,9 +617,9 @@ class AvailableCreditOnAcceptanceTest extends TestCase
 
         $mocks['contactRepo']->method('acceptContact')->willReturn(true);
         $mocks['balanceRepo']->method('insertInitialContactBalances')->willReturn(true);
-        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(0);
-        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(50000);
-        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn($creditLimit);
+        $mocks['balanceRepo']->method('getContactSentBalance')->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $mocks['balanceRepo']->method('getContactReceivedBalance')->willReturn(\Eiou\Core\SplitAmount::from(50000));
+        $mocks['contactCurrencyRepo']->method('getCreditLimit')->willReturn(\Eiou\Core\SplitAmount::from($creditLimit));
         $mocks['contactCurrencyRepo']->method('hasCurrency')->willReturn(false);
         $mocks['contactCurrencyRepo']->method('insertCurrencyConfig')->willReturn(true);
         $mocks['syncTrigger']->method('syncContactBalance')->willReturn(['success' => true, 'currencies' => []]);
@@ -628,7 +628,7 @@ class AvailableCreditOnAcceptanceTest extends TestCase
             ->method('upsertAvailableCredit')
             ->with(
                 $this->anything(),
-                0,
+                $this->equalTo(\Eiou\Core\SplitAmount::from(0)),
                 'USD'
             );
 

@@ -1536,18 +1536,18 @@ class ContactStatusServiceTest extends TestCase
         $this->mockBalanceRepo->expects($this->once())
             ->method('getContactSentBalance')
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
-            ->willReturn(300);
+            ->willReturn(\Eiou\Core\SplitAmount::from(300));
         $this->mockBalanceRepo->expects($this->once())
             ->method('getContactReceivedBalance')
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // ContactCurrencyRepository returns 5000 (overrides contact's credit_limit of 1000)
         $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
         $this->mockContactCurrencyRepo->expects($this->once())
             ->method('getCreditLimit')
             ->with($expectedPubkeyHash, 'USD')
-            ->willReturn(5000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(5000));
 
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
@@ -1607,18 +1607,18 @@ class ContactStatusServiceTest extends TestCase
         $this->mockBalanceRepo->expects($this->once())
             ->method('getContactSentBalance')
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
-            ->willReturn(500);
+            ->willReturn(\Eiou\Core\SplitAmount::from(500));
         $this->mockBalanceRepo->expects($this->once())
             ->method('getContactReceivedBalance')
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
-            ->willReturn(200);
+            ->willReturn(\Eiou\Core\SplitAmount::from(200));
 
         // ContactCurrencyRepository returns 0 (no per-currency config)
         $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
         $this->mockContactCurrencyRepo->expects($this->once())
             ->method('getCreditLimit')
             ->with($expectedPubkeyHash, 'USD')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')

@@ -841,9 +841,9 @@ class ChainDropServiceTest extends TestCase
         // Stored balance shows higher received than transaction sum
         // missing_received = 2000 - 1000 = 1000, missing_sent = 0, net_missing = 1000 > 0 → BLOCKED
         $this->balanceRepository->method('getContactReceivedBalance')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
         $this->balanceRepository->method('getContactSentBalance')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         // KEY ASSERTION: acceptProposal should NOT be called (guard blocks)
         $this->proposalRepository->expects($this->never())
@@ -1054,9 +1054,9 @@ class ChainDropServiceTest extends TestCase
             ]);
 
         $this->balanceRepository->method('getContactReceivedBalance')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
         $this->balanceRepository->method('getContactSentBalance')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->proposalRepository->method('getByProposalId')
             ->with(self::TEST_PROPOSAL_ID)

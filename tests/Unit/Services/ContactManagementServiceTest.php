@@ -308,7 +308,7 @@ class ContactManagementServiceTest extends TestCase
 
         $this->contactCurrencyRepo->expects($this->once())
             ->method('upsertCurrencyConfig')
-            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit)
+            ->with($pubkeyHash, $currency, (int) $fee, $this->isInstanceOf(\Eiou\Core\SplitAmount::class))
             ->willReturn(true);
 
         $result = $this->service->acceptContact($pubkey, $name, $fee, $credit, $currency);
@@ -328,11 +328,11 @@ class ContactManagementServiceTest extends TestCase
         $this->contactRepo->expects($this->once())
             ->method('getCreditLimit')
             ->with('pubkey', 'EUR')
-            ->willReturn(500.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(500));
 
         $result = $this->service->getCreditLimit('pubkey', 'EUR');
 
-        $this->assertEquals(500.0, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(500), $result);
     }
 
     // =========================================================================
@@ -360,22 +360,22 @@ class ContactManagementServiceTest extends TestCase
 
         $this->contactCurrencyRepo->expects($this->once())
             ->method('insertCurrencyConfig')
-            ->with($pubkeyHash, $currency, (int) $fee, (int) $credit);
+            ->with($pubkeyHash, $currency, $this->anything(), $this->isInstanceOf(\Eiou\Core\SplitAmount::class));
 
         $this->balanceRepo->expects($this->once())
             ->method('insertInitialContactBalances')
             ->with($pubkey, $currency);
 
         $this->balanceRepo->method('getContactSentBalance')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->balanceRepo->method('getContactReceivedBalance')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactCurrencyRepo->method('getCreditLimit')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->contactCreditRepo->expects($this->once())
             ->method('upsertAvailableCredit')
-            ->with($pubkeyHash, 0, $currency);
+            ->with($pubkeyHash, $this->equalTo(\Eiou\Core\SplitAmount::from(0)), $currency);
 
         $result = $this->service->addCurrencyToContact($pubkey, $currency, $fee, $credit);
 

@@ -598,9 +598,9 @@ class Rp2pServiceCascadeCancelTest extends TestCase
             ]);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->timeUtility->method('getCurrentMicrotime')
@@ -799,7 +799,7 @@ class Rp2pServiceCascadeCancelTest extends TestCase
                 $this->callback(function ($payload) {
                     return $payload['type'] === 'rp2p'
                         && $payload['cancelled'] === true
-                        && $payload['amount'] === 0
+                        && $payload['amount'] === ['whole' => 0, 'frac' => 0]
                         && $payload['hash'] === self::TEST_HASH;
                 }),
                 $this->anything(),

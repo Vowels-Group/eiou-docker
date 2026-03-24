@@ -247,11 +247,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -300,11 +300,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(1000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1000));
 
         // With amount 101000 (100000 + 1000 fee) and only 1000 credit, should reject
         // insertRp2pRequest should not be called
@@ -506,7 +506,7 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT,
+            'amount' => \Eiou\Core\SplitAmount::from(self::TEST_AMOUNT),
             'senderAddress' => self::TEST_ADDRESS
         ];
 
@@ -515,7 +515,7 @@ class Rp2pServiceTest extends TestCase
 
         $p2p = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT,
+            'amount' => \Eiou\Core\SplitAmount::from(self::TEST_AMOUNT),
             'destination_address' => self::TEST_ADDRESS,
             'my_fee_amount' => 100,
             'sender_public_key' => self::TEST_PUBLIC_KEY
@@ -799,11 +799,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -866,11 +866,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -934,11 +934,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         // Verify the hash is preserved in the RP2P record
         $this->rp2pRepository->expects($this->once())
@@ -1002,11 +1002,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         // Verify the accumulated amount (base + fee) is stored in the RP2P record
         $expectedAccumulatedAmount = $baseAmount + $nodeFee;
@@ -1059,11 +1059,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -1118,11 +1118,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -1180,11 +1180,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
@@ -1250,11 +1250,11 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         // Verify the amount remains unchanged when fee is zero
         $this->rp2pRepository->expects($this->once())
@@ -1327,10 +1327,10 @@ class Rp2pServiceTest extends TestCase
         $this->p2pRepository->method('getByHash')
             ->willReturn($p2p);
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->p2pRepository->expects($this->once())
@@ -1399,10 +1399,10 @@ class Rp2pServiceTest extends TestCase
         $this->p2pRepository->method('getByHash')
             ->willReturn($p2p);
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->timeUtility->method('getCurrentMicrotime')
@@ -1475,10 +1475,10 @@ class Rp2pServiceTest extends TestCase
         ];
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $rp2pCandidateRepo->expects($this->once())
             ->method('insertCandidate');
@@ -1755,10 +1755,10 @@ class Rp2pServiceTest extends TestCase
 
         // Funds validation for relay nodes (no destination_address)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $rp2pCandidateRepo->expects($this->once())
             ->method('insertCandidate');
@@ -1838,10 +1838,10 @@ class Rp2pServiceTest extends TestCase
 
         // Funds validation for relay nodes (no destination_address)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $rp2pCandidateRepo->expects($this->once())
             ->method('insertCandidate');
@@ -1939,10 +1939,10 @@ class Rp2pServiceTest extends TestCase
 
         // Funds validation for relay nodes (no destination_address)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $rp2pCandidateRepo->expects($this->once())
             ->method('insertCandidate');
@@ -2019,10 +2019,10 @@ class Rp2pServiceTest extends TestCase
 
         // Funds validation for relay nodes (no destination_address)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $rp2pCandidateRepo->expects($this->once())
             ->method('insertCandidate');
@@ -2157,10 +2157,10 @@ class Rp2pServiceTest extends TestCase
 
         // Setup for handleRp2pRequest (sends upstream after Phase 1)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->timeUtility->method('getCurrentMicrotime')
@@ -2239,10 +2239,10 @@ class Rp2pServiceTest extends TestCase
             ->method('markPhase1Sent');
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->timeUtility->method('getCurrentMicrotime')
@@ -2299,10 +2299,10 @@ class Rp2pServiceTest extends TestCase
         $this->p2pRepository->method('getByHash')
             ->willReturn($p2p);
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->rp2pRepository->method('insertRp2pRequest')
             ->willReturn('test-rp2p-id');
         $this->timeUtility->method('getCurrentMicrotime')
@@ -2375,10 +2375,10 @@ class Rp2pServiceTest extends TestCase
 
         // Funds validation for relay nodes (no destination_address)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
 
         $rp2pCandidateRepo->expects($this->once())
             ->method('insertCandidate');
@@ -2490,10 +2490,10 @@ class Rp2pServiceTest extends TestCase
 
         // Can't afford: credit + funds < amount
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         // rp2p should NOT be inserted
         $this->rp2pRepository->expects($this->never())
@@ -2745,10 +2745,10 @@ class Rp2pServiceTest extends TestCase
 
         // Relay can't afford — triggers rejection
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         // Should increment response count for the rejected RP2P
         $this->p2pRepository->expects($this->once())
@@ -2829,10 +2829,10 @@ class Rp2pServiceTest extends TestCase
 
         // Relay can't afford
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactRepository->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         // Should increment count
         $this->p2pRepository->expects($this->once())
