@@ -278,6 +278,22 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="autoBackupEnabled">Auto-Backup Database:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
@@ -554,22 +570,6 @@
                             ?></textarea>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Currencies without display decimals default to 8 decimal places.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
                             </small>
                         </div>
                     </div>
