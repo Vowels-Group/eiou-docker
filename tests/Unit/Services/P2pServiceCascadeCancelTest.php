@@ -21,6 +21,11 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\RepositoryFactory;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\CapacityReservationRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -44,6 +49,7 @@ class P2pServiceCascadeCancelTest extends TestCase
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pSenderRepository $p2pSenderRepository;
+    private MockObject|RepositoryFactory $repositoryFactory;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -67,6 +73,16 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
+        $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->repositoryFactory->method('get')->willReturnCallback(function (string $class) {
+            return match ($class) {
+                P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                Rp2pRepository::class => $this->createMock(Rp2pRepository::class),
+                ContactCurrencyRepository::class => $this->createMock(ContactCurrencyRepository::class),
+                CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                default => $this->createMock($class),
+            };
+        });
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -99,6 +115,7 @@ class P2pServiceCascadeCancelTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             $this->messageDeliveryService,
             $this->p2pSenderRepository
         );
@@ -376,6 +393,7 @@ class P2pServiceCascadeCancelTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             $this->messageDeliveryService,
             null // No P2pSenderRepository
         );
@@ -860,7 +878,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P should be stored with status 'cancelled' (not 'queued')
         $this->p2pRepository->expects($this->once())
@@ -964,7 +982,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P should be stored with status 'cancelled'
         $this->p2pRepository->expects($this->once())
@@ -1074,6 +1092,7 @@ class P2pServiceCascadeCancelTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $userContextZeroLevel,
+            $this->repositoryFactory,
             $this->messageDeliveryService,
             $this->p2pSenderRepository
         );
@@ -1085,7 +1104,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // reAdjustP2pLevel: maxP2pLevel=0, requestLevel(5)+0=5 < maxRequestLevel(10),
         // so returns requestLevel+0 = 5. Now requestLevel(5) >= maxRequestLevel(5).
@@ -1183,7 +1202,7 @@ class P2pServiceCascadeCancelTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(null);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P should be stored (not with cancelled status)
         $this->p2pRepository->expects($this->once())

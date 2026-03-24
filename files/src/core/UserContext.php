@@ -562,6 +562,18 @@ class UserContext {
     }
 
     /**
+     * Get auto-reject unknown currency setting.
+     *
+     * When true, incoming contact requests with currencies not in allowedCurrencies
+     * are automatically rejected. When false, they arrive as pending for manual review.
+     *
+     * @return bool
+     */
+    public function getAutoRejectUnknownCurrency(): bool {
+        return (bool) ($this->get('autoRejectUnknownCurrency') ?? Constants::AUTO_REJECT_UNKNOWN_CURRENCY);
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string
@@ -1008,6 +1020,7 @@ class UserContext {
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
+            'autoRejectUnknownCurrency' => Constants::AUTO_REJECT_UNKNOWN_CURRENCY,
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
 
             // Feature toggles

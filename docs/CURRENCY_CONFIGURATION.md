@@ -14,12 +14,13 @@ eIOU supports multiple currencies. By default, only USD is configured. This guid
 
 ## Overview
 
-Currency support requires two settings:
+Currency support involves these settings:
 
 | Setting | Purpose | Example |
 |---------|---------|---------|
 | `allowedCurrencies` | List of currency codes users can transact in | `USD,EUR` |
 | `displayDecimals` | Number of decimal places shown in the UI (0-8) | `4` (default) |
+| `autoRejectUnknownCurrency` | Auto-reject incoming contact requests with unknown currencies | `true` (default) |
 
 All currencies are stored internally at **8-decimal precision** (10^8 minor units per major unit), regardless of display settings. This eliminates conversion factor mismatches between nodes — every node stores the same integers for the same amounts.
 
@@ -39,7 +40,7 @@ Input validation always operates at the full internal precision (8 decimal place
 | Limit | Value | Notes |
 |-------|-------|-------|
 | Internal precision | 8 decimals (10^8) | Fixed for all currencies |
-| Display decimals | 0-8 (default 4) | Global setting, truncates (floors) |
+| Display decimals | 0-8 (default 2) | Global setting, truncates (floors) |
 | Max transaction amount | ~2.3 quintillion | PHP_INT_MAX / 4, enforced at input validation |
 | Max credit limit | ~9.2 quintillion | PHP_INT_MAX, stored via split BIGINT columns |
 | Minimum amount | 0.00000001 | 1 fractional unit at 8-decimal precision |
@@ -72,8 +73,8 @@ To change the display decimal places:
 # Add to allowed currencies (comma-separated)
 docker exec eiou-node eiou changesettings allowedCurrencies USD,EUR
 
-# Optionally change display decimal places (0-8, default 4)
-docker exec eiou-node eiou changesettings displayDecimals 4
+# Optionally change display decimal places (0-8, default 2)
+docker exec eiou-node eiou changesettings displayDecimals 2
 
 # Verify
 docker exec eiou-node eiou viewsettings
@@ -98,15 +99,15 @@ curl -X PUT https://localhost/api/v1/system/settings \
 
 ### Display Decimals
 
-The display decimals setting controls how many decimal places are shown in the UI for all currencies. It is a single global value (0-8, default 4).
+The display decimals setting controls how many decimal places are shown in the UI for all currencies. It is a single global value (0-8, default 2).
 
 Values are **truncated (floored)**, not rounded. This ensures displayed amounts never exceed the actual stored value. For example, with display decimals set to 2, an amount of 1.999 displays as 1.99, not 2.00.
 
 | Display Decimals | Amount Stored | UI Shows | Internal Storage |
 |-----------------|---------------|----------|------------------|
 | 0 | 1234.56789012 | 1,234 | whole=1234, frac=56789012 |
-| 2 | 1234.56789012 | 1,234.56 | whole=1234, frac=56789012 |
-| 4 (default) | 1234.56789012 | 1,234.5678 | whole=1234, frac=56789012 |
+| 2 (default) | 1234.56789012 | 1,234.56 | whole=1234, frac=56789012 |
+| 4 | 1234.56789012 | 1,234.5678 | whole=1234, frac=56789012 |
 | 8 | 1234.56789012 | 1,234.56789012 | whole=1234, frac=56789012 |
 
 Input validation always accepts up to 8 decimal places regardless of the display setting.
@@ -114,6 +115,25 @@ Input validation always accepts up to 8 decimal places regardless of the display
 ### Currency Code Format
 
 Currency codes must be 3-9 uppercase alphanumeric characters (`A-Z`, `0-9`). Standard ISO 4217 codes (USD, EUR, GBP) are recommended for fiat currencies, but any valid code can be used for custom units of account.
+
+### Unknown Currency Handling
+
+The `autoRejectUnknownCurrency` setting (default: **enabled**) controls what happens when another node sends a contact request with a currency not in your `allowedCurrencies`.
+
+| Setting | Behavior |
+|---------|----------|
+| **Enabled** (default) | The request is automatically rejected. The sender receives a "currency not accepted" response. |
+| **Disabled** | The request arrives as a pending contact for manual review. The GUI shows a warning that the currency is not in your allowed list. |
+
+When you manually accept a contact or currency request for a currency not in your allowed list, that currency is **automatically added** to `allowedCurrencies` and persisted to config. This applies regardless of the toggle — if a request somehow arrives as pending (e.g., the toggle was disabled when it arrived), accepting it always adds the currency.
+
+```bash
+# Disable auto-rejection to allow unknown currency requests through
+docker exec eiou-node eiou changesettings autoRejectUnknownCurrency false
+
+# Re-enable (default)
+docker exec eiou-node eiou changesettings autoRejectUnknownCurrency true
+```
 
 ---
 

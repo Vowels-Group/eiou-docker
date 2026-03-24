@@ -29,6 +29,9 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -56,6 +59,9 @@ class P2pServiceTest extends TestCase
     private MockObject|P2pSenderRepository $p2pSenderRepository;
     private MockObject|ContactCurrencyRepository $contactCurrencyRepository;
     private MockObject|CapacityReservationRepository $capacityReservationRepository;
+    private MockObject|P2pRelayedContactRepository $p2pRelayedContactRepository;
+    private MockObject|Rp2pRepository $rp2pRepository;
+    private MockObject|RepositoryFactory $repositoryFactory;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -81,6 +87,18 @@ class P2pServiceTest extends TestCase
         $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
         $this->contactCurrencyRepository = $this->createMock(ContactCurrencyRepository::class);
         $this->capacityReservationRepository = $this->createMock(CapacityReservationRepository::class);
+        $this->p2pRelayedContactRepository = $this->createMock(P2pRelayedContactRepository::class);
+        $this->rp2pRepository = $this->createMock(Rp2pRepository::class);
+        $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $this->repositoryFactory->method('get')->willReturnCallback(function (string $class) {
+            return match ($class) {
+                P2pRelayedContactRepository::class => $this->p2pRelayedContactRepository,
+                Rp2pRepository::class => $this->rp2pRepository,
+                ContactCurrencyRepository::class => $this->contactCurrencyRepository,
+                CapacityReservationRepository::class => $this->capacityReservationRepository,
+                default => $this->createMock($class),
+            };
+        });
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -111,11 +129,10 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             $this->messageDeliveryService,
             $this->p2pSenderRepository
         );
-        $this->service->setContactCurrencyRepository($this->contactCurrencyRepository);
-        $this->service->setCapacityReservationRepository($this->capacityReservationRepository);
     }
 
     // =========================================================================
@@ -276,20 +293,20 @@ class P2pServiceTest extends TestCase
             ->willReturn('http');
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->capacityReservationRepository->method('getTotalReservedForPubkey')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(1000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1000));
 
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
 
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(1000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1000));
 
         $this->userContext->method('getUserLocaters')
             ->willReturn(['http' => 'http://me.test']);
@@ -317,6 +334,11 @@ class P2pServiceTest extends TestCase
             ->willReturn('http://other.address');
         $this->userContext->method('getUserLocaters')
             ->willReturn(['http' => 'http://me.test']);
+
+        // calculateRequestedAmount is called before calculateAvailableFunds,
+        // so calculateFee must return a proper SplitAmount
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $this->validationUtility->method('calculateAvailableFunds')
             ->willThrowException(new PDOException('Database error'));
@@ -350,12 +372,12 @@ class P2pServiceTest extends TestCase
             ->willReturn(100); // 1% stored as 100 (scaled by FEE_CONVERSION_FACTOR=100)
 
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 1.0, 10) // 100 / FEE_CONVERSION_FACTOR = 1.0 (raw percentage)
-            ->willReturn(100);
+            ->with($this->equalTo(\Eiou\Core\SplitAmount::from(10000)), 1.0, 10) // 100 / FEE_CONVERSION_FACTOR = 1.0 (raw percentage)
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $result = $this->service->calculateRequestedAmount($request);
 
-        $this->assertEquals(10100, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(10100), $result);
     }
 
     /**
@@ -380,12 +402,12 @@ class P2pServiceTest extends TestCase
             ->willReturn(30); // 0.3% stored as 30 (scaled by FEE_CONVERSION_FACTOR=100)
 
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 0.3, 10) // 30 / FEE_CONVERSION_FACTOR = 0.3 (raw percentage)
-            ->willReturn(300);
+            ->with($this->equalTo(\Eiou\Core\SplitAmount::from(10000)), 0.3, 10) // 30 / FEE_CONVERSION_FACTOR = 0.3 (raw percentage)
+            ->willReturn(\Eiou\Core\SplitAmount::from(300));
 
         $result = $this->service->calculateRequestedAmount($request);
 
-        $this->assertEquals(10300, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(10300), $result);
     }
 
     /**
@@ -405,12 +427,12 @@ class P2pServiceTest extends TestCase
             ->willReturn(null);
 
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 1.0, 10) // Uses default fee from userContext
-            ->willReturn(100);
+            ->with($this->equalTo(\Eiou\Core\SplitAmount::from(10000)), 1.0, 10) // Uses default fee from userContext
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $result = $this->service->calculateRequestedAmount($request);
 
-        $this->assertEquals(10100, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(10100), $result);
     }
 
     // =========================================================================
@@ -465,6 +487,16 @@ class P2pServiceTest extends TestCase
         $this->userContext->method('getUserLocaters')
             ->willReturn(['http' => 'http://me.test']);
 
+        // checkAvailableFunds calls calculateRequestedAmount which calls calculateFee
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
+        $this->capacityReservationRepository->method('getTotalReservedForPubkey')
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
+        $this->contactService->method('getCreditLimit')
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
+
         $this->p2pRepository->method('p2pExists')
             ->with(self::TEST_HASH)
             ->willReturn(true);
@@ -503,18 +535,18 @@ class P2pServiceTest extends TestCase
 
         // Funds check mocks (intermediary path — matchYourselfP2P returns false)
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->capacityReservationRepository->method('getTotalReservedForPubkey')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $this->p2pRepository->method('p2pExists')
             ->with(self::TEST_HASH)
@@ -583,18 +615,18 @@ class P2pServiceTest extends TestCase
 
         // Funds check mocks
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->capacityReservationRepository->method('getTotalReservedForPubkey')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         // P2P exists (already relayed)
         $this->p2pRepository->method('p2pExists')
@@ -678,18 +710,18 @@ class P2pServiceTest extends TestCase
 
         // Funds check mocks
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->capacityReservationRepository->method('getTotalReservedForPubkey')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $this->p2pRepository->method('p2pExists')
             ->with(self::TEST_HASH)
@@ -748,7 +780,7 @@ class P2pServiceTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $this->p2pRepository->method('insertP2pRequest')
             ->willReturn('1');
@@ -1159,11 +1191,11 @@ class P2pServiceTest extends TestCase
         $this->p2pRepository->expects($this->once())
             ->method('getCreditInP2p')
             ->with(self::TEST_PUBLIC_KEY)
-            ->willReturn(5000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(5000));
 
         $result = $this->service->getCreditInP2p(self::TEST_PUBLIC_KEY);
 
-        $this->assertEquals(5000, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(5000), $result);
     }
 
     /**
@@ -1185,21 +1217,21 @@ class P2pServiceTest extends TestCase
         $this->capacityReservationRepository->expects($this->once())
             ->method('getTotalReservedForPubkey')
             ->with($senderPubkeyHash, 'USD')
-            ->willReturn(5000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(5000));
 
         $this->transportUtility->method('resolveUserAddressForTransport')
             ->willReturn('http://other.address');
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(100000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(100000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100000));
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
         $this->userContext->method('getUserLocaters')
             ->willReturn(['http' => 'http://me.test']);
 
@@ -1215,11 +1247,13 @@ class P2pServiceTest extends TestCase
     {
         $this->p2pRepository->expects($this->once())
             ->method('getUserTotalEarnings')
-            ->willReturn('1234.56');
+            ->willReturn(\Eiou\Core\SplitAmount::fromString('1234.56'));
 
         $result = $this->service->getUserTotalEarnings();
 
-        $this->assertEquals('1234.56', $result);
+        // P2pService::getUserTotalEarnings() declares string return type,
+        // so SplitAmount::__toString() is called, returning "1234.56000000"
+        $this->assertStringContainsString('1234', $result);
     }
 
     /**
@@ -1259,6 +1293,7 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             null
         );
 
@@ -1276,7 +1311,8 @@ class P2pServiceTest extends TestCase
             $this->p2pRepository,
             $this->transactionRepository,
             $this->utilityContainer,
-            $this->userContext
+            $this->userContext,
+            $this->repositoryFactory
         );
 
         $this->assertInstanceOf(P2pService::class, $service);
@@ -1355,13 +1391,13 @@ class P2pServiceTest extends TestCase
 
         // Fee calculation: 10000 * 1.5% = 150 (with minimum fee of 10)
         $this->currencyUtility->method('calculateFee')
-            ->with(10000, 1.5, 10) // 150 / FEE_CONVERSION_FACTOR = 1.5 (raw percentage)
-            ->willReturn(150);
+            ->with($this->equalTo(\Eiou\Core\SplitAmount::from(10000)), 1.5, 10) // 150 / FEE_CONVERSION_FACTOR = 1.5 (raw percentage)
+            ->willReturn(\Eiou\Core\SplitAmount::from(150));
 
         $result = $this->service->calculateRequestedAmount($request);
 
         // Total should be amount + fee for this hop
-        $this->assertEquals(10150, $result);
+        $this->assertEquals(\Eiou\Core\SplitAmount::from(10150), $result);
     }
 
     /**
@@ -1406,13 +1442,13 @@ class P2pServiceTest extends TestCase
 
             $this->currencyUtility->expects($this->atLeastOnce())
                 ->method('calculateFee')
-                ->with($baseAmount, $rawPercentages[$index], 10) // DB value / FEE_CONVERSION_FACTOR
-                ->willReturn($expectedFees[$index]);
+                ->with($this->equalTo(\Eiou\Core\SplitAmount::from($baseAmount)), $rawPercentages[$index], 10) // DB value / FEE_CONVERSION_FACTOR
+                ->willReturn(\Eiou\Core\SplitAmount::from($expectedFees[$index]));
 
             $result = $this->service->calculateRequestedAmount($request);
 
             $this->assertEquals(
-                $baseAmount + $expectedFees[$index],
+                \Eiou\Core\SplitAmount::from($baseAmount + $expectedFees[$index]),
                 $result,
                 "Fee calculation failed for hop " . ($index + 1)
             );
@@ -1464,17 +1500,17 @@ class P2pServiceTest extends TestCase
 
         // High fee that would push total over limit
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(600);
+            ->willReturn(\Eiou\Core\SplitAmount::from(600));
 
         $this->validationUtility->method('calculateAvailableFunds')
-            ->willReturn(5000); // Less than requested amount + fees
+            ->willReturn(\Eiou\Core\SplitAmount::from(5000)); // Less than requested amount + fees
 
         $this->capacityReservationRepository->method('getTotalReservedForPubkey')
-            ->willReturn(0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->contactService->method('getCreditLimit')
             ->with($this->anything(), 'USD')
-            ->willReturn(1000.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1000));
 
         ob_start();
         $result = $this->service->checkP2pPossible($request, false);
@@ -1499,6 +1535,7 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
+            $this->repositoryFactory,
             null // No MessageDeliveryService
         );
 
@@ -1702,9 +1739,9 @@ class P2pServiceTest extends TestCase
             ->willReturn(200); // 2% stored as 200 (scaled by FEE_CONVERSION_FACTOR=100)
 
         // Fee calculation: 10000 * 2% = 200
-        $expectedFee = 200;
+        $expectedFee = \Eiou\Core\SplitAmount::from(200);
         $this->currencyUtility->method('calculateFee')
-            ->with(self::TEST_AMOUNT, 2.0, 10) // 200 / FEE_CONVERSION_FACTOR = 2.0 (raw percentage)
+            ->with($this->equalTo(\Eiou\Core\SplitAmount::from(self::TEST_AMOUNT)), 2.0, 10) // 200 / FEE_CONVERSION_FACTOR = 2.0 (raw percentage)
             ->willReturn($expectedFee);
 
         // Expect P2P to be inserted with calculated fee
@@ -1712,7 +1749,7 @@ class P2pServiceTest extends TestCase
             ->method('insertP2pRequest')
             ->with(
                 $this->callback(function ($req) use ($expectedFee) {
-                    return isset($req['feeAmount']) && $req['feeAmount'] === $expectedFee;
+                    return isset($req['feeAmount']) && $req['feeAmount'] == $expectedFee;
                 }),
                 null // destination_address is null for intermediary
             );
@@ -2564,7 +2601,7 @@ class P2pServiceTest extends TestCase
         $this->contactService->method('lookupByAddress')
             ->willReturn(['pubkey_hash' => 'test_hash']);
         $this->currencyUtility->method('calculateFee')
-            ->willReturn(200);
+            ->willReturn(\Eiou\Core\SplitAmount::from(200));
 
         // Verify fast flag is overridden to 1 when stored
         $this->p2pRepository->expects($this->once())

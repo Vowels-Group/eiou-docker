@@ -333,11 +333,12 @@ class CliHelpService
                     'rateLimitBlockSeconds' => 'Rate limit block duration in seconds (minimum 1)',
                     // Display
                     'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
-                    'displayDateFormat' => 'Date format (e.g., Y-m-d H:i:s)',
+                    'displayDateFormat' => 'Date format — must be one of: ' . implode(', ', Constants::VALID_DATE_FORMATS),
                     'displayRecentTransactionsLimit' => 'Recent transactions display limit (minimum 1)',
                     'displayDecimals' => 'Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage.',
                     // Currency Management
                     'allowedCurrencies' => 'Allowed currencies (comma-separated, e.g., USD,EUR)',
+                    'autoRejectUnknownCurrency' => 'Auto-reject incoming contact requests with currencies not in your allowed list (true/false). When disabled, unknown currency requests arrive as pending; accepting them auto-adds the currency.',
                 ],
                 'examples' => [
                     'changesettings' => 'Interactive mode (prompts for setting)',

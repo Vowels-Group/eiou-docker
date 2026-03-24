@@ -183,8 +183,8 @@ class ContactStatusProcessorTest extends TestCase
             ->willReturn([$contact]);
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -264,8 +264,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -301,8 +301,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -336,8 +336,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -377,8 +377,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -414,8 +414,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -451,8 +451,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -494,8 +494,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -540,8 +540,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -585,8 +585,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(null);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -633,8 +633,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -668,8 +668,8 @@ class ContactStatusProcessorTest extends TestCase
         ];
 
         $this->transactionRepository->expects($this->once())
-            ->method('getPreviousTxid')
-            ->willReturn(self::TEST_PREV_TXID);
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
         $this->contactStatusPayload->expects($this->once())
             ->method('build')
@@ -712,8 +712,8 @@ class ContactStatusProcessorTest extends TestCase
             ->method('getAcceptedContacts')
             ->willReturn($contacts);
 
-        $this->transactionRepository->method('getPreviousTxid')
-            ->willReturn(null);
+        $this->transactionRepository->method('getPreviousTxidsByCurrency')
+            ->willReturn([]);
 
         $this->contactStatusPayload->method('build')
             ->willReturn(['type' => 'contact_status_ping']);

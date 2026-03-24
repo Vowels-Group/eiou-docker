@@ -29,7 +29,12 @@ use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Contracts\Rp2pServiceInterface;
+use Eiou\Database\RepositoryFactory;
 use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\CapacityReservationRepository;
+use Eiou\Database\RouteCancellationRepository;
 use Eiou\Schemas\Payloads\MessagePayload;
 use PDOException;
 use Exception;
@@ -108,6 +113,19 @@ class CleanupServiceTest extends TestCase
         $this->messageDeliveryService->method('processRetryQueue')
             ->willReturn(['processed' => 0, 'failed' => 0, 'moved_to_dlq' => 0]);
 
+        $repositoryFactory = $this->createMock(RepositoryFactory::class);
+        $repositoryFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    Rp2pCandidateRepository::class => $this->createMock(Rp2pCandidateRepository::class),
+                    P2pSenderRepository::class => $this->createMock(P2pSenderRepository::class),
+                    P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                    CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                    RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
+                    default => null,
+                };
+            });
+
         $this->service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
@@ -115,7 +133,8 @@ class CleanupServiceTest extends TestCase
             $this->balanceRepository,
             $this->utilityContainer,
             $this->userContext,
-            $this->messageDeliveryService
+            $this->messageDeliveryService,
+            $repositoryFactory
         );
     }
 
@@ -256,6 +275,19 @@ class CleanupServiceTest extends TestCase
             ->with(10)
             ->willReturn(['processed' => 3, 'failed' => 0, 'moved_to_dlq' => 0]);
 
+        $repoFactory = $this->createMock(RepositoryFactory::class);
+        $repoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    Rp2pCandidateRepository::class => $this->createMock(Rp2pCandidateRepository::class),
+                    P2pSenderRepository::class => $this->createMock(P2pSenderRepository::class),
+                    P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                    CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                    RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
+                    default => null,
+                };
+            });
+
         $service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
@@ -263,7 +295,8 @@ class CleanupServiceTest extends TestCase
             $this->balanceRepository,
             $this->utilityContainer,
             $this->userContext,
-            $messageDeliveryService
+            $messageDeliveryService,
+            $repoFactory
         );
 
         $result = $service->processCleanupMessages();
@@ -298,6 +331,19 @@ class CleanupServiceTest extends TestCase
         $messageDeliveryService->method('processRetryQueue')
             ->willReturn(['processed' => 2, 'failed' => 0, 'moved_to_dlq' => 0]);
 
+        $repoFactory = $this->createMock(RepositoryFactory::class);
+        $repoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    Rp2pCandidateRepository::class => $this->createMock(Rp2pCandidateRepository::class),
+                    P2pSenderRepository::class => $this->createMock(P2pSenderRepository::class),
+                    P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                    CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                    RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
+                    default => null,
+                };
+            });
+
         $service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
@@ -305,7 +351,8 @@ class CleanupServiceTest extends TestCase
             $this->balanceRepository,
             $this->utilityContainer,
             $this->userContext,
-            $messageDeliveryService
+            $messageDeliveryService,
+            $repoFactory
         );
 
         $result = $service->processCleanupMessages();
@@ -330,6 +377,19 @@ class CleanupServiceTest extends TestCase
         $messageDeliveryService->method('processRetryQueue')
             ->willThrowException(new Exception('Retry queue error'));
 
+        $repoFactory = $this->createMock(RepositoryFactory::class);
+        $repoFactory->method('get')
+            ->willReturnCallback(function (string $class) {
+                return match ($class) {
+                    Rp2pCandidateRepository::class => $this->createMock(Rp2pCandidateRepository::class),
+                    P2pSenderRepository::class => $this->createMock(P2pSenderRepository::class),
+                    P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
+                    CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
+                    RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
+                    default => null,
+                };
+            });
+
         $service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
@@ -337,7 +397,8 @@ class CleanupServiceTest extends TestCase
             $this->balanceRepository,
             $this->utilityContainer,
             $this->userContext,
-            $messageDeliveryService
+            $messageDeliveryService,
+            $repoFactory
         );
 
         $result = $service->processCleanupMessages();
@@ -891,7 +952,8 @@ class CleanupServiceTest extends TestCase
         $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
 
         $this->service->setRp2pService($rp2pService);
-        $this->service->setRp2pCandidateRepository($rp2pCandidateRepo);
+        $ref = new \ReflectionProperty($this->service, 'rp2pCandidateRepository');
+        $ref->setValue($this->service, $rp2pCandidateRepo);
 
         $message = [
             'hash' => self::TEST_HASH,
@@ -940,7 +1002,8 @@ class CleanupServiceTest extends TestCase
         $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
 
         $this->service->setRp2pService($rp2pService);
-        $this->service->setRp2pCandidateRepository($rp2pCandidateRepo);
+        $ref = new \ReflectionProperty($this->service, 'rp2pCandidateRepository');
+        $ref->setValue($this->service, $rp2pCandidateRepo);
 
         $message = [
             'hash' => self::TEST_HASH,
@@ -998,7 +1061,8 @@ class CleanupServiceTest extends TestCase
         $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
 
         $this->service->setRp2pService($rp2pService);
-        $this->service->setRp2pCandidateRepository($rp2pCandidateRepo);
+        $ref = new \ReflectionProperty($this->service, 'rp2pCandidateRepository');
+        $ref->setValue($this->service, $rp2pCandidateRepo);
 
         $staleP2p = [
             'hash' => self::TEST_HASH,

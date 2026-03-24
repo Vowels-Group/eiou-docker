@@ -1052,14 +1052,29 @@ class InputValidatorTest extends TestCase
 
     public function testValidateDateFormatValid(): void
     {
-        $result = InputValidator::validateDateFormat('Y-m-d H:i:s');
-        $this->assertTrue($result['valid']);
-        $this->assertSame('Y-m-d H:i:s', $result['value']);
+        foreach (Constants::VALID_DATE_FORMATS as $fmt) {
+            $result = InputValidator::validateDateFormat($fmt);
+            $this->assertTrue($result['valid'], "Format '{$fmt}' should be valid");
+            $this->assertSame($fmt, $result['value']);
+        }
     }
 
     public function testValidateDateFormatEmpty(): void
     {
         $result = InputValidator::validateDateFormat('');
+        $this->assertFalse($result['valid']);
+    }
+
+    public function testValidateDateFormatRejectsArbitrary(): void
+    {
+        $result = InputValidator::validateDateFormat('l, F j, Y g:i A');
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsString('Invalid date format', $result['error']);
+    }
+
+    public function testValidateDateFormatRejectsNonsense(): void
+    {
+        $result = InputValidator::validateDateFormat('not-a-date-format');
         $this->assertFalse($result['valid']);
     }
 

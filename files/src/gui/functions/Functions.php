@@ -94,6 +94,18 @@ function cleanupDlqRetentionDays(): int {
     return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
 }
 
+function displayDateFormat(): string {
+    return \Eiou\Core\UserContext::getInstance()->getDisplayDateFormat();
+}
+
+function formatTimestamp(string $timestamp): string {
+    $fmt = displayDateFormat();
+    $dt = \DateTime::createFromFormat('Y-m-d H:i:s.u', $timestamp)
+       ?? \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
+       ?? new \DateTime($timestamp);
+    return $dt->format($fmt);
+}
+
 // =========================================================================
 
 // Route controllers if POST request

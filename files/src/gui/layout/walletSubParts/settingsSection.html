@@ -278,6 +278,22 @@
                         </div>
 
                         <div class="form-group">
+                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="autoBackupEnabled">Auto-Backup Database:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
@@ -553,7 +569,7 @@
                                 echo htmlspecialchars(implode("\n", $allowedCurrencyList));
                             ?></textarea>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. Currencies without display decimals default to 8 decimal places.
+                                <i class="fas fa-info-circle"></i> Allowed currency codes — one per line. All currencies use the global display decimal places setting.
                             </small>
                         </div>
                     </div>
@@ -613,9 +629,14 @@
 
                         <div class="form-group">
                             <label for="displayDateFormat">Date Format:</label>
-                            <input type="text" id="displayDateFormat" name="displayDateFormat" value="<?php echo htmlspecialchars($user->getDisplayDateFormat()); ?>" class="default-value" placeholder="Y-m-d H:i:s.u">
+                            <?php $currentDateFormat = $user->getDisplayDateFormat(); $now = new \DateTime(); ?>
+                            <select id="displayDateFormat" name="displayDateFormat" class="default-value">
+                                <?php foreach (\Eiou\Core\Constants::VALID_DATE_FORMATS as $fmt): ?>
+                                    <option value="<?php echo htmlspecialchars($fmt); ?>" <?php echo ($fmt === $currentDateFormat) ? 'selected' : ''; ?>><?php echo htmlspecialchars($now->format($fmt)); ?> (<?php echo htmlspecialchars($fmt); ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> PHP date format string for timestamps in the GUI (e.g., Y-m-d H:i:s)
+                                <i class="fas fa-info-circle"></i> Date format for timestamps in the GUI
                             </small>
                         </div>
 

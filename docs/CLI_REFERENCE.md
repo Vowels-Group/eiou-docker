@@ -1012,7 +1012,7 @@ eiou changesettings [setting] [value]
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
-| `displayDecimals` | Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage. | `4` |
+| `displayDecimals` | Display decimal places for all currencies (0-8, default 2). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage. | `2` |
 | `displayDateFormat` | PHP date format string | `Y-m-d H:i:s.u` |
 | `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
 

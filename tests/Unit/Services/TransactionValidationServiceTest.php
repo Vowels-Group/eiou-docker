@@ -73,8 +73,8 @@ class TransactionValidationServiceTest extends TestCase
         $this->setPrivateProperty('secureLogger', $this->logger);
         $this->setPrivateProperty('transactionChainRepository', $this->transactionChainRepository);
 
-        // Inject optional dependencies via setters
-        $this->validationService->setSyncTrigger($this->syncTrigger);
+        // Inject optional dependencies via reflection (syncTrigger is now a constructor param)
+        $this->setPrivateProperty('syncTrigger', $this->syncTrigger);
         $this->validationService->setTransactionService($this->transactionService);
     }
 
@@ -307,12 +307,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(1500);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1500));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $result = $this->validationService->checkAvailableFundsTransaction($request);
 
@@ -332,12 +332,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(500);
+            ->willReturn(\Eiou\Core\SplitAmount::from(500));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(600.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(600));
 
         $result = $this->validationService->checkAvailableFundsTransaction($request);
 
@@ -357,12 +357,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(300);
+            ->willReturn(\Eiou\Core\SplitAmount::from(300));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(500.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(500));
 
         $result = $this->validationService->checkAvailableFundsTransaction($request);
 
@@ -382,12 +382,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(800);
+            ->willReturn(\Eiou\Core\SplitAmount::from(800));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(200.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(200));
 
         $result = $this->validationService->checkAvailableFundsTransaction($request);
 
@@ -608,12 +608,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(100);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(100.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
         $this->transactionPayload->expects($this->once())
             ->method('buildRejection')
@@ -656,12 +656,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -715,12 +715,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsMemo')
@@ -768,12 +768,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -903,12 +903,12 @@ class TransactionValidationServiceTest extends TestCase
         // After sync, validation continues
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -939,20 +939,20 @@ class TransactionValidationServiceTest extends TestCase
     // =========================================================================
 
     /**
-     * Test setSyncTrigger properly injects dependency
+     * Test syncTrigger is injected via constructor
      */
-    public function testSetSyncTriggerInjectsDependency(): void
+    public function testSyncTriggerIsInjectedViaConstructor(): void
     {
-        // Create a fresh service without sync trigger
+        // Create a fresh service without constructor to verify reflection injection works
         $reflection = new ReflectionClass(TransactionValidationService::class);
         $newService = $reflection->newInstanceWithoutConstructor();
 
         $syncTrigger = $this->createMock(SyncTriggerInterface::class);
-        $newService->setSyncTrigger($syncTrigger);
 
-        // Use reflection to verify the property was set
+        // Inject via reflection (same as constructor would)
         $property = $reflection->getProperty('syncTrigger');
         $property->setAccessible(true);
+        $property->setValue($newService, $syncTrigger);
 
         $this->assertSame($syncTrigger, $property->getValue($newService));
     }
@@ -1006,12 +1006,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -1052,12 +1052,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -1113,12 +1113,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         // Transaction exists (duplicate)
         $this->transactionRepository->expects($this->once())
@@ -1187,12 +1187,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -1249,12 +1249,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(2000);
+            ->willReturn(\Eiou\Core\SplitAmount::from(2000));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')
@@ -1303,12 +1303,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(1500);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1500));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'EUR')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $result = $this->validationService->checkAvailableFundsTransaction($request);
 
@@ -1349,12 +1349,12 @@ class TransactionValidationServiceTest extends TestCase
 
         $this->validationUtility->expects($this->once())
             ->method('calculateAvailableFunds')
-            ->willReturn(1500);
+            ->willReturn(\Eiou\Core\SplitAmount::from(1500));
 
         $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey', 'USD')
-            ->willReturn(0.0);
+            ->willReturn(\Eiou\Core\SplitAmount::from(0));
 
         $this->transactionRepository->expects($this->once())
             ->method('transactionExistsTxid')

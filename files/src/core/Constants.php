@@ -90,7 +90,7 @@ class Constants {
     // shown in the UI for all currencies. Does NOT affect input validation or
     // internal storage — all input is validated and stored at INTERNAL_PRECISION
     // (8) decimal places. Configurable via changesettings displayDecimals (0-8).
-    const DISPLAY_DECIMALS = 4;
+    const DISPLAY_DECIMALS = 2;
     // Allowed currencies (defaults): configurable via changesettings
     const ALLOWED_CURRENCIES = ['USD'];
 
@@ -429,6 +429,28 @@ class Constants {
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
+    const VALID_DATE_FORMATS = [
+        'Y-m-d H:i:s.u',   // 2026-03-24 17:43:20.123456 (default, microseconds)
+        'Y-m-d H:i:s',     // 2026-03-24 17:43:20
+        'Y-m-d H:i',       // 2026-03-24 17:43
+        'Y-m-d',           // 2026-03-24
+        'd/m/Y H:i:s',     // 24/03/2026 17:43:20
+        'd/m/Y H:i',       // 24/03/2026 17:43
+        'd/m/Y',           // 24/03/2026
+        'm/d/Y H:i:s',     // 03/24/2026 17:43:20
+        'm/d/Y H:i',       // 03/24/2026 17:43
+        'm/d/Y',           // 03/24/2026
+        'd-m-Y H:i:s',     // 24-03-2026 17:43:20
+        'd-m-Y H:i',       // 24-03-2026 17:43
+        'd-m-Y',           // 24-03-2026
+        'd M Y H:i:s',     // 24 Mar 2026 17:43:20
+        'd M Y H:i',       // 24 Mar 2026 17:43
+        'd M Y',           // 24 Mar 2026
+        'M d, Y H:i:s',    // Mar 24, 2026 17:43:20
+        'M d, Y H:i',      // Mar 24, 2026 17:43
+        'M d, Y',          // Mar 24, 2026
+        'U',               // Unix timestamp
+    ];
     const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
@@ -471,6 +493,7 @@ class Constants {
     const AUTO_CHAIN_DROP_ACCEPT_GUARD = true;     // Balance guard for auto-accept: compares stored vs calculated balances to block acceptance when missing transactions would erase debt owed to us. Disable to accept unconditionally.
     const AUTO_ACCEPT_RESTORED_CONTACT = true;     // Auto-accept contacts on wallet restore when transaction history proves prior relationship - default ON; when OFF, restored contacts stay pending for manual review
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
+    const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

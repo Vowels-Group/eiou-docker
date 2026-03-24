@@ -797,10 +797,11 @@ class ChainDropService implements ChainDropServiceInterface
             if (!isset($currencies[$currency])) {
                 $currencies[$currency] = ['received' => SplitAmount::zero(), 'sent' => SplitAmount::zero()];
             }
+            $txAmount = SplitAmount::from($tx['amount']);
             if (in_array($tx['sender_address'], $userAddresses)) {
-                $currencies[$currency]['sent'] = $currencies[$currency]['sent']->add($tx['amount']);
+                $currencies[$currency]['sent'] = $currencies[$currency]['sent']->add($txAmount);
             } elseif (in_array($tx['receiver_address'], $userAddresses)) {
-                $currencies[$currency]['received'] = $currencies[$currency]['received']->add($tx['amount']);
+                $currencies[$currency]['received'] = $currencies[$currency]['received']->add($txAmount);
             }
         }
 

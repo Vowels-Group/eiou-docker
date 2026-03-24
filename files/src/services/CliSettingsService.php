@@ -199,6 +199,11 @@ class CliSettingsService
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'autorejectunknowncurrency'){
+                $key = 'autoRejectUnknownCurrency';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'apienabled'){
                 $key = 'apiEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -428,6 +433,7 @@ class CliSettingsService
                 ],
                 'Currency Management' => [
                     ['num' => '44', 'label' => 'Allowed currencies'],
+                    ['num' => '51', 'label' => 'Auto-reject unknown currencies'],
                 ],
             ];
 
@@ -916,14 +922,25 @@ class CliSettingsService
                     break;
 
                 case '41':
-                    echo "Enter date format (e.g., Y-m-d H:i:s): ";
-                    $key = 'displayDateFormat';
-                    $validation = InputValidator::validateDateFormat(trim(fgets(STDIN)));
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
+                    $now = new \DateTime();
+                    echo "Available date formats:\n";
+                    foreach (Constants::VALID_DATE_FORMATS as $i => $fmt) {
+                        echo "  " . ($i + 1) . ". " . $now->format($fmt) . "  (" . $fmt . ")\n";
                     }
-                    $value = $validation['value'];
+                    echo "Enter format string or number (1-" . count(Constants::VALID_DATE_FORMATS) . "): ";
+                    $key = 'displayDateFormat';
+                    $input = trim(fgets(STDIN));
+                    // Allow selection by number
+                    if (ctype_digit($input) && (int) $input >= 1 && (int) $input <= count(Constants::VALID_DATE_FORMATS)) {
+                        $value = Constants::VALID_DATE_FORMATS[(int) $input - 1];
+                    } else {
+                        $validation = InputValidator::validateDateFormat($input);
+                        if (!$validation['valid']) {
+                            echo "Error: " . $validation['error'] . "\n";
+                            return;
+                        }
+                        $value = $validation['value'];
+                    }
                     break;
 
                 case '43':
@@ -1026,6 +1043,17 @@ class CliSettingsService
                 case '50':
                     echo "Enable hop budget randomization? (yes/no): ";
                     $key = 'hopBudgetRandomized';
+                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '51':
+                    echo "Auto-reject contact requests with unknown currencies? (yes/no): ";
+                    $key = 'autoRejectUnknownCurrency';
                     $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
@@ -1161,6 +1189,7 @@ class CliSettingsService
             'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
+            'auto_reject_unknown_currency' => $this->currentUser->getAutoRejectUnknownCurrency(),
         ];
 
         if ($output->isJsonMode()) {
@@ -1225,6 +1254,7 @@ class CliSettingsService
             echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
+            echo "\tAuto-reject unknown currencies: " . ($settings['auto_reject_unknown_currency'] ? 'enabled' : 'disabled') . "\n";
         }
     }
 
