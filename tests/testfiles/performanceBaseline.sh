@@ -519,24 +519,26 @@ if [[ -n "$realContactAddress" ]]; then
         _txResult=$(docker exec -e EIOU_TEST_MODE=true ${testContainer} eiou send ${realContactAddress} 0.01 USD --json 2>&1)
         if echo "$_txResult" | grep -q '"success":\s*true'; then
             batchSuccessCount=$(( batchSuccessCount + 1 ))
-            # Extract txid and wait for it to reach completed status before next send.
-            # Chain integrity requires the previous tx to be completed, not just sent.
-            _txid=$(echo "$_txResult" | grep -o '"txid"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"txid"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
-            if [[ -n "$_txid" ]]; then
-                for _wait in $(seq 1 20); do
-                    _status=$(docker exec ${testContainer} php -r "
-                        require_once('${BOOTSTRAP_PATH}');
-                        echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)->getStatusByTxid('${_txid}') ?? 'unknown';
-                    " 2>/dev/null || echo "unknown")
-                    if [[ "$_status" == "completed" ]] || [[ "$_status" == "accepted" ]]; then
-                        break
-                    fi
-                    sleep 2
-                done
-            fi
         elif [[ -z "$batchFirstError" ]]; then
             batchFirstError="Send ${_batchI}/10: $(echo "$_txResult" | head -c 200)"
         fi
+        # Wait for transaction to be fully processed by the daemon before next send.
+        # The sender's chain integrity check blocks new sends until the previous tx
+        # reaches a settled state. The daemon must process outgoing/incoming queues.
+        for _wait in $(seq 1 15); do
+            _chainValid=$(docker exec -e EIOU_TEST_MODE=true ${testContainer} php -r "
+                require_once('${BOOTSTRAP_PATH}');
+                \$app = \Eiou\Core\Application::getInstance();
+                \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class);
+                \$contactPubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${realContactAddress}');
+                \$status = \$repo->verifyChainIntegrity(\$app->services->getCurrentUser()->getPublicKey(), \$contactPubkey, 'USD');
+                echo \$status['valid'] ? 'VALID' : 'INVALID';
+            " 2>/dev/null || echo "ERROR")
+            if [[ "$_chainValid" == "VALID" ]]; then
+                break
+            fi
+            sleep 2
+        done
     done
     batchEnd=$(date +%s%N)
     batchTime=$(( (batchEnd - batchStart) / 1000000 ))
