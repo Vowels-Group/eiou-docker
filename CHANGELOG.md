@@ -23,7 +23,11 @@ The project is currently in **ALPHA** status.
 - `TRANSACTION_MAX_AMOUNT` enforcement — amounts above PHP_INT_MAX / 4 (~2.3 quintillion) are rejected at input validation. The headroom ensures fee accumulation across multi-hop P2P routes cannot overflow
 
 ### Changed
-- Simplify `displayDecimals` from per-currency map to a single global integer (0-8, default 4) — replaces the old `{"USD":2,"BTC":8}` JSON format with a plain number that applies to all currencies. Moved from Currency to Display section in both GUI and CLI. GUI now uses a dropdown instead of a textarea. Values are truncated (floored), not rounded, so displayed amounts never exceed the actual stored value. CLI: `changesettings displayDecimals 4`. API: `{"display_decimals": 4}`
+- Change `DISPLAY_DECIMALS` default from 4 to 2 — matches traditional currency display (e.g., $1,234.56)
+- Replace date format free-text input with validated dropdown — 20 predefined formats (ISO, US, EU, short, unix timestamp) defined in `VALID_DATE_FORMATS`. GUI shows live-formatted examples. CLI interactive mode shows numbered list. Validation rejects arbitrary strings via whitelist
+- Apply `displayDateFormat` to all GUI timestamps — transaction list, transaction/contact modals, wallet "last updated", DLQ timestamps all use the user's configured format via `formatTimestamp()` helper. Previously showed raw database timestamps
+- Fix 16 hardcoded `.toFixed(2)` calls in JavaScript — all currency amounts in transaction modals, contact modals, transaction history, and P2P candidate routes now use `EIOU_DISPLAY_DECIMALS` global. Fee percentages remain at 2 decimals
+- Simplify `displayDecimals` from per-currency map to a single global integer (0-8, default 2) — replaces the old `{"USD":2,"BTC":8}` JSON format with a plain number that applies to all currencies. Moved from Currency to Display section in both GUI and CLI. GUI now uses a dropdown instead of a textarea. Values are truncated (floored), not rounded, so displayed amounts never exceed the actual stored value. CLI: `changesettings displayDecimals 2`. API: `{"display_decimals": 2}`
 - `Constants::getDisplayDecimals()` no longer takes a currency parameter — the display precision is global, not per-currency
 - `formatCurrency()` uses display decimals (display-layer function); all internal calculations use `INTERNAL_PRECISION` (8)
 - Add `displayDecimals()` and `cspNonce()` template helper functions in `Functions.php` — shorthand for `\Eiou\Core\Constants::getDisplayDecimals()` and `\Eiou\Utils\Security::getCspNonce()` in GUI templates, replacing 23 verbose fully-qualified calls
@@ -77,6 +81,7 @@ The project is currently in **ALPHA** status.
 - Update `API_REFERENCE.md` field descriptions for `POST /wallet/send`, `POST /contacts`, and `PUT /contacts/:address` to document validation constraints (format, ranges, precision)
 
 ### Tests
+- Fix 285 of 412 pre-existing unit test failures from SplitAmount migration — updated constructor signatures (P2pService, ContactStatusService, CleanupService, ChainDropService, ChainVerificationService), replaced removed setter calls with constructor injection (setSyncTrigger, setP2pRelayedContactRepository, setTransactionChainRepository), fixed mock return types for SplitAmount, updated getPreviousTxid → getPreviousTxidsByCurrency mock expectations
 - Fix batch transaction performance test race condition — the chain reset between single tx (4.1) and batch (4.2) deleted the tx while the daemon was still async-completing it, causing a broken `previous_txid` on re-insertion. Fix: let batch chain naturally from the single tx instead of resetting, wait for queue settlement, and fix dangling pointers before batch
 - Improve batch transaction performance test reliability — add queue processing between sends, reset chain state before benchmarks, increase timing margins, poll chain validity instead of transaction status
 - Add `EIOU_TEST_MODE` flag to bypass rate limiting in performance tests
