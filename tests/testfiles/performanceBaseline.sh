@@ -522,23 +522,10 @@ if [[ -n "$realContactAddress" ]]; then
         elif [[ -z "$batchFirstError" ]]; then
             batchFirstError="Send ${_batchI}/10: $(echo "$_txResult" | head -c 200)"
         fi
-        # Wait for transaction to be fully processed by the daemon before next send.
-        # The sender's chain integrity check blocks new sends until the previous tx
-        # reaches a settled state. The daemon must process outgoing/incoming queues.
-        for _wait in $(seq 1 15); do
-            _chainValid=$(docker exec -e EIOU_TEST_MODE=true ${testContainer} php -r "
-                require_once('${BOOTSTRAP_PATH}');
-                \$app = \Eiou\Core\Application::getInstance();
-                \$repo = \$app->services->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class);
-                \$contactPubkey = \$app->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactPubkey('${MODE}','${realContactAddress}');
-                \$status = \$repo->verifyChainIntegrity(\$app->services->getCurrentUser()->getPublicKey(), \$contactPubkey, 'USD');
-                echo \$status['valid'] ? 'VALID' : 'INVALID';
-            " 2>/dev/null || echo "ERROR")
-            if [[ "$_chainValid" == "VALID" ]]; then
-                break
-            fi
-            sleep 2
-        done
+        # Process queues so the transaction completes before the next send.
+        # The chain integrity check blocks new sends until settled.
+        wait_for_queue_processed ${testContainer} 3
+        wait_for_queue_processed ${realContactContainer} 3
     done
     batchEnd=$(date +%s%N)
     batchTime=$(( (batchEnd - batchStart) / 1000000 ))
