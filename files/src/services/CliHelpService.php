@@ -333,7 +333,7 @@ class CliHelpService
                     'rateLimitBlockSeconds' => 'Rate limit block duration in seconds (minimum 1)',
                     // Display
                     'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
-                    'displayDateFormat' => 'Date format — must be one of: ' . implode(', ', \Eiou\Core\Constants::VALID_DATE_FORMATS),
+                    'displayDateFormat' => 'Date format — must be one of: ' . implode(', ', Constants::VALID_DATE_FORMATS),
                     'displayRecentTransactionsLimit' => 'Recent transactions display limit (minimum 1)',
                     'displayDecimals' => 'Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage.',
                     // Currency Management
