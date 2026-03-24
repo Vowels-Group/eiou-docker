@@ -1789,7 +1789,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             try {
                                 $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
                                 $availableCredit = $creditData['availableCreditByCurrency'][$currency] ?? 0;
-                                $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, (int) $availableCredit, $currency);
+                                $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, SplitAmount::fromMajorUnits((float) $availableCredit), $currency);
                             } catch (\Exception $e) {
                                 Logger::getInstance()->log('Failed to store credit during currency acceptance for ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
                             }
