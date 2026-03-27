@@ -10,7 +10,14 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## 2026-03-16 -- 2026-03-24 
+## [Unreleased]
+
+### Security
+- Add nginx security headers to both HTTP and HTTPS server blocks — `X-Frame-Options: DENY` (prevent clickjacking), `X-Content-Type-Options: nosniff` (prevent MIME-type sniffing), `Referrer-Policy: strict-origin-when-cross-origin` (control referrer leakage). HSTS was already present on the HTTPS block. CSP is handled at the PHP application layer with per-request nonces
+
+---
+
+## 2026-03-16 -- 2026-03-24
 
 ### Added
 - Add `autoRejectUnknownCurrency` setting (default: enabled) — automatically rejects incoming contact requests when the requested currency is not in the node's `allowedCurrencies`. When disabled, unknown currency requests arrive as pending for manual review. Configurable via GUI toggle (Settings → Currency), CLI (`changesettings autoRejectUnknownCurrency true/false`), and API (`auto_reject_unknown_currency`)
