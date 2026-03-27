@@ -24,6 +24,8 @@ use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\RepositoryFactory;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\ContactSyncServiceInterface;
+use Eiou\Core\SplitAmount;
 
 #[CoversClass(ContactManagementService::class)]
 class ContactManagementServiceTest extends TestCase
@@ -416,5 +418,258 @@ class ContactManagementServiceTest extends TestCase
         $result = $this->service->addCurrencyToContact($pubkey, $currency, 1.0, 100.0);
 
         $this->assertFalse($result);
+    }
+
+    // =========================================================================
+    // addContact() Requested Credit Limit Tests
+    // =========================================================================
+
+    /**
+     * Helper to create a service with a mock sync service injected
+     */
+    private function createServiceWithMockSync(): ContactSyncServiceInterface
+    {
+        $mockSync = $this->createMock(ContactSyncServiceInterface::class);
+        $this->service->setContactSyncService($mockSync);
+        return $mockSync;
+    }
+
+    /**
+     * Test addContact passes requested credit limit when numeric arg after currency
+     */
+    public function testAddContactPassesRequestedCreditLimitToSyncService(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // argv: eiou add address name fee credit currency requested_credit
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD', '500'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                'http://bob:8080',
+                'Bob',
+                $this->anything(),  // fee (scaled)
+                $this->anything(),  // credit (SplitAmount)
+                'USD',
+                $this->anything(),  // output
+                null,               // description (not provided)
+                $this->callback(function ($val) {
+                    return $val instanceof SplitAmount && $val->whole === 500 && $val->frac === 0;
+                })
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
+    }
+
+    /**
+     * Test addContact skips requested credit when arg 7 is NULL placeholder with description at arg 8
+     */
+    public function testAddContactSkipsRequestedCreditWithNullPlaceholder(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // argv: eiou add address name fee credit currency NULL description
+        // NULL placeholder allows a description (even numeric) at position 8
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD', 'NULL', '12345'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                'http://bob:8080',
+                'Bob',
+                $this->anything(),
+                $this->anything(),
+                'USD',
+                $this->anything(),
+                '12345',            // description from arg 8 (could be numeric reference)
+                null                // no requested credit (NULL placeholder)
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
+    }
+
+    /**
+     * Test addContact passes both requested credit and description when both provided
+     */
+    public function testAddContactPassesBothRequestedCreditAndDescription(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // argv: eiou add address name fee credit currency requested_credit description
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD', '250', 'Hello'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                'http://bob:8080',
+                'Bob',
+                $this->anything(),
+                $this->anything(),
+                'USD',
+                $this->anything(),
+                'Hello',            // description from arg 8
+                $this->callback(function ($val) {
+                    return $val instanceof SplitAmount && $val->whole === 250;
+                })
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
+    }
+
+    /**
+     * Test addContact passes null requested credit when no arg 7 provided
+     */
+    public function testAddContactPassesNullRequestedCreditWhenNotProvided(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // argv: eiou add address name fee credit currency (no requested credit, no description)
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                'http://bob:8080',
+                'Bob',
+                $this->anything(),
+                $this->anything(),
+                'USD',
+                $this->anything(),
+                null,               // no description
+                null                // no requested credit
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
+    }
+
+    /**
+     * Test addContact passes requested credit with decimal value
+     */
+    public function testAddContactPassesDecimalRequestedCredit(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // argv: eiou add address name fee credit currency requested_credit (decimal)
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD', '99.50'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                'USD',
+                $this->anything(),
+                null,               // no description (arg 8 not provided)
+                $this->callback(function ($val) {
+                    return $val instanceof SplitAmount && $val->whole === 99;
+                })
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
+    }
+
+    /**
+     * Test addContact with empty string arg 7 passes null requested credit
+     */
+    public function testAddContactEmptyStringRequestedCreditPassesNull(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // argv: eiou add address name fee credit currency "" "message"
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD', '', 'Hello'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                'USD',
+                $this->anything(),
+                'Hello',            // description at arg 8
+                null                // empty string = no requested credit
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
+    }
+
+    /**
+     * Test addContact with NULL placeholder and numeric description does not confuse them
+     */
+    public function testAddContactNullPlaceholderWithNumericDescriptionNotConfused(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn(null);
+
+        // Scenario: no requested credit, but description is a numeric reference "99.50"
+        // argv: eiou add address name fee credit currency NULL 99.50
+        $argv = ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD', 'NULL', '99.50'];
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                $this->anything(),
+                'USD',
+                $this->anything(),
+                '99.50',            // numeric description preserved correctly
+                null                // no requested credit (NULL placeholder)
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact($argv, $output);
     }
 }

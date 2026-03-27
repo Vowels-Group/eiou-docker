@@ -275,8 +275,20 @@ class ContactManagementService implements ContactManagementServiceInterface
         $transportIndex = $this->transportUtility->determineTransportType($address);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
-        // Optional description/message for the contact request
-        $description = $data[7] ?? null;
+        // Optional requested credit limit (what we'd like the contact to set for us)
+        // Position: $data[7] = requested credit limit, $data[8] = description
+        // Use NULL or empty string to skip the requested credit limit
+        $requestedCreditLimit = null;
+        $rawArg7 = $data[7] ?? null;
+        if ($rawArg7 !== null && $rawArg7 !== '--json' && $rawArg7 !== '' && strtoupper($rawArg7) !== 'NULL') {
+            $requestedCreditValidation = $this->inputValidator->validateCreditLimit($rawArg7);
+            if ($requestedCreditValidation['valid']) {
+                $requestedCreditLimit = SplitAmount::from($requestedCreditValidation['value']);
+            }
+        }
+
+        // Optional description/message for the contact request (always at index 8)
+        $description = $data[8] ?? null;
         if ($description === '--json' || $description === null || $description === '') {
             $description = null;
         }
@@ -292,7 +304,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             if ($this->addCurrencyToContact($contact['pubkey'], $currency, $fee, $credit)) {
                 // Send P2P request so the remote side is notified of the new currency
                 $syncService = $this->getContactSyncService();
-                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description);
+                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description, $requestedCreditLimit);
             } else {
                 $output->error("Failed to add currency {$currency} to contact {$name}. Currency may already exist or contact is not accepted.", ErrorCodes::CONTACT_EXISTS, 409);
             }
@@ -302,9 +314,9 @@ class ContactManagementService implements ContactManagementServiceInterface
         // Delegate to sync service for P2P exchange handling
         $syncService = $this->getContactSyncService();
         if ($contact) {
-            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output, $description);
+            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output, $description, $requestedCreditLimit);
         } else {
-            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description);
+            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description, $requestedCreditLimit);
         }
     }
 

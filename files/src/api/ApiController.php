@@ -964,6 +964,16 @@ class ApiController {
             return $this->errorResponse($creditValidation['error'], 400, 'invalid_credit');
         }
 
+        // Validate requested credit limit if provided (what sender wants receiver to set)
+        $requestedCreditValidated = null;
+        if (isset($data['requested_credit_limit']) && $data['requested_credit_limit'] !== '' && $data['requested_credit_limit'] !== null) {
+            $reqCreditValidation = InputValidator::validateCreditLimit($data['requested_credit_limit'], $currency);
+            if (!$reqCreditValidation['valid']) {
+                return $this->errorResponse($reqCreditValidation['error'], 400, 'invalid_requested_credit');
+            }
+            $requestedCreditValidated = (string) $reqCreditValidation['value'];
+        }
+
         // Validate description if provided
         if (!empty($data['description'])) {
             $descValidation = InputValidator::validateMemo($data['description']);
@@ -986,8 +996,12 @@ class ApiController {
                 (string) $creditValidation['value'],         // $data[5] - credit limit
                 $currency,                                   // $data[6] - currency
             ];
+            // $data[7] = requested credit limit (or NULL placeholder), $data[8] = description
+            if ($requestedCreditValidated !== null || !empty($data['description'])) {
+                $argv[] = $requestedCreditValidated ?? 'NULL';   // $data[7] - requested credit limit or NULL
+            }
             if (!empty($data['description'])) {
-                $argv[] = $data['description'];              // $data[7] - optional description
+                $argv[] = $data['description'];                  // $data[8] - description
             }
             $argv[] = '--json';                          // Enable JSON output mode
 

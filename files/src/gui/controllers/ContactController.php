@@ -75,6 +75,7 @@ class ContactController
         $fee = $_POST['fee'] ?? '';
         $credit = $_POST['credit'] ?? '';
         $currency = $_POST['currency'] ?? '';
+        $requestedCredit = $_POST['requested_credit'] ?? '';
         $description = Security::sanitizeInput($_POST['description'] ?? '');
 
         if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
@@ -116,6 +117,17 @@ class ContactController
                 return;
             }
 
+            // Validate requested credit limit if provided
+            $requestedCreditValidated = null;
+            if ($requestedCredit !== '' && $requestedCredit !== null) {
+                $reqCreditValidation = InputValidator::validateCreditLimit($requestedCredit);
+                if (!$reqCreditValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid requested credit limit: ' . $reqCreditValidation['error'], 'error');
+                    return;
+                }
+                $requestedCreditValidated = $reqCreditValidation['value'];
+            }
+
             // Use sanitized and validated values
             $address = $addressValidation['value'];
             $name = $nameValidation['value'];
@@ -124,7 +136,11 @@ class ContactController
             $currency = $currencyValidation['value'];
 
             // Create argv array with --json flag for structured output
+            // $data[7] = requested credit limit (or NULL placeholder), $data[8] = description
             $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
+            if ($requestedCreditValidated !== null || !empty($description)) {
+                $argv[] = $requestedCreditValidated !== null ? (string) $requestedCreditValidated : 'NULL';
+            }
             if (!empty($description)) {
                 $argv[] = $description;
             }

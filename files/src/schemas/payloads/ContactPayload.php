@@ -40,6 +40,11 @@ class ContactPayload extends BasePayload
             $payload['description'] = $data['description'];
         }
 
+        // Include optional requested credit limit (what sender would like the receiver to set)
+        if (isset($data['requested_credit_limit'])) {
+            $payload['requested_credit_limit'] = $data['requested_credit_limit'];
+        }
+
         return $payload;
     }
 
@@ -49,7 +54,7 @@ class ContactPayload extends BasePayload
      * @param string $address The address of the contact request
      * @return array The contact creation payload
      */
-    public function buildCreateRequest(string $address, ?string $currency = null, ?string $description = null): array
+    public function buildCreateRequest(string $address, ?string $currency = null, ?string $description = null, ?array $requestedCreditLimit = null): array
     {
         $data = ['address' => $address];
         if ($currency !== null) {
@@ -57,6 +62,9 @@ class ContactPayload extends BasePayload
         }
         if ($description !== null && $description !== '') {
             $data['description'] = $description;
+        }
+        if ($requestedCreditLimit !== null) {
+            $data['requested_credit_limit'] = $requestedCreditLimit;
         }
         return $this->build($data);
     }
