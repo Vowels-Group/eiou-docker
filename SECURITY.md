@@ -225,10 +225,15 @@ The two layers complement each other. The external proxy handles infrastructure 
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| CPU limit | 1.0 core | Prevents resource exhaustion |
-| Memory limit | 512MB | Prevents unbounded memory consumption |
-| Memory reservation | 256MB | Guarantees minimum available memory |
+| `cap_drop: ALL` + selective `cap_add` | 7 capabilities re-added | Drops all Linux capabilities; only CHOWN, DAC_OVERRIDE, FOWNER, KILL, NET_BIND_SERVICE, SETGID, SETUID are granted |
+| `no-new-privileges` | Enabled | Prevents processes from gaining privileges after startup |
+| CPU limit | 2.0 cores | Prevents resource exhaustion |
+| Memory limit | 1024MB | Prevents unbounded memory consumption |
+| Memory reservation | 512MB | Guarantees minimum available memory |
+| Process limit (`pids_limit`) | 200 | Prevents fork bombs |
 | Privilege dropping | nginx workers as `www-data`, PHP-FPM workers as `www-data`, MariaDB as `mysql`, Tor as `debian-tor`, PHP processors as `www-data` | Limits blast radius of service compromise |
+| tini as PID 1 | Enabled | Proper signal forwarding and zombie process reaping |
+| Graceful shutdown | 45s grace period | Ordered service termination via SIGTERM trap in `startup.sh` |
 
 **Recommendations:**
 
@@ -353,6 +358,7 @@ State is file-based in `/tmp/tor-circuit-health/` (clears on container restart).
 | SQL injection | Column whitelist validation, parameterized queries via PDO prepared statements |
 | Input validation | 18+ validation methods in `InputValidator` class |
 | Rate limiting | Per-key limits (default: 100 requests/minute) via `RateLimiterService` |
+| Security headers | `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` on all responses; CSP with per-request nonces at the application layer |
 | Secure logging | Automatic masking of passwords, auth codes, API keys, and mnemonics in log output |
 
 ### Transport Security
@@ -365,6 +371,39 @@ State is file-based in `/tmp/tor-circuit-health/` (clears on container restart).
 | Message signing | All P2P messages signed with secp256k1 ECDSA signatures |
 | Replay prevention | API timestamps validated within a 5-minute window |
 | Hop budget randomization | Geometric distribution prevents traffic analysis of routing depth |
+
+### Service Hardening
+
+| Service | Hardening | Configuration |
+|---------|-----------|---------------|
+| nginx | Version hidden (`server_tokens off`), worker count fixed at 2 | `eiou.dockerfile`, `eiou.conf` |
+| PHP | Version hidden (`expose_php = Off`), errors logged not displayed | `eiou.dockerfile` |
+| PHP-FPM | On-demand process manager, 10s idle timeout, max 5 workers | `eiou.dockerfile` |
+| MariaDB | Bound to `127.0.0.1` only (no network exposure), symlinks disabled (`skip-symbolic-links`), Unix socket authentication | `eiou.dockerfile` |
+
+### Health Monitoring
+
+The container exposes a `/api/health` endpoint that checks:
+- Database connectivity (PDO `SELECT 1`)
+- Background processor status (P2P, transaction, cleanup, contact status)
+
+Returns HTTP 200 with `status: ok` when healthy, or HTTP 503 with `status: degraded` when any component fails. Docker uses this endpoint for its built-in health check (30s interval, 120s startup grace period, 5 retries before marking unhealthy).
+
+### Logging & Log Rotation
+
+| Setting | Configuration |
+|---------|---------------|
+| Docker log driver | `json-file` with `max-size: 10m`, `max-file: 3` (rotating) |
+| nginx logs | Weekly rotation, 4 files retained, compressed, `640 www-data:adm` permissions |
+| PHP error log | Weekly rotation, 4 files retained, compressed, `640 www-data:www-data` permissions |
+| Secure logging | Passwords, auth codes, API keys, and mnemonics automatically masked in application log output |
+
+### API Access Control
+
+| Protection | Implementation |
+|------------|----------------|
+| Authentication | HMAC-SHA256 request signing with 5-minute timestamp window |
+| CORS | Configurable allowed origins; logs a security warning if wildcard (`*`) is configured |
 
 ---
 
