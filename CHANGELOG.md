@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Add optional requested credit limit to contact requests — when sending a contact request, the sender can specify the credit limit they would like the receiver to set for them. The receiver sees this value pre-filled in the credit limit field when accepting, with an info message ("Contact requested a credit limit of X"). If no value is sent, the receiver's default credit limit is used. Stored in the existing `credit_limit` columns on incoming pending `contact_currencies` rows (no schema change). CLI: `eiou add <addr> <name> <fee> <credit> <currency> [requested_credit] [message]`. API: new optional `requested_credit_limit` field in `POST /api/v1/contacts`. GUI: new "Requested Credit Limit" field on the add contact form
+
 ### Security
 - Add nginx security headers to both HTTP and HTTPS server blocks — `X-Frame-Options: DENY` (prevent clickjacking), `X-Content-Type-Options: nosniff` (prevent MIME-type sniffing), `Referrer-Policy: strict-origin-when-cross-origin` (control referrer leakage). HSTS was already present on the HTTPS block. CSP is handled at the PHP application layer with per-request nonces
 
