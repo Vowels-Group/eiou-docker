@@ -665,7 +665,7 @@
                                 <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
                             </div>
                             <div class="form-group">
-                                <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Credit Limit:</label>
+                                <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?></label>
                                 <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($creditValue); ?>" min="0" required class="<?php echo $hasRequestedCredit ? '' : 'default-value'; ?>">
                             </div>
                             <div class="form-group">
@@ -675,12 +675,6 @@
                                 </button>
                             </div>
                         </div>
-                        <?php if ($hasRequestedCredit): ?>
-                        <small class="form-hint">
-                            <i class="fas fa-info-circle"></i>
-                            Contact requested a credit limit of <strong><?php echo htmlspecialchars($creditValue); ?></strong>
-                        </small>
-                        <?php endif; ?>
                         <?php if (!empty($pc['description'])): ?>
                         <div class="pending-contact-currency-message">
                             <label><i class="fas fa-comment"></i> Message:</label>
