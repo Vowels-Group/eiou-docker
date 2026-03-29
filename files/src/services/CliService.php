@@ -13,6 +13,7 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\RepositoryFactory;
 use Eiou\Services\Utilities\UtilityServiceContainer;
@@ -479,6 +480,7 @@ class CliService implements CliServiceInterface {
 
         // Format incoming requests (include description from contact transaction if present)
         $txContactRepo = $this->repositoryFactory ? $this->repositoryFactory->get(\Eiou\Database\TransactionContactRepository::class) : null;
+        $contactCurrencyRepo = $this->repositoryFactory ? $this->repositoryFactory->get(ContactCurrencyRepository::class) : null;
         $myPubkey = $this->currentUser->getPublicKey();
         foreach ($incomingRequests as $contact) {
             $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'Unknown';
@@ -494,6 +496,21 @@ class CliService implements CliServiceInterface {
                 $desc = $contactTx['description'] ?? null;
                 if ($desc !== null && $desc !== 'Contact request transaction') {
                     $entry['description'] = $desc;
+                }
+            }
+            // Get pending currencies with requested credit limits
+            if ($contactCurrencyRepo !== null && !empty($contact['pubkey_hash'])) {
+                $pendingCurrencies = $contactCurrencyRepo->getPendingCurrencies($contact['pubkey_hash'], 'incoming');
+                if (!empty($pendingCurrencies)) {
+                    $entry['currencies'] = array_map(function ($pc) {
+                        $curr = [
+                            'currency' => $pc['currency'],
+                        ];
+                        if ($pc['credit_limit'] !== null && $pc['credit_limit'] instanceof SplitAmount) {
+                            $curr['requested_credit_limit'] = $pc['credit_limit']->toMajorUnits();
+                        }
+                        return $curr;
+                    }, $pendingCurrencies);
                 }
             }
             $pendingData['incoming'][] = $entry;
@@ -532,6 +549,15 @@ class CliService implements CliServiceInterface {
                     echo "  From: " . $contact['address'] . "\n";
                     if (!empty($contact['description'])) {
                         echo "  Message: " . $contact['description'] . "\n";
+                    }
+                    if (!empty($contact['currencies'])) {
+                        foreach ($contact['currencies'] as $curr) {
+                            $line = "  Currency: " . $curr['currency'];
+                            if (isset($curr['requested_credit_limit'])) {
+                                $line .= " (requested credit limit: " . $curr['requested_credit_limit'] . ")";
+                            }
+                            echo $line . "\n";
+                        }
                     }
                     if ($contact['created_at']) {
                         echo "  Date: " . $contact['created_at'] . "\n";

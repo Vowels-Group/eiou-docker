@@ -227,7 +227,7 @@ Add a new contact or accept an incoming contact request.
 
 **Syntax:**
 ```bash
-eiou add <address> <name> <fee> <credit> <currency> [message]
+eiou add <address> <name> <fee> <credit> <currency> [requested_credit] [message]
 ```
 
 **Arguments:**
@@ -237,20 +237,30 @@ eiou add <address> <name> <fee> <credit> <currency> [message]
 | `address` | required | Contact's node address (HTTP, HTTPS, or Tor) |
 | `name` | required | Display name for the contact (use quotes for multi-word names, e.g., `"Jane Doe"`) |
 | `fee` | required | Fee percentage for transactions (e.g., 1.0) |
-| `credit` | required | Credit limit for this contact |
+| `credit` | required | Credit limit you extend to this contact (the maximum balance they can accumulate with you). Setting this to `0` means you can be contacts but they cannot send transactions through you |
 | `currency` | required | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
-| `message` | optional | A short message sent with the contact request |
+| `requested_credit` | optional | The credit limit you would like this contact to set for you. Sent as a suggestion — the recipient sees it pre-filled when accepting. Use `NULL` or omit to skip |
+| `message` | optional | A short message sent with the contact request (max 255 chars, not E2E encrypted). If providing a message without a requested credit limit, pass `NULL` as the requested_credit placeholder |
 
 **Examples:**
 ```bash
 # Add a new contact
 eiou add http://bob:8080 Bob 1.0 100 USD
 
-# Add with a message
-eiou add http://bob:8080 Bob 1.0 100 USD "Hey, it's Dave!"
+# Add with a requested credit limit
+eiou add http://bob:8080 Bob 1.0 100 USD 500
+
+# Add with both requested credit and a message
+eiou add http://bob:8080 Bob 1.0 100 USD 500 "Hey, it's Dave!"
+
+# Add with a message but no requested credit (use NULL placeholder)
+eiou add http://bob:8080 Bob 1.0 100 USD NULL "Hey, it's Dave!"
 
 # Add with a multi-word name
 eiou add http://bob:8080 "Jane Doe" 1.0 100 USD
+
+# Add as contact-only (0 credit = no transactions through you)
+eiou add http://bob:8080 Bob 1.0 0 USD
 
 # Add via Tor address
 eiou add abc123...onion Alice 0.5 500 USD
@@ -262,6 +272,9 @@ eiou add http://charlie:8080 Charlie 1 200 USD --json
 **Notes:**
 - Creates a pending contact request that the recipient must accept
 - To accept an incoming request, use `add` with the sender's address
+- A credit limit of `0` establishes the contact relationship without extending any credit — the contact exists but cannot route transactions through you. This is useful for maintaining a relationship without financial exposure
+- The `requested_credit` is a suggestion only — the recipient can accept, modify, or ignore it when accepting the request
+- Arguments are strictly positional: `requested_credit` is always at position 7, `message` at position 8. Use `NULL` as a placeholder if you need to provide a message without a requested credit limit
 - Each currency request is tracked independently with a direction (`incoming`/`outgoing`) in the `contact_currencies` table
 - Cross-currency requests are supported: Alice can request USD from Bob while Bob requests GBY from Alice — each side accepts independently
 - Re-running `add` with a different currency for an existing pending contact updates the outgoing currency request

@@ -671,6 +671,42 @@ class ApiControllerTest extends TestCase
     }
 
     /**
+     * Test add contact returns 400 for invalid requested_credit_limit
+     */
+    public function testAddContactReturns400ForInvalidRequestedCreditLimit(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['contacts:write']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/contacts',
+            [],
+            json_encode([
+                'address' => 'http://bob:8080',
+                'name' => 'Bob',
+                'fee_percent' => 1,
+                'credit_limit' => 100,
+                'currency' => 'USD',
+                'requested_credit_limit' => -50  // Invalid: negative
+            ]),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('invalid_requested_credit', $response['error']['code']);
+    }
+
+    /**
      * Test backup restore requires confirmation
      */
     public function testBackupRestoreRequiresConfirmation(): void

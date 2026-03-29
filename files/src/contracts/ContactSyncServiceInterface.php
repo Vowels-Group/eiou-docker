@@ -88,7 +88,8 @@ interface ContactSyncServiceInterface
         SplitAmount $credit,
         string $currency,
         ?CliOutputManager $output = null,
-        ?string $description = null
+        ?string $description = null,
+        ?SplitAmount $requestedCreditLimit = null
     ): void;
 
     /**
@@ -101,6 +102,7 @@ interface ContactSyncServiceInterface
      * @param string $currency The currency code
      * @param CliOutputManager|null $output Optional CLI output manager for feedback
      * @param string|null $description Optional description
+     * @param SplitAmount|null $requestedCreditLimit Optional credit limit to request from the contact
      * @return void
      */
     public function handleNewContact(
@@ -110,7 +112,8 @@ interface ContactSyncServiceInterface
         SplitAmount $credit,
         string $currency,
         ?CliOutputManager $output = null,
-        ?string $description = null
+        ?string $description = null,
+        ?SplitAmount $requestedCreditLimit = null
     ): void;
 
     /**
