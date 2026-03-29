@@ -21,7 +21,7 @@
 #   12. Keep container running while handling signals
 #
 # Environment Variables:
-#   QUICKSTART          - Hostname for quickstart mode (e.g., "alice")
+#   QUICKSTART          - Hostname for quickstart mode (e.g., "alice", "192.168.1.100:8080")
 #   RESTORE             - 24-word seed phrase for wallet restoration
 #   RESTORE_FILE        - Path to file containing seed phrase (more secure)
 #   SSL_DOMAIN          - Primary domain for SSL certificate CN
@@ -32,7 +32,7 @@
 #   EIOU_HS_TIMEOUT     - Tor hidden service timeout in seconds (default: 60)
 #   EIOU_TOR_TIMEOUT    - Tor connectivity timeout in seconds (default: 120)
 #   EIOU_NAME           - Display name for the node (shown in local UI)
-#   EIOU_HOST           - Externally reachable address (IP or domain)
+#   EIOU_HOST           - Externally reachable address (IP or domain, optional :port)
 #   EIOU_PORT           - Port for HTTP/HTTPS URLs (appended to addresses)
 #   EIOU_TEST_MODE      - Enable test mode for manual message processing
 #   EIOU_CONTACT_STATUS_ENABLED - Enable contact status ping feature
@@ -287,14 +287,14 @@ EIOU_HOST=${EIOU_HOST:-false}
 EIOU_PORT=${EIOU_PORT:-false}
 
 # Validate environment variable values to prevent injection or naming errors.
-# Hostnames: alphanumeric, dots, and hyphens only (valid DNS characters).
+# Hostnames: alphanumeric, dots, hyphens, and optional :port (valid DNS + IP:port).
 # Names: alphanumeric, spaces, hyphens, underscores, and dots only.
 # Port: numeric only.
 validate_hostname() {
     local val="$1" varname="$2"
-    if [ "$val" != "false" ] && ! echo "$val" | grep -qE '^[a-zA-Z0-9._-]+$'; then
+    if [ "$val" != "false" ] && ! echo "$val" | grep -qE '^[a-zA-Z0-9._-]+(:[0-9]+)?$'; then
         echo "ERROR: $varname contains invalid characters: '$val'"
-        echo "       Only alphanumeric characters, dots, hyphens, and underscores are allowed."
+        echo "       Only alphanumeric characters, dots, hyphens, underscores, and optional :port are allowed."
         exit 1
     fi
 }
@@ -315,6 +315,24 @@ if [ "$EIOU_PORT" != "false" ] && ! echo "$EIOU_PORT" | grep -qE '^[0-9]+$'; the
     exit 1
 fi
 
+# Extract embedded port from QUICKSTART or EIOU_HOST (e.g., "192.168.1.100:8080")
+# The embedded port is used when EIOU_PORT is not explicitly set.
+extract_host_port() {
+    local val="$1"
+    if echo "$val" | grep -qE ':[0-9]+$'; then
+        echo "${val##*:}"
+    fi
+}
+
+if [ "$QUICKSTART" != "false" ] && echo "$QUICKSTART" | grep -qE ':[0-9]+$'; then
+    QUICKSTART_PORT=$(extract_host_port "$QUICKSTART")
+    QUICKSTART="${QUICKSTART%:*}"
+fi
+if [ "$EIOU_HOST" != "false" ] && echo "$EIOU_HOST" | grep -qE ':[0-9]+$'; then
+    EIOU_HOST_PORT=$(extract_host_port "$EIOU_HOST")
+    EIOU_HOST="${EIOU_HOST%:*}"
+fi
+
 # Resolve the effective address host:
 # Priority: EIOU_HOST > QUICKSTART (for address construction)
 if [ "$EIOU_HOST" != "false" ]; then
@@ -323,6 +341,16 @@ elif [ "$QUICKSTART" != "false" ]; then
     EFFECTIVE_HOST="$QUICKSTART"
 else
     EFFECTIVE_HOST="false"
+fi
+
+# Resolve the effective port:
+# Priority: EIOU_PORT (explicit) > embedded port from EIOU_HOST > embedded port from QUICKSTART
+if [ "$EIOU_PORT" = "false" ]; then
+    if [ -n "${EIOU_HOST_PORT:-}" ]; then
+        EIOU_PORT="$EIOU_HOST_PORT"
+    elif [ -n "${QUICKSTART_PORT:-}" ]; then
+        EIOU_PORT="$QUICKSTART_PORT"
+    fi
 fi
 
 # Resolve the effective display name:
