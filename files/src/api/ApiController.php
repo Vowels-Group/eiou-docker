@@ -5,6 +5,7 @@ namespace Eiou\Api;
 
 use Exception;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
@@ -763,6 +764,7 @@ class ApiController {
 
         $contactRepo = $this->services->getRepositoryFactory()->get(ContactRepository::class);
         $addressRepo = $this->services->getRepositoryFactory()->get(AddressRepository::class);
+        $contactCurrencyRepo = $this->services->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
         // Get all address types dynamically for future-proofing
         $addressTypes = $addressRepo->getAllAddressTypes();
@@ -778,12 +780,30 @@ class ApiController {
                 $addresses[$type] = $contact[$type] ?? null;
             }
 
-            $incoming[] = [
+            $entry = [
                 'pubkey_hash' => $contact['pubkey_hash'] ?? null,
                 'status' => $contact['status'] ?? null,
                 'addresses' => $addresses,
                 'created_at' => $contact['created_at'] ?? null
             ];
+
+            // Include pending currencies with requested credit limits
+            if (!empty($contact['pubkey_hash'])) {
+                $pendingCurrencies = $contactCurrencyRepo->getPendingCurrencies($contact['pubkey_hash'], 'incoming');
+                if (!empty($pendingCurrencies)) {
+                    $entry['currencies'] = array_map(function ($pc) {
+                        $curr = [
+                            'currency' => $pc['currency'],
+                        ];
+                        if ($pc['credit_limit'] !== null && $pc['credit_limit'] instanceof SplitAmount) {
+                            $curr['requested_credit_limit'] = $pc['credit_limit']->toMajorUnits();
+                        }
+                        return $curr;
+                    }, $pendingCurrencies);
+                }
+            }
+
+            $incoming[] = $entry;
         }
 
         // Get outgoing pending requests (user initiated, name IS NOT NULL)
