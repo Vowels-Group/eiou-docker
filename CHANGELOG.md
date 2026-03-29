@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Allow `ip:port` format in `QUICKSTART` and `EIOU_HOST` environment variables — the embedded port is automatically extracted and used when `EIOU_PORT` is not explicitly set (e.g., `EIOU_HOST=192.168.1.100:8080` is equivalent to `EIOU_HOST=192.168.1.100` + `EIOU_PORT=8080`)
 - Add optional requested credit limit to contact requests — when sending a contact request, the sender can specify the credit limit they would like the receiver to set for them. The receiver sees this value pre-filled in the credit limit field when accepting, with an info message ("Contact requested a credit limit of X"). If no value is sent, the receiver's default credit limit is used. Stored in the existing `credit_limit` columns on incoming pending `contact_currencies` rows (no schema change). CLI: `eiou add <addr> <name> <fee> <credit> <currency> [requested_credit] [message]`. API: new optional `requested_credit_limit` field in `POST /api/v1/contacts`. GUI: new "Requested Credit Limit" field on the add contact form
 
 ### Security
