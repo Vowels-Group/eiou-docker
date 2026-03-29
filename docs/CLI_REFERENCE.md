@@ -100,8 +100,8 @@ Wallet generation and restoration are handled automatically by `startup.sh` duri
 
 | Variable | Description |
 |----------|-------------|
-| `QUICKSTART` | Hostname for quickstart mode (e.g., `alice`) — auto-generates wallet on first boot |
-| `EIOU_HOST` | Override hostname (takes priority over `QUICKSTART`) |
+| `QUICKSTART` | Hostname for quickstart mode (e.g., `alice`, `192.168.1.100:8080`) — auto-generates wallet on first boot |
+| `EIOU_HOST` | Override hostname (IP or domain, optional `:port` — takes priority over `QUICKSTART`) |
 | `EIOU_NAME` | Display name for the node |
 | `RESTORE` | BIP39 seed phrase (24 words) to restore an existing wallet |
 | `RESTORE_FILE` | Path to file containing seed phrase (recommended — more secure) |

@@ -81,8 +81,10 @@ These variables configure the node's externally reachable identity. When omitted
 | Variable | Purpose | Fallback |
 |----------|---------|----------|
 | `EIOU_NAME` | Display name (shown in local UI) | Falls back to `QUICKSTART` |
-| `EIOU_HOST` | Externally reachable address (IP or domain) | Falls back to `QUICKSTART` |
-| `EIOU_PORT` | Port appended to HTTP/HTTPS URLs | Not appended if omitted |
+| `EIOU_HOST` | Externally reachable address (IP or domain, optional `:port`) | Falls back to `QUICKSTART` |
+| `EIOU_PORT` | Port appended to HTTP/HTTPS URLs | Not appended if omitted. Can also be embedded in `QUICKSTART` or `EIOU_HOST` |
+
+Both `QUICKSTART` and `EIOU_HOST` accept an optional `:port` suffix (e.g., `192.168.1.100:8080`). The port is automatically extracted and used as `EIOU_PORT` unless `EIOU_PORT` is explicitly set. Priority: `EIOU_PORT` (explicit) > embedded port from `EIOU_HOST` > embedded port from `QUICKSTART`.
 
 **Example: Production node with external IP**
 
@@ -92,6 +94,15 @@ environment:
   - EIOU_NAME=Dave            # Local display name
   - EIOU_HOST=88.99.69.172   # External IP address
   - EIOU_PORT=1133            # Custom port
+```
+
+This is equivalent to:
+
+```yaml
+environment:
+  - QUICKSTART=dave
+  - EIOU_NAME=Dave
+  - EIOU_HOST=88.99.69.172:1133   # Port embedded in host
 ```
 
 This generates:

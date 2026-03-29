@@ -108,8 +108,8 @@ This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wall
 |----------|----------|---------|-------------|
 | `QUICKSTART` | No | *(none)* | Container hostname for HTTP/HTTPS mode. Generates Docker-internal addresses (`http://<value>`) with a self-signed SSL certificate — **not reachable from outside the Docker network**. For external access, also set `EIOU_HOST` and `EIOU_PORT`. If omitted, the node runs in **Tor-only mode** (reachable only via its .onion address) |
 | `EIOU_NAME` | No | `QUICKSTART` | Display name shown in the local GUI header and logs. Cosmetic only — never sent to other nodes |
-| `EIOU_HOST` | No | `QUICKSTART` | Externally reachable address (IP or domain). **Required for access from outside Docker.** Use a real IP or FQDN with proper SSL (Let's Encrypt or CA-signed) for production |
-| `EIOU_PORT` | No | *(none)* | Port appended to URLs. Use when mapping to a non-standard external port (e.g., `8443`) |
+| `EIOU_HOST` | No | `QUICKSTART` | Externally reachable address (IP or domain, with optional `:port`). **Required for access from outside Docker.** Use a real IP or FQDN with proper SSL (Let's Encrypt or CA-signed) for production. If `:port` is included (e.g., `192.168.1.100:8080`), it is used as `EIOU_PORT` unless `EIOU_PORT` is explicitly set |
+| `EIOU_PORT` | No | *(none)* | Port appended to URLs. Use when mapping to a non-standard external port (e.g., `8443`). Can also be embedded in `QUICKSTART` or `EIOU_HOST` as `:port` |
 
 **Example — production node with public IP:**
 
