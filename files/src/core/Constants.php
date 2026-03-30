@@ -414,6 +414,7 @@ class Constants {
     const DELIVERY_ACKNOWLEDGED = 'acknowledged';
     const DELIVERY_WARNING = 'warning';
     const DELIVERY_UPDATED = 'updated';
+    const DELIVERY_CONTACT_DESCRIPTION = 'contact_description';
     const DELIVERY_REJECTED = 'rejected';
     const DELIVERY_MAINTENANCE = 'maintenance';
     const DELIVERY_ERROR = 'error';

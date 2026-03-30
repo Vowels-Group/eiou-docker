@@ -673,4 +673,71 @@ class MessagePayloadTest extends TestCase
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
+
+    // =========================================================================
+    // buildContactDescription() Tests
+    // =========================================================================
+
+    /**
+     * Test buildContactDescription returns correct payload structure
+     */
+    public function testBuildContactDescriptionReturnsCorrectStructure(): void
+    {
+        $address = 'http://recipient.example.com';
+        $resolvedAddress = 'http://sender.example.com';
+        $publicKey = 'test-public-key-123';
+        $description = 'Hey, it\'s Dave!';
+
+        $this->transportUtility->expects($this->once())
+            ->method('resolveUserAddressForTransport')
+            ->with($address)
+            ->willReturn($resolvedAddress);
+
+        $this->userContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn($publicKey);
+
+        $result = $this->messagePayload->buildContactDescription($address, $description);
+
+        $this->assertIsArray($result);
+        $this->assertEquals('message', $result['type']);
+        $this->assertEquals('contact', $result['typeMessage']);
+        $this->assertEquals(Constants::DELIVERY_CONTACT_DESCRIPTION, $result['status']);
+        $this->assertEquals($description, $result['description']);
+        $this->assertEquals($resolvedAddress, $result['senderAddress']);
+        $this->assertEquals($publicKey, $result['senderPublicKey']);
+    }
+
+    /**
+     * Test buildContactDescription uses type=message for E2E encryption eligibility
+     */
+    public function testBuildContactDescriptionUsesMessageType(): void
+    {
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://sender.example.com');
+        $this->userContext->method('getPublicKey')
+            ->willReturn('test-key');
+
+        $result = $this->messagePayload->buildContactDescription('http://remote:8080', 'Test');
+
+        // type=message ensures this is NOT in PayloadEncryption::TYPES_EXCLUDED_FROM_ENCRYPTION
+        $this->assertEquals('message', $result['type']);
+        $this->assertNotContains($result['type'], \Eiou\Security\PayloadEncryption::TYPES_EXCLUDED_FROM_ENCRYPTION);
+    }
+
+    /**
+     * Test buildContactDescription preserves description content exactly
+     */
+    public function testBuildContactDescriptionPreservesDescriptionExactly(): void
+    {
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://sender.example.com');
+        $this->userContext->method('getPublicKey')
+            ->willReturn('test-key');
+
+        $specialDescription = 'Hello! I\'m "Bob" & I use <HTML> tags';
+        $result = $this->messagePayload->buildContactDescription('http://remote:8080', $specialDescription);
+
+        $this->assertEquals($specialDescription, $result['description']);
+    }
 }

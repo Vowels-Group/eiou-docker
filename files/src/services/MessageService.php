@@ -586,6 +586,37 @@ class MessageService implements MessageServiceInterface {
 
             // Return acknowledgment with our available credit for delivery tracking
             echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress, $ackCreditByCurrency, $ackCreditCalculatedAt);
+        } elseif ($status === Constants::DELIVERY_CONTACT_DESCRIPTION) {
+            // E2E encrypted contact description follow-up
+            // The sender omitted the description from the initial cleartext contact request (non-TOR)
+            // and is now delivering it encrypted after obtaining our public key
+            $description = $decodedMessage['description'] ?? null;
+
+            if ($description !== null && $description !== '' && $senderPublicKey !== null) {
+                // Find the contact transaction from this sender and update its description
+                $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
+                    $senderPublicKey, $this->currentUser->getPublicKey()
+                );
+
+                if ($contactTx && isset($contactTx['txid'])) {
+                    $this->transactionRepository->updateDescription($contactTx['txid'], $description, true);
+                    Logger::getInstance()->info("Contact description updated via E2E encrypted follow-up", [
+                        'sender_address' => $senderAddress,
+                        'txid' => $contactTx['txid']
+                    ]);
+                } else {
+                    Logger::getInstance()->warning("Contact description received but no matching contact transaction found", [
+                        'sender_address' => $senderAddress
+                    ]);
+                }
+            }
+
+            echo json_encode([
+                'status' => Constants::DELIVERY_RECEIVED,
+                'message' => 'Contact description received',
+                'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+                'senderPublicKey' => $this->currentUser->getPublicKey()
+            ]);
         } else {
             // Log unexpected status for debugging
             Logger::getInstance()->info("Received contact message with non-accepted status", [

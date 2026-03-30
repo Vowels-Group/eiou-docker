@@ -416,6 +416,13 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                 }
 
+                // Send E2E encrypted description follow-up if stored (non-TOR retry)
+                $retryDescription = $contactParams['description'] ?? null;
+                $retryIsTor = $contactParams['is_tor'] ?? false;
+                if (!$retryIsTor && $retryDescription !== null && $retryDescription !== '') {
+                    $this->sendContactDescriptionE2E($address, $retryDescription);
+                }
+
                 Logger::getInstance()->info("Contact created successfully after retry delivery", [
                     'pubkey_hash' => $senderPublicKeyHash,
                     'name' => $name,
@@ -455,6 +462,13 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                 if ($this->messageDeliveryService !== null) {
                     $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                }
+
+                // Send E2E encrypted description follow-up if stored (non-TOR retry)
+                $retryDescription = $contactParams['description'] ?? null;
+                $retryIsTor = $contactParams['is_tor'] ?? false;
+                if (!$retryIsTor && $retryDescription !== null && $retryDescription !== '') {
+                    $this->sendContactDescriptionE2E($address, $retryDescription);
                 }
 
                 Logger::getInstance()->info("Contact mutually accepted after retry delivery", [
@@ -498,6 +512,13 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                 if ($this->messageDeliveryService !== null) {
                     $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                }
+
+                // Send E2E encrypted description follow-up if stored (non-TOR retry)
+                $retryDescription = $contactParams['description'] ?? null;
+                $retryIsTor = $contactParams['is_tor'] ?? false;
+                if (!$retryIsTor && $retryDescription !== null && $retryDescription !== '') {
+                    $this->sendContactDescriptionE2E($address, $retryDescription);
                 }
 
                 Logger::getInstance()->info("Contact created after retry delivery (remote already had us)", [
@@ -735,6 +756,38 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
         // Call internal send method
         return $this->sendContactMessageInternal($contactAddress, $payloadArray, $messageId, true);
+    }
+
+    /**
+     * Send contact description as an E2E encrypted follow-up message
+     *
+     * Used for non-TOR transports where the initial contact request is sent without
+     * the description (cleartext bootstrap). After receiving the recipient's public key
+     * in the contact request response, this method sends the description separately,
+     * encrypted end-to-end.
+     *
+     * @param string $address Recipient address
+     * @param string $description The contact description/message to send encrypted
+     * @return void
+     */
+    private function sendContactDescriptionE2E(string $address, string $description): void {
+        $payload = $this->messagePayload->buildContactDescription($address, $description);
+        $descMessageId = 'contact-desc-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+
+        $result = $this->sendContactMessageInternal($address, $payload, $descMessageId, true);
+
+        if (!$result['success']) {
+            Logger::getInstance()->warning("E2E contact description delivery failed", [
+                'recipient_address' => $address,
+                'message_id' => $descMessageId,
+                'error' => $result['tracking']['error'] ?? 'unknown'
+            ]);
+        } else {
+            Logger::getInstance()->info("Contact description sent E2E encrypted", [
+                'recipient_address' => $address,
+                'message_id' => $descMessageId,
+            ]);
+        }
     }
 
     /**
@@ -1163,8 +1216,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
         ];
 
         // Build the payload array (include currency so receiver knows sender's preference)
+        // For TOR addresses: include description in the contact request (single phase, TOR provides transport encryption)
+        // For non-TOR addresses: omit description — it will be sent as a separate E2E encrypted follow-up
+        $isTorAddress = $this->transportUtility->isTorAddress($address);
+        $descriptionForPayload = $isTorAddress ? $description : null;
         $requestedCreditArray = $requestedCreditLimit !== null ? $requestedCreditLimit->toArray() : null;
-        $payload = $this->contactPayload->buildCreateRequest($address, $currency, $description, $requestedCreditArray);
+        $payload = $this->contactPayload->buildCreateRequest($address, $currency, $descriptionForPayload, $requestedCreditArray);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
         // Store contact creation params as metadata in the payload.
@@ -1179,6 +1236,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
         ];
         if ($requestedCreditLimit !== null) {
             $payload['_contact_params']['requested_credit_limit'] = $requestedCreditLimit->toArray();
+        }
+        // Store description and TOR flag for retry path — if the initial send is queued
+        // for retry, handleRetryDeliveryCompleted() needs to send the E2E follow-up
+        if ($description !== null && $description !== '') {
+            $payload['_contact_params']['description'] = $description;
+            $payload['_contact_params']['is_tor'] = $isTorAddress;
         }
 
         // Generate unique message ID for contact creation tracking
@@ -1381,6 +1444,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
+                    // For non-TOR: send description as E2E encrypted follow-up now that we have recipient's public key
+                    if (!$isTorAddress && $description !== null && $description !== '') {
+                        $this->sendContactDescriptionE2E($address, $description);
+                    }
+
                     $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                     $contactData['pubkey'] = $senderPublicKey;
                     $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
@@ -1429,6 +1497,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Update delivery stage
                     if ($this->messageDeliveryService !== null) {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    // For non-TOR: send description as E2E encrypted follow-up
+                    if (!$isTorAddress && $description !== null && $description !== '') {
+                        $this->sendContactDescriptionE2E($address, $description);
                     }
 
                     $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
