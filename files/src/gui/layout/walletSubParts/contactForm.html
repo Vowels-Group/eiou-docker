@@ -42,11 +42,16 @@
             Default values from your wallet settings
         </small>
         <div class="form-group">
-            <label for="description">Message (optional) <i class="fas fa-exclamation-triangle text-danger"></i>:</label>
-            <input type="text" id="description" name="description" placeholder="e.g. Hey, it's Dave!" maxlength="255">
+            <label for="requested_credit">Requested Credit Limit (optional):</label>
+            <input type="number" id="requested_credit" name="requested_credit" placeholder="Credit limit you'd like from this contact" min="0" step="any">
             <small class="form-hint">
-                <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> <strong>WARNING:</strong></span> This message is <strong>not end-to-end encrypted</strong> (the recipient's key is not yet known). Do not include sensitive or personal information.
+                <i class="fas fa-info-circle"></i>
+                The credit limit you would like this contact to set for you. They will see this as a suggestion when accepting your request.
             </small>
+        </div>
+        <div class="form-group">
+            <label for="description">Message (optional):</label>
+            <input type="text" id="description" name="description" placeholder="e.g. Hey, it's Dave!" maxlength="255">
         </div>
         <div class="form-actions">
             <button type="submit" class="btn btn-success">Add Contact</button>

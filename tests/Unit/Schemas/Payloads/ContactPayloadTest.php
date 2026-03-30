@@ -619,6 +619,96 @@ class ContactPayloadTest extends TestCase
         $this->assertArrayNotHasKey('description', $result);
     }
 
+    // =========================================================================
+    // requested_credit_limit Tests
+    // =========================================================================
+
+    /**
+     * Test build includes requested_credit_limit when provided
+     */
+    public function testBuildIncludesRequestedCreditLimitWhenProvided(): void
+    {
+        $requestedCredit = ['whole' => 500, 'frac' => 0];
+        $result = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS,
+            'requested_credit_limit' => $requestedCredit
+        ]);
+
+        $this->assertArrayHasKey('requested_credit_limit', $result);
+        $this->assertEquals($requestedCredit, $result['requested_credit_limit']);
+    }
+
+    /**
+     * Test build excludes requested_credit_limit when not provided
+     */
+    public function testBuildExcludesRequestedCreditLimitWhenNotProvided(): void
+    {
+        $result = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS
+        ]);
+
+        $this->assertArrayNotHasKey('requested_credit_limit', $result);
+    }
+
+    /**
+     * Test buildCreateRequest passes requested_credit_limit to build
+     */
+    public function testBuildCreateRequestPassesRequestedCreditLimit(): void
+    {
+        $requestedCredit = ['whole' => 250, 'frac' => 50000000];
+        $result = $this->payload->buildCreateRequest(
+            self::TEST_HTTP_ADDRESS,
+            'USD',
+            'Hello',
+            $requestedCredit
+        );
+
+        $this->assertArrayHasKey('requested_credit_limit', $result);
+        $this->assertEquals($requestedCredit, $result['requested_credit_limit']);
+        $this->assertArrayHasKey('currency', $result);
+        $this->assertArrayHasKey('description', $result);
+    }
+
+    /**
+     * Test buildCreateRequest without requested_credit_limit
+     */
+    public function testBuildCreateRequestWithoutRequestedCreditLimit(): void
+    {
+        $result = $this->payload->buildCreateRequest(self::TEST_HTTP_ADDRESS, 'USD', 'Hello');
+
+        $this->assertArrayNotHasKey('requested_credit_limit', $result);
+    }
+
+    /**
+     * Test buildCreateRequest with null requested_credit_limit
+     */
+    public function testBuildCreateRequestWithNullRequestedCreditLimit(): void
+    {
+        $result = $this->payload->buildCreateRequest(self::TEST_HTTP_ADDRESS, 'USD', 'Hello', null);
+
+        $this->assertArrayNotHasKey('requested_credit_limit', $result);
+    }
+
+    /**
+     * Test build includes both description and requested_credit_limit
+     */
+    public function testBuildIncludesBothDescriptionAndRequestedCreditLimit(): void
+    {
+        $requestedCredit = ['whole' => 1000, 'frac' => 0];
+        $result = $this->payload->build([
+            'address' => self::TEST_HTTP_ADDRESS,
+            'description' => 'Test message',
+            'requested_credit_limit' => $requestedCredit
+        ]);
+
+        $this->assertArrayHasKey('description', $result);
+        $this->assertArrayHasKey('requested_credit_limit', $result);
+        $this->assertEquals('Test message', $result['description']);
+        $this->assertEquals($requestedCredit, $result['requested_credit_limit']);
+        // type + senderAddress + senderAddresses + senderPublicKey + description + requested_credit_limit = 6
+        $this->assertCount(6, $result);
+    }
+
     /**
      * Test filterAddresses with custom address types from utility
      */

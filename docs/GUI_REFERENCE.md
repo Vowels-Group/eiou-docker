@@ -361,7 +361,7 @@ All three dashboard cards display per-currency rows. When a card has no data for
 | credit | number | Credit limit (default from settings) |
 | fee | number | Fee percentage (default from settings) |
 | currency | select | Currency code (dynamically populated from user's allowed currencies) |
-| description | text | Optional message sent with the contact request (max 255 chars). **Not E2E encrypted** — the recipient's key is not yet known at contact request time |
+| description | text | Optional message sent with the contact request (max 255 chars). For non-Tor contacts, sent as a separate E2E encrypted follow-up after key exchange. For Tor contacts, included directly (protected by Tor transport encryption) |
 
 ---
 

@@ -167,7 +167,8 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
     "name": "Bob",
     "fee_percent": 1.0,
     "credit_limit": 100.00,
-    "currency": "USD"
+    "currency": "USD",
+    "requested_credit_limit": 500.00
 }
 ```
 

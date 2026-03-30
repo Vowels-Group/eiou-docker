@@ -671,8 +671,9 @@ Bob adds Alice     -->  Both sides become ACCEPTED
 | `address` | Node's network address | `http://bob` |
 | `name` | Display name | `Bob` |
 | `fee` | Transaction fee percentage | `0.01` (0.01%) |
-| `credit` | Maximum balance to extend | `1000` |
+| `credit` | Maximum balance to extend. Setting to `0` means you can be contacts but they cannot send transactions through you | `1000` |
 | `currency` | Currency for credit limit | `USD` |
+| `requested_credit` | (Optional) Credit limit you'd like the contact to set for you — sent as a suggestion | `500` |
 
 #### Contact States
 
