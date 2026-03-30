@@ -240,7 +240,7 @@ eiou add <address> <name> <fee> <credit> <currency> [requested_credit] [message]
 | `credit` | required | Credit limit you extend to this contact (the maximum balance they can accumulate with you). Setting this to `0` means you can be contacts but they cannot send transactions through you |
 | `currency` | required | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
 | `requested_credit` | optional | The credit limit you would like this contact to set for you. Sent as a suggestion — the recipient sees it pre-filled when accepting. Use `NULL` or omit to skip |
-| `message` | optional | A short message sent with the contact request (max 255 chars, not E2E encrypted). If providing a message without a requested credit limit, pass `NULL` as the requested_credit placeholder |
+| `message` | optional | A short message sent with the contact request (max 255 chars, E2E encrypted for non-Tor, transport-encrypted for Tor). If providing a message without a requested credit limit, pass `NULL` as the requested_credit placeholder |
 
 **Examples:**
 ```bash

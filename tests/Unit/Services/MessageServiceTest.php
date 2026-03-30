@@ -836,4 +836,141 @@ class MessageServiceTest extends TestCase
 
         $this->service->handleMessageRequest($request);
     }
+
+    // =========================================================================
+    // handleContactMessageRequest() — contact_description Tests
+    // =========================================================================
+
+    /**
+     * Test that contact_description status updates the transaction description
+     */
+    public function testContactDescriptionUpdatesTransactionDescription(): void
+    {
+        $senderPublicKey = 'sender-public-key-abc123';
+        $senderAddress = 'http://sender.example.com';
+        $txid = 'contact-tx-id-123';
+
+        $request = [
+            'typeMessage' => 'contact',
+            'status' => Constants::DELIVERY_CONTACT_DESCRIPTION,
+            'description' => 'Hey, it\'s Dave!',
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => $senderPublicKey,
+        ];
+
+        // Contact is known
+        $this->contactRepository->method('contactExistsPubkey')
+            ->with($senderPublicKey)
+            ->willReturn(true);
+
+        // Find the contact transaction
+        $this->transactionContactRepository->expects($this->once())
+            ->method('getContactTransactionByParties')
+            ->with($senderPublicKey, self::TEST_PUBLIC_KEY)
+            ->willReturn(['txid' => $txid, 'currency' => 'USD']);
+
+        // Expect the description to be updated
+        $this->transactionRepository->expects($this->once())
+            ->method('updateDescription')
+            ->with($txid, 'Hey, it\'s Dave!', true);
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://mynode:8080');
+
+        $this->expectOutputRegex('/Contact description received/');
+
+        $this->service->handleMessageRequest($request);
+    }
+
+    /**
+     * Test that contact_description with no matching transaction logs warning
+     */
+    public function testContactDescriptionNoMatchingTransactionReturnsReceived(): void
+    {
+        $request = [
+            'typeMessage' => 'contact',
+            'status' => Constants::DELIVERY_CONTACT_DESCRIPTION,
+            'description' => 'Hello!',
+            'senderAddress' => 'http://sender.example.com',
+            'senderPublicKey' => 'unknown-sender-key',
+        ];
+
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(true);
+
+        // No matching contact transaction
+        $this->transactionContactRepository->method('getContactTransactionByParties')
+            ->willReturn(null);
+
+        // updateDescription should NOT be called
+        $this->transactionRepository->expects($this->never())
+            ->method('updateDescription');
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://mynode:8080');
+
+        $this->expectOutputRegex('/Contact description received/');
+
+        $this->service->handleMessageRequest($request);
+    }
+
+    /**
+     * Test that contact_description with empty description does not update
+     */
+    public function testContactDescriptionEmptyDescriptionDoesNotUpdate(): void
+    {
+        $request = [
+            'typeMessage' => 'contact',
+            'status' => Constants::DELIVERY_CONTACT_DESCRIPTION,
+            'description' => '',
+            'senderAddress' => 'http://sender.example.com',
+            'senderPublicKey' => 'some-key',
+        ];
+
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(true);
+
+        // Should not attempt to find or update transaction
+        $this->transactionContactRepository->expects($this->never())
+            ->method('getContactTransactionByParties');
+
+        $this->transactionRepository->expects($this->never())
+            ->method('updateDescription');
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://mynode:8080');
+
+        $this->expectOutputRegex('/Contact description received/');
+
+        $this->service->handleMessageRequest($request);
+    }
+
+    /**
+     * Test that contact_description without description field does not update
+     */
+    public function testContactDescriptionMissingDescriptionFieldDoesNotUpdate(): void
+    {
+        $request = [
+            'typeMessage' => 'contact',
+            'status' => Constants::DELIVERY_CONTACT_DESCRIPTION,
+            'senderAddress' => 'http://sender.example.com',
+            'senderPublicKey' => 'some-key',
+        ];
+
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(true);
+
+        $this->transactionContactRepository->expects($this->never())
+            ->method('getContactTransactionByParties');
+
+        $this->transactionRepository->expects($this->never())
+            ->method('updateDescription');
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://mynode:8080');
+
+        $this->expectOutputRegex('/Contact description received/');
+
+        $this->service->handleMessageRequest($request);
+    }
 }

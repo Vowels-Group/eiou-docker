@@ -620,7 +620,7 @@ Add a new contact.
 | `credit_limit` | number | No | 100.0 | Credit limit you extend to this contact (>= 0, up to 8 decimal places, max PHP_INT_MAX). Setting to `0` means you can be contacts but they cannot send transactions through you. Returned as a decimal string |
 | `currency` | string | No | USD | Currency code, 3-9 uppercase alphanumeric characters. Must be in the allowed currencies list |
 | `requested_credit_limit` | number | No | - | The credit limit you would like this contact to set for you. Sent as a suggestion — the recipient sees it pre-filled when accepting the request. If omitted, the recipient's default credit limit is used |
-| `description` | string | No | - | A short message sent with the contact request (max 255 characters). Not E2E encrypted — protected by transport encryption (Tor/HTTPS) only |
+| `description` | string | No | - | A short message sent with the contact request (max 255 characters). For non-Tor contacts, sent as a separate E2E encrypted follow-up after key exchange. For Tor contacts, included directly (protected by Tor transport encryption) |
 
 **Response (201 Created):**
 

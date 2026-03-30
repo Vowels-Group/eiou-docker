@@ -160,6 +160,31 @@ class MessagePayload extends BasePayload
     }
 
     /**
+     * Build E2E encrypted contact description payload
+     *
+     * Sent as a follow-up to the initial contact request for non-TOR transports.
+     * The contact request itself is sent without a description (cleartext bootstrap),
+     * then this message delivers the description E2E encrypted using the recipient's
+     * public key obtained from the contact request response.
+     *
+     * @param string $address The recipient address
+     * @param string $description The contact request description/message
+     * @return array The contact description payload (will be E2E encrypted by signWithCapture)
+     */
+    public function buildContactDescription(string $address, string $description): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'contact',
+            'status' => Constants::DELIVERY_CONTACT_DESCRIPTION,
+            'description' => $description,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
      * Build payload regarding the successful completion of a transaction
      *
      * @param array $message Message data containing transaction hash
