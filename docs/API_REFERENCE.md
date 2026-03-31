@@ -1301,6 +1301,44 @@ All fields are optional. Only provided fields will be updated. Unknown fields re
 
 ---
 
+### POST /api/v1/system/update-check
+
+Trigger a manual update check against Docker Hub and GitHub Releases. Bypasses the 24-hour cache.
+
+**Permission:** `system:read`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "available": true,
+        "current_version": "0.1.4-alpha",
+        "latest_version": "0.1.5-alpha",
+        "last_checked": "2026-03-31T20:53:57+00:00",
+        "source": "docker-hub",
+        "error": null
+    }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `available` | boolean | Whether a newer version exists |
+| `current_version` | string | Currently running version |
+| `latest_version` | string\|null | Latest version found (null if check failed) |
+| `last_checked` | string | ISO 8601 timestamp of this check |
+| `source` | string\|null | `docker-hub` or `github` |
+| `error` | string\|null | Error message if both sources failed |
+
+**Notes:**
+- Checks Docker Hub first (primary), falls back to GitHub Releases
+- Returns `502` if both sources are unreachable
+- The result is cached — subsequent `GET /api/v1/system/status` calls include the cached update status without triggering a new check
+
+---
+
 ### POST /api/v1/system/sync
 
 Trigger a sync operation to synchronize data with contacts.

@@ -1139,6 +1139,31 @@ eiou help --json
 
 ---
 
+### updatecheck
+
+Check Docker Hub and GitHub Releases for newer image versions. Bypasses the 24-hour cache and performs a fresh check.
+
+**Syntax:**
+```bash
+eiou updatecheck
+```
+
+**Examples:**
+```bash
+# Check for updates
+eiou updatecheck
+
+# JSON output
+eiou updatecheck --json
+```
+
+**Output:**
+- If an update is available: shows the latest version and a `docker pull` command
+- If up to date: confirms the current version
+- If check fails: reports that Docker Hub and GitHub could not be reached
+
+---
+
 ### shutdown
 
 Gracefully shutdown the wallet application. Stops all message processors and sets a shutdown flag to prevent the watchdog from restarting them.
