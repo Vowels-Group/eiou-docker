@@ -1798,11 +1798,13 @@ echo -e "\n\t-> Round 1: Propose and accept first chain drop"
 proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
 echo -e "\t   Propose result: ${proposeResult:0:80}..."
 
-wait_for_queue_processed ${sender} 3
-wait_for_queue_processed ${receiver} 3
+sleep 5
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 proposalId=$(get_pending_proposal ${receiver})
 if [[ "$proposalId" == "NONE" ]]; then
+    sleep 5
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     proposalId=$(get_pending_proposal ${receiver})
@@ -1810,8 +1812,9 @@ fi
 
 if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
-    wait_for_queue_processed ${sender} 3
-    wait_for_queue_processed ${receiver} 3
+    sleep 5
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
 fi
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
@@ -1832,11 +1835,13 @@ echo -e "\n\t-> Round 2: Propose and accept second chain drop"
 proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
 echo -e "\t   Propose result: ${proposeResult:0:80}..."
 
-wait_for_queue_processed ${sender} 3
-wait_for_queue_processed ${receiver} 3
+sleep 5
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 proposalId=$(get_pending_proposal ${receiver})
 if [[ "$proposalId" == "NONE" ]]; then
+    sleep 5
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     proposalId=$(get_pending_proposal ${receiver})
@@ -1844,8 +1849,9 @@ fi
 
 if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
-    wait_for_queue_processed ${sender} 3
-    wait_for_queue_processed ${receiver} 3
+    sleep 5
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
 fi
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
@@ -2620,11 +2626,13 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Receiver accepting chain drop proposal"
 
-wait_for_queue_processed ${sender} 3
-wait_for_queue_processed ${receiver} 3
+sleep 5
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 proposalId=$(get_pending_proposal ${receiver})
 if [[ "$proposalId" == "NONE" ]]; then
+    sleep 5
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     proposalId=$(get_pending_proposal ${receiver})

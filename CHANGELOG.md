@@ -13,8 +13,26 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Add **MariaDB Transparent Data Encryption (TDE)** — enabled by default after wallet generation, all database files encrypted at rest using `file_key_management` plugin with key derived from master key via HMAC-SHA256. TDE key stored only in `/dev/shm` (RAM-backed, never persisted to disk). On first boot the encryption plugin is loaded and all existing tables are encrypted; on subsequent boots the TDE key is regenerated from the master key before MariaDB starts. No user configuration required
+- Add **optional volume passphrase** (`EIOU_VOLUME_KEY` / `EIOU_VOLUME_KEY_FILE`) for environments with external secrets management — encrypts the master key at rest using Argon2id key derivation + AES-256-GCM. When set, the host server cannot read the master key from the Docker volume without the passphrase. `EIOU_VOLUME_KEY_FILE` (recommended) reads from a file; `EIOU_VOLUME_KEY` reads from an environment variable. Plaintext master key exists only in `/dev/shm` at runtime
+- Encrypt `dbUser` and `dbName` in `dbconfig.json` alongside `dbPass` — all database credentials are now encrypted at rest using AES-256-GCM with domain-separated AAD contexts. Backward-compatible: plaintext fields are encrypted on first boot after master key is available
+- Two-location master key fallback — `KeyEncryption::getMasterKey()` checks `/dev/shm/.master.key` (RAM) first, then falls back to the persistent volume. When volume encryption is active, only the RAM copy exists in plaintext
+
+### Security
+- Add data-at-rest encryption for all database files (MariaDB TDE) and optional volume passphrase protection for the master encryption key — see Added section for details
+
+### Tests
+- Add `VolumeEncryptionTest` (13 tests) and `MariaDbEncryptionTest` (5 tests) — unit tests for the new encryption services covering availability, status reporting, key file management, init scenarios, and error handling
+- Fix chain drop test timing in sections 8 and 13 of `chainDropTestSuite.sh` — add `sleep 5` and increase wait timeouts to match passing sections, preventing flaky failures from tight timing on proposal delivery
+
+---
+
+## v0.1.4-alpha (2026-03-30)
+
+### Added
 - Allow `ip:port` format in `QUICKSTART` and `EIOU_HOST` environment variables — the embedded port is automatically extracted and used when `EIOU_PORT` is not explicitly set (e.g., `EIOU_HOST=192.168.1.100:8080` is equivalent to `EIOU_HOST=192.168.1.100` + `EIOU_PORT=8080`)
 - Add optional requested credit limit to contact requests — when sending a contact request, the sender can specify the credit limit they would like the receiver to set for them. The receiver sees this value pre-filled in the credit limit field when accepting, with an info message ("Contact requested a credit limit of X"). If no value is sent, the receiver's default credit limit is used. Stored in the existing `credit_limit` columns on incoming pending `contact_currencies` rows (no schema change). CLI: `eiou add <addr> <name> <fee> <credit> <currency> [requested_credit] [message]`. API: new optional `requested_credit_limit` field in `POST /api/v1/contacts`. GUI: new "Requested Credit Limit" field on the add contact form
+- Add GitHub Actions workflow to publish Docker image on release — automatically builds from `eiou.dockerfile` and pushes to Docker Hub (`eiou/eiou`) when a GitHub release is published with a version tag (`vX.Y.Z`, `vX.Y.Z-alpha`, `vX.Y.Z-beta`). Attaches the image tarball to the release and appends a Docker Hub reference to the notes
 
 ### Changed
 - Contact request messages are now E2E encrypted for non-Tor transports — the optional description/message is no longer sent in cleartext with the initial contact request. Instead, the contact request is sent without the description (cleartext bootstrap for key exchange), then the description is delivered as a separate E2E encrypted follow-up using the recipient's public key obtained from the response. Tor addresses continue to use the single-phase flow (description included directly, protected by Tor transport encryption). The GUI warning about unencrypted messages has been removed
@@ -24,7 +42,7 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## 2026-03-16 -- 2026-03-24
+## v0.1.3-alpha (2026-03-24)
 
 ### Added
 - Add `autoRejectUnknownCurrency` setting (default: enabled) — automatically rejects incoming contact requests when the requested currency is not in the node's `allowedCurrencies`. When disabled, unknown currency requests arrive as pending for manual review. Configurable via GUI toggle (Settings → Currency), CLI (`changesettings autoRejectUnknownCurrency true/false`), and API (`auto_reject_unknown_currency`)

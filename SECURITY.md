@@ -8,8 +8,9 @@ Security policy and guidelines for the eIOU Docker project.
 2. [Supported Versions](#supported-versions)
 3. [Reporting a Vulnerability](#reporting-a-vulnerability)
 4. [Security Best Practices for Users](#security-best-practices-for-users)
-5. [Security Architecture Overview](#security-architecture-overview)
-6. [Known Limitations](#known-limitations)
+5. [Data-at-Rest Encryption](#data-at-rest-encryption)
+6. [Security Architecture Overview](#security-architecture-overview)
+7. [Known Limitations](#known-limitations)
 
 ---
 
@@ -290,6 +291,7 @@ CI monitors the digest monthly and opens a GitHub issue when it becomes stale.
 | Variable | Risk | Mitigation |
 |----------|------|------------|
 | `RESTORE` | Seed phrase visible in process listings, Docker inspect, and logs | Use `RESTORE_FILE` instead |
+| `EIOU_VOLUME_KEY` | Volume passphrase visible in Docker inspect and process listings | Use `EIOU_VOLUME_KEY_FILE` instead |
 | `EIOU_TEST_MODE` | Disables rate limiting | Never enable in production |
 | API secrets | Visible in environment if set as env vars | Use the API key management CLI commands |
 
@@ -299,6 +301,70 @@ CI monitors the digest monthly and opens a GitHub issue when it becomes stale.
 - Never commit files containing seed phrases, API secrets, or private keys
 - Use Docker secrets or a secrets management tool for production deployments
 - Review `docker inspect <container>` output to verify no sensitive data is exposed in the container configuration
+
+---
+
+## Data-at-Rest Encryption
+
+eIOU Docker encrypts all persistent data at rest using multiple layers. MariaDB TDE is enabled by default; volume passphrase encryption is optional for environments with external secrets management.
+
+### Encryption Layers
+
+| Layer | Technology | Default | Purpose |
+|-------|-----------|---------|---------|
+| Database TDE | MariaDB `file_key_management` | Yes | Encrypt all DB files at rest (tables, redo logs, temp files, binlog) |
+| Credential encryption | AES-256-GCM with AAD | Yes | Encrypt dbPass, dbUser, dbName in `dbconfig.json` |
+| Master key encryption | Argon2id + AES-256-GCM | Optional | Protect master key on config volume with a passphrase |
+| Private key encryption | AES-256-GCM | Yes | Encrypt wallet private keys, mnemonics, auth codes |
+
+### MariaDB Transparent Data Encryption (TDE)
+
+TDE is enabled automatically after wallet generation — no user configuration required.
+
+- **Key derivation**: TDE key is derived from the master encryption key using HMAC-SHA256 with a unique context string
+- **Key storage**: TDE key file lives in `/dev/shm` (RAM-backed) — never written to persistent storage
+- **Boot sequence**: On each container start, the TDE key is regenerated from the master key before MariaDB starts, so MariaDB can read its encrypted data files
+- **First boot**: After wallet generation, MariaDB is restarted to load the `file_key_management` plugin, then all existing tables are encrypted
+- **Coverage**: All InnoDB and Aria tables, redo logs, temporary tables, temporary files, and binary logs
+
+### Volume Passphrase Encryption (Optional)
+
+For environments with external secrets management (Vault, Kubernetes secrets), the master encryption key can be protected with a passphrase.
+
+| Variable | Description |
+|----------|-------------|
+| `EIOU_VOLUME_KEY_FILE` | Path to a file containing the passphrase (recommended — not visible in `docker inspect`) |
+| `EIOU_VOLUME_KEY` | Passphrase as environment variable (convenient but visible in `docker inspect`) |
+
+When set:
+1. The master key is encrypted with a passphrase-derived key (Argon2id KDF + AES-256-GCM) and stored as `.master.key.enc` on the config volume
+2. On every boot, the master key is decrypted to `/dev/shm/.master.key` (RAM-only)
+3. The plaintext master key never exists on the persistent volume after initial migration
+4. If the passphrase is lost, the master key cannot be recovered — restore from seed phrase
+
+**Example with Docker Compose:**
+
+```yaml
+services:
+  alice:
+    environment:
+      - QUICKSTART=alice
+    volumes:
+      - ./volume-key.txt:/run/secrets/volume_key:ro
+    environment:
+      - EIOU_VOLUME_KEY_FILE=/run/secrets/volume_key
+```
+
+### Threat Model
+
+| Threat | Protection |
+|--------|------------|
+| Host server reads database files | MariaDB TDE — files are encrypted, key is in RAM only |
+| Host server reads master key from volume | Volume passphrase — master key is encrypted on volume |
+| Host server reads RAM (`/dev/shm`) | Not protected — requires host-level isolation (VM, confidential computing) |
+| Container compromise at runtime | Not protected — attacker can read decrypted keys from memory |
+| Docker volume theft (offline) | TDE + volume passphrase — data unreadable without the passphrase |
+| Backup theft | Backups are independently encrypted with AES-256-GCM using the master key |
 
 ---
 
@@ -314,7 +380,10 @@ eIOU Docker implements security at multiple layers. This section provides a brie
 | Signing keys | secp256k1 (ECDSA) | Message signing and identity verification |
 | Tor identity | Ed25519 | Hidden service authentication (derived from secp256k1 keys) |
 | Master encryption key | HKDF-SHA256 from BIP39 seed | Deterministic master key for at-rest encryption. Recoverable via seed phrase restore |
+| Database TDE | MariaDB `file_key_management` (HMAC-SHA256 derived key) | Transparent encryption of all database files at rest. Key in RAM only |
+| Volume passphrase | Argon2id + AES-256-GCM | Optional passphrase-based encryption of master key on persistent volume |
 | Private key storage | AES-256-GCM | Encryption at rest for private keys, auth codes, and mnemonics |
+| Credential storage | AES-256-GCM with AAD | Encryption at rest for database credentials (dbPass, dbUser, dbName) |
 | Backup encryption | AES-256-GCM | Encrypted MariaDB database backups |
 | Payload E2E encryption | ECDH + AES-256-GCM | End-to-end encryption for **all** contact message payloads. Uses ephemeral key pairs for forward secrecy. Encrypt-then-sign design allows signature verification without decryption |
 | API authentication | HMAC-SHA256 | Request signing with 5-minute timestamp window |
@@ -379,7 +448,7 @@ State is file-based in `/tmp/tor-circuit-health/` (clears on container restart).
 | nginx | Version hidden (`server_tokens off`), worker count fixed at 2 | `eiou.dockerfile`, `eiou.conf` |
 | PHP | Version hidden (`expose_php = Off`), errors logged not displayed | `eiou.dockerfile` |
 | PHP-FPM | On-demand process manager, 10s idle timeout, max 5 workers | `eiou.dockerfile` |
-| MariaDB | Bound to `127.0.0.1` only (no network exposure), symlinks disabled (`skip-symbolic-links`), Unix socket authentication | `eiou.dockerfile` |
+| MariaDB | Bound to `127.0.0.1` only (no network exposure), symlinks disabled (`skip-symbolic-links`), Unix socket authentication, TDE encryption for all tables/logs | `eiou.dockerfile`, `startup.sh` |
 
 ### Health Monitoring
 
