@@ -105,6 +105,9 @@ class AnalyticsService
             $byType[$stat['type'] ?? ''] = $stat;
         }
 
+        // Volume per currency — counts and total amounts grouped by currency and type
+        $volumeByCurrency = self::getVolumeByCurrency($pdo);
+
         return [
             'event' => 'usage_heartbeat',
             'analytics_id' => self::getAnonymousId(),
@@ -117,8 +120,77 @@ class AnalyticsService
                 'tx_p2p_count' => (int) ($byType['relay']['count'] ?? 0),
                 'contact_count' => $contactRepo->countAcceptedContacts(),
                 'days_active' => $daysActive,
+                'volume_by_currency' => $volumeByCurrency,
             ],
         ];
+    }
+
+    /**
+     * Get transaction volume grouped by currency and type.
+     *
+     * Returns aggregate counts and total amounts per currency.
+     * Only currency codes and totals — no individual transaction details.
+     *
+     * @param \PDO $pdo Database connection
+     * @return array Array of currency volumes
+     */
+    private static function getVolumeByCurrency(\PDO $pdo): array
+    {
+        $stmt = $pdo->prepare(
+            "SELECT currency, type, COUNT(*) AS count,
+                    SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
+             FROM transactions
+             GROUP BY currency, type"
+        );
+
+        try {
+            $stmt->execute();
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
+            return [];
+        }
+
+        // Group by currency
+        $byCurrency = [];
+        foreach ($rows as $row) {
+            $currency = $row['currency'] ?? 'UNKNOWN';
+            $type = $row['type'] ?? 'other';
+
+            if (!isset($byCurrency[$currency])) {
+                $byCurrency[$currency] = [
+                    'currency' => $currency,
+                    'sent_count' => 0,
+                    'sent_total' => '0',
+                    'received_count' => 0,
+                    'received_total' => '0',
+                    'relay_count' => 0,
+                    'relay_total' => '0',
+                ];
+            }
+
+            $whole = (int) ($row['total_whole'] ?? 0);
+            $frac = (int) ($row['total_frac'] ?? 0);
+            // Normalize fractional overflow (frac is stored as value * 10^8)
+            $carry = intdiv($frac, 100000000);
+            $whole += $carry;
+            $frac -= $carry * 100000000;
+            $total = $whole . '.' . str_pad((string) abs($frac), 8, '0', STR_PAD_LEFT);
+
+            $count = (int) $row['count'];
+
+            if ($type === 'sent') {
+                $byCurrency[$currency]['sent_count'] = $count;
+                $byCurrency[$currency]['sent_total'] = $total;
+            } elseif ($type === 'received') {
+                $byCurrency[$currency]['received_count'] = $count;
+                $byCurrency[$currency]['received_total'] = $total;
+            } elseif ($type === 'relay') {
+                $byCurrency[$currency]['relay_count'] = $count;
+                $byCurrency[$currency]['relay_total'] = $total;
+            }
+        }
+
+        return array_values($byCurrency);
     }
 
     /**
