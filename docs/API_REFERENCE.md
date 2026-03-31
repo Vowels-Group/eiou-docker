@@ -987,7 +987,7 @@ Get system health status.
     "success": true,
     "data": {
         "status": "operational",
-        "version": "1.0.0",
+        "version": "0.1.5-alpha",
         "environment": "production",
         "database": "healthy",
         "processors": {
@@ -995,7 +995,15 @@ Get system health status.
             "transaction": true,
             "cleanup": true
         },
-        "timestamp": "2026-01-24T12:00:00+00:00"
+        "update": {
+            "available": true,
+            "current_version": "0.1.5-alpha",
+            "latest_version": "0.1.6-alpha",
+            "last_checked": "2026-03-31T02:00:00+00:00",
+            "source": "docker-hub",
+            "error": null
+        },
+        "timestamp": "2026-03-31T12:00:00+00:00"
     },
     "request_id": "req_abc123"
 }
@@ -1005,6 +1013,12 @@ Get system health status.
 - `status`: Always `"operational"` when system is running
 - `database`: `"healthy"` or `"unhealthy"` based on database connectivity
 - `processors`: Boolean flags indicating if processor PID files exist
+- `update.available`: Whether a newer version exists on Docker Hub
+- `update.current_version`: The running node's version
+- `update.latest_version`: The latest version found (null if check hasn't run)
+- `update.last_checked`: ISO 8601 timestamp of last check (null if never checked)
+- `update.source`: `"docker-hub"` or `"github"` (null if not checked)
+- `update.error`: Error message if the last check failed (null on success)
 
 ---
 
@@ -1136,6 +1150,7 @@ Get system settings.
 - `trusted_proxies`: Trusted proxy IPs for header forwarding (comma-separated, empty = none)
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
+- `update_check_enabled`: Whether daily Docker Hub update checks are enabled (no data sent — read-only API call)
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
@@ -1214,6 +1229,7 @@ Update system settings.
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
+| `update_check_enabled` | boolean | Enable/disable daily Docker Hub update checks |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
 | `rate_limit_enabled` | boolean | Enable/disable rate limiting (CLI/API only — not exposed in GUI) |

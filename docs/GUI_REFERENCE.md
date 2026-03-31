@@ -205,6 +205,7 @@ Handles settings and debug operations.
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
+| `updateCheckEnabled` | bool | Check Docker Hub daily for newer versions (read-only API call) |
 | `autoAcceptTransaction` | bool | Auto-accept P2P transactions when route found (when OFF, transactions pause at `awaiting_approval` for user review in both fast and best-fee modes) |
 | `syncChunkSize` | int | Transactions per sync chunk (10-500) |
 | `syncMaxChunks` | int | Max sync chunks per cycle (10-1000) |
@@ -214,7 +215,7 @@ Handles settings and debug operations.
 
 | Category | Settings |
 |----------|----------|
-| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled` |
+| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled`, `updateCheckEnabled` |
 | Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
 | Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
