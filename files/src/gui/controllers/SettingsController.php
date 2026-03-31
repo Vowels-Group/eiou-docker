@@ -212,6 +212,8 @@ class SettingsController
         $settings['hopBudgetRandomized'] = isset($_POST['hopBudgetRandomized']) && $_POST['hopBudgetRandomized'] === '1';
         $settings['apiEnabled'] = isset($_POST['apiEnabled']) && $_POST['apiEnabled'] === '1';
         $settings['autoRejectUnknownCurrency'] = isset($_POST['autoRejectUnknownCurrency']) && $_POST['autoRejectUnknownCurrency'] === '1';
+        $settings['updateCheckEnabled'] = isset($_POST['updateCheckEnabled']) && $_POST['updateCheckEnabled'] === '1';
+        $settings['analyticsEnabled'] = isset($_POST['analyticsEnabled']) && $_POST['analyticsEnabled'] === '1';
 
         // API CORS — textarea value (newline-separated), normalize to comma-separated
         if (isset($_POST['apiCorsAllowedOrigins'])) {
