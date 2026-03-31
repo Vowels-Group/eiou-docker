@@ -92,6 +92,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <p class="alert-body-text">
                 Version <strong><?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?></strong> is available (you are running <?php echo htmlspecialchars($updateCheckStatus['current_version']); ?>).
                 Pull the latest image with: <code>docker pull eiou/eiou:<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?></code>
+                <br>
+                <a href="https://github.com/Vowels-Group/eiou-docker/releases/tag/v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?>" target="_blank" rel="noopener noreferrer">View release notes</a>
+                &middot;
+                <a href="https://hub.docker.com/r/eiou/eiou/tags" target="_blank" rel="noopener noreferrer">Docker Hub</a>
             </p>
         </div>
     </div>
