@@ -496,6 +496,7 @@ class Constants {
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
     const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
     const UPDATE_CHECK_ENABLED = true;            // Check Docker Hub for newer image versions daily - default ON; when OFF, no external API calls are made
+    const ANALYTICS_ENABLED = false;              // Share anonymous usage statistics - default OFF (opt-in only); when ON, sends aggregate counts to analytics.eiou.org weekly
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

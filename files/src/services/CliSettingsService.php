@@ -204,6 +204,11 @@ class CliSettingsService
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'analyticsenabled'){
+                $key = 'analyticsEnabled';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'apienabled'){
                 $key = 'apiEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');

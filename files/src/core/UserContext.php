@@ -588,6 +588,20 @@ class UserContext {
     }
 
     /**
+     * Check if anonymous analytics are enabled.
+     * Supports runtime override via EIOU_ANALYTICS_ENABLED env variable.
+     *
+     * @return bool
+     */
+    public function getAnalyticsEnabled(): bool {
+        $envValue = getenv('EIOU_ANALYTICS_ENABLED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return (bool) ($this->get('analyticsEnabled') ?? Constants::ANALYTICS_ENABLED);
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string
@@ -1037,6 +1051,7 @@ class UserContext {
             'autoRejectUnknownCurrency' => Constants::AUTO_REJECT_UNKNOWN_CURRENCY,
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
             'updateCheckEnabled' => Constants::UPDATE_CHECK_ENABLED,
+            'analyticsEnabled' => Constants::ANALYTICS_ENABLED,
 
             // Feature toggles
             'hopBudgetRandomized' => Constants::HOP_BUDGET_RANDOMIZED,

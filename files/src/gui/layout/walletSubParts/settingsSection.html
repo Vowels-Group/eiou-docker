@@ -335,6 +335,28 @@
                             <?php endif; ?>
                         </div>
 
+                        <div class="form-group">
+                            <label for="analyticsEnabled">Anonymous Analytics:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="analyticsEnabled" name="analyticsEnabled" value="1" <?php echo $user->getAnalyticsEnabled() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="analyticsEnabledStatus" class="toggle-status <?php echo $user->getAnalyticsEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAnalyticsEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Share anonymous usage statistics to help improve eIOU. Only aggregate transaction counts are sent — no personal data, amounts, contacts, or addresses. <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Learn more</a>
+                            </small>
+                            <?php $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus(); ?>
+                            <?php if (!empty($analyticsStatus['last_submitted'])): ?>
+                            <small class="form-hint">
+                                <i class="fas fa-clock"></i> Last submitted: <?php echo htmlspecialchars(formatTimestamp($analyticsStatus['last_submitted'])); ?>
+                            </small>
+                            <?php endif; ?>
+                        </div>
+
                     </div>
                 </div>
 

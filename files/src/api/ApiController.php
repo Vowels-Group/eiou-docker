@@ -1635,6 +1635,7 @@ class ApiController {
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
             'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_reject_unknown_currency' => ['key' => 'autoRejectUnknownCurrency', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'analytics_enabled' => ['key' => 'analyticsEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Backup & logging
             'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
