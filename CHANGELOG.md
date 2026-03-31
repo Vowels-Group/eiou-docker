@@ -17,12 +17,20 @@ The project is currently in **ALPHA** status.
 - Add **optional volume passphrase** (`EIOU_VOLUME_KEY` / `EIOU_VOLUME_KEY_FILE`) for environments with external secrets management — encrypts the master key at rest using Argon2id key derivation + AES-256-GCM. When set, the host server cannot read the master key from the Docker volume without the passphrase. `EIOU_VOLUME_KEY_FILE` (recommended) reads from a file; `EIOU_VOLUME_KEY` reads from an environment variable. Plaintext master key exists only in `/dev/shm` at runtime
 - Encrypt `dbUser` and `dbName` in `dbconfig.json` alongside `dbPass` — all database credentials are now encrypted at rest using AES-256-GCM with domain-separated AAD contexts. Backward-compatible: plaintext fields are encrypted on first boot after master key is available
 - Two-location master key fallback — `KeyEncryption::getMasterKey()` checks `/dev/shm/.master.key` (RAM) first, then falls back to the persistent volume. When volume encryption is active, only the RAM copy exists in plaintext
+- Add **update version notification** — checks Docker Hub daily for newer image tags and notifies the user via a GUI banner and the `/api/v1/system/status` API response. Compares semver tags (handles `alpha` < `beta` < stable ordering). Results are cached for 24 hours in `/etc/eiou/config/update-check.json`. Configurable via `EIOU_UPDATE_CHECK_ENABLED` env var (default: true), GUI toggle in Feature Toggles, and CLI `changesettings updateCheckEnabled`. No data is sent — read-only Docker Hub API call. Tor-only nodes silently skip the check
+
+### Fixed
+- Fix GitHub Releases fallback in `UpdateCheckService` — the `/releases/latest` endpoint excludes pre-releases (returns 404 since all releases are pre-release). Switch to `/releases?per_page=10` and pick the highest semver, matching the Docker Hub tag selection logic
 
 ### Security
 - Add data-at-rest encryption for all database files (MariaDB TDE) and optional volume passphrase protection for the master encryption key — see Added section for details
 
+### Docs
+- Update `UPGRADE_GUIDE.md` — document MariaDB TDE, credential encryption, update version check, expanded startup flow, new verification log lines, and new troubleshooting entries
+
 ### Tests
 - Add `VolumeEncryptionTest` (13 tests) and `MariaDbEncryptionTest` (5 tests) — unit tests for the new encryption services covering availability, status reporting, key file management, init scenarios, and error handling
+- Add `UpdateCheckServiceTest` (9 tests) — unit tests for version comparison logic, prerelease ordering, and status reporting
 - Fix chain drop test timing in sections 8 and 13 of `chainDropTestSuite.sh` — add `sleep 5` and increase wait timeouts to match passing sections, preventing flaky failures from tight timing on proposal delivery
 
 ---

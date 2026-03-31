@@ -54,6 +54,7 @@ use Eiou\Services\ApiKeyService;
  * - GET  /api/v1/system/metrics              - Get system metrics
  * - GET  /api/v1/system/settings             - Get system settings
  * - PUT  /api/v1/system/settings             - Update system settings
+ * - POST /api/v1/system/update-check          - Trigger manual update check
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
@@ -255,6 +256,7 @@ class ApiController {
             $method === 'GET' && $action === 'metrics' => $this->getSystemMetrics(),
             $method === 'GET' && $action === 'settings' => $this->getSystemSettings(),
             $method === 'PUT' && $action === 'settings' => $this->updateSettings($body),
+            $method === 'POST' && $action === 'update-check' => $this->triggerUpdateCheck(),
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
@@ -1449,8 +1451,28 @@ class ApiController {
             'environment' => Constants::getAppEnv(),
             'database' => $dbStatus,
             'processors' => $processors,
+            'update' => \Eiou\Services\UpdateCheckService::getStatus(),
             'timestamp' => date('c')
         ]);
+    }
+
+    /**
+     * POST /api/v1/system/update-check
+     *
+     * Trigger a manual update check against Docker Hub / GitHub Releases.
+     */
+    private function triggerUpdateCheck(): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        $result = \Eiou\Services\UpdateCheckService::check(true);
+
+        if ($result === null) {
+            return $this->errorResponse('Update check failed', 502, 'update_check_failed');
+        }
+
+        return $this->successResponse($result);
     }
 
     /**

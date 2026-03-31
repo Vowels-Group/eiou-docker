@@ -493,6 +493,7 @@ class CliHelpService
                         'GET /api/v1/system/status' => 'System status',
                         'GET /api/v1/system/settings' => 'System settings',
                         'PUT /api/v1/system/settings' => 'Update settings (admin)',
+                        'POST /api/v1/system/update-check' => 'Trigger update check',
                         'POST /api/v1/system/sync' => 'Trigger sync (admin)',
                         'POST /api/v1/system/shutdown' => 'Shutdown processors (admin)',
                         'POST /api/v1/system/start' => 'Start processors (admin)',
@@ -516,6 +517,16 @@ class CliHelpService
                         'POST /api/v1/keys/disable/:key_id' => 'Disable API key (admin)'
                     ]
                 ]
+            ],
+            'updatecheck' => [
+                'description' => 'Check Docker Hub and GitHub for newer image versions',
+                'usage' => 'updatecheck',
+                'arguments' => [],
+                'examples' => [
+                    'updatecheck' => 'Check for updates now',
+                    'updatecheck --json' => 'JSON output with full version details'
+                ],
+                'note' => 'Bypasses the 24-hour cache and checks Docker Hub (primary) and GitHub Releases (fallback) for newer versions. Reports the latest available version and whether an update is available. Respects the updateCheckEnabled setting.'
             ],
             'shutdown' => [
                 'description' => 'Gracefully shutdown all processors (P2P, Transaction, Cleanup, ContactStatus)',

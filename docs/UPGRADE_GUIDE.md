@@ -41,11 +41,12 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 
 | Data | Volume | Container Path | Notes |
 |------|--------|----------------|-------|
-| Database (transactions, contacts, balances) | `{node}-mysql-data` | `/var/lib/mysql` | All structured data |
+| Database (transactions, contacts, balances) | `{node}-mysql-data` | `/var/lib/mysql` | All structured data (encrypted at rest via MariaDB TDE) |
 | Wallet keys (encrypted) | `{node}-config` | `/etc/eiou/config/userconfig.json` | Public key, encrypted private key, mnemonic |
-| Master encryption key | `{node}-config` | `/etc/eiou/config/.master.key` | Derived from seed phrase; recoverable via restore |
-| Database credentials | `{node}-config` | `/etc/eiou/config/dbconfig.json` | Auto-generated username and password |
-| User settings | `{node}-config` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, etc. |
+| Master encryption key | `{node}-config` | `/etc/eiou/config/.master.key` | Derived from seed phrase; recoverable via restore. Optionally encrypted with a volume passphrase (stored as `.master.key.enc`) |
+| Database credentials (encrypted) | `{node}-config` | `/etc/eiou/config/dbconfig.json` | Auto-generated; encrypted at rest with AES-256-GCM |
+| User settings | `{node}-config` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, update check preference, etc. |
+| MariaDB TDE config | `{node}-mysql-data` | `/etc/mysql/conf.d/encryption.cnf` | Generated on first boot after wallet creation |
 | Encrypted backups | `{node}-backups` | `/var/lib/eiou/backups/*.eiou.enc` | AES-256-GCM encrypted database dumps |
 
 ### Updated automatically (overwritten by new image)
@@ -64,6 +65,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 |------|----------------|-------|
 | SSL certificates | `/etc/nginx/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
 | Tor hidden service keys | `/var/lib/tor/hidden_service/` | Deterministically derived from wallet seed phrase |
+| MariaDB TDE key file | `/dev/shm/.mariadb-encryption-key` | RAM-backed; re-derived from master key on every boot |
 
 **Tor address is stable**: The `.onion` address is derived deterministically from your BIP39 seed phrase. A new container will produce the same Tor address as long as the wallet data (in the `{node}-config` volume) is present.
 
@@ -71,7 +73,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 
 ## How It Works
 
-The upgrade mechanism relies on four components working together:
+The upgrade mechanism relies on several components working together:
 
 ### 1. Named Volumes Survive Container Recreation
 
@@ -105,6 +107,16 @@ On startup, `startup.sh` creates a lockfile (`/tmp/eiou_maintenance.lock`) befor
 
 The lockfile is removed after all initialization is complete (composer install, migrations, processor startup).
 
+### 7. Data-at-Rest Encryption (MariaDB TDE)
+
+On first startup after wallet creation, MariaDB Transparent Data Encryption (TDE) is enabled automatically. The TDE key is derived from the master encryption key via HMAC-SHA256 and written to `/dev/shm` (RAM-backed, lost on restart). MariaDB is restarted once to load the `file_key_management` plugin, then all existing tables are encrypted. On subsequent boots, the TDE key is re-derived before MariaDB starts — no user action is needed.
+
+Database credentials in `dbconfig.json` are also encrypted at rest with AES-256-GCM on first boot after the master key becomes available.
+
+### 8. Update Version Check
+
+A daily cron job (2 AM UTC) checks Docker Hub for newer image tags and caches the result in `/etc/eiou/config/update-check.json`. If Docker Hub is unreachable, it falls back to GitHub Releases. The check is read-only, cached for 24 hours, and respects the user's `updateCheckEnabled` setting (enabled by default). Tor-only nodes silently skip the check. When an update is available, a notification is shown in the GUI dashboard.
+
 ### Visual Flow
 
 ```
@@ -120,11 +132,16 @@ Old Container (running v1) — receives SIGTERM:
 New Container (running v2) — startup.sh runs:
   1. Maintenance mode ON   — /tmp/eiou_maintenance.lock created (HTTP → 503)
   2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
-  3. Composer install      — installs new dependencies, regenerates autoloader
-  4. Services start        — web server, MariaDB, Tor, cron
-  5. Database migrations   — adds new tables/columns as needed
-  6. Maintenance mode OFF  — lockfile removed, HTTP requests accepted
-  7. Processors start      — P2P, Transaction, Cleanup, ContactStatus
+  3. Volume decryption     — if volume passphrase active, decrypt master key to /dev/shm
+  4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm
+  5. Composer install      — installs new dependencies, regenerates autoloader
+  6. Services start        — web server, MariaDB, Tor, cron
+  7. Database migrations   — adds new tables/columns as needed
+  8. TDE first-time setup  — if new, encrypt existing tables (MariaDB restarts once)
+  9. Credential encryption — encrypt dbconfig.json credentials if not already encrypted
+  10. Update check cron    — install daily version check (if enabled)
+  11. Maintenance mode OFF — lockfile removed, HTTP requests accepted
+  12. Processors start     — P2P, Transaction, Cleanup, ContactStatus
 
 Result:
   ├── /var/lib/mysql          ← same volume reattached (data intact)
@@ -232,6 +249,9 @@ docker logs <container-name> 2>&1 | head -100
 - `Source file sync completed.` -- sync succeeded
 - `Composer autoloader generated successfully.` -- autoloader rebuilt
 - `Initialization successful` or `Wallet already configured` -- wallet data found
+- `MariaDB TDE: encryption key ready` -- TDE key derived successfully
+- `Enabling MariaDB data-at-rest encryption...` -- first-time TDE setup (normal on first upgrade)
+- `Update check cron job installed (daily at 2 AM UTC)` -- version check active
 
 ---
 
@@ -302,6 +322,14 @@ volumes:
   - /path/to/certs:/ssl-certs:ro
 ```
 
+### MariaDB fails to start after upgrade
+
+If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
+
+### Volume passphrase lost
+
+If you enabled volume passphrase encryption (`EIOU_VOLUME_KEY_FILE`) and lost the passphrase, the encrypted master key cannot be decrypted. Recovery requires restoring from your 24-word seed phrase, which re-derives the master key from scratch. Old encrypted backups remain decryptable after seed restore.
+
 ### Permissions errors in logs
 
 The source sync may have set incorrect permissions. This is usually handled automatically, but if errors persist:
@@ -337,21 +365,11 @@ Your 24-word BIP39 mnemonic is displayed only once during initial wallet generat
 
 Always run `eiou backup create` before upgrading. The encrypted backup file can be used to restore your database if anything goes wrong. Backup files are stored on the `{node}-backups` volume, which is preserved across upgrades.
 
-### Web Server Changed from Apache to nginx
-
-The web server has been replaced from Apache (mod_php) to nginx + PHP-FPM. This is transparent for most users — the upgrade is automatic. Key changes to be aware of:
-
-- **SSL certificate path** moved from `/etc/apache2/ssl/` to `/etc/nginx/ssl/`. Self-signed certificates are regenerated automatically. If you mount external certificates at `/ssl-certs/`, no change is needed (they are copied to the new path on startup)
-- **Log paths** changed from `/var/log/apache2/` to `/var/log/nginx/`
-- **GUI debug panel** now shows "nginx Logs" instead of "Apache Logs"
-- **Connection-level rate limiting** is now enforced by nginx before PHP runs (30r/s general, 10r/s API, 20r/s P2P per IP). The application-level PHP `RateLimiterService` continues to operate as before for finer-grained per-endpoint limits
-
-No user action is required — the upgrade is handled automatically by rebuilding the container.
-
 ### Master Key Is Derived from Seed
 
-The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is deterministically derived from the BIP39 seed phrase. If the `{node}-config` volume is lost:
+The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is deterministically derived from the BIP39 seed phrase. All other encryption keys (MariaDB TDE, database credential encryption, backup encryption) are derived from this single master key. If the `{node}-config` volume is lost:
 - Wallet keys, Tor address, auth code, and master key are all recoverable from the seed phrase
 - Encrypted backups remain decryptable after a seed restore (the same master key is re-derived)
+- MariaDB TDE and credential encryption are re-established automatically on next boot
 
 The seed phrase is the single recovery secret for the entire node.
