@@ -435,7 +435,26 @@ class TransactionRecoveryRepository extends AbstractRepository {
 
         try {
             $stmt->execute($params);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // The UNION query computes amount columns as combined minor-unit
+            // integers (whole * FRAC_MODULUS + frac).  Hydrate them into
+            // SplitAmount objects so the GUI templates can call ->toDisplayString()
+            // and ->subtract() without crashing.
+            foreach ($rows as &$row) {
+                if (isset($row['amount'])) {
+                    $row['amount'] = SplitAmount::fromMinorUnits((int) $row['amount']);
+                }
+                if (!empty($row['fee_amount'])) {
+                    $row['fee_amount'] = SplitAmount::fromMinorUnits((int) $row['fee_amount']);
+                }
+                if (!empty($row['rp2p_amount'])) {
+                    $row['rp2p_amount'] = SplitAmount::fromMinorUnits((int) $row['rp2p_amount']);
+                }
+            }
+            unset($row);
+
+            return $rows;
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve in-progress transactions", $e);
             return [];
