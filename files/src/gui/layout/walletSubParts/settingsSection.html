@@ -309,6 +309,32 @@
                             </small>
                         </div>
 
+                        <div class="form-group">
+                            <label for="updateCheckEnabled">Update Notifications:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="updateCheckEnabled" name="updateCheckEnabled" value="1" <?php echo $user->getUpdateCheckEnabled() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="updateCheckEnabledStatus" class="toggle-status <?php echo $user->getUpdateCheckEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getUpdateCheckEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Check Docker Hub daily for newer versions and show a notification when an update is available. No data is sent — only a read-only API call.
+                            </small>
+                            <?php if (!empty($updateCheckStatus['last_checked'])): ?>
+                            <small class="form-hint">
+                                <i class="fas fa-clock"></i> Last checked: <?php echo htmlspecialchars(formatTimestamp($updateCheckStatus['last_checked'])); ?>
+                                <?php if ($updateCheckStatus['available']): ?>
+                                    — <strong>v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?> available</strong>
+                                <?php else: ?>
+                                    — up to date
+                                <?php endif; ?>
+                            </small>
+                            <?php endif; ?>
+                        </div>
+
                     </div>
                 </div>
 

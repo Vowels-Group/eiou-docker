@@ -1449,6 +1449,7 @@ class ApiController {
             'environment' => Constants::getAppEnv(),
             'database' => $dbStatus,
             'processors' => $processors,
+            'update' => \Eiou\Services\UpdateCheckService::getStatus(),
             'timestamp' => date('c')
         ]);
     }

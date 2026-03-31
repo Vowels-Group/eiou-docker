@@ -276,6 +276,9 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
+// Update check status (reads cache only — never triggers a new check on page load)
+$updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
+
 // Check Tor/SOCKS5 GUI status (written by TransportUtilityService and startup.sh watchdog)
 $torGuiStatus = null;
 $torGuiStatusFile = '/tmp/tor-gui-status';

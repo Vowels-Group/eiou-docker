@@ -48,6 +48,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | No | Default transport when sending to a contact name (`http`, `https`, `tor`) |
 | `EIOU_TOR_FORCE_FAST` | `true` | No | Auto-enable fast mode for Tor routes. Set to `false` for best-fee testing over Tor |
 | `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | No | Randomize hop budget via geometric distribution. Set to `false` for deterministic routing depth |
+| `EIOU_UPDATE_CHECK_ENABLED` | `true` | No | Check Docker Hub daily for newer image versions. Set to `false` to disable all external API calls |
 | `EIOU_VOLUME_KEY_FILE` | (none) | No | Path to file containing volume encryption passphrase (recommended) |
 | `EIOU_VOLUME_KEY` | (none) | No | Volume encryption passphrase as environment variable (less secure) |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, or use `P2P_CA_CERT` for a shared CA |

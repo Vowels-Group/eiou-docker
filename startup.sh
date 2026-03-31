@@ -1430,6 +1430,20 @@ else
     echo "Automatic backups disabled via EIOU_BACKUP_AUTO_ENABLED"
 fi
 
+# Set up cron for daily update check (2 AM UTC, avoids overlap with midnight backup)
+if [ "${EIOU_UPDATE_CHECK_ENABLED:-true}" = "true" ]; then
+    UPDATE_CRON_JOB="0 2 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1"
+    (crontab -l 2>/dev/null | grep -v "update-check-cron.php"; echo "$UPDATE_CRON_JOB") | crontab -
+    echo "Update check cron job installed (daily at 2 AM UTC)"
+
+    # Run initial check in background (non-blocking — don't delay startup)
+    runuser -u www-data -- php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1 &
+else
+    # Remove any existing update check cron entry
+    (crontab -l 2>/dev/null | grep -v "update-check-cron.php") | crontab -
+    echo "Update checks disabled via EIOU_UPDATE_CHECK_ENABLED"
+fi
+
 # Clear any stale shutdown flag from previous runs
 rm -f "$SHUTDOWN_FLAG" 2>/dev/null
 
