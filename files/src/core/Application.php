@@ -159,12 +159,12 @@ class Application {
     }
 
     /**
-     * Migrate plaintext dbPass to encrypted dbPassEncrypted in dbconfig.json.
+     * Migrate plaintext database credentials to encrypted format in dbconfig.json.
      *
      * freshInstall() writes plaintext to avoid master-key timing issues during
-     * initial setup. This migration encrypts it once the master key is stable
-     * and the PDO connection has proven the password works. Idempotent — skips
-     * if already encrypted.
+     * initial setup. This migration encrypts dbPass, dbUser, and dbName once
+     * the master key is stable and the PDO connection has proven the credentials
+     * work. Idempotent — skips fields that are already encrypted.
      */
     private function migrateDbConfigEncryption(): void {
         $configPath = '/etc/eiou/config/dbconfig.json';
@@ -177,14 +177,37 @@ class Application {
             return;
         }
         $config = json_decode($raw, true);
-        if (!is_array($config) || !isset($config['dbPass'])) {
-            return; // Already encrypted or invalid — nothing to do
+        if (!is_array($config)) {
+            return;
+        }
+
+        // Check if there's anything to migrate
+        $hasPlaintextPass = isset($config['dbPass']);
+        $hasPlaintextUser = isset($config['dbUser']) && !isset($config['dbUserEncrypted']);
+        $hasPlaintextName = isset($config['dbName']) && !isset($config['dbNameEncrypted']);
+
+        if (!$hasPlaintextPass && !$hasPlaintextUser && !$hasPlaintextName) {
+            return; // Already encrypted — nothing to do
         }
 
         try {
-            $encrypted = KeyEncryption::encrypt($config['dbPass']);
-            $config['dbPassEncrypted'] = $encrypted;
-            unset($config['dbPass']);
+            // Encrypt dbPass (if still plaintext)
+            if ($hasPlaintextPass) {
+                $config['dbPassEncrypted'] = KeyEncryption::encrypt($config['dbPass']);
+                unset($config['dbPass']);
+            }
+
+            // Encrypt dbUser
+            if ($hasPlaintextUser) {
+                $config['dbUserEncrypted'] = KeyEncryption::encrypt($config['dbUser'], 'db_user');
+                unset($config['dbUser']);
+            }
+
+            // Encrypt dbName
+            if ($hasPlaintextName) {
+                $config['dbNameEncrypted'] = KeyEncryption::encrypt($config['dbName'], 'db_name');
+                unset($config['dbName']);
+            }
 
             $oldUmask = umask(0027);
             file_put_contents($configPath, json_encode($config), LOCK_EX);
@@ -199,13 +222,13 @@ class Application {
             DatabaseContext::getInstance()->setdatabaseData($config);
 
             if ($this->loggerLoaded()) {
-                $this->getLogger()->info("Migrated dbconfig.json: plaintext dbPass encrypted");
+                $this->getLogger()->info("Migrated dbconfig.json: database credentials encrypted");
             }
         } catch (Exception $e) {
             // Non-fatal on first boot: the master key doesn't exist yet because
             // the wallet hasn't been generated. Wallet::generateWallet() and
             // Wallet::restoreWallet() handle this migration immediately after
-            // initMasterKeyFromSeed(), so the plaintext password is encrypted
+            // initMasterKeyFromSeed(), so the plaintext credentials are encrypted
             // before the container becomes operational.
             if ($this->loggerLoaded()) {
                 $this->getLogger()->warning("dbconfig.json encryption migration deferred — will complete during wallet setup", [

@@ -53,6 +53,7 @@ class KeyEncryptionTest extends TestCase
         $this->assertArrayHasKey('openssl_available', $info);
         $this->assertArrayHasKey('sodium_available', $info);
         $this->assertArrayHasKey('master_key_exists', $info);
+        $this->assertArrayHasKey('volume_encryption', $info);
     }
 
     /**

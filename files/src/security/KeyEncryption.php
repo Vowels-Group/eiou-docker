@@ -48,12 +48,21 @@ class KeyEncryption {
     private const HMAC_CONTEXT_MASTER_KEY = 'eiou-master-key';
 
     /**
-     * Master key file location
+     * Master key file location (persistent volume — may be encrypted)
      */
     private const MASTER_KEY_FILE = '/etc/eiou/config/.master.key';
 
     /**
+     * Runtime master key location (RAM-backed, used when volume encryption is active)
+     */
+    private const RUNTIME_KEY_FILE = '/dev/shm/.master.key';
+
+    /**
      * Get master encryption key
+     *
+     * Checks /dev/shm first (runtime key from volume encryption), then falls
+     * back to the persistent volume. When volume encryption is active, the key
+     * only exists in /dev/shm — the persistent copy is encrypted.
      *
      * The master key must be initialized via initMasterKeyFromSeed() during
      * wallet generation or restore. This method only reads the existing key.
@@ -62,13 +71,19 @@ class KeyEncryption {
      * @throws RuntimeException If master key file does not exist or is corrupted
      */
     private static function getMasterKey(): string {
-        if (!file_exists(self::MASTER_KEY_FILE)) {
+        // Prefer runtime key in RAM (set by VolumeEncryption during startup)
+        $keyFile = self::RUNTIME_KEY_FILE;
+        if (!file_exists($keyFile)) {
+            $keyFile = self::MASTER_KEY_FILE;
+        }
+
+        if (!file_exists($keyFile)) {
             throw new RuntimeException(
                 'Master key not found. Initialize wallet first via generate or restore.'
             );
         }
 
-        $key = file_get_contents(self::MASTER_KEY_FILE);
+        $key = file_get_contents($keyFile);
 
         if ($key === false || strlen($key) !== 32) {
             throw new RuntimeException('Master key file corrupted');
@@ -108,6 +123,7 @@ class KeyEncryption {
             mkdir($dir, 0700, true);
         }
 
+        // Always write plaintext key first (needed for immediate use)
         $oldUmask = umask(0077);
         $result = file_put_contents(self::MASTER_KEY_FILE, $key, LOCK_EX);
         umask($oldUmask);
@@ -122,6 +138,15 @@ class KeyEncryption {
             chown(self::MASTER_KEY_FILE, 'www-data');
         }
         chmod(self::MASTER_KEY_FILE, 0600);
+
+        // If volume encryption is active, encrypt the key and move plaintext to /dev/shm
+        if (VolumeEncryption::isActive()) {
+            $passphrase = VolumeEncryption::getPassphrase();
+            if ($passphrase !== null) {
+                VolumeEncryption::encryptNewMasterKey($passphrase);
+                self::secureClear($passphrase);
+            }
+        }
     }
 
     /**
@@ -275,7 +300,8 @@ class KeyEncryption {
             'tag_length' => self::TAG_LENGTH,
             'openssl_available' => extension_loaded('openssl'),
             'sodium_available' => extension_loaded('sodium'),
-            'master_key_exists' => file_exists(self::MASTER_KEY_FILE)
+            'master_key_exists' => file_exists(self::RUNTIME_KEY_FILE) || file_exists(self::MASTER_KEY_FILE),
+            'volume_encryption' => VolumeEncryption::getStatus()
         ];
     }
 }

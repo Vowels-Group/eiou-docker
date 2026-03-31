@@ -914,21 +914,41 @@ class BackupService implements BackupServiceInterface
         }
 
         $config = json_decode(file_get_contents($configFile), true);
-        if (!$config || !isset($config['dbHost'], $config['dbName'], $config['dbUser'])) {
+        if (!$config) {
             Logger::getInstance()->error("Invalid database config", ['path' => $configFile]);
             return null;
         }
 
-        // Decrypt password if stored encrypted, fall back to plaintext
-        if (isset($config['dbPassEncrypted']) && is_array($config['dbPassEncrypted'])) {
-            try {
+        // Decrypt fields that may be stored encrypted (falls back to plaintext for each)
+        try {
+            // dbPass
+            if (isset($config['dbPassEncrypted']) && is_array($config['dbPassEncrypted'])) {
                 $config['dbPass'] = \Eiou\Security\KeyEncryption::decrypt($config['dbPassEncrypted']);
-            } catch (\Exception $e) {
-                Logger::getInstance()->error("Failed to decrypt database password", ['error' => $e->getMessage()]);
+            }
+            if (!isset($config['dbPass'])) {
+                Logger::getInstance()->error("No database password found in config", ['path' => $configFile]);
                 return null;
             }
-        } elseif (!isset($config['dbPass'])) {
-            Logger::getInstance()->error("No database password found in config", ['path' => $configFile]);
+
+            // dbUser
+            if (isset($config['dbUserEncrypted']) && is_array($config['dbUserEncrypted'])) {
+                $config['dbUser'] = \Eiou\Security\KeyEncryption::decrypt($config['dbUserEncrypted']);
+            }
+            if (!isset($config['dbUser'])) {
+                Logger::getInstance()->error("No database user found in config", ['path' => $configFile]);
+                return null;
+            }
+
+            // dbName
+            if (isset($config['dbNameEncrypted']) && is_array($config['dbNameEncrypted'])) {
+                $config['dbName'] = \Eiou\Security\KeyEncryption::decrypt($config['dbNameEncrypted']);
+            }
+            if (!isset($config['dbName'])) {
+                Logger::getInstance()->error("No database name found in config", ['path' => $configFile]);
+                return null;
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->error("Failed to decrypt database credentials", ['error' => $e->getMessage()]);
             return null;
         }
 

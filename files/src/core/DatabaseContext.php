@@ -122,20 +122,38 @@ class DatabaseContext {
     }
 
     /**
-     * Get database name
+     * Get database name (decrypts if stored encrypted, falls back to plaintext)
      *
      * @return string|null
      */
     public function getDbName(): ?string {
+        $encrypted = $this->get('dbNameEncrypted');
+        if (is_array($encrypted) && isset($encrypted['ciphertext'], $encrypted['iv'], $encrypted['tag'])) {
+            try {
+                return KeyEncryption::decrypt($encrypted);
+            } catch (Exception $e) {
+                error_log("DatabaseContext: Failed to decrypt dbName: " . $e->getMessage());
+                return null;
+            }
+        }
         return $this->get('dbName') ?? null;
     }
 
     /**
-     * Get database user
+     * Get database user (decrypts if stored encrypted, falls back to plaintext)
      *
      * @return string|null
      */
     public function getDbUser(): ?string {
+        $encrypted = $this->get('dbUserEncrypted');
+        if (is_array($encrypted) && isset($encrypted['ciphertext'], $encrypted['iv'], $encrypted['tag'])) {
+            try {
+                return KeyEncryption::decrypt($encrypted);
+            } catch (Exception $e) {
+                error_log("DatabaseContext: Failed to decrypt dbUser: " . $e->getMessage());
+                return null;
+            }
+        }
         return $this->get('dbUser') ?? null;
     }
 
