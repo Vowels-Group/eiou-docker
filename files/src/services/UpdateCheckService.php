@@ -22,9 +22,10 @@ class UpdateCheckService
     private const DOCKER_HUB_TAGS_URL = 'https://hub.docker.com/v2/repositories/eiou/eiou/tags/';
 
     /**
-     * GitHub Releases API endpoint (fallback)
+     * GitHub Releases API endpoint (fallback).
+     * Uses /releases (not /releases/latest) because /latest excludes pre-releases.
      */
-    private const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Vowels-Group/eiou-docker/releases/latest';
+    private const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Vowels-Group/eiou-docker/releases?per_page=10';
 
     /**
      * Cache file location (persistent volume)
@@ -172,7 +173,7 @@ class UpdateCheckService
     }
 
     /**
-     * Query GitHub Releases for the latest release.
+     * Query GitHub Releases for the latest release (including pre-releases).
      *
      * @return string|null Latest version string or null on failure
      */
@@ -184,11 +185,26 @@ class UpdateCheckService
         }
 
         $data = json_decode($response, true);
-        if (!is_array($data) || !isset($data['tag_name'])) {
+        if (!is_array($data) || empty($data)) {
             return null;
         }
 
-        return ltrim($data['tag_name'], 'v');
+        // Pick the highest semver from the releases list
+        $highest = null;
+        foreach ($data as $release) {
+            if (!isset($release['tag_name']) || ($release['draft'] ?? false)) {
+                continue;
+            }
+            $version = ltrim($release['tag_name'], 'v');
+            if (!preg_match('/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/', $version)) {
+                continue;
+            }
+            if ($highest === null || version_compare($version, $highest, '>')) {
+                $highest = $version;
+            }
+        }
+
+        return $highest;
     }
 
     /**
