@@ -92,21 +92,17 @@ class AnalyticsService
      */
     public static function buildHeartbeatPayload(\PDO $pdo, int $periodDays = 7): array
     {
-        $statsRepo = new \Eiou\Database\TransactionStatisticsRepository($pdo);
         $contactRepo = new \Eiou\Database\ContactRepository($pdo);
 
-        $typeStats = $statsRepo->getTypeStatistics();
-        $dailyCounts = $statsRepo->getDailyTransactionCounts($periodDays);
+        // All counts are scoped to the period window so heartbeats
+        // don't double-count when aggregated across submissions
+        $periodStats = self::getPeriodTypeStats($pdo, $periodDays);
+        $dailyCounts = (new \Eiou\Database\TransactionStatisticsRepository($pdo))
+            ->getDailyTransactionCounts($periodDays);
         $daysActive = count(array_filter($dailyCounts, fn($d) => ($d['count'] ?? 0) > 0));
 
-        // Index type stats by type name for easy lookup
-        $byType = [];
-        foreach ($typeStats as $stat) {
-            $byType[$stat['type'] ?? ''] = $stat;
-        }
-
-        // Volume per currency — counts and total amounts grouped by currency and type
-        $volumeByCurrency = self::getVolumeByCurrency($pdo);
+        // Volume per currency — scoped to the same period
+        $volumeByCurrency = self::getVolumeByCurrency($pdo, $periodDays);
 
         return [
             'event' => 'usage_heartbeat',
@@ -115,9 +111,9 @@ class AnalyticsService
             'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
             'period_days' => $periodDays,
             'metrics' => [
-                'tx_sent_count' => (int) ($byType['sent']['count'] ?? 0),
-                'tx_received_count' => (int) ($byType['received']['count'] ?? 0),
-                'tx_p2p_count' => (int) ($byType['relay']['count'] ?? 0),
+                'tx_sent_count' => (int) ($periodStats['sent'] ?? 0),
+                'tx_received_count' => (int) ($periodStats['received'] ?? 0),
+                'tx_p2p_count' => (int) ($periodStats['relay'] ?? 0),
                 'contact_count' => $contactRepo->countAcceptedContacts(),
                 'days_active' => $daysActive,
                 'volume_by_currency' => $volumeByCurrency,
@@ -126,25 +122,57 @@ class AnalyticsService
     }
 
     /**
-     * Get transaction volume grouped by currency and type.
+     * Get transaction counts by type for the given period.
+     *
+     * @param \PDO $pdo Database connection
+     * @param int $periodDays Number of days to look back
+     * @return array Counts keyed by type (sent, received, relay)
+     */
+    private static function getPeriodTypeStats(\PDO $pdo, int $periodDays): array
+    {
+        $stmt = $pdo->prepare(
+            "SELECT type, COUNT(*) AS count
+             FROM transactions
+             WHERE timestamp >= DATE_SUB(NOW(), INTERVAL :days DAY)
+             GROUP BY type"
+        );
+
+        try {
+            $stmt->execute([':days' => $periodDays]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['type']] = (int) $row['count'];
+        }
+        return $result;
+    }
+
+    /**
+     * Get transaction volume grouped by currency and type for the given period.
      *
      * Returns aggregate counts and total amounts per currency.
      * Only currency codes and totals — no individual transaction details.
      *
      * @param \PDO $pdo Database connection
+     * @param int $periodDays Number of days to look back
      * @return array Array of currency volumes
      */
-    private static function getVolumeByCurrency(\PDO $pdo): array
+    private static function getVolumeByCurrency(\PDO $pdo, int $periodDays): array
     {
         $stmt = $pdo->prepare(
             "SELECT currency, type, COUNT(*) AS count,
                     SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
              FROM transactions
+             WHERE timestamp >= DATE_SUB(NOW(), INTERVAL :days DAY)
              GROUP BY currency, type"
         );
 
         try {
-            $stmt->execute();
+            $stmt->execute([':days' => $periodDays]);
             $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
         } catch (\PDOException $e) {
             return [];
