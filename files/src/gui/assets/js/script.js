@@ -4067,6 +4067,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('hopBudgetRandomized', 'hopBudgetRandomizedStatus');
     initToggleSwitch('apiEnabled', 'apiEnabledStatus');
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
+    initToggleSwitch('updateCheckEnabled', 'updateCheckEnabledStatus');
+    initToggleSwitch('analyticsEnabled', 'analyticsEnabledStatus');
     initSyncTimeoutDynamicMax();
 });
 

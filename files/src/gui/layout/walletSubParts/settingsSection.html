@@ -349,7 +349,7 @@
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Share anonymous usage statistics to help improve eIOU. Only aggregate transaction counts are sent — no personal data, amounts, contacts, or addresses. <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Learn more</a>
                             </small>
-                            <?php $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus(); ?>
+                            <?php try { $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus(); } catch (\Throwable $e) { $analyticsStatus = []; } ?>
                             <?php if (!empty($analyticsStatus['last_submitted'])): ?>
                             <small class="form-hint">
                                 <i class="fas fa-clock"></i> Last submitted: <?php echo htmlspecialchars(formatTimestamp($analyticsStatus['last_submitted'])); ?>
