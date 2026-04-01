@@ -13,8 +13,8 @@ use Eiou\Utils\Logger;
  * Collects and sends anonymous, aggregated usage statistics to help
  * improve eIOU. Opt-in only (default: off). The anonymous ID is a
  * one-way HMAC-SHA256 hash that cannot be reversed to the node's
- * identity. No personal data, transaction details, amounts, or
- * contact information is ever sent.
+ * identity. No personal data, transaction details, or contact
+ * information is ever sent. Only aggregated anonymous counts and volumes.
  */
 class AnalyticsService
 {
@@ -154,12 +154,14 @@ class AnalyticsService
     /**
      * Get transaction volume grouped by currency and type for the given period.
      *
-     * Returns aggregate counts and total amounts per currency.
+     * Returns aggregate counts and total amounts per currency.  Amounts are
+     * returned as integer whole/frac pairs (frac denominator = 10^8) to
+     * preserve exact precision through the analytics pipeline.
      * Only currency codes and totals — no individual transaction details.
      *
      * @param \PDO $pdo Database connection
      * @param int $periodDays Number of days to look back
-     * @return array Array of currency volumes
+     * @return array Array of currency volumes with integer whole/frac fields
      */
     private static function getVolumeByCurrency(\PDO $pdo, int $periodDays): array
     {
@@ -188,11 +190,14 @@ class AnalyticsService
                 $byCurrency[$currency] = [
                     'currency' => $currency,
                     'sent_count' => 0,
-                    'sent_total' => '0',
+                    'sent_whole' => 0,
+                    'sent_frac' => 0,
                     'received_count' => 0,
-                    'received_total' => '0',
+                    'received_whole' => 0,
+                    'received_frac' => 0,
                     'relay_count' => 0,
-                    'relay_total' => '0',
+                    'relay_whole' => 0,
+                    'relay_frac' => 0,
                 ];
             }
 
@@ -202,19 +207,21 @@ class AnalyticsService
             $carry = intdiv($frac, 100000000);
             $whole += $carry;
             $frac -= $carry * 100000000;
-            $total = $whole . '.' . str_pad((string) abs($frac), 8, '0', STR_PAD_LEFT);
 
             $count = (int) $row['count'];
 
             if ($type === 'sent') {
                 $byCurrency[$currency]['sent_count'] = $count;
-                $byCurrency[$currency]['sent_total'] = $total;
+                $byCurrency[$currency]['sent_whole'] = $whole;
+                $byCurrency[$currency]['sent_frac'] = $frac;
             } elseif ($type === 'received') {
                 $byCurrency[$currency]['received_count'] = $count;
-                $byCurrency[$currency]['received_total'] = $total;
+                $byCurrency[$currency]['received_whole'] = $whole;
+                $byCurrency[$currency]['received_frac'] = $frac;
             } elseif ($type === 'relay') {
                 $byCurrency[$currency]['relay_count'] = $count;
-                $byCurrency[$currency]['relay_total'] = $total;
+                $byCurrency[$currency]['relay_whole'] = $whole;
+                $byCurrency[$currency]['relay_frac'] = $frac;
             }
         }
 
