@@ -1262,10 +1262,18 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // Check if we already have this contact stored locally (under a different address)
             // This handles the case where user adds a known contact via new address type
             // OR the case where they sent us a request while we were sending ours
+            // Store remote version from contact creation response
+            $remoteVersion = $responseData['version'] ?? null;
+
             $existingLocalContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
             if ($existingLocalContact) {
                 // Update the address with new transport type
                 $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+                // Store remote version from response
+                if ($remoteVersion !== null) {
+                    $this->contactRepository->updateContactFields($senderPublicKey, ['remote_version' => $remoteVersion]);
+                }
 
                 if ($this->messageDeliveryService !== null) {
                     $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
@@ -1412,6 +1420,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     // Store any additional addresses from senderAddresses if present
                     if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
                         $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
+                    // Store remote version from response
+                    if ($remoteVersion !== null) {
+                        $this->contactRepository->updateContactFields($senderPublicKey, ['remote_version' => $remoteVersion]);
                     }
 
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);

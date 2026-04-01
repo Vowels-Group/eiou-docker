@@ -262,17 +262,21 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         $contactInfo = $this->getContactService()->lookupContactInfoWithDisambiguation($request[2], $output);
         if (!$contactInfo) { $this->handleP2pRoute($request, $output); return; }
 
-        // Block sends to contacts running incompatible versions
+        // Block sends to contacts with known incompatible versions.
+        // Null remote_version (unknown) is allowed — the receiving node's
+        // entry point guard will reject if they're actually incompatible.
         $remoteVersion = $contactInfo['remote_version'] ?? null;
-        $versionCheck = InputValidator::checkVersionCompatibility($remoteVersion);
-        if ($versionCheck !== null) {
-            $output->error(
-                $versionCheck['reason'],
-                'INCOMPATIBLE_VERSION',
-                400,
-                array_merge($txData, ['remote_version' => $remoteVersion ?? 'unknown', 'action' => $versionCheck['action']])
-            );
-            return;
+        if ($remoteVersion !== null) {
+            $versionCheck = InputValidator::checkVersionCompatibility($remoteVersion);
+            if ($versionCheck !== null) {
+                $output->error(
+                    $versionCheck['reason'],
+                    'INCOMPATIBLE_VERSION',
+                    400,
+                    array_merge($txData, ['remote_version' => $remoteVersion, 'action' => $versionCheck['action']])
+                );
+                return;
+            }
         }
 
         if ($contactInfo['status'] === Constants::CONTACT_STATUS_ACCEPTED) {
