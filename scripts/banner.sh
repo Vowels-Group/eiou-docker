@@ -88,10 +88,29 @@ show_startup_warnings() {
 
 # Short reminder banner - shown before watchdog starts
 show_alpha_warning_short() {
+    local Y='\033[1;33m'  # bold yellow
+    local R='\033[0m'     # reset
+
     echo ""
-    printf '\033[1;33m%s\033[0m\n' "$_HR"
-    printf '\033[1;33m  OPEN ALPHA: Decentralized P2P credit network. Active development.\033[0m\n'
-    printf '\033[1;33m%s\033[0m\n' "$_HR"
+    printf "${Y}%s${R}\n" "$_HR"
+    printf "${Y}  OPEN ALPHA: Decentralized P2P credit network. Active development.${R}\n"
+
+    # One-time analytics opt-in notice (shown until user makes a choice)
+    local consent_asked
+    consent_asked=$(php -r '$c = json_decode(@file_get_contents("/etc/eiou/config/defaultconfig.json"), true); echo ($c["analyticsConsentAsked"] ?? false) ? "true" : "false";' 2>/dev/null)
+    if [ "$consent_asked" != "true" ]; then
+        printf "${Y}${R}\n"
+        printf "${Y}  Anonymous analytics available — help improve eIOU by${R}\n"
+        printf "${Y}  sharing fully anonymous, non-sensitive usage statistics.${R}\n"
+        printf "${Y}  Sent once per week through Tor. Your identity and${R}\n"
+        printf "${Y}  transactions remain completely private.${R}\n"
+        printf "${Y}${R}\n"
+        printf "${Y}  Enable: changesettings analyticsEnabled true${R}\n"
+        printf "${Y}     API: PUT /api/v1/system/settings${R}\n"
+        printf "${Y}          {\"analytics_enabled\": true}${R}\n"
+    fi
+
+    printf "${Y}%s${R}\n" "$_HR"
     echo ""
 }
 

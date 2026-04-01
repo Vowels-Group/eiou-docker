@@ -1809,21 +1809,6 @@ if type show_alpha_warning_short &>/dev/null; then
     show_alpha_warning_short
 fi
 
-# One-time analytics opt-in notice (shown until user makes a choice)
-ANALYTICS_CONSENT_ASKED=$(php -r '$c = json_decode(@file_get_contents("/etc/eiou/config/defaultconfig.json"), true); echo ($c["analyticsConsentAsked"] ?? false) ? "true" : "false";' 2>/dev/null)
-if [ "$ANALYTICS_CONSENT_ASKED" != "true" ]; then
-    echo ""
-    echo "  Anonymous analytics are available. Help improve eIOU by"
-    echo "  sharing fully anonymous, non-sensitive usage statistics."
-    echo "  Data is sent once per week through Tor — your identity"
-    echo "  and transactions remain completely private."
-    echo ""
-    echo "  Enable via CLI:  changesettings analyticsEnabled true"
-    echo "  Enable via API:  PUT /api/v1/system/settings"
-    echo '                   {"analytics_enabled": true}'
-    echo ""
-fi
-
 # Start watchdog in background
 watchdog &
 WATCHDOG_PID=$!
