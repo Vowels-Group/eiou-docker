@@ -109,7 +109,12 @@ show_alpha_warning_short() {
         printf "${Y}  API: PUT /api/v1/system/settings${R}\n"
         printf "${Y}       {\"analytics_enabled\": true}${R}\n"
         printf "${Y}${R}\n"
-        printf "${Y}  Can be disabled anytime by replacing true with false.${R}\n"
+        printf "${Y}  To disable:${R}\n"
+        printf "${Y}  CLI: eiou changesettings analyticsEnabled false${R}\n"
+        printf "${Y}  API: PUT /api/v1/system/settings${R}\n"
+        printf "${Y}       {\"analytics_enabled\": false}${R}\n"
+        printf "${Y}${R}\n"
+        printf "${Y}  This can be changed at any time.${R}\n"
     fi
 
     printf "${Y}%s${R}\n" "$_HR"
