@@ -115,12 +115,24 @@ Navigate to **Settings** → **Advanced Settings** → **Feature Toggles** → *
 
 ### CLI
 
+From inside the container:
+
 ```bash
 # Enable
 eiou changesettings analyticsEnabled true
 
 # Disable
 eiou changesettings analyticsEnabled false
+```
+
+From the host:
+
+```bash
+# Enable
+docker exec <container> php /app/eiou/cli.php changesettings analyticsEnabled true
+
+# Disable
+docker exec <container> php /app/eiou/cli.php changesettings analyticsEnabled false
 ```
 
 ### API
