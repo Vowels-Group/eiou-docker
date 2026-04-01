@@ -18,6 +18,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Utils\InputValidator;
 use Eiou\Core\SplitAmount;
 use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\TransactionPayload;
@@ -333,6 +334,26 @@ class MessageService implements MessageServiceInterface {
                 \Eiou\Core\ErrorCodes::UNAUTHORIZED,
                 ['request_type' => $request['typeMessage'] ?? 'unknown'],
                 401
+            );
+        }
+
+        // Version compatibility check — reject messages from nodes with
+        // incompatible versions. Old versions use different amount formats
+        // that cause data corruption (e.g., cents vs SplitAmount).
+        $versionCheck = InputValidator::checkVersionCompatibility($request['version'] ?? null);
+        if ($versionCheck !== null) {
+            $this->logger->warning('Message rejected: incompatible version', [
+                'sender_version' => $request['version'] ?? 'unknown',
+                'min_required' => Constants::MIN_COMPATIBLE_VERSION,
+                'message_type' => $request['typeMessage'] ?? 'unknown',
+                'sender_address' => $request['senderAddress'] ?? 'unknown',
+                'action' => $versionCheck['action'],
+            ]);
+            throw new FatalServiceException(
+                $versionCheck['reason'],
+                \Eiou\Core\ErrorCodes::HTTP_BAD_REQUEST,
+                ['sender_version' => $request['version'] ?? 'unknown', 'action' => $versionCheck['action']],
+                400
             );
         }
 

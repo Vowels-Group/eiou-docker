@@ -45,6 +45,7 @@ class Constants {
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
     const APP_VERSION = '0.1.5-alpha';
+    const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
     // Database schema version — bump this when adding new migrations in DatabaseSetup.php.
@@ -668,4 +669,5 @@ class Constants {
         $reflection = new \ReflectionClass(self::class);
         return $reflection->getConstants();
     }
+
 }

@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
+use Eiou\Utils\InputValidator;
 use Eiou\Core\SplitAmount;
 use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
@@ -1718,6 +1719,23 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @return string Response payload
      */
     public function handleContactCreation(array $request): string {
+        // Version compatibility check — reject requests from nodes with
+        // incompatible versions. Old versions use different amount formats
+        // that cause data corruption (e.g., cents vs SplitAmount).
+        $versionCheck = InputValidator::checkVersionCompatibility($request['version'] ?? null);
+        if ($versionCheck !== null) {
+            $this->logger->warning('Contact request rejected: incompatible version', [
+                'sender_version' => $request['version'] ?? 'unknown',
+                'min_required' => Constants::MIN_COMPATIBLE_VERSION,
+                'sender_address' => $request['senderAddress'] ?? 'unknown',
+                'action' => $versionCheck['action'],
+            ]);
+            return $this->contactPayload->buildRejection(
+                $request['senderAddress'] ?? '',
+                $versionCheck['reason']
+            );
+        }
+
         $senderAddress = $request['senderAddress'];
         $senderPublicKey = $request['senderPublicKey'];
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);

@@ -915,6 +915,7 @@ class TransportUtilityService implements TransportServiceInterface
         $envelope = [
             'senderAddress' => $payload['senderAddress'],
             'senderPublicKey' => $payload['senderPublicKey'],
+            'version' => Constants::APP_VERSION,
             'message' => $message,
             'signature' => $base64Signature
         ];
