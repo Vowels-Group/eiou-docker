@@ -57,6 +57,7 @@ class ContactStatusPayload extends BasePayload
 
         $response = [
             'status' => 'pong',
+            'version' => Constants::APP_VERSION,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
             'chainValid' => $chainValid,

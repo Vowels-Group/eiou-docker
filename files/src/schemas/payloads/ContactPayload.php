@@ -115,6 +115,7 @@ class ContactPayload extends BasePayload
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
             'status' => Constants::DELIVERY_UPDATED,
+            'version' => Constants::APP_VERSION,
             'message' => $myAddress . ' confirms that contact address has been updated/added',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -148,6 +149,7 @@ class ContactPayload extends BasePayload
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
             'status' => Constants::DELIVERY_WARNING,
+            'version' => Constants::APP_VERSION,
             'message' => 'Contact already exists',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -220,6 +222,7 @@ class ContactPayload extends BasePayload
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
             'status' => Constants::STATUS_ACCEPTED,
+            'version' => Constants::APP_VERSION,
             'message' => 'Contact request mutually accepted (both sides sent requests)',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),

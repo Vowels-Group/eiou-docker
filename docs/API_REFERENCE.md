@@ -987,7 +987,7 @@ Get system health status.
     "success": true,
     "data": {
         "status": "operational",
-        "version": "1.0.0",
+        "version": "0.1.5-alpha",
         "environment": "production",
         "database": "healthy",
         "processors": {
@@ -995,7 +995,15 @@ Get system health status.
             "transaction": true,
             "cleanup": true
         },
-        "timestamp": "2026-01-24T12:00:00+00:00"
+        "update": {
+            "available": true,
+            "current_version": "0.1.5-alpha",
+            "latest_version": "0.1.6-alpha",
+            "last_checked": "2026-03-31T02:00:00+00:00",
+            "source": "docker-hub",
+            "error": null
+        },
+        "timestamp": "2026-03-31T12:00:00+00:00"
     },
     "request_id": "req_abc123"
 }
@@ -1005,6 +1013,12 @@ Get system health status.
 - `status`: Always `"operational"` when system is running
 - `database`: `"healthy"` or `"unhealthy"` based on database connectivity
 - `processors`: Boolean flags indicating if processor PID files exist
+- `update.available`: Whether a newer version exists on Docker Hub
+- `update.current_version`: The running node's version
+- `update.latest_version`: The latest version found (null if check hasn't run)
+- `update.last_checked`: ISO 8601 timestamp of last check (null if never checked)
+- `update.source`: `"docker-hub"` or `"github"` (null if not checked)
+- `update.error`: Error message if the last check failed (null on success)
 
 ---
 
@@ -1136,6 +1150,8 @@ Get system settings.
 - `trusted_proxies`: Trusted proxy IPs for header forwarding (comma-separated, empty = none)
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
+- `update_check_enabled`: Whether daily Docker Hub update checks are enabled (no data sent — read-only API call)
+- `analytics_enabled`: Whether anonymous usage analytics are enabled (opt-in, default off — sends only aggregate counts weekly)
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
@@ -1214,6 +1230,8 @@ Update system settings.
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
+| `update_check_enabled` | boolean | Enable/disable daily Docker Hub update checks |
+| `analytics_enabled` | boolean | Enable/disable anonymous usage analytics (opt-in, default off) |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
 | `rate_limit_enabled` | boolean | Enable/disable rate limiting (CLI/API only — not exposed in GUI) |
@@ -1282,6 +1300,44 @@ All fields are optional. Only provided fields will be updated. Unknown fields re
 **Notes:**
 - Changing `hostname` automatically derives `hostname_secure` and regenerates the SSL certificate
 - Boolean fields accept: `true`/`false`, `"true"`/`"false"`, `"1"`/`"0"`, `"on"`/`"off"`, `"yes"`/`"no"`
+
+---
+
+### POST /api/v1/system/update-check
+
+Trigger a manual update check against Docker Hub and GitHub Releases. Bypasses the 24-hour cache.
+
+**Permission:** `system:read`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "available": true,
+        "current_version": "0.1.4-alpha",
+        "latest_version": "0.1.5-alpha",
+        "last_checked": "2026-03-31T20:53:57+00:00",
+        "source": "docker-hub",
+        "error": null
+    }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `available` | boolean | Whether a newer version exists |
+| `current_version` | string | Currently running version |
+| `latest_version` | string\|null | Latest version found (null if check failed) |
+| `last_checked` | string | ISO 8601 timestamp of this check |
+| `source` | string\|null | `docker-hub` or `github` |
+| `error` | string\|null | Error message if both sources failed |
+
+**Notes:**
+- Checks Docker Hub first (primary), falls back to GitHub Releases
+- Returns `502` if both sources are unreachable
+- The result is cached — subsequent `GET /api/v1/system/status` calls include the cached update status without triggering a new check
 
 ---
 

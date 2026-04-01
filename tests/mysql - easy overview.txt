@@ -6,7 +6,7 @@ use eiou
 SELECT message FROM debug;
 
 # Contacts - relationship info
-SELECT name, status, online_status, valid_chain FROM contacts;
+SELECT name, status, online_status, valid_chain, remote_version FROM contacts;
 
 # Contact Currencies - per-contact currency settings
 SELECT pubkey_hash, currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction FROM contact_currencies;

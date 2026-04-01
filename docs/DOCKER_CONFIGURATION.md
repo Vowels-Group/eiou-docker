@@ -48,6 +48,10 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | No | Default transport when sending to a contact name (`http`, `https`, `tor`) |
 | `EIOU_TOR_FORCE_FAST` | `true` | No | Auto-enable fast mode for Tor routes. Set to `false` for best-fee testing over Tor |
 | `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | No | Randomize hop budget via geometric distribution. Set to `false` for deterministic routing depth |
+| `EIOU_UPDATE_CHECK_ENABLED` | `true` | No | Check Docker Hub daily for newer image versions. Set to `false` to disable all external API calls |
+| `EIOU_ANALYTICS_ENABLED` | `false` | No | Share anonymous usage statistics weekly (opt-in). Sends only aggregate transaction counts and volume per currency — no personal data, amounts per transaction, contacts, or addresses |
+| `EIOU_VOLUME_KEY_FILE` | (none) | No | Path to file containing volume encryption passphrase (recommended) |
+| `EIOU_VOLUME_KEY` | (none) | No | Volume encryption passphrase as environment variable (less secure) |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, or use `P2P_CA_CERT` for a shared CA |
 | `P2P_CA_CERT` | (none) | No | Path to a CA certificate file inside the container. When set, P2P SSL verification uses this CA instead of the system bundle — use with a volume mount (e.g., `./ssl-ca:/ssl-ca:ro`) |
 
@@ -187,6 +191,33 @@ environment:
 Supported types:
 - `DNS:hostname` - Additional DNS names
 - `IP:address` - IP addresses
+
+#### EIOU_VOLUME_KEY / EIOU_VOLUME_KEY_FILE
+
+Optional passphrase that encrypts the master encryption key at rest on the Docker volume. When set, the host server cannot read the master key (or any data derived from it) without the passphrase. The master key is decrypted to `/dev/shm` (RAM-only) on every boot.
+
+**`EIOU_VOLUME_KEY_FILE`** (recommended): Path to a file containing the passphrase. The file is read once at startup and the contents are stored in RAM. Not visible in `docker inspect`.
+
+**`EIOU_VOLUME_KEY`**: Passphrase as an environment variable. Convenient for development but visible in `docker inspect` and process listings. The variable is cleared from the shell environment after reading, but remains in `/proc/<pid>/environ`.
+
+```yaml
+# Recommended: file-based passphrase
+services:
+  alice:
+    environment:
+      - QUICKSTART=alice
+      - EIOU_VOLUME_KEY_FILE=/run/secrets/volume_key
+    volumes:
+      - ./volume-key.txt:/run/secrets/volume_key:ro
+```
+
+**First boot with passphrase**: The plaintext master key is encrypted and the plaintext copy is securely deleted (overwrite + unlink). The encrypted key is stored as `.master.key.enc` on the config volume.
+
+**Subsequent boots**: The encrypted master key is decrypted to `/dev/shm/.master.key` before any services start.
+
+**Without passphrase**: Data-at-rest encryption (MariaDB TDE) is still active — only the master key itself is unprotected on the volume. Adding a passphrase later will automatically migrate the existing plaintext key to encrypted format.
+
+> **Warning:** If you lose the passphrase and don't have the 24-word seed phrase, the node data cannot be recovered.
 
 #### EIOU_TEST_MODE
 

@@ -54,6 +54,7 @@ use Eiou\Services\ApiKeyService;
  * - GET  /api/v1/system/metrics              - Get system metrics
  * - GET  /api/v1/system/settings             - Get system settings
  * - PUT  /api/v1/system/settings             - Update system settings
+ * - POST /api/v1/system/update-check          - Trigger manual update check
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
@@ -255,6 +256,7 @@ class ApiController {
             $method === 'GET' && $action === 'metrics' => $this->getSystemMetrics(),
             $method === 'GET' && $action === 'settings' => $this->getSystemSettings(),
             $method === 'PUT' && $action === 'settings' => $this->updateSettings($body),
+            $method === 'POST' && $action === 'update-check' => $this->triggerUpdateCheck(),
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
@@ -1443,14 +1445,42 @@ class ApiController {
             'contact_status' => AbstractMessageProcessor::isProcessorRunning('/tmp/contact_status.pid'),
         ];
 
+        $user = \Eiou\Core\UserContext::getInstance();
+        $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus();
+
         return $this->successResponse([
             'status' => 'operational',
             'version' => Constants::APP_VERSION ?? '1.0.0',
             'environment' => Constants::getAppEnv(),
             'database' => $dbStatus,
             'processors' => $processors,
+            'update' => \Eiou\Services\UpdateCheckService::getStatus(),
+            'analytics' => [
+                'enabled' => $analyticsStatus['enabled'],
+                'consent_pending' => !$user->getAnalyticsConsentAsked(),
+                'last_submitted' => $analyticsStatus['last_submitted'],
+            ],
             'timestamp' => date('c')
         ]);
+    }
+
+    /**
+     * POST /api/v1/system/update-check
+     *
+     * Trigger a manual update check against Docker Hub / GitHub Releases.
+     */
+    private function triggerUpdateCheck(): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        $result = \Eiou\Services\UpdateCheckService::check(true);
+
+        if ($result === null) {
+            return $this->errorResponse('Update check failed', 502, 'update_check_failed');
+        }
+
+        return $this->successResponse($result);
     }
 
     /**
@@ -1613,6 +1643,7 @@ class ApiController {
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
             'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_reject_unknown_currency' => ['key' => 'autoRejectUnknownCurrency', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'analytics_enabled' => ['key' => 'analyticsEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Backup & logging
             'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
@@ -1749,6 +1780,7 @@ class ApiController {
             // Write to config file
             $configPath = '/etc/eiou/config/' . $configFile;
             $configContent = json_decode(file_get_contents($configPath), true) ?? [];
+            $wasAnalyticsEnabled = (bool) ($configContent['analyticsEnabled'] ?? false);
             $configContent[$configKey] = $value;
             if ($hostnameSecure !== null) {
                 $configContent['hostname_secure'] = $hostnameSecure;
@@ -1758,6 +1790,18 @@ class ApiController {
             // Regenerate SSL certificate when hostname changes
             if ($configKey === 'hostname') {
                 $this->regenerateSslForHostname($value);
+            }
+
+            // Trigger initial analytics node_setup event when toggled on
+            if ($configKey === 'analyticsEnabled' && $value === true && !$wasAnalyticsEnabled) {
+                $script = '/app/eiou/scripts/analytics-cron.php';
+                if (file_exists($script)) {
+                    $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
+                    if (posix_getuid() === 0) {
+                        $cmd = 'runuser -u www-data -- ' . $cmd;
+                    }
+                    @exec($cmd);
+                }
             }
 
             $updated[$apiKey] = $value;

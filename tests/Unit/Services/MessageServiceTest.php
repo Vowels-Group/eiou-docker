@@ -973,4 +973,5 @@ class MessageServiceTest extends TestCase
 
         $this->service->handleMessageRequest($request);
     }
+
 }

@@ -101,8 +101,8 @@ function displayDateFormat(): string {
 function formatTimestamp(string $timestamp): string {
     $fmt = displayDateFormat();
     $dt = \DateTime::createFromFormat('Y-m-d H:i:s.u', $timestamp)
-       ?? \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
-       ?? new \DateTime($timestamp);
+       ?: \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
+       ?: new \DateTime($timestamp);
     return $dt->format($fmt);
 }
 
@@ -125,6 +125,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // Settings actions
     if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport'])) {
         $settingsController->routeAction();
+    }
+
+    // AJAX-only analytics consent (returns JSON, exits immediately)
+    if ($action === 'analyticsConsent') {
+        header('Content-Type: application/json');
+        try {
+            $settingsController->routeAction();
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
+        }
+        exit;
     }
 
     // AJAX-only settings actions (returns JSON, exits immediately)
@@ -275,6 +286,16 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
 
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
+
+// Update check status (reads cache only — never triggers a new check on page load)
+$updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
+
+// Analytics status (reads cache only — never triggers a new submission on page load)
+try {
+    $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus();
+} catch (\Throwable $e) {
+    $analyticsStatus = [];
+}
 
 // Check Tor/SOCKS5 GUI status (written by TransportUtilityService and startup.sh watchdog)
 $torGuiStatus = null;

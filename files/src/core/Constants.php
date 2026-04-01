@@ -44,14 +44,15 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.3-alpha';
+    const APP_VERSION = '0.1.5-alpha';
+    const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
     // Database schema version — bump this when adding new migrations in DatabaseSetup.php.
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 3;
+    const SCHEMA_VERSION = 4;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -495,6 +496,8 @@ class Constants {
     const AUTO_ACCEPT_RESTORED_CONTACT = true;     // Auto-accept contacts on wallet restore when transaction history proves prior relationship - default ON; when OFF, restored contacts stay pending for manual review
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
     const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
+    const UPDATE_CHECK_ENABLED = true;            // Check Docker Hub for newer image versions daily - default ON; when OFF, no external API calls are made
+    const ANALYTICS_ENABLED = false;              // Share anonymous usage statistics - default OFF (opt-in only); when ON, sends aggregate counts to analytics.eiou.org weekly
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)
@@ -666,4 +669,5 @@ class Constants {
         $reflection = new \ReflectionClass(self::class);
         return $reflection->getConstants();
     }
+
 }

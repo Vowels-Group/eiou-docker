@@ -212,6 +212,8 @@ class SettingsController
         $settings['hopBudgetRandomized'] = isset($_POST['hopBudgetRandomized']) && $_POST['hopBudgetRandomized'] === '1';
         $settings['apiEnabled'] = isset($_POST['apiEnabled']) && $_POST['apiEnabled'] === '1';
         $settings['autoRejectUnknownCurrency'] = isset($_POST['autoRejectUnknownCurrency']) && $_POST['autoRejectUnknownCurrency'] === '1';
+        $settings['updateCheckEnabled'] = isset($_POST['updateCheckEnabled']) && $_POST['updateCheckEnabled'] === '1';
+        $settings['analyticsEnabled'] = isset($_POST['analyticsEnabled']) && $_POST['analyticsEnabled'] === '1';
 
         // API CORS — textarea value (newline-separated), normalize to comma-separated
         if (isset($_POST['apiCorsAllowedOrigins'])) {
@@ -396,12 +398,19 @@ class SettingsController
                 $config = json_decode(file_get_contents($configFile), true) ?? [];
             }
 
+            $wasAnalyticsEnabled = (bool) ($config['analyticsEnabled'] ?? false);
+
             // Merge new settings
             $config = array_merge($config, $settings);
 
             // Write back to file
             if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
+            }
+
+            // Trigger initial analytics event when toggled on for the first time
+            if (!$wasAnalyticsEnabled && ($settings['analyticsEnabled'] ?? false)) {
+                self::triggerInitialAnalytics();
             }
 
             MessageHelper::redirectMessage('Settings updated successfully', 'success');
@@ -524,8 +533,74 @@ class SettingsController
             case 'getDebugReportJson':
                 $this->handleGetDebugReportJson();
                 break;
+            case 'analyticsConsent':
+                $this->handleAnalyticsConsent();
+                break;
             default:
                 MessageHelper::redirectMessage('Unknown settings action', 'error');
         }
+    }
+
+    /**
+     * Handle one-time analytics consent from the post-login modal.
+     * Sets analyticsConsentAsked=true and optionally analyticsEnabled=true.
+     * Returns JSON response (AJAX endpoint).
+     *
+     * @return void
+     */
+    private function handleAnalyticsConsent(): void
+    {
+        $this->session->verifyCSRFToken(false);
+
+        $enable = isset($_POST['consent']) && $_POST['consent'] === '1';
+
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        $config = [];
+
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true) ?? [];
+        }
+
+        $config['analyticsConsentAsked'] = true;
+        if ($enable) {
+            $config['analyticsEnabled'] = true;
+        }
+
+        header('Content-Type: application/json');
+
+        if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+            echo json_encode(['success' => false, 'error' => 'Failed to save preference']);
+            return;
+        }
+
+        // Trigger immediate node_setup event in the background on first enable
+        if ($enable) {
+            self::triggerInitialAnalytics();
+        }
+
+        echo json_encode(['success' => true, 'analyticsEnabled' => $enable]);
+    }
+
+    /**
+     * Trigger the initial analytics node_setup event in the background.
+     * Non-blocking — the cron script runs asynchronously so the web
+     * request is not delayed by the Tor connection.
+     *
+     * @return void
+     */
+    private static function triggerInitialAnalytics(): void
+    {
+        $script = '/app/eiou/scripts/analytics-cron.php';
+        if (!file_exists($script)) {
+            return;
+        }
+
+        // Use runuser only when running as root (CLI); php-fpm workers
+        // already run as www-data so runuser would fail with permission error.
+        $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
+        if (posix_getuid() === 0) {
+            $cmd = 'runuser -u www-data -- ' . $cmd;
+        }
+        @exec($cmd);
     }
 }

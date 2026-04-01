@@ -24,6 +24,7 @@
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
  *   ping <contact>             - Check contact online status
+ *   updatecheck                - Check for newer image versions
  *   shutdown                   - Graceful shutdown
  *
  * Output Flags:
@@ -389,6 +390,24 @@ elseif($request === "report"){
     echo "  eiou report debug \"login page crash\"\n";
     echo "  eiou report debug --full\n";
     echo "  eiou report debug \"issue description\" --full\n";
+  }
+}
+// Update Check
+elseif($request === "updatecheck"){
+  $debugService->output("Executing update check request", 'SILENT');
+  $result = \Eiou\Services\UpdateCheckService::check(true);
+  if ($result === null) {
+    $output->error("Update check failed — could not reach Docker Hub or GitHub", ErrorCodes::GENERAL_ERROR);
+    exit(1);
+  }
+  if ($result['available']) {
+    $output->success(
+      "Update available: {$result['latest_version']} (current: {$result['current_version']})",
+      $result,
+      "Run: docker pull eiou/eiou:{$result['latest_version']}"
+    );
+  } else {
+    $output->success("Up to date: {$result['current_version']}", $result);
   }
 }
 else{

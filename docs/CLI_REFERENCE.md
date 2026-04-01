@@ -952,6 +952,8 @@ eiou changesettings [setting] [value]
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
+| `updateCheckEnabled` | Check Docker Hub daily for newer versions | `true`, `false` |
+| `analyticsEnabled` | Share anonymous usage statistics (opt-in) | `true`, `false` |
 | `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 | `name` | Display name for this node | `Alice` |
@@ -1135,6 +1137,31 @@ eiou help apikey
 # JSON format
 eiou help --json
 ```
+
+---
+
+### updatecheck
+
+Check Docker Hub and GitHub Releases for newer image versions. Bypasses the 24-hour cache and performs a fresh check.
+
+**Syntax:**
+```bash
+eiou updatecheck
+```
+
+**Examples:**
+```bash
+# Check for updates
+eiou updatecheck
+
+# JSON output
+eiou updatecheck --json
+```
+
+**Output:**
+- If an update is available: shows the latest version and a `docker pull` command
+- If up to date: confirms the current version
+- If check fails: reports that Docker Hub and GitHub could not be reached
 
 ---
 

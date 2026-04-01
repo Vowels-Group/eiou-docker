@@ -4,10 +4,14 @@
 namespace Eiou\Services\Utilities;
 
 use Eiou\Contracts\ValidationUtilityServiceInterface;
+use Eiou\Core\Constants;
 use Eiou\Core\SplitAmount;
 use Eiou\Core\UserContext;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactRepository;
 use Eiou\Services\ServiceContainer;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\Logger;
 
 /**
  * Validation Utility Service
@@ -95,5 +99,52 @@ class ValidationUtilityService implements ValidationUtilityServiceInterface
         // Contact's available funds = what we've sent to them (they received) minus what they've sent to us (we received)
         // In the balances table: 'sent' is what WE sent TO contact, 'received' is what WE received FROM contact
         return $totalSent->subtract($totalReceived);
+    }
+
+    /**
+     * Check version compatibility for an incoming message envelope.
+     *
+     * If the sender is a known contact, updates their stored remote_version
+     * (only when it changes, to avoid unnecessary writes). Logs a warning
+     * only on first detection of an incompatible version.
+     *
+     * @param array $envelope The transport envelope (senderPublicKey, version, senderAddress)
+     * @param string $messageType The message type (for logging context)
+     * @return array|null Null if compatible, or ['reason' => ..., 'action' => ...] if not
+     */
+    public function verifyVersionCompatibility(array $envelope, string $messageType): ?array
+    {
+        $incomingVersion = $envelope['version'] ?? null;
+        $versionCheck = InputValidator::checkVersionCompatibility($incomingVersion);
+
+        // Update stored remote_version for known contacts regardless of compatibility
+        $senderPubkey = $envelope['senderPublicKey'] ?? null;
+        if ($senderPubkey !== null) {
+            $contactRepo = $this->container->getRepositoryFactory()->get(ContactRepository::class);
+            $existingContact = $contactRepo->getContactByPubkey($senderPubkey);
+
+            if ($existingContact !== null) {
+                $storedVersion = $existingContact['remote_version'] ?? null;
+
+                if ($incomingVersion !== $storedVersion) {
+                    $contactRepo->updateContactFields($senderPubkey, [
+                        'remote_version' => $incomingVersion,
+                    ]);
+
+                    // Log only on first detection (version changed) to avoid spam
+                    if ($versionCheck !== null) {
+                        Logger::getInstance()->warning('Incompatible node version detected', [
+                            'sender_version' => $incomingVersion ?? 'unknown',
+                            'min_required' => Constants::MIN_COMPATIBLE_VERSION,
+                            'message_type' => $messageType,
+                            'sender_address' => $envelope['senderAddress'] ?? 'unknown',
+                            'action' => $versionCheck['action'],
+                        ]);
+                    }
+                }
+            }
+        }
+
+        return $versionCheck;
     }
 }

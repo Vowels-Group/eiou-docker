@@ -391,6 +391,45 @@ RESTORE_FILE=${RESTORE_FILE:-false}
 RESTORE=${RESTORE:-false}
 
 # =============================================================================
+# VOLUME ENCRYPTION KEY HANDLING
+# =============================================================================
+# EIOU_VOLUME_KEY or EIOU_VOLUME_KEY_FILE protects all volume data at rest.
+# When set, the master encryption key is encrypted with a passphrase-derived
+# key using Argon2id. The host server cannot read the master key from the
+# Docker volume without this passphrase.
+#
+# EIOU_VOLUME_KEY_FILE (recommended): Path to a file containing the passphrase
+# EIOU_VOLUME_KEY: Passphrase as environment variable (less secure)
+# =============================================================================
+EIOU_VOLUME_KEY=${EIOU_VOLUME_KEY:-}
+EIOU_VOLUME_KEY_FILE=${EIOU_VOLUME_KEY_FILE:-}
+
+if [ -n "$EIOU_VOLUME_KEY_FILE" ]; then
+    # File-based volume key (recommended — not visible in docker inspect)
+    if [ ! -f "$EIOU_VOLUME_KEY_FILE" ]; then
+        echo "ERROR: Volume key file not found at $EIOU_VOLUME_KEY_FILE"
+        exit 1
+    fi
+    if [ ! -r "$EIOU_VOLUME_KEY_FILE" ]; then
+        echo "ERROR: Cannot read volume key file at $EIOU_VOLUME_KEY_FILE"
+        exit 1
+    fi
+    # Store in /dev/shm (RAM-backed) for PHP access, then clear from env
+    cat "$EIOU_VOLUME_KEY_FILE" > /dev/shm/.volume_key
+    chmod 600 /dev/shm/.volume_key
+    echo "Volume encryption key loaded from file."
+elif [ -n "$EIOU_VOLUME_KEY" ]; then
+    # Environment variable volume key (convenient but visible in docker inspect)
+    printf '%s' "$EIOU_VOLUME_KEY" > /dev/shm/.volume_key
+    chmod 600 /dev/shm/.volume_key
+    # Clear from shell environment (does not clear /proc/<pid>/environ)
+    unset EIOU_VOLUME_KEY
+    export EIOU_VOLUME_KEY=""
+    echo "Volume encryption key loaded from environment."
+    echo "NOTE: For better security, use EIOU_VOLUME_KEY_FILE instead."
+fi
+
+# =============================================================================
 # SSL CERTIFICATE SETUP
 # =============================================================================
 # Environment Variables:
@@ -740,6 +779,62 @@ touch /var/log/eiou/app.log
 chown -R www-data:www-data /var/log/eiou
 chmod 755 /var/log/eiou
 chmod 640 /var/log/eiou/app.log
+
+# =============================================================================
+# PRE-SERVICE ENCRYPTION SETUP
+# =============================================================================
+# These steps must run BEFORE MariaDB starts:
+#   1. Volume encryption: if active, decrypt master key to /dev/shm
+#   2. MariaDB TDE: if already enabled, write TDE key file to /dev/shm
+#      so MariaDB can read its encrypted tables on startup
+# =============================================================================
+
+# Step 1: Volume encryption (optional — for environments with secrets management)
+if [ -f /dev/shm/.volume_key ] || [ -f /etc/eiou/config/.master.key.enc ]; then
+    echo "Initializing volume encryption..."
+    VOLUME_INIT_RESULT=$(php /app/eiou/scripts/volume-encryption-init.php 2>&1)
+    VOLUME_INIT_EXIT=$?
+    echo "$VOLUME_INIT_RESULT"
+    if [ $VOLUME_INIT_EXIT -ne 0 ]; then
+        echo ""
+        echo "========================================================================"
+        echo "FATAL: Volume encryption initialization failed."
+        echo "The node cannot start without access to the master encryption key."
+        echo ""
+        echo "If you have lost the volume key, the node data cannot be recovered."
+        echo "You must restore from your 24-word seed phrase."
+        echo "========================================================================"
+        exit 1
+    fi
+fi
+
+# Step 2: MariaDB TDE key file (for subsequent boots where TDE is already enabled)
+# The TDE key file lives in /dev/shm (RAM) and is lost on container restart.
+# It must be recreated from the master key BEFORE MariaDB starts, otherwise
+# MariaDB cannot read its encrypted tables.
+if [ -f /etc/mysql/conf.d/encryption.cnf ]; then
+    MASTER_KEY_PATH=""
+    if [ -f /dev/shm/.master.key ]; then
+        MASTER_KEY_PATH="/dev/shm/.master.key"
+    elif [ -f /etc/eiou/config/.master.key ]; then
+        MASTER_KEY_PATH="/etc/eiou/config/.master.key"
+    fi
+
+    if [ -n "$MASTER_KEY_PATH" ]; then
+        echo "Preparing MariaDB TDE key file for startup..."
+        TDE_KEY_RESULT=$(php /app/eiou/scripts/mariadb-tde-init.php setup-key 2>&1)
+        TDE_KEY_EXIT=$?
+        if [ $TDE_KEY_EXIT -eq 0 ]; then
+            echo "MariaDB TDE: encryption key ready"
+        else
+            echo "WARNING: Failed to prepare TDE key file — MariaDB may fail to start"
+            echo "$TDE_KEY_RESULT"
+        fi
+    else
+        echo "WARNING: MariaDB TDE config exists but master key not available yet"
+        echo "MariaDB may fail to read encrypted tables on this boot"
+    fi
+fi
 
 # Start services
 service cron start
@@ -1115,6 +1210,51 @@ else
     fi
 fi
 
+# =============================================================================
+# MARIADB TRANSPARENT DATA ENCRYPTION (TDE) — FIRST-TIME SETUP
+# =============================================================================
+# MariaDB TDE encrypts all database files at rest (transactions, contacts,
+# balances, redo logs, temp tables). Enabled automatically after wallet
+# generation — no user configuration required.
+#
+# On first boot: master key just became available → write TDE config, restart
+# MariaDB to load the encryption plugin, encrypt existing tables.
+# On subsequent boots: TDE key file was already set up in the pre-service
+# section above, and MariaDB loaded the plugin on start.
+# =============================================================================
+if [ -f /dev/shm/.master.key ] || [ -f /etc/eiou/config/.master.key ]; then
+    if [ ! -f /etc/mysql/conf.d/encryption.cnf ]; then
+        # First-time TDE setup: write config + prepare for restart
+        echo "Enabling MariaDB data-at-rest encryption..."
+        TDE_RESULT=$(php /app/eiou/scripts/mariadb-tde-init.php setup 2>&1)
+        TDE_EXIT=$?
+        echo "$TDE_RESULT"
+
+        if [ $TDE_EXIT -eq 0 ] && echo "$TDE_RESULT" | grep -q "RESTART_REQUIRED"; then
+            echo "Restarting MariaDB to load encryption plugin..."
+            service mariadb restart
+
+            # Wait for MariaDB to be ready after restart
+            while ! mysqladmin ping -h localhost --silent; do
+                echo "Waiting for MariaDB to restart..."
+                sleep 1
+            done
+
+            # Encrypt existing tables
+            echo "Encrypting existing database tables..."
+            TDE_ENCRYPT_RESULT=$(php /app/eiou/scripts/mariadb-tde-init.php encrypt-tables 2>&1)
+            TDE_ENCRYPT_EXIT=$?
+            echo "$TDE_ENCRYPT_RESULT"
+
+            if [ $TDE_ENCRYPT_EXIT -ne 0 ]; then
+                echo "WARNING: Table encryption deferred — will complete on next restart."
+            fi
+        elif [ $TDE_EXIT -ne 0 ]; then
+            echo "WARNING: MariaDB TDE setup failed — database files remain unencrypted."
+        fi
+    fi
+fi
+
 # Check if all precursors to the message processors are available and working
 first=true
 while true; do
@@ -1289,6 +1429,28 @@ if [ "${EIOU_BACKUP_AUTO_ENABLED:-true}" = "true" ]; then
 else
     echo "Automatic backups disabled via EIOU_BACKUP_AUTO_ENABLED"
 fi
+
+# Set up cron for daily update check (2 AM UTC, avoids overlap with midnight backup)
+if [ "${EIOU_UPDATE_CHECK_ENABLED:-true}" = "true" ]; then
+    UPDATE_CRON_JOB="0 2 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1"
+    (crontab -l 2>/dev/null | grep -v "update-check-cron.php"; echo "$UPDATE_CRON_JOB") | crontab -
+    echo "Update check cron job installed (daily at 2 AM UTC)"
+
+    # Run initial check in background (non-blocking — don't delay startup)
+    runuser -u www-data -- php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1 &
+else
+    # Remove any existing update check cron entry
+    (crontab -l 2>/dev/null | grep -v "update-check-cron.php") | crontab -
+    echo "Update checks disabled via EIOU_UPDATE_CHECK_ENABLED"
+fi
+
+# Set up cron for weekly analytics submission (Sundays at 3 AM UTC)
+# Always installed — the PHP script checks analyticsEnabled and exits
+# gracefully if disabled, so users can enable via GUI/CLI/API at any time
+# without needing a container restart.
+ANALYTICS_CRON_JOB="0 3 * * 0 runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
+(crontab -l 2>/dev/null | grep -v "analytics-cron.php"; echo "$ANALYTICS_CRON_JOB") | crontab -
+echo "Analytics cron job installed (weekly, Sundays at 3 AM UTC)"
 
 # Clear any stale shutdown flag from previous runs
 rm -f "$SHUTDOWN_FLAG" 2>/dev/null
