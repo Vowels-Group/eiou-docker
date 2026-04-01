@@ -204,6 +204,11 @@ class CliSettingsService
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'analyticsenabled'){
+                $key = 'analyticsEnabled';
+                $validation = InputValidator::validateBoolean($argv[3] ?? '');
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'apienabled'){
                 $key = 'apiEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -1094,6 +1099,7 @@ class CliSettingsService
         }
 
         $config_content = json_decode(file_get_contents('/etc/eiou/config/' . $configFile),true);
+        $wasAnalyticsEnabled = (bool) ($config_content['analyticsEnabled'] ?? false);
         $config_content[$key] = $value;
 
         // Also save hostname_secure when hostname is updated
@@ -1107,6 +1113,19 @@ class CliSettingsService
         // The certificate CN and SANs need to match the new hostname
         if ($key == 'hostname') {
             $this->regenerateSslCertificate($value, $output);
+        }
+
+        // Trigger initial analytics node_setup event when toggled on
+        if ($key === 'analyticsEnabled' && $value === true && !$wasAnalyticsEnabled) {
+            $script = '/app/eiou/scripts/analytics-cron.php';
+            if (file_exists($script)) {
+                $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
+                if (posix_getuid() === 0) {
+                    $cmd = 'runuser -u www-data -- ' . $cmd;
+                }
+                @exec($cmd);
+                $output->info('Sending initial analytics event in the background...');
+            }
         }
 
         $output->success('Setting updated successfully.', [

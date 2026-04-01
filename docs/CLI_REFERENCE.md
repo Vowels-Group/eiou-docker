@@ -953,6 +953,7 @@ eiou changesettings [setting] [value]
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
 | `updateCheckEnabled` | Check Docker Hub daily for newer versions | `true`, `false` |
+| `analyticsEnabled` | Share anonymous usage statistics (opt-in) | `true`, `false` |
 | `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 | `name` | Display name for this node | `Alice` |

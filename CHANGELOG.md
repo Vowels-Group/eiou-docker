@@ -18,14 +18,19 @@ The project is currently in **ALPHA** status.
 - Encrypt `dbUser` and `dbName` in `dbconfig.json` alongside `dbPass` — all database credentials are now encrypted at rest using AES-256-GCM with domain-separated AAD contexts. Backward-compatible: plaintext fields are encrypted on first boot after master key is available
 - Two-location master key fallback — `KeyEncryption::getMasterKey()` checks `/dev/shm/.master.key` (RAM) first, then falls back to the persistent volume. When volume encryption is active, only the RAM copy exists in plaintext
 - Add **update version notification** — checks Docker Hub daily for newer image tags and notifies the user via a GUI banner and the `/api/v1/system/status` API response. Compares semver tags (handles `alpha` < `beta` < stable ordering). Results are cached for 24 hours in `/etc/eiou/config/update-check.json`. Configurable via `EIOU_UPDATE_CHECK_ENABLED` env var (default: true), GUI toggle in Feature Toggles, and CLI `changesettings updateCheckEnabled`. No data is sent — read-only Docker Hub API call. Tor-only nodes silently skip the check
+- Add **opt-in anonymous analytics** — sends aggregate, anonymous usage statistics weekly to `analytics.eiou.org`. Disabled by default (opt-in only). Reports transaction counts, volume per currency, contact count, and days active for the past 7 days. The anonymous ID is an HMAC-SHA256 hash that cannot be reversed to the node's identity. No personal data, individual transaction details, amounts per transaction, contacts, or addresses are ever sent. Configurable via `EIOU_ANALYTICS_ENABLED` env var, GUI toggle in Feature Toggles, CLI `changesettings analyticsEnabled`, and API `analytics_enabled`. Server-side: Cloudflare Worker + D1 in `Vowels-Group/eiou-analytics` (private)
+- Add **one-time analytics consent modal** — after first login, a modal asks the user whether to enable anonymous analytics. The choice is saved to config (`analyticsConsentAsked`) and the modal never reappears. Users can always change their preference later in Settings > Feature Toggles. The modal uses AJAX to save the preference without a page reload
 
 ### Fixed
+- Fix analytics cron not installed when enabled via GUI/CLI/API after startup — the cron job is now always installed since the PHP script already exits gracefully when analytics is disabled. Also trigger an immediate `node_setup` event (no jitter) when analytics is first enabled through any interface (GUI consent modal, settings toggle, CLI, or API)
+- Fix GUI settings controller not processing `updateCheckEnabled` toggle — checkbox value was not read from POST data, so toggling it in the GUI had no effect
 - Fix GitHub Releases fallback in `UpdateCheckService` — the `/releases/latest` endpoint excludes pre-releases (returns 404 since all releases are pre-release). Switch to `/releases?per_page=10` and pick the highest semver, matching the Docker Hub tag selection logic
 
 ### Security
 - Add data-at-rest encryption for all database files (MariaDB TDE) and optional volume passphrase protection for the master encryption key — see Added section for details
 
 ### Docs
+- Add `ANONYMOUS_ANALYTICS.md` — full reference covering privacy guarantees, what is/isn't sent, exact payload examples, and how to toggle via GUI, CLI, and API
 - Update `UPGRADE_GUIDE.md` — document MariaDB TDE, credential encryption, update version check, expanded startup flow, new verification log lines, and new troubleshooting entries
 
 ### Tests

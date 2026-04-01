@@ -1151,6 +1151,7 @@ Get system settings.
 - `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
 - `update_check_enabled`: Whether daily Docker Hub update checks are enabled (no data sent — read-only API call)
+- `analytics_enabled`: Whether anonymous usage analytics are enabled (opt-in, default off — sends only aggregate counts weekly)
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
@@ -1230,6 +1231,7 @@ Update system settings.
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
 | `update_check_enabled` | boolean | Enable/disable daily Docker Hub update checks |
+| `analytics_enabled` | boolean | Enable/disable anonymous usage analytics (opt-in, default off) |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
 | `rate_limit_enabled` | boolean | Enable/disable rate limiting (CLI/API only — not exposed in GUI) |

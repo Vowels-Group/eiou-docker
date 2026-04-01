@@ -1445,6 +1445,9 @@ class ApiController {
             'contact_status' => AbstractMessageProcessor::isProcessorRunning('/tmp/contact_status.pid'),
         ];
 
+        $user = \Eiou\Core\UserContext::getInstance();
+        $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus();
+
         return $this->successResponse([
             'status' => 'operational',
             'version' => Constants::APP_VERSION ?? '1.0.0',
@@ -1452,6 +1455,11 @@ class ApiController {
             'database' => $dbStatus,
             'processors' => $processors,
             'update' => \Eiou\Services\UpdateCheckService::getStatus(),
+            'analytics' => [
+                'enabled' => $analyticsStatus['enabled'],
+                'consent_pending' => !$user->getAnalyticsConsentAsked(),
+                'last_submitted' => $analyticsStatus['last_submitted'],
+            ],
             'timestamp' => date('c')
         ]);
     }
@@ -1635,6 +1643,7 @@ class ApiController {
             'api_cors_allowed_origins' => ['key' => 'apiCorsAllowedOrigins', 'validate' => null, 'config' => 'defaultconfig.json'],
             'allowed_currencies' => ['key' => 'allowedCurrencies', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_reject_unknown_currency' => ['key' => 'autoRejectUnknownCurrency', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
+            'analytics_enabled' => ['key' => 'analyticsEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'rate_limit_enabled' => ['key' => 'rateLimitEnabled', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             // Backup & logging
             'backup_retention_count' => ['key' => 'backupRetentionCount', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
@@ -1771,6 +1780,7 @@ class ApiController {
             // Write to config file
             $configPath = '/etc/eiou/config/' . $configFile;
             $configContent = json_decode(file_get_contents($configPath), true) ?? [];
+            $wasAnalyticsEnabled = (bool) ($configContent['analyticsEnabled'] ?? false);
             $configContent[$configKey] = $value;
             if ($hostnameSecure !== null) {
                 $configContent['hostname_secure'] = $hostnameSecure;
@@ -1780,6 +1790,18 @@ class ApiController {
             // Regenerate SSL certificate when hostname changes
             if ($configKey === 'hostname') {
                 $this->regenerateSslForHostname($value);
+            }
+
+            // Trigger initial analytics node_setup event when toggled on
+            if ($configKey === 'analyticsEnabled' && $value === true && !$wasAnalyticsEnabled) {
+                $script = '/app/eiou/scripts/analytics-cron.php';
+                if (file_exists($script)) {
+                    $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
+                    if (posix_getuid() === 0) {
+                        $cmd = 'runuser -u www-data -- ' . $cmd;
+                    }
+                    @exec($cmd);
+                }
             }
 
             $updated[$apiKey] = $value;

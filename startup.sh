@@ -1444,6 +1444,14 @@ else
     echo "Update checks disabled via EIOU_UPDATE_CHECK_ENABLED"
 fi
 
+# Set up cron for weekly analytics submission (Sundays at 3 AM UTC)
+# Always installed — the PHP script checks analyticsEnabled and exits
+# gracefully if disabled, so users can enable via GUI/CLI/API at any time
+# without needing a container restart.
+ANALYTICS_CRON_JOB="0 3 * * 0 runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
+(crontab -l 2>/dev/null | grep -v "analytics-cron.php"; echo "$ANALYTICS_CRON_JOB") | crontab -
+echo "Analytics cron job installed (weekly, Sundays at 3 AM UTC)"
+
 # Clear any stale shutdown flag from previous runs
 rm -f "$SHUTDOWN_FLAG" 2>/dev/null
 

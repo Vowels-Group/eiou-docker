@@ -494,6 +494,28 @@ class SettingsControllerTest extends TestCase
         $this->assertTrue(true);
     }
 
+    #[Test]
+    public function routeActionHandlesAnalyticsConsentAction(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['action' => 'analyticsConsent', 'consent' => '1'];
+
+        $this->mockSession->expects($this->once())
+            ->method('verifyCSRFToken');
+
+        try {
+            ob_start();
+            $this->controller->routeAction();
+            $output = ob_get_clean();
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+
+        $this->assertTrue(true);
+    }
+
     protected function tearDown(): void
     {
         $_POST = [];

@@ -1320,4 +1320,18 @@ class UserContextTest extends TestCase
         $instance->setUserData(['displayRecentTransactionsLimit' => 0]);
         $this->assertSame(1, $instance->getDisplayRecentTransactionsLimit());
     }
+
+    public function testGetAnalyticsConsentAskedReturnsFalseWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertFalse($instance->getAnalyticsConsentAsked());
+    }
+
+    public function testGetAnalyticsConsentAskedReturnsTrueWhenSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['analyticsConsentAsked' => true]);
+        $this->assertTrue($instance->getAnalyticsConsentAsked());
+    }
 }

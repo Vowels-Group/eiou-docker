@@ -3811,3 +3811,55 @@ hr.currency-separator-double {
     -webkit-box-orient: vertical; -webkit-box-direction: normal; -ms-flex-direction: column; flex-direction: column;
     gap: 0.3rem;
 }
+
+/* Analytics consent modal */
+.analytics-consent-heading {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.95rem;
+    color: #212529;
+}
+.analytics-consent-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.3rem 0 0.8rem;
+}
+.analytics-consent-list li {
+    padding: 0.3rem 0;
+    color: #495057;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+.analytics-consent-icon-ok {
+    color: #28a745;
+    margin-right: 0.4rem;
+}
+.analytics-consent-icon-dot {
+    color: #6c757d;
+    font-size: 0.35rem;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+}
+.analytics-consent-footer {
+    margin-top: 0.8rem;
+    margin-bottom: 0;
+}
+.btn-consent-skip {
+    padding: 0.5rem 1rem;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #6c757d;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.btn-consent-skip:hover { background: #f8f9fa; color: #495057; }
+.btn-consent-enable {
+    padding: 0.5rem 1rem;
+    border: none;
+    background: #0d6efd;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.btn-consent-enable:hover { background: #0b5ed7; }
