@@ -915,10 +915,17 @@ class TransportUtilityService implements TransportServiceInterface
         $envelope = [
             'senderAddress' => $payload['senderAddress'],
             'senderPublicKey' => $payload['senderPublicKey'],
-            'version' => Constants::APP_VERSION,
             'message' => $message,
             'signature' => $base64Signature
         ];
+
+        // Include version in envelope for all types except contact creation requests.
+        // Contact requests go to untrusted nodes (no established relationship yet),
+        // so exposing the version would let any node fingerprint us. Version is
+        // exchanged later via acceptance responses, ping/pong, and message envelopes.
+        if ($messageType !== 'create') {
+            $envelope['version'] = Constants::APP_VERSION;
+        }
 
         return [
             'envelope' => $envelope,

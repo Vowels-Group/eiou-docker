@@ -85,7 +85,6 @@ class ContactPayload extends BasePayload
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
             'status' => Constants::DELIVERY_RECEIVED,
-            'version' => Constants::APP_VERSION,
             'message' => $myAddress . ' confirms that the contact request has been received',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),

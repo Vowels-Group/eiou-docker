@@ -365,6 +365,25 @@ Your 24-word BIP39 mnemonic is displayed only once during initial wallet generat
 
 Always run `eiou backup create` before upgrading. The encrypted backup file can be used to restore your database if anything goes wrong. Backup files are stored on the `{node}-backups` volume, which is preserved across upgrades.
 
+### Version Compatibility
+
+Starting with v0.1.5-alpha, nodes enforce version compatibility. Nodes running versions below `0.1.3-alpha` are rejected because earlier versions use an incompatible amount format (cents-based integers vs SplitAmount) that causes data corruption.
+
+**What happens if you don't upgrade:**
+- Other nodes running v0.1.5+ will reject your contact requests, transactions, and sync messages
+- You will see rejection responses with a message indicating the minimum required version
+- Existing contacts running newer versions will be unable to send to you
+
+**What happens when you upgrade:**
+- Your node automatically includes its version in all outgoing messages and contact responses
+- Contacts learn your new version via the next message, ping, or contact handshake
+- Any previously blocked communication auto-heals — no manual action needed
+
+**Checking a contact's version:**
+- Each contact's `remote_version` is stored in the database and updated automatically
+- The version is exchanged during: contact acceptance (mutual acceptance response), ping/pong, and any incoming message envelope
+- Version is NOT exposed before trust is established — the initial contact request and "received" response intentionally omit the version to prevent untrusted nodes from fingerprinting your software version. Version is only shared after contact acceptance, through message envelopes (outside the signed content), ping/pong responses, and mutual acceptance payloads
+
 ### Master Key Is Derived from Seed
 
 The AES-256 master encryption key (`/etc/eiou/config/.master.key`) is deterministically derived from the BIP39 seed phrase. All other encryption keys (MariaDB TDE, database credential encryption, backup encryption) are derived from this single master key. If the `{node}-config` volume is lost:
