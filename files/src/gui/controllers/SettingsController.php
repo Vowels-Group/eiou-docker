@@ -526,8 +526,46 @@ class SettingsController
             case 'getDebugReportJson':
                 $this->handleGetDebugReportJson();
                 break;
+            case 'analyticsConsent':
+                $this->handleAnalyticsConsent();
+                break;
             default:
                 MessageHelper::redirectMessage('Unknown settings action', 'error');
         }
+    }
+
+    /**
+     * Handle one-time analytics consent from the post-login modal.
+     * Sets analyticsConsentAsked=true and optionally analyticsEnabled=true.
+     * Returns JSON response (AJAX endpoint).
+     *
+     * @return void
+     */
+    private function handleAnalyticsConsent(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $enable = isset($_POST['consent']) && $_POST['consent'] === '1';
+
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        $config = [];
+
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true) ?? [];
+        }
+
+        $config['analyticsConsentAsked'] = true;
+        if ($enable) {
+            $config['analyticsEnabled'] = true;
+        }
+
+        header('Content-Type: application/json');
+
+        if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+            echo json_encode(['success' => false, 'error' => 'Failed to save preference']);
+            return;
+        }
+
+        echo json_encode(['success' => true, 'analyticsEnabled' => $enable]);
     }
 }

@@ -602,6 +602,16 @@ class UserContext {
     }
 
     /**
+     * Check if the user has been asked about analytics consent.
+     * Returns true once the user has made any choice (enable or skip).
+     *
+     * @return bool
+     */
+    public function getAnalyticsConsentAsked(): bool {
+        return (bool) ($this->get('analyticsConsentAsked') ?? false);
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string

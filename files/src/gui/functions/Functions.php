@@ -127,6 +127,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $settingsController->routeAction();
     }
 
+    // AJAX-only analytics consent (returns JSON, exits immediately)
+    if ($action === 'analyticsConsent') {
+        header('Content-Type: application/json');
+        try {
+            $settingsController->routeAction();
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     // AJAX-only settings actions (returns JSON, exits immediately)
     if ($action === 'getDebugReportJson') {
         // Set JSON header early to ensure clean response

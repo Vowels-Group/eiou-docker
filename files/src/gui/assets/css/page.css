@@ -3811,3 +3811,37 @@ hr.currency-separator-double {
     -webkit-box-orient: vertical; -webkit-box-direction: normal; -ms-flex-direction: column; flex-direction: column;
     gap: 0.3rem;
 }
+
+/* Analytics consent modal */
+.analytics-consent-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+}
+.analytics-consent-list li {
+    padding: 0.4rem 0;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.btn-consent-skip {
+    padding: 0.5rem 1rem;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #6c757d;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.btn-consent-skip:hover { background: #f8f9fa; color: #495057; }
+.btn-consent-enable {
+    padding: 0.5rem 1rem;
+    border: none;
+    background: #0d6efd;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.btn-consent-enable:hover { background: #0b5ed7; }

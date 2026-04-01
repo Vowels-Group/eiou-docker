@@ -1,0 +1,37 @@
+<!-- Analytics Consent Modal — shown once after first login -->
+<?php if (!$user->getAnalyticsConsentAsked()): ?>
+<div id="analyticsConsentModal" class="modal">
+    <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+            <div class="modal-header-content">
+                <h3><i class="fas fa-chart-bar"></i> Help Improve eIOU</h3>
+            </div>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p>Would you like to share anonymous usage statistics to help improve eIOU?</p>
+
+            <h4 style="margin: 1rem 0 0.5rem; font-size: 0.95rem; color: #212529;"><i class="fas fa-shield-alt"></i> How it stays private</h4>
+            <ul class="analytics-consent-list">
+                <li><i class="fas fa-check-circle" style="color: #28a745;"></i> Routed entirely through <strong>Tor</strong> &mdash; your IP is never exposed</li>
+                <li><i class="fas fa-check-circle" style="color: #28a745;"></i> Anonymous ID is a one-way hash &mdash; cannot be reversed to your identity</li>
+                <li><i class="fas fa-check-circle" style="color: #28a745;"></i> <strong>No</strong> personal data, individual transactions, contacts, or addresses</li>
+                <li><i class="fas fa-check-circle" style="color: #28a745;"></i> Sent <strong>once per week</strong> &mdash; not continuous tracking</li>
+            </ul>
+
+            <h4 style="margin: 1rem 0 0.5rem; font-size: 0.95rem; color: #212529;"><i class="fas fa-paper-plane"></i> What is sent</h4>
+            <ul class="analytics-consent-list">
+                <li><i class="fas fa-circle" style="color: #6c757d; font-size: 0.4rem; align-self: center;"></i> Aggregate transaction counts (sent, received, relayed)</li>
+                <li><i class="fas fa-circle" style="color: #6c757d; font-size: 0.4rem; align-self: center;"></i> Total volume per currency</li>
+                <li><i class="fas fa-circle" style="color: #6c757d; font-size: 0.4rem; align-self: center;"></i> Number of contacts and active days</li>
+                <li><i class="fas fa-circle" style="color: #6c757d; font-size: 0.4rem; align-self: center;"></i> Node version</li>
+            </ul>
+
+            <p style="margin-top: 1rem;"><small class="form-hint"><i class="fas fa-info-circle"></i> You can change this anytime in Settings &gt; Feature Toggles. <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Privacy policy</a></small></p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-consent-skip" data-action="analyticsConsentSkip">No Thanks</button>
+            <button type="button" class="btn btn-consent-enable" data-action="analyticsConsentEnable"><i class="fas fa-chart-bar"></i> Enable Analytics</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>

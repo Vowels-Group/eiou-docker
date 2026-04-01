@@ -4073,6 +4073,60 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================================
+// Analytics consent modal
+// ============================================================================
+
+/**
+ * Submit analytics consent choice via AJAX and close the modal.
+ * @param {boolean} enable - true to enable analytics, false to skip
+ */
+function submitAnalyticsConsent(enable) {
+    var modal = document.getElementById('analyticsConsentModal');
+    if (!modal) { return; }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        // Fallback: hide modal even if CSRF is missing (shouldn't happen)
+        modal.classList.add('d-none');
+        return;
+    }
+
+    // Disable buttons to prevent double-submit
+    var btns = modal.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) { btns[i].disabled = true; }
+
+    var formData = new FormData();
+    formData.append('action', 'analyticsConsent');
+    formData.append('consent', enable ? '1' : '0');
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 15000;
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        // Hide modal regardless of outcome — don't block the user
+        modal.classList.add('d-none');
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success && enable) {
+                showToast('Analytics Enabled', 'Thank you! You can change this anytime in Settings.', 'success');
+                // Update the settings toggle if it exists on the page
+                var toggle = document.getElementById('analyticsEnabled');
+                if (toggle) { toggle.checked = true; }
+                var status = document.getElementById('analyticsEnabledStatus');
+                if (status) { status.textContent = 'Enabled'; status.classList.add('enabled'); }
+            }
+        } catch (e) { /* modal already hidden, nothing else to do */ }
+    };
+
+    xhr.onerror = function() { modal.classList.add('d-none'); };
+    xhr.ontimeout = function() { modal.classList.add('d-none'); };
+    xhr.send(formData);
+}
+
+// ============================================================================
 // CSP nonce-compatible event delegation (L-32)
 // Replaces all inline on* handlers with data-action attributes
 // ============================================================================
@@ -4215,7 +4269,11 @@ document.addEventListener('DOMContentLoaded', function() {
         'showContactTxDetail': function(el) {
             var index = parseInt(el.getAttribute('data-index'), 10);
             showContactTxDetail(index);
-        }
+        },
+
+        // Analytics consent modal
+        'analyticsConsentEnable': function() { submitAnalyticsConsent(true); },
+        'analyticsConsentSkip': function() { submitAnalyticsConsent(false); }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
