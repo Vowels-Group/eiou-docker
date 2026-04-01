@@ -129,10 +129,10 @@ From the host:
 
 ```bash
 # Enable
-docker exec <container> php /app/eiou/cli.php changesettings analyticsEnabled true
+docker exec <container> eiou changesettings analyticsEnabled true
 
 # Disable
-docker exec <container> php /app/eiou/cli.php changesettings analyticsEnabled false
+docker exec <container> eiou changesettings analyticsEnabled false
 ```
 
 ### API
