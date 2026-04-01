@@ -543,7 +543,7 @@ class SettingsController
      */
     private function handleAnalyticsConsent(): void
     {
-        $this->session->verifyCSRFToken();
+        $this->session->verifyCSRFToken(false);
 
         $enable = isset($_POST['consent']) && $_POST['consent'] === '1';
 
