@@ -101,8 +101,8 @@ function displayDateFormat(): string {
 function formatTimestamp(string $timestamp): string {
     $fmt = displayDateFormat();
     $dt = \DateTime::createFromFormat('Y-m-d H:i:s.u', $timestamp)
-       ?? \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
-       ?? new \DateTime($timestamp);
+       ?: \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
+       ?: new \DateTime($timestamp);
     return $dt->format($fmt);
 }
 
