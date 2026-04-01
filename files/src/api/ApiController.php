@@ -1796,7 +1796,11 @@ class ApiController {
             if ($configKey === 'analyticsEnabled' && $value === true && !$wasAnalyticsEnabled) {
                 $script = '/app/eiou/scripts/analytics-cron.php';
                 if (file_exists($script)) {
-                    @exec('runuser -u www-data -- /usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &');
+                    $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
+                    if (posix_getuid() === 0) {
+                        $cmd = 'runuser -u www-data -- ' . $cmd;
+                    }
+                    @exec($cmd);
                 }
             }
 

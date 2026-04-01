@@ -595,6 +595,12 @@ class SettingsController
             return;
         }
 
-        @exec('runuser -u www-data -- /usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &');
+        // Use runuser only when running as root (CLI); php-fpm workers
+        // already run as www-data so runuser would fail with permission error.
+        $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
+        if (posix_getuid() === 0) {
+            $cmd = 'runuser -u www-data -- ' . $cmd;
+        }
+        @exec($cmd);
     }
 }
