@@ -12,7 +12,9 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\ServiceContainer;
+use Eiou\Core\Constants;
 use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactRepository;
 use Eiou\Database\RepositoryFactory;
 
 #[CoversClass(ValidationUtilityService::class)]
@@ -513,5 +515,135 @@ class ValidationUtilityServiceTest extends TestCase
 
         $result = $this->service->calculateAvailableFunds($request);
         $this->assertTrue($result->isZero());
+    }
+
+    // =========================================================================
+    // verifyVersionCompatibility tests
+    // =========================================================================
+
+    public function testVerifyVersionCompatibilityReturnsNullForCompatible(): void
+    {
+        $contactRepo = $this->createMock(ContactRepository::class);
+        $contactRepo->method('getContactByPubkey')->willReturn([
+            'pubkey' => 'test-key',
+            'remote_version' => Constants::APP_VERSION,
+        ]);
+        $contactRepo->expects($this->never())->method('updateContactFields');
+
+        $factory = $this->createMock(RepositoryFactory::class);
+        $factory->method('get')->willReturn($contactRepo);
+        $container = $this->createMock(ServiceContainer::class);
+        $container->method('getRepositoryFactory')->willReturn($factory);
+        $svc = new ValidationUtilityService($container);
+
+        $result = $svc->verifyVersionCompatibility([
+            'senderPublicKey' => 'test-key',
+            'senderAddress' => 'http://test',
+            'version' => Constants::APP_VERSION,
+        ], 'send');
+
+        $this->assertNull($result);
+    }
+
+    public function testVerifyVersionCompatibilityRejectsNoVersion(): void
+    {
+        $contactRepo = $this->createMock(ContactRepository::class);
+        $contactRepo->method('getContactByPubkey')->willReturn([
+            'pubkey' => 'test-key',
+            'remote_version' => null,
+        ]);
+
+        $factory = $this->createMock(RepositoryFactory::class);
+        $factory->method('get')->willReturn($contactRepo);
+        $container = $this->createMock(ServiceContainer::class);
+        $container->method('getRepositoryFactory')->willReturn($factory);
+        $svc = new ValidationUtilityService($container);
+
+        $result = $svc->verifyVersionCompatibility([
+            'senderPublicKey' => 'test-key',
+            'senderAddress' => 'http://test',
+            // No version
+        ], 'send');
+
+        $this->assertNotNull($result);
+        $this->assertSame('upgrade_remote', $result['action']);
+    }
+
+    public function testVerifyVersionCompatibilityRejectsOldVersion(): void
+    {
+        $contactRepo = $this->createMock(ContactRepository::class);
+        $contactRepo->method('getContactByPubkey')->willReturn([
+            'pubkey' => 'test-key',
+            'remote_version' => null,
+        ]);
+        $contactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->with('test-key', ['remote_version' => '0.1.0-alpha']);
+
+        $factory = $this->createMock(RepositoryFactory::class);
+        $factory->method('get')->willReturn($contactRepo);
+        $container = $this->createMock(ServiceContainer::class);
+        $container->method('getRepositoryFactory')->willReturn($factory);
+        $svc = new ValidationUtilityService($container);
+
+        $result = $svc->verifyVersionCompatibility([
+            'senderPublicKey' => 'test-key',
+            'senderAddress' => 'http://test',
+            'version' => '0.1.0-alpha',
+        ], 'send');
+
+        $this->assertNotNull($result);
+        $this->assertSame('upgrade_remote', $result['action']);
+    }
+
+    public function testVerifyVersionCompatibilityUpdatesStoredVersion(): void
+    {
+        $contactRepo = $this->createMock(ContactRepository::class);
+        $contactRepo->method('getContactByPubkey')->willReturn([
+            'pubkey' => 'test-key',
+            'remote_version' => '0.1.4-alpha',
+        ]);
+        // Version changed from 0.1.4 to current — should update
+        $contactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->with('test-key', ['remote_version' => Constants::APP_VERSION]);
+
+        $factory = $this->createMock(RepositoryFactory::class);
+        $factory->method('get')->willReturn($contactRepo);
+        $container = $this->createMock(ServiceContainer::class);
+        $container->method('getRepositoryFactory')->willReturn($factory);
+        $svc = new ValidationUtilityService($container);
+
+        $result = $svc->verifyVersionCompatibility([
+            'senderPublicKey' => 'test-key',
+            'senderAddress' => 'http://test',
+            'version' => Constants::APP_VERSION,
+        ], 'send');
+
+        $this->assertNull($result);
+    }
+
+    public function testVerifyVersionCompatibilitySkipsUpdateWhenUnchanged(): void
+    {
+        $contactRepo = $this->createMock(ContactRepository::class);
+        $contactRepo->method('getContactByPubkey')->willReturn([
+            'pubkey' => 'test-key',
+            'remote_version' => Constants::APP_VERSION,
+        ]);
+        $contactRepo->expects($this->never())->method('updateContactFields');
+
+        $factory = $this->createMock(RepositoryFactory::class);
+        $factory->method('get')->willReturn($contactRepo);
+        $container = $this->createMock(ServiceContainer::class);
+        $container->method('getRepositoryFactory')->willReturn($factory);
+        $svc = new ValidationUtilityService($container);
+
+        $result = $svc->verifyVersionCompatibility([
+            'senderPublicKey' => 'test-key',
+            'senderAddress' => 'http://test',
+            'version' => Constants::APP_VERSION,
+        ], 'send');
+
+        $this->assertNull($result);
     }
 }
