@@ -24,7 +24,7 @@ class ContactRepository extends AbstractRepository {
      */
     protected array $allowedColumns = [
         'id', 'contact_id', 'pubkey', 'pubkey_hash', 'name', 'status',
-        'online_status', 'valid_chain', 'created_at', 'last_ping_at'
+        'online_status', 'valid_chain', 'remote_version', 'created_at', 'last_ping_at'
     ];
 
     /**
