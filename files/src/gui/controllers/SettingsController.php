@@ -398,12 +398,19 @@ class SettingsController
                 $config = json_decode(file_get_contents($configFile), true) ?? [];
             }
 
+            $wasAnalyticsEnabled = (bool) ($config['analyticsEnabled'] ?? false);
+
             // Merge new settings
             $config = array_merge($config, $settings);
 
             // Write back to file
             if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
+            }
+
+            // Trigger initial analytics event when toggled on for the first time
+            if (!$wasAnalyticsEnabled && ($settings['analyticsEnabled'] ?? false)) {
+                self::triggerInitialAnalytics();
             }
 
             MessageHelper::redirectMessage('Settings updated successfully', 'success');
@@ -566,6 +573,28 @@ class SettingsController
             return;
         }
 
+        // Trigger immediate node_setup event in the background on first enable
+        if ($enable) {
+            self::triggerInitialAnalytics();
+        }
+
         echo json_encode(['success' => true, 'analyticsEnabled' => $enable]);
+    }
+
+    /**
+     * Trigger the initial analytics node_setup event in the background.
+     * Non-blocking — the cron script runs asynchronously so the web
+     * request is not delayed by the Tor connection.
+     *
+     * @return void
+     */
+    private static function triggerInitialAnalytics(): void
+    {
+        $script = '/app/eiou/scripts/analytics-cron.php';
+        if (!file_exists($script)) {
+            return;
+        }
+
+        @exec('runuser -u www-data -- /usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &');
     }
 }

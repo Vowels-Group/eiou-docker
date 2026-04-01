@@ -33,10 +33,13 @@ try {
     }
 
     // Random jitter (0–3600s) to spread submissions across a 1-hour window
-    // and avoid thundering herd through Tor exit nodes
-    $jitter = random_int(0, 3600);
-    echo "Waiting {$jitter}s jitter before submission\n";
-    sleep($jitter);
+    // and avoid thundering herd through Tor exit nodes.
+    // Skip jitter for node_setup (triggered on first enable, user expects prompt send).
+    if ($event !== 'node_setup') {
+        $jitter = random_int(0, 3600);
+        echo "Waiting {$jitter}s jitter before submission\n";
+        sleep($jitter);
+    }
 
     // Build payload
     if ($event === 'node_setup') {

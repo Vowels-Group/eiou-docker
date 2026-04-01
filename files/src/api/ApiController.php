@@ -1780,6 +1780,7 @@ class ApiController {
             // Write to config file
             $configPath = '/etc/eiou/config/' . $configFile;
             $configContent = json_decode(file_get_contents($configPath), true) ?? [];
+            $wasAnalyticsEnabled = (bool) ($configContent['analyticsEnabled'] ?? false);
             $configContent[$configKey] = $value;
             if ($hostnameSecure !== null) {
                 $configContent['hostname_secure'] = $hostnameSecure;
@@ -1789,6 +1790,14 @@ class ApiController {
             // Regenerate SSL certificate when hostname changes
             if ($configKey === 'hostname') {
                 $this->regenerateSslForHostname($value);
+            }
+
+            // Trigger initial analytics node_setup event when toggled on
+            if ($configKey === 'analyticsEnabled' && $value === true && !$wasAnalyticsEnabled) {
+                $script = '/app/eiou/scripts/analytics-cron.php';
+                if (file_exists($script)) {
+                    @exec('runuser -u www-data -- /usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &');
+                }
             }
 
             $updated[$apiKey] = $value;

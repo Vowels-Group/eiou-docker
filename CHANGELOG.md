@@ -22,6 +22,7 @@ The project is currently in **ALPHA** status.
 - Add **one-time analytics consent modal** — after first login, a modal asks the user whether to enable anonymous analytics. The choice is saved to config (`analyticsConsentAsked`) and the modal never reappears. Users can always change their preference later in Settings > Feature Toggles. The modal uses AJAX to save the preference without a page reload
 
 ### Fixed
+- Fix analytics cron not installed when enabled via GUI/CLI/API after startup — the cron job is now always installed since the PHP script already exits gracefully when analytics is disabled. Also trigger an immediate `node_setup` event (no jitter) when analytics is first enabled through any interface (GUI consent modal, settings toggle, CLI, or API)
 - Fix GUI settings controller not processing `updateCheckEnabled` toggle — checkbox value was not read from POST data, so toggling it in the GUI had no effect
 - Fix GitHub Releases fallback in `UpdateCheckService` — the `/releases/latest` endpoint excludes pre-releases (returns 404 since all releases are pre-release). Switch to `/releases?per_page=10` and pick the highest semver, matching the Docker Hub tag selection logic
 
