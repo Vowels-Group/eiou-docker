@@ -10,8 +10,10 @@ eIOU includes an optional, opt-in anonymous analytics system that sends aggregat
 4. [How It Works](#how-it-works)
 5. [Toggling Analytics On/Off](#toggling-analytics-onoff)
 6. [First-Login Consent Modal](#first-login-consent-modal)
-7. [Environment Variable Override](#environment-variable-override)
-8. [Technical Details](#technical-details)
+7. [Startup Banner Notice](#startup-banner-notice)
+8. [API Discoverability](#api-discoverability)
+9. [Environment Variable Override](#environment-variable-override)
+10. [Technical Details](#technical-details)
 
 ---
 
@@ -115,10 +117,10 @@ Navigate to **Settings** → **Advanced Settings** → **Feature Toggles** → *
 
 ```bash
 # Enable
-docker exec <container> php /app/eiou/cli.php changesettings analyticsEnabled true
+eiou changesettings analyticsEnabled true
 
 # Disable
-docker exec <container> php /app/eiou/cli.php changesettings analyticsEnabled false
+eiou changesettings analyticsEnabled false
 ```
 
 ### API
@@ -147,6 +149,38 @@ On first login after the node is set up (or after upgrading to a version that in
 - **No Thanks** — leaves analytics disabled
 
 Either choice sets `analyticsConsentAsked` to `true` so the modal never appears again. The preference can always be changed later through any of the methods above.
+
+---
+
+## Startup Banner Notice
+
+For CLI and headless users who never interact with the GUI, a one-time notice is displayed inside the Open Alpha startup banner when the container starts. It shows the enable/disable commands for both CLI and API. The notice disappears once `analyticsConsentAsked` is set in the config (either via the GUI modal or by toggling the setting through CLI/API).
+
+---
+
+## API Discoverability
+
+The `GET /api/v1/system/status` endpoint includes an `analytics` object so API consumers can programmatically detect the opt-in state:
+
+```json
+{
+  "data": {
+    "analytics": {
+      "enabled": false,
+      "consent_pending": true,
+      "last_submitted": null
+    }
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `enabled` | Whether analytics are currently enabled |
+| `consent_pending` | `true` if the user has not yet made a choice (enable or skip) |
+| `last_submitted` | ISO 8601 timestamp of the last successful submission, or `null` |
+
+When `consent_pending` is `true`, the caller can prompt the user or enable analytics via `PUT /api/v1/system/settings`.
 
 ---
 
