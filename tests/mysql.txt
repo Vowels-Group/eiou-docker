@@ -18,7 +18,7 @@ SELECT message FROM debug;
 # ============================================================
 # Full contacts info (excludes pubkey, pubkey_hash)
 # Note: fee_percent, credit_limit, and currency have moved to contact_currencies
-SELECT id, contact_id, name, status, online_status, valid_chain, created_at, last_ping_at FROM contacts;
+SELECT id, contact_id, name, status, online_status, valid_chain, remote_version, created_at, last_ping_at FROM contacts;
 
 # ============================================================
 # CONTACT_CURRENCIES TABLE

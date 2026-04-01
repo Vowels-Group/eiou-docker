@@ -1364,4 +1364,55 @@ class InputValidatorTest extends TestCase
         $this->assertTrue($result['valid']);
         $this->assertSame('100.50000000', $result['value']);
     }
+
+    // =========================================================================
+    // checkVersionCompatibility
+    // =========================================================================
+
+    public function testVersionCompatibilityReturnsNullForCompatibleVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility('0.1.5-alpha');
+        $this->assertNull($result);
+    }
+
+    public function testVersionCompatibilityReturnsNullForMinimumVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility('0.1.3-alpha');
+        $this->assertNull($result);
+    }
+
+    public function testVersionCompatibilityRejectsNullVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility(null);
+        $this->assertNotNull($result);
+        $this->assertSame('upgrade_remote', $result['action']);
+        $this->assertStringContainsString('unknown', $result['reason']);
+    }
+
+    public function testVersionCompatibilityRejectsOldVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility('0.1.0-alpha');
+        $this->assertNotNull($result);
+        $this->assertSame('upgrade_remote', $result['action']);
+        $this->assertStringContainsString('0.1.0-alpha', $result['reason']);
+    }
+
+    public function testVersionCompatibilityRejectsPreAlphaVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility('0.1.2-alpha');
+        $this->assertNotNull($result);
+        $this->assertSame('upgrade_remote', $result['action']);
+    }
+
+    public function testVersionCompatibilityAcceptsNewerVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility('0.2.0-alpha');
+        $this->assertNull($result);
+    }
+
+    public function testVersionCompatibilityAcceptsStableVersion(): void
+    {
+        $result = InputValidator::checkVersionCompatibility('1.0.0');
+        $this->assertNull($result);
+    }
 }

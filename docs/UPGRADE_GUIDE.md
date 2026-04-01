@@ -46,7 +46,6 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 | Master encryption key | `{node}-config` | `/etc/eiou/config/.master.key` | Derived from seed phrase; recoverable via restore. Optionally encrypted with a volume passphrase (stored as `.master.key.enc`) |
 | Database credentials (encrypted) | `{node}-config` | `/etc/eiou/config/dbconfig.json` | Auto-generated; encrypted at rest with AES-256-GCM |
 | User settings | `{node}-config` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, update check preference, etc. |
-| MariaDB TDE config | `{node}-mysql-data` | `/etc/mysql/conf.d/encryption.cnf` | Generated on first boot after wallet creation |
 | Encrypted backups | `{node}-backups` | `/var/lib/eiou/backups/*.eiou.enc` | AES-256-GCM encrypted database dumps |
 
 ### Updated automatically (overwritten by new image)
@@ -65,6 +64,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 |------|----------------|-------|
 | SSL certificates | `/etc/nginx/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
 | Tor hidden service keys | `/var/lib/tor/hidden_service/` | Deterministically derived from wallet seed phrase |
+| MariaDB TDE config | `/etc/mysql/conf.d/encryption.cnf` | Generated on first boot; recreated from master key on subsequent boots |
 | MariaDB TDE key file | `/dev/shm/.mariadb-encryption-key` | RAM-backed; re-derived from master key on every boot |
 
 **Tor address is stable**: The `.onion` address is derived deterministically from your BIP39 seed phrase. A new container will produce the same Tor address as long as the wallet data (in the `{node}-config` volume) is present.
@@ -89,7 +89,7 @@ Source code and user data are stored in separate locations:
 
 - **Source code** (`/app/eiou/`) is baked into the image at build time. When a new image is built, it contains the updated code. No runtime sync is needed.
 - **User data** (`/etc/eiou/config/`) is stored on the `{node}-config` named volume and is never overwritten by image updates.
-- **After startup**: `composer install` runs to install any new dependencies and regenerate the autoloader.
+- **Composer dependencies** are installed during image build (`composer install --no-dev --optimize-autoloader`), not at runtime. The vendor directory at `/app/eiou/vendor/` is baked into the image.
 
 ### 4. Database Migrations on Application Init
 
@@ -134,14 +134,13 @@ New Container (running v2) — startup.sh runs:
   2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
   3. Volume decryption     — if volume passphrase active, decrypt master key to /dev/shm
   4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm
-  5. Composer install      — installs new dependencies, regenerates autoloader
-  6. Services start        — web server, MariaDB, Tor, cron
-  7. Database migrations   — adds new tables/columns as needed
-  8. TDE first-time setup  — if new, encrypt existing tables (MariaDB restarts once)
-  9. Credential encryption — encrypt dbconfig.json credentials if not already encrypted
-  10. Update check cron    — install daily version check (if enabled)
-  11. Maintenance mode OFF — lockfile removed, HTTP requests accepted
-  12. Processors start     — P2P, Transaction, Cleanup, ContactStatus
+  5. Services start        — web server, MariaDB, Tor, cron
+  6. Database migrations   — adds new tables/columns as needed
+  7. TDE first-time setup  — if new, encrypt existing tables (MariaDB restarts once)
+  8. Credential encryption — encrypt dbconfig.json credentials if not already encrypted
+  9. Cron jobs             — install update check, analytics, backup cron entries
+  10. Maintenance mode OFF — lockfile removed, HTTP requests accepted
+  11. Processors start     — P2P, Transaction, Cleanup, ContactStatus
 
 Result:
   ├── /var/lib/mysql          ← same volume reattached (data intact)
@@ -179,11 +178,10 @@ docker-compose -f <compose-file>.yml up -d --build
 5. Services stop in reverse order (web server, MariaDB, Tor, cron)
 6. Container is removed, named volumes are kept
 7. New container starts with **maintenance mode** enabled (HTTP requests return 503)
-8. New source code is available at `/app/eiou/` (baked into the image)
-9. Composer regenerates the autoloader
-10. Database migrations run if needed
-11. Maintenance mode is released — HTTP requests are accepted again
-12. Background processors start normally
+8. New source code is available at `/app/eiou/` (baked into the image, including updated vendor dependencies)
+9. Database migrations run if needed (idempotent — only new tables/columns added)
+10. Maintenance mode is released — HTTP requests are accepted again
+11. Background processors start normally
 
 ### Method 2: Docker Hub Pull
 
@@ -245,13 +243,12 @@ docker logs <container-name> 2>&1 | head -100
 ```
 
 **What to look for in the logs:**
-- `Syncing source files from image to volume...` -- source code was updated
-- `Source file sync completed.` -- sync succeeded
-- `Composer autoloader generated successfully.` -- autoloader rebuilt
-- `Initialization successful` or `Wallet already configured` -- wallet data found
-- `MariaDB TDE: encryption key ready` -- TDE key derived successfully
-- `Enabling MariaDB data-at-rest encryption...` -- first-time TDE setup (normal on first upgrade)
-- `Update check cron job installed (daily at 2 AM UTC)` -- version check active
+- `Wallet already configured` or `eIOU has been initiated` — existing wallet detected on volume
+- `MariaDB TDE: key file ready` — TDE key derived from master key successfully
+- `Enabling MariaDB data-at-rest encryption...` — first-time TDE setup (normal on first upgrade to a TDE-enabled version)
+- `Update check cron job installed (daily at 2 AM UTC)` — version check active
+- `Analytics cron job installed (weekly, Sundays at 3 AM UTC)` — analytics cron active
+- `eIOU Node started successfully!` — all processors running, ready to receive
 
 ---
 
@@ -364,6 +361,25 @@ Your 24-word BIP39 mnemonic is displayed only once during initial wallet generat
 ### Back Up Before Every Upgrade
 
 Always run `eiou backup create` before upgrading. The encrypted backup file can be used to restore your database if anything goes wrong. Backup files are stored on the `{node}-backups` volume, which is preserved across upgrades.
+
+### Version Compatibility
+
+Starting with v0.1.5-alpha, nodes enforce version compatibility. Nodes running versions below `0.1.3-alpha` are rejected because earlier versions use an incompatible amount format (cents-based integers vs SplitAmount) that causes data corruption.
+
+**What happens if you don't upgrade:**
+- Other nodes running v0.1.5+ will reject your contact requests, transactions, and sync messages
+- You will see rejection responses with a message indicating the minimum required version
+- Existing contacts running newer versions will be unable to send to you
+
+**What happens when you upgrade:**
+- Your node automatically includes its version in all outgoing messages and contact responses
+- Contacts learn your new version via the next message, ping, or contact handshake
+- Any previously blocked communication auto-heals — no manual action needed
+
+**Checking a contact's version:**
+- Each contact's `remote_version` is stored in the database and updated automatically
+- The version is exchanged during: contact acceptance (mutual acceptance response), ping/pong, and any incoming message envelope
+- Version is NOT exposed before trust is established — the initial contact request and "received" response intentionally omit the version to prevent untrusted nodes from fingerprinting your software version. Version is only shared after contact acceptance, through message envelopes (outside the signed content), ping/pong responses, and mutual acceptance payloads
 
 ### Master Key Is Derived from Seed
 

@@ -800,4 +800,50 @@ class InputValidator {
 
         return ['valid' => false, 'value' => null, 'error' => 'Value must be true/false, on/off, yes/no, or 1/0'];
     }
+
+    /**
+     * Check if a remote node's version is compatible with ours.
+     *
+     * Returns null if compatible, or an array with rejection details if not:
+     *   ['reason' => string, 'action' => 'upgrade_remote'|'upgrade_local']
+     *
+     * - If the remote version is missing or below MIN_COMPATIBLE_VERSION → tell them to upgrade
+     * - If our version is below MIN_COMPATIBLE_VERSION relative to theirs → we need to upgrade
+     *
+     * @param string|null $remoteVersion The remote node's APP_VERSION (null if not provided)
+     * @return array|null Null if compatible, or ['reason' => ..., 'action' => ...]
+     */
+    public static function checkVersionCompatibility(?string $remoteVersion): ?array
+    {
+        // No version field at all — pre-v0.1.3 node
+        if ($remoteVersion === null) {
+            return [
+                'reason' => 'Incompatible node version (unknown) — minimum required: ' . Constants::MIN_COMPATIBLE_VERSION .
+                            '. Please upgrade at https://github.com/eiou-org/eiou-docker',
+                'action' => 'upgrade_remote',
+            ];
+        }
+
+        // Remote is below our minimum
+        if (version_compare($remoteVersion, Constants::MIN_COMPATIBLE_VERSION, '<')) {
+            return [
+                'reason' => "Incompatible node version ($remoteVersion) — minimum required: " . Constants::MIN_COMPATIBLE_VERSION .
+                            '. Please upgrade at https://github.com/eiou-org/eiou-docker',
+                'action' => 'upgrade_remote',
+            ];
+        }
+
+        // We are below the remote's minimum (remote is newer and we're too old)
+        if (version_compare(Constants::APP_VERSION, $remoteVersion, '<') &&
+            version_compare(Constants::APP_VERSION, Constants::MIN_COMPATIBLE_VERSION, '<')) {
+            return [
+                'reason' => 'This node is running ' . Constants::APP_VERSION .
+                            ' which is incompatible with the remote node (' . $remoteVersion .
+                            '). Please upgrade this node at https://github.com/eiou-org/eiou-docker',
+                'action' => 'upgrade_local',
+            ];
+        }
+
+        return null;
+    }
 }

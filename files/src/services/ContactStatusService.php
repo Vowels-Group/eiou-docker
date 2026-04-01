@@ -386,6 +386,17 @@ class ContactStatusService implements ContactStatusServiceInterface {
             return;
         }
 
+        // Update stored remote version from ping request envelope
+        $remoteVersion = $request['version'] ?? null;
+        if ($remoteVersion !== null) {
+            $existingContact = $this->contactRepository->getContactByPubkey($senderPubkey);
+            if ($existingContact !== null && $remoteVersion !== ($existingContact['remote_version'] ?? null)) {
+                $this->contactRepository->updateContactFields($senderPubkey, [
+                    'remote_version' => $remoteVersion,
+                ]);
+            }
+        }
+
         // Per-currency chain comparison: compare chain heads for each currency independently
         $remotePrevTxidsByCurrency = $request['prevTxidsByCurrency'] ?? [];
         $localPrevTxidsByCurrency = $this->transactionRepository->getPreviousTxidsByCurrency(
@@ -653,6 +664,14 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 ]);
 
                 if ($response['status'] === 'pong') {
+                    // Update stored remote version from pong response
+                    $remoteVersion = $response['version'] ?? null;
+                    if ($remoteVersion !== null && $remoteVersion !== ($contact['remote_version'] ?? null)) {
+                        $this->contactRepository->updateContactFields($contact['pubkey'], [
+                            'remote_version' => $remoteVersion,
+                        ]);
+                    }
+
                     // Determine online status based on processor health
                     $onlineStatus = $this->determineOnlineStatusFromPong($response);
                     $this->updateContactStatus($contact['pubkey'], $onlineStatus);

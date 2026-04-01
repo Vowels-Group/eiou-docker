@@ -113,10 +113,29 @@ $request = array_merge($messageContent, [
     'signature' => $envelope['signature'],
     'senderAddress' => $envelope['senderAddress'],
     'senderPublicKey' => $envelope['senderPublicKey'],
+    'version' => $envelope['version'] ?? null,
 ]);
 
 // Route based on the type from message content
 $type = $messageContent['type'] ?? null;
+
+// Version compatibility guard — reject messages from incompatible nodes.
+// Exemptions:
+//   - "create" has its own guard in ContactSyncService (returns contact-specific rejection)
+//   - "ping" is exempt so contacts can discover each other's version via pong
+if ($type !== null && $type !== 'create' && $type !== 'ping') {
+    $versionCheck = $validationUtility->verifyVersionCompatibility($envelope, $type);
+    if ($versionCheck !== null) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'status' => 'rejected',
+            'error' => $versionCheck['reason'],
+            'error_code' => 'incompatible_version'
+        ]);
+        die;
+    }
+}
 
 if ($type === "create") {
   // Handle contact request

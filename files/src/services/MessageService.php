@@ -336,6 +336,9 @@ class MessageService implements MessageServiceInterface {
             );
         }
 
+        // Note: Version compatibility is enforced at the entry point (www/eiou/index.html)
+        // before routing reaches this method. No duplicate check needed here.
+
         // Handle Transaction messages
         if($request['typeMessage'] === "transaction"){
             if(isset($request['inquiry']) && $request['inquiry']){
