@@ -29,6 +29,7 @@ The project is currently in **ALPHA** status.
 - Add data-at-rest encryption for all database files (MariaDB TDE) and optional volume passphrase protection for the master encryption key — see Added section for details
 
 ### Docs
+- Add `ANONYMOUS_ANALYTICS.md` — full reference covering privacy guarantees, what is/isn't sent, exact payload examples, and how to toggle via GUI, CLI, and API
 - Update `UPGRADE_GUIDE.md` — document MariaDB TDE, credential encryption, update version check, expanded startup flow, new verification log lines, and new troubleshooting entries
 
 ### Tests
