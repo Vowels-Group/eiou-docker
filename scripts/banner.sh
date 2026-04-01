@@ -116,6 +116,7 @@ show_alpha_warning_short() {
         printf "${Y}       {\"analytics_enabled\": false}${R}\n"
         printf "${Y}${R}\n"
         printf "${Y}  This can be changed at any time.${R}\n"
+        printf "${Y}${R}\n"
         printf "${Y}  No action required — nothing is sent unless you${R}\n"
         printf "${Y}  opt in. This message will appear on each restart${R}\n"
         printf "${Y}  until a choice is made.${R}\n"
