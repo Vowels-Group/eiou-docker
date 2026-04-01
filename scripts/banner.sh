@@ -104,10 +104,12 @@ show_alpha_warning_short() {
         printf "${Y}  sharing fully anonymous, non-sensitive usage statistics.${R}\n"
         printf "${Y}  Sent once per week through Tor. Your identity and${R}\n"
         printf "${Y}  transactions remain completely private.${R}\n"
-        printf "${Y}${R}\n"
+        printf "${Y}  To enable:${R}\n"
         printf "${Y}  CLI: eiou changesettings analyticsEnabled true${R}\n"
         printf "${Y}  API: PUT /api/v1/system/settings${R}\n"
         printf "${Y}       {\"analytics_enabled\": true}${R}\n"
+        printf "${Y}${R}\n"
+        printf "${Y}  Can be disabled anytime by replacing true with false.${R}\n"
     fi
 
     printf "${Y}%s${R}\n" "$_HR"
