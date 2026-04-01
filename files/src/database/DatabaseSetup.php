@@ -240,7 +240,11 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [];
+    $columnsToAdd = [
+        'contacts' => [
+            'remote_version' => "VARCHAR(32) DEFAULT NULL COMMENT 'Remote node self-reported APP_VERSION' AFTER valid_chain",
+        ],
+    ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [
