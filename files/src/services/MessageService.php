@@ -337,24 +337,42 @@ class MessageService implements MessageServiceInterface {
             );
         }
 
-        // Version compatibility check — reject messages from nodes with
-        // incompatible versions. Old versions use different amount formats
-        // that cause data corruption (e.g., cents vs SplitAmount).
-        $versionCheck = InputValidator::checkVersionCompatibility($request['version'] ?? null);
-        if ($versionCheck !== null) {
-            $this->logger->warning('Message rejected: incompatible version', [
-                'sender_version' => $request['version'] ?? 'unknown',
-                'min_required' => Constants::MIN_COMPATIBLE_VERSION,
-                'message_type' => $request['typeMessage'] ?? 'unknown',
-                'sender_address' => $request['senderAddress'] ?? 'unknown',
-                'action' => $versionCheck['action'],
-            ]);
-            throw new FatalServiceException(
-                $versionCheck['reason'],
-                \Eiou\Core\ErrorCodes::HTTP_BAD_REQUEST,
-                ['sender_version' => $request['version'] ?? 'unknown', 'action' => $versionCheck['action']],
-                400
-            );
+        // Version compatibility — update stored remote_version and reject if incompatible.
+        // Uses per-contact storage so we log once (when version changes), not per message.
+        $senderVersion = $request['version'] ?? null;
+        $senderPubkey = $request['senderPublicKey'] ?? null;
+        if ($senderPubkey !== null) {
+            $contact = $this->contactRepository->getContactByPubkey($senderPubkey);
+            if ($contact !== null) {
+                $storedVersion = $contact['remote_version'] ?? null;
+
+                // Update stored version if it changed
+                if ($senderVersion !== $storedVersion) {
+                    $this->contactRepository->updateContactFields($senderPubkey, [
+                        'remote_version' => $senderVersion,
+                    ]);
+                }
+
+                $versionCheck = InputValidator::checkVersionCompatibility($senderVersion);
+                if ($versionCheck !== null) {
+                    // Log at warning only when the version changed (first detection or upgrade/downgrade)
+                    // Log at debug for repeated rejections to avoid log spam
+                    $logLevel = ($senderVersion !== $storedVersion) ? 'warning' : 'debug';
+                    $this->logger->$logLevel('Message rejected: incompatible version', [
+                        'sender_version' => $senderVersion ?? 'unknown',
+                        'min_required' => Constants::MIN_COMPATIBLE_VERSION,
+                        'message_type' => $request['typeMessage'] ?? 'unknown',
+                        'sender_address' => $request['senderAddress'] ?? 'unknown',
+                        'action' => $versionCheck['action'],
+                    ]);
+                    throw new FatalServiceException(
+                        $versionCheck['reason'],
+                        \Eiou\Core\ErrorCodes::HTTP_BAD_REQUEST,
+                        ['sender_version' => $senderVersion ?? 'unknown', 'action' => $versionCheck['action']],
+                        400
+                    );
+                }
+            }
         }
 
         // Handle Transaction messages
