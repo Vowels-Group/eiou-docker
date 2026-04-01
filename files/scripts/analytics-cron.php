@@ -32,6 +32,12 @@ try {
         }
     }
 
+    // Random jitter (0–3600s) to spread submissions across a 1-hour window
+    // and avoid thundering herd through Tor exit nodes
+    $jitter = random_int(0, 3600);
+    echo "Waiting {$jitter}s jitter before submission\n";
+    sleep($jitter);
+
     // Build payload
     if ($event === 'node_setup') {
         $payload = AnalyticsService::buildSetupPayload();

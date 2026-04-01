@@ -34,9 +34,19 @@ class AnalyticsService
     private const ID_LENGTH = 32;
 
     /**
-     * HTTP request timeout in seconds
+     * Tor SOCKS5 proxy address
      */
-    private const REQUEST_TIMEOUT = 10;
+    private const TOR_PROXY = '127.0.0.1:9050';
+
+    /**
+     * HTTP connect timeout in seconds (generous for Tor circuit setup)
+     */
+    private const CONNECT_TIMEOUT = 30;
+
+    /**
+     * HTTP request timeout in seconds (generous for Tor latency)
+     */
+    private const REQUEST_TIMEOUT = 60;
 
     /**
      * Cache file for last submission timestamp
@@ -229,7 +239,11 @@ class AnalyticsService
     }
 
     /**
-     * Send a payload to the analytics endpoint.
+     * Send a payload to the analytics endpoint via Tor.
+     *
+     * Routes through the local Tor SOCKS5 proxy so the node's IP address
+     * is never exposed to the analytics server. DNS is also resolved
+     * through Tor (SOCKS5_HOSTNAME).
      *
      * @param array $payload The event payload
      * @return bool True if the server accepted the payload
@@ -251,8 +265,10 @@ class AnalyticsService
             ],
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => self::REQUEST_TIMEOUT,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
             CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_PROXY => self::TOR_PROXY,
+            CURLOPT_PROXYTYPE => CURLPROXY_SOCKS5_HOSTNAME,
         ]);
 
         $response = curl_exec($ch);
