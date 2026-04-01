@@ -21,6 +21,8 @@ The project is currently in **ALPHA** status.
 - Add **opt-in anonymous analytics** — sends aggregate, anonymous usage statistics weekly to `analytics.eiou.org`. Disabled by default (opt-in only). Reports transaction counts, volume per currency, contact count, and days active for the past 7 days. The anonymous ID is an HMAC-SHA256 hash that cannot be reversed to the node's identity. No personal data, individual transaction details, amounts per transaction, contacts, or addresses are ever sent. Configurable via `EIOU_ANALYTICS_ENABLED` env var, GUI toggle in Feature Toggles, CLI `changesettings analyticsEnabled`, and API `analytics_enabled`. Server-side: Cloudflare Worker + D1 in `Vowels-Group/eiou-analytics` (private)
 - Add **one-time analytics consent modal** — after first login, a modal asks the user whether to enable anonymous analytics. The choice is saved to config (`analyticsConsentAsked`) and the modal never reappears. Users can always change their preference later in Settings > Feature Toggles. The modal uses AJAX to save the preference without a page reload
 
+- Add **version compatibility guard** — nodes include their version in the message envelope (outside signed content). Contact requests and all message types (transactions, P2P, sync, chain drops) from nodes below `MIN_COMPATIBLE_VERSION` (0.1.3-alpha) are rejected with an upgrade URL. Direction-aware: tells the remote to upgrade if they're old, or tells you to upgrade if you're old. Stores `remote_version` per contact to enable log-once behavior — first detection logs at warning, repeated rejections log at debug to prevent log spam. Auto-heals when the remote upgrades
+
 ### Fixed
 - Fix analytics cron not installed when enabled via GUI/CLI/API after startup — the cron job is now always installed since the PHP script already exits gracefully when analytics is disabled. Also trigger an immediate `node_setup` event (no jitter) when analytics is first enabled through any interface (GUI consent modal, settings toggle, CLI, or API)
 - Fix GUI settings controller not processing `updateCheckEnabled` toggle — checkbox value was not read from POST data, so toggling it in the GUI had no effect
@@ -36,6 +38,7 @@ The project is currently in **ALPHA** status.
 ### Tests
 - Add `VolumeEncryptionTest` (13 tests) and `MariaDbEncryptionTest` (5 tests) — unit tests for the new encryption services covering availability, status reporting, key file management, init scenarios, and error handling
 - Add `UpdateCheckServiceTest` (9 tests) — unit tests for version comparison logic, prerelease ordering, and status reporting
+- Add version compatibility tests — 7 unit tests for `InputValidator::checkVersionCompatibility()` (null, old, minimum, newer, stable versions) and 4 tests for `MessageService` version guard (reject no version, reject old version, accept compatible, skip DB update when unchanged)
 - Fix chain drop test timing in sections 8 and 13 of `chainDropTestSuite.sh` — add `sleep 5` and increase wait timeouts to match passing sections, preventing flaky failures from tight timing on proposal delivery
 
 ---
