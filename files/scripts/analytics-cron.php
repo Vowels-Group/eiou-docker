@@ -46,27 +46,21 @@ try {
         $payload = AnalyticsService::buildSetupPayload();
     } else {
         // Need PDO for heartbeat (transaction stats)
-        $dbConfigPath = '/etc/eiou/config/dbconfig.json';
-        if (!file_exists($dbConfigPath)) {
-            echo "Database config not found — skipping analytics\n";
+        // Use DatabaseContext to handle encrypted credentials
+        $dbCtx = \Eiou\Core\DatabaseContext::getInstance();
+        if (!$dbCtx->hasValidDbConfig()) {
+            echo "Database config not available — skipping analytics\n";
             exit(0);
         }
 
-        $dbConfig = json_decode(file_get_contents($dbConfigPath), true);
-        if (!is_array($dbConfig)) {
-            echo "Invalid database config — skipping analytics\n";
-            exit(0);
-        }
-
-        // Connect to database (read-only queries only)
         $dsn = sprintf(
             'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-            $dbConfig['dbHost'] ?? '127.0.0.1',
-            $dbConfig['dbPort'] ?? '3306',
-            $dbConfig['dbName'] ?? 'eiou'
+            $dbCtx->getDbHost() ?? '127.0.0.1',
+            $dbCtx->get('dbPort') ?? '3306',
+            $dbCtx->getDbName() ?? 'eiou'
         );
 
-        $pdo = new PDO($dsn, $dbConfig['dbUser'] ?? 'root', $dbConfig['dbPass'] ?? '', [
+        $pdo = new PDO($dsn, $dbCtx->getDbUser(), $dbCtx->getDbPass() ?? '', [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
