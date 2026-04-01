@@ -1445,6 +1445,9 @@ class ApiController {
             'contact_status' => AbstractMessageProcessor::isProcessorRunning('/tmp/contact_status.pid'),
         ];
 
+        $user = \Eiou\Core\UserContext::getInstance();
+        $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus();
+
         return $this->successResponse([
             'status' => 'operational',
             'version' => Constants::APP_VERSION ?? '1.0.0',
@@ -1452,6 +1455,11 @@ class ApiController {
             'database' => $dbStatus,
             'processors' => $processors,
             'update' => \Eiou\Services\UpdateCheckService::getStatus(),
+            'analytics' => [
+                'enabled' => $analyticsStatus['enabled'],
+                'consent_pending' => !$user->getAnalyticsConsentAsked(),
+                'last_submitted' => $analyticsStatus['last_submitted'],
+            ],
             'timestamp' => date('c')
         ]);
     }
