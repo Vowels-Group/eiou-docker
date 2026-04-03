@@ -957,9 +957,13 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
 
     echo "Broken data preserved in $BROKEN_DIR"
 
-    # Remove stale TDE encryption config — the fresh database won't be
-    # encrypted until the TDE first-time setup step runs after migrations.
+    # Remove stale TDE encryption config and key file — the fresh database
+    # won't be encrypted until the TDE first-time setup step runs after
+    # migrations. Both must be removed so TDE setup can recreate them cleanly
+    # (the key file may have been created by the TDE rebuild detection above
+    # with mysql:mysql ownership, which blocks subsequent writes).
     rm -f /etc/mysql/conf.d/encryption.cnf
+    rm -f /dev/shm/.mariadb-encryption-key
 
     # Initialize fresh system tables. The Debian init script does not
     # reliably detect an empty-but-existing data directory, so we run
