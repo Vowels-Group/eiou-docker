@@ -10,7 +10,7 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## v0.1.7-alpha (2026-04-03)
+## v0.1.8-alpha (2026-04-03)
 
 ### Fixed
 - Fix MariaDB failing to start after container rebuild when TDE was enabled — `encryption.cnf` lives in the container filesystem (not a volume) and is lost when the container is recreated, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. MariaDB fails with `Obtaining redo log encryption key version 1 failed`. The pre-MariaDB TDE key setup now detects this condition: if the master key is available and a database exists on the volume but `encryption.cnf` is missing, it recreates the encryption config and TDE key file before MariaDB starts
@@ -21,7 +21,7 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## v0.1.6-alpha (2026-04-03)
+## v0.1.5-alpha (2026-03-31)
 
 ### Changed
 - Reorder all transport/address display to most-secure-first: Tor > HTTPS > HTTP — affects GUI dropdowns (settings, send form, wallet info, contact modal), contact card icons, pending contact address lines, CLI output, and startup log. `VALID_TRANSPORT_INDICES` constant reordered. Startup log shows yellow ⚠ next to HTTP/HTTPS addresses only when they are Docker-internal (QUICKSTART without EIOU_HOST)

@@ -1217,7 +1217,7 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** Rebuilding the Docker image pulled a newer MariaDB patch version from Debian repos. The InnoDB redo logs on the persistent volume use the old version's encryption metadata format, which the new binary cannot parse.
 
-**Solution:** Starting with v0.1.6-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, uses `innodb_force_recovery=1` to regenerate redo logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
+**Solution:** Starting with v0.1.8-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, uses `innodb_force_recovery=1` to regenerate redo logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
 
 #### TDE Encryption Config Lost After Container Rebuild
 
@@ -1225,7 +1225,7 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** `encryption.cnf` lives in the container filesystem (`/etc/mysql/conf.d/`), not on a volume. When the container is rebuilt, this file is lost, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. Without the encryption plugin config, MariaDB cannot decrypt its own data.
 
-**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. The pre-MariaDB TDE key setup detects when the master key is available and database files exist on the volume but `encryption.cnf` is missing. It recreates the encryption config and TDE key file before MariaDB starts. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
+**Solution:** Starting with v0.1.8-alpha, this is handled automatically by `startup.sh`. The pre-MariaDB TDE key setup detects when the master key is available and database files exist on the volume but `encryption.cnf` is missing. It recreates the encryption config and TDE key file before MariaDB starts. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
 
 ### Tor Connectivity Issues
 
