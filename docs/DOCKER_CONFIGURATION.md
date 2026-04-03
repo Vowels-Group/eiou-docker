@@ -1225,7 +1225,7 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** The prior container crashed during initialization, had a partially restored volume, or never completed MariaDB setup. The persistent volume has `ibdata1` (InnoDB data) but is missing `ib_logfile0` (InnoDB redo log). MariaDB requires this file to exist before the InnoDB plugin can initialize — force-recovery cannot help if the file is absent entirely.
 
-**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. Before starting MariaDB, the script detects missing `ib_logfile0` when `ibdata1` exists, creates a zero-filled redo log of the correct size (96MB default), then triggers the force-recovery path to rebuild the redo log. If the underlying data files (`ibdata1`, `.ibd` table files) are also corrupted, recovery will fail and the container will exit with instructions to restore from backup or seed phrase.
+**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. The script detects missing `ib_logfile0` when `ibdata1` exists, extracts the encrypted seed phrase from `userconfig.json`, moves the broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, and restores the wallet from the extracted seed phrase (same keys, same `.onion` address). After startup, restore transaction data with `eiou backup restore`. Backups are stored on a separate volume and are unaffected by the reinitialization.
 
 ### Tor Connectivity Issues
 

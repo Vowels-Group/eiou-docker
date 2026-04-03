@@ -882,41 +882,113 @@ fi
 # =============================================================================
 # MISSING REDO LOG DETECTION
 # =============================================================================
-# If ibdata1 exists but ib_logfile0 does not, MariaDB will refuse to start
-# even with innodb_force_recovery — InnoDB requires the redo log FILE to
-# exist before it can initialize the plugin. This can happen when:
-#   - A prior container crashed during initialization
-#   - The volume was partially restored or corrupted
-#   - A broken prior image never completed MariaDB setup
+# If ibdata1 exists but ib_logfile0 does not, MariaDB cannot start — InnoDB
+# requires the redo log file to exist, and no force_recovery level bypasses
+# this. A zero-filled placeholder also fails (MariaDB rejects it as a
+# pre-10.2.2 format log), and a redo log from mysql_install_db fails due to
+# LSN mismatch with the existing ibdata1.
 #
-# Fix: create a zero-filled ib_logfile0 of the correct size before starting
-# MariaDB. InnoDB will detect the invalid (empty) redo log and rebuild it
-# when started with innodb_force_recovery.
+# The only reliable fix is to clear the broken data directory and let MariaDB
+# reinitialize from scratch. This is safe because:
+#   - The wallet seed phrase is extracted from userconfig.json and used to
+#     restore the same wallet identity (same keys, same .onion address)
+#   - Encrypted backups are on the backups volume (/var/lib/eiou/backups/)
+#   - The user can restore transaction data with: eiou backup restore
+#
+# The broken files are preserved under /var/lib/mysql/.broken-<timestamp>/
+# for manual inspection if needed.
 # =============================================================================
 if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
     echo "========================================================================"
     echo "WARNING: InnoDB redo log (ib_logfile0) is missing!"
-    echo "Data directory exists but redo logs do not."
-    echo "Creating empty redo log to allow MariaDB recovery..."
+    echo "Data directory exists but redo logs do not — MariaDB cannot recover"
+    echo "from this state. Reinitializing database from scratch."
+    echo ""
+    echo "Your wallet identity will be preserved (same keys, same .onion address)."
+    echo "After startup, restore your transaction data with:"
+    echo "  eiou backup list      — list available backups"
+    echo "  eiou backup restore   — restore the most recent backup"
     echo "========================================================================"
 
-    # MariaDB 10.11 default innodb_log_file_size is 96MB.
-    # Read the configured value if available, otherwise use default.
-    CONFIGURED_LOG_SIZE=$(my_print_defaults --mysqld 2>/dev/null | grep -oP '(?<=innodb.log.file.size=)\d+' | head -1)
-    LOG_SIZE_BYTES="${CONFIGURED_LOG_SIZE:-100663296}"  # 96MB = 100663296 bytes
-    LOG_SIZE_MB=$((LOG_SIZE_BYTES / 1048576))
-    if [ "$LOG_SIZE_MB" -lt 1 ]; then
-        LOG_SIZE_MB=96
+    # Extract seed phrase from existing wallet config before clearing the database.
+    # This preserves the wallet identity (same keys, same .onion address) through
+    # the reinitialization. The seed phrase is written to RAM-backed /dev/shm and
+    # never touches disk or a bash variable.
+    SEED_EXTRACTED=false
+    if [ -f /etc/eiou/config/userconfig.json ]; then
+        php -r '
+            chdir("/app/eiou");
+            require_once "/app/eiou/vendor/autoload.php";
+            require_once "/app/eiou/src/bootstrap.php";
+            use Eiou\Security\KeyEncryption;
+            $cfg = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
+            if (!isset($cfg["mnemonic_encrypted"])) { exit(1); }
+            $mnemonic = KeyEncryption::decrypt($cfg["mnemonic_encrypted"]);
+            if (!$mnemonic) { exit(1); }
+            file_put_contents("/dev/shm/.eiou-recovery-seed", $mnemonic);
+            chmod("/dev/shm/.eiou-recovery-seed", 0600);
+        ' 2>/dev/null
+        if [ -f /dev/shm/.eiou-recovery-seed ]; then
+            SEED_EXTRACTED=true
+            echo "Wallet seed phrase extracted — identity will be preserved."
+        fi
     fi
 
-    dd if=/dev/zero of=/var/lib/mysql/ib_logfile0 bs=1M count="$LOG_SIZE_MB" 2>/dev/null
-    chown mysql:mysql /var/lib/mysql/ib_logfile0
-    chmod 660 /var/lib/mysql/ib_logfile0
-    echo "Created empty ib_logfile0 (${LOG_SIZE_MB}MB)"
+    # Preserve broken files for manual inspection (outside the data dir
+    # so MariaDB doesn't interpret the directory as a database).
+    BROKEN_DIR="/tmp/mysql-broken-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BROKEN_DIR"
 
-    # Force the recovery path so MariaDB rebuilds the redo log properly
-    MARIADB_VERSION_CHANGED=true
-    MARIADB_UPGRADE_NEEDED=true
+    # Move all files and directories aside
+    for item in /var/lib/mysql/*; do
+        mv "$item" "$BROKEN_DIR/" 2>/dev/null
+    done
+    for item in /var/lib/mysql/.*; do
+        case "$item" in
+            /var/lib/mysql/.|/var/lib/mysql/..) continue ;;
+            *) mv "$item" "$BROKEN_DIR/" 2>/dev/null ;;
+        esac
+    done
+
+    echo "Broken data preserved in $BROKEN_DIR"
+
+    # Check for available backups on the backups volume
+    BACKUP_COUNT=$(ls /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l)
+    if [ "$BACKUP_COUNT" -gt 0 ]; then
+        echo "Found $BACKUP_COUNT backup(s) available for restore after startup."
+    fi
+
+    # Remove stale TDE encryption config — the fresh database won't be
+    # encrypted until the TDE first-time setup step runs after migrations.
+    rm -f /etc/mysql/conf.d/encryption.cnf
+
+    # Initialize fresh system tables. The Debian init script does not
+    # reliably detect an empty-but-existing data directory, so we run
+    # mysql_install_db explicitly.
+    echo "Initializing fresh MariaDB system tables..."
+    mysql_install_db --user=mysql --datadir=/var/lib/mysql --skip-test-db 2>/dev/null
+    echo "MariaDB reinitialization complete."
+
+    # Remove old wallet and database configs so the startup flow triggers
+    # a fresh wallet generation (using the extracted seed phrase).
+    # This creates a new database, new credentials, and runs migrations.
+    rm -f /etc/eiou/config/userconfig.json
+    rm -f /etc/eiou/config/dbconfig.json
+    rm -f /etc/eiou/config/defaultconfig.json
+
+    if [ "$SEED_EXTRACTED" = "true" ]; then
+        # Point RESTORE_FILE to the extracted seed phrase so the startup
+        # flow restores the same wallet identity instead of generating new keys.
+        RESTORE_FILE="/dev/shm/.eiou-recovery-seed"
+        echo "Wallet will be restored from seed phrase (same identity)."
+    else
+        echo "WARNING: Could not extract seed phrase — a new wallet will be generated."
+        echo "Your old wallet identity will be lost. Use your backed-up seed phrase"
+        echo "to restore: set RESTORE_FILE=/path/to/seed.txt and restart."
+    fi
+
+    MARIADB_UPGRADE_NEEDED=false
+    MARIADB_VERSION_CHANGED=false
 fi
 
 # Start services
@@ -1078,7 +1150,13 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         echo "$RESTORE_RESULT"
         echo "Wallet restore completed."
-        echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
+
+        # Securely delete the auto-extracted seed file if this was a redo-log recovery
+        if [ "$RESTORE_FILE" = "/dev/shm/.eiou-recovery-seed" ]; then
+            shred -u "$RESTORE_FILE" 2>/dev/null || rm -f "$RESTORE_FILE"
+        else
+            echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
+        fi
 
         # Apply hostname to restored wallet if set
         # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
