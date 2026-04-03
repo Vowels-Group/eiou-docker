@@ -69,9 +69,9 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
-                            <?php if (!empty($contact['http'])): ?>
-                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
-                                    <i class="fas fa-globe"></i>
+                            <?php if (!empty($contact['tor'])): ?>
+                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
+                                    <i class="fas fa-user-secret"></i>
                                 </span>
                             <?php endif; ?>
                             <?php if (!empty($contact['https'])): ?>
@@ -79,9 +79,9 @@
                                     <i class="fas fa-globe"></i>
                                 </span>
                             <?php endif; ?>
-                            <?php if (!empty($contact['tor'])): ?>
-                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                                    <i class="fas fa-user-secret"></i>
+                            <?php if (!empty($contact['http'])): ?>
+                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
+                                    <i class="fas fa-globe"></i>
                                 </span>
                             <?php endif; ?>
                             <?php if (empty($contact['http']) && empty($contact['https']) && empty($contact['tor'])): ?>
@@ -132,9 +132,9 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
-                            <?php if (!empty($contact['http'])): ?>
-                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
-                                    <i class="fas fa-globe"></i>
+                            <?php if (!empty($contact['tor'])): ?>
+                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
+                                    <i class="fas fa-user-secret"></i>
                                 </span>
                             <?php endif; ?>
                             <?php if (!empty($contact['https'])): ?>
@@ -142,9 +142,9 @@
                                     <i class="fas fa-globe"></i>
                                 </span>
                             <?php endif; ?>
-                            <?php if (!empty($contact['tor'])): ?>
-                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                                    <i class="fas fa-user-secret"></i>
+                            <?php if (!empty($contact['http'])): ?>
+                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
+                                    <i class="fas fa-globe"></i>
                                 </span>
                             <?php endif; ?>
                         </div>
@@ -176,9 +176,9 @@
                             <span class="badge badge-blocked">Blocked</span>
                         </div>
                         <div class="contact-address-icons">
-                            <?php if (!empty($contact['http'])): ?>
-                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
-                                    <i class="fas fa-globe"></i>
+                            <?php if (!empty($contact['tor'])): ?>
+                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
+                                    <i class="fas fa-user-secret"></i>
                                 </span>
                             <?php endif; ?>
                             <?php if (!empty($contact['https'])): ?>
@@ -186,9 +186,9 @@
                                     <i class="fas fa-globe"></i>
                                 </span>
                             <?php endif; ?>
-                            <?php if (!empty($contact['tor'])): ?>
-                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                                    <i class="fas fa-user-secret"></i>
+                            <?php if (!empty($contact['http'])): ?>
+                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
+                                    <i class="fas fa-globe"></i>
                                 </span>
                             <?php endif; ?>
                         </div>
@@ -564,10 +564,10 @@
             </div>
 
             <div class="pending-addresses">
-                <?php if (!empty($contact['http'])): ?>
+                <?php if (!empty($contact['tor'])): ?>
                     <div class="address-line">
-                        <span class="address-icon address-http" title="HTTP Address"><i class="fas fa-globe"></i></span>
-                        <span class="monospace"><?php echo htmlspecialchars($contact['http']); ?></span>
+                        <span class="address-icon address-tor" title="Tor Address"><i class="fas fa-user-secret"></i></span>
+                        <span class="monospace"><?php echo htmlspecialchars($contact['tor']); ?></span>
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($contact['https'])): ?>
@@ -576,10 +576,10 @@
                         <span class="monospace"><?php echo htmlspecialchars($contact['https']); ?></span>
                     </div>
                 <?php endif; ?>
-                <?php if (!empty($contact['tor'])): ?>
+                <?php if (!empty($contact['http'])): ?>
                     <div class="address-line">
-                        <span class="address-icon address-tor" title="Tor Address"><i class="fas fa-user-secret"></i></span>
-                        <span class="monospace"><?php echo htmlspecialchars($contact['tor']); ?></span>
+                        <span class="address-icon address-http" title="HTTP Address"><i class="fas fa-globe"></i></span>
+                        <span class="monospace"><?php echo htmlspecialchars($contact['http']); ?></span>
                     </div>
                 <?php endif; ?>
             </div>
