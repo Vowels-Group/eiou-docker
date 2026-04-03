@@ -1519,8 +1519,13 @@ if [[ ! -z ${http} ]]; then
         httpAddr="http://$http"
         httpsAddr="https://$http"
     fi
-    echo -e "\t HTTPS address: $httpsAddr"
-    echo -e "\t HTTP address: $httpAddr"
+    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
+        ADDR_WARN="\033[33m⚠\033[0m "
+    else
+        ADDR_WARN=""
+    fi
+    echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
+    echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
     if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
         echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
         echo -e "\t   They are not reachable from outside the Docker network."
