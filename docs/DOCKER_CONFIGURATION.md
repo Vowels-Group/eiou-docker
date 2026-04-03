@@ -1217,7 +1217,7 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** Rebuilding the Docker image pulled a newer MariaDB patch version from Debian repos. The InnoDB redo logs on the persistent volume use the old version's encryption metadata format, which the new binary cannot parse.
 
-**Solution:** Starting with v0.1.6-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, uses `innodb_force_recovery=1` to regenerate redo logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
+**Solution:** Starting with v0.1.8-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, uses `innodb_force_recovery=1` to regenerate redo logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
 
 #### Missing InnoDB Redo Log After Broken Container
 
@@ -1225,7 +1225,15 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** The prior container crashed during initialization, had a partially restored volume, or never completed MariaDB setup. The persistent volume has `ibdata1` (InnoDB data) but is missing `ib_logfile0` (InnoDB redo log). MariaDB requires this file to exist before the InnoDB plugin can initialize — force-recovery cannot help if the file is absent entirely.
 
-**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. The script detects missing `ib_logfile0` when `ibdata1` exists, moves broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables from the config volume, enables TDE encryption, and auto-restores from the latest backup. Wallet identity (keys, `.onion` address) is preserved — `userconfig.json` on the config volume is never modified. The recovery is crash-safe. If auto-restore fails (e.g., no backups available), the node starts with empty tables and you can manually restore later with `eiou backup restore <filename> --confirm`.
+**Solution:** Starting with v0.1.8-alpha, this is handled automatically by `startup.sh`. The script detects missing `ib_logfile0` when `ibdata1` exists, moves broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables from the config volume, enables TDE encryption, and auto-restores from the latest backup. Wallet identity (keys, `.onion` address) is preserved — `userconfig.json` on the config volume is never modified. The recovery is crash-safe. If auto-restore fails (e.g., no backups available), the node starts with empty tables and you can manually restore later with `eiou backup restore <filename> --confirm`.
+
+#### TDE Encryption Config Lost After Container Rebuild
+
+**Symptoms:** MariaDB error log shows `Obtaining redo log encryption key version 1 failed (4294967295). Maybe the key or the required encryption key management plugin was not found` followed by `Reading log encryption info failed`.
+
+**Cause:** `encryption.cnf` lives in the container filesystem (`/etc/mysql/conf.d/`), not on a volume. When the container is rebuilt, this file is lost, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. Without the encryption plugin config, MariaDB cannot decrypt its own data.
+
+**Solution:** Starting with v0.1.8-alpha, this is handled automatically by `startup.sh`. The pre-MariaDB TDE key setup detects when the master key is available and database files exist on the volume but `encryption.cnf` is missing. It recreates the encryption config and TDE key file before MariaDB starts. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
 
 ### Tor Connectivity Issues
 

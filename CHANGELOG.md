@@ -10,32 +10,21 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## v0.1.7-alpha (2026-04-03)
-
-### Fixed
-- Fix MariaDB failing to start when InnoDB redo log (`ib_logfile0`) is completely missing from the persistent volume — this occurs when upgrading from a broken prior container that crashed during initialization, had a partially restored volume, or never completed MariaDB setup. MariaDB refuses to initialize the InnoDB plugin without the redo log file present, and no `innodb_force_recovery` level can bypass this. `startup.sh` now detects this condition and performs automatic recovery: moves the broken data to `/tmp/mysql-broken-<timestamp>/` for inspection, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables via `Application::getInstance()`, enables TDE encryption, and auto-restores from the latest backup on the backups volume. Wallet identity (keys, `.onion` address) is preserved because `userconfig.json` on the config volume is never modified — only `dbconfig.json` is regenerated with fresh database credentials. The recovery is crash-safe: if the process dies at any point, the next boot retriggers the same flow
-
-### Docs
-- Update `UPGRADE_GUIDE.md` — add missing redo log recovery to startup flow diagram, add troubleshooting entry for missing `ib_logfile0` scenario
-- Update `DOCKER_CONFIGURATION.md` — add troubleshooting entry for missing InnoDB redo logs after broken container upgrade
-
----
-
-
-## v0.1.6-alpha (2026-04-03)
+## v0.1.8-alpha (2026-04-03)
 
 ### Changed
 - Reorder all transport/address display to most-secure-first: Tor > HTTPS > HTTP — affects GUI dropdowns (settings, send form, wallet info, contact modal), contact card icons, pending contact address lines, CLI output, and startup log. `VALID_TRANSPORT_INDICES` constant reordered. Startup log shows yellow ⚠ next to HTTP/HTTPS addresses only when they are Docker-internal (QUICKSTART without EIOU_HOST)
 
 ### Fixed
 - Fix MariaDB failing to start after image rebuild due to version-incompatible encrypted InnoDB redo logs — when `apt` installs a different MariaDB patch version between builds, the new binary cannot parse the old version's redo log encryption metadata format (error: "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"). `startup.sh` now tracks the MariaDB binary version in `/var/lib/mysql/.mariadb_version` and on mismatch starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs, performs a clean shutdown to regenerate them in the new format, then restarts normally and runs `mariadb-upgrade`. A reactive fallback applies the same force-recovery if the normal startup times out (e.g., first boot with version tracking). The MariaDB wait loop now has a 60-second timeout with diagnostics instead of looping forever
+- Fix MariaDB failing to start when InnoDB redo log (`ib_logfile0`) is completely missing from the persistent volume — this occurs when upgrading from a broken prior container that crashed during initialization, had a partially restored volume, or never completed MariaDB setup. MariaDB refuses to initialize the InnoDB plugin without the redo log file present, and no `innodb_force_recovery` level can bypass this. `startup.sh` now detects this condition and performs automatic recovery: moves the broken data to `/tmp/mysql-broken-<timestamp>/` for inspection, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables via `Application::getInstance()`, enables TDE encryption, and auto-restores from the latest backup on the backups volume. Wallet identity (keys, `.onion` address) is preserved because `userconfig.json` on the config volume is never modified — only `dbconfig.json` is regenerated with fresh database credentials. The recovery is crash-safe: if the process dies at any point, the next boot retriggers the same flow
+- Fix MariaDB failing to start after container rebuild when TDE was enabled — `encryption.cnf` lives in the container filesystem (not a volume) and is lost when the container is recreated, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. MariaDB fails with `Obtaining redo log encryption key version 1 failed`. The pre-MariaDB TDE key setup now detects this condition: if the master key is available and a database exists on the volume but `encryption.cnf` is missing, it recreates the encryption config and TDE key file before MariaDB starts
 
 ### Docs
 - Update `GUI_REFERENCE.md` and `GUI_QUICK_REFERENCE.md` — add 6 undocumented controller actions (`addCurrency`, `acceptAllCurrencies`, `getP2pCandidates`, `analyticsConsent`, `dlqRetryAll`, `dlqAbandonAll`), 3 missing layout components (`banner.html`, `dlqSection.html`, `analyticsConsentModal.html`), 3 undocumented notification types (Tor connectivity, update available, pending currency requests), 2 missing Feature Toggle settings (`autoRejectUnknownCurrency`, `analyticsEnabled`), and remove outdated "Single currency display" limitation
 - Update `ARCHITECTURE.md` — add `MariaDbEncryption` and `VolumeEncryption` to Security Components, add database TDE/credential/volume encryption to Encrypted Storage table, add 8 missing services to Service Catalog (`AnalyticsService`, `UpdateCheckService`, `DebugReportService`, CLI services), add `DeliveryEvents` to Event-Driven Communication section
-- Update `DOCKER_CONFIGURATION.md` — add 16 service tuning environment variables (nginx workers, rate limits, PHP-FPM process manager settings) and `TRUSTED_PROXIES` to the Quick Reference table
-- Update `UPGRADE_GUIDE.md` — add MariaDB version detection to startup flow, add verification log messages, expand troubleshooting with version mismatch and force-recovery details
-- Add MariaDB version mismatch troubleshooting entry to `DOCKER_CONFIGURATION.md`
+- Update `DOCKER_CONFIGURATION.md` — add 16 service tuning environment variables (nginx workers, rate limits, PHP-FPM process manager settings) and `TRUSTED_PROXIES` to the Quick Reference table; add troubleshooting entries for missing InnoDB redo logs and TDE config lost after rebuild
+- Update `UPGRADE_GUIDE.md` — add MariaDB version detection to startup flow, add missing redo log recovery and TDE config rebuild steps, expand troubleshooting with version mismatch, missing redo log, TDE config loss, and force-recovery details
 
 ---
 

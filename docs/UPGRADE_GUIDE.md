@@ -133,7 +133,9 @@ New Container (running v2) — startup.sh runs:
   1. Maintenance mode ON   — /tmp/eiou_maintenance.lock created (HTTP → 503)
   2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
   3. Volume decryption     — if volume passphrase active, decrypt master key to /dev/shm
-  4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm
+  4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm;
+                             if encryption.cnf lost (container rebuild), recreate it
+                             from master key so MariaDB can read encrypted data
   5. MariaDB version check — compare binary version to stored version on volume;
                              if mismatch, use force-recovery to regenerate redo logs
   5b. Missing redo log check — if ibdata1 exists but ib_logfile0 does not (broken
@@ -331,7 +333,7 @@ volumes:
 
 ### MariaDB fails to start after upgrade
 
-**Version mismatch (most common after image rebuild):** If MariaDB was upgraded to a different patch version between image builds (e.g., 10.11.6 → 10.11.14), the InnoDB redo logs on the persistent volume are incompatible with the new binary. The error log shows: `Reading log encryption info failed; the log was created with MariaDB X.Y.Z`. Starting with v0.1.6-alpha, `startup.sh` handles this automatically:
+**Version mismatch (most common after image rebuild):** If MariaDB was upgraded to a different patch version between image builds (e.g., 10.11.6 → 10.11.14), the InnoDB redo logs on the persistent volume are incompatible with the new binary. The error log shows: `Reading log encryption info failed; the log was created with MariaDB X.Y.Z`. Starting with v0.1.8-alpha, `startup.sh` handles this automatically:
 
 1. Before starting MariaDB, it compares the binary version against `/var/lib/mysql/.mariadb_version`
 2. On mismatch, it starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs
@@ -340,8 +342,9 @@ volumes:
 
 If the proactive check is bypassed (e.g., first boot with version tracking), a reactive fallback applies the same force-recovery when the normal startup times out. If all recovery fails, the container exits with a FATAL message instead of looping forever.
 
-**Missing redo log (ib_logfile0):** If the prior container crashed during initialization or was otherwise broken, the persistent volume may have `ibdata1` (InnoDB system tablespace) but no `ib_logfile0` (redo log). MariaDB refuses to start without this file, and no `innodb_force_recovery` level bypasses this. Starting with v0.1.7-alpha, `startup.sh` detects this condition and performs automatic recovery: moves broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables from the config volume, enables TDE encryption, and auto-restores from the latest backup. Wallet identity is preserved because `userconfig.json` (keys, `.onion` address) on the config volume is never modified. The recovery is crash-safe — if the process dies mid-recovery, the next boot retriggers the same flow. The error log shows `InnoDB: File ./ib_logfile0 was not found` followed by `Plugin 'InnoDB' registration as a STORAGE ENGINE failed`.
+**Missing redo log (ib_logfile0):** If the prior container crashed during initialization or was otherwise broken, the persistent volume may have `ibdata1` (InnoDB system tablespace) but no `ib_logfile0` (redo log). MariaDB refuses to start without this file, and no `innodb_force_recovery` level bypasses this. Starting with v0.1.8-alpha, `startup.sh` detects this condition and performs automatic recovery: moves broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables from the config volume, enables TDE encryption, and auto-restores from the latest backup. Wallet identity is preserved because `userconfig.json` (keys, `.onion` address) on the config volume is never modified. The recovery is crash-safe — if the process dies mid-recovery, the next boot retriggers the same flow. The error log shows `InnoDB: File ./ib_logfile0 was not found` followed by `Plugin 'InnoDB' registration as a STORAGE ENGINE failed`.
 
+**TDE encryption config lost after container rebuild:** The `encryption.cnf` file lives in the container filesystem (`/etc/mysql/conf.d/`), not on a volume. When the container is recreated (`docker compose up -d --build`), this file is lost, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. MariaDB fails with: `Obtaining redo log encryption key version 1 failed`. Starting with v0.1.8-alpha, the pre-MariaDB TDE key setup detects this condition: if the master key is available and a database exists on the volume, it recreates `encryption.cnf` and the TDE key file automatically. No manual action needed.
 
 **Missing TDE key file:** If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
 
