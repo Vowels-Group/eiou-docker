@@ -829,8 +829,10 @@ elif [ -d /var/lib/mysql/mysql ] && { [ -f /dev/shm/.master.key ] || [ -f /etc/e
     echo "TDE encryption config missing after container rebuild — recreating..."
     TDE_CONFIG_RESULT=$(php /app/eiou/scripts/mariadb-tde-init.php setup 2>&1)
     if echo "$TDE_CONFIG_RESULT" | grep -q "configuration written"; then
-        echo "MariaDB TDE: configuration restored"
-        TDE_SETUP_NEEDED=true
+        echo "MariaDB TDE: configuration and key file restored"
+        # setup already calls setupKeyFile() internally, so the key in /dev/shm
+        # is ready. Do NOT set TDE_SETUP_NEEDED — a redundant setup-key call
+        # would fail with permission denied (file is now owned by mysql:mysql).
     else
         echo "WARNING: Could not recreate TDE config — MariaDB may fail to read encrypted data"
         echo "$TDE_CONFIG_RESULT"
@@ -955,9 +957,13 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
 
     echo "Broken data preserved in $BROKEN_DIR"
 
-    # Remove stale TDE encryption config — the fresh database won't be
-    # encrypted until the TDE first-time setup step runs after migrations.
+    # Remove stale TDE encryption config and key file — the fresh database
+    # won't be encrypted until the TDE first-time setup step runs after
+    # migrations. Both must be removed so TDE setup can recreate them cleanly
+    # (the key file may have been created by the TDE rebuild detection above
+    # with mysql:mysql ownership, which blocks subsequent writes).
     rm -f /etc/mysql/conf.d/encryption.cnf
+    rm -f /dev/shm/.mariadb-encryption-key
 
     # Initialize fresh system tables. The Debian init script does not
     # reliably detect an empty-but-existing data directory, so we run
