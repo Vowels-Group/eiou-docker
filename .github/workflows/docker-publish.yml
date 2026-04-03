@@ -68,13 +68,13 @@ jobs:
           VERSION="${{ steps.meta.outputs.version }}"
           CHANNEL="${{ steps.meta.outputs.channel }}"
 
-          # Always tag with the full version
-          TAGS="${IMAGE}:${VERSION}"
+          # Always tag with the full version and latest
+          TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
 
           # Stable releases get additional convenience tags
           if [ "$CHANNEL" = "stable" ]; then
             IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-            TAGS="${TAGS},${IMAGE}:${MAJOR}.${MINOR},${IMAGE}:${MAJOR},${IMAGE}:latest"
+            TAGS="${TAGS},${IMAGE}:${MAJOR}.${MINOR},${IMAGE}:${MAJOR}"
           fi
 
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"

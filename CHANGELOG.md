@@ -10,7 +10,10 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## [Unreleased]
+## v0.1.6-alpha (2026-04-03)
+
+### Changed
+- Reorder all transport/address display to most-secure-first: Tor > HTTPS > HTTP — affects GUI dropdowns (settings, send form, wallet info, contact modal), contact card icons, pending contact address lines, CLI output, and startup log. `VALID_TRANSPORT_INDICES` constant reordered. Startup log shows yellow ⚠ next to HTTP/HTTPS addresses only when they are Docker-internal (QUICKSTART without EIOU_HOST)
 
 ### Fixed
 - Fix MariaDB failing to start after image rebuild due to version-incompatible encrypted InnoDB redo logs — when `apt` installs a different MariaDB patch version between builds, the new binary cannot parse the old version's redo log encryption metadata format (error: "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"). `startup.sh` now tracks the MariaDB binary version in `/var/lib/mysql/.mariadb_version` and on mismatch starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs, performs a clean shutdown to regenerate them in the new format, then restarts normally and runs `mariadb-upgrade`. A reactive fallback applies the same force-recovery if the normal startup times out (e.g., first boot with version tracking). The MariaDB wait loop now has a 60-second timeout with diagnostics instead of looping forever
