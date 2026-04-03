@@ -337,6 +337,13 @@ if ($container->has(ContactServiceInterface::class)) {
 | `DatabaseLockingService` | Distributed locking via MariaDB `GET_LOCK()` / `RELEASE_LOCK()` | PDO |
 | `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo + setter: ContactCreditRepo, P2pRepo |
 | `DebugService` | Debug logging and diagnostics | DebugRepo |
+| `DebugReportService` | Generates debug reports (limited/full) with system info, logs, and diagnostics | DebugService, Logger |
+| `AnalyticsService` | Opt-in anonymous usage statistics — collects aggregate metrics (transaction counts, volume, contact count, active days) and sends weekly to `analytics.eiou.org`. Anonymous ID is HMAC-SHA256 hash. Disabled by default | UserContext, TransactionRepo, ContactRepo |
+| `UpdateCheckService` | Checks Docker Hub (with GitHub Releases fallback) for newer image versions. Cached for 24 hours. Respects `updateCheckEnabled` setting. Tor-only nodes skip | UserContext |
+| `CliDlqService` | CLI dead letter queue operations (list, retry, abandon) | DeadLetterQueueRepo, TransportUtility |
+| `CliHelpService` | CLI help/documentation generation | None |
+| `CliP2pApprovalService` | CLI P2P transaction approval workflow | P2pRepo, Rp2pCandidateRepo |
+| `CliSettingsService` | CLI settings read/write | UserContext |
 
 ### Utility Services
 
@@ -483,6 +490,12 @@ events instead of direct dependencies.
 | `CHAIN_DROP_REJECTED` | When a chain drop proposal is rejected |
 | `CHAIN_DROP_EXECUTED` | When a chain drop has been fully executed locally |
 | `TRANSACTION_RECOVERED_FROM_BACKUP` | When a missing transaction is recovered from a database backup instead of requiring a chain drop |
+
+**DeliveryEvents Constants:**
+
+| Event | When Dispatched |
+|-------|-----------------|
+| `RETRY_DELIVERY_COMPLETED` | When a retried message (from DLQ) is successfully re-delivered to the recipient |
 
 **Usage Example:**
 
@@ -2896,8 +2909,10 @@ TorKeyDerivation          +---------------------+
 |-----------|------|---------|
 | `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation |
 | `KeyEncryption` | `/src/security/KeyEncryption.php` | AES-256-GCM encryption/decryption for private keys and auth codes |
+| `MariaDbEncryption` | `/src/security/MariaDbEncryption.php` | Transparent Data Encryption (TDE) — derives TDE key from master key via HMAC-SHA256, writes key file to `/dev/shm`, enables `file_key_management` plugin, encrypts all InnoDB/Aria tables at rest |
 | `PayloadEncryption` | `/src/security/PayloadEncryption.php` | ECDH + AES-256-GCM end-to-end encryption for all contact message payloads |
 | `TorKeyDerivation` | `/src/security/TorKeyDerivation.php` | Derives Ed25519 keypairs from secp256k1 keys for Tor v3 hidden service addresses |
+| `VolumeEncryption` | `/src/security/VolumeEncryption.php` | Optional master key protection at rest — encrypts the master key with a passphrase-derived key (Argon2id + AES-256-GCM) so the host server cannot read it from the Docker volume without the passphrase |
 
 ### Encrypted Storage
 
@@ -2906,6 +2921,9 @@ TorKeyDerivation          +---------------------+
 | Private Key | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
 | Auth Code | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
 | Mnemonic | AES-256-GCM | Displayed once, not stored |
+| Database credentials | AES-256-GCM with AAD | `/etc/eiou/config/dbconfig.json` |
+| All database files | MariaDB TDE (file_key_management) | `/var/lib/mysql/` (InnoDB, Aria, redo logs, temp tables, binlog) |
+| Master key (optional) | Argon2id + AES-256-GCM | `/etc/eiou/config/.master.key.enc` (when volume passphrase active) |
 
 ### Payload Encryption (E2E)
 

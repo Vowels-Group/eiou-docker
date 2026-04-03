@@ -26,6 +26,12 @@ Complete command-line interface documentation for the eIOU Docker node.
 
 The eIOU CLI provides a command-line interface for interacting with an eIOU wallet node.
 
+> **Note:** All examples in this reference show bare `eiou` commands as run **inside** the container. From the host machine, prepend `docker exec <container>`:
+> ```bash
+> docker exec eiou-node eiou info          # from the host
+> eiou info                                 # inside the container (docker exec -it <container> bash)
+> ```
+
 **Usage:**
 ```bash
 eiou <command> [arguments] [options]

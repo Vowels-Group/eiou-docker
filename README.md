@@ -20,8 +20,10 @@ Run an eIOU node with a single `docker compose` command. The container includes 
 - **Multi-Transport** — HTTP, HTTPS, and Tor (.onion) with automatic failover and Tor circuit health tracking
 - **REST API** — full API with HMAC-SHA256 authentication
 - **CLI Interface** — complete command-line management via `eiou` commands
+- **Data-at-Rest Encryption** — MariaDB Transparent Data Encryption (TDE) encrypts all database files automatically. Optional volume passphrase (`EIOU_VOLUME_KEY_FILE`) encrypts the master key itself so the host cannot read it
 - **Encrypted Backups** — automatic daily database backups encrypted with AES-256-GCM
 - **Deterministic Key Recovery** — all cryptographic material (wallet keys, Tor identity, encryption master key) derived from BIP39 seed phrase
+- **Update Notifications** — daily check for newer Docker image versions (read-only Docker Hub API call, no data sent)
 - **Persistent Storage** — named Docker volumes keep your data across restarts and rebuilds
 
 ## Prerequisites
@@ -64,7 +66,7 @@ docker compose logs -f
 # Execute CLI commands inside the container
 docker exec eiou-node eiou info              # Node address, Tor address, public key
 docker exec eiou-node eiou info detail       # Detailed info including balances
-docker exec eiou-node eiou contacts          # List contacts
+docker exec eiou-node eiou search             # List contacts
 
 # Add a contact (address is the other node's HTTP/HTTPS/Tor URL)
 docker exec eiou-node eiou add <address> <name> <fee> <credit> <currency>
@@ -98,7 +100,7 @@ Create a `.env` file next to `docker-compose.yml` with the following content:
 NODE_NAME=my-wallet
 ```
 
-This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wallet-files`, `my-wallet-backups`.
+This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wallet-config`, `my-wallet-backups`.
 
 ### Environment Variables
 
@@ -194,6 +196,11 @@ Increase these for WSL2 or resource-constrained environments.
 | `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | Default transport when sending to a contact by name. Options: `tor`, `http`, `https` |
 | `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode (first response wins) for Tor routes. Set to `false` to allow best-fee mode over Tor |
 | `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | Randomize P2P hop budget with geometric distribution. Set to `false` for deterministic routing depth |
+| `EIOU_UPDATE_CHECK_ENABLED` | `true` | Check Docker Hub daily for newer image versions. Set to `false` to disable |
+| `EIOU_ANALYTICS_ENABLED` | `false` | Opt-in anonymous usage statistics sent weekly. See [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) |
+| `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | Auto-accept restored contacts when transaction history proves prior relationship |
+| `EIOU_VOLUME_KEY_FILE` | *(none)* | Path to file containing volume encryption passphrase. Encrypts the master key at rest so the host cannot read it from the Docker volume |
+| `APP_DEBUG` | `true` | Enable debug logging to database (visible in GUI Debug panel). Set to `false` for production |
 | `EIOU_P2P_MAX_WORKERS` | *(per-transport)* | Override max concurrent P2P worker processes. Defaults: HTTP=50, HTTPS=50, Tor=5 |
 
 ### Volume Mounts
@@ -284,7 +291,7 @@ docker compose down -v && docker compose up -d --build   # Fresh start
 
 ### Container stuck at "Waiting for MariaDB"
 
-Normal on first boot — MariaDB initialization takes up to 2 minutes. If it persists, ensure at least 512MB memory is available.
+Normal on first boot — MariaDB initialization takes up to 2 minutes. The startup script has a 60-second timeout with automatic recovery: if MariaDB fails due to a version mismatch after an image rebuild (encrypted redo log incompatibility), it automatically performs a force-recovery and restart. If it still fails, the container exits with a FATAL message instead of looping. Ensure at least 512MB memory is available.
 
 ### SSL certificate warnings in browser
 
@@ -355,6 +362,7 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 | [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
+| [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) | What data is sent, privacy guarantees, how to toggle |
 | [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |
 
 ## Legal Notice
