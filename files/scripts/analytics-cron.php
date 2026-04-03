@@ -4,7 +4,7 @@
 # Anonymous Analytics Cron Script
 #
 # Sends aggregated, anonymous usage statistics to analytics.eiou.org.
-# Runs weekly via cron. Respects the analyticsEnabled user setting.
+# Runs daily via cron. Respects the analyticsEnabled user setting.
 # Opt-in only (default: off). No personal data is ever sent.
 #
 # Exit codes:
@@ -65,7 +65,7 @@ try {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
 
-        $payload = AnalyticsService::buildHeartbeatPayload($pdo, 7);
+        $payload = AnalyticsService::buildHeartbeatPayload($pdo, 1);
     }
 
     // Send

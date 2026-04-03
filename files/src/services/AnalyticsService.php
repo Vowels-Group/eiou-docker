@@ -100,7 +100,7 @@ class AnalyticsService
      * @param int $periodDays Number of days to aggregate
      * @return array
      */
-    public static function buildHeartbeatPayload(\PDO $pdo, int $periodDays = 7): array
+    public static function buildHeartbeatPayload(\PDO $pdo, int $periodDays = 1): array
     {
         $contactRepo = new \Eiou\Database\ContactRepository($pdo);
 
