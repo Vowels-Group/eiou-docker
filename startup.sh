@@ -1503,6 +1503,7 @@ echo "User Information: "
 if [[ ! -z ${displayname} ]]; then
     echo -e "\t Display name: $displayname"
 fi
+echo -e "\t Tor address: $tor"
 if [[ ! -z ${http} ]]; then
     # Always show both HTTP and HTTPS addresses regardless of configured protocol
     if [[ ${http} == https://* ]]; then
@@ -1518,8 +1519,13 @@ if [[ ! -z ${http} ]]; then
         httpAddr="http://$http"
         httpsAddr="https://$http"
     fi
-    echo -e "\t HTTP address: $httpAddr"
-    echo -e "\t HTTPS address: $httpsAddr"
+    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
+        ADDR_WARN="\033[33m⚠\033[0m "
+    else
+        ADDR_WARN=""
+    fi
+    echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
+    echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
     if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
         echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
         echo -e "\t   They are not reachable from outside the Docker network."
@@ -1531,7 +1537,6 @@ if [[ ! -z ${http} ]]; then
         echo -e "\033[0m"
     fi
 fi
-echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
 if [ "$authcode_file" = "tty" ]; then

@@ -255,7 +255,7 @@ class Constants {
     // Production defaults to 'tor' for privacy; tests can set to 'http' to avoid
     // Tor's force-fast behavior when testing best-fee mode.
     const DEFAULT_TRANSPORT_MODE = 'tor';
-    const VALID_TRANSPORT_INDICES = ['http', 'https', 'tor'];
+    const VALID_TRANSPORT_INDICES = ['tor', 'https', 'http'];
 
     /**
      * Get the default transport mode, with env override support

@@ -292,14 +292,14 @@ class UserContext {
      */
     public function getUserAddresses(): array {
         $addresses = [];
-        if ($hostname = $this->getHttpAddress()) {
-            $addresses[] = $hostname;
+        if ($torAddress = $this->getTorAddress()) {
+            $addresses[] = $torAddress;
         }
         if ($hostnameSecure = $this->getHttpsAddress()) {
             $addresses[] = $hostnameSecure;
         }
-        if ($torAddress = $this->getTorAddress()) {
-            $addresses[] = $torAddress;
+        if ($hostname = $this->getHttpAddress()) {
+            $addresses[] = $hostname;
         }
         return $addresses;
     }
