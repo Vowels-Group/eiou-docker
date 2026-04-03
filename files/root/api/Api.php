@@ -37,7 +37,7 @@ if ($requestPath === '/api/health') {
         $pdo = new PDO(
             'mysql:host=127.0.0.1;dbname=eiou',
             'eiou',
-            trim(file_get_contents('/run/secrets/db_password') ?: (getenv('DB_PASSWORD') ?: 'eiou')),
+            trim(@file_get_contents('/run/secrets/db_password') ?: (getenv('DB_PASSWORD') ?: 'eiou')),
             [PDO::ATTR_TIMEOUT => 3]
         );
         $pdo->query('SELECT 1');
