@@ -829,8 +829,10 @@ elif [ -d /var/lib/mysql/mysql ] && { [ -f /dev/shm/.master.key ] || [ -f /etc/e
     echo "TDE encryption config missing after container rebuild — recreating..."
     TDE_CONFIG_RESULT=$(php /app/eiou/scripts/mariadb-tde-init.php setup 2>&1)
     if echo "$TDE_CONFIG_RESULT" | grep -q "configuration written"; then
-        echo "MariaDB TDE: configuration restored"
-        TDE_SETUP_NEEDED=true
+        echo "MariaDB TDE: configuration and key file restored"
+        # setup already calls setupKeyFile() internally, so the key in /dev/shm
+        # is ready. Do NOT set TDE_SETUP_NEEDED — a redundant setup-key call
+        # would fail with permission denied (file is now owned by mysql:mysql).
     else
         echo "WARNING: Could not recreate TDE config — MariaDB may fail to read encrypted data"
         echo "$TDE_CONFIG_RESULT"
