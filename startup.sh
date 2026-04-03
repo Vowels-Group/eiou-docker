@@ -836,18 +836,166 @@ if [ -f /etc/mysql/conf.d/encryption.cnf ]; then
     fi
 fi
 
+# =============================================================================
+# MARIADB VERSION UPGRADE DETECTION
+# =============================================================================
+# When the image is rebuilt, apt may install a newer MariaDB version.
+# InnoDB redo logs contain version-specific encryption metadata — if the
+# binary version doesn't match the redo logs on the persistent volume,
+# MariaDB fails with:
+#   "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"
+#
+# MariaDB 10.5+ does NOT recreate ib_logfile0 when it's missing, so we
+# cannot simply delete stale redo logs. Instead, on version mismatch we
+# start MariaDB with innodb_force_recovery=1 (skips redo log application),
+# then do a clean shutdown to write fresh redo logs in the new format,
+# then restart normally. After normal startup, mariadb-upgrade handles
+# any schema changes.
+# =============================================================================
+MARIADB_VERSION_FILE="/var/lib/mysql/.mariadb_version"
+CURRENT_MARIADB_VERSION=$(mariadbd --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+if [ -z "$CURRENT_MARIADB_VERSION" ]; then
+    CURRENT_MARIADB_VERSION=$(mysqld --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+fi
+MARIADB_UPGRADE_NEEDED=false
+MARIADB_VERSION_CHANGED=false
+
+if [ -n "$CURRENT_MARIADB_VERSION" ] && [ -f "$MARIADB_VERSION_FILE" ]; then
+    STORED_MARIADB_VERSION=$(cat "$MARIADB_VERSION_FILE" 2>/dev/null)
+    if [ "$CURRENT_MARIADB_VERSION" != "$STORED_MARIADB_VERSION" ]; then
+        echo "========================================================================"
+        echo "MariaDB version change detected: $STORED_MARIADB_VERSION -> $CURRENT_MARIADB_VERSION"
+        echo "Will use force-recovery to regenerate redo logs in new format."
+        echo "========================================================================"
+        MARIADB_VERSION_CHANGED=true
+        MARIADB_UPGRADE_NEEDED=true
+    fi
+elif [ -n "$CURRENT_MARIADB_VERSION" ] && [ -d /var/lib/mysql/mysql ]; then
+    # Existing database but no version file — first boot with version tracking.
+    # Run mariadb-upgrade to be safe.
+    echo "MariaDB: Adding version tracking (first tracked boot: $CURRENT_MARIADB_VERSION)"
+    MARIADB_UPGRADE_NEEDED=true
+fi
+
 # Start services
 service cron start
 service tor start
 service "$PHP_FPM_SERVICE" start
 service nginx start
-service mariadb start
 
-# Wait for MariaDB to be ready
-while ! mysqladmin ping -h localhost --silent; do
-    echo "Waiting for MariaDB to be ready..."
-    sleep 1
-done
+# Helper: wait for MariaDB with timeout, returns 0 on success, 1 on timeout
+wait_for_mariadb() {
+    local label="${1:-MariaDB}"
+    local timeout="${2:-60}"
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        if mysqladmin ping -h localhost --silent 2>/dev/null; then
+            return 0
+        fi
+        elapsed=$((elapsed + 1))
+        if [ $((elapsed % 10)) -eq 0 ]; then
+            echo "Waiting for $label... (${elapsed}s/${timeout}s)"
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+# On version change: start with force-recovery to bypass incompatible redo logs,
+# then clean shutdown to regenerate them, then restart normally.
+if [ "$MARIADB_VERSION_CHANGED" = "true" ]; then
+    echo "Starting MariaDB with innodb_force_recovery=1 to bypass stale redo logs..."
+    printf '[mysqld]\ninnodb_force_recovery=1\n' > /etc/mysql/conf.d/zz-force-recovery.cnf
+
+    service mariadb start
+    if wait_for_mariadb "MariaDB force-recovery" 60; then
+        echo "Force-recovery succeeded. Performing clean shutdown to regenerate redo logs..."
+        service mariadb stop
+        sleep 2
+        rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
+        echo "Restarting MariaDB in normal mode..."
+        service mariadb start
+        if wait_for_mariadb "MariaDB normal restart" 60; then
+            MARIADB_STARTED=true
+            echo "MariaDB version upgrade completed successfully."
+        else
+            MARIADB_STARTED=false
+        fi
+    else
+        # Force-recovery also failed — fatal
+        rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
+        MARIADB_STARTED=false
+    fi
+else
+    # Normal startup (no version change)
+    service mariadb start
+    if wait_for_mariadb "MariaDB" 60; then
+        MARIADB_STARTED=true
+    else
+        MARIADB_STARTED=false
+    fi
+fi
+
+# Reactive fallback: if normal startup failed (no proactive detection),
+# try force-recovery in case of redo log corruption or version issues
+# that weren't caught by version tracking (e.g., first boot with tracking).
+if [ "$MARIADB_STARTED" = "false" ] && [ "$MARIADB_VERSION_CHANGED" = "false" ]; then
+    echo "========================================================================"
+    echo "WARNING: MariaDB failed to start within 60s"
+    echo "Attempting recovery with innodb_force_recovery=1..."
+    echo "========================================================================"
+
+    service mariadb stop 2>/dev/null || true
+    sleep 2
+
+    printf '[mysqld]\ninnodb_force_recovery=1\n' > /etc/mysql/conf.d/zz-force-recovery.cnf
+    service mariadb start
+    MARIADB_UPGRADE_NEEDED=true
+
+    if wait_for_mariadb "MariaDB force-recovery" 60; then
+        echo "Force-recovery succeeded. Clean shutdown to regenerate redo logs..."
+        service mariadb stop
+        sleep 2
+        rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
+        echo "Restarting MariaDB in normal mode..."
+        service mariadb start
+        if wait_for_mariadb "MariaDB normal restart" 60; then
+            MARIADB_STARTED=true
+            echo "MariaDB recovery completed successfully."
+        fi
+    else
+        rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
+    fi
+fi
+
+if [ "$MARIADB_STARTED" = "false" ]; then
+    echo "========================================================================"
+    echo "FATAL: MariaDB failed to start after all recovery attempts."
+    echo ""
+    echo "The database volume may be corrupted. Options:"
+    echo "  - Check container logs: docker logs <container> 2>&1 | grep -i innodb"
+    echo "  - Restore from backup: eiou backup list / eiou backup restore"
+    echo "  - Restore from seed: use RESTORE_FILE with fresh volumes"
+    echo "========================================================================"
+    exit 1
+fi
+
+# Complete MariaDB upgrade if version changed
+if [ "$MARIADB_UPGRADE_NEEDED" = "true" ] && [ -n "$CURRENT_MARIADB_VERSION" ]; then
+    echo "Running mariadb-upgrade for version $CURRENT_MARIADB_VERSION..."
+    if mariadb-upgrade 2>&1; then
+        echo "MariaDB upgrade completed successfully."
+    elif mysql_upgrade 2>&1; then
+        echo "MariaDB upgrade completed successfully (via mysql_upgrade)."
+    else
+        echo "WARNING: mariadb-upgrade not available or failed — manual check recommended."
+    fi
+fi
+
+# Store current MariaDB version for future upgrade detection
+if [ -n "$CURRENT_MARIADB_VERSION" ]; then
+    echo "$CURRENT_MARIADB_VERSION" > "$MARIADB_VERSION_FILE"
+fi
 
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
@@ -1355,6 +1503,7 @@ echo "User Information: "
 if [[ ! -z ${displayname} ]]; then
     echo -e "\t Display name: $displayname"
 fi
+echo -e "\t Tor address: $tor"
 if [[ ! -z ${http} ]]; then
     # Always show both HTTP and HTTPS addresses regardless of configured protocol
     if [[ ${http} == https://* ]]; then
@@ -1370,8 +1519,13 @@ if [[ ! -z ${http} ]]; then
         httpAddr="http://$http"
         httpsAddr="https://$http"
     fi
-    echo -e "\t HTTP address: $httpAddr"
-    echo -e "\t HTTPS address: $httpsAddr"
+    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
+        ADDR_WARN="\033[33m⚠\033[0m "
+    else
+        ADDR_WARN=""
+    fi
+    echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
+    echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
     if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
         echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
         echo -e "\t   They are not reachable from outside the Docker network."
@@ -1383,7 +1537,6 @@ if [[ ! -z ${http} ]]; then
         echo -e "\033[0m"
     fi
 fi
-echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
 if [ "$authcode_file" = "tty" ]; then

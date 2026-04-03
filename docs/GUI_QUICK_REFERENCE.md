@@ -33,9 +33,9 @@ Quick lookup card for the eIOU Wallet web interface.
 
 | Controller | File | Actions | Purpose |
 |------------|------|---------|---------|
-| `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping, proposeChainDrop, acceptChainDrop, rejectChainDrop | Contact management |
-| `TransactionController` | `controllers/TransactionController.php` | sendEIOU, checkUpdates | Sending transactions |
-| `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson | User settings & debug |
+| `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping, proposeChainDrop, acceptChainDrop, rejectChainDrop, acceptCurrency, addCurrency, acceptAllCurrencies | Contact management |
+| `TransactionController` | `controllers/TransactionController.php` | sendEIOU, checkUpdates, approveP2pTransaction, rejectP2pTransaction, getP2pCandidates | Sending transactions & P2P approval |
+| `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson, analyticsConsent | User settings, debug & analytics |
 
 ---
 
@@ -58,6 +58,8 @@ All POST actions require CSRF token.
 | `acceptChainDrop` | `proposal_id` | JSON (AJAX) |
 | `rejectChainDrop` | `proposal_id` | JSON (AJAX) |
 | `acceptCurrency` | `pubkey_hash`, `currency`, `fee`, `credit` | Redirect with message |
+| `addCurrency` | `pubkey`, `currency`, `fee`, `credit` | JSON (AJAX) |
+| `acceptAllCurrencies` | `pubkey_hash`, `currencies` (JSON), `is_new_contact`, `contact_address`, `contact_name` | JSON (AJAX) |
 
 ### Transaction Actions (TransactionController)
 
@@ -69,14 +71,26 @@ All POST actions require CSRF token.
 
 Optional: `address_type` (when contact selected), `description`, `best_fee` (experimental best-fee routing)
 
+| `getP2pCandidates` | `hash` | JSON (AJAX) |
+
 ### Settings Actions (SettingsController)
 
 | Action | Required Fields | Response |
 |--------|-----------------|----------|
-| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled`, `autoAcceptTransaction` | Redirect with message |
+| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled`, `autoAcceptTransaction`, plus advanced settings | Redirect with message |
 | `clearDebugLogs` | (none) | Redirect with message |
 | `sendDebugReport` | `description` (optional) | Redirect with message |
 | `getDebugReportJson` | `description` (optional), `report_mode` (full/limited) | JSON (AJAX) |
+| `analyticsConsent` | `consent` (0 or 1) | JSON (AJAX) |
+
+### DLQ Actions (DlqController)
+
+| Action | Required Fields | Response |
+|--------|-----------------|----------|
+| `dlqRetry` | `dlq_id`, `csrf_token` | JSON (AJAX) |
+| `dlqAbandon` | `dlq_id`, `csrf_token` | JSON (AJAX) |
+| `dlqRetryAll` | `csrf_token` | JSON (AJAX) |
+| `dlqAbandonAll` | `csrf_token` | JSON (AJAX) |
 
 ---
 
@@ -86,16 +100,19 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 |-----------|------|---------|
 | Main layout | `layout/wallet.html` | Page structure, includes all sections |
 | Auth form | `layout/authenticationForm.html` | Login form |
+| Banner | `layout/walletSubParts/banner.html` | Dynamic image banner carousel from `/gui/assets/banners/` |
 | Header | `layout/walletSubParts/header.html` | Page header |
-| Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages, pending contact banners, chain drop proposal banners |
+| Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
 | Quick actions | `layout/walletSubParts/quickActions.html` | Action buttons |
 | Wallet info | `layout/walletSubParts/walletInformation.html` | Balance, earnings, available credit display |
 | Send form | `layout/walletSubParts/eiouForm.html` | Send transaction form |
 | Contact form | `layout/walletSubParts/contactForm.html` | Add contact form |
 | Contact section | `layout/walletSubParts/contactSection.html` | Contact lists, modal with your/their credit |
 | Transaction history | `layout/walletSubParts/transactionHistory.html` | Transaction list |
+| DLQ section | `layout/walletSubParts/dlqSection.html` | Dead letter queue management |
 | Settings | `layout/walletSubParts/settingsSection.html` | Settings panel & debug tools |
 | Floating buttons | `layout/walletSubParts/floatingButtons.html` | Back-to-top, etc. |
+| Analytics consent | `layout/walletSubParts/analyticsConsentModal.html` | One-time analytics opt-in modal |
 
 ---
 
@@ -144,6 +161,13 @@ fetch(window.location.href, {
 | `safeStorageSet(key, value)` | Tor-safe sessionStorage | Store preferences |
 | `safeStorageGet(key)` | Tor-safe sessionStorage | Retrieve preferences |
 | `safeStorageRemove(key)` | Tor-safe sessionStorage | Clear preferences |
+| `copyToClipboard(text, button)` | Copy text to clipboard | Address/key copy buttons |
+| `filterContacts(query)` | Filter contact cards by name | Contact search input |
+| `toggleShowAllContacts()` | Toggle between 16 and all contacts | Show more button |
+| `initContactsDisplay()` | Initialize contact grid with scroll/filter | DOMContentLoaded |
+| `updateAmountPrecisionHint()` | Show min amount hint for selected currency | Send form currency change |
+| `initializeCurrencyAcceptHandlers()` | Set up accept forms for pending currencies | DOMContentLoaded |
+| `showToast(message, type, duration)` | Display a temporary toast notification | Internal notifications |
 
 ### Constants
 

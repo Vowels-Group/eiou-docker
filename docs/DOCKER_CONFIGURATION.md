@@ -54,6 +54,22 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_VOLUME_KEY` | (none) | No | Volume encryption passphrase as environment variable (less secure) |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, or use `P2P_CA_CERT` for a shared CA |
 | `P2P_CA_CERT` | (none) | No | Path to a CA certificate file inside the container. When set, P2P SSL verification uses this CA instead of the system bundle — use with a volume mount (e.g., `./ssl-ca:/ssl-ca:ro`) |
+| `TRUSTED_PROXIES` | (none) | No | Comma-separated list of trusted reverse proxy IPs for `X-Forwarded-For` header parsing |
+| **Service Tuning** | | | |
+| `NGINX_WORKER_PROCESSES` | `2` | No | Nginx worker thread count (match to CPU allocation) |
+| `NGINX_WORKER_CONNECTIONS` | `768` | No | Max connections per nginx worker |
+| `NGINX_CLIENT_MAX_BODY` | `10m` | No | Max request body size |
+| `NGINX_RATE_LIMIT_GENERAL` | `30r/s` | No | General endpoint rate limit |
+| `NGINX_RATE_LIMIT_API` | `10r/s` | No | API endpoint rate limit |
+| `NGINX_RATE_LIMIT_P2P` | `20r/s` | No | P2P endpoint rate limit |
+| `NGINX_CONN_LIMIT` | `50` | No | Max concurrent connections per IP |
+| `PHP_FPM_PM` | `ondemand` | No | Process manager mode: `ondemand`, `dynamic`, `static` |
+| `PHP_FPM_MAX_CHILDREN` | `5` | No | Max PHP worker processes (~20-30MB RAM each) |
+| `PHP_FPM_START_SERVERS` | `2` | No | Initial workers on startup (dynamic mode only) |
+| `PHP_FPM_MIN_SPARE` | `1` | No | Min idle workers (dynamic mode only) |
+| `PHP_FPM_MAX_SPARE` | `3` | No | Max idle workers (dynamic mode only) |
+| `PHP_FPM_IDLE_TIMEOUT` | `10s` | No | Kill idle workers after this timeout (ondemand mode only) |
+| `PHP_FPM_MAX_REQUESTS` | `0` | No | Recycle worker after N requests (0 = unlimited) |
 
 *Required unless using Tor-only mode
 
@@ -1194,6 +1210,14 @@ docker-compose -f <config>.yml up -d --build
 - Wait longer (up to 2 minutes on first run)
 - Check MariaDB logs: `docker logs <container> 2>&1 | grep -i maria`
 - Ensure sufficient memory (minimum 275MB per container)
+
+#### MariaDB Version Mismatch After Image Rebuild
+
+**Symptoms:** MariaDB error log shows `Reading log encryption info failed; the log was created with MariaDB X.Y.Z` followed by `InnoDB: Plugin registration as a STORAGE ENGINE failed`.
+
+**Cause:** Rebuilding the Docker image pulled a newer MariaDB patch version from Debian repos. The InnoDB redo logs on the persistent volume use the old version's encryption metadata format, which the new binary cannot parse.
+
+**Solution:** Starting with v0.1.6-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, removes incompatible redo/aria logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
 
 ### Tor Connectivity Issues
 
