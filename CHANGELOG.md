@@ -10,6 +10,17 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## v0.1.7-alpha (2026-04-03)
+
+### Fixed
+- Fix MariaDB failing to start after container rebuild when TDE was enabled — `encryption.cnf` lives in the container filesystem (not a volume) and is lost when the container is recreated, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. MariaDB fails with `Obtaining redo log encryption key version 1 failed`. The pre-MariaDB TDE key setup now detects this condition: if the master key is available and a database exists on the volume but `encryption.cnf` is missing, it recreates the encryption config and TDE key file before MariaDB starts
+
+### Docs
+- Update `UPGRADE_GUIDE.md` — add TDE config rebuild to startup flow diagram, add troubleshooting entry for TDE config lost after container rebuild
+- Update `DOCKER_CONFIGURATION.md` — add troubleshooting entry for TDE encryption config lost after rebuild
+
+---
+
 ## v0.1.6-alpha (2026-04-03)
 
 ### Changed

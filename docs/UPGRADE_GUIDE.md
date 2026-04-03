@@ -133,9 +133,11 @@ New Container (running v2) — startup.sh runs:
   1. Maintenance mode ON   — /tmp/eiou_maintenance.lock created (HTTP → 503)
   2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
   3. Volume decryption     — if volume passphrase active, decrypt master key to /dev/shm
-  4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm
+  4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm;
+                             if encryption.cnf lost (container rebuild), recreate it
+                             from master key so MariaDB can read encrypted data
   5. MariaDB version check — compare binary version to stored version on volume;
-                             if mismatch, remove stale redo/aria logs before start
+                             if mismatch, use force-recovery to regenerate redo logs
   6. Services start        — web server, MariaDB, Tor, cron
   7. MariaDB upgrade       — if version changed, run mariadb-upgrade + store new version
   8. Database migrations   — adds new tables/columns as needed
@@ -335,6 +337,8 @@ volumes:
 4. It restarts MariaDB normally, then runs `mariadb-upgrade` and stores the new version
 
 If the proactive check is bypassed (e.g., first boot with version tracking), a reactive fallback applies the same force-recovery when the normal startup times out. If all recovery fails, the container exits with a FATAL message instead of looping forever.
+
+**TDE encryption config lost after container rebuild:** The `encryption.cnf` file lives in the container filesystem (`/etc/mysql/conf.d/`), not on a volume. When the container is recreated (`docker compose up -d --build`), this file is lost, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. MariaDB fails with: `Obtaining redo log encryption key version 1 failed`. Starting with v0.1.7-alpha, the pre-MariaDB TDE key setup detects this condition: if the master key is available and a database exists on the volume, it recreates `encryption.cnf` and the TDE key file automatically. No manual action needed.
 
 **Missing TDE key file:** If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
 

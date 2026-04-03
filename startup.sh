@@ -812,7 +812,32 @@ fi
 # The TDE key file lives in /dev/shm (RAM) and is lost on container restart.
 # It must be recreated from the master key BEFORE MariaDB starts, otherwise
 # MariaDB cannot read its encrypted tables.
+#
+# encryption.cnf is in the container filesystem (/etc/mysql/conf.d/), NOT on a
+# volume. On container rebuild it is lost, but the mysql-data volume still has
+# TDE-encrypted redo logs and tablespace files. If the master key is available
+# and a database already exists on the volume, we must recreate encryption.cnf
+# AND the TDE key file, otherwise MariaDB fails with:
+#   "Obtaining redo log encryption key version 1 failed"
+TDE_SETUP_NEEDED=false
 if [ -f /etc/mysql/conf.d/encryption.cnf ]; then
+    # Normal restart: encryption.cnf exists, just refresh the key in /dev/shm
+    TDE_SETUP_NEEDED=true
+elif [ -d /var/lib/mysql/mysql ] && { [ -f /dev/shm/.master.key ] || [ -f /etc/eiou/config/.master.key ]; }; then
+    # Container rebuild: encryption.cnf lost but volume has data + master key available.
+    # Recreate encryption.cnf so MariaDB can load the TDE plugin and read encrypted files.
+    echo "TDE encryption config missing after container rebuild — recreating..."
+    TDE_CONFIG_RESULT=$(php /app/eiou/scripts/mariadb-tde-init.php setup 2>&1)
+    if echo "$TDE_CONFIG_RESULT" | grep -q "configuration written"; then
+        echo "MariaDB TDE: configuration restored"
+        TDE_SETUP_NEEDED=true
+    else
+        echo "WARNING: Could not recreate TDE config — MariaDB may fail to read encrypted data"
+        echo "$TDE_CONFIG_RESULT"
+    fi
+fi
+
+if [ "$TDE_SETUP_NEEDED" = "true" ]; then
     MASTER_KEY_PATH=""
     if [ -f /dev/shm/.master.key ]; then
         MASTER_KEY_PATH="/dev/shm/.master.key"
