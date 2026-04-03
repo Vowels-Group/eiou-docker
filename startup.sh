@@ -846,7 +846,9 @@ fi
 #   "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"
 #
 # MariaDB 10.5+ does NOT recreate ib_logfile0 when it's missing, so we
-# cannot simply delete stale redo logs. Instead, on version mismatch we
+# cannot simply delete stale redo logs. (If ib_logfile0 is missing entirely,
+# the MISSING REDO LOG DETECTION section below handles that separately.)
+# Instead, on version mismatch we
 # start MariaDB with innodb_force_recovery=1 (skips redo log application),
 # then do a clean shutdown to write fresh redo logs in the new format,
 # then restart normally. After normal startup, mariadb-upgrade handles
@@ -874,6 +876,46 @@ elif [ -n "$CURRENT_MARIADB_VERSION" ] && [ -d /var/lib/mysql/mysql ]; then
     # Existing database but no version file — first boot with version tracking.
     # Run mariadb-upgrade to be safe.
     echo "MariaDB: Adding version tracking (first tracked boot: $CURRENT_MARIADB_VERSION)"
+    MARIADB_UPGRADE_NEEDED=true
+fi
+
+# =============================================================================
+# MISSING REDO LOG DETECTION
+# =============================================================================
+# If ibdata1 exists but ib_logfile0 does not, MariaDB will refuse to start
+# even with innodb_force_recovery — InnoDB requires the redo log FILE to
+# exist before it can initialize the plugin. This can happen when:
+#   - A prior container crashed during initialization
+#   - The volume was partially restored or corrupted
+#   - A broken prior image never completed MariaDB setup
+#
+# Fix: create a zero-filled ib_logfile0 of the correct size before starting
+# MariaDB. InnoDB will detect the invalid (empty) redo log and rebuild it
+# when started with innodb_force_recovery.
+# =============================================================================
+if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
+    echo "========================================================================"
+    echo "WARNING: InnoDB redo log (ib_logfile0) is missing!"
+    echo "Data directory exists but redo logs do not."
+    echo "Creating empty redo log to allow MariaDB recovery..."
+    echo "========================================================================"
+
+    # MariaDB 10.11 default innodb_log_file_size is 96MB.
+    # Read the configured value if available, otherwise use default.
+    CONFIGURED_LOG_SIZE=$(my_print_defaults --mysqld 2>/dev/null | grep -oP '(?<=innodb.log.file.size=)\d+' | head -1)
+    LOG_SIZE_BYTES="${CONFIGURED_LOG_SIZE:-100663296}"  # 96MB = 100663296 bytes
+    LOG_SIZE_MB=$((LOG_SIZE_BYTES / 1048576))
+    if [ "$LOG_SIZE_MB" -lt 1 ]; then
+        LOG_SIZE_MB=96
+    fi
+
+    dd if=/dev/zero of=/var/lib/mysql/ib_logfile0 bs=1M count="$LOG_SIZE_MB" 2>/dev/null
+    chown mysql:mysql /var/lib/mysql/ib_logfile0
+    chmod 660 /var/lib/mysql/ib_logfile0
+    echo "Created empty ib_logfile0 (${LOG_SIZE_MB}MB)"
+
+    # Force the recovery path so MariaDB rebuilds the redo log properly
+    MARIADB_VERSION_CHANGED=true
     MARIADB_UPGRADE_NEEDED=true
 fi
 

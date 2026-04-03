@@ -135,7 +135,10 @@ New Container (running v2) — startup.sh runs:
   3. Volume decryption     — if volume passphrase active, decrypt master key to /dev/shm
   4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm
   5. MariaDB version check — compare binary version to stored version on volume;
-                             if mismatch, remove stale redo/aria logs before start
+                             if mismatch, use force-recovery to regenerate redo logs
+  5b. Missing redo log check — if ibdata1 exists but ib_logfile0 does not (broken
+                             prior container), create zero-filled redo log and
+                             trigger force-recovery path
   6. Services start        — web server, MariaDB, Tor, cron
   7. MariaDB upgrade       — if version changed, run mariadb-upgrade + store new version
   8. Database migrations   — adds new tables/columns as needed
@@ -335,6 +338,8 @@ volumes:
 4. It restarts MariaDB normally, then runs `mariadb-upgrade` and stores the new version
 
 If the proactive check is bypassed (e.g., first boot with version tracking), a reactive fallback applies the same force-recovery when the normal startup times out. If all recovery fails, the container exits with a FATAL message instead of looping forever.
+
+**Missing redo log (ib_logfile0):** If the prior container crashed during initialization or was otherwise broken, the persistent volume may have `ibdata1` (InnoDB system tablespace) but no `ib_logfile0` (redo log). MariaDB refuses to start without this file, even with `innodb_force_recovery`. Starting with v0.1.7-alpha, `startup.sh` detects this condition and creates a zero-filled redo log of the correct size before starting MariaDB, then triggers force-recovery to rebuild the redo log properly. The error log shows `InnoDB: File ./ib_logfile0 was not found` followed by `Plugin 'InnoDB' registration as a STORAGE ENGINE failed`.
 
 **Missing TDE key file:** If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
 

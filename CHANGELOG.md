@@ -10,6 +10,17 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## v0.1.7-alpha (2026-04-03)
+
+### Fixed
+- Fix MariaDB failing to start when InnoDB redo log (`ib_logfile0`) is completely missing from the persistent volume — this occurs when upgrading from a broken prior container that crashed during initialization, had a partially restored volume, or never completed MariaDB setup. MariaDB refuses to initialize the InnoDB plugin without the redo log file present, even with `innodb_force_recovery` enabled. `startup.sh` now detects this condition before starting MariaDB: if `ibdata1` exists but `ib_logfile0` does not, it creates a zero-filled redo log of the correct size (96MB default, or reads from MariaDB config) with proper ownership, then triggers the existing force-recovery path to rebuild the redo log and run `mariadb-upgrade`
+
+### Docs
+- Update `UPGRADE_GUIDE.md` — add missing redo log recovery to startup flow diagram, add troubleshooting entry for missing `ib_logfile0` scenario
+- Update `DOCKER_CONFIGURATION.md` — add troubleshooting entry for missing InnoDB redo logs after broken container upgrade
+
+---
+
 ## v0.1.6-alpha (2026-04-03)
 
 ### Changed

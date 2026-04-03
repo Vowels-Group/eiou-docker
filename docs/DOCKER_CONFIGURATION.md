@@ -1217,7 +1217,15 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** Rebuilding the Docker image pulled a newer MariaDB patch version from Debian repos. The InnoDB redo logs on the persistent volume use the old version's encryption metadata format, which the new binary cannot parse.
 
-**Solution:** Starting with v0.1.6-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, removes incompatible redo/aria logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
+**Solution:** Starting with v0.1.6-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, uses `innodb_force_recovery=1` to regenerate redo logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
+
+#### Missing InnoDB Redo Log After Broken Container
+
+**Symptoms:** MariaDB error log shows `InnoDB: File ./ib_logfile0 was not found` followed by `Plugin 'InnoDB' registration as a STORAGE ENGINE failed`. Even `innodb_force_recovery` fails with the same error.
+
+**Cause:** The prior container crashed during initialization, had a partially restored volume, or never completed MariaDB setup. The persistent volume has `ibdata1` (InnoDB data) but is missing `ib_logfile0` (InnoDB redo log). MariaDB requires this file to exist before the InnoDB plugin can initialize — force-recovery cannot help if the file is absent entirely.
+
+**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. Before starting MariaDB, the script detects missing `ib_logfile0` when `ibdata1` exists, creates a zero-filled redo log of the correct size (96MB default), then triggers the force-recovery path to rebuild the redo log. If the underlying data files (`ibdata1`, `.ibd` table files) are also corrupted, recovery will fail and the container will exit with instructions to restore from backup or seed phrase.
 
 ### Tor Connectivity Issues
 
