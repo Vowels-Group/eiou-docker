@@ -97,17 +97,19 @@ files/src/gui/
 │   ├── authenticationForm.html     # Login page
 │   ├── wallet.html                 # Main wallet layout (includes subparts)
 │   └── walletSubParts/             # Modular UI components
-│       ├── header.html             # Page header with logout
-│       ├── notifications.html      # Toast and banner notifications
-│       ├── quickActions.html       # Quick action cards
-│       ├── walletInformation.html  # Balance and address display
-│       ├── eiouForm.html           # Send transaction form
-│       ├── contactForm.html        # Add contact form
-│       ├── contactSection.html     # Contact list and modal
-│       ├── transactionHistory.html # Transaction list and modal
-│       ├── dlqSection.html         # Dead letter queue management
-│       ├── settingsSection.html    # Settings form and debug panel
-│       └── floatingButtons.html    # Back-to-top and refresh buttons
+│       ├── banner.html              # Dynamic image banner carousel
+│       ├── header.html              # Page header with logout
+│       ├── notifications.html       # Toast and banner notifications
+│       ├── quickActions.html        # Quick action cards
+│       ├── walletInformation.html   # Balance and address display
+│       ├── eiouForm.html            # Send transaction form
+│       ├── contactForm.html         # Add contact form
+│       ├── contactSection.html      # Contact list and modal
+│       ├── transactionHistory.html  # Transaction list and modal
+│       ├── dlqSection.html          # Dead letter queue management
+│       ├── settingsSection.html     # Settings form and debug panel
+│       ├── floatingButtons.html     # Back-to-top and refresh buttons
+│       └── analyticsConsentModal.html # One-time analytics opt-in modal
 │
 └── assets/
     ├── css/
@@ -145,6 +147,8 @@ Handles all contact-related operations.
 | `handleAcceptChainDrop()` | `acceptChainDrop` | Accept chain drop proposal (AJAX) | `proposal_id` |
 | `handleRejectChainDrop()` | `rejectChainDrop` | Reject chain drop proposal (AJAX) | `proposal_id` |
 | `handleAcceptCurrency()` | `acceptCurrency` | Accept pending incoming currency | `pubkey_hash`, `currency`, `fee`, `credit` |
+| `handleAddCurrency()` | `addCurrency` | Add a new currency to an existing contact (AJAX) | `pubkey`, `currency`, `fee`, `credit` |
+| `handleAcceptAllCurrencies()` | `acceptAllCurrencies` | Accept all pending currencies for a contact (AJAX) | `pubkey_hash`, `currencies` (JSON array), `is_new_contact`, `contact_address`, `contact_name` |
 
 **AJAX Response Format (pingContact):**
 
@@ -170,6 +174,7 @@ Handles transaction operations.
 |--------|-------------|-------------|------------|
 | `handleSendEIOU()` | `sendEIOU` | Send eIOU transaction | `recipient` or `manual_recipient`, `address_type`, `amount`, `currency`, `description` |
 | `handleCheckUpdates()` | GET `check_updates=1` | Poll for updates | `last_check` (timestamp) |
+| `handleGetP2pCandidates()` | `getP2pCandidates` | Fetch P2P route candidates for best-fee approval (AJAX) | `hash` |
 
 **Recipient Resolution:**
 1. If `manual_recipient` is provided, use as-is (P2P routing)
@@ -188,6 +193,7 @@ Handles settings and debug operations.
 | `handleClearDebugLogs()` | `clearDebugLogs` | Clear debug entries | None |
 | `handleSendDebugReport()` | `sendDebugReport` | Generate debug file | `description` |
 | `handleGetDebugReportJson()` | `getDebugReportJson` | Download debug JSON (AJAX) | `description`, `report_mode` |
+| `handleAnalyticsConsent()` | `analyticsConsent` | Save one-time analytics consent choice (AJAX) | `consent` (0 or 1) |
 
 **Available Settings:**
 
@@ -215,7 +221,7 @@ Handles settings and debug operations.
 
 | Category | Settings |
 |----------|----------|
-| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled`, `updateCheckEnabled` |
+| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `autoRejectUnknownCurrency`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
 | Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
 | Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
@@ -234,6 +240,8 @@ Handles dead letter queue management actions (AJAX only — all responses are JS
 |--------|-------------|-------------|------------|
 | `handleRetry()` | `dlqRetry` | Re-send a failed message to its original recipient | `dlq_id`, `csrf_token` |
 | `handleAbandon()` | `dlqAbandon` | Mark a DLQ item as abandoned | `dlq_id`, `csrf_token` |
+| `handleRetryAll()` | `dlqRetryAll` | Retry all retryable DLQ items in bulk (transaction + contact types only) | `csrf_token` |
+| `handleAbandonAll()` | `dlqAbandonAll` | Abandon all pending/retrying DLQ items | `csrf_token` |
 
 **Retry constraints:**
 - Only `transaction` and `contact` message types can be retried
@@ -263,20 +271,33 @@ Login page displayed when user is not authenticated.
 Main layout container that includes all subpart components.
 
 **Include Order:**
-1. header.html
-2. notifications.html
-3. quickActions.html
-4. walletInformation.html
-5. eiouForm.html
-6. contactForm.html
-7. contactSection.html
-8. transactionHistory.html
-9. settingsSection.html
-10. floatingButtons.html
+1. banner.html
+2. header.html
+3. notifications.html
+4. quickActions.html
+5. walletInformation.html
+6. eiouForm.html
+7. contactForm.html
+8. contactSection.html
+9. transactionHistory.html
+10. dlqSection.html
+11. settingsSection.html
+12. floatingButtons.html
+13. analyticsConsentModal.html
 
 ---
 
 ### walletSubParts Components
+
+#### banner.html
+
+Loads and displays banner images from `/gui/assets/banners/`. Any image placed in that directory (jpg, jpeg, png, gif, svg, webp) is shown at the top of the wallet page. Files are sorted alphabetically. Used for promotional or informational banners.
+
+| Element | Purpose |
+|---------|---------|
+| Banner carousel | Displays images from the banners directory |
+
+---
 
 #### header.html
 
@@ -292,8 +313,11 @@ Main layout container that includes all subpart components.
 | Element | Purpose |
 |---------|---------|
 | Operation result toasts | Success/error messages from redirects |
+| Tor connectivity status | Warning when Tor is unreachable, success toast when restored |
+| Update available banner | Shows current vs available version with Docker pull command |
 | In-progress banner | Shows pending transaction count |
 | Pending contacts banner | Shows pending contact request count |
+| Pending currency requests | Shows incoming currency requests from existing contacts |
 | Chain drop proposal banner | Incoming proposals requiring action (red alert) |
 | Completed transaction toasts | Notifications for finished transactions |
 | Received transaction toasts | Notifications for incoming payments |
@@ -454,6 +478,8 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 |--------|--------------|-------------|
 | **Retry** | `transaction`, `contact` types only, pending/retrying status | Re-sends the original signed payload directly to the recipient |
 | **Abandon** | Any pending/retrying item | Marks as abandoned — no further retries |
+| **Retry All** | Bulk action — all retryable items | Re-sends all eligible items (transaction + contact types only) |
+| **Abandon All** | Bulk action — all pending/retrying items | Marks all actionable items as abandoned |
 
 > **Important — retry eligibility by message type:**
 >
@@ -509,6 +535,18 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 |--------|---------|
 | Back to top | Scroll to page top |
 | Manual refresh | Reload wallet data |
+
+---
+
+#### analyticsConsentModal.html
+
+One-time modal shown after first login to ask the user whether to enable anonymous analytics. The choice is saved via the `analyticsConsent` AJAX action and the modal never reappears (`analyticsConsentAsked` flag in config).
+
+| Element | Purpose |
+|---------|---------|
+| Consent modal | Opt-in/opt-out choice for anonymous analytics |
+| Enable button | Sets `analyticsEnabled=true` |
+| Decline button | Sets `analyticsEnabled=false` |
 
 ---
 
@@ -664,7 +702,7 @@ Builds standardized contact data structures for the GUI.
 | `buildContactData($contact, $status)` | Create normalized contact array |
 | `buildEncodedContactData($contact, $status)` | JSON-encoded, HTML-safe for onclick |
 
-**Contact Data Fields:** name, address, fee, credit_limit, currency, status, pubkey, pubkey_hash, balance, contact_id, transactions, online_status, valid_chain, my_available_credit, their_available_credit, chain_drop_proposal, plus all dynamic address types.
+**Contact Data Fields:** name, address, fee, credit_limit, currency, status, pubkey, pubkey_hash, balance, balances_by_currency, contact_id, transactions, online_status, valid_chain, my_available_credit, their_available_credit, chain_drop_proposal, chain_gap_details, currencies, pending_currencies, outgoing_currencies, plus all dynamic address types.
 
 **Address Priority:** Tor > HTTPS > HTTP (security preference)
 
@@ -677,7 +715,6 @@ Builds standardized contact data structures for the GUI.
 | No WebSockets | Tor Browser blocks WebSockets | Polling-based updates |
 | Limited JavaScript | Tor Browser security settings | Server-side rendering |
 | Session-based auth | No persistent login | Re-authenticate on browser close |
-| Single currency display | USD hardcoded in some selects | Future multi-currency support |
 | No real-time updates | Page refresh required | Auto-refresh when enabled |
 | Large contact lists | Performance with >100 contacts | Pagination/virtualization planned |
 | Debug log size | Full report slow over Tor | Limited report option available |
