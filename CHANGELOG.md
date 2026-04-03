@@ -14,20 +14,10 @@ The project is currently in **ALPHA** status.
 
 ### Fixed
 - Fix MariaDB failing to start after container rebuild when TDE was enabled — `encryption.cnf` lives in the container filesystem (not a volume) and is lost when the container is recreated, but the mysql-data volume still has TDE-encrypted redo logs and tablespace files. MariaDB fails with `Obtaining redo log encryption key version 1 failed`. The pre-MariaDB TDE key setup now detects this condition: if the master key is available and a database exists on the volume but `encryption.cnf` is missing, it recreates the encryption config and TDE key file before MariaDB starts
-
-### Docs
-- Update `UPGRADE_GUIDE.md` — add TDE config rebuild to startup flow diagram, add troubleshooting entry for TDE config lost after container rebuild
-- Update `DOCKER_CONFIGURATION.md` — add troubleshooting entry for TDE encryption config lost after rebuild
-
----
-
-## v0.1.5-alpha (2026-03-31)
+- Fix MariaDB failing to start after image rebuild due to version-incompatible encrypted InnoDB redo logs — when `apt` installs a different MariaDB patch version between builds, the new binary cannot parse the old version's redo log encryption metadata format (error: "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"). `startup.sh` now tracks the MariaDB binary version in `/var/lib/mysql/.mariadb_version` and on mismatch starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs, performs a clean shutdown to regenerate them in the new format, then restarts normally and runs `mariadb-upgrade`. A reactive fallback applies the same force-recovery if the normal startup times out (e.g., first boot with version tracking). The MariaDB wait loop now has a 60-second timeout with diagnostics instead of looping forever
 
 ### Changed
 - Reorder all transport/address display to most-secure-first: Tor > HTTPS > HTTP — affects GUI dropdowns (settings, send form, wallet info, contact modal), contact card icons, pending contact address lines, CLI output, and startup log. `VALID_TRANSPORT_INDICES` constant reordered. Startup log shows yellow ⚠ next to HTTP/HTTPS addresses only when they are Docker-internal (QUICKSTART without EIOU_HOST)
-
-### Fixed
-- Fix MariaDB failing to start after image rebuild due to version-incompatible encrypted InnoDB redo logs — when `apt` installs a different MariaDB patch version between builds, the new binary cannot parse the old version's redo log encryption metadata format (error: "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"). `startup.sh` now tracks the MariaDB binary version in `/var/lib/mysql/.mariadb_version` and on mismatch starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs, performs a clean shutdown to regenerate them in the new format, then restarts normally and runs `mariadb-upgrade`. A reactive fallback applies the same force-recovery if the normal startup times out (e.g., first boot with version tracking). The MariaDB wait loop now has a 60-second timeout with diagnostics instead of looping forever
 
 ### Docs
 - Update `GUI_REFERENCE.md` and `GUI_QUICK_REFERENCE.md` — add 6 undocumented controller actions (`addCurrency`, `acceptAllCurrencies`, `getP2pCandidates`, `analyticsConsent`, `dlqRetryAll`, `dlqAbandonAll`), 3 missing layout components (`banner.html`, `dlqSection.html`, `analyticsConsentModal.html`), 3 undocumented notification types (Tor connectivity, update available, pending currency requests), 2 missing Feature Toggle settings (`autoRejectUnknownCurrency`, `analyticsEnabled`), and remove outdated "Single currency display" limitation
@@ -35,6 +25,8 @@ The project is currently in **ALPHA** status.
 - Update `DOCKER_CONFIGURATION.md` — add 16 service tuning environment variables (nginx workers, rate limits, PHP-FPM process manager settings) and `TRUSTED_PROXIES` to the Quick Reference table
 - Update `UPGRADE_GUIDE.md` — add MariaDB version detection to startup flow, add verification log messages, expand troubleshooting with version mismatch and force-recovery details
 - Add MariaDB version mismatch troubleshooting entry to `DOCKER_CONFIGURATION.md`
+- - Update `UPGRADE_GUIDE.md` — add TDE config rebuild to startup flow diagram, add troubleshooting entry for TDE config lost after container rebuild
+- Update `DOCKER_CONFIGURATION.md` — add troubleshooting entry for TDE encryption config lost after rebuild
 
 ---
 
