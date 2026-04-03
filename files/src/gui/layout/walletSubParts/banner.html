@@ -23,8 +23,17 @@ if (is_dir($bannerDir)) {
 if (!empty($banners)):
 ?>
 <div class="banner-container">
-    <?php foreach ($banners as $banner): ?>
+    <?php foreach ($banners as $banner):
+        $ext = strtolower(pathinfo($banner, PATHINFO_EXTENSION));
+        if ($ext === 'svg'):
+            // Inline SVGs so we can inject dynamic values from Constants
+            $svgContent = file_get_contents($bannerDir . '/' . $banner);
+            // Replace {{APP_VERSION}} with version from Constants (e.g. "0.1.10-alpha" → "v0.1.10")
+            $version = 'v' . preg_replace('/-(alpha|beta|rc\d*)$/i', '', \Eiou\Core\Constants::APP_VERSION);
+            $svgContent = str_replace('{{APP_VERSION}}', htmlspecialchars($version), $svgContent);
+            echo '<div class="banner-image">' . $svgContent . '</div>';
+        else: ?>
         <img src="/gui/assets/banners/<?php echo htmlspecialchars($banner); ?>" alt="Banner" class="banner-image">
-    <?php endforeach; ?>
+    <?php endif; endforeach; ?>
 </div>
 <?php endif; ?>
