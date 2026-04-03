@@ -1195,6 +1195,14 @@ docker-compose -f <config>.yml up -d --build
 - Check MariaDB logs: `docker logs <container> 2>&1 | grep -i maria`
 - Ensure sufficient memory (minimum 275MB per container)
 
+#### MariaDB Version Mismatch After Image Rebuild
+
+**Symptoms:** MariaDB error log shows `Reading log encryption info failed; the log was created with MariaDB X.Y.Z` followed by `InnoDB: Plugin registration as a STORAGE ENGINE failed`.
+
+**Cause:** Rebuilding the Docker image pulled a newer MariaDB patch version from Debian repos. The InnoDB redo logs on the persistent volume use the old version's encryption metadata format, which the new binary cannot parse.
+
+**Solution:** Starting with v0.1.6-alpha, this is handled automatically by `startup.sh`. The startup script detects version mismatches, removes incompatible redo/aria logs, and runs `mariadb-upgrade`. No manual action needed. See the [Upgrade Guide](UPGRADE_GUIDE.md#mariadb-fails-to-start-after-upgrade) for details.
+
 ### Tor Connectivity Issues
 
 #### Hidden Service Not Ready

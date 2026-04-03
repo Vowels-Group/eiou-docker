@@ -134,13 +134,16 @@ New Container (running v2) — startup.sh runs:
   2. Config migration      — moves legacy config files to /etc/eiou/config/ if needed
   3. Volume decryption     — if volume passphrase active, decrypt master key to /dev/shm
   4. TDE key setup         — derive MariaDB TDE key from master key, write to /dev/shm
-  5. Services start        — web server, MariaDB, Tor, cron
-  6. Database migrations   — adds new tables/columns as needed
-  7. TDE first-time setup  — if new, encrypt existing tables (MariaDB restarts once)
-  8. Credential encryption — encrypt dbconfig.json credentials if not already encrypted
-  9. Cron jobs             — install update check, analytics, backup cron entries
-  10. Maintenance mode OFF — lockfile removed, HTTP requests accepted
-  11. Processors start     — P2P, Transaction, Cleanup, ContactStatus
+  5. MariaDB version check — compare binary version to stored version on volume;
+                             if mismatch, remove stale redo/aria logs before start
+  6. Services start        — web server, MariaDB, Tor, cron
+  7. MariaDB upgrade       — if version changed, run mariadb-upgrade + store new version
+  8. Database migrations   — adds new tables/columns as needed
+  9. TDE first-time setup  — if new, encrypt existing tables (MariaDB restarts once)
+  10. Credential encryption — encrypt dbconfig.json credentials if not already encrypted
+  11. Cron jobs            — install update check, analytics, backup cron entries
+  12. Maintenance mode OFF — lockfile removed, HTTP requests accepted
+  13. Processors start     — P2P, Transaction, Cleanup, ContactStatus
 
 Result:
   ├── /var/lib/mysql          ← same volume reattached (data intact)
@@ -246,6 +249,9 @@ docker logs <container-name> 2>&1 | head -100
 - `Wallet already configured` or `eIOU has been initiated` — existing wallet detected on volume
 - `MariaDB TDE: key file ready` — TDE key derived from master key successfully
 - `Enabling MariaDB data-at-rest encryption...` — first-time TDE setup (normal on first upgrade to a TDE-enabled version)
+- `MariaDB version change detected: X.Y.Z -> A.B.C` — version mismatch detected, redo logs will be cleaned (normal after image rebuild with a different MariaDB patch)
+- `MariaDB upgrade completed successfully` — `mariadb-upgrade` ran after version change
+- `MariaDB: Adding version tracking` — first boot with version tracking enabled (normal on first upgrade to v0.1.6+)
 - `Update check cron job installed (daily at 2 AM UTC)` — version check active
 - `Analytics cron job installed (weekly, Sundays at 3 AM UTC)` — analytics cron active
 - `eIOU Node started successfully!` — all processors running, ready to receive
@@ -321,7 +327,16 @@ volumes:
 
 ### MariaDB fails to start after upgrade
 
-If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
+**Version mismatch (most common after image rebuild):** If MariaDB was upgraded to a different patch version between image builds (e.g., 10.11.6 → 10.11.14), the InnoDB redo logs on the persistent volume are incompatible with the new binary. The error log shows: `Reading log encryption info failed; the log was created with MariaDB X.Y.Z`. Starting with v0.1.6-alpha, `startup.sh` handles this automatically:
+
+1. Before starting MariaDB, it compares the binary version against `/var/lib/mysql/.mariadb_version`
+2. On mismatch, it starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs
+3. It performs a clean shutdown to regenerate redo logs in the new version's format
+4. It restarts MariaDB normally, then runs `mariadb-upgrade` and stores the new version
+
+If the proactive check is bypassed (e.g., first boot with version tracking), a reactive fallback applies the same force-recovery when the normal startup times out. If all recovery fails, the container exits with a FATAL message instead of looping forever.
+
+**Missing TDE key file:** If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
 
 ### Volume passphrase lost
 

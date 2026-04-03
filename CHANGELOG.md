@@ -12,6 +12,13 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Fix MariaDB failing to start after image rebuild due to version-incompatible encrypted InnoDB redo logs — when `apt` installs a different MariaDB patch version between builds, the new binary cannot parse the old version's redo log encryption metadata format (error: "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"). `startup.sh` now tracks the MariaDB binary version in `/var/lib/mysql/.mariadb_version` and on mismatch starts MariaDB with `innodb_force_recovery=1` to bypass stale redo logs, performs a clean shutdown to regenerate them in the new format, then restarts normally and runs `mariadb-upgrade`. A reactive fallback applies the same force-recovery if the normal startup times out (e.g., first boot with version tracking). The MariaDB wait loop now has a 60-second timeout with diagnostics instead of looping forever
+
+---
+
+## v0.1.5-alpha (2026-03-31)
+
 ### Added
 - Add **MariaDB Transparent Data Encryption (TDE)** — enabled by default after wallet generation, all database files encrypted at rest using `file_key_management` plugin with key derived from master key via HMAC-SHA256. TDE key stored only in `/dev/shm` (RAM-backed, never persisted to disk). On first boot the encryption plugin is loaded and all existing tables are encrypted; on subsequent boots the TDE key is regenerated from the master key before MariaDB starts. No user configuration required
 - Add **optional volume passphrase** (`EIOU_VOLUME_KEY` / `EIOU_VOLUME_KEY_FILE`) for environments with external secrets management — encrypts the master key at rest using Argon2id key derivation + AES-256-GCM. When set, the host server cannot read the master key from the Docker volume without the passphrase. `EIOU_VOLUME_KEY_FILE` (recommended) reads from a file; `EIOU_VOLUME_KEY` reads from an environment variable. Plaintext master key exists only in `/dev/shm` at runtime
