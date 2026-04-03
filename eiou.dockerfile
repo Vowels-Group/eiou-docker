@@ -88,6 +88,10 @@ LABEL org.opencontainers.image.title="eiou-node" \
 # - cron: Scheduled task execution for maintenance jobs
 # - curl: HTTP client for peer-to-peer communication
 # - mariadb-server: Database for wallet, transactions, contacts
+#   NOTE: Not version-pinned — Debian repos may ship a newer MariaDB between
+#   image builds. startup.sh detects version mismatches and uses force-recovery
+#   to regenerate redo logs + mariadb-upgrade automatically. See "MARIADB
+#   VERSION UPGRADE DETECTION" in startup.sh.
 # - certbot: Let's Encrypt ACME client for automatic SSL certificates
 # - openssl: SSL certificate generation and cryptography
 # - php-bcmath, php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
