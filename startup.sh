@@ -1791,11 +1791,11 @@ elif [[ "$authcode_file" == seedfile:* ]]; then
     seedfile_path="${authcode_file#seedfile:}"
     echo -e "\t Seedphrase & Auth Code: (stored in secure temp file)"
     echo -e "\t   View: docker exec \"$(hostname)\" cat \"$seedfile_path\""
-    echo -e "\t   Auto-deletes in 300 seconds"
+    echo -e "\t   Auto-deletes in 15 minutes"
 elif [ -n "$authcode_file" ]; then
     echo -e "\t Authentication Code: (stored in secure temp file)"
     echo -e "\t   View: docker exec \"$(hostname)\" cat \"$authcode_file\""
-    echo -e "\t   Auto-deletes in 300 seconds"
+    echo -e "\t   Auto-deletes in 15 minutes"
 else
     echo -e "\t Authentication Code: (unavailable - see 'eiou info --show-auth')"
 fi
