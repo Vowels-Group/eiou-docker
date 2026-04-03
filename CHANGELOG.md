@@ -21,6 +21,7 @@ The project is currently in **ALPHA** status.
 
 ---
 
+
 ## v0.1.6-alpha (2026-04-03)
 
 ### Changed

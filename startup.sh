@@ -946,6 +946,7 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
     MARIADB_VERSION_CHANGED=false
 fi
 
+
 # Start services
 service cron start
 service tor start

@@ -342,6 +342,7 @@ If the proactive check is bypassed (e.g., first boot with version tracking), a r
 
 **Missing redo log (ib_logfile0):** If the prior container crashed during initialization or was otherwise broken, the persistent volume may have `ibdata1` (InnoDB system tablespace) but no `ib_logfile0` (redo log). MariaDB refuses to start without this file, and no `innodb_force_recovery` level bypasses this. Starting with v0.1.7-alpha, `startup.sh` detects this condition and performs automatic recovery: moves broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables from the config volume, enables TDE encryption, and auto-restores from the latest backup. Wallet identity is preserved because `userconfig.json` (keys, `.onion` address) on the config volume is never modified. The recovery is crash-safe — if the process dies mid-recovery, the next boot retriggers the same flow. The error log shows `InnoDB: File ./ib_logfile0 was not found` followed by `Plugin 'InnoDB' registration as a STORAGE ENGINE failed`.
 
+
 **Missing TDE key file:** If the TDE encryption plugin was enabled on a previous boot but the TDE key file is missing, MariaDB cannot read its encrypted tables. Check the logs for `WARNING: Failed to prepare TDE key file`. This can happen if the master key is unavailable (e.g., volume passphrase not provided). Ensure the `{node}-config` volume has `.master.key` (or `.master.key.enc` with the correct `EIOU_VOLUME_KEY_FILE`).
 
 ### Volume passphrase lost
