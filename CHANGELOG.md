@@ -10,6 +10,18 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## v0.1.7-alpha (2026-04-03)
+
+### Fixed
+- Fix MariaDB failing to start when InnoDB redo log (`ib_logfile0`) is completely missing from the persistent volume — this occurs when upgrading from a broken prior container that crashed during initialization, had a partially restored volume, or never completed MariaDB setup. MariaDB refuses to initialize the InnoDB plugin without the redo log file present, and no `innodb_force_recovery` level can bypass this. `startup.sh` now detects this condition and performs automatic recovery: moves the broken data to `/tmp/mysql-broken-<timestamp>/` for inspection, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables via `Application::getInstance()`, enables TDE encryption, and auto-restores from the latest backup on the backups volume. Wallet identity (keys, `.onion` address) is preserved because `userconfig.json` on the config volume is never modified — only `dbconfig.json` is regenerated with fresh database credentials. The recovery is crash-safe: if the process dies at any point, the next boot retriggers the same flow
+
+### Docs
+- Update `UPGRADE_GUIDE.md` — add missing redo log recovery to startup flow diagram, add troubleshooting entry for missing `ib_logfile0` scenario
+- Update `DOCKER_CONFIGURATION.md` — add troubleshooting entry for missing InnoDB redo logs after broken container upgrade
+
+---
+
+
 ## v0.1.6-alpha (2026-04-03)
 
 ### Changed
