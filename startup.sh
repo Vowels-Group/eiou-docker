@@ -890,49 +890,27 @@ fi
 #
 # The only reliable fix is to clear the broken data directory and let MariaDB
 # reinitialize from scratch. This is safe because:
-#   - The wallet seed phrase is extracted from userconfig.json and used to
-#     restore the same wallet identity (same keys, same .onion address)
+#   - Config files (userconfig.json, dbconfig.json, .master.key) are on the
+#     config volume (/etc/eiou/config/), NOT the mysql-data volume
 #   - Encrypted backups are on the backups volume (/var/lib/eiou/backups/)
-#   - The user can restore transaction data with: eiou backup restore
+#   - No config files are deleted — the database user and schema are recreated
+#     from the existing encrypted credentials in dbconfig.json
+#   - Backup is auto-restored after MariaDB starts if one is available
 #
-# The broken files are preserved under /var/lib/mysql/.broken-<timestamp>/
+# The broken files are preserved under /tmp/mysql-broken-<timestamp>/
 # for manual inspection if needed.
 # =============================================================================
+REDO_LOG_RECOVERY=false
 if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
     echo "========================================================================"
     echo "WARNING: InnoDB redo log (ib_logfile0) is missing!"
     echo "Data directory exists but redo logs do not — MariaDB cannot recover"
     echo "from this state. Reinitializing database from scratch."
     echo ""
-    echo "Your wallet identity will be preserved (same keys, same .onion address)."
-    echo "After startup, restore your transaction data with:"
-    echo "  eiou backup list      — list available backups"
-    echo "  eiou backup restore   — restore the most recent backup"
+    echo "Your wallet keys, config, and encrypted backups are safe (stored on"
+    echo "separate volumes). The database will be auto-restored from the latest"
+    echo "backup if one is available."
     echo "========================================================================"
-
-    # Extract seed phrase from existing wallet config before clearing the database.
-    # This preserves the wallet identity (same keys, same .onion address) through
-    # the reinitialization. The seed phrase is written to RAM-backed /dev/shm and
-    # never touches disk or a bash variable.
-    SEED_EXTRACTED=false
-    if [ -f /etc/eiou/config/userconfig.json ]; then
-        php -r '
-            chdir("/app/eiou");
-            require_once "/app/eiou/vendor/autoload.php";
-            require_once "/app/eiou/src/bootstrap.php";
-            use Eiou\Security\KeyEncryption;
-            $cfg = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
-            if (!isset($cfg["mnemonic_encrypted"])) { exit(1); }
-            $mnemonic = KeyEncryption::decrypt($cfg["mnemonic_encrypted"]);
-            if (!$mnemonic) { exit(1); }
-            file_put_contents("/dev/shm/.eiou-recovery-seed", $mnemonic);
-            chmod("/dev/shm/.eiou-recovery-seed", 0600);
-        ' 2>/dev/null
-        if [ -f /dev/shm/.eiou-recovery-seed ]; then
-            SEED_EXTRACTED=true
-            echo "Wallet seed phrase extracted — identity will be preserved."
-        fi
-    fi
 
     # Preserve broken files for manual inspection (outside the data dir
     # so MariaDB doesn't interpret the directory as a database).
@@ -952,12 +930,6 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
 
     echo "Broken data preserved in $BROKEN_DIR"
 
-    # Check for available backups on the backups volume
-    BACKUP_COUNT=$(ls /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l)
-    if [ "$BACKUP_COUNT" -gt 0 ]; then
-        echo "Found $BACKUP_COUNT backup(s) available for restore after startup."
-    fi
-
     # Remove stale TDE encryption config — the fresh database won't be
     # encrypted until the TDE first-time setup step runs after migrations.
     rm -f /etc/mysql/conf.d/encryption.cnf
@@ -969,24 +941,7 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
     mysql_install_db --user=mysql --datadir=/var/lib/mysql --skip-test-db 2>/dev/null
     echo "MariaDB reinitialization complete."
 
-    # Remove old wallet and database configs so the startup flow triggers
-    # a fresh wallet generation (using the extracted seed phrase).
-    # This creates a new database, new credentials, and runs migrations.
-    rm -f /etc/eiou/config/userconfig.json
-    rm -f /etc/eiou/config/dbconfig.json
-    rm -f /etc/eiou/config/defaultconfig.json
-
-    if [ "$SEED_EXTRACTED" = "true" ]; then
-        # Point RESTORE_FILE to the extracted seed phrase so the startup
-        # flow restores the same wallet identity instead of generating new keys.
-        RESTORE_FILE="/dev/shm/.eiou-recovery-seed"
-        echo "Wallet will be restored from seed phrase (same identity)."
-    else
-        echo "WARNING: Could not extract seed phrase — a new wallet will be generated."
-        echo "Your old wallet identity will be lost. Use your backed-up seed phrase"
-        echo "to restore: set RESTORE_FILE=/path/to/seed.txt and restart."
-    fi
-
+    REDO_LOG_RECOVERY=true
     MARIADB_UPGRADE_NEEDED=false
     MARIADB_VERSION_CHANGED=false
 fi
@@ -1111,6 +1066,43 @@ if [ -n "$CURRENT_MARIADB_VERSION" ]; then
     echo "$CURRENT_MARIADB_VERSION" > "$MARIADB_VERSION_FILE"
 fi
 
+# =============================================================================
+# REDO LOG RECOVERY: Recreate database from existing config
+# =============================================================================
+# After MariaDB reinitializes with fresh system tables (due to missing redo
+# log), the application database and user no longer exist. Recreate them from
+# the encrypted credentials in dbconfig.json (on the config volume, untouched).
+# No config files are deleted — this is crash-safe.
+# =============================================================================
+if [ "$REDO_LOG_RECOVERY" = "true" ] && [ -f /etc/eiou/config/dbconfig.json ]; then
+    # Remove stale database config and schema version so the Application's
+    # freshInstall() runs on the next instantiation — creating a new database,
+    # user, and all tables from scratch. This is crash-safe: if the process
+    # dies after this point, the next boot sees no dbconfig.json and freshInstall
+    # runs again. userconfig.json (wallet identity) is NOT touched.
+    rm -f /etc/eiou/config/dbconfig.json
+    rm -f /etc/eiou/config/.schema_version
+
+    echo "Recreating database and tables..."
+    DB_RECREATE_RESULT=$(php -r '
+        chdir("/app/eiou");
+        require_once "/app/eiou/vendor/autoload.php";
+        require_once "/app/eiou/src/bootstrap.php";
+        $app = \Eiou\Core\Application::getInstance();
+        echo "Database and tables created successfully.\n";
+    ' 2>&1)
+    echo "$DB_RECREATE_RESULT"
+
+    if echo "$DB_RECREATE_RESULT" | grep -q "ERROR\|Fatal"; then
+        echo "WARNING: Database recreation failed. The node may not function correctly."
+        echo "You may need to restore from backup or seed phrase manually."
+        REDO_LOG_RECOVERY=false
+    fi
+    # Auto-restore from backup is deferred until after TDE setup (backups from
+    # TDE-enabled databases contain ENCRYPTED=YES in CREATE TABLE statements
+    # and cannot be restored until TDE is active on the new database).
+fi
+
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
     # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART
@@ -1150,13 +1142,7 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         echo "$RESTORE_RESULT"
         echo "Wallet restore completed."
-
-        # Securely delete the auto-extracted seed file if this was a redo-log recovery
-        if [ "$RESTORE_FILE" = "/dev/shm/.eiou-recovery-seed" ]; then
-            shred -u "$RESTORE_FILE" 2>/dev/null || rm -f "$RESTORE_FILE"
-        else
-            echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
-        fi
+        echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
 
         # Apply hostname to restored wallet if set
         # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
@@ -1520,6 +1506,49 @@ if [ -f /dev/shm/.master.key ] || [ -f /etc/eiou/config/.master.key ]; then
         elif [ $TDE_EXIT -ne 0 ]; then
             echo "WARNING: MariaDB TDE setup failed — database files remain unencrypted."
         fi
+    fi
+fi
+
+# =============================================================================
+# REDO LOG RECOVERY: Auto-restore from backup (deferred until after TDE)
+# =============================================================================
+# Backups from TDE-enabled databases contain ENCRYPTED=YES in CREATE TABLE
+# statements, so we must wait until TDE is active before restoring.
+# =============================================================================
+if [ "$REDO_LOG_RECOVERY" = "true" ]; then
+    # Ensure TDE plugin is loaded if encryption.cnf exists — the TDE setup may
+    # have written the config but not restarted MariaDB (isInitialized race).
+    # Backups from TDE databases need the plugin active to restore.
+    if [ -f /etc/mysql/conf.d/encryption.cnf ]; then
+        TDE_LOADED=$(mysql -u root -sN -e "SELECT COUNT(*) FROM information_schema.plugins WHERE PLUGIN_NAME='file_key_management';" 2>/dev/null)
+        if [ "$TDE_LOADED" = "0" ]; then
+            echo "Restarting MariaDB to load TDE encryption plugin..."
+            service mariadb restart
+            while ! mysqladmin ping -h localhost --silent 2>/dev/null; do sleep 1; done
+            echo "MariaDB restarted with TDE plugin."
+        fi
+    fi
+
+    BACKUP_COUNT=$(ls /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l)
+    if [ "$BACKUP_COUNT" -gt 0 ]; then
+        # Find the latest (largest) backup — most likely to have the most data
+        LATEST_BACKUP=$(ls -tS /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | head -1)
+        BACKUP_NAME=$(basename "$LATEST_BACKUP")
+        echo "Auto-restoring from backup: $BACKUP_NAME ..."
+        RESTORE_RESULT=$(eiou backup restore "$BACKUP_NAME" --confirm 2>&1)
+        RESTORE_EXIT=$?
+        if [ $RESTORE_EXIT -eq 0 ]; then
+            echo "Database restored successfully from backup."
+        else
+            echo "$RESTORE_RESULT"
+            echo "WARNING: Auto-restore failed. You can try manually:"
+            echo "  eiou backup list"
+            echo "  eiou backup restore <filename> --confirm"
+        fi
+    else
+        echo "No backups found. The database has empty tables."
+        echo "If you have a backup file, copy it to the backups volume and run:"
+        echo "  eiou backup restore <filename> --confirm"
     fi
 fi
 

@@ -1225,7 +1225,7 @@ docker-compose -f <config>.yml up -d --build
 
 **Cause:** The prior container crashed during initialization, had a partially restored volume, or never completed MariaDB setup. The persistent volume has `ibdata1` (InnoDB data) but is missing `ib_logfile0` (InnoDB redo log). MariaDB requires this file to exist before the InnoDB plugin can initialize — force-recovery cannot help if the file is absent entirely.
 
-**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. The script detects missing `ib_logfile0` when `ibdata1` exists, extracts the encrypted seed phrase from `userconfig.json`, moves the broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, and restores the wallet from the extracted seed phrase (same keys, same `.onion` address). After startup, restore transaction data with `eiou backup restore`. Backups are stored on a separate volume and are unaffected by the reinitialization.
+**Solution:** Starting with v0.1.7-alpha, this is handled automatically by `startup.sh`. The script detects missing `ib_logfile0` when `ibdata1` exists, moves broken data to `/tmp/mysql-broken-<timestamp>/`, reinitializes MariaDB with `mysql_install_db`, recreates the database and tables from the config volume, enables TDE encryption, and auto-restores from the latest backup. Wallet identity (keys, `.onion` address) is preserved — `userconfig.json` on the config volume is never modified. The recovery is crash-safe. If auto-restore fails (e.g., no backups available), the node starts with empty tables and you can manually restore later with `eiou backup restore <filename> --confirm`.
 
 ### Tor Connectivity Issues
 
