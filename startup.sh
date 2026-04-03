@@ -871,7 +871,9 @@ fi
 #   "Reading log encryption info failed; the log was created with MariaDB X.Y.Z"
 #
 # MariaDB 10.5+ does NOT recreate ib_logfile0 when it's missing, so we
-# cannot simply delete stale redo logs. Instead, on version mismatch we
+# cannot simply delete stale redo logs. (If ib_logfile0 is missing entirely,
+# the MISSING REDO LOG DETECTION section below handles that separately.)
+# Instead, on version mismatch we
 # start MariaDB with innodb_force_recovery=1 (skips redo log application),
 # then do a clean shutdown to write fresh redo logs in the new format,
 # then restart normally. After normal startup, mariadb-upgrade handles
@@ -901,6 +903,74 @@ elif [ -n "$CURRENT_MARIADB_VERSION" ] && [ -d /var/lib/mysql/mysql ]; then
     echo "MariaDB: Adding version tracking (first tracked boot: $CURRENT_MARIADB_VERSION)"
     MARIADB_UPGRADE_NEEDED=true
 fi
+
+# =============================================================================
+# MISSING REDO LOG DETECTION
+# =============================================================================
+# If ibdata1 exists but ib_logfile0 does not, MariaDB cannot start — InnoDB
+# requires the redo log file to exist, and no force_recovery level bypasses
+# this. A zero-filled placeholder also fails (MariaDB rejects it as a
+# pre-10.2.2 format log), and a redo log from mysql_install_db fails due to
+# LSN mismatch with the existing ibdata1.
+#
+# The only reliable fix is to clear the broken data directory and let MariaDB
+# reinitialize from scratch. This is safe because:
+#   - Config files (userconfig.json, dbconfig.json, .master.key) are on the
+#     config volume (/etc/eiou/config/), NOT the mysql-data volume
+#   - Encrypted backups are on the backups volume (/var/lib/eiou/backups/)
+#   - No config files are deleted — the database user and schema are recreated
+#     from the existing encrypted credentials in dbconfig.json
+#   - Backup is auto-restored after MariaDB starts if one is available
+#
+# The broken files are preserved under /tmp/mysql-broken-<timestamp>/
+# for manual inspection if needed.
+# =============================================================================
+REDO_LOG_RECOVERY=false
+if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
+    echo "========================================================================"
+    echo "WARNING: InnoDB redo log (ib_logfile0) is missing!"
+    echo "Data directory exists but redo logs do not — MariaDB cannot recover"
+    echo "from this state. Reinitializing database from scratch."
+    echo ""
+    echo "Your wallet keys, config, and encrypted backups are safe (stored on"
+    echo "separate volumes). The database will be auto-restored from the latest"
+    echo "backup if one is available."
+    echo "========================================================================"
+
+    # Preserve broken files for manual inspection (outside the data dir
+    # so MariaDB doesn't interpret the directory as a database).
+    BROKEN_DIR="/tmp/mysql-broken-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BROKEN_DIR"
+
+    # Move all files and directories aside
+    for item in /var/lib/mysql/*; do
+        mv "$item" "$BROKEN_DIR/" 2>/dev/null
+    done
+    for item in /var/lib/mysql/.*; do
+        case "$item" in
+            /var/lib/mysql/.|/var/lib/mysql/..) continue ;;
+            *) mv "$item" "$BROKEN_DIR/" 2>/dev/null ;;
+        esac
+    done
+
+    echo "Broken data preserved in $BROKEN_DIR"
+
+    # Remove stale TDE encryption config — the fresh database won't be
+    # encrypted until the TDE first-time setup step runs after migrations.
+    rm -f /etc/mysql/conf.d/encryption.cnf
+
+    # Initialize fresh system tables. The Debian init script does not
+    # reliably detect an empty-but-existing data directory, so we run
+    # mysql_install_db explicitly.
+    echo "Initializing fresh MariaDB system tables..."
+    mysql_install_db --user=mysql --datadir=/var/lib/mysql --skip-test-db 2>/dev/null
+    echo "MariaDB reinitialization complete."
+
+    REDO_LOG_RECOVERY=true
+    MARIADB_UPGRADE_NEEDED=false
+    MARIADB_VERSION_CHANGED=false
+fi
+
 
 # Start services
 service cron start
@@ -1020,6 +1090,43 @@ fi
 # Store current MariaDB version for future upgrade detection
 if [ -n "$CURRENT_MARIADB_VERSION" ]; then
     echo "$CURRENT_MARIADB_VERSION" > "$MARIADB_VERSION_FILE"
+fi
+
+# =============================================================================
+# REDO LOG RECOVERY: Recreate database from existing config
+# =============================================================================
+# After MariaDB reinitializes with fresh system tables (due to missing redo
+# log), the application database and user no longer exist. Recreate them from
+# the encrypted credentials in dbconfig.json (on the config volume, untouched).
+# No config files are deleted — this is crash-safe.
+# =============================================================================
+if [ "$REDO_LOG_RECOVERY" = "true" ] && [ -f /etc/eiou/config/dbconfig.json ]; then
+    # Remove stale database config and schema version so the Application's
+    # freshInstall() runs on the next instantiation — creating a new database,
+    # user, and all tables from scratch. This is crash-safe: if the process
+    # dies after this point, the next boot sees no dbconfig.json and freshInstall
+    # runs again. userconfig.json (wallet identity) is NOT touched.
+    rm -f /etc/eiou/config/dbconfig.json
+    rm -f /etc/eiou/config/.schema_version
+
+    echo "Recreating database and tables..."
+    DB_RECREATE_RESULT=$(php -r '
+        chdir("/app/eiou");
+        require_once "/app/eiou/vendor/autoload.php";
+        require_once "/app/eiou/src/bootstrap.php";
+        $app = \Eiou\Core\Application::getInstance();
+        echo "Database and tables created successfully.\n";
+    ' 2>&1)
+    echo "$DB_RECREATE_RESULT"
+
+    if echo "$DB_RECREATE_RESULT" | grep -q "ERROR\|Fatal"; then
+        echo "WARNING: Database recreation failed. The node may not function correctly."
+        echo "You may need to restore from backup or seed phrase manually."
+        REDO_LOG_RECOVERY=false
+    fi
+    # Auto-restore from backup is deferred until after TDE setup (backups from
+    # TDE-enabled databases contain ENCRYPTED=YES in CREATE TABLE statements
+    # and cannot be restored until TDE is active on the new database).
 fi
 
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
@@ -1425,6 +1532,49 @@ if [ -f /dev/shm/.master.key ] || [ -f /etc/eiou/config/.master.key ]; then
         elif [ $TDE_EXIT -ne 0 ]; then
             echo "WARNING: MariaDB TDE setup failed — database files remain unencrypted."
         fi
+    fi
+fi
+
+# =============================================================================
+# REDO LOG RECOVERY: Auto-restore from backup (deferred until after TDE)
+# =============================================================================
+# Backups from TDE-enabled databases contain ENCRYPTED=YES in CREATE TABLE
+# statements, so we must wait until TDE is active before restoring.
+# =============================================================================
+if [ "$REDO_LOG_RECOVERY" = "true" ]; then
+    # Ensure TDE plugin is loaded if encryption.cnf exists — the TDE setup may
+    # have written the config but not restarted MariaDB (isInitialized race).
+    # Backups from TDE databases need the plugin active to restore.
+    if [ -f /etc/mysql/conf.d/encryption.cnf ]; then
+        TDE_LOADED=$(mysql -u root -sN -e "SELECT COUNT(*) FROM information_schema.plugins WHERE PLUGIN_NAME='file_key_management';" 2>/dev/null)
+        if [ "$TDE_LOADED" = "0" ]; then
+            echo "Restarting MariaDB to load TDE encryption plugin..."
+            service mariadb restart
+            while ! mysqladmin ping -h localhost --silent 2>/dev/null; do sleep 1; done
+            echo "MariaDB restarted with TDE plugin."
+        fi
+    fi
+
+    BACKUP_COUNT=$(ls /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l)
+    if [ "$BACKUP_COUNT" -gt 0 ]; then
+        # Find the latest (largest) backup — most likely to have the most data
+        LATEST_BACKUP=$(ls -tS /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | head -1)
+        BACKUP_NAME=$(basename "$LATEST_BACKUP")
+        echo "Auto-restoring from backup: $BACKUP_NAME ..."
+        RESTORE_RESULT=$(eiou backup restore "$BACKUP_NAME" --confirm 2>&1)
+        RESTORE_EXIT=$?
+        if [ $RESTORE_EXIT -eq 0 ]; then
+            echo "Database restored successfully from backup."
+        else
+            echo "$RESTORE_RESULT"
+            echo "WARNING: Auto-restore failed. You can try manually:"
+            echo "  eiou backup list"
+            echo "  eiou backup restore <filename> --confirm"
+        fi
+    else
+        echo "No backups found. The database has empty tables."
+        echo "If you have a backup file, copy it to the backups volume and run:"
+        echo "  eiou backup restore <filename> --confirm"
     fi
 fi
 
