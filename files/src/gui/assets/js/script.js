@@ -141,6 +141,112 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ============================================================================
+// Tab Navigation
+// ============================================================================
+
+/**
+ * Map of legacy hash fragments to their tab and optional scroll target.
+ * Keeps old #anchor bookmarks and quick-action links working.
+ */
+var TAB_HASH_MAP = {
+    'dashboard':    { tab: 'dashboard' },
+    'send-form':    { tab: 'send', scrollTo: 'send-form' },
+    'add-contact':  { tab: 'send', scrollTo: 'add-contact' },
+    'contacts':     { tab: 'send', scrollTo: 'contacts' },
+    'transactions': { tab: 'activity', scrollTo: 'transactions' },
+    'dlq':          { tab: 'activity', scrollTo: 'dlq' },
+    'settings':     { tab: 'settings' },
+    'debug':        { tab: 'debug' },
+    'debug-section':{ tab: 'debug' }
+};
+
+/**
+ * Switches the visible tab panel and updates tab bar active states.
+ *
+ * @param {string} tabName - The tab identifier (dashboard, send, activity, settings, debug)
+ * @param {string} [scrollToId] - Optional element ID to scroll to within the tab
+ */
+function switchTab(tabName, scrollToId) {
+    var panels = document.querySelectorAll('.tab-panel');
+    var desktopBtns = document.querySelectorAll('.tab-bar .tab-btn');
+    var mobileBtns = document.querySelectorAll('.tab-bar-mobile .tab-btn-mobile');
+    var targetPanel = document.getElementById('tab-panel-' + tabName);
+
+    if (!targetPanel) return;
+
+    // Hide all panels, show target
+    for (var i = 0; i < panels.length; i++) {
+        panels[i].style.display = 'none';
+    }
+    targetPanel.style.display = 'block';
+
+    // Update desktop tab bar
+    for (var j = 0; j < desktopBtns.length; j++) {
+        if (desktopBtns[j].getAttribute('data-tab') === tabName) {
+            desktopBtns[j].classList.add('tab-active');
+        } else {
+            desktopBtns[j].classList.remove('tab-active');
+        }
+    }
+
+    // Update mobile tab bar
+    for (var k = 0; k < mobileBtns.length; k++) {
+        if (mobileBtns[k].getAttribute('data-tab') === tabName) {
+            mobileBtns[k].classList.add('tab-active');
+        } else {
+            mobileBtns[k].classList.remove('tab-active');
+        }
+    }
+
+    // Update hash without triggering reload
+    try {
+        if (history.replaceState) {
+            history.replaceState(null, '', '#' + tabName);
+        }
+    } catch (e) { /* Tor strict mode fallback — hash won't update but tab still works */ }
+
+    // Persist last tab
+    safeStorageSet('eiou_active_tab', tabName);
+
+    // Scroll to specific element within the tab, or scroll to top
+    if (scrollToId) {
+        var scrollTarget = document.getElementById(scrollToId);
+        if (scrollTarget) {
+            scrollTarget.scrollIntoView({ block: 'start' });
+            return;
+        }
+    }
+    window.scrollTo(0, 0);
+}
+
+/**
+ * Initializes tab navigation on page load.
+ * Checks URL hash, then sessionStorage, then defaults to dashboard.
+ */
+function initTabNavigation() {
+    var hash = window.location.hash ? window.location.hash.substring(1) : '';
+    var tabToShow = 'dashboard';
+    var scrollToId = null;
+
+    // Check URL hash first
+    if (hash && TAB_HASH_MAP[hash]) {
+        tabToShow = TAB_HASH_MAP[hash].tab;
+        scrollToId = TAB_HASH_MAP[hash].scrollTo || null;
+    } else if (hash && hash.indexOf('reopen_contact') !== -1) {
+        // Contact reopen hash — show send tab (contacts are there)
+        tabToShow = 'send';
+    } else {
+        // Fall back to stored tab
+        var stored = safeStorageGet('eiou_active_tab');
+        if (stored && document.getElementById('tab-panel-' + stored)) {
+            tabToShow = stored;
+        }
+    }
+
+    switchTab(tabToShow, scrollToId);
+}
+
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
@@ -154,12 +260,14 @@ function escapeHtml(text) {
         }
     });
 
-    // Hide FAB initially
+    // Hide FAB initially and initialize tabs
     document.addEventListener('DOMContentLoaded', function() {
         var fab = document.getElementById('backToTop');
         if (fab) {
             fab.classList.add('hidden');
         }
+        // Initialize tab navigation
+        initTabNavigation();
     });
 
 /**
@@ -4134,6 +4242,14 @@ function submitAnalyticsConsent(enable) {
 (function() {
     // Map of action names to handler functions
     var clickActions = {
+        // Tab navigation
+        'switchTab': function(el, event) {
+            event.preventDefault();
+            var tab = el.getAttribute('data-tab');
+            var scrollTo = el.getAttribute('data-scroll-to') || null;
+            switchTab(tab, scrollTo);
+        },
+
         // Navigation & reload
         'reloadWithHash': function(el) {
             var hash = el.getAttribute('data-hash');
