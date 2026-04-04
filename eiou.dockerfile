@@ -285,7 +285,7 @@ RUN chmod +x /startup.sh
 # - start-period: Wait 120 seconds before first check (MariaDB needs 30-60s to initialize)
 # - retries: Mark unhealthy after 5 consecutive failures
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
-    CMD curl -sf http://localhost/api/health || exit 1
+    CMD curl -sfk https://localhost/api/health || exit 1
 
 # Ensure Docker sends SIGTERM for graceful shutdown (startup.sh traps this)
 STOPSIGNAL SIGTERM
