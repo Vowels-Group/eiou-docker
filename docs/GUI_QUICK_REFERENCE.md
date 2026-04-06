@@ -96,23 +96,24 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 
 ## Layout Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| Main layout | `layout/wallet.html` | Page structure, includes all sections |
-| Auth form | `layout/authenticationForm.html` | Login form |
-| Banner | `layout/walletSubParts/banner.html` | Dynamic image banner carousel from `/gui/assets/banners/` |
-| Header | `layout/walletSubParts/header.html` | Page header |
-| Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
-| Quick actions | `layout/walletSubParts/quickActions.html` | Action buttons |
-| Wallet info | `layout/walletSubParts/walletInformation.html` | Balance, earnings, available credit display |
-| Send form | `layout/walletSubParts/eiouForm.html` | Send transaction form |
-| Contact form | `layout/walletSubParts/contactForm.html` | Add contact form |
-| Contact section | `layout/walletSubParts/contactSection.html` | Contact lists, modal with your/their credit |
-| Transaction history | `layout/walletSubParts/transactionHistory.html` | Transaction list |
-| DLQ section | `layout/walletSubParts/dlqSection.html` | Dead letter queue management |
-| Settings | `layout/walletSubParts/settingsSection.html` | Settings panel & debug tools |
-| Floating buttons | `layout/walletSubParts/floatingButtons.html` | Back-to-top, etc. |
-| Analytics consent | `layout/walletSubParts/analyticsConsentModal.html` | One-time analytics opt-in modal |
+| Component | File | Tab | Purpose |
+|-----------|------|-----|---------|
+| Main layout | `layout/wallet.html` | — | Page structure, tab bar, includes all sections |
+| Auth form | `layout/authenticationForm.html` | — | Login form |
+| Banner | `layout/walletSubParts/banner.html` | — | Dynamic image banner carousel from `/gui/assets/banners/` |
+| Header | `layout/walletSubParts/header.html` | — | Page header |
+| Notifications | `layout/walletSubParts/notifications.html` | — | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
+| Wallet info | `layout/walletSubParts/walletInformation.html` | Dashboard | Balance (blue), fee earnings (amber/gold), available credit (blue-purple); ⓘ icons open info modal on tap |
+| Send form | `layout/walletSubParts/eiouForm.html` | Send | Send transaction form |
+| Contact form | `layout/walletSubParts/contactForm.html` | Contacts | Add contact form |
+| Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists, modal with your/their credit |
+| Transaction history | `layout/walletSubParts/transactionHistory.html` | Activity | Transaction list |
+| DLQ section | `layout/walletSubParts/dlqSection.html` | Activity | Dead letter queue management |
+| Settings | `layout/walletSubParts/settingsSection.html` | Settings | Settings form |
+| Debug | `layout/walletSubParts/debugSection.html` | Settings | Debug logs & system info (below settings form) |
+| Quick actions | `layout/walletSubParts/quickActions.html` | *(unused)* | Retained but not rendered — navigation is tab-based |
+| Floating buttons | `layout/walletSubParts/floatingButtons.html` | — | Back-to-top, etc. |
+| Analytics consent | `layout/walletSubParts/analyticsConsentModal.html` | — | One-time analytics opt-in modal |
 
 ---
 
@@ -167,6 +168,7 @@ fetch(window.location.href, {
 | `initContactsDisplay()` | Initialize contact grid with scroll/filter | DOMContentLoaded |
 | `updateAmountPrecisionHint()` | Show min amount hint for selected currency | Send form currency change |
 | `initializeCurrencyAcceptHandlers()` | Set up accept forms for pending currencies | DOMContentLoaded |
+| `showInfoModal(el)` | Show tap-friendly info modal from an element's `title` attribute | ⓘ icon click |
 | `showToast(message, type, duration)` | Display a temporary toast notification | Internal notifications |
 
 ### Constants
