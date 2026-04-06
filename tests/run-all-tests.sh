@@ -439,6 +439,7 @@ messageDeliveryTest
 curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
+paymentRequestTest
 securityTestSuite
 apiInputValidationTest
 syncTestSuite
@@ -501,6 +502,7 @@ addContactsTest
 curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
+paymentRequestTest
 securityTestSuite
 apiInputValidationTest
 serviceExceptionTest
