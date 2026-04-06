@@ -51,7 +51,8 @@ class AddressValidator
      */
     public static function isTorAddress(string $address): bool
     {
-        return preg_match('/^[a-z2-7]{56}\.onion(:\d{1,5})?$/', $address) === 1;
+        // Matches any .onion hostname (v2/v3/bare), optionally preceded by http:// or https://
+        return preg_match('/^(https?:\/\/)?[a-z0-9][a-z0-9\-\.]*\.onion(:\d{1,5})?(\/.*)?$/i', $address) === 1;
     }
 
     /**
