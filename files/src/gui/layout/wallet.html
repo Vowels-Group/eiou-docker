@@ -29,7 +29,10 @@
                 <i class="fas fa-home"></i> <span class="tab-label">Dashboard</span>
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="send">
-                <i class="fas fa-paper-plane"></i> <span class="tab-label">Send &amp; Contacts</span>
+                <i class="fas fa-paper-plane"></i> <span class="tab-label">Send</span>
+            </button>
+            <button type="button" class="tab-btn" data-action="switchTab" data-tab="contacts">
+                <i class="fas fa-address-book"></i> <span class="tab-label">Contacts</span>
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="activity">
                 <i class="fas fa-history"></i> <span class="tab-label">Activity</span>
@@ -40,20 +43,20 @@
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="settings">
                 <i class="fas fa-cog"></i> <span class="tab-label">Settings</span>
             </button>
-            <button type="button" class="tab-btn" data-action="switchTab" data-tab="debug">
-                <i class="fas fa-bug"></i> <span class="tab-label">Debug</span>
-            </button>
         </nav>
 
         <!-- Tab: Dashboard -->
         <div class="tab-panel" id="tab-panel-dashboard">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/quickActions.html");?>
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>
         </div>
 
-        <!-- Tab: Send & Contacts -->
+        <!-- Tab: Send -->
         <div class="tab-panel" id="tab-panel-send" style="display:none">
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>
+        </div>
+
+        <!-- Tab: Contacts -->
+        <div class="tab-panel" id="tab-panel-contacts" style="display:none">
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactForm.html");?>
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");?>
         </div>
@@ -67,10 +70,6 @@
         <!-- Tab: Settings -->
         <div class="tab-panel" id="tab-panel-settings" style="display:none">
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/settingsSection.html");?>
-        </div>
-
-        <!-- Tab: Debug -->
-        <div class="tab-panel" id="tab-panel-debug" style="display:none">
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/debugSection.html");?>
         </div>
     </div>
@@ -81,9 +80,13 @@
             <i class="fas fa-home"></i>
             <span class="tab-label-mobile">Home</span>
         </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Send & Contacts">
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Send">
             <i class="fas fa-paper-plane"></i>
             <span class="tab-label-mobile">Send</span>
+        </button>
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="contacts" title="Contacts">
+            <i class="fas fa-address-book"></i>
+            <span class="tab-label-mobile">Contacts</span>
         </button>
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="activity" title="Activity">
             <i class="fas fa-history"></i>
@@ -95,10 +98,6 @@
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="settings" title="Settings">
             <i class="fas fa-cog"></i>
             <span class="tab-label-mobile">Settings</span>
-        </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="debug" title="Debug">
-            <i class="fas fa-bug"></i>
-            <span class="tab-label-mobile">Debug</span>
         </button>
     </nav>
 

@@ -234,7 +234,7 @@ body {
 }
 
 .balance-display.balance-earnings {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%);
 }
 
 .balance-display.balance-credit {
@@ -2535,13 +2535,23 @@ html {
 .info-tooltip-icon {
     font-size: 0.75rem;
     color: #6c757d;
-    cursor: help;
+    cursor: pointer;
+}
+
+.info-tooltip-icon:hover,
+.info-tooltip-icon:focus {
+    opacity: 0.8;
 }
 
 .balance-currency .info-tooltip-icon {
     font-size: 0.7rem;
     color: white;
     opacity: 0.7;
+}
+
+.balance-currency .info-tooltip-icon:hover,
+.balance-currency .info-tooltip-icon:focus {
+    opacity: 1;
 }
 
 .pubkey-display {

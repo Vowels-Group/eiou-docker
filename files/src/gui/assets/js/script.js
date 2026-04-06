@@ -152,19 +152,19 @@ function escapeHtml(text) {
 var TAB_HASH_MAP = {
     'dashboard':    { tab: 'dashboard' },
     'send-form':    { tab: 'send', scrollTo: 'send-form' },
-    'add-contact':  { tab: 'send', scrollTo: 'add-contact' },
-    'contacts':     { tab: 'send', scrollTo: 'contacts' },
+    'add-contact':  { tab: 'contacts', scrollTo: 'add-contact' },
+    'contacts':     { tab: 'contacts', scrollTo: 'contacts' },
     'transactions': { tab: 'activity', scrollTo: 'transactions' },
     'dlq':          { tab: 'activity', scrollTo: 'dlq' },
     'settings':     { tab: 'settings' },
-    'debug':        { tab: 'debug' },
-    'debug-section':{ tab: 'debug' }
+    'debug':        { tab: 'settings' },
+    'debug-section':{ tab: 'settings' }
 };
 
 /**
  * Switches the visible tab panel and updates tab bar active states.
  *
- * @param {string} tabName - The tab identifier (dashboard, send, activity, settings, debug)
+ * @param {string} tabName - The tab identifier (dashboard, send, contacts, activity, settings)
  * @param {string} [scrollToId] - Optional element ID to scroll to within the tab
  */
 function switchTab(tabName, scrollToId) {
@@ -234,8 +234,8 @@ function initTabNavigation() {
         tabToShow = TAB_HASH_MAP[hash].tab;
         scrollToId = TAB_HASH_MAP[hash].scrollTo || null;
     } else if (hash && hash.indexOf('reopen_contact') !== -1) {
-        // Contact reopen hash — show send tab (contacts are there)
-        tabToShow = 'send';
+        // Contact reopen hash — show contacts tab
+        tabToShow = 'contacts';
     } else {
         // Fall back to stored tab
         var stored = safeStorageGet('eiou_active_tab');
@@ -1885,6 +1885,47 @@ function initContactsDisplay() {
             contactCards[i].style.display = 'none';
         }
     }
+}
+
+/**
+ * Shows a small info modal with the text from an info icon's title attribute.
+ * Used so touch/mobile users can read tooltip text without hover.
+ *
+ * @param {HTMLElement} el - The info icon element with a title attribute
+ */
+function showInfoModal(el) {
+    var text = el.getAttribute('title') || '';
+    if (!text) return;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'info-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:340px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-info-circle" style="color:#6c757d"></i> Info</h3>' +
+                '<span class="close" id="info-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5">' +
+                escapeHtml(text) +
+            '</div>' +
+        '</div>';
+
+    function closeInfoModal() {
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', escHandler);
+    }
+
+    function escHandler(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) { closeInfoModal(); }
+    }
+
+    overlay.querySelector('#info-modal-close').onclick = closeInfoModal;
+    overlay.onclick = function(e) { if (e.target === overlay) { closeInfoModal(); } };
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
 }
 
 /**
@@ -4273,6 +4314,12 @@ function submitAnalyticsConsent(enable) {
         'rejectP2pTransaction': function(el) {
             var txid = el.getAttribute('data-txid');
             rejectP2pTransaction(txid);
+        },
+
+        // Info icon modal (mobile-friendly tooltip replacement)
+        'showInfoModal': function(el, event) {
+            event.preventDefault();
+            showInfoModal(el);
         },
 
         // Contact modal
