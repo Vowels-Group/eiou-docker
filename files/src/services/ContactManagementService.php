@@ -273,6 +273,13 @@ class ContactManagementService implements ContactManagementServiceInterface
 
         // Get contact if exists in database in some form
         $transportIndex = $this->transportUtility->determineTransportType($address);
+        if ($transportIndex === null) {
+            $this->secureLogger->warning("Could not determine transport type for address", [
+                'address_length' => strlen($address)
+            ]);
+            $output->error("Invalid address: could not determine transport type", ErrorCodes::INVALID_ADDRESS, 400);
+            return;
+        }
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
         // Optional requested credit limit (what we'd like the contact to set for us)

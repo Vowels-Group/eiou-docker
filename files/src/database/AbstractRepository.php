@@ -171,7 +171,16 @@ abstract class AbstractRepository {
             $stmt->execute();
             return $stmt;
         } catch (PDOException $e) {
-            $this->logError("Query execution failed", $e, $query);
+            // MySQL error 1062 = duplicate entry — expected during race conditions
+            // (concurrent P2P/RP2P processing). Log as warning, not error.
+            if (isset($e->errorInfo[1]) && $e->errorInfo[1] === 1062) {
+                Logger::getInstance()->warning("Duplicate entry detected (race condition)", [
+                    'repository' => static::class,
+                    'error' => $e->getMessage()
+                ]);
+            } else {
+                $this->logError("Query execution failed", $e, $query);
+            }
             return false;
         }
     }

@@ -210,14 +210,14 @@ class TransactionService implements TransactionServiceInterface {
         }
         $currency = $data['currency'] ?? '';
         $amount = $data['amount'];
-        $amountStr = ($amount instanceof SplitAmount) ? (string) $amount : (string) $amount;
+        $amountStr = (string) (($amount instanceof SplitAmount) ? $amount : SplitAmount::from($amount));
         return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $amountStr . $currency . $data['time']);
     }
 
     public function createUniqueDatabaseTxid(array $data, array $rp2p): string {
         $currency = $data['currency'] ?? $rp2p['currency'] ?? '';
         $amount = $data['amount'];
-        $amountStr = ($amount instanceof SplitAmount) ? (string) $amount : (string) $amount;
+        $amountStr = (string) (($amount instanceof SplitAmount) ? $amount : SplitAmount::from($amount));
         return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $amountStr . $currency . $rp2p['time']);
     }
 
