@@ -41,6 +41,7 @@ use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
+use Eiou\Services\PaymentRequestService;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Proxies\SyncServiceProxy;
@@ -939,6 +940,26 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PaymentRequestService instance
+     *
+     * @return PaymentRequestService
+     */
+    public function getPaymentRequestService(): PaymentRequestService {
+        if (!isset($this->services['PaymentRequestService'])) {
+            $this->services['PaymentRequestService'] = new PaymentRequestService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getTransactionService(),
+                $this->getUtilityContainer()->getTransportUtility($this->currentUser),
+                $this->currentUser,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PaymentRequestService'];
+    }
+
+    /**
      * Get SyncServiceProxy instance
      *
      * Returns a lazy-loading proxy for SyncService that implements SyncTriggerInterface.
@@ -1124,6 +1145,11 @@ class ServiceContainer implements ContainerInterface {
         // MessageService -> ChainDropService
         if (isset($this->services['MessageService']) && isset($this->services['ChainDropService'])) {
             $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
+        }
+
+        // MessageService -> PaymentRequestService
+        if (isset($this->services['MessageService']) && isset($this->services['PaymentRequestService'])) {
+            $this->services['MessageService']->setPaymentRequestService($this->services['PaymentRequestService']);
         }
 
         // ChainDropService -> BackupService

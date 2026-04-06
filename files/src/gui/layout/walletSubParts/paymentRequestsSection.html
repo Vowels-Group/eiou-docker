@@ -1,0 +1,157 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!-- Payment Requests Section — shown below the Send eIOU form -->
+<?php
+$incomingRequests = $paymentRequests['incoming'] ?? [];
+$outgoingRequests = $paymentRequests['outgoing'] ?? [];
+$pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '') === 'pending');
+?>
+
+<?php if (!empty($incomingRequests) || !empty($outgoingRequests)): ?>
+<div class="form-container fade-in-up" id="payment-requests-section">
+    <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
+
+    <?php if (!empty($pendingIncoming)): ?>
+    <!-- Incoming pending requests — action required -->
+    <div class="pr-group">
+        <h3 class="pr-group-title pr-group-title--incoming">
+            <i class="fas fa-inbox"></i>
+            Incoming Requests
+            <span class="tab-badge" style="position:static;margin-left:0.4rem"><?php echo count($pendingIncoming); ?></span>
+        </h3>
+        <?php foreach ($incomingRequests as $req): ?>
+            <?php if (($req['status'] ?? '') !== 'pending') continue; ?>
+            <?php
+                $amount = ($req['amount'] instanceof \Eiou\Core\SplitAmount)
+                    ? number_format($req['amount']->toMajorUnits(), displayDecimals())
+                    : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
+                $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
+                $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+                $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
+            ?>
+            <div class="pr-item pr-item--pending">
+                <div class="pr-item-header">
+                    <span class="pr-badge pr-badge--incoming">Incoming</span>
+                    <span class="pr-from"><strong><?php echo $fromName; ?></strong> is requesting</span>
+                    <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
+                </div>
+                <?php if ($desc): ?>
+                <div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div>
+                <?php endif; ?>
+                <div class="pr-meta">Received: <?php echo $createdAt; ?></div>
+                <div class="pr-actions">
+                    <form method="POST" class="pr-action-form" style="display:inline">
+                        <input type="hidden" name="action" value="approvePaymentRequest">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="fas fa-check"></i> Approve &amp; Pay
+                        </button>
+                    </form>
+                    <form method="POST" class="pr-action-form" style="display:inline">
+                        <input type="hidden" name="action" value="declinePaymentRequest">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                        <button type="submit" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> Decline
+                        </button>
+                    </form>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php
+    // Resolved incoming (approved/declined) — show history
+    $resolvedIncoming = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '') !== 'pending');
+    ?>
+    <?php if (!empty($resolvedIncoming)): ?>
+    <div class="pr-group">
+        <h3 class="pr-group-title">
+            <i class="fas fa-history"></i> Received — History
+        </h3>
+        <?php foreach ($resolvedIncoming as $req): ?>
+            <?php
+                $amount = ($req['amount'] instanceof \Eiou\Core\SplitAmount)
+                    ? number_format($req['amount']->toMajorUnits(), displayDecimals())
+                    : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
+                $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
+                $status = $req['status'] ?? '';
+                $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
+            ?>
+            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>">
+                <div class="pr-item-header">
+                    <?php if ($status === 'approved'): ?>
+                        <span class="pr-badge pr-badge--approved"><i class="fas fa-check-circle"></i> Paid</span>
+                    <?php elseif ($status === 'declined'): ?>
+                        <span class="pr-badge pr-badge--declined"><i class="fas fa-times-circle"></i> Declined</span>
+                    <?php else: ?>
+                        <span class="pr-badge"><?php echo htmlspecialchars(ucfirst($status)); ?></span>
+                    <?php endif; ?>
+                    <span class="pr-from"><?php echo $fromName; ?> requested</span>
+                    <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
+                </div>
+                <?php if ($respondedAt): ?><div class="pr-meta"><?php echo ($status === 'approved') ? 'Paid' : 'Responded'; ?>: <?php echo $respondedAt; ?></div><?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!empty($outgoingRequests)): ?>
+    <!-- Outgoing requests you have sent -->
+    <div class="pr-group">
+        <h3 class="pr-group-title">
+            <i class="fas fa-paper-plane"></i> Your Outgoing Requests
+        </h3>
+        <?php foreach ($outgoingRequests as $req): ?>
+            <?php
+                $amount = ($req['amount'] instanceof \Eiou\Core\SplitAmount)
+                    ? number_format($req['amount']->toMajorUnits(), displayDecimals())
+                    : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
+                $toName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['recipient_pubkey_hash'] ?? ''), 0, 12) . '…';
+                $status = $req['status'] ?? '';
+                $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+                $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
+                $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
+            ?>
+            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>">
+                <div class="pr-item-header">
+                    <?php if ($status === 'pending'): ?>
+                        <span class="pr-badge pr-badge--pending"><i class="fas fa-clock"></i> Pending</span>
+                    <?php elseif ($status === 'approved'): ?>
+                        <span class="pr-badge pr-badge--approved"><i class="fas fa-check-circle"></i> Paid</span>
+                    <?php elseif ($status === 'declined'): ?>
+                        <span class="pr-badge pr-badge--declined"><i class="fas fa-times-circle"></i> Declined</span>
+                    <?php elseif ($status === 'cancelled'): ?>
+                        <span class="pr-badge pr-badge--cancelled"><i class="fas fa-ban"></i> Cancelled</span>
+                    <?php else: ?>
+                        <span class="pr-badge"><?php echo htmlspecialchars(ucfirst($status)); ?></span>
+                    <?php endif; ?>
+                    <span class="pr-from">Requested from <strong><?php echo $toName; ?></strong></span>
+                    <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
+                </div>
+                <?php if ($desc): ?><div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div><?php endif; ?>
+                <div class="pr-meta">
+                    Sent: <?php echo $createdAt; ?>
+                    <?php if ($respondedAt): ?> &nbsp;·&nbsp; Responded: <?php echo $respondedAt; ?><?php endif; ?>
+                </div>
+                <?php if ($status === 'pending'): ?>
+                <div class="pr-actions">
+                    <form method="POST" class="pr-action-form" style="display:inline">
+                        <input type="hidden" name="action" value="cancelPaymentRequest">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                        <button type="submit" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-ban"></i> Cancel
+                        </button>
+                    </form>
+                </div>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+</div>
+<?php endif; ?>

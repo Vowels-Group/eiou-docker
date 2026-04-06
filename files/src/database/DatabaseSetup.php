@@ -95,6 +95,9 @@ function freshInstall(){
                 $dbConn->exec(getCapacityReservationsTableSchema());
                 $dbConn->exec(getRouteCancellationsTableSchema());
 
+                // Payment Requests
+                $dbConn->exec(getPaymentRequestsTableSchema());
+
                 // Message Delivery
                 $dbConn->exec(getMessageDeliveryTableSchema());
                 $dbConn->exec(getDeadLetterQueueTableSchema());
@@ -186,7 +189,9 @@ function runMigrations(PDO $pdo): array {
 
     // List of migration tables to create (added after initial release)
     // Use fully-qualified names since dynamic calls don't use namespace resolution
-    $migrations = [];
+    $migrations = [
+        'payment_requests' => 'Eiou\Database\getPaymentRequestsTableSchema',
+    ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
         try {

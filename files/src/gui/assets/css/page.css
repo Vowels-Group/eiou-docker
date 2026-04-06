@@ -4037,3 +4037,99 @@ hr.currency-separator-double {
         bottom: 124px;
     }
 }
+
+/* =========================================================================
+   Payment Requests Section
+   ========================================================================= */
+
+.pr-group {
+    margin-top: 1.5rem;
+}
+
+.pr-group-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #6c757d);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pr-group-title--incoming {
+    color: var(--text-primary, #212529);
+}
+
+.pr-item {
+    background: var(--card-bg, #f8f9fa);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.6rem;
+}
+
+.pr-item--pending {
+    border-left: 3px solid #fd7e14;
+}
+
+.pr-item--approved {
+    border-left: 3px solid #28a745;
+    opacity: 0.85;
+}
+
+.pr-item--declined,
+.pr-item--cancelled {
+    border-left: 3px solid #6c757d;
+    opacity: 0.7;
+}
+
+.pr-item-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+}
+
+.pr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: #e9ecef;
+    color: #495057;
+}
+
+.pr-badge--incoming  { background: #fff3cd; color: #856404; }
+.pr-badge--pending   { background: #fff3cd; color: #856404; }
+.pr-badge--approved  { background: #d4edda; color: #155724; }
+.pr-badge--declined,
+.pr-badge--cancelled { background: #e9ecef; color: #495057; }
+
+.pr-from   { flex: 1; min-width: 0; }
+.pr-amount { font-weight: 700; white-space: nowrap; }
+
+.pr-description {
+    font-size: 0.8rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 0.35rem;
+}
+
+.pr-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 0.3rem;
+}
+
+.pr-actions {
+    margin-top: 0.65rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}

@@ -4436,7 +4436,17 @@ function submitAnalyticsConsent(enable) {
 
         // Analytics consent modal
         'analyticsConsentEnable': function() { submitAnalyticsConsent(true); },
-        'analyticsConsentSkip': function() { submitAnalyticsConsent(false); }
+        'analyticsConsentSkip': function() { submitAnalyticsConsent(false); },
+
+        // Payment request — same form as Send, different action
+        'requestPayment': function(el, event) {
+            event.preventDefault();
+            var actionField = document.getElementById('send-form-action');
+            var form = document.getElementById('send-form-el');
+            if (!actionField || !form) { return; }
+            actionField.value = 'createPaymentRequest';
+            form.submit();
+        }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text

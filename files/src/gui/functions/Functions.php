@@ -122,6 +122,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $transactionController->routeAction();
     }
 
+    // Payment request actions
+    if (in_array($action, ['createPaymentRequest', 'approvePaymentRequest', 'declinePaymentRequest', 'cancelPaymentRequest'])) {
+        $paymentRequestController->routeAction();
+    }
+
     // Settings actions
     if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport'])) {
         $settingsController->routeAction();
@@ -755,6 +760,16 @@ foreach ($contactArraysForCredit as &$contacts) {
     unset($contact);
 }
 unset($contacts);
+
+// Load payment requests for display in the Send tab
+$paymentRequests = ['incoming' => [], 'outgoing' => []];
+$pendingPaymentRequestCount = 0;
+try {
+    $paymentRequests = $serviceContainer->getPaymentRequestService()->getAllForDisplay(50);
+    $pendingPaymentRequestCount = $serviceContainer->getPaymentRequestService()->countPendingIncoming();
+} catch (Exception $e) {
+    // Non-critical — payment requests section will be empty
+}
 
 // Initialize ContactDataBuilder helper
 $contactDataBuilder = new ContactDataBuilder($addressTypes);

@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- **Payment request system**: users can now request payment from a contact directly from the Send tab. Clicking "Request Payment" (next to "Send eIOU") sends a signed `payment_request` message to the contact. The recipient sees it below the Send form, can **Approve & Pay** (triggers a normal `sendEIOU` automatically) or **Decline**. The requester gets a response message updating their outgoing request status. Includes: `payment_requests` DB table, `PaymentRequestRepository`, `PaymentRequestService`, `PaymentRequestController` (GUI), `paymentRequestsSection.html` template, REST API endpoints at `/api/v1/requests/`, and `MessageService` routing for the new `payment_request` typeMessage. Schema migration v4 → v5
+
 ### Changed
 - Restructure wallet GUI tab navigation: split "Send & Contacts" tab into a dedicated **Send** tab (eIOU form only) and a dedicated **Contacts** tab (add contact form + contact list); merge **Debug** section into the bottom of the **Settings** tab (removed as a standalone tab); remove the Quick Actions dashboard card bar (Send eIOU, Add Contact, View Contacts, Transaction History, Failed Messages, Settings shortcuts) — navigation is now fully tab-based
 - Change "Total Fee Earnings" dashboard card color from green (`#28a745`→`#20c997`) to amber/gold (`#fd7e14`→`#ffc107`) to avoid culturally ambiguous color associations (green/red carry opposite financial meanings in different markets)

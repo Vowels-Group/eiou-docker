@@ -12,6 +12,7 @@ use Eiou\Gui\Helpers\MessageHelper;
 use Eiou\Gui\Helpers\ViewHelper;
 use Eiou\Gui\Controllers\ContactController;
 use Eiou\Gui\Controllers\DlqController;
+use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
 
@@ -50,6 +51,10 @@ $transactionController->setP2pApprovalDependencies(
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
 $settingsController = new SettingsController($secureSession);
+$paymentRequestController = new PaymentRequestController(
+    $secureSession,
+    $serviceContainer->getPaymentRequestService()
+);
 $dlqController = new DlqController(
     $secureSession,
     $repoFactory->get(Eiou\Database\DeadLetterQueueRepository::class),
