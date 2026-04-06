@@ -22,6 +22,14 @@
     object-fit: contain;
 }
 
+.banner-image svg {
+    max-width: 500px;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -226,7 +234,7 @@ body {
 }
 
 .balance-display.balance-earnings {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%);
 }
 
 .balance-display.balance-credit {
@@ -2527,13 +2535,23 @@ html {
 .info-tooltip-icon {
     font-size: 0.75rem;
     color: #6c757d;
-    cursor: help;
+    cursor: pointer;
+}
+
+.info-tooltip-icon:hover,
+.info-tooltip-icon:focus {
+    opacity: 0.8;
 }
 
 .balance-currency .info-tooltip-icon {
     font-size: 0.7rem;
     color: white;
     opacity: 0.7;
+}
+
+.balance-currency .info-tooltip-icon:hover,
+.balance-currency .info-tooltip-icon:focus {
+    opacity: 1;
 }
 
 .pubkey-display {
@@ -3863,3 +3881,159 @@ hr.currency-separator-double {
     font-size: 0.9rem;
 }
 .btn-consent-enable:hover { background: #0b5ed7; }
+
+/* ============================================================================
+   Tab Navigation
+   ============================================================================ */
+
+/* Desktop tab bar - sticky below header */
+.tab-bar {
+    display: flex;
+    gap: 0;
+    background: #fff;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin: 0 0 1.5rem 0;
+    padding: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    color: #6c757d;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: #495057;
+    background: #f8f9fa;
+}
+
+.tab-btn.tab-active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+}
+
+.tab-btn i { font-size: 1rem; }
+
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #dc3545;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Mobile bottom tab bar - hidden on desktop */
+.tab-bar-mobile {
+    display: none;
+}
+
+/* Tab panels */
+.tab-panel {
+    min-height: 200px;
+}
+
+/* Mobile: show bottom bar, hide desktop bar */
+@media (max-width: 768px) {
+    .tab-bar {
+        display: none;
+    }
+
+    .tab-bar-mobile {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: #fff;
+        border-top: 1px solid #dee2e6;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+        padding: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .tab-btn-mobile {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 8px 4px 6px;
+        border: none;
+        background: transparent;
+        color: #6c757d;
+        font-size: 0.65rem;
+        cursor: pointer;
+        position: relative;
+        min-height: 52px;
+    }
+
+    .tab-btn-mobile i {
+        font-size: 1.2rem;
+    }
+
+    .tab-btn-mobile.tab-active {
+        color: #0d6efd;
+    }
+
+    .tab-label-mobile {
+        font-weight: 500;
+    }
+
+    .tab-badge-mobile {
+        position: absolute;
+        top: 4px;
+        right: 50%;
+        transform: translateX(14px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: #dc3545;
+        color: #fff;
+        font-size: 0.6rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    /* Add bottom padding to container so content isn't hidden behind mobile tab bar */
+    .container {
+        padding-bottom: 70px;
+    }
+
+    /* Adjust floating buttons to sit above mobile tab bar */
+    .back-to-top-btn {
+        bottom: 76px;
+    }
+
+    .manual-refresh {
+        bottom: 124px;
+    }
+}

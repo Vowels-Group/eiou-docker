@@ -6,32 +6,32 @@
         <i class="fas fa-chevron-left"></i>
     </button>
     <div class="quick-actions" id="quick-actions-grid">
-        <a href="#send-form" class="action-card">
+        <a href="#send-form" class="action-card" data-action="switchTab" data-tab="send" data-scroll-to="send-form">
             <i class="fas fa-paper-plane"></i>
             <h3>Send eIOU</h3>
             <p>Transfer value to contacts or anyone via P2P</p>
         </a>
-        <a href="#add-contact" class="action-card">
+        <a href="#add-contact" class="action-card" data-action="switchTab" data-tab="send" data-scroll-to="add-contact">
             <i class="fas fa-user-plus"></i>
             <h3>Add Contact</h3>
             <p>Add new contact</p>
         </a>
-        <a href="#contacts" class="action-card">
+        <a href="#contacts" class="action-card" data-action="switchTab" data-tab="send" data-scroll-to="contacts">
             <i class="fas fa-address-book"></i>
             <h3>View Contacts</h3>
             <p>Manage your contacts</p>
         </a>
-        <a href="#transactions" class="action-card">
+        <a href="#transactions" class="action-card" data-action="switchTab" data-tab="activity" data-scroll-to="transactions">
             <i class="fas fa-history"></i>
             <h3>Transaction History</h3>
             <p>View past transactions</p>
         </a>
-        <a href="#dlq" class="action-card<?php echo (!empty($dlqPendingCount) && $dlqPendingCount > 0) ? ' action-card-warning' : ''; ?>">
+        <a href="#dlq" class="action-card<?php echo (!empty($dlqPendingCount) && $dlqPendingCount > 0) ? ' action-card-warning' : ''; ?>" data-action="switchTab" data-tab="activity" data-scroll-to="dlq">
             <i class="fas fa-inbox"></i>
             <h3>Failed Messages<?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?> <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span><?php endif; ?></h3>
             <p>Review and retry undelivered messages</p>
         </a>
-        <a href="#settings" class="action-card">
+        <a href="#settings" class="action-card" data-action="switchTab" data-tab="settings">
             <i class="fas fa-cog"></i>
             <h3>Settings</h3>
             <p>Configure wallet settings</p>

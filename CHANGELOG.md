@@ -10,6 +10,15 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## [Unreleased]
+
+### Changed
+- Restructure wallet GUI tab navigation: split "Send & Contacts" tab into a dedicated **Send** tab (eIOU form only) and a dedicated **Contacts** tab (add contact form + contact list); merge **Debug** section into the bottom of the **Settings** tab (removed as a standalone tab); remove the Quick Actions dashboard card bar (Send eIOU, Add Contact, View Contacts, Transaction History, Failed Messages, Settings shortcuts) — navigation is now fully tab-based
+- Change "Total Fee Earnings" dashboard card color from green (`#28a745`→`#20c997`) to amber/gold (`#fd7e14`→`#ffc107`) to avoid culturally ambiguous color associations (green/red carry opposite financial meanings in different markets)
+- Info tooltip icons (ⓘ) now open a tap-friendly modal on click in addition to the existing hover tooltip, making them accessible on touch/mobile devices where hover is not available
+
+---
+
 ## v0.1.8-alpha (2026-04-03)
 
 ### Changed

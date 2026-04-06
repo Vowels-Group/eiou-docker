@@ -11,32 +11,96 @@
     <style nonce="<?php echo cspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/page.css");?></style>
     <script nonce="<?php echo cspNonce(); ?>">var EIOU_DISPLAY_DECIMALS = <?php echo displayDecimals(); ?>; var EIOU_DATE_FORMAT = '<?php echo displayDateFormat(); ?>';</script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js"></script>
+    <!-- Graceful degradation: show all sections when JS is disabled (Tor Safest mode) -->
+    <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
 </head>
 <body>
     <div class="container">
         <!-- Banner -->
         <?php require_once("/app/eiou/src/gui/layout/walletSubParts/banner.html");?>
         <!-- Header -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/header.html");?>  
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/header.html");?>
         <!-- Notifications -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/notifications.html");?>  
-        <!-- Quick Actions -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/quickActions.html");?>  
-        <!-- Wallet Dashboard -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>    
-        <!-- Send eIOU Form -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>    
-        <!-- Add Contact Form -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactForm.html");?>    
-        <!-- Contacts Section -->   
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");?>   
-        <!-- Transaction History -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/transactionHistory.html");?>
-        <!-- Dead Letter Queue Section -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/dlqSection.html");?>
-        <!-- Settings Section -->
-        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/settingsSection.html");?>
+        <?php require_once("/app/eiou/src/gui/layout/walletSubParts/notifications.html");?>
+
+        <!-- Tab Bar (Desktop) -->
+        <nav class="tab-bar" id="tab-bar">
+            <button type="button" class="tab-btn tab-active" data-action="switchTab" data-tab="dashboard">
+                <i class="fas fa-home"></i> <span class="tab-label">Dashboard</span>
+            </button>
+            <button type="button" class="tab-btn" data-action="switchTab" data-tab="send">
+                <i class="fas fa-paper-plane"></i> <span class="tab-label">Send</span>
+            </button>
+            <button type="button" class="tab-btn" data-action="switchTab" data-tab="contacts">
+                <i class="fas fa-address-book"></i> <span class="tab-label">Contacts</span>
+            </button>
+            <button type="button" class="tab-btn" data-action="switchTab" data-tab="activity">
+                <i class="fas fa-history"></i> <span class="tab-label">Activity</span>
+                <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
+                <span class="tab-badge"><?php echo (int)$dlqPendingCount; ?></span>
+                <?php endif; ?>
+            </button>
+            <button type="button" class="tab-btn" data-action="switchTab" data-tab="settings">
+                <i class="fas fa-cog"></i> <span class="tab-label">Settings</span>
+            </button>
+        </nav>
+
+        <!-- Tab: Dashboard -->
+        <div class="tab-panel" id="tab-panel-dashboard">
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>
+        </div>
+
+        <!-- Tab: Send -->
+        <div class="tab-panel" id="tab-panel-send" style="display:none">
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>
+        </div>
+
+        <!-- Tab: Contacts -->
+        <div class="tab-panel" id="tab-panel-contacts" style="display:none">
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactForm.html");?>
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");?>
+        </div>
+
+        <!-- Tab: Activity -->
+        <div class="tab-panel" id="tab-panel-activity" style="display:none">
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/transactionHistory.html");?>
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/dlqSection.html");?>
+        </div>
+
+        <!-- Tab: Settings -->
+        <div class="tab-panel" id="tab-panel-settings" style="display:none">
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/settingsSection.html");?>
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/debugSection.html");?>
+        </div>
     </div>
+
+    <!-- Tab Bar (Mobile - fixed bottom) -->
+    <nav class="tab-bar-mobile" id="tab-bar-mobile">
+        <button type="button" class="tab-btn-mobile tab-active" data-action="switchTab" data-tab="dashboard" title="Dashboard">
+            <i class="fas fa-home"></i>
+            <span class="tab-label-mobile">Home</span>
+        </button>
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Send">
+            <i class="fas fa-paper-plane"></i>
+            <span class="tab-label-mobile">Send</span>
+        </button>
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="contacts" title="Contacts">
+            <i class="fas fa-address-book"></i>
+            <span class="tab-label-mobile">Contacts</span>
+        </button>
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="activity" title="Activity">
+            <i class="fas fa-history"></i>
+            <span class="tab-label-mobile">Activity</span>
+            <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
+            <span class="tab-badge-mobile"><?php echo (int)$dlqPendingCount; ?></span>
+            <?php endif; ?>
+        </button>
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="settings" title="Settings">
+            <i class="fas fa-cog"></i>
+            <span class="tab-label-mobile">Settings</span>
+        </button>
+    </nav>
+
     <!-- Floating Action Buttons -->
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/floatingButtons.html");?>
     <!-- Analytics Consent Modal -->
@@ -52,4 +116,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>
