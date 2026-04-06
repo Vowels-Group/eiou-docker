@@ -32,12 +32,13 @@ if ($requestPath === '/api/health') {
     $health = ['status' => 'ok', 'timestamp' => date('c')];
     $httpCode = 200;
 
-    // Check database connectivity
+    // Check database connectivity using encrypted credentials from dbconfig.json
     try {
+        $dbContext = \Eiou\Core\DatabaseContext::getInstance();
         $pdo = new PDO(
-            'mysql:host=127.0.0.1;dbname=eiou',
-            'eiou',
-            trim(@file_get_contents('/run/secrets/db_password') ?: (getenv('DB_PASSWORD') ?: 'eiou')),
+            'mysql:host=' . $dbContext->getDbHost() . ';dbname=' . $dbContext->getDbName() . ';charset=utf8mb4',
+            $dbContext->getDbUser(),
+            $dbContext->getDbPass(),
             [PDO::ATTR_TIMEOUT => 3]
         );
         $pdo->query('SELECT 1');
@@ -49,10 +50,16 @@ if ($requestPath === '/api/health') {
     }
 
     // Check message processors (PID files)
-    $processors = ['p2pmessages' => 'p2p', 'transactionmessages' => 'transaction', 'cleanupmessages' => 'cleanup', 'contact_status' => 'contact_status'];
+    // Keys are actual filenames in /tmp/, values are display names
+    $processors = [
+        'p2pmessages_lock.pid'          => 'p2p',
+        'transactionmessages_lock.pid'  => 'transaction',
+        'cleanupmessages_lock.pid'      => 'cleanup',
+        'contact_status.pid'            => 'contact_status',
+    ];
     $health['processors'] = [];
     foreach ($processors as $pidFile => $name) {
-        $pidPath = "/tmp/{$pidFile}_lock.pid";
+        $pidPath = "/tmp/{$pidFile}";
         $running = false;
         if (file_exists($pidPath)) {
             $pid = trim(file_get_contents($pidPath));
