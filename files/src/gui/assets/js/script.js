@@ -4143,7 +4143,11 @@ function openQrScanner(targetInputId) {
             var errorEl = document.getElementById('qr-file-error');
             if (errorEl) { errorEl.style.display = 'none'; }
 
-            scanner.scanFile(file, false)
+            // Use a fresh Html5Qrcode instance for file scanning — the camera
+            // scanner's internal state may be corrupted after a failed start().
+            // scanFile needs a visible container, so reuse qr-scanner-reader.
+            var fileScanner = new Html5Qrcode('qr-scanner-reader');
+            fileScanner.scanFile(file, true)
                 .then(function(decodedText) {
                     onScanSuccess(decodedText);
                 })
@@ -4154,6 +4158,9 @@ function openQrScanner(targetInputId) {
                     }
                     // Reset file input so the same file can be re-selected
                     fileInput.value = '';
+                    // Clear any rendered image from the reader container
+                    var readerEl = document.getElementById('qr-scanner-reader');
+                    if (readerEl) readerEl.innerHTML = '';
                 });
         });
     }
