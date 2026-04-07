@@ -4223,71 +4223,72 @@ function openQrScanner(targetInputId) {
                 fileInput.value = '';
             }
 
-            // Timeout — if image never loads after 10 seconds, show error
+            if (canvasIsBlocked) {
+                // Canvas blocked (Tor Browser) — go straight to server-side, no timeout needed
+                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+                return;
+            }
+
+            // Timeout — if client-side image never loads after 10 seconds, show error
             var loadTimeout = setTimeout(function() {
                 showError('Image loading timed out. Try a smaller or different image file.');
             }, 10000);
 
-            if (canvasIsBlocked) {
-                // Canvas blocked (Tor Browser) — go straight to server-side
-                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-            } else {
-                // Try client-side decode with jsQR (faster, no upload)
-                var reader = new FileReader();
-                reader.onload = function() {
-                    var img = new Image();
-                    img.onload = function() {
-                        clearTimeout(loadTimeout);
-                        setTimeout(function() {
-                            try {
-                                var canvas = document.createElement('canvas');
-                                var maxDim = 1000;
-                                var w = img.width, h = img.height;
-                                if (w > maxDim || h > maxDim) {
-                                    var scale = maxDim / Math.max(w, h);
-                                    w = Math.round(w * scale);
-                                    h = Math.round(h * scale);
-                                }
-                                canvas.width = w;
-                                canvas.height = h;
-                                var ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0, w, h);
-                                var d = ctx.getImageData(0, 0, w, h).data;
-
-                                // Threshold to pure black/white
-                                for (var i = 0; i < d.length; i += 4) {
-                                    var br = (d[i]*299 + d[i+1]*587 + d[i+2]*114) / 1000;
-                                    var bw = br > 128 ? 255 : 0;
-                                    d[i]=bw; d[i+1]=bw; d[i+2]=bw; d[i+3]=255;
-                                }
-
-                                if (typeof jsQR !== 'undefined') {
-                                    var code = jsQR(d, w, h);
-                                    if (code && code.data) {
-                                        hideLoading();
-                                        onScanSuccess(code.data);
-                                        return;
-                                    }
-                                }
-                                showError('No QR code found in image. Try a clearer photo.');
-                            } catch (e) {
-                                // Canvas failed — fall back to server
-                                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                            }
-                        }, 50);
-                    };
-                    img.onerror = function() {
-                        clearTimeout(loadTimeout);
-                        decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                    };
-                    img.src = reader.result;
-                };
-                reader.onerror = function() {
+            // Try client-side decode with jsQR (faster, no upload)
+            var reader = new FileReader();
+            reader.onload = function() {
+                var img = new Image();
+                img.onload = function() {
                     clearTimeout(loadTimeout);
-                    showError('Could not read file.');
+                    setTimeout(function() {
+                        try {
+                            var canvas = document.createElement('canvas');
+                            var maxDim = 1000;
+                            var w = img.width, h = img.height;
+                            if (w > maxDim || h > maxDim) {
+                                var scale = maxDim / Math.max(w, h);
+                                w = Math.round(w * scale);
+                                h = Math.round(h * scale);
+                            }
+                            canvas.width = w;
+                            canvas.height = h;
+                            var ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, w, h);
+                            var d = ctx.getImageData(0, 0, w, h).data;
+
+                            // Threshold to pure black/white
+                            for (var i = 0; i < d.length; i += 4) {
+                                var br = (d[i]*299 + d[i+1]*587 + d[i+2]*114) / 1000;
+                                var bw = br > 128 ? 255 : 0;
+                                d[i]=bw; d[i+1]=bw; d[i+2]=bw; d[i+3]=255;
+                            }
+
+                            if (typeof jsQR !== 'undefined') {
+                                var code = jsQR(d, w, h);
+                                if (code && code.data) {
+                                    hideLoading();
+                                    onScanSuccess(code.data);
+                                    return;
+                                }
+                            }
+                            showError('No QR code found in image. Try a clearer photo.');
+                        } catch (e) {
+                            // Canvas failed — fall back to server
+                            decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+                        }
+                    }, 50);
                 };
-                reader.readAsDataURL(file);
-            }
+                img.onerror = function() {
+                    clearTimeout(loadTimeout);
+                    decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+                };
+                img.src = reader.result;
+            };
+            reader.onerror = function() {
+                clearTimeout(loadTimeout);
+                showError('Could not read file.');
+            };
+            reader.readAsDataURL(file);
         });
     }
 
