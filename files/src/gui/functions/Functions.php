@@ -167,17 +167,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit; // Ensure we don't continue to render HTML
     }
 
-    // AJAX-only QR decode (returns JSON, exits immediately)
-    if ($action === 'decodeQr') {
-        header('Content-Type: application/json');
-        try {
-            $contactController->routeAction();
-        } catch (Exception $e) {
-            echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
-        }
-        exit;
-    }
-
     // AJAX-only chain drop actions (returns JSON, exits immediately)
     if (in_array($action, ['proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop'])) {
         try {

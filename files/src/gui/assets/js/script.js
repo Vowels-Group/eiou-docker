@@ -4049,55 +4049,13 @@ function toggleAddressQr(el) {
 }
 
 /**
- * Open the QR code scanner modal using html5-qrcode.
- * On successful scan, fills the target input and closes the modal.
+ * Open the QR code scanner modal.
+ * Uses html5-qrcode for camera scanning on regular browsers.
+ * Tor Browser is detected and blocked early (camera and canvas both fail).
  */
-/**
- * Decode a QR code image server-side (fallback for Tor Browser).
- * Uploads the file to the node's PHP backend which decodes it with GD + ZXing.
- */
-function decodeQrServerSide(file, onSuccess, onError, onComplete) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken) {
-        onError('CSRF token not found');
-        return;
-    }
-
-    var formData = new FormData();
-    formData.append('action', 'decodeQr');
-    formData.append('csrf_token', csrfToken.value);
-    formData.append('qr_image', file);
-
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', window.location.pathname, true);
-    xhr.onload = function() {
-        if (xhr.status !== 200) {
-            onError('Server error (HTTP ' + xhr.status + '). Please refresh and try again.');
-            return;
-        }
-        try {
-            var resp = JSON.parse(xhr.responseText);
-            if (resp.success && resp.data) {
-                if (onComplete) onComplete();
-                onSuccess(resp.data);
-            } else {
-                onError(resp.error || 'No QR code found in image. Try a clearer photo.');
-            }
-        } catch (e) {
-            // Log the actual response for debugging
-            console.error('QR decode: unexpected response', xhr.status, xhr.responseText.substring(0, 200));
-            onError('Server returned an unexpected response. Check the browser console for details.');
-        }
-    };
-    xhr.onerror = function() {
-        onError('Could not reach server for QR decoding.');
-    };
-    xhr.send(formData);
-}
 
 /**
- * Quick canvas integrity check — detects Tor Browser fingerprinting protection.
- * Returns true if canvas data is being modified by the browser.
+ * Detect Tor Browser fingerprinting protection (canvas data modified).
  */
 function isCanvasBlocked() {
     try {
@@ -4116,8 +4074,7 @@ function isCanvasBlocked() {
 }
 
 function openQrScanner(targetInputId) {
-    // Tor Browser blocks both camera API and canvas — QR scanning cannot work.
-    // Detect early and show a clear message instead of wasting time on fallbacks.
+    // Tor Browser blocks camera API and canvas — QR scanning cannot work
     if (isCanvasBlocked()) {
         showToast('QR Scanner Unavailable',
             'Your browser blocks camera and image processing for privacy (Tor Browser). Please copy and paste the address manually.',
@@ -4125,9 +4082,11 @@ function openQrScanner(targetInputId) {
         return;
     }
 
-    var hasCameraLib = typeof Html5Qrcode !== 'undefined';
+    if (typeof Html5Qrcode === 'undefined') {
+        showToast('Error', 'QR scanner library not available', 'error');
+        return;
+    }
 
-    // Create scanner modal — z-index above other modals (e.g., Add Contact)
     var overlay = document.createElement('div');
     overlay.className = 'modal';
     overlay.id = 'qr-scanner-modal';
@@ -4140,55 +4099,26 @@ function openQrScanner(targetInputId) {
             '</div>' +
             '<div class="modal-body" style="padding:1rem">' +
                 '<div id="qr-scanner-reader" style="width:100%"></div>' +
-                '<p id="qr-scanner-hint" style="text-align:center;color:#6c757d;font-size:0.85rem;margin-top:0.5rem">' +
+                '<p style="text-align:center;color:#6c757d;font-size:0.85rem;margin-top:0.5rem">' +
                     'Point your camera at a QR code containing an address' +
                 '</p>' +
-                '<div id="qr-scanner-file-fallback" style="display:none;text-align:center;padding:1rem 0">' +
-                    '<p style="color:#6c757d;font-size:0.85rem;margin-bottom:0.75rem">' +
-                        'Upload a photo of the QR code:' +
-                    '</p>' +
-                    '<label class="btn btn-primary btn-sm" style="cursor:pointer">' +
-                        '<i class="fas fa-image"></i> Choose Image' +
-                        '<input type="file" id="qr-file-input" accept="image/*" style="display:none">' +
-                    '</label>' +
-                    '<p id="qr-file-error" style="color:#dc3545;font-size:0.85rem;margin-top:0.5rem;display:none"></p>' +
-                '</div>' +
             '</div>' +
         '</div>';
 
     document.body.appendChild(overlay);
     overlay.style.display = 'flex';
 
-    var scanner = hasCameraLib ? new Html5Qrcode('qr-scanner-reader') : null;
+    var scanner = new Html5Qrcode('qr-scanner-reader');
     var scanning = false;
 
-    function onScanSuccess(decodedText) {
-        var input = document.getElementById(targetInputId);
-        if (input) {
-            input.value = decodedText;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
-        closeScanner();
-    }
-
     function closeScanner() {
-        if (scanning && scanner) {
+        if (scanning) {
             scanner.stop().catch(function() {});
         }
         if (document.body.contains(overlay)) {
             document.body.removeChild(overlay);
         }
         document.removeEventListener('keydown', escHandler);
-    }
-
-    function showFileFallback() {
-        var readerEl = document.getElementById('qr-scanner-reader');
-        var hintEl = document.getElementById('qr-scanner-hint');
-        var fallbackEl = document.getElementById('qr-scanner-file-fallback');
-        if (readerEl) readerEl.innerHTML = '';
-        if (hintEl) hintEl.style.display = 'none';
-        if (fallbackEl) fallbackEl.style.display = 'block';
     }
 
     function escHandler(e) {
@@ -4201,119 +4131,28 @@ function openQrScanner(targetInputId) {
     });
     document.addEventListener('keydown', escHandler);
 
-    // Wire file input — uses jsQR for decoding (works in Tor Browser)
-    var fileInput = document.getElementById('qr-file-input');
-    if (fileInput) {
-        fileInput.addEventListener('change', function(e) {
-            var file = e.target.files[0];
-            if (!file) return;
-            var errorEl = document.getElementById('qr-file-error');
-            var fallbackEl = document.getElementById('qr-scanner-file-fallback');
-            if (errorEl) { errorEl.style.display = 'none'; }
-
-            // Show loading indicator
-            var loadingEl = document.getElementById('qr-file-loading');
-            if (!loadingEl && fallbackEl) {
-                loadingEl = document.createElement('p');
-                loadingEl.id = 'qr-file-loading';
-                loadingEl.style.cssText = 'text-align:center;color:#0d6efd;font-size:0.85rem;margin-top:0.5rem';
-                loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing image...';
-                fallbackEl.appendChild(loadingEl);
+    scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        function onScanSuccess(decodedText) {
+            var input = document.getElementById(targetInputId);
+            if (input) {
+                input.value = decodedText;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            if (loadingEl) loadingEl.style.display = 'block';
-
-            function hideLoading() {
-                if (loadingEl) loadingEl.style.display = 'none';
-            }
-
-            function showError(msg) {
-                hideLoading();
-                if (errorEl) {
-                    errorEl.textContent = msg;
-                    errorEl.style.display = 'block';
-                }
-                fileInput.value = '';
-            }
-
-            // Timeout — if client-side image never loads after 10 seconds, show error
-            var loadTimeout = setTimeout(function() {
-                showError('Image loading timed out. Try a smaller or different image file.');
-            }, 10000);
-
-            // Try client-side decode with jsQR (faster, no upload)
-            var reader = new FileReader();
-            reader.onload = function() {
-                var img = new Image();
-                img.onload = function() {
-                    clearTimeout(loadTimeout);
-                    setTimeout(function() {
-                        try {
-                            var canvas = document.createElement('canvas');
-                            var maxDim = 1000;
-                            var w = img.width, h = img.height;
-                            if (w > maxDim || h > maxDim) {
-                                var scale = maxDim / Math.max(w, h);
-                                w = Math.round(w * scale);
-                                h = Math.round(h * scale);
-                            }
-                            canvas.width = w;
-                            canvas.height = h;
-                            var ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, w, h);
-                            var d = ctx.getImageData(0, 0, w, h).data;
-
-                            // Threshold to pure black/white
-                            for (var i = 0; i < d.length; i += 4) {
-                                var br = (d[i]*299 + d[i+1]*587 + d[i+2]*114) / 1000;
-                                var bw = br > 128 ? 255 : 0;
-                                d[i]=bw; d[i+1]=bw; d[i+2]=bw; d[i+3]=255;
-                            }
-
-                            if (typeof jsQR !== 'undefined') {
-                                var code = jsQR(d, w, h);
-                                if (code && code.data) {
-                                    hideLoading();
-                                    onScanSuccess(code.data);
-                                    return;
-                                }
-                            }
-                            showError('No QR code found in image. Try a clearer photo.');
-                        } catch (e) {
-                            // Canvas failed — fall back to server
-                            decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                        }
-                    }, 50);
-                };
-                img.onerror = function() {
-                    clearTimeout(loadTimeout);
-                    decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                };
-                img.src = reader.result;
-            };
-            reader.onerror = function() {
-                clearTimeout(loadTimeout);
-                showError('Could not read file.');
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    // Try camera (html5-qrcode) first, fall back to file upload (jsQR)
-    if (scanner) {
-        scanner.start(
-            { facingMode: 'environment' },
-            { fps: 10, qrbox: { width: 250, height: 250 } },
-            onScanSuccess,
-            function() { /* ignore — fires continuously when no QR in frame */ }
-        ).then(function() {
-            scanning = true;
-        }).catch(function() {
-            showFileFallback();
-        });
-    } else {
-        // No camera library — go straight to file upload
-        showFileFallback();
-    }
+            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
+            closeScanner();
+        },
+        function() { /* ignore — fires continuously when no QR in frame */ }
+    ).then(function() {
+        scanning = true;
+    }).catch(function() {
+        var readerEl = document.getElementById('qr-scanner-reader');
+        if (readerEl) {
+            readerEl.innerHTML = '<p style="color:#dc3545;text-align:center;padding:2rem">' +
+                '<i class="fas fa-exclamation-triangle"></i> Camera access denied or unavailable.</p>';
+        }
+    });
 }
 
 // ============================================================================
