@@ -4071,6 +4071,10 @@ function decodeQrServerSide(file, onSuccess, onError, onComplete) {
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
     xhr.onload = function() {
+        if (xhr.status !== 200) {
+            onError('Server error (HTTP ' + xhr.status + '). Please refresh and try again.');
+            return;
+        }
         try {
             var resp = JSON.parse(xhr.responseText);
             if (resp.success && resp.data) {
@@ -4080,7 +4084,9 @@ function decodeQrServerSide(file, onSuccess, onError, onComplete) {
                 onError(resp.error || 'No QR code found in image. Try a clearer photo.');
             }
         } catch (e) {
-            onError('Server returned an invalid response.');
+            // Log the actual response for debugging
+            console.error('QR decode: unexpected response', xhr.status, xhr.responseText.substring(0, 200));
+            onError('Server returned an unexpected response. Check the browser console for details.');
         }
     };
     xhr.onerror = function() {

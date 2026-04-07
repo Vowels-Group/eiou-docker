@@ -1170,10 +1170,13 @@ class ContactController
     public function handleDecodeQr(): void
     {
         header('Content-Type: application/json');
-        try {
-            $this->session->verifyCSRFToken();
-        } catch (\Exception $e) {
-            echo json_encode(['success' => false, 'error' => 'CSRF verification failed']);
+
+        // Use validateCSRFToken directly — verifyCSRFToken calls die() which
+        // outputs plain text, corrupting the JSON response. Don't rotate the
+        // token (false) since this is an AJAX call and the page stays open.
+        $csrfToken = $_POST['csrf_token'] ?? '';
+        if (!$this->session->validateCSRFToken($csrfToken, false)) {
+            echo json_encode(['success' => false, 'error' => 'CSRF verification failed. Please refresh the page.']);
             exit;
         }
 

@@ -169,10 +169,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // AJAX-only QR decode (returns JSON, exits immediately)
     if ($action === 'decodeQr') {
+        header('Content-Type: application/json');
         try {
             $contactController->routeAction();
         } catch (Exception $e) {
-            header('Content-Type: application/json');
             echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
         }
         exit;
