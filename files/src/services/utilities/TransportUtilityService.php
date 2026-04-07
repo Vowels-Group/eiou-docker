@@ -91,12 +91,12 @@ class TransportUtilityService implements TransportServiceInterface
         $transportIndex = $this->determineTransportType($info) ?? Constants::getDefaultTransportMode();
         if(isset($contactInfo[$transportIndex])){
             return $transportIndex;
-        } 
-        // If provided address/name did not result in a viable transport type 
+        }
+        // If provided address/name did not result in a viable transport type
         //  and default transport mode did not work to compensate, try finding the next possible
-        $transportModes = $this->container->getRepositoryFactory()->get(AddressRepository::class)->getAllAddressTypes();
-        unset($transportModes[array_search($transportIndex,$transportModes)]);
-        $transportModes = array_values($transportModes);
+        // Use VALID_TRANSPORT_INDICES (security-descending: tor, https, http)
+        $transportModes = Constants::VALID_TRANSPORT_INDICES;
+        $transportModes = array_values(array_diff($transportModes, [$transportIndex]));
         while($transportModes !== []){
             $transportIndex = array_shift($transportModes);
             if(isset($contactInfo[$transportIndex])){
@@ -114,13 +114,10 @@ class TransportUtilityService implements TransportServiceInterface
      * @return string|null The fallback address
      */
     public function fallbackTransportAddress(array $contactInfo): ?string {
-        $transportModes = $this->container->getRepositoryFactory()->get(AddressRepository::class)->getAllAddressTypes();
-        if($transportModes){
-            while($transportModes !== []){
-                $transportIndex = array_shift($transportModes);
-                if(isset($contactInfo[$transportIndex])){
-                    return $contactInfo[$transportIndex];
-                }
+        // Use VALID_TRANSPORT_INDICES (security-descending: tor, https, http)
+        foreach (Constants::VALID_TRANSPORT_INDICES as $transportIndex) {
+            if (isset($contactInfo[$transportIndex])) {
+                return $contactInfo[$transportIndex];
             }
         }
         output(outputNoViableTransportAddress(), 'SILENT');
