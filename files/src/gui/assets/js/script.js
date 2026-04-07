@@ -4071,9 +4071,19 @@ function openQrScanner(targetInputId) {
             '</div>' +
             '<div class="modal-body" style="padding:1rem">' +
                 '<div id="qr-scanner-reader" style="width:100%"></div>' +
-                '<p style="text-align:center;color:#6c757d;font-size:0.85rem;margin-top:0.5rem">' +
+                '<p id="qr-scanner-hint" style="text-align:center;color:#6c757d;font-size:0.85rem;margin-top:0.5rem">' +
                     'Point your camera at a QR code containing an address' +
                 '</p>' +
+                '<div id="qr-scanner-file-fallback" style="display:none;text-align:center;padding:1rem 0">' +
+                    '<p style="color:#6c757d;font-size:0.85rem;margin-bottom:0.75rem">' +
+                        'Camera unavailable. Upload a photo of the QR code instead:' +
+                    '</p>' +
+                    '<label class="btn btn-primary btn-sm" style="cursor:pointer">' +
+                        '<i class="fas fa-image"></i> Choose Image' +
+                        '<input type="file" id="qr-file-input" accept="image/*" style="display:none">' +
+                    '</label>' +
+                    '<p id="qr-file-error" style="color:#dc3545;font-size:0.85rem;margin-top:0.5rem;display:none"></p>' +
+                '</div>' +
             '</div>' +
         '</div>';
 
@@ -4083,6 +4093,16 @@ function openQrScanner(targetInputId) {
     var scanner = new Html5Qrcode('qr-scanner-reader');
     var scanning = false;
 
+    function onScanSuccess(decodedText) {
+        var input = document.getElementById(targetInputId);
+        if (input) {
+            input.value = decodedText;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
+        closeScanner();
+    }
+
     function closeScanner() {
         if (scanning) {
             scanner.stop().catch(function() {});
@@ -4091,6 +4111,15 @@ function openQrScanner(targetInputId) {
             document.body.removeChild(overlay);
         }
         document.removeEventListener('keydown', escHandler);
+    }
+
+    function showFileFallback() {
+        var readerEl = document.getElementById('qr-scanner-reader');
+        var hintEl = document.getElementById('qr-scanner-hint');
+        var fallbackEl = document.getElementById('qr-scanner-file-fallback');
+        if (readerEl) readerEl.style.display = 'none';
+        if (hintEl) hintEl.style.display = 'none';
+        if (fallbackEl) fallbackEl.style.display = 'block';
     }
 
     function escHandler(e) {
@@ -4103,33 +4132,41 @@ function openQrScanner(targetInputId) {
     });
     document.addEventListener('keydown', escHandler);
 
-    // Start scanning
+    // Wire file input for image-based QR scanning
+    var fileInput = document.getElementById('qr-file-input');
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            var errorEl = document.getElementById('qr-file-error');
+            if (errorEl) { errorEl.style.display = 'none'; }
+
+            scanner.scanFile(file, true)
+                .then(function(decodedText) {
+                    onScanSuccess(decodedText);
+                })
+                .catch(function() {
+                    if (errorEl) {
+                        errorEl.textContent = 'No QR code found in image. Try a clearer photo.';
+                        errorEl.style.display = 'block';
+                    }
+                    // Reset file input so the same file can be re-selected
+                    fileInput.value = '';
+                });
+        });
+    }
+
+    // Try camera first, fall back to file upload if unavailable
     scanner.start(
-        { facingMode: 'environment' },  // Prefer rear camera
+        { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
-        function onScanSuccess(decodedText) {
-            // Fill the target input
-            var input = document.getElementById(targetInputId);
-            if (input) {
-                input.value = decodedText;
-                // Trigger input event for any listeners
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
-            closeScanner();
-        },
-        function onScanFailure() {
-            // Ignore scan failures (no QR in frame) — this fires continuously
-        }
+        onScanSuccess,
+        function onScanFailure() { /* ignore — fires continuously when no QR in frame */ }
     ).then(function() {
         scanning = true;
-    }).catch(function(err) {
-        var readerEl = document.getElementById('qr-scanner-reader');
-        if (readerEl) {
-            readerEl.innerHTML = '<p style="color:#dc3545;text-align:center;padding:2rem">' +
-                '<i class="fas fa-exclamation-triangle"></i> Camera access denied or unavailable.<br>' +
-                '<small>Check browser permissions and ensure you are using HTTPS or localhost.</small></p>';
-        }
+    }).catch(function() {
+        // Camera unavailable (Tor Browser, denied permissions, no camera)
+        showFileFallback();
     });
 }
 
