@@ -52,7 +52,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_ANALYTICS_ENABLED` | `false` | No | Share anonymous usage statistics weekly (opt-in). Sends only aggregate transaction counts and volume per currency — no personal data, amounts per transaction, contacts, or addresses |
 | `EIOU_VOLUME_KEY_FILE` | (none) | No | Path to file containing volume encryption passphrase (recommended) |
 | `EIOU_VOLUME_KEY` | (none) | No | Volume encryption passphrase as environment variable (less secure) |
-| `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, or use `P2P_CA_CERT` for a shared CA |
+| `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, use `P2P_CA_CERT` for a shared CA, or place nodes behind a reverse proxy with valid certificates |
 | `P2P_CA_CERT` | (none) | No | Path to a CA certificate file inside the container. When set, P2P SSL verification uses this CA instead of the system bundle — use with a volume mount (e.g., `./ssl-ca:/ssl-ca:ro`) |
 | `TRUSTED_PROXIES` | (none) | No | Comma-separated list of trusted reverse proxy IPs for `X-Forwarded-For` header parsing |
 | **Service Tuning** | | | |
@@ -90,7 +90,7 @@ The node will be accessible at:
 
 > **Important:** Addresses like `http://alice` are resolved by Docker's internal DNS and are **only reachable by other containers on the same Docker network**. They are not accessible from the host machine or the internet. For external access, set `EIOU_HOST` to a real IP address or domain name, `EIOU_PORT` to the mapped port, and use a trusted SSL certificate (Let's Encrypt or CA-signed) instead of the auto-generated self-signed one. See the `EIOU_HOST` / `EIOU_PORT` section below.
 >
-> **HTTPS with self-signed certs:** The auto-generated self-signed certificate allows HTTPS connections, but other nodes will **reject** these certificates by default because `P2P_SSL_VERIFY=true`. To send transactions over HTTPS between QUICKSTART nodes, either set `P2P_SSL_VERIFY=false` in all nodes (dev/testing only), use a shared CA via `P2P_CA_CERT`, or use proper trusted certificates. See [P2P SSL troubleshooting](#p2p-https-fails-between-docker-nodes-self-signed-certificates).
+> **HTTPS with self-signed certs:** The auto-generated self-signed certificate allows HTTPS connections, but other nodes will **reject** these certificates by default because `P2P_SSL_VERIFY=true`. To send transactions over HTTPS between QUICKSTART nodes, either set `P2P_SSL_VERIFY=false` in all nodes (dev/testing only), use a shared CA via `P2P_CA_CERT`, place nodes behind a reverse proxy with valid certificates, or use proper trusted certificates. See [P2P SSL troubleshooting](#p2p-https-fails-between-docker-nodes-self-signed-certificates).
 
 #### EIOU_NAME / EIOU_HOST / EIOU_PORT
 
