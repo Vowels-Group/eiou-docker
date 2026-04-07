@@ -3816,6 +3816,13 @@ hr.currency-separator-double {
 }
 .btn-outline:hover { background: #e9ecef; color: #212529; }
 
+.btn-outline-primary {
+    background: transparent;
+    border: 1px solid #0d6efd;
+    color: #0d6efd;
+}
+.btn-outline-primary:hover { background: #0d6efd; color: white; }
+
 .tx-type-indicator-text { font-weight: 600; color: #28a745; }
 
 .tx-in-progress-spinner { flex-shrink: 0; }
