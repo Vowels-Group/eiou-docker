@@ -3949,6 +3949,13 @@ function showSelectedUserAddress() {
     var selectedOption = select.options[select.selectedIndex];
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('user-address-value').textContent = address;
+
+    // If QR code is visible, regenerate it for the new address
+    var qrContainer = document.getElementById('address-qr-display');
+    if (qrContainer && qrContainer.style.display !== 'none' && qrContainer.innerHTML) {
+        var svg = generateQrSvg(address, 200);
+        if (svg) qrContainer.innerHTML = svg;
+    }
 }
 
 /**
