@@ -78,6 +78,8 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                     : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
                 $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
                 $status = $req['status'] ?? '';
+                $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+                $txid = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
                 $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
             ?>
             <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>">
@@ -92,7 +94,11 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                     <span class="pr-from"><?php echo $fromName; ?> requested</span>
                     <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
                 </div>
-                <?php if ($respondedAt): ?><div class="pr-meta"><?php echo ($status === 'approved') ? 'Paid' : 'Responded'; ?>: <?php echo $respondedAt; ?></div><?php endif; ?>
+                <?php if ($desc): ?><div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div><?php endif; ?>
+                <div class="pr-meta">
+                    <?php if ($respondedAt): ?><?php echo ($status === 'approved') ? 'Paid' : 'Responded'; ?>: <?php echo $respondedAt; ?><?php endif; ?>
+                    <?php if ($txid): ?> &nbsp;·&nbsp; <span title="<?php echo $txid; ?>">txid: <?php echo substr($txid, 0, 12); ?>…</span><?php endif; ?>
+                </div>
             </div>
         <?php endforeach; ?>
     </div>
@@ -112,6 +118,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                 $toName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['recipient_pubkey_hash'] ?? ''), 0, 12) . '…';
                 $status = $req['status'] ?? '';
                 $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+                $txid = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
                 $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
                 $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
             ?>
@@ -135,6 +142,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                 <div class="pr-meta">
                     Sent: <?php echo $createdAt; ?>
                     <?php if ($respondedAt): ?> &nbsp;·&nbsp; Responded: <?php echo $respondedAt; ?><?php endif; ?>
+                    <?php if ($txid): ?> &nbsp;·&nbsp; <span title="<?php echo $txid; ?>">txid: <?php echo substr($txid, 0, 12); ?>…</span><?php endif; ?>
                 </div>
                 <?php if ($status === 'pending'): ?>
                 <div class="pr-actions">

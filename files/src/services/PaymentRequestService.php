@@ -189,7 +189,15 @@ class PaymentRequestService
             : SplitAmount::fromDb((int)$request['amount_whole'], (int)$request['amount_frac']);
         $amountStr = (string)$splitAmount;
         $currency = $request['currency'];
-        $description = $request['description'] ?? null;
+        $rawDescription = $request['description'] ?? null;
+
+        // Build transaction description: "payment: {description}", but drop the prefix
+        // if the combined string would exceed the 255-char description limit
+        $description = null;
+        if (!empty($rawDescription)) {
+            $prefixed = 'payment: ' . $rawDescription;
+            $description = strlen($prefixed) <= 255 ? $prefixed : $rawDescription;
+        }
 
         // Trigger sendEiou via the existing transaction pipeline
         CliOutputManager::resetInstance();

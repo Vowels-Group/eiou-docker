@@ -372,6 +372,63 @@ class PaymentRequestServiceTest extends TestCase
         $this->assertEquals('tx-abc', $result['txid']);
     }
 
+    public function testApprovePrependsPaymentPrefixToDescription(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => 'repayment for groceries',
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID);
+
+        // Description in argv[5] should be prefixed
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals('payment: repayment for groceries', $capturedArgv[5]);
+    }
+
+    public function testApproveDropsPrefixWhenDescriptionExceedsLimit(): void
+    {
+        $longDescription = str_repeat('x', 250);  // 250 chars — 'payment: ' (9) + 250 = 259 > 255
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => $longDescription,
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID);
+
+        // Prefix dropped — raw description used as-is
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals($longDescription, $capturedArgv[5]);
+    }
+
     // =========================================================================
     // decline()
     // =========================================================================

@@ -17,6 +17,11 @@ The project is currently in **ALPHA** status.
 - **Unit tests** for `PaymentRequestRepository` (16 tests) and `PaymentRequestService` (26 tests) — full coverage of create, approve, decline, cancel, incoming message handling, and response handling
 - **Integration flow test** (`tests/testfiles/paymentRequestTest.sh`) added to the `run-all-tests.sh` suite (`all` and `api` subsets) — 8 tests covering the full lifecycle: create, outgoing pending confirmation, incoming delivery, decline, cancel, invalid-create error handling, and an **approve flow** that verifies the eIOU is actually sent (balance change on both nodes + txid in transactions table)
 
+### Fixed
+- **Payment request description missing on received requests**: the resolved "Received — History" section now displays the description text the requester included, matching the existing behaviour on incoming pending and outgoing requests
+- **Payment request approval auto-fills transaction description**: approving a payment request now sends the eIOU with description `"payment: {description}"` so the resulting transaction is self-describing; if the prefixed string would exceed 255 characters the prefix is dropped and the raw description is used instead
+- **Txid now shown on paid payment requests**: both the sender's outgoing view and the recipient's received history show the truncated txid (full value on hover) once the request is approved and paid
+
 ### Changed
 - Restructure wallet GUI tab navigation: split "Send & Contacts" tab into a dedicated **Send** tab (eIOU form only) and a dedicated **Contacts** tab (add contact form + contact list); merge **Debug** section into the bottom of the **Settings** tab (removed as a standalone tab); remove the Quick Actions dashboard card bar (Send eIOU, Add Contact, View Contacts, Transaction History, Failed Messages, Settings shortcuts) — navigation is now fully tab-based
 - Change "Total Fee Earnings" dashboard card color from green (`#28a745`→`#20c997`) to amber/gold (`#fd7e14`→`#ffc107`) to avoid culturally ambiguous color associations (green/red carry opposite financial meanings in different markets)
