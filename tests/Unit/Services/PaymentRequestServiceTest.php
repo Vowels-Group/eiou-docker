@@ -19,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Eiou\Services\PaymentRequestService;
+use Eiou\Services\MessageDeliveryService;
 use Eiou\Database\PaymentRequestRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\AddressRepository;
@@ -37,6 +38,7 @@ class PaymentRequestServiceTest extends TestCase
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|UserContext $currentUser;
     private MockObject|Logger $logger;
+    private MockObject|MessageDeliveryService $messageDeliveryService;
     private PaymentRequestService $service;
 
     private const TEST_REQUEST_ID  = 'req1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab';
@@ -59,6 +61,7 @@ class PaymentRequestServiceTest extends TestCase
         $this->transportUtility         = $this->createMock(TransportUtilityService::class);
         $this->currentUser              = $this->createMock(UserContext::class);
         $this->logger                   = $this->createMock(Logger::class);
+        $this->messageDeliveryService   = $this->createMock(MessageDeliveryService::class);
 
         $this->currentUser->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
@@ -67,6 +70,10 @@ class PaymentRequestServiceTest extends TestCase
 
         $this->transportUtility->method('resolveUserAddressForTransport')
             ->willReturn(self::TEST_ADDRESS);
+
+        // Default: MessageDeliveryService succeeds
+        $this->messageDeliveryService->method('sendMessage')
+            ->willReturn(['success' => true, 'queued_for_retry' => false, 'tracking' => ['stage' => 'completed']]);
 
         $this->service = new PaymentRequestService(
             $this->paymentRequestRepository,
@@ -77,6 +84,7 @@ class PaymentRequestServiceTest extends TestCase
             $this->currentUser,
             $this->logger
         );
+        $this->service->setMessageDeliveryService($this->messageDeliveryService);
     }
 
     // =========================================================================
@@ -176,9 +184,9 @@ class PaymentRequestServiceTest extends TestCase
             ->method('createRequest')
             ->with($this->arrayHasKey('request_id'))
             ->willReturn('1');
-        $this->transportUtility->expects($this->once())
-            ->method('send')
-            ->willReturn(json_encode(['status' => 'received']));
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with('payment_request', self::TEST_CONTACT_ADDRESS);
 
         $result = $this->service->create(self::TEST_CONTACT_NAME, self::TEST_AMOUNT, self::TEST_CURRENCY, 'Pay me back');
 
@@ -196,10 +204,10 @@ class PaymentRequestServiceTest extends TestCase
             ->willReturn($this->addressMap());
         $this->paymentRequestRepository->method('createRequest')
             ->willReturn('1');
-        $this->transportUtility->method('send')
-            ->willThrowException(new \Exception('Connection refused'));
+        $this->messageDeliveryService->method('sendMessage')
+            ->willReturn(['success' => false, 'queued_for_retry' => true, 'tracking' => ['stage' => 'queued_for_retry']]);
 
-        // Should still succeed — delivery failure is non-fatal
+        // Should still succeed — delivery failure/queuing is non-fatal
         $result = $this->service->create(self::TEST_CONTACT_NAME, self::TEST_AMOUNT, self::TEST_CURRENCY, null);
 
         $this->assertTrue($result['success']);
@@ -217,11 +225,10 @@ class PaymentRequestServiceTest extends TestCase
             ]);
         $this->paymentRequestRepository->method('createRequest')
             ->willReturn('1');
-        // The send call should go to the tor address
-        $this->transportUtility->expects($this->once())
-            ->method('send')
-            ->with('http://bobonion.onion', $this->anything())
-            ->willReturn(json_encode(['status' => 'received']));
+        // Delivery should go to the tor address
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with('payment_request', 'http://bobonion.onion');
 
         $this->service->create(self::TEST_CONTACT_NAME, self::TEST_AMOUNT, self::TEST_CURRENCY, null);
     }
@@ -354,10 +361,10 @@ class PaymentRequestServiceTest extends TestCase
         $this->paymentRequestRepository->expects($this->once())
             ->method('updateStatus')
             ->with(self::TEST_REQUEST_ID, 'approved', $this->arrayHasKey('resulting_txid'));
-        // Response message best-effort — transport called once
-        $this->transportUtility->expects($this->once())
-            ->method('send')
-            ->willReturn(json_encode(['status' => 'received']));
+        // Response message goes via MessageDeliveryService
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with('payment_request', self::TEST_CONTACT_ADDRESS);
 
         $result = $this->service->approve(self::TEST_REQUEST_ID);
 
@@ -422,9 +429,10 @@ class PaymentRequestServiceTest extends TestCase
         $this->paymentRequestRepository->expects($this->once())
             ->method('updateStatus')
             ->with(self::TEST_REQUEST_ID, 'declined', $this->arrayHasKey('responded_at'));
-        $this->transportUtility->expects($this->once())
-            ->method('send')
-            ->willReturn(json_encode(['status' => 'received']));
+        // Response message goes via MessageDeliveryService
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with('payment_request', self::TEST_CONTACT_ADDRESS);
 
         $result = $this->service->decline(self::TEST_REQUEST_ID);
 

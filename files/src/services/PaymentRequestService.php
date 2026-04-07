@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Database\PaymentRequestRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\AddressRepository;
+use Eiou\Services\MessageDeliveryService;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\SplitAmount;
@@ -39,6 +40,12 @@ class PaymentRequestService
     private TransportUtilityService $transportUtility;
     private UserContext $currentUser;
     private Logger $logger;
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    public function setMessageDeliveryService(MessageDeliveryService $service): void
+    {
+        $this->messageDeliveryService = $service;
+    }
 
     public function __construct(
         PaymentRequestRepository $paymentRequestRepository,
@@ -139,24 +146,14 @@ class PaymentRequestService
             'description'     => $description,
         ];
 
-        try {
-            $response = $this->transportUtility->send($recipientAddress, $payload);
-            $decoded = json_decode($response, true);
-            $responseStatus = $decoded['status'] ?? '';
-            if (!in_array($responseStatus, ['received', 'inserted', 'ok', 'forwarded', 'completed'], true)) {
-                $this->logger->warning('Payment request delivery response was not a success status', [
-                    'request_id' => $requestId,
-                    'status'     => $responseStatus,
-                ]);
-            }
-        } catch (\Exception $e) {
-            // Don't fail — request is stored locally and can still be approved/declined
-            // even if the delivery message failed (e.g., contact temporarily offline).
-            $this->logger->warning('Payment request delivery failed — stored locally', [
-                'request_id' => $requestId,
-                'error'      => $e->getMessage(),
-            ]);
-        }
+        $this->logger->info('Sending payment request message', [
+            'request_id'        => $requestId,
+            'recipient_address' => $recipientAddress,
+            'amount'            => (string)$splitAmount,
+            'currency'          => $currencyValidation['value'],
+        ]);
+
+        $this->deliverMessage($recipientAddress, $payload, $requestId, 'create');
 
         return ['success' => true, 'request_id' => $requestId];
     }
@@ -464,12 +461,68 @@ class PaymentRequestService
             $payload['txid'] = $txid;
         }
 
+        $this->logger->info('Sending payment request response message', [
+            'request_id'        => $request['request_id'],
+            'outcome'           => $outcome,
+            'requester_address' => $requesterAddress,
+        ]);
+
+        $this->deliverMessage($requesterAddress, $payload, $request['request_id'], 'response-' . $outcome);
+    }
+
+    /**
+     * Deliver a payment_request message using MessageDeliveryService when available
+     * (with retry and DLQ), falling back to direct transport otherwise.
+     *
+     * Delivery failures are non-fatal: the request is always stored locally first,
+     * so the recipient will still receive it on their next check if delivery was queued.
+     */
+    private function deliverMessage(string $address, array $payload, string $requestId, string $context): void
+    {
+        if ($this->messageDeliveryService !== null) {
+            $messageId = 'payment_request-' . $context . '-' . $requestId;
+            $result = $this->messageDeliveryService->sendMessage(
+                'payment_request',
+                $address,
+                $payload,
+                $messageId,
+                false // sync — wait for first attempt, retry handled by cleanup processor
+            );
+            if (!($result['success'] ?? false) && !($result['queued_for_retry'] ?? false)) {
+                $this->logger->warning('Payment request message delivery did not succeed on first attempt', [
+                    'request_id' => $requestId,
+                    'context'    => $context,
+                    'address'    => $address,
+                    'stage'      => $result['tracking']['stage'] ?? 'unknown',
+                ]);
+            } else {
+                $this->logger->info('Payment request message delivered (or queued for retry)', [
+                    'request_id' => $requestId,
+                    'context'    => $context,
+                    'stage'      => $result['tracking']['stage'] ?? 'unknown',
+                ]);
+            }
+            return;
+        }
+
+        // Fallback: direct transport (no retry, no DLQ)
+        $this->logger->warning('MessageDeliveryService not available — using direct transport for payment request (no retry)', [
+            'request_id' => $requestId,
+            'context'    => $context,
+        ]);
         try {
-            $this->transportUtility->send($requesterAddress, $payload);
+            $response = $this->transportUtility->send($address, $payload);
+            $decoded  = json_decode($response, true);
+            $status   = $decoded['status'] ?? '';
+            $this->logger->info('Payment request direct transport response', [
+                'request_id' => $requestId,
+                'context'    => $context,
+                'status'     => $status,
+            ]);
         } catch (\Exception $e) {
-            $this->logger->warning('Failed to send payment_request response message', [
-                'request_id' => $request['request_id'],
-                'outcome'    => $outcome,
+            $this->logger->warning('Payment request direct transport failed', [
+                'request_id' => $requestId,
+                'context'    => $context,
                 'error'      => $e->getMessage(),
             ]);
         }

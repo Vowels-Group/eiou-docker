@@ -1152,6 +1152,11 @@ class ServiceContainer implements ContainerInterface {
             $this->services['MessageService']->setPaymentRequestService($this->services['PaymentRequestService']);
         }
 
+        // PaymentRequestService -> MessageDeliveryService
+        if (isset($this->services['PaymentRequestService']) && isset($this->services['MessageDeliveryService'])) {
+            $this->services['PaymentRequestService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
+        }
+
         // ChainDropService -> BackupService
         if (isset($this->services['ChainDropService'])) {
             $this->services['ChainDropService']->setBackupService($this->getBackupService());
@@ -1323,6 +1328,10 @@ class ServiceContainer implements ContainerInterface {
         // Initialize CLI service (must be before wireCircularDependencies
         // so setter injection for ContactCreditRepository and P2pRepository runs)
         $this->getCliService();
+
+        // Initialize PaymentRequestService so wireCircularDependencies() can
+        // wire it into MessageService (required for incoming payment_request handling)
+        $this->getPaymentRequestService();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();
