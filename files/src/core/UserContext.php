@@ -320,6 +320,14 @@ class UserContext {
                 $locaters['http'] = $address;
             }
         }
+
+        // In QUICKSTART mode, hostname is set to https:// but Apache serves
+        // both HTTP and HTTPS on the same address. Derive the HTTP version so
+        // contacts can reach us via HTTP (no SSL verification needed).
+        if (!isset($locaters['http']) && isset($locaters['https'])) {
+            $locaters['http'] = preg_replace('/^https:\/\//', 'http://', $locaters['https']);
+        }
+
         return $locaters;
     }
 
