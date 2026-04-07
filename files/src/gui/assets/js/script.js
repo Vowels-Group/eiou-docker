@@ -4114,10 +4114,12 @@ function openQrScanner(targetInputId) {
     }
 
     function showFileFallback() {
+        // Keep qr-scanner-reader visible but clear it — scanFile() needs
+        // the container in the DOM and visible to render the image for decoding
         var readerEl = document.getElementById('qr-scanner-reader');
         var hintEl = document.getElementById('qr-scanner-hint');
         var fallbackEl = document.getElementById('qr-scanner-file-fallback');
-        if (readerEl) readerEl.style.display = 'none';
+        if (readerEl) readerEl.innerHTML = '';
         if (hintEl) hintEl.style.display = 'none';
         if (fallbackEl) fallbackEl.style.display = 'block';
     }
