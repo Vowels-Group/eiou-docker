@@ -3767,7 +3767,7 @@ hr.currency-separator-double {
 
 .tx-modal-badge-contact { background: #17a2b8; }
 .tx-modal-badge-p2p { background: #ffc107; color: #000; }
-.tx-modal-badge-direct { background: #6c757d; }
+.tx-modal-badge-direct { background: #ffc107; color: #000; }
 .tx-modal-badge-sent { background: #dc3545; }
 .tx-modal-badge-received { background: #28a745; }
 .tx-modal-badge-relay { background: #17a2b8; }
@@ -4077,6 +4077,25 @@ hr.currency-separator-double {
 .pr-item--approved {
     border-left: 3px solid #28a745;
     opacity: 0.85;
+}
+
+.pr-item[data-action] {
+    cursor: pointer;
+    transition: opacity 0.15s, box-shadow 0.15s;
+}
+.pr-item[data-action]:hover {
+    opacity: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.pr-view-tx {
+    margin-left: auto;
+    color: #6c757d;
+    font-size: 0.75rem;
+    opacity: 0.6;
+}
+.pr-item[data-action]:hover .pr-view-tx {
+    opacity: 1;
+    color: #0d6efd;
 }
 
 .pr-item--declined,

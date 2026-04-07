@@ -18,6 +18,8 @@ The project is currently in **ALPHA** status.
 - **Integration flow test** (`tests/testfiles/paymentRequestTest.sh`) added to the `run-all-tests.sh` suite (`all` and `api` subsets) — 8 tests covering the full lifecycle: create, outgoing pending confirmation, incoming delivery, decline, cancel, invalid-create error handling, and an **approve flow** that verifies the eIOU is actually sent (balance change on both nodes + txid in transactions table)
 
 ### Fixed
+- **"Direct" transaction type badge in modal was grey instead of yellow**: `tx-modal-badge-direct` now uses `#ffc107` (yellow/amber) matching the p2p badge and the transaction list badge — previously inconsistently used bootstrap grey
+- **Clicking a paid payment request now opens the transaction modal**: resolved incoming and outgoing payment request rows with a `resulting_txid` are now clickable (pointer cursor, hover highlight, external-link icon) and open the standard transaction detail modal by searching `transactionData` for the matching txid
 - **Payment request description missing on received requests**: the resolved "Received — History" section now displays the description text the requester included, matching the existing behaviour on incoming pending and outgoing requests
 - **Payment request approval auto-fills transaction description**: approving a payment request now sends the eIOU with description `"payment: {description}"` so the resulting transaction is self-describing; if the prefixed string would exceed 255 characters the prefix is dropped and the raw description is used instead
 - **Txid now shown on paid payment requests**: both the sender's outgoing view and the recipient's received history show the truncated txid (full value on hover) once the request is approved and paid

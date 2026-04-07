@@ -82,7 +82,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                 $txid = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
                 $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
             ?>
-            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>">
+            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>"<?php if ($txid): ?> data-action="openTransactionModalByTxid" data-txid="<?php echo $txid; ?>"<?php endif; ?>>
                 <div class="pr-item-header">
                     <?php if ($status === 'approved'): ?>
                         <span class="pr-badge pr-badge--approved"><i class="fas fa-check-circle"></i> Paid</span>
@@ -93,6 +93,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                     <?php endif; ?>
                     <span class="pr-from"><?php echo $fromName; ?> requested</span>
                     <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
+                    <?php if ($txid): ?><span class="pr-view-tx"><i class="fas fa-external-link-alt"></i></span><?php endif; ?>
                 </div>
                 <?php if ($desc): ?><div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div><?php endif; ?>
                 <div class="pr-meta">
@@ -122,7 +123,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                 $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
                 $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
             ?>
-            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>">
+            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>"<?php if ($txid): ?> data-action="openTransactionModalByTxid" data-txid="<?php echo $txid; ?>"<?php endif; ?>>
                 <div class="pr-item-header">
                     <?php if ($status === 'pending'): ?>
                         <span class="pr-badge pr-badge--pending"><i class="fas fa-clock"></i> Pending</span>
@@ -137,6 +138,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                     <?php endif; ?>
                     <span class="pr-from">Requested from <strong><?php echo $toName; ?></strong></span>
                     <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
+                    <?php if ($txid): ?><span class="pr-view-tx"><i class="fas fa-external-link-alt"></i></span><?php endif; ?>
                 </div>
                 <?php if ($desc): ?><div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div><?php endif; ?>
                 <div class="pr-meta">

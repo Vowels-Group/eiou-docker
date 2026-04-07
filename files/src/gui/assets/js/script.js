@@ -862,6 +862,20 @@ function closeTransactionModal() {
     }
 }
 
+/**
+ * Open the transaction modal by txid, searching the transactionData array.
+ * Used by payment request rows that have a resulting_txid.
+ */
+function openTransactionModalByTxid(txid) {
+    if (typeof transactionData === 'undefined' || !txid) { return; }
+    for (var i = 0; i < transactionData.length; i++) {
+        if (transactionData[i].txid === txid) {
+            openTransactionModal(i);
+            return;
+        }
+    }
+}
+
 // Close modal when clicking outside of it
 window.onclick = function(event) {
     var editModal = document.getElementById('editContactModal');
@@ -4302,6 +4316,9 @@ function submitAnalyticsConsent(enable) {
         'openTransactionModal': function(el) {
             var index = parseInt(el.getAttribute('data-index'), 10);
             openTransactionModal(index);
+        },
+        'openTransactionModalByTxid': function(el) {
+            openTransactionModalByTxid(el.getAttribute('data-txid'));
         },
         'closeTransactionModal': function() { closeTransactionModal(); },
 
