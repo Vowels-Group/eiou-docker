@@ -4178,37 +4178,49 @@ function openQrScanner(targetInputId) {
                 var img = new Image();
                 img.onload = function() {
                     clearTimeout(loadTimeout);
-                    try {
-                        var canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        var ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-                        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    // Defer processing by one frame so the browser can paint the spinner
+                    setTimeout(function() {
+                        try {
+                            var canvas = document.createElement('canvas');
+                            // Limit canvas size to prevent huge phone photos from freezing
+                            var maxDim = 1000;
+                            var w = img.width;
+                            var h = img.height;
+                            if (w > maxDim || h > maxDim) {
+                                var scale = maxDim / Math.max(w, h);
+                                w = Math.round(w * scale);
+                                h = Math.round(h * scale);
+                            }
+                            canvas.width = w;
+                            canvas.height = h;
+                            var ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, w, h);
+                            var imageData = ctx.getImageData(0, 0, w, h);
 
-                        // Detect canvas fingerprinting protection (all zeros or uniform data)
-                        var sample = 0;
-                        for (var p = 0; p < Math.min(400, imageData.data.length); p += 4) {
-                            sample += imageData.data[p]; // Red channel
-                        }
-                        if (sample === 0) {
-                            showError('Your browser is blocking canvas image data (privacy protection). Try using a regular browser for QR scanning.');
-                            return;
-                        }
-
-                        if (typeof jsQR !== 'undefined') {
-                            var code = jsQR(imageData.data, imageData.width, imageData.height);
-                            if (code && code.data) {
-                                hideLoading();
-                                onScanSuccess(code.data);
+                            // Detect canvas fingerprinting protection (all zeros)
+                            var sample = 0;
+                            for (var p = 0; p < Math.min(400, imageData.data.length); p += 4) {
+                                sample += imageData.data[p];
+                            }
+                            if (sample === 0) {
+                                showError('Your browser is blocking canvas image data (privacy protection). Try using a regular browser for QR scanning.');
                                 return;
                             }
-                        }
 
-                        showError('No QR code found in image. Try a clearer photo.');
-                    } catch (canvasErr) {
-                        showError('Cannot read image data. Your browser may be blocking canvas access for privacy.');
-                    }
+                            if (typeof jsQR !== 'undefined') {
+                                var code = jsQR(imageData.data, imageData.width, imageData.height);
+                                if (code && code.data) {
+                                    hideLoading();
+                                    onScanSuccess(code.data);
+                                    return;
+                                }
+                            }
+
+                            showError('No QR code found in image. Try a clearer photo.');
+                        } catch (canvasErr) {
+                            showError('Cannot read image data. Your browser may be blocking canvas access for privacy.');
+                        }
+                    }, 50);
                 };
                 img.onerror = function() {
                     clearTimeout(loadTimeout);
