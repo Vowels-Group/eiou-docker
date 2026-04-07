@@ -129,7 +129,8 @@ show_alpha_warning_short() {
             echo -e "\t   For external access, set EIOU_HOST to a real IP or domain and EIOU_PORT to the mapped port."
             if [ "${P2P_SSL_VERIFY:-}" != "false" ] && [ -z "${P2P_CA_CERT:-}" ]; then
                 echo -e "\t   HTTPS between nodes will also fail — self-signed certs are rejected by default"
-                echo -e "\t   (P2P_SSL_VERIFY=true). Set P2P_SSL_VERIFY=false or use P2P_CA_CERT with a shared CA."
+                echo -e "\t   (P2P_SSL_VERIFY=true). Set P2P_SSL_VERIFY=false, use P2P_CA_CERT with a shared CA,"
+                echo -e "\t   or place nodes behind a reverse proxy with valid certificates."
             fi
             echo -e "\033[0m"
         fi
