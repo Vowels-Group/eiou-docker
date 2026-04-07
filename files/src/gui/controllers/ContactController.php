@@ -1167,14 +1167,19 @@ class ContactController
      * - QR reader only extracts text from pixel data — never executes file content
      * - Decoded text is treated as untrusted (returned raw, validated client-side)
      */
-    private function handleDecodeQr(): void
+    public function handleDecodeQr(): void
     {
-        $this->session->verifyCSRFToken();
         header('Content-Type: application/json');
+        try {
+            $this->session->verifyCSRFToken();
+        } catch (\Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'CSRF verification failed']);
+            exit;
+        }
 
         if (!isset($_FILES['qr_image']) || $_FILES['qr_image']['error'] !== UPLOAD_ERR_OK) {
             echo json_encode(['success' => false, 'error' => 'No image uploaded']);
-            return;
+            exit;
         }
 
         $tmpFile = $_FILES['qr_image']['tmp_name'];
@@ -1182,14 +1187,14 @@ class ContactController
         // Ensure the file is a real upload (not a path traversal / symlink attack)
         if (!is_uploaded_file($tmpFile)) {
             echo json_encode(['success' => false, 'error' => 'Invalid upload']);
-            return;
+            exit;
         }
 
         $maxSize = 5 * 1024 * 1024; // 5MB
         if ($_FILES['qr_image']['size'] > $maxSize) {
             @unlink($tmpFile);
             echo json_encode(['success' => false, 'error' => 'Image too large (max 5MB)']);
-            return;
+            exit;
         }
 
         // Validate MIME type using file content (not the user-supplied type header)
@@ -1199,13 +1204,13 @@ class ContactController
         if (!in_array($mimeType, $allowedMimes, true)) {
             @unlink($tmpFile);
             echo json_encode(['success' => false, 'error' => 'File is not a valid image (detected: ' . $mimeType . ')']);
-            return;
+            exit;
         }
 
         if (!class_exists('\\Zxing\\QrReader')) {
             @unlink($tmpFile);
             echo json_encode(['success' => false, 'error' => 'QR decoder not available on server']);
-            return;
+            exit;
         }
 
         try {
@@ -1220,9 +1225,10 @@ class ContactController
 
         if ($text === null || $text === '' || $text === false) {
             echo json_encode(['success' => false, 'error' => 'No QR code found in image']);
-            return;
+            exit;
         }
 
         echo json_encode(['success' => true, 'data' => $text]);
+        exit;
     }
 }
