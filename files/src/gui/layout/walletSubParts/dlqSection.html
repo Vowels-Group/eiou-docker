@@ -164,12 +164,12 @@
                     </span>
                 </td>
                 <td data-label="Recipient" class="dlq-cell-center">
-                    <span class="monospace dlq-address dlq-truncate" title="<?php echo htmlspecialchars($recipient); ?>">
+                    <span class="monospace dlq-address dlq-truncate dlq-tap-detail" title="<?php echo htmlspecialchars($recipient); ?>" data-action="showInfoModal" role="button">
                         <?php echo htmlspecialchars($recipient); ?>
                     </span>
                 </td>
                 <td data-label="Reason" class="dlq-cell-center">
-                    <span class="dlq-reason-text dlq-truncate" title="<?php echo htmlspecialchars($reason); ?>">
+                    <span class="dlq-reason-text dlq-truncate dlq-tap-detail" title="<?php echo htmlspecialchars($reason); ?>" data-action="showInfoModal" role="button">
                         <?php echo htmlspecialchars($reason ?: '—'); ?>
                     </span>
                 </td>

@@ -2840,6 +2840,10 @@ html {
     white-space: nowrap;
 }
 
+/* Tappable truncated text — opens modal with full content */
+.dlq-tap-detail { cursor: pointer; }
+.dlq-tap-detail:hover { text-decoration: underline; }
+
 /* Action buttons cell (inner div inside <td>) */
 .dlq-actions-cell {
     white-space: nowrap;
