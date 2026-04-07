@@ -470,7 +470,17 @@ function initializeSendForm() {
             if (addressTypes.length > 0) {
                 addressTypeGroup.style.display = 'block';
                 addressTypeSelect.required = true;
-                if (addressTypes.length === 1) {
+                // Auto-select best address: prefer security order (tor > https > http)
+                var preferredOrder = ['tor', 'https', 'http'];
+                var autoSelected = false;
+                for (var p = 0; p < preferredOrder.length; p++) {
+                    if (addressTypes.indexOf(preferredOrder[p]) !== -1) {
+                        addressTypeSelect.value = preferredOrder[p];
+                        autoSelected = true;
+                        break;
+                    }
+                }
+                if (!autoSelected) {
                     addressTypeSelect.value = addressTypes[0];
                 }
             } else {
