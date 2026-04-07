@@ -4084,6 +4084,23 @@ document.addEventListener('DOMContentLoaded', function() {
  * On success the row is visually marked resolved; on failure the status
  * label is updated and the row remains actionable for another attempt.
  *
+ * Close all open DLQ dropdown menus
+ */
+function closeDlqDropdowns() {
+    var menus = document.querySelectorAll('.dlq-dropdown-menu.open');
+    for (var i = 0; i < menus.length; i++) {
+        menus[i].classList.remove('open');
+    }
+}
+
+// Close DLQ dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dlq-dropdown')) {
+        closeDlqDropdowns();
+    }
+});
+
+/**
  * @param {number} dlqId - The DLQ record ID
  * @param {HTMLElement} btn - The button element that was clicked
  */
@@ -4562,8 +4579,16 @@ function submitAnalyticsConsent(enable) {
             var id = parseInt(el.getAttribute('data-dlq-id'), 10);
             abandonDlqItem(id, el);
         },
-        'retryAllDlqItems': function(el) { retryAllDlqItems(el); },
-        'abandonAllDlqItems': function(el) { abandonAllDlqItems(el); },
+        'retryAllDlqItems': function(el) { closeDlqDropdowns(); retryAllDlqItems(el); },
+        'abandonAllDlqItems': function(el) { closeDlqDropdowns(); abandonAllDlqItems(el); },
+        'toggleDlqDropdown': function(el) {
+            var targetId = el.getAttribute('data-target');
+            var menu = document.getElementById(targetId);
+            if (!menu) return;
+            var wasOpen = menu.classList.contains('open');
+            closeDlqDropdowns();
+            if (!wasOpen) menu.classList.add('open');
+        },
 
         // Settings
         'toggleConfigSection': function(el) {

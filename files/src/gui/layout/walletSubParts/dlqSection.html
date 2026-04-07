@@ -9,10 +9,13 @@
             <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span>
             <?php endif; ?>
         </h2>
-        <div class="dlq-section-header-actions">
+        <?php if (!empty($dlqItems)): ?>
+        <?php $hasRetryable = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying']) && in_array($_i['message_type'] ?? '', ['transaction','contact'])) { $hasRetryable = true; break; } } ?>
+        <?php $hasActive = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying'])) { $hasActive = true; break; } } ?>
+        <?php endif; ?>
+        <!-- Desktop: inline buttons -->
+        <div class="dlq-section-header-actions dlq-desktop-actions">
             <?php if (!empty($dlqItems)): ?>
-            <?php $hasRetryable = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying']) && in_array($_i['message_type'] ?? '', ['transaction','contact'])) { $hasRetryable = true; break; } } ?>
-            <?php $hasActive = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying'])) { $hasActive = true; break; } } ?>
             <?php if ($hasRetryable): ?>
             <button type="button" class="btn btn-success btn-sm" data-action="retryAllDlqItems" title="Retry all pending transaction and contact messages">
                 <i class="fas fa-redo"></i> Retry All
@@ -27,6 +30,29 @@
             <button type="button" class="btn btn-primary btn-sm" data-action="reloadWithHash" data-hash="dlq">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
+        </div>
+        <!-- Mobile: dropdown -->
+        <div class="dlq-section-header-actions dlq-mobile-actions">
+            <div class="dlq-dropdown">
+                <button type="button" class="btn btn-primary btn-sm dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="dlq-bulk-dropdown">
+                    <i class="fas fa-ellipsis-v"></i> Actions
+                </button>
+                <div class="dlq-dropdown-menu" id="dlq-bulk-dropdown">
+                    <?php if (!empty($dlqItems) && $hasRetryable): ?>
+                    <button type="button" class="dlq-dropdown-item" data-action="retryAllDlqItems">
+                        <i class="fas fa-redo"></i> Retry All
+                    </button>
+                    <?php endif; ?>
+                    <?php if (!empty($dlqItems) && $hasActive): ?>
+                    <button type="button" class="dlq-dropdown-item" data-action="abandonAllDlqItems">
+                        <i class="fas fa-ban"></i> Abandon All
+                    </button>
+                    <?php endif; ?>
+                    <button type="button" class="dlq-dropdown-item" data-action="reloadWithHash" data-hash="dlq">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -162,11 +188,11 @@
                     </span>
                 </td>
                 <td data-label="">
-                    <div class="dlq-actions-cell">
+                    <!-- Desktop: inline buttons -->
+                    <div class="dlq-actions-cell dlq-desktop-actions">
                     <?php if ($canRetry): ?>
                     <button type="button"
                             class="btn btn-sm btn-success dlq-retry-btn"
-                            id="dlq-retry-<?php echo $dlqId; ?>"
                             data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>"
                             title="Retry sending this message">
                         <i class="fas fa-redo"></i> Retry
@@ -179,12 +205,39 @@
                     <?php if ($canAct): ?>
                     <button type="button"
                             class="btn btn-sm btn-secondary dlq-abandon-btn"
-                            id="dlq-abandon-<?php echo $dlqId; ?>"
                             data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>"
                             title="Abandon this message (cannot be undone)">
                         <i class="fas fa-ban"></i> Abandon
                     </button>
                     <?php elseif (!$canAct): ?>
+                    <span class="dlq-final-state">
+                        <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
+                    </span>
+                    <?php endif; ?>
+                    </div>
+                    <!-- Mobile: dropdown -->
+                    <div class="dlq-actions-cell dlq-mobile-actions">
+                    <?php if ($canAct): ?>
+                    <div class="dlq-dropdown">
+                        <button type="button" class="btn btn-sm btn-outline dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="dlq-row-dropdown-<?php echo $dlqId; ?>">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dlq-dropdown-menu" id="dlq-row-dropdown-<?php echo $dlqId; ?>">
+                            <?php if ($canRetry): ?>
+                            <button type="button" class="dlq-dropdown-item" data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
+                                <i class="fas fa-redo"></i> Retry
+                            </button>
+                            <?php elseif (!$canRetry): ?>
+                            <span class="dlq-dropdown-item dlq-dropdown-item-disabled">
+                                <i class="fas fa-clock"></i> Expired
+                            </span>
+                            <?php endif; ?>
+                            <button type="button" class="dlq-dropdown-item dlq-dropdown-item-danger" data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
+                                <i class="fas fa-ban"></i> Abandon
+                            </button>
+                        </div>
+                    </div>
+                    <?php else: ?>
                     <span class="dlq-final-state">
                         <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
                     </span>

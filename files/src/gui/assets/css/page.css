@@ -2710,10 +2710,10 @@ html {
 
 .dlq-section {
     background: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 /* Pending count badge in section header and action card */
@@ -2989,6 +2989,49 @@ html {
 .dlq-table th:nth-child(2),
 .dlq-table th:nth-child(3) {
     text-align: center;
+}
+
+/* DLQ dropdown (mobile action menus) */
+.dlq-dropdown { position: relative; display: inline-block; }
+.dlq-dropdown-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 100;
+    min-width: 150px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 0.25rem 0;
+}
+.dlq-dropdown-menu.open { display: block; }
+.dlq-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: 0.875rem;
+    color: #212529;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.dlq-dropdown-item:hover { background: #f8f9fa; }
+.dlq-dropdown-item-danger { color: #dc3545; }
+.dlq-dropdown-item-danger:hover { background: #fff5f5; }
+.dlq-dropdown-item-disabled { color: #6c757d; cursor: default; }
+
+/* Desktop: show inline buttons, hide dropdown */
+.dlq-mobile-actions { display: none; }
+.dlq-desktop-actions { display: flex; }
+
+@media (max-width: 640px) {
+    .dlq-section { padding: 1.25rem; }
+    .dlq-mobile-actions { display: flex; }
+    .dlq-desktop-actions { display: none !important; }
 }
 
 /* ============================================================
