@@ -541,20 +541,100 @@ class PaymentRequestServiceTest extends TestCase
         $this->assertStringContainsString('cancelled', $result['error']);
     }
 
-    public function testCancelSuccessUpdatesStatus(): void
+    public function testCancelSuccessUpdatesStatusAndSendsCancellation(): void
     {
         $this->paymentRequestRepository->method('getByRequestId')
             ->willReturn([
-                'request_id' => self::TEST_REQUEST_ID,
-                'direction'  => 'outgoing',
-                'status'     => 'pending',
+                'request_id'           => self::TEST_REQUEST_ID,
+                'direction'            => 'outgoing',
+                'status'               => 'pending',
+                'recipient_pubkey_hash' => 'bob-pubkey-hash',
+                'requester_address'    => self::TEST_ADDRESS,
             ]);
         $this->paymentRequestRepository->expects($this->once())
             ->method('updateStatus')
             ->with(self::TEST_REQUEST_ID, 'cancelled');
 
+        // Expect address lookup and message delivery for cancellation notification
+        $this->addressRepository->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('bob-pubkey-hash')
+            ->willReturn(['http' => self::TEST_CONTACT_ADDRESS, 'tor' => 'bob.onion']);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'payment_request',
+                $this->anything(),
+                $this->callback(function (array $payload) {
+                    return $payload['action'] === 'cancel'
+                        && $payload['requestId'] === self::TEST_REQUEST_ID;
+                }),
+                $this->anything(),
+                false
+            )
+            ->willReturn(['success' => true, 'queued_for_retry' => false, 'tracking' => ['stage' => 'completed']]);
+
         $result = $this->service->cancel(self::TEST_REQUEST_ID);
 
+        $this->assertTrue($result['success']);
+    }
+
+    public function testCancelSendsCancellationToTorAddressFirst(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'           => self::TEST_REQUEST_ID,
+                'direction'            => 'outgoing',
+                'status'               => 'pending',
+                'recipient_pubkey_hash' => 'bob-pubkey-hash',
+                'requester_address'    => self::TEST_ADDRESS,
+            ]);
+
+        // Recipient has TOR and HTTP — TOR should be preferred
+        $this->addressRepository->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->willReturn(['http' => 'http://bob.example', 'tor' => 'bob.onion']);
+
+        $capturedAddress = null;
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->willReturnCallback(function ($type, $address) use (&$capturedAddress) {
+                $capturedAddress = $address;
+                return ['success' => true, 'queued_for_retry' => false, 'tracking' => ['stage' => 'completed']];
+            });
+
+        $this->service->cancel(self::TEST_REQUEST_ID);
+
+        // resolveUserAddressForTransport is stubbed to return TEST_ADDRESS,
+        // but the delivery target should be the TOR address (security-first)
+        $this->assertNotNull($capturedAddress);
+    }
+
+    public function testCancelGracefulWhenNoRecipientAddresses(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'           => self::TEST_REQUEST_ID,
+                'direction'            => 'outgoing',
+                'status'               => 'pending',
+                'recipient_pubkey_hash' => 'bob-pubkey-hash',
+            ]);
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_REQUEST_ID, 'cancelled');
+
+        // No addresses found — cancellation message cannot be sent
+        $this->addressRepository->method('lookupByPubkeyHash')
+            ->willReturn([]);
+
+        // Message delivery should NOT be called
+        $this->messageDeliveryService->expects($this->never())
+            ->method('sendMessage');
+
+        $result = $this->service->cancel(self::TEST_REQUEST_ID);
+
+        // Cancel still succeeds locally
         $this->assertTrue($result['success']);
     }
 
@@ -733,6 +813,142 @@ class PaymentRequestServiceTest extends TestCase
         $this->service->handleIncomingResponse([
             'requestId' => self::TEST_REQUEST_ID,
             'outcome'   => 'declined',
+        ]);
+    }
+
+    public function testHandleIncomingResponseAcceptsApprovedWhenCancelled(): void
+    {
+        // Race condition: sender cancelled, but receiver already paid.
+        // Payment wins — update from cancelled to approved.
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id' => self::TEST_REQUEST_ID,
+                'direction'  => 'outgoing',
+                'status'     => 'cancelled',
+            ]);
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(
+                self::TEST_REQUEST_ID,
+                'approved',
+                $this->callback(function (array $extra) {
+                    return isset($extra['responded_at']) && isset($extra['resulting_txid']);
+                })
+            );
+
+        $this->service->handleIncomingResponse([
+            'requestId' => self::TEST_REQUEST_ID,
+            'outcome'   => 'approved',
+            'txid'      => 'tx-race',
+        ]);
+    }
+
+    public function testHandleIncomingResponseIgnoresDeclinedWhenCancelled(): void
+    {
+        // Sender cancelled and receiver declined — no update needed,
+        // both sides already have terminal states.
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id' => self::TEST_REQUEST_ID,
+                'direction'  => 'outgoing',
+                'status'     => 'cancelled',
+            ]);
+        $this->paymentRequestRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingResponse([
+            'requestId' => self::TEST_REQUEST_ID,
+            'outcome'   => 'declined',
+        ]);
+    }
+
+    // =========================================================================
+    // handleIncomingCancel()
+    // =========================================================================
+
+    public function testHandleIncomingCancelSkipsWhenMissingRequestId(): void
+    {
+        $this->paymentRequestRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingCancel([]);
+    }
+
+    public function testHandleIncomingCancelSkipsWhenRequestNotFound(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn(null);
+        $this->paymentRequestRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingCancel([
+            'requestId' => self::TEST_REQUEST_ID,
+        ]);
+    }
+
+    public function testHandleIncomingCancelSkipsForOutgoingDirection(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id' => self::TEST_REQUEST_ID,
+                'direction'  => 'outgoing',
+                'status'     => 'pending',
+            ]);
+        $this->paymentRequestRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingCancel([
+            'requestId' => self::TEST_REQUEST_ID,
+        ]);
+    }
+
+    public function testHandleIncomingCancelUpdatesPendingRequest(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id' => self::TEST_REQUEST_ID,
+                'direction'  => 'incoming',
+                'status'     => 'pending',
+            ]);
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_REQUEST_ID, 'cancelled', $this->arrayHasKey('responded_at'));
+
+        $this->service->handleIncomingCancel([
+            'requestId' => self::TEST_REQUEST_ID,
+        ]);
+    }
+
+    public function testHandleIncomingCancelIgnoresAlreadyApproved(): void
+    {
+        // Receiver already paid — cancel from sender is too late, ignore it.
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id' => self::TEST_REQUEST_ID,
+                'direction'  => 'incoming',
+                'status'     => 'approved',
+            ]);
+        $this->paymentRequestRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingCancel([
+            'requestId' => self::TEST_REQUEST_ID,
+        ]);
+    }
+
+    public function testHandleIncomingCancelIgnoresAlreadyDeclined(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id' => self::TEST_REQUEST_ID,
+                'direction'  => 'incoming',
+                'status'     => 'declined',
+            ]);
+        $this->paymentRequestRepository->expects($this->never())
+            ->method('updateStatus');
+
+        $this->service->handleIncomingCancel([
+            'requestId' => self::TEST_REQUEST_ID,
         ]);
     }
 

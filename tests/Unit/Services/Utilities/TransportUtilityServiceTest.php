@@ -585,18 +585,33 @@ class TransportUtilityServiceTest extends TestCase
      */
     public function testFallbackTransportTypeTriesAlternatives(): void
     {
-        $address = 'https://example.com'; // HTTPS address
+        // HTTPS requested but only HTTP available — falls through Constants order
+        $address = 'https://example.com';
         $contactInfo = [
-            'http' => 'http://contact.com', // Only HTTP available
+            'http' => 'http://contact.com',
         ];
-
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
-            ->willReturn(['http', 'https', 'tor']);
 
         $result = $this->service->fallbackTransportType($address, $contactInfo);
 
         $this->assertEquals('http', $result);
+    }
+
+    /**
+     * Test fallbackTransportType uses security-descending order from Constants
+     */
+    public function testFallbackTransportTypeUsesSecurityDescendingOrder(): void
+    {
+        // TOR requested but unavailable; both HTTPS and HTTP available.
+        // Should prefer HTTPS (security-descending: tor, https, http).
+        $address = 'test.onion';
+        $contactInfo = [
+            'https' => 'https://contact.com',
+            'http'  => 'http://contact.com',
+        ];
+
+        $result = $this->service->fallbackTransportType($address, $contactInfo);
+
+        $this->assertEquals('https', $result);
     }
 
     // =========================================================================
@@ -604,22 +619,20 @@ class TransportUtilityServiceTest extends TestCase
     // =========================================================================
 
     /**
-     * Test fallbackTransportAddress returns first available address
+     * Test fallbackTransportAddress uses security-descending order (tor > https > http)
      */
     public function testFallbackTransportAddressReturnsFirstAvailable(): void
     {
         $contactInfo = [
-            'http' => 'http://contact.com',
+            'http'  => 'http://contact.com',
             'https' => 'https://contact.com'
         ];
 
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
-            ->willReturn(['http', 'https', 'tor']);
-
         $result = $this->service->fallbackTransportAddress($contactInfo);
 
-        $this->assertEquals('http://contact.com', $result);
+        // Constants::VALID_TRANSPORT_INDICES = ['tor', 'https', 'http']
+        // TOR not available, so HTTPS is picked first (security-descending)
+        $this->assertEquals('https://contact.com', $result);
     }
 
     /**
@@ -630,10 +643,6 @@ class TransportUtilityServiceTest extends TestCase
         $contactInfo = [
             'tor' => 'contact.onion'
         ];
-
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
-            ->willReturn(['http', 'https', 'tor']);
 
         $result = $this->service->fallbackTransportAddress($contactInfo);
 
@@ -647,13 +656,25 @@ class TransportUtilityServiceTest extends TestCase
     {
         $contactInfo = [];
 
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
-            ->willReturn(['http', 'https', 'tor']);
-
         $result = $this->service->fallbackTransportAddress($contactInfo);
 
         $this->assertNull($result);
+    }
+
+    /**
+     * Test fallbackTransportAddress prefers TOR when all types available
+     */
+    public function testFallbackTransportAddressPrefersTor(): void
+    {
+        $contactInfo = [
+            'http'  => 'http://contact.com',
+            'https' => 'https://contact.com',
+            'tor'   => 'contact.onion'
+        ];
+
+        $result = $this->service->fallbackTransportAddress($contactInfo);
+
+        $this->assertEquals('contact.onion', $result);
     }
 
     // =========================================================================
