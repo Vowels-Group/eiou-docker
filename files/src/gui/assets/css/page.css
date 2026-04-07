@@ -2948,8 +2948,8 @@ html {
         border: 1px solid #dee2e6;
         border-radius: 6px;
         padding: 0.5rem 0.75rem;
+        padding-top: 0.75rem;
         background: #fff;
-        overflow: visible;
         position: relative;
     }
 
@@ -2985,11 +2985,13 @@ html {
         overflow-x: visible;
     }
 
-    /* Position row dropdown above the button to avoid clipping at bottom */
-    .dlq-row .dlq-dropdown-menu {
-        top: auto;
-        bottom: 100%;
-        margin-bottom: 4px;
+    /* Card-level ⋮ actions pinned to top-right of each mobile card */
+    .dlq-card-actions-mobile {
+        display: block;
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        z-index: 10;
     }
 }
 
@@ -3089,8 +3091,9 @@ html {
 .dlq-dropdown-item-danger:hover { background: #fff5f5; }
 .dlq-dropdown-item-disabled { color: #6c757d; cursor: default; }
 
-/* Desktop: show inline buttons, hide dropdown */
+/* Desktop: show inline buttons, hide mobile elements */
 .dlq-mobile-actions { display: none; }
+.dlq-card-actions-mobile { display: none; }
 .dlq-desktop-actions { display: flex; }
 
 @media (max-width: 640px) {

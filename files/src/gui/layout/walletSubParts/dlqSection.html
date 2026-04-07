@@ -157,6 +157,30 @@
                 }
             ?>
             <tr class="dlq-row" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>">
+                <!-- Mobile: ⋮ menu pinned to top-right of card -->
+                <?php if ($canAct): ?>
+                <div class="dlq-card-actions-mobile">
+                    <div class="dlq-dropdown">
+                        <button type="button" class="btn btn-sm btn-outline dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="dlq-card-dropdown-<?php echo $dlqId; ?>">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dlq-dropdown-menu" id="dlq-card-dropdown-<?php echo $dlqId; ?>">
+                            <?php if ($canRetry): ?>
+                            <button type="button" class="dlq-dropdown-item" data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
+                                <i class="fas fa-redo"></i> Retry
+                            </button>
+                            <?php else: ?>
+                            <span class="dlq-dropdown-item dlq-dropdown-item-disabled">
+                                <i class="fas fa-clock"></i> Expired
+                            </span>
+                            <?php endif; ?>
+                            <button type="button" class="dlq-dropdown-item dlq-dropdown-item-danger" data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
+                                <i class="fas fa-ban"></i> Abandon
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
                 <td data-label="Type">
                     <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
                         <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>
@@ -210,34 +234,6 @@
                         <i class="fas fa-ban"></i> Abandon
                     </button>
                     <?php elseif (!$canAct): ?>
-                    <span class="dlq-final-state">
-                        <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
-                    </span>
-                    <?php endif; ?>
-                    </div>
-                    <!-- Mobile: dropdown -->
-                    <div class="dlq-actions-cell dlq-mobile-actions">
-                    <?php if ($canAct): ?>
-                    <div class="dlq-dropdown">
-                        <button type="button" class="btn btn-sm btn-outline dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="dlq-row-dropdown-<?php echo $dlqId; ?>">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
-                        <div class="dlq-dropdown-menu" id="dlq-row-dropdown-<?php echo $dlqId; ?>">
-                            <?php if ($canRetry): ?>
-                            <button type="button" class="dlq-dropdown-item" data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
-                                <i class="fas fa-redo"></i> Retry
-                            </button>
-                            <?php elseif (!$canRetry): ?>
-                            <span class="dlq-dropdown-item dlq-dropdown-item-disabled">
-                                <i class="fas fa-clock"></i> Expired
-                            </span>
-                            <?php endif; ?>
-                            <button type="button" class="dlq-dropdown-item dlq-dropdown-item-danger" data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
-                                <i class="fas fa-ban"></i> Abandon
-                            </button>
-                        </div>
-                    </div>
-                    <?php else: ?>
                     <span class="dlq-final-state">
                         <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
                     </span>
