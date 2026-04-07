@@ -3941,6 +3941,28 @@ function showSelectedUserAddress() {
     document.getElementById('user-address-value').textContent = address;
 }
 
+/**
+ * Switch visible wallet currency on mobile (tab per currency)
+ */
+function switchWalletCurrency(currency) {
+    var tabs = document.querySelectorAll('.wallet-currency-tab');
+    var rows = document.querySelectorAll('.wallet-stats-row[data-wallet-currency]');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.toggle('active', tabs[i].getAttribute('data-currency') === currency);
+    }
+    for (var j = 0; j < rows.length; j++) {
+        rows[j].classList.toggle('wallet-currency-active', rows[j].getAttribute('data-wallet-currency') === currency);
+    }
+}
+
+// Initialize first currency as active on load
+(function() {
+    var firstTab = document.querySelector('.wallet-currency-tab.active');
+    if (firstTab) {
+        switchWalletCurrency(firstTab.getAttribute('data-currency'));
+    }
+})();
+
 // ============================================================================
 // SYNCING TRANSACTION NOTIFICATION FUNCTIONS
 // ============================================================================
@@ -4459,6 +4481,9 @@ function submitAnalyticsConsent(enable) {
             var tab = el.getAttribute('data-tab');
             var scrollTo = el.getAttribute('data-scroll-to') || null;
             switchTab(tab, scrollTo);
+        },
+        'switchWalletCurrency': function(el) {
+            switchWalletCurrency(el.getAttribute('data-currency'));
         },
 
         // Navigation & reload

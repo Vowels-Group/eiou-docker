@@ -224,6 +224,54 @@ body {
     margin-bottom: 0;
 }
 
+/* Currency tabs — hidden on desktop, shown on mobile when multiple currencies */
+.wallet-currency-tabs {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .wallet-currency-tabs {
+        display: flex;
+        gap: 0.25rem;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+    }
+    .wallet-currency-tab {
+        padding: 0.4rem 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        background: white;
+        color: #495057;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .wallet-currency-tab.active {
+        background: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    .wallet-stats-container {
+        max-height: none;
+        overflow-y: visible;
+    }
+    .wallet-stats-row {
+        flex-direction: column;
+    }
+    .wallet-stats-row .balance-display {
+        flex: none;
+    }
+    /* When tabs exist, hide non-active currency rows on mobile */
+    .wallet-currency-tabs ~ .wallet-stats-container .wallet-stats-row {
+        display: none;
+    }
+    .wallet-currency-tabs ~ .wallet-stats-container .wallet-stats-row.wallet-currency-active {
+        display: flex;
+    }
+}
+
 .balance-display {
     background: #0d6efd;
     color: white;
@@ -2901,6 +2949,8 @@ html {
         border-radius: 6px;
         padding: 0.5rem 0.75rem;
         background: #fff;
+        overflow: visible;
+        position: relative;
     }
 
     .dlq-table td {
@@ -2929,6 +2979,17 @@ html {
         flex-wrap: wrap;
         gap: 0.4rem;
         padding-top: 0.5rem;
+    }
+
+    .dlq-table-wrapper {
+        overflow-x: visible;
+    }
+
+    /* Position row dropdown above the button to avoid clipping at bottom */
+    .dlq-row .dlq-dropdown-menu {
+        top: auto;
+        bottom: 100%;
+        margin-bottom: 4px;
     }
 }
 
