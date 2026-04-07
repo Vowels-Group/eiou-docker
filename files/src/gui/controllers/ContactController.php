@@ -1180,8 +1180,23 @@ class ContactController
             exit;
         }
 
-        if (!isset($_FILES['qr_image']) || $_FILES['qr_image']['error'] !== UPLOAD_ERR_OK) {
-            echo json_encode(['success' => false, 'error' => 'No image uploaded']);
+        if (!isset($_FILES['qr_image'])) {
+            $maxUpload = ini_get('upload_max_filesize') ?: 'unknown';
+            $maxPost = ini_get('post_max_size') ?: 'unknown';
+            echo json_encode(['success' => false, 'error' => "No file received. The image may exceed PHP limits (upload_max_filesize={$maxUpload}, post_max_size={$maxPost})."]);
+            exit;
+        }
+        if ($_FILES['qr_image']['error'] !== UPLOAD_ERR_OK) {
+            $uploadErrors = [
+                UPLOAD_ERR_INI_SIZE   => 'File exceeds server upload size limit',
+                UPLOAD_ERR_FORM_SIZE  => 'File exceeds form size limit',
+                UPLOAD_ERR_PARTIAL    => 'File was only partially uploaded',
+                UPLOAD_ERR_NO_FILE    => 'No file was selected',
+                UPLOAD_ERR_NO_TMP_DIR => 'Server missing temp directory',
+                UPLOAD_ERR_CANT_WRITE => 'Server failed to write file',
+            ];
+            $errMsg = $uploadErrors[$_FILES['qr_image']['error']] ?? 'Upload error code ' . $_FILES['qr_image']['error'];
+            echo json_encode(['success' => false, 'error' => $errMsg]);
             exit;
         }
 
