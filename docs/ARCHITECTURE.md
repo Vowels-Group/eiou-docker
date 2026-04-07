@@ -329,7 +329,8 @@ if ($container->has(ContactServiceInterface::class)) {
 | `CleanupService` | Expired message/proposal cleanup; releases expired capacity reservations, prunes old cancellation records | P2pRepo, Rp2pRepo, TransactionRepo, ChainDropService, CapacityReservationRepo, RouteCancellationRepo |
 | `BackupService` | Encrypted backup and restore | TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
-| `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService |
+| `PaymentRequestService` | Payment request lifecycle — create, approve (triggers sendEiou), decline, cancel, handle incoming request/response messages | PaymentRequestRepo, TransactionService, MessageDeliveryService, ContactRepo, TransportUtility |
+| `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService, PaymentRequestService |
 | `ApiAuthService` | API authentication (HMAC-SHA256) | ApiKeyRepo |
 | `ApiKeyService` | API key management | ApiKeyRepo |
 | `TransactionRecoveryService` | Stuck transaction recovery | TransactionRecoveryRepo |
@@ -2932,6 +2933,25 @@ key agreement + AES-256-GCM. Every content field — including `type` — is enc
 making all message types (P2P, RP2P, transactions, pings, route cancellations, etc.)
 indistinguishable on the wire. Encryption happens in `TransportUtilityService::signWithCapture()`
 (encrypt-then-sign), decryption in `index.html` before message routing.
+
+**Envelope-level fields (outside signed content):**
+
+`signWithCapture()` lifts certain metadata out of the signed message content and places
+it at the top level of the transport envelope alongside the signature. These fields are
+not signed because they are transport metadata that can legitimately change over time:
+
+| Field | Description |
+|-------|-------------|
+| `senderAddress` | The specific address used for this transport hop |
+| `senderPublicKey` | Sender's public key for signature verification |
+| `senderAddresses` | **All** of the sender's known addresses (HTTP, HTTPS, Tor). Included when the payload contains `senderAddresses`; absent otherwise. Recipients store these to enable fallback transport for future messages. |
+| `signature` | secp256k1 signature over the signed message content |
+| `version` | Sender's app version (omitted for `type=create` contact requests) |
+| `message` | JSON-encoded signed content (may be E2E encrypted) |
+
+The receiver extracts all envelope-level fields and merges them into the request array
+before routing, so handlers receive `senderAddress`, `senderPublicKey`, and
+`senderAddresses` as regular request fields.
 
 **Excluded from encryption:**
 - `create` (contact requests) — recipient is not yet a contact, so their public key is

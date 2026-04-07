@@ -275,8 +275,8 @@ Main layout container that includes all subpart components.
 | Tab | Components |
 |-----|------------|
 | Dashboard | `walletInformation.html` |
-| Send | `eiouForm.html` |
-| Contacts | `contactForm.html`, `contactSection.html` |
+| Send | `eiouForm.html`, `paymentRequestsSection.html` |
+| Contacts | `contactSection.html` |
 | Activity | `transactionHistory.html`, `dlqSection.html` |
 | Settings | `settingsSection.html`, `debugSection.html` |
 
@@ -286,7 +286,7 @@ Main layout container that includes all subpart components.
 3. notifications.html
 4. walletInformation.html *(Dashboard tab)*
 5. eiouForm.html *(Send tab)*
-6. contactForm.html *(Contacts tab)*
+6. paymentRequestsSection.html *(Send tab)*
 7. contactSection.html *(Contacts tab)*
 8. transactionHistory.html *(Activity tab)*
 9. dlqSection.html *(Activity tab)*
@@ -380,7 +380,37 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 
 ---
 
+#### paymentRequestsSection.html
+
+Rendered below the Send form in the Send tab. Shows incoming and outgoing payment requests.
+
+**Incoming Requests (pending):**
+
+| Element | Purpose |
+|---------|---------|
+| Requester name/address | Who sent the request |
+| Amount + currency | Requested amount |
+| Description | Optional note from requester |
+| Approve & Pay button | Sends the eIOU automatically, marks request approved |
+| Decline button | Rejects the request, notifies requester |
+
+**Outgoing Requests (pending):**
+
+| Element | Purpose |
+|---------|---------|
+| Recipient name/address | Who you sent the request to |
+| Amount + currency | Requested amount |
+| Description | Optional note |
+| Status badge | Pending / Approved / Declined |
+| Cancel button | Cancels the outgoing request |
+
+Resolved requests (approved/declined) appear in a collapsed history section. Approved requests show a clickable truncated txid that opens the transaction detail modal.
+
+---
+
 #### contactForm.html
+
+> **Note:** This file contains the Add Contact form fields. It is included as part of the Add Contact modal inside `contactSection.html`, not as a standalone include in `wallet.html`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -394,6 +424,8 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 ---
 
 #### contactSection.html
+
+The Contacts tab. The contact list is shown first. The "Add Contact" form is accessed via the "+ New Contact" button which opens a modal dialog (the form fields from `contactForm.html` are embedded in this modal, not rendered inline).
 
 **Contact Grid:**
 - Accepted contacts with balance

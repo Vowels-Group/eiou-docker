@@ -2,7 +2,7 @@
 
 **Branch**: `eiou-docker-feat-payment-requests`
 **Date**: 2026-04-06
-**Status**: Pre-implementation investigation
+**Status**: ✓ Implemented — see [API_REFERENCE.md](API_REFERENCE.md), [GUI_REFERENCE.md](GUI_REFERENCE.md), and [GUI_QUICK_REFERENCE.md](GUI_QUICK_REFERENCE.md) for current documentation
 
 ---
 
