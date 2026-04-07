@@ -4089,13 +4089,31 @@ function decodeQrServerSide(file, onSuccess, onError, onComplete) {
     xhr.send(formData);
 }
 
-function openQrScanner(targetInputId) {
-    if (typeof jsQR === 'undefined' && typeof Html5Qrcode === 'undefined') {
-        showToast('Error', 'QR scanner libraries not available', 'error');
-        return;
+/**
+ * Quick canvas integrity check — detects Tor Browser fingerprinting protection.
+ * Returns true if canvas data is being modified by the browser.
+ */
+function isCanvasBlocked() {
+    try {
+        var c = document.createElement('canvas');
+        c.width = 2; c.height = 1;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(0, 0, 1, 1);
+        ctx.fillStyle = '#0000ff';
+        ctx.fillRect(1, 0, 1, 1);
+        var d = ctx.getImageData(0, 0, 2, 1).data;
+        return (d[0] !== 255 || d[1] !== 0 || d[4] !== 0 || d[6] !== 255);
+    } catch (e) {
+        return true;
     }
+}
 
-    var hasCameraLib = typeof Html5Qrcode !== 'undefined';
+function openQrScanner(targetInputId) {
+    // Detect canvas blocking early — if blocked, camera and client-side
+    // jsQR both fail, so go straight to server-side file upload
+    var canvasIsBlocked = isCanvasBlocked();
+    var hasCameraLib = !canvasIsBlocked && typeof Html5Qrcode !== 'undefined';
 
     // Create scanner modal — z-index above other modals (e.g., Add Contact)
     var overlay = document.createElement('div');
@@ -4210,90 +4228,66 @@ function openQrScanner(targetInputId) {
                 showError('Image loading timed out. Try a smaller or different image file.');
             }, 10000);
 
-            var reader = new FileReader();
-            reader.onload = function() {
-                var img = new Image();
-                img.onload = function() {
-                    clearTimeout(loadTimeout);
-                    // Defer processing by one frame so the browser can paint the spinner
-                    setTimeout(function() {
-                        try {
-                            var canvas = document.createElement('canvas');
-                            // Limit canvas size to prevent huge phone photos from freezing
-                            var maxDim = 1000;
-                            var w = img.width;
-                            var h = img.height;
-                            if (w > maxDim || h > maxDim) {
-                                var scale = maxDim / Math.max(w, h);
-                                w = Math.round(w * scale);
-                                h = Math.round(h * scale);
-                            }
-                            canvas.width = w;
-                            canvas.height = h;
-                            var ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, w, h);
-                            var imageData = ctx.getImageData(0, 0, w, h);
-
-                            // Detect canvas fingerprinting protection:
-                            // Draw a known pattern to a test canvas, read it back,
-                            // and check if the browser modified the values.
-                            var testCanvas = document.createElement('canvas');
-                            testCanvas.width = 2;
-                            testCanvas.height = 1;
-                            var testCtx = testCanvas.getContext('2d');
-                            testCtx.fillStyle = '#ff0000';
-                            testCtx.fillRect(0, 0, 1, 1);
-                            testCtx.fillStyle = '#0000ff';
-                            testCtx.fillRect(1, 0, 1, 1);
-                            var testData = testCtx.getImageData(0, 0, 2, 1).data;
-                            // Red pixel should be [255,0,0,255], blue should be [0,0,255,255]
-                            var canvasBlocked = (testData[0] !== 255 || testData[1] !== 0 || testData[4] !== 0 || testData[6] !== 255);
-
-                            if (canvasBlocked) {
-                                // Canvas blocked (Tor Browser) — fall back to server-side decoding
-                                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                                return;
-                            }
-
-                            // Threshold to pure black/white for robustness
-                            var d = imageData.data;
-                            for (var i = 0; i < d.length; i += 4) {
-                                var brightness = (d[i] * 299 + d[i+1] * 587 + d[i+2] * 114) / 1000;
-                                var bw = brightness > 128 ? 255 : 0;
-                                d[i] = bw;
-                                d[i+1] = bw;
-                                d[i+2] = bw;
-                                d[i+3] = 255;
-                            }
-
-                            if (typeof jsQR !== 'undefined') {
-                                var code = jsQR(d, imageData.width, imageData.height);
-                                if (code && code.data) {
-                                    hideLoading();
-                                    onScanSuccess(code.data);
-                                    return;
+            if (canvasIsBlocked) {
+                // Canvas blocked (Tor Browser) — go straight to server-side
+                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+            } else {
+                // Try client-side decode with jsQR (faster, no upload)
+                var reader = new FileReader();
+                reader.onload = function() {
+                    var img = new Image();
+                    img.onload = function() {
+                        clearTimeout(loadTimeout);
+                        setTimeout(function() {
+                            try {
+                                var canvas = document.createElement('canvas');
+                                var maxDim = 1000;
+                                var w = img.width, h = img.height;
+                                if (w > maxDim || h > maxDim) {
+                                    var scale = maxDim / Math.max(w, h);
+                                    w = Math.round(w * scale);
+                                    h = Math.round(h * scale);
                                 }
-                            }
+                                canvas.width = w;
+                                canvas.height = h;
+                                var ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, w, h);
+                                var d = ctx.getImageData(0, 0, w, h).data;
 
-                            showError('No QR code found in image. Try a clearer photo.');
-                        } catch (canvasErr) {
-                            // Canvas exception — fall back to server-side decoding
-                            decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                        }
-                    }, 50);
+                                // Threshold to pure black/white
+                                for (var i = 0; i < d.length; i += 4) {
+                                    var br = (d[i]*299 + d[i+1]*587 + d[i+2]*114) / 1000;
+                                    var bw = br > 128 ? 255 : 0;
+                                    d[i]=bw; d[i+1]=bw; d[i+2]=bw; d[i+3]=255;
+                                }
+
+                                if (typeof jsQR !== 'undefined') {
+                                    var code = jsQR(d, w, h);
+                                    if (code && code.data) {
+                                        hideLoading();
+                                        onScanSuccess(code.data);
+                                        return;
+                                    }
+                                }
+                                showError('No QR code found in image. Try a clearer photo.');
+                            } catch (e) {
+                                // Canvas failed — fall back to server
+                                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+                            }
+                        }, 50);
+                    };
+                    img.onerror = function() {
+                        clearTimeout(loadTimeout);
+                        decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+                    };
+                    img.src = reader.result;
                 };
-                img.onerror = function() {
+                reader.onerror = function() {
                     clearTimeout(loadTimeout);
-                    // Image couldn't load client-side — try server-side
-                    decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
+                    showError('Could not read file.');
                 };
-                img.src = reader.result;
-            };
-            reader.onerror = function() {
-                clearTimeout(loadTimeout);
-                showError('Could not read file.');
-            };
-            reader.readAsDataURL(file);
+                reader.readAsDataURL(file);
+            }
         });
     }
 
