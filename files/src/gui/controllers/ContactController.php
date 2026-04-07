@@ -1231,6 +1231,32 @@ class ContactController
             exit;
         }
 
+        // Downscale large images (phone photos can be 3000x4000+) to max 1000px
+        // before decoding — reduces memory usage and speeds up QR detection.
+        try {
+            $srcImage = @imagecreatefromstring(file_get_contents($tmpFile));
+            if ($srcImage) {
+                $w = imagesx($srcImage);
+                $h = imagesy($srcImage);
+                $maxDim = 1000;
+                if ($w > $maxDim || $h > $maxDim) {
+                    $scale = $maxDim / max($w, $h);
+                    $newW = (int)round($w * $scale);
+                    $newH = (int)round($h * $scale);
+                    $resized = imagecreatetruecolor($newW, $newH);
+                    imagecopyresampled($resized, $srcImage, 0, 0, 0, 0, $newW, $newH, $w, $h);
+                    imagedestroy($srcImage);
+                    // Save resized image back to temp file for QrReader
+                    imagepng($resized, $tmpFile);
+                    imagedestroy($resized);
+                } else {
+                    imagedestroy($srcImage);
+                }
+            }
+        } catch (\Exception $e) {
+            // If resize fails, proceed with original — QrReader may still work
+        }
+
         try {
             $reader = new \Zxing\QrReader($tmpFile);
             $text = $reader->text();
