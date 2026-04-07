@@ -4197,18 +4197,39 @@ function openQrScanner(targetInputId) {
                             ctx.drawImage(img, 0, 0, w, h);
                             var imageData = ctx.getImageData(0, 0, w, h);
 
-                            // Detect canvas fingerprinting protection (all zeros)
-                            var sample = 0;
-                            for (var p = 0; p < Math.min(400, imageData.data.length); p += 4) {
-                                sample += imageData.data[p];
-                            }
-                            if (sample === 0) {
-                                showError('Your browser is blocking canvas image data (privacy protection). Try using a regular browser for QR scanning.');
+                            // Detect canvas fingerprinting protection:
+                            // Draw a known pattern to a test canvas, read it back,
+                            // and check if the browser modified the values.
+                            var testCanvas = document.createElement('canvas');
+                            testCanvas.width = 2;
+                            testCanvas.height = 1;
+                            var testCtx = testCanvas.getContext('2d');
+                            testCtx.fillStyle = '#ff0000';
+                            testCtx.fillRect(0, 0, 1, 1);
+                            testCtx.fillStyle = '#0000ff';
+                            testCtx.fillRect(1, 0, 1, 1);
+                            var testData = testCtx.getImageData(0, 0, 2, 1).data;
+                            // Red pixel should be [255,0,0,255], blue should be [0,0,255,255]
+                            var canvasBlocked = (testData[0] !== 255 || testData[1] !== 0 || testData[4] !== 0 || testData[6] !== 255);
+
+                            if (canvasBlocked) {
+                                showError('Your browser is modifying canvas data (fingerprinting protection). In Tor Browser, look for a canvas permission prompt in the address bar and click "Allow", then try again.');
                                 return;
                             }
 
+                            // Threshold to pure black/white for robustness
+                            var d = imageData.data;
+                            for (var i = 0; i < d.length; i += 4) {
+                                var brightness = (d[i] * 299 + d[i+1] * 587 + d[i+2] * 114) / 1000;
+                                var bw = brightness > 128 ? 255 : 0;
+                                d[i] = bw;
+                                d[i+1] = bw;
+                                d[i+2] = bw;
+                                d[i+3] = 255;
+                            }
+
                             if (typeof jsQR !== 'undefined') {
-                                var code = jsQR(imageData.data, imageData.width, imageData.height);
+                                var code = jsQR(d, imageData.width, imageData.height);
                                 if (code && code.data) {
                                     hideLoading();
                                     onScanSuccess(code.data);
