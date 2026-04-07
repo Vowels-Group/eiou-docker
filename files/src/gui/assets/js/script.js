@@ -4141,12 +4141,43 @@ function openQrScanner(targetInputId) {
             var file = e.target.files[0];
             if (!file) return;
             var errorEl = document.getElementById('qr-file-error');
+            var fallbackEl = document.getElementById('qr-scanner-file-fallback');
             if (errorEl) { errorEl.style.display = 'none'; }
+
+            // Show loading indicator
+            var loadingEl = document.getElementById('qr-file-loading');
+            if (!loadingEl && fallbackEl) {
+                loadingEl = document.createElement('p');
+                loadingEl.id = 'qr-file-loading';
+                loadingEl.style.cssText = 'text-align:center;color:#0d6efd;font-size:0.85rem;margin-top:0.5rem';
+                loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing image...';
+                fallbackEl.appendChild(loadingEl);
+            }
+            if (loadingEl) loadingEl.style.display = 'block';
+
+            function hideLoading() {
+                if (loadingEl) loadingEl.style.display = 'none';
+            }
+
+            function showError(msg) {
+                hideLoading();
+                if (errorEl) {
+                    errorEl.textContent = msg;
+                    errorEl.style.display = 'block';
+                }
+                fileInput.value = '';
+            }
+
+            // Timeout — if image never loads after 10 seconds, show error
+            var loadTimeout = setTimeout(function() {
+                showError('Image loading timed out. Try a smaller or different image file.');
+            }, 10000);
 
             var reader = new FileReader();
             reader.onload = function() {
                 var img = new Image();
                 img.onload = function() {
+                    clearTimeout(loadTimeout);
                     try {
                         var canvas = document.createElement('canvas');
                         canvas.width = img.width;
@@ -4155,34 +4186,39 @@ function openQrScanner(targetInputId) {
                         ctx.drawImage(img, 0, 0);
                         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                        // Detect canvas fingerprinting protection (all zeros or uniform data)
+                        var sample = 0;
+                        for (var p = 0; p < Math.min(400, imageData.data.length); p += 4) {
+                            sample += imageData.data[p]; // Red channel
+                        }
+                        if (sample === 0) {
+                            showError('Your browser is blocking canvas image data (privacy protection). Try using a regular browser for QR scanning.');
+                            return;
+                        }
+
                         if (typeof jsQR !== 'undefined') {
                             var code = jsQR(imageData.data, imageData.width, imageData.height);
                             if (code && code.data) {
+                                hideLoading();
                                 onScanSuccess(code.data);
                                 return;
                             }
                         }
 
-                        if (errorEl) {
-                            errorEl.textContent = 'No QR code found in image. Try a clearer photo.';
-                            errorEl.style.display = 'block';
-                        }
+                        showError('No QR code found in image. Try a clearer photo.');
                     } catch (canvasErr) {
-                        if (errorEl) {
-                            errorEl.textContent = 'Cannot read image data. Your browser may be blocking canvas access for privacy.';
-                            errorEl.style.display = 'block';
-                        }
+                        showError('Cannot read image data. Your browser may be blocking canvas access for privacy.');
                     }
-                    fileInput.value = '';
                 };
                 img.onerror = function() {
-                    if (errorEl) {
-                        errorEl.textContent = 'Could not load image file.';
-                        errorEl.style.display = 'block';
-                    }
-                    fileInput.value = '';
+                    clearTimeout(loadTimeout);
+                    showError('Could not load image file. Try a PNG or JPG.');
                 };
                 img.src = reader.result;
+            };
+            reader.onerror = function() {
+                clearTimeout(loadTimeout);
+                showError('Could not read file.');
             };
             reader.readAsDataURL(file);
         });
