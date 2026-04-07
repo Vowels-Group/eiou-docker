@@ -56,4 +56,40 @@ class VendorAssetsTest extends TestCase
         $content = file_get_contents($path);
         $this->assertStringContainsString('Html5Qrcode', $content, 'html5-qrcode.min.js does not contain expected Html5Qrcode reference');
     }
+
+    /**
+     * jsQR library (file-based QR decoder) must exist and be non-empty.
+     * Used as a Tor Browser-compatible fallback when camera is unavailable.
+     */
+    public function testJsQrLibraryExists(): void
+    {
+        $path = self::ASSETS_DIR . '/jsqr.js';
+        $this->assertFileExists($path, 'jsqr.js vendor library is missing');
+        $this->assertGreaterThan(0, filesize($path), 'jsqr.js is empty');
+    }
+
+    /**
+     * The jsQR library should contain the expected jsQR function reference.
+     */
+    public function testJsQrLibraryIsValid(): void
+    {
+        $path = self::ASSETS_DIR . '/jsqr.js';
+        $content = file_get_contents($path);
+        $this->assertStringContainsString('jsQR', $content, 'jsqr.js does not contain expected jsQR reference');
+    }
+
+    /**
+     * THIRD_PARTY_NOTICES file must exist and reference all bundled libraries.
+     */
+    public function testThirdPartyNoticesExists(): void
+    {
+        $path = self::ASSETS_DIR . '/THIRD_PARTY_NOTICES';
+        $this->assertFileExists($path);
+        $content = file_get_contents($path);
+        $this->assertStringContainsString('qrcode-generator', $content);
+        $this->assertStringContainsString('html5-qrcode', $content);
+        $this->assertStringContainsString('jsQR', $content);
+        $this->assertStringContainsString('MIT', $content);
+        $this->assertStringContainsString('Apache', $content);
+    }
 }

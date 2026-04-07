@@ -4053,10 +4053,12 @@ function toggleAddressQr(el) {
  * On successful scan, fills the target input and closes the modal.
  */
 function openQrScanner(targetInputId) {
-    if (typeof Html5Qrcode === 'undefined') {
-        showToast('Error', 'QR scanner library not available', 'error');
+    if (typeof jsQR === 'undefined' && typeof Html5Qrcode === 'undefined') {
+        showToast('Error', 'QR scanner libraries not available', 'error');
         return;
     }
+
+    var hasCameraLib = typeof Html5Qrcode !== 'undefined';
 
     // Create scanner modal — z-index above other modals (e.g., Add Contact)
     var overlay = document.createElement('div');
@@ -4076,7 +4078,7 @@ function openQrScanner(targetInputId) {
                 '</p>' +
                 '<div id="qr-scanner-file-fallback" style="display:none;text-align:center;padding:1rem 0">' +
                     '<p style="color:#6c757d;font-size:0.85rem;margin-bottom:0.75rem">' +
-                        'Camera unavailable. Upload a photo of the QR code instead:' +
+                        'Upload a photo of the QR code:' +
                     '</p>' +
                     '<label class="btn btn-primary btn-sm" style="cursor:pointer">' +
                         '<i class="fas fa-image"></i> Choose Image' +
@@ -4090,7 +4092,7 @@ function openQrScanner(targetInputId) {
     document.body.appendChild(overlay);
     overlay.style.display = 'flex';
 
-    var scanner = new Html5Qrcode('qr-scanner-reader');
+    var scanner = hasCameraLib ? new Html5Qrcode('qr-scanner-reader') : null;
     var scanning = false;
 
     function onScanSuccess(decodedText) {
@@ -4104,7 +4106,7 @@ function openQrScanner(targetInputId) {
     }
 
     function closeScanner() {
-        if (scanning) {
+        if (scanning && scanner) {
             scanner.stop().catch(function() {});
         }
         if (document.body.contains(overlay)) {
@@ -4114,8 +4116,6 @@ function openQrScanner(targetInputId) {
     }
 
     function showFileFallback() {
-        // Keep qr-scanner-reader visible but clear it — scanFile() needs
-        // the container in the DOM and visible to render the image for decoding
         var readerEl = document.getElementById('qr-scanner-reader');
         var hintEl = document.getElementById('qr-scanner-hint');
         var fallbackEl = document.getElementById('qr-scanner-file-fallback');
@@ -4134,7 +4134,7 @@ function openQrScanner(targetInputId) {
     });
     document.addEventListener('keydown', escHandler);
 
-    // Wire file input for image-based QR scanning
+    // Wire file input — uses jsQR for decoding (works in Tor Browser)
     var fileInput = document.getElementById('qr-file-input');
     if (fileInput) {
         fileInput.addEventListener('change', function(e) {
@@ -4143,40 +4143,67 @@ function openQrScanner(targetInputId) {
             var errorEl = document.getElementById('qr-file-error');
             if (errorEl) { errorEl.style.display = 'none'; }
 
-            // Use a fresh Html5Qrcode instance for file scanning — the camera
-            // scanner's internal state may be corrupted after a failed start().
-            // scanFile needs a visible container, so reuse qr-scanner-reader.
-            var fileScanner = new Html5Qrcode('qr-scanner-reader');
-            fileScanner.scanFile(file, true)
-                .then(function(decodedText) {
-                    onScanSuccess(decodedText);
-                })
-                .catch(function() {
+            var reader = new FileReader();
+            reader.onload = function() {
+                var img = new Image();
+                img.onload = function() {
+                    try {
+                        var canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                        if (typeof jsQR !== 'undefined') {
+                            var code = jsQR(imageData.data, imageData.width, imageData.height);
+                            if (code && code.data) {
+                                onScanSuccess(code.data);
+                                return;
+                            }
+                        }
+
+                        if (errorEl) {
+                            errorEl.textContent = 'No QR code found in image. Try a clearer photo.';
+                            errorEl.style.display = 'block';
+                        }
+                    } catch (canvasErr) {
+                        if (errorEl) {
+                            errorEl.textContent = 'Cannot read image data. Your browser may be blocking canvas access for privacy.';
+                            errorEl.style.display = 'block';
+                        }
+                    }
+                    fileInput.value = '';
+                };
+                img.onerror = function() {
                     if (errorEl) {
-                        errorEl.textContent = 'No QR code found in image. Try a clearer photo.';
+                        errorEl.textContent = 'Could not load image file.';
                         errorEl.style.display = 'block';
                     }
-                    // Reset file input so the same file can be re-selected
                     fileInput.value = '';
-                    // Clear any rendered image from the reader container
-                    var readerEl = document.getElementById('qr-scanner-reader');
-                    if (readerEl) readerEl.innerHTML = '';
-                });
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
         });
     }
 
-    // Try camera first, fall back to file upload if unavailable
-    scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        onScanSuccess,
-        function onScanFailure() { /* ignore — fires continuously when no QR in frame */ }
-    ).then(function() {
-        scanning = true;
-    }).catch(function() {
-        // Camera unavailable (Tor Browser, denied permissions, no camera)
+    // Try camera (html5-qrcode) first, fall back to file upload (jsQR)
+    if (scanner) {
+        scanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            onScanSuccess,
+            function() { /* ignore — fires continuously when no QR in frame */ }
+        ).then(function() {
+            scanning = true;
+        }).catch(function() {
+            showFileFallback();
+        });
+    } else {
+        // No camera library — go straight to file upload
         showFileFallback();
-    });
+    }
 }
 
 // ============================================================================
