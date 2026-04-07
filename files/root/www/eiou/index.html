@@ -189,7 +189,6 @@ elseif ($type === "message") {
   $debugService->output("Processing message from " . print_r($envelope['senderAddress'],true), 'SILENT');
   $messageService = $serviceContainer->getMessageService();
   $messageService->handleMessageRequest($request);
-  echo json_encode(['success' => true, 'status' => 'received']);
 }
 elseif ($type === "ping") {
   // Handle contact status ping

@@ -409,6 +409,8 @@ class MessageService implements MessageServiceInterface {
         } else {
             Logger::getInstance()->warning("Unknown payment_request action", ['action' => $action]);
         }
+
+        echo json_encode(['success' => true, 'status' => 'received']);
     }
 
     /**
@@ -446,6 +448,8 @@ class MessageService implements MessageServiceInterface {
                     'action' => $action
                 ]);
         }
+
+        echo json_encode(['success' => true, 'status' => 'received']);
     }
 
     /**
