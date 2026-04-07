@@ -1089,8 +1089,12 @@ function initializeTransactionToast() {
             var currency = document.getElementById('currency');
 
             var recipient = '';
-            if (recipientSelect && recipientSelect.value) {
-                recipient = recipientSelect.options[recipientSelect.selectedIndex].text;
+            var recipientSearch = document.getElementById('recipient-search');
+            if (recipientSelect && recipientSelect.value && recipientSearch && recipientSearch.value) {
+                recipient = recipientSearch.value;
+            } else if (recipientSelect && recipientSelect.value) {
+                var addr = recipientSelect.value;
+                recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
             } else if (manualAddress && manualAddress.value) {
                 var addr = manualAddress.value;
                 recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
