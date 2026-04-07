@@ -4143,7 +4143,7 @@ function openQrScanner(targetInputId) {
             var errorEl = document.getElementById('qr-file-error');
             if (errorEl) { errorEl.style.display = 'none'; }
 
-            scanner.scanFile(file, true)
+            scanner.scanFile(file, false)
                 .then(function(decodedText) {
                     onScanSuccess(decodedText);
                 })
