@@ -3261,7 +3261,32 @@ html {
     -webkit-flex-wrap: wrap; -ms-flex-wrap: wrap; flex-wrap: wrap;
 }
 
-.address-value { flex: 1; word-break: break-all; }
+.address-value { flex: 1; min-width: 0; word-break: break-all; }
+
+@media (max-width: 640px) {
+    .address-display-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .address-display-row .address-value,
+    .address-display-row .address-value-mono {
+        flex: none;
+        width: 100%;
+        margin-bottom: 0.25rem;
+    }
+    .address-display-row .btn {
+        align-self: flex-start;
+    }
+    /* Group Copy + QR buttons on one line below the address */
+    .address-display-row {
+        flex-wrap: wrap;
+        flex-direction: row;
+    }
+    .address-display-row .address-value,
+    .address-display-row .address-value-mono {
+        flex-basis: 100%;
+    }
+}
 .address-value-mono {
     flex: 1;
     word-break: break-all;
