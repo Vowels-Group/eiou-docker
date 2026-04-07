@@ -4058,10 +4058,11 @@ function openQrScanner(targetInputId) {
         return;
     }
 
-    // Create scanner modal
+    // Create scanner modal — z-index above other modals (e.g., Add Contact)
     var overlay = document.createElement('div');
     overlay.className = 'modal';
     overlay.id = 'qr-scanner-modal';
+    overlay.style.zIndex = '10001';
     overlay.innerHTML =
         '<div class="modal-content" style="max-width:400px">' +
             '<div class="modal-header">' +
