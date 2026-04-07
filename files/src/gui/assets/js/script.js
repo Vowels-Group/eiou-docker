@@ -150,15 +150,18 @@ function escapeHtml(text) {
  * Keeps old #anchor bookmarks and quick-action links working.
  */
 var TAB_HASH_MAP = {
-    'dashboard':    { tab: 'dashboard' },
-    'send-form':    { tab: 'send', scrollTo: 'send-form' },
-    'add-contact':  { tab: 'contacts', scrollTo: 'add-contact' },
-    'contacts':     { tab: 'contacts', scrollTo: 'contacts' },
-    'transactions': { tab: 'activity', scrollTo: 'transactions' },
-    'dlq':          { tab: 'activity', scrollTo: 'dlq' },
-    'settings':     { tab: 'settings' },
-    'debug':        { tab: 'settings' },
-    'debug-section':{ tab: 'settings' }
+    'dashboard':         { tab: 'dashboard' },
+    'send':              { tab: 'send' },
+    'send-form':         { tab: 'send', scrollTo: 'send-form' },
+    'payment-requests':  { tab: 'send', scrollTo: 'payment-requests-section' },
+    'add-contact':       { tab: 'contacts', scrollTo: 'add-contact' },
+    'contacts':          { tab: 'contacts', scrollTo: 'contacts' },
+    'pending-contacts':  { tab: 'contacts', scrollTo: 'pending-contacts' },
+    'transactions':      { tab: 'activity', scrollTo: 'transactions' },
+    'dlq':               { tab: 'activity', scrollTo: 'dlq' },
+    'settings':          { tab: 'settings' },
+    'debug':             { tab: 'settings' },
+    'debug-section':     { tab: 'settings' }
 };
 
 /**
@@ -246,6 +249,14 @@ function initTabNavigation() {
 
     switchTab(tabToShow, scrollToId);
 }
+
+// Re-run tab+scroll routing whenever the hash changes (e.g. clicking notification "View" links)
+window.addEventListener('hashchange', function() {
+    var hash = window.location.hash ? window.location.hash.substring(1) : '';
+    if (hash && TAB_HASH_MAP[hash]) {
+        switchTab(TAB_HASH_MAP[hash].tab, TAB_HASH_MAP[hash].scrollTo || null);
+    }
+});
 
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
@@ -1416,6 +1427,52 @@ function initializeFormLoaders() {
             showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
             startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
         });
+    }
+
+    // Payment request — Approve & Pay (triggers a full sendEiou, can be slow over Tor)
+    var approveForms = document.querySelectorAll('form input[name="action"][value="approvePaymentRequest"]');
+    for (var i = 0; i < approveForms.length; i++) {
+        var form = approveForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
+                startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
+            });
+        }
+    }
+
+    // Payment request — Request Payment (sends a message to the contact)
+    var requestForms = document.querySelectorAll('form input[name="action"][value="createPaymentRequest"]');
+    for (var i = 0; i < requestForms.length; i++) {
+        var form = requestForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Sending payment request...', retryInfoText);
+                startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
+            });
+        }
+    }
+
+    // Payment request — Decline
+    var declineForms = document.querySelectorAll('form input[name="action"][value="declinePaymentRequest"]');
+    for (var i = 0; i < declineForms.length; i++) {
+        var form = declineForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Declining payment request...');
+            });
+        }
+    }
+
+    // Payment request — Cancel
+    var cancelPrForms = document.querySelectorAll('form input[name="action"][value="cancelPaymentRequest"]');
+    for (var i = 0; i < cancelPrForms.length; i++) {
+        var form = cancelPrForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Cancelling payment request...');
+            });
+        }
     }
 }
 
