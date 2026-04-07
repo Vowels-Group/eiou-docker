@@ -4,7 +4,7 @@
 <div id="contacts" class="contacts-section fade-in-up">
     <div class="section-header">
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-        <a href="#add-contact" class="btn btn-success btn-compact font-sm"><i class="fas fa-user-plus"></i> New Contact</a>
+        <button type="button" class="btn btn-success btn-compact font-sm" data-action="openAddContactModal"><i class="fas fa-user-plus"></i> New Contact</button>
     </div>
     <?php if (!empty($allContacts)): ?>
     <div class="contacts-search-bar mb-lg">
@@ -783,3 +783,72 @@
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
+
+<!-- Add Contact Modal -->
+<div id="add-contact-modal" class="modal" style="display:none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <div class="modal-header-content">
+                <h3><i class="fas fa-user-plus"></i> Add New Contact</h3>
+            </div>
+            <span class="close" data-action="closeAddContactModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <form id="add-contact-form" method="POST">
+                <input type="hidden" name="action" value="addContact">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                <div class="form-group">
+                    <label for="address">Contact Address:</label>
+                    <input type="text" id="address" name="address" placeholder="Enter HTTP(S) or Tor (.onion) address" required>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Supports any address type (HTTP, HTTPS, Tor). The contact can share additional addresses after connecting.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" placeholder="Enter contact name" required>
+                </div>
+                <div class="form-row contact-form-row">
+                    <div class="form-group">
+                        <label for="credit">Credit Limit:</label>
+                        <input type="number" id="credit" name="credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
+                    </div>
+                    <div class="form-group">
+                        <label for="fee">Fee (%):</label>
+                        <input type="number" id="fee" name="fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactCurrency">Currency:</label>
+                        <select id="contactCurrency" name="currency" required>
+                            <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
+                                <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <small class="form-hint-defaults">
+                    <i class="fas fa-info-circle"></i>
+                    Default values from your wallet settings
+                </small>
+                <div class="form-group">
+                    <label for="requested_credit">Requested Credit Limit (optional):</label>
+                    <input type="number" id="requested_credit" name="requested_credit" placeholder="Credit limit you'd like from this contact" min="0" step="any">
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        The credit limit you would like this contact to set for you. They will see this as a suggestion when accepting your request.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="description">Message (optional):</label>
+                    <input type="text" id="description" name="description" placeholder="e.g. Hey, it's Dave!" maxlength="255">
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-action="closeAddContactModal">Cancel</button>
+            <button type="submit" form="add-contact-form" class="btn btn-success"><i class="fas fa-user-plus"></i> Add Contact</button>
+        </div>
+    </div>
+</div>

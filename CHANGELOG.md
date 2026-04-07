@@ -26,6 +26,7 @@ The project is currently in **ALPHA** status.
 - **Txid now shown on paid payment requests**: both the sender's outgoing view and the recipient's received history show the truncated txid (full value on hover) once the request is approved and paid
 
 ### Changed
+- **Contacts tab redesign**: "Your Contacts" section now appears first; the Add Contact form has been moved into a popup modal that opens when clicking the "+ New Contact" button, keeping the contacts list front and centre without the form taking up page space
 - Restructure wallet GUI tab navigation: split "Send & Contacts" tab into a dedicated **Send** tab (eIOU form only) and a dedicated **Contacts** tab (add contact form + contact list); merge **Debug** section into the bottom of the **Settings** tab (removed as a standalone tab); remove the Quick Actions dashboard card bar (Send eIOU, Add Contact, View Contacts, Transaction History, Failed Messages, Settings shortcuts) — navigation is now fully tab-based
 - Change "Total Fee Earnings" dashboard card color from green (`#28a745`→`#20c997`) to amber/gold (`#fd7e14`→`#ffc107`) to avoid culturally ambiguous color associations (green/red carry opposite financial meanings in different markets)
 - Info tooltip icons (ⓘ) now open a tap-friendly modal on click in addition to the existing hover tooltip, making them accessible on touch/mobile devices where hover is not available

@@ -154,7 +154,7 @@ var TAB_HASH_MAP = {
     'send':              { tab: 'send' },
     'send-form':         { tab: 'send', scrollTo: 'send-form' },
     'payment-requests':  { tab: 'send', scrollTo: 'payment-requests-section' },
-    'add-contact':       { tab: 'contacts', scrollTo: 'add-contact' },
+    'add-contact':       { tab: 'contacts', openModal: 'openAddContactModal' },
     'contacts':          { tab: 'contacts', scrollTo: 'contacts' },
     'pending-contacts':  { tab: 'contacts', scrollTo: 'pending-contacts' },
     'transactions':      { tab: 'activity', scrollTo: 'transactions' },
@@ -236,6 +236,7 @@ function initTabNavigation() {
     if (hash && TAB_HASH_MAP[hash]) {
         tabToShow = TAB_HASH_MAP[hash].tab;
         scrollToId = TAB_HASH_MAP[hash].scrollTo || null;
+        var openModalFn = TAB_HASH_MAP[hash].openModal || null;
     } else if (hash && hash.indexOf('reopen_contact') !== -1) {
         // Contact reopen hash — show contacts tab
         tabToShow = 'contacts';
@@ -248,6 +249,9 @@ function initTabNavigation() {
     }
 
     switchTab(tabToShow, scrollToId);
+    if (openModalFn && typeof window[openModalFn] === 'function') {
+        window[openModalFn]();
+    }
 }
 
 // Re-run tab+scroll routing whenever the hash changes (e.g. clicking notification "View" links)
@@ -255,6 +259,8 @@ window.addEventListener('hashchange', function() {
     var hash = window.location.hash ? window.location.hash.substring(1) : '';
     if (hash && TAB_HASH_MAP[hash]) {
         switchTab(TAB_HASH_MAP[hash].tab, TAB_HASH_MAP[hash].scrollTo || null);
+        var fn = TAB_HASH_MAP[hash].openModal;
+        if (fn && typeof window[fn] === 'function') { window[fn](); }
     }
 });
 
@@ -685,6 +691,14 @@ function closeEditContactModal() {
     document.getElementById('editContactModal').style.display = 'none';
 }
 
+function openAddContactModal() {
+    document.getElementById('add-contact-modal').style.display = 'flex';
+}
+
+function closeAddContactModal() {
+    document.getElementById('add-contact-modal').style.display = 'none';
+}
+
 /**
  * Opens the transaction detail modal for a specific transaction.
  *
@@ -953,12 +967,16 @@ function openTransactionModalByTxid(txid) {
 window.onclick = function(event) {
     var editModal = document.getElementById('editContactModal');
     var txModal = document.getElementById('transactionModal');
+    var addContactModal = document.getElementById('add-contact-modal');
 
     if (event.target === editModal) {
         closeEditContactModal();
     }
     if (event.target === txModal) {
         closeTransactionModal();
+    }
+    if (event.target === addContactModal) {
+        closeAddContactModal();
     }
 }
 
@@ -969,6 +987,7 @@ document.addEventListener('keydown', function(event) {
         closeEditContactModal();
         closeTransactionModal();
         closeContactModal();
+        closeAddContactModal();
     }
 });
 
@@ -1350,8 +1369,8 @@ function initializeFormLoaders() {
     // Retry info text for contact operations
     var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
 
-    // Add contact form
-    var addContactForm = document.querySelector('#add-contact form');
+    // Add contact form (now inside modal)
+    var addContactForm = document.getElementById('add-contact-form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
             showLoader('Adding contact...', retryInfoText);
@@ -4573,6 +4592,10 @@ function submitAnalyticsConsent(enable) {
         // Analytics consent modal
         'analyticsConsentEnable': function() { submitAnalyticsConsent(true); },
         'analyticsConsentSkip': function() { submitAnalyticsConsent(false); },
+
+        // Add contact modal
+        'openAddContactModal': function() { openAddContactModal(); },
+        'closeAddContactModal': function() { closeAddContactModal(); },
 
         // Payment request — same form as Send, different action
         'requestPayment': function(el, event) {
