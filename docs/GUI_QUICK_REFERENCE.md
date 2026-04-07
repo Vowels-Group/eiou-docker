@@ -35,6 +35,7 @@ Quick lookup card for the eIOU Wallet web interface.
 |------------|------|---------|---------|
 | `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping, proposeChainDrop, acceptChainDrop, rejectChainDrop, acceptCurrency, addCurrency, acceptAllCurrencies | Contact management |
 | `TransactionController` | `controllers/TransactionController.php` | sendEIOU, checkUpdates, approveP2pTransaction, rejectP2pTransaction, getP2pCandidates | Sending transactions & P2P approval |
+| `PaymentRequestController` | `controllers/PaymentRequestController.php` | createPaymentRequest, approvePaymentRequest, declinePaymentRequest, cancelPaymentRequest | Payment request lifecycle |
 | `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson, analyticsConsent | User settings, debug & analytics |
 
 ---
@@ -73,6 +74,17 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 
 | `getP2pCandidates` | `hash` | JSON (AJAX) |
 
+### Payment Request Actions (PaymentRequestController)
+
+| Action | Required Fields | Response |
+|--------|-----------------|----------|
+| `createPaymentRequest` | `recipient`, `amount`, `currency` | Redirect with message |
+| `approvePaymentRequest` | `request_id` | Redirect with message |
+| `declinePaymentRequest` | `request_id` | Redirect with message |
+| `cancelPaymentRequest` | `request_id` | Redirect with message |
+
+Optional for create: `description`, `address_type`
+
 ### Settings Actions (SettingsController)
 
 | Action | Required Fields | Response |
@@ -104,7 +116,8 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 | Header | `layout/walletSubParts/header.html` | — | Page header |
 | Notifications | `layout/walletSubParts/notifications.html` | — | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
 | Wallet info | `layout/walletSubParts/walletInformation.html` | Dashboard | Balance (blue), fee earnings (amber/gold), available credit (blue-purple); ⓘ icons open info modal on tap |
-| Send form | `layout/walletSubParts/eiouForm.html` | Send | Send transaction form |
+| Send form | `layout/walletSubParts/eiouForm.html` | Send | Send transaction form; also contains the "Request Payment" button (changes form action to `createPaymentRequest`) |
+| Payment requests | `layout/walletSubParts/paymentRequestsSection.html` | Send | Incoming requests (Approve & Pay / Decline) and outgoing requests (Cancel); rendered below the Send form |
 | Contact form | `layout/walletSubParts/contactForm.html` | Contacts | Add contact form |
 | Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists, modal with your/their credit |
 | Transaction history | `layout/walletSubParts/transactionHistory.html` | Activity | Transaction list |

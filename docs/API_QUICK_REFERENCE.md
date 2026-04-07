@@ -47,6 +47,16 @@ All requests require HMAC-SHA256 authentication:
 | `POST` | `/api/v1/contacts/block/:address` | `contacts:write` | Block contact |
 | `POST` | `/api/v1/contacts/unblock/:address` | `contacts:write` | Unblock contact |
 
+### Payment Request Endpoints
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/requests` | `wallet:read` | List all payment requests (incoming + outgoing) |
+| `POST` | `/api/v1/requests` | `wallet:send` | Create and send a payment request to a contact |
+| `POST` | `/api/v1/requests/approve` | `wallet:send` | Approve an incoming request — triggers `sendEiou` automatically |
+| `POST` | `/api/v1/requests/decline` | `wallet:send` | Decline an incoming request |
+| `DELETE` | `/api/v1/requests/{request_id}` | `wallet:send` | Cancel an outgoing request (pending only) |
+
 ### System Endpoints
 
 | Method | Endpoint | Permission | Description |
