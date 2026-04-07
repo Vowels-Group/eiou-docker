@@ -1439,12 +1439,19 @@ function initializeFormLoaders() {
         });
     }
 
-    // Send form - already handled in initializeTransactionToast, add loader
-    var sendForm = document.querySelector('#send-form form');
+    // Send form — action field is mutated at submit time (sendEIOU vs createPaymentRequest)
+    var sendForm = document.getElementById('send-form-el');
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
-            showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
-            startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
+            var actionField = document.getElementById('send-form-action');
+            var action = actionField ? actionField.value : 'sendEIOU';
+            if (action === 'createPaymentRequest') {
+                showLoader('Sending payment request...', retryInfoText);
+                startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
+            } else {
+                showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
+                startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
+            }
         });
     }
 
@@ -1456,18 +1463,6 @@ function initializeFormLoaders() {
             form.addEventListener('submit', function() {
                 showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
                 startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
-            });
-        }
-    }
-
-    // Payment request — Request Payment (sends a message to the contact)
-    var requestForms = document.querySelectorAll('form input[name="action"][value="createPaymentRequest"]');
-    for (var i = 0; i < requestForms.length; i++) {
-        var form = requestForms[i].closest('form');
-        if (form) {
-            form.addEventListener('submit', function() {
-                showLoader('Sending payment request...', retryInfoText);
-                startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
             });
         }
     }
@@ -4604,6 +4599,8 @@ function submitAnalyticsConsent(enable) {
             var form = document.getElementById('send-form-el');
             if (!actionField || !form) { return; }
             actionField.value = 'createPaymentRequest';
+            showLoader('Sending payment request...', 'Connecting to contact server. The message processor will continue retrying in the background.');
+            startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
             form.submit();
         }
     };
