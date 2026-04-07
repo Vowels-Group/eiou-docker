@@ -700,8 +700,17 @@ function openTransactionModal(index) {
     if (typeof transactionData === 'undefined' || !transactionData[index]) {
         return;
     }
+    renderTransactionModal(transactionData[index]);
+}
 
-    var tx = transactionData[index];
+/**
+ * Renders and opens the transaction detail modal from a transaction data object.
+ * Called by openTransactionModal (from transactionData array) and
+ * openTransactionModalByTxid (which may fetch via AJAX).
+ *
+ * @param {Object} tx - Transaction object with the same keys as transactionData entries
+ */
+function renderTransactionModal(tx) {
     var modal = document.getElementById('transactionModal');
     var content = document.getElementById('tx-modal-content');
 
@@ -863,17 +872,70 @@ function closeTransactionModal() {
 }
 
 /**
- * Open the transaction modal by txid, searching the transactionData array.
- * Used by payment request rows that have a resulting_txid.
+ * Open the transaction detail modal for a given txid.
+ * Checks the in-page transactionData array first (fast path); if not found,
+ * falls back to an AJAX POST to fetch the transaction from the server.
+ *
+ * @param {string} txid - The transaction ID to look up and display
  */
 function openTransactionModalByTxid(txid) {
-    if (typeof transactionData === 'undefined' || !txid) { return; }
-    for (var i = 0; i < transactionData.length; i++) {
-        if (transactionData[i].txid === txid) {
-            openTransactionModal(i);
-            return;
+    if (!txid) { return; }
+
+    // Fast path: already in the page's transactionData array
+    if (typeof transactionData !== 'undefined') {
+        for (var i = 0; i < transactionData.length; i++) {
+            if (transactionData[i].txid === txid) {
+                renderTransactionModal(transactionData[i]);
+                return;
+            }
         }
     }
+
+    // Slow path: fetch from server via AJAX
+    var modal = document.getElementById('transactionModal');
+    var content = document.getElementById('tx-modal-content');
+    if (modal && content) {
+        content.innerHTML = '<div style="text-align:center;padding:2rem"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
+        modal.style.display = 'flex';
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Could not load transaction: CSRF token missing.</div>'; }
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'getTransactionByTxid');
+    formData.append('txid', txid);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 15000;
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            try {
+                var resp = JSON.parse(xhr.responseText);
+                if (resp.success && resp.transaction) {
+                    renderTransactionModal(resp.transaction);
+                } else {
+                    if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Transaction not found.</div>'; }
+                }
+            } catch (e) {
+                if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Error loading transaction.</div>'; }
+            }
+        } else {
+            if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Server error loading transaction.</div>'; }
+        }
+    };
+    xhr.ontimeout = function() {
+        if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Request timed out.</div>'; }
+    };
+    xhr.onerror = function() {
+        if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Network error loading transaction.</div>'; }
+    };
+    xhr.send(formData);
 }
 
 // Close modal when clicking outside of it

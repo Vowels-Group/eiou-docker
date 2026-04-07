@@ -179,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // AJAX-only P2P approval actions (returns JSON, exits immediately)
-    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates'])) {
+    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid'])) {
         try {
             $transactionController->routeAction();
         } catch (Exception $e) {
