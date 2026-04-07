@@ -3974,6 +3974,158 @@ function switchWalletCurrency(currency) {
 })();
 
 // ============================================================================
+// QR CODE FUNCTIONS
+// ============================================================================
+
+/**
+ * Generate a QR code SVG string for the given text using qrcode-generator.
+ * Returns an SVG element string, or null if the library is not loaded.
+ */
+function generateQrSvg(text, size) {
+    size = size || 200;
+    if (typeof qrcode === 'undefined') return null;
+
+    var qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+
+    var moduleCount = qr.getModuleCount();
+    var cellSize = size / moduleCount;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
+    svg += '<rect width="100%" height="100%" fill="white"/>';
+
+    for (var row = 0; row < moduleCount; row++) {
+        for (var col = 0; col < moduleCount; col++) {
+            if (qr.isDark(row, col)) {
+                svg += '<rect x="' + (col * cellSize) + '" y="' + (row * cellSize) + '" width="' + cellSize + '" height="' + cellSize + '" fill="black"/>';
+            }
+        }
+    }
+    svg += '</svg>';
+    return svg;
+}
+
+/**
+ * Toggle QR code display for an address.
+ * Reads the address from data-qr-text or data-qr-source (element ID),
+ * generates the QR, and shows/hides the target container.
+ */
+function toggleAddressQr(el) {
+    var targetId = el.getAttribute('data-qr-target');
+    var container = document.getElementById(targetId);
+    if (!container) return;
+
+    // Toggle visibility
+    if (container.style.display !== 'none' && container.innerHTML) {
+        container.style.display = 'none';
+        return;
+    }
+
+    // Get address text
+    var text = el.getAttribute('data-qr-text');
+    if (!text) {
+        var sourceId = el.getAttribute('data-qr-source');
+        if (sourceId) {
+            var sourceEl = document.getElementById(sourceId);
+            text = sourceEl ? sourceEl.textContent.trim() : '';
+        }
+    }
+    if (!text) return;
+
+    var svg = generateQrSvg(text, 200);
+    if (!svg) {
+        container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
+    } else {
+        container.innerHTML = svg;
+    }
+    container.style.display = 'block';
+}
+
+/**
+ * Open the QR code scanner modal using html5-qrcode.
+ * On successful scan, fills the target input and closes the modal.
+ */
+function openQrScanner(targetInputId) {
+    if (typeof Html5Qrcode === 'undefined') {
+        showToast('Error', 'QR scanner library not available', 'error');
+        return;
+    }
+
+    // Create scanner modal
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'qr-scanner-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:400px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-qrcode"></i> Scan QR Code</h3>' +
+                '<span class="close" id="qr-scanner-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1rem">' +
+                '<div id="qr-scanner-reader" style="width:100%"></div>' +
+                '<p style="text-align:center;color:#6c757d;font-size:0.85rem;margin-top:0.5rem">' +
+                    'Point your camera at a QR code containing an address' +
+                '</p>' +
+            '</div>' +
+        '</div>';
+
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+
+    var scanner = new Html5Qrcode('qr-scanner-reader');
+    var scanning = false;
+
+    function closeScanner() {
+        if (scanning) {
+            scanner.stop().catch(function() {});
+        }
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', escHandler);
+    }
+
+    function escHandler(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) closeScanner();
+    }
+
+    overlay.querySelector('#qr-scanner-close').onclick = closeScanner;
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closeScanner();
+    });
+    document.addEventListener('keydown', escHandler);
+
+    // Start scanning
+    scanner.start(
+        { facingMode: 'environment' },  // Prefer rear camera
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        function onScanSuccess(decodedText) {
+            // Fill the target input
+            var input = document.getElementById(targetInputId);
+            if (input) {
+                input.value = decodedText;
+                // Trigger input event for any listeners
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
+            closeScanner();
+        },
+        function onScanFailure() {
+            // Ignore scan failures (no QR in frame) — this fires continuously
+        }
+    ).then(function() {
+        scanning = true;
+    }).catch(function(err) {
+        var readerEl = document.getElementById('qr-scanner-reader');
+        if (readerEl) {
+            readerEl.innerHTML = '<p style="color:#dc3545;text-align:center;padding:2rem">' +
+                '<i class="fas fa-exclamation-triangle"></i> Camera access denied or unavailable.<br>' +
+                '<small>Check browser permissions and ensure you are using HTTPS or localhost.</small></p>';
+        }
+    });
+}
+
+// ============================================================================
 // SYNCING TRANSACTION NOTIFICATION FUNCTIONS
 // ============================================================================
 
@@ -4537,6 +4689,11 @@ function submitAnalyticsConsent(enable) {
         },
         'switchWalletCurrency': function(el) {
             switchWalletCurrency(el.getAttribute('data-currency'));
+        },
+        'toggleAddressQr': function(el) { toggleAddressQr(el); },
+        'openQrScanner': function(el) {
+            var target = el.getAttribute('data-scan-target');
+            if (target) openQrScanner(target);
         },
 
         // Navigation & reload

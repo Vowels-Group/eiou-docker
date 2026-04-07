@@ -207,6 +207,39 @@ body {
     color: #495057;
 }
 
+/* QR code display container */
+.address-qr-container {
+    text-align: center;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+.address-qr-container svg {
+    max-width: 200px;
+    height: auto;
+}
+
+/* Input with inline action button (e.g., QR scanner) */
+.input-with-action {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+}
+.input-with-action input {
+    flex: 1;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.input-action-btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none;
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+}
+
 .wallet-stats-container {
     max-height: 300px;
     overflow-y: auto;

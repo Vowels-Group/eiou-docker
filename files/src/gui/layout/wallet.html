@@ -10,6 +10,8 @@
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
     <style nonce="<?php echo cspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/page.css");?></style>
     <script nonce="<?php echo cspNonce(); ?>">var EIOU_DISPLAY_DECIMALS = <?php echo displayDecimals(); ?>; var EIOU_DATE_FORMAT = '<?php echo displayDateFormat(); ?>';</script>
+    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/qrcode-generator.js"></script>
+    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/html5-qrcode.min.js"></script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js"></script>
     <!-- Graceful degradation: show all sections when JS is disabled (Tor Safest mode) -->
     <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
