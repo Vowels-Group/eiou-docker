@@ -291,6 +291,9 @@ class PaymentRequestService
 
         $this->paymentRequestRepository->updateStatus($requestId, 'cancelled');
 
+        // Notify the receiver so their incoming request is also cancelled
+        $this->sendCancellationMessage($request);
+
         return ['success' => true];
     }
 
@@ -375,7 +378,14 @@ class PaymentRequestService
         }
 
         $request = $this->paymentRequestRepository->getByRequestId($requestId);
-        if (!$request || $request['direction'] !== 'outgoing' || $request['status'] !== 'pending') {
+        if (!$request || $request['direction'] !== 'outgoing') {
+            return;
+        }
+
+        // Accept responses for pending requests, and also for cancelled requests
+        // when the receiver already approved (payment wins — money is in flight).
+        $status = $request['status'];
+        if ($status !== 'pending' && !($status === 'cancelled' && $outcome === 'approved')) {
             return;
         }
 
@@ -385,6 +395,45 @@ class PaymentRequestService
         }
 
         $this->paymentRequestRepository->updateStatus($requestId, $outcome, $extra);
+    }
+
+    /**
+     * Handle an incoming cancellation from the requester (action=cancel).
+     * Updates our incoming request to cancelled, but only if still pending.
+     * If we already approved/paid, the cancellation is ignored — payment wins.
+     *
+     * @param array $message Decoded message payload
+     * @return void
+     */
+    public function handleIncomingCancel(array $message): void
+    {
+        $requestId = $message['requestId'] ?? '';
+        if (empty($requestId)) {
+            $this->logger->warning('Incoming payment_request cancel missing requestId');
+            return;
+        }
+
+        $request = $this->paymentRequestRepository->getByRequestId($requestId);
+        if (!$request || $request['direction'] !== 'incoming') {
+            return;
+        }
+
+        // Only cancel if still pending — if already approved/declined, ignore
+        if ($request['status'] !== 'pending') {
+            $this->logger->info('Ignoring cancellation for non-pending request', [
+                'request_id' => $requestId,
+                'status'     => $request['status'],
+            ]);
+            return;
+        }
+
+        $this->paymentRequestRepository->updateStatus($requestId, 'cancelled', [
+            'responded_at' => date('Y-m-d H:i:s.u'),
+        ]);
+
+        $this->logger->info('Incoming payment request cancelled by requester', [
+            'request_id' => $requestId,
+        ]);
     }
 
     /**
@@ -442,6 +491,55 @@ class PaymentRequestService
         }
 
         return null;
+    }
+
+    /**
+     * Send a cancellation message to the receiver of an outgoing payment request.
+     * Looks up the receiver's address from their pubkey hash.
+     */
+    private function sendCancellationMessage(array $request): void
+    {
+        $recipientPubkeyHash = $request['recipient_pubkey_hash'] ?? '';
+        if (empty($recipientPubkeyHash)) {
+            return;
+        }
+
+        $addresses = $this->addressRepository->lookupByPubkeyHash($recipientPubkeyHash);
+        if (empty($addresses)) {
+            $this->logger->warning('Cannot send cancellation: no addresses for recipient', [
+                'request_id' => $request['request_id'],
+            ]);
+            return;
+        }
+
+        // Pick best address (tor > https > http)
+        $recipientAddress = null;
+        foreach (['tor', 'https', 'http'] as $type) {
+            if (!empty($addresses[$type])) {
+                $recipientAddress = $addresses[$type];
+                break;
+            }
+        }
+        if ($recipientAddress === null) {
+            return;
+        }
+
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($recipientAddress);
+        $payload = [
+            'type'            => 'message',
+            'typeMessage'     => 'payment_request',
+            'action'          => 'cancel',
+            'requestId'       => $request['request_id'],
+            'senderAddress'   => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey() ?? '',
+        ];
+
+        $this->logger->info('Sending payment request cancellation', [
+            'request_id'        => $request['request_id'],
+            'recipient_address' => $recipientAddress,
+        ]);
+
+        $this->deliverMessage($recipientAddress, $payload, $request['request_id'], 'cancel');
     }
 
     /**

@@ -406,6 +406,8 @@ class MessageService implements MessageServiceInterface {
             $this->paymentRequestService->handleIncomingRequest($request);
         } elseif ($action === 'response') {
             $this->paymentRequestService->handleIncomingResponse($request);
+        } elseif ($action === 'cancel') {
+            $this->paymentRequestService->handleIncomingCancel($request);
         } else {
             Logger::getInstance()->warning("Unknown payment_request action", ['action' => $action]);
         }
