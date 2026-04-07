@@ -3286,6 +3286,14 @@ html {
     .address-display-row .address-value-mono {
         flex-basis: 100%;
     }
+    .address-display-row-start {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    .address-display-row-start .address-value-mono {
+        flex-basis: 100%;
+        margin-bottom: 0.25rem;
+    }
 }
 .address-value-mono {
     flex: 1;
