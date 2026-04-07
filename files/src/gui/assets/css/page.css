@@ -3058,6 +3058,23 @@ html {
     text-align: center;
 }
 
+/* DLQ search bar */
+.dlq-search-bar {
+    margin-bottom: 0.75rem;
+}
+.dlq-search-bar input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    outline: none;
+}
+.dlq-search-bar input:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
 /* DLQ dropdown (mobile action menus) */
 .dlq-dropdown { position: relative; display: inline-block; }
 .dlq-dropdown-menu {

@@ -1743,9 +1743,8 @@ if [ "$TOR_CONNECTED" = false ]; then
     echo "Continuing startup anyway. Tor-dependent features may not work."
 fi
 
-# User information is displayed later, just before the OPEN ALPHA banner,
-# so it appears at the end of the startup log (easy to find).
-# Variables $displayname, $tor, $http, $pubkey, $authcode_file are used there.
+# User information is displayed inside the OPEN ALPHA banner (banner.sh)
+# using the variables $displayname, $tor, $http, $pubkey, $authcode_file.
 
 # ========================
 # Backup System Setup
@@ -2147,61 +2146,7 @@ watchdog() {
     done
 }
 
-# Display user information just before the alpha banner so it's easy to find
-echo ""
-echo "User Information: "
-if [[ ! -z ${displayname} ]]; then
-    echo -e "\t Display name: $displayname"
-fi
-echo -e "\t Tor address: $tor"
-if [[ ! -z ${http} ]]; then
-    # Always show both HTTP and HTTPS addresses regardless of configured protocol
-    if [[ ${http} == https://* ]]; then
-        httpAddr="${http/https:\/\//http:\/\/}"
-        httpsAddr="$http"
-    elif [[ ${http} == http://* ]]; then
-        httpAddr="$http"
-        httpsAddr="${http/http:\/\//https:\/\/}"
-    else
-        httpAddr="http://$http"
-        httpsAddr="https://$http"
-    fi
-    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
-        ADDR_WARN="\033[33m⚠\033[0m "
-    else
-        ADDR_WARN=""
-    fi
-    echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
-    echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
-    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
-        echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
-        echo -e "\t   They are not reachable from outside the Docker network."
-        echo -e "\t   For external access, set EIOU_HOST to a real IP or domain and EIOU_PORT to the mapped port."
-        if [ "${P2P_SSL_VERIFY:-}" != "false" ] && [ -z "${P2P_CA_CERT:-}" ]; then
-            echo -e "\t   HTTPS between nodes will also fail — self-signed certs are rejected by default"
-            echo -e "\t   (P2P_SSL_VERIFY=true). Set P2P_SSL_VERIFY=false or use P2P_CA_CERT with a shared CA."
-        fi
-        echo -e "\033[0m"
-    fi
-fi
-readable="${pubkey//$'\n'/$'\n\t\t'}"
-echo -e "\t Public Key: \n\t\t $readable"
-if [ "$authcode_file" = "tty" ]; then
-    echo -e "\t Authentication Code: (displayed securely via terminal)"
-elif [[ "$authcode_file" == seedfile:* ]]; then
-    seedfile_path="${authcode_file#seedfile:}"
-    echo -e "\t Seedphrase & Auth Code: (stored in secure temp file)"
-    echo -e "\t   View: docker exec \"$(hostname)\" cat \"$seedfile_path\""
-    echo -e "\t   Auto-deletes in 15 minutes"
-elif [ -n "$authcode_file" ]; then
-    echo -e "\t Authentication Code: (stored in secure temp file)"
-    echo -e "\t   View: docker exec \"$(hostname)\" cat \"$authcode_file\""
-    echo -e "\t   Auto-deletes in 15 minutes"
-else
-    echo -e "\t Authentication Code: (unavailable - see 'eiou info --show-auth')"
-fi
-
-# Display alpha/testing reminder before watchdog starts
+# Display alpha/testing reminder (includes user information) before watchdog starts
 if type show_alpha_warning_short &>/dev/null; then
     show_alpha_warning_short
 fi

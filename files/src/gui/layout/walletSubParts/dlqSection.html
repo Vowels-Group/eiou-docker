@@ -90,6 +90,12 @@
         <button class="dlq-filter-tab"        data-filter="all"       data-action="setDlqFilter">All</button>
     </div>
 
+    <?php if (count($dlqItems ?? []) > 3): ?>
+    <div class="dlq-search-bar">
+        <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." oninput="searchDlq(this.value)">
+    </div>
+    <?php endif; ?>
+
     <?php if (empty($dlqItems)): ?>
     <div class="empty-state">
         <i class="fas fa-check-circle dlq-empty-icon"></i>

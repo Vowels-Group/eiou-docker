@@ -4076,7 +4076,7 @@ function setDlqFilter(filter) {
         }
     }
 
-    // Show/hide rows
+    // Show/hide rows and mark filter state for search
     var rows = document.querySelectorAll('.dlq-row');
     var visibleCount = 0;
     for (var j = 0; j < rows.length; j++) {
@@ -4085,7 +4085,15 @@ function setDlqFilter(filter) {
             || (filter === 'active' && (status === 'pending' || status === 'retrying'))
             || (filter !== 'all' && filter !== 'active' && status === filter);
         rows[j].style.display = show ? '' : 'none';
+        rows[j].setAttribute('data-filter-hidden', show ? 'false' : 'true');
         if (show) { visibleCount++; }
+    }
+
+    // Re-apply search if active
+    var searchInput = document.getElementById('dlq-search');
+    if (searchInput && searchInput.value.trim()) {
+        searchDlq(searchInput.value);
+        return; // searchDlq updates the count
     }
 
     // Toggle filter-empty message vs table
@@ -4097,6 +4105,41 @@ function setDlqFilter(filter) {
     // Update footer count
     var countEl = document.getElementById('dlq-visible-count');
     if (countEl) { countEl.textContent = visibleCount; }
+}
+
+/**
+ * Search/filter DLQ rows by recipient, failure reason, or type.
+ * Works on top of the active status filter — only searches visible rows.
+ */
+function searchDlq(query) {
+    query = (query || '').toLowerCase().trim();
+    var rows = document.querySelectorAll('.dlq-row');
+    var visibleCount = 0;
+
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        // Skip rows already hidden by status filter
+        if (row.getAttribute('data-filter-hidden') === 'true') {
+            continue;
+        }
+        if (!query) {
+            row.style.display = '';
+            visibleCount++;
+            continue;
+        }
+        var text = (row.textContent || '').toLowerCase();
+        var match = text.indexOf(query) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+    }
+
+    var countEl = document.getElementById('dlq-visible-count');
+    if (countEl) { countEl.textContent = visibleCount; }
+
+    var filterEmpty = document.getElementById('dlq-filter-empty');
+    var tableWrapper = document.querySelector('#dlq .dlq-table-wrapper');
+    if (filterEmpty) { filterEmpty.style.display = visibleCount === 0 ? '' : 'none'; }
+    if (tableWrapper) { tableWrapper.style.display = visibleCount === 0 ? 'none' : ''; }
 }
 
 // Initialize DLQ toasts on page load (Tor Browser compatible)
