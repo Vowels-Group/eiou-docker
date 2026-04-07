@@ -1030,6 +1030,10 @@ class ContactController
             case 'rejectChainDrop':
                 $this->handleRejectChainDrop();
                 break;
+
+            case 'decodeQr':
+                $this->handleDecodeQr();
+                break;
         }
     }
 
@@ -1149,5 +1153,76 @@ class ContactController
             $config['allowedCurrencies'] = $newValue;
             file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX);
         }
+    }
+
+    /**
+     * Handle QR code decoding from uploaded image (AJAX - returns JSON).
+     * Server-side fallback for Tor Browser where canvas is blocked.
+     *
+     * Security:
+     * - CSRF-protected
+     * - MIME type validated (must be a real image, not executable code)
+     * - File size limited to 5MB
+     * - Temp file deleted immediately after decoding
+     * - QR reader only extracts text from pixel data — never executes file content
+     * - Decoded text is treated as untrusted (returned raw, validated client-side)
+     */
+    private function handleDecodeQr(): void
+    {
+        $this->session->verifyCSRFToken();
+        header('Content-Type: application/json');
+
+        if (!isset($_FILES['qr_image']) || $_FILES['qr_image']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['success' => false, 'error' => 'No image uploaded']);
+            return;
+        }
+
+        $tmpFile = $_FILES['qr_image']['tmp_name'];
+
+        // Ensure the file is a real upload (not a path traversal / symlink attack)
+        if (!is_uploaded_file($tmpFile)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid upload']);
+            return;
+        }
+
+        $maxSize = 5 * 1024 * 1024; // 5MB
+        if ($_FILES['qr_image']['size'] > $maxSize) {
+            @unlink($tmpFile);
+            echo json_encode(['success' => false, 'error' => 'Image too large (max 5MB)']);
+            return;
+        }
+
+        // Validate MIME type using file content (not the user-supplied type header)
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->file($tmpFile);
+        $allowedMimes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp'];
+        if (!in_array($mimeType, $allowedMimes, true)) {
+            @unlink($tmpFile);
+            echo json_encode(['success' => false, 'error' => 'File is not a valid image (detected: ' . $mimeType . ')']);
+            return;
+        }
+
+        if (!class_exists('\\Zxing\\QrReader')) {
+            @unlink($tmpFile);
+            echo json_encode(['success' => false, 'error' => 'QR decoder not available on server']);
+            return;
+        }
+
+        try {
+            $reader = new \Zxing\QrReader($tmpFile);
+            $text = $reader->text();
+        } catch (\Exception $e) {
+            $text = null;
+        } finally {
+            // Always delete the temp file — never leave uploaded images on disk
+            @unlink($tmpFile);
+        }
+
+        if ($text === null || $text === '' || $text === false) {
+            echo json_encode(['success' => false, 'error' => 'No QR code found in image']);
+            return;
+        }
+
+        echo json_encode(['success' => true, 'data' => $text]);
     }
 }

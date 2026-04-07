@@ -4052,6 +4052,43 @@ function toggleAddressQr(el) {
  * Open the QR code scanner modal using html5-qrcode.
  * On successful scan, fills the target input and closes the modal.
  */
+/**
+ * Decode a QR code image server-side (fallback for Tor Browser).
+ * Uploads the file to the node's PHP backend which decodes it with GD + ZXing.
+ */
+function decodeQrServerSide(file, onSuccess, onError, onComplete) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) {
+        onError('CSRF token not found');
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'decodeQr');
+    formData.append('csrf_token', csrfToken.value);
+    formData.append('qr_image', file);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.onload = function() {
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            if (resp.success && resp.data) {
+                if (onComplete) onComplete();
+                onSuccess(resp.data);
+            } else {
+                onError(resp.error || 'No QR code found in image. Try a clearer photo.');
+            }
+        } catch (e) {
+            onError('Server returned an invalid response.');
+        }
+    };
+    xhr.onerror = function() {
+        onError('Could not reach server for QR decoding.');
+    };
+    xhr.send(formData);
+}
+
 function openQrScanner(targetInputId) {
     if (typeof jsQR === 'undefined' && typeof Html5Qrcode === 'undefined') {
         showToast('Error', 'QR scanner libraries not available', 'error');
@@ -4213,7 +4250,8 @@ function openQrScanner(targetInputId) {
                             var canvasBlocked = (testData[0] !== 255 || testData[1] !== 0 || testData[4] !== 0 || testData[6] !== 255);
 
                             if (canvasBlocked) {
-                                showError('Your browser is modifying canvas data (fingerprinting protection). In Tor Browser, look for a canvas permission prompt in the address bar and click "Allow", then try again.');
+                                // Canvas blocked (Tor Browser) — fall back to server-side decoding
+                                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
                                 return;
                             }
 
@@ -4239,13 +4277,15 @@ function openQrScanner(targetInputId) {
 
                             showError('No QR code found in image. Try a clearer photo.');
                         } catch (canvasErr) {
-                            showError('Cannot read image data. Your browser may be blocking canvas access for privacy.');
+                            // Canvas exception — fall back to server-side decoding
+                            decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
                         }
                     }, 50);
                 };
                 img.onerror = function() {
                     clearTimeout(loadTimeout);
-                    showError('Could not load image file. Try a PNG or JPG.');
+                    // Image couldn't load client-side — try server-side
+                    decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
                 };
                 img.src = reader.result;
             };
