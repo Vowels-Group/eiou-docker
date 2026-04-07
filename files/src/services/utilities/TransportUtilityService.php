@@ -921,6 +921,13 @@ class TransportUtilityService implements TransportServiceInterface
             'signature' => $base64Signature
         ];
 
+        // Include all sender addresses on the envelope (outside signed content, since
+        // addresses can change over time and cannot be re-signed). Recipients store these
+        // to enable fallback transport. Mirrors the senderAddresses field in response payloads.
+        if (!empty($payload['senderAddresses']) && is_array($payload['senderAddresses'])) {
+            $envelope['senderAddresses'] = $payload['senderAddresses'];
+        }
+
         // Include version in envelope for all types except contact creation requests.
         // Contact requests go to untrusted nodes (no established relationship yet),
         // so exposing the version would let any node fingerprint us. Version is
