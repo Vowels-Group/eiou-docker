@@ -4116,10 +4116,16 @@ function isCanvasBlocked() {
 }
 
 function openQrScanner(targetInputId) {
-    // Detect canvas blocking early — if blocked, camera and client-side
-    // jsQR both fail, so go straight to server-side file upload
-    var canvasIsBlocked = isCanvasBlocked();
-    var hasCameraLib = !canvasIsBlocked && typeof Html5Qrcode !== 'undefined';
+    // Tor Browser blocks both camera API and canvas — QR scanning cannot work.
+    // Detect early and show a clear message instead of wasting time on fallbacks.
+    if (isCanvasBlocked()) {
+        showToast('QR Scanner Unavailable',
+            'Your browser blocks camera and image processing for privacy (Tor Browser). Please copy and paste the address manually.',
+            'warning');
+        return;
+    }
+
+    var hasCameraLib = typeof Html5Qrcode !== 'undefined';
 
     // Create scanner modal — z-index above other modals (e.g., Add Contact)
     var overlay = document.createElement('div');
@@ -4227,12 +4233,6 @@ function openQrScanner(targetInputId) {
                     errorEl.style.display = 'block';
                 }
                 fileInput.value = '';
-            }
-
-            if (canvasIsBlocked) {
-                // Canvas blocked (Tor Browser) — go straight to server-side, no timeout needed
-                decodeQrServerSide(file, onScanSuccess, showError, hideLoading);
-                return;
             }
 
             // Timeout — if client-side image never loads after 10 seconds, show error
