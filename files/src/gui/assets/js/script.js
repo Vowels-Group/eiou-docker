@@ -1256,12 +1256,12 @@ function startOperationTimeout(operationType, timeoutMessage) {
         var storedOp = safeStorageSet('eiou_pending_operation', operationType);
         var storedMsg = safeStorageSet('eiou_timeout_message', timeoutMessage);
 
+        var currentUrl = window.location.href.split('?')[0].split('#')[0];
         if (storedOp && storedMsg) {
-            // Storage worked, simple reload
-            window.location.reload();
+            // Navigate via href (not reload()) so it interrupts any in-flight POST
+            window.location.href = currentUrl;
         } else {
-            // Storage failed (Tor Browser), use URL parameter fallback
-            var currentUrl = window.location.href.split('?')[0].split('#')[0];
+            // Storage failed (Tor Browser), pass message as URL parameter
             var encodedMsg = encodeURIComponent(timeoutMessage);
             window.location.href = currentUrl + '?timeout_msg=' + encodedMsg;
         }
@@ -1467,13 +1467,14 @@ function initializeFormLoaders() {
         }
     }
 
-    // Payment request — Decline
+    // Payment request — Decline (sends a Tor response message, can be slow)
     var declineForms = document.querySelectorAll('form input[name="action"][value="declinePaymentRequest"]');
     for (var i = 0; i < declineForms.length; i++) {
         var form = declineForms[i].closest('form');
         if (form) {
             form.addEventListener('submit', function() {
-                showLoader('Declining payment request...');
+                showLoader('Declining payment request...', retryInfoText);
+                startOperationTimeout('declinePaymentRequest', 'Still waiting. The request has been declined locally. You can continue using the app and check back later.');
             });
         }
     }
@@ -1485,6 +1486,7 @@ function initializeFormLoaders() {
         if (form) {
             form.addEventListener('submit', function() {
                 showLoader('Cancelling payment request...');
+                startOperationTimeout('cancelPaymentRequest', 'Still waiting. The request has been cancelled locally. You can continue using the app and check back later.');
             });
         }
     }
