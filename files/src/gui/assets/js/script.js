@@ -2771,8 +2771,8 @@ function pingContact() {
                     var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
                     if (waitMatch) {
                         errorMessage = 'Too many requests. Please wait ' + waitMatch[1] + ' seconds.';
-                    } else {
-                        // Try JSON parse
+                    } else if (xhr.responseText.charAt(0) === '{') {
+                        // Try JSON parse only if it looks like JSON
                         try {
                             var errResp = JSON.parse(xhr.responseText);
                             if (errResp.message) errorMessage = errResp.message;
