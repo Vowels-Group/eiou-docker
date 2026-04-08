@@ -458,6 +458,15 @@ function initializeSendForm() {
 
             addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
             var addressTypes = Object.keys(addresses);
+            // Sort by security preference: tor > https > http, then any others
+            var preferredDisplayOrder = ['tor', 'https', 'http'];
+            addressTypes.sort(function(a, b) {
+                var ai = preferredDisplayOrder.indexOf(a);
+                var bi = preferredDisplayOrder.indexOf(b);
+                if (ai === -1) ai = preferredDisplayOrder.length;
+                if (bi === -1) bi = preferredDisplayOrder.length;
+                return ai - bi;
+            });
 
             for (var j = 0; j < addressTypes.length; j++) {
                 var type = addressTypes[j];
@@ -3140,6 +3149,9 @@ function showSelectedContactAddress() {
     var selectedOption = select.options[select.selectedIndex];
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('modal_address_display').textContent = address;
+    // Hide QR display when address changes
+    var qrContainer = document.getElementById('contact-address-qr-display');
+    if (qrContainer) { qrContainer.style.display = 'none'; qrContainer.innerHTML = ''; }
 }
 
 // Close contact modal when clicking outside (Tor Browser compatible)
