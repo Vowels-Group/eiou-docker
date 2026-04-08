@@ -66,12 +66,13 @@ create_api_key() {
 
 api_sig() {
     local container="$1" method="$2" path="$3" ts="$4" nonce="$5" body="$6" secret="$7"
-    # Pass body via stdin to avoid shell/PHP double-quote escaping issues
-    echo -n "${body}" | docker exec -i ${container} php -r '
-        $body = file_get_contents("php://stdin");
-        $msg = "'"${method}"'\n'"${path}"'\n'"${ts}"'\n'"${nonce}"'\n" . $body;
-        echo hash_hmac("sha256", $msg, "'"${secret}"'");
-    ' 2>/dev/null
+    # Pass body via stdin to avoid shell/PHP double-quote escaping issues.
+    # PHP code uses double quotes for the \n separators (single quotes treat \n as literal).
+    echo -n "${body}" | docker exec -i ${container} php -r "
+        \$body = file_get_contents('php://stdin');
+        \$msg = \"${method}\n${path}\n${ts}\n${nonce}\n\" . \$body;
+        echo hash_hmac('sha256', \$msg, '${secret}');
+    " 2>/dev/null
 }
 
 api_call() {
@@ -172,10 +173,17 @@ createBody="{\"contact\":\"${contactBName}\",\"amount\":\"5.00\",\"currency\":\"
 createResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$createBody")
 
 requestId=""
-if [[ "$createResp" =~ '"success"' ]] && [[ "$createResp" =~ '"request_id"' ]]; then
-    requestId=$(echo "$createResp" | grep -o '"request_id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"request_id"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
-    printf "\t   POST /api/v1/requests ${GREEN}PASSED${NC} (id=${requestId})\n"
-    passed=$(( passed + 1 ))
+if [[ "$createResp" =~ '"success": true' ]] || [[ "$createResp" =~ '"success":true' ]]; then
+    # Extract request_id from inside "data" object (not the API envelope request_id)
+    requestId=$(echo "$createResp" | grep -o '"request_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"request_id"[[:space:]]*:[[:space:]]*"//;s/"$//')
+    if [[ -n "$requestId" ]]; then
+        printf "\t   POST /api/v1/requests ${GREEN}PASSED${NC} (id=${requestId})\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   POST /api/v1/requests ${RED}FAILED${NC} (success but no request_id in data)\n"
+        printf "\t   Response: ${createResp}\n"
+        failure=$(( failure + 1 ))
+    fi
 else
     printf "\t   POST /api/v1/requests ${RED}FAILED${NC}\n"
     printf "\t   Response: ${createResp}\n"
