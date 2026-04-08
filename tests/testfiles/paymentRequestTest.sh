@@ -169,6 +169,10 @@ fi
 
 ############################ TEST 2: CREATE PAYMENT REQUEST ############################
 
+# Debug: verify contact exists before creating payment request
+contactCheck=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "GET" "/api/v1/contacts")
+printf "\t   Debug — contacts on A: $(echo "$contactCheck" | grep -o '"name":"[^"]*"' | head -3)\n"
+
 echo -e "\n[Test 2: Create payment request A→B]"
 totaltests=$(( totaltests + 1 ))
 
