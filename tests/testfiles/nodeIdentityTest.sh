@@ -227,7 +227,7 @@ else
                 envTestPassed=false
             fi
 
-            if echo "$envLogs" | grep -q "HTTP address: http://10.0.0.99:8443"; then
+            if echo "$envLogs" | grep -q "HTTP address:.*http://10.0.0.99:8443"; then
                 printf "\t   HTTP address in logs ${GREEN}PASSED${NC}\n"
             else
                 printf "\t   HTTP address in logs ${RED}FAILED${NC}\n"
