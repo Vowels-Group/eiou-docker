@@ -573,7 +573,7 @@ class TransactionController
         header('Content-Type: application/json');
 
         $csrfToken = $_POST['csrf_token'] ?? '';
-        if (!Security::validateCsrfToken($csrfToken)) {
+        if (!$this->session->validateCSRFToken($csrfToken, false)) {
             echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
             return;
         }
