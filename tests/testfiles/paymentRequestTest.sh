@@ -38,6 +38,51 @@ BOOTSTRAP_PATH="/app/eiou/src/bootstrap.php"
 echo -e "\t   Container A (requester): ${containerA}"
 echo -e "\t   Container B (recipient): ${containerB}"
 
+############################ ENSURE CONTACTS EXIST ############################
+
+# Previous tests (e.g. apiEndpointsTest) may delete contacts.
+# Re-add httpB on httpA (and vice versa) if not already accepted.
+addressB="${containerAddresses[${containerB}]}"
+addressA="${containerAddresses[${containerA}]}"
+transportB=$(getPhpTransportType "$addressB")
+
+statusAB=$(docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
+        '${transportB}','${addressB}'
+    );
+" 2>/dev/null || echo "none")
+
+if [ "$statusAB" != "accepted" ]; then
+    printf "\t-> Contact A→B not accepted (status: ${statusAB}), re-adding...\n"
+    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.00 0.00 USD 2>/dev/null
+    docker exec ${containerB} eiou add ${addressA} ${containerA} 0.00 0.00 USD 2>/dev/null
+
+    # Wait for contacts to be accepted (up to 15s)
+    wait_elapsed=0
+    while [ $wait_elapsed -lt 15 ]; do
+        statusCheck=$(docker exec ${containerA} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getRepositoryFactory()->get(\Eiou\Database\ContactRepository::class)->getContactStatus(
+                '${transportB}','${addressB}'
+            );
+        " 2>/dev/null || echo "pending")
+
+        if [ "$statusCheck" = "accepted" ]; then
+            printf "\t   Contact re-established (${wait_elapsed}s)\n"
+            break
+        fi
+        sleep 1
+        wait_elapsed=$((wait_elapsed + 1))
+    done
+
+    if [ "$statusCheck" != "accepted" ]; then
+        printf "\t   ${RED}Warning: Contact still not accepted after 15s (status: ${statusCheck})${NC}\n"
+    fi
+else
+    printf "\t   Contact A→B already accepted\n"
+fi
+
 ############################ API KEY SETUP ############################
 
 create_api_key() {
@@ -131,7 +176,7 @@ printf "\t   API keys ready: A=${keyA_id}, B=${keyB_id}\n"
 contactBName=$(docker exec ${containerA} php -r "
     require_once '${BOOTSTRAP_PATH}';
     \$app = Eiou\Core\Application::getInstance();
-    \$contacts = \$app->services->getContactService()->getContacts();
+    \$contacts = \$app->services->getContactService()->getAllContacts();
     foreach (\$contacts as \$c) {
         if (strpos(\$c['address'] ?? '', 'httpB') !== false || strpos(\$c['name'] ?? '', 'httpB') !== false) {
             echo \$c['name'];
