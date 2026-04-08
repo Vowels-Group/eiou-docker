@@ -38,6 +38,10 @@ use Eiou\Gui\Includes\SessionKeys;
 // Template helper functions — shorthand for FQN calls used in .html templates
 // =========================================================================
 
+function appVersion(): string {
+    return \Eiou\Core\Constants::APP_VERSION;
+}
+
 function displayDecimals(): int {
     return \Eiou\Core\Constants::getDisplayDecimals();
 }

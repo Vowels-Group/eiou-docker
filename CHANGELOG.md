@@ -45,6 +45,7 @@ The project is currently in **ALPHA** status.
 - **Fatal error in transaction modal AJAX**: `handleGetTransactionByTxid()` called `Security::validateCsrfToken()` which doesn't exist — changed to `$this->session->validateCSRFToken()` matching all other AJAX handlers
 - **AJAX rate limit returns HTML redirect instead of JSON**: `SecurityInit.php` rate limiting used `MessageHelper::redirectMessage()` for all requests, but AJAX endpoints expect JSON. The XHR followed the redirect, got HTML, and JSON.parse failed showing "Invalid response" or "Request failed". Now returns a proper 429 JSON response with `retry_after` for known AJAX actions (ping, chain drop, DLQ, P2P, payment requests). Non-AJAX form submissions still get the redirect
 - **Check Status 403 on Tor causes "Request failed" error**: when the session/CSRF token expires between page reloads (common on Tor due to session regeneration), the ping POST receives a 403. Instead of showing an error, the page now auto-reloads and reopens the contact modal on the Status tab with a fresh session
+- **Stale JS/CSS after deploy when behind Cloudflare**: external script tags (`script.js`, vendor QR libraries) had no cache-busting parameter, so CDN/proxy caches (Cloudflare) could serve old assets after a version bump — breaking features added in newer releases (e.g. tabbed navigation, QR codes). Added `?v={APP_VERSION}` to all `<script src>` URLs and an `appVersion()` template helper
 
 ### Changed
 - **Tab renamed**: "Send" tab renamed to "Payment" (desktop and mobile); section heading changed to "New eIOU"
