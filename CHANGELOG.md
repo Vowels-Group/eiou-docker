@@ -12,6 +12,10 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+---
+
+## v0.1.10-alpha (2026-04-08)
+
 ### Added
 - **Payment request system**: users can now request payment from a contact directly from the Send tab. Clicking "Request Payment" (next to "Send eIOU") sends a signed `payment_request` message to the contact. The recipient sees it below the Send form, can **Approve & Pay** (triggers a normal `sendEIOU` automatically) or **Decline**. The requester gets a response message updating their outgoing request status. Includes: `payment_requests` DB table, `PaymentRequestRepository`, `PaymentRequestService`, `PaymentRequestController` (GUI), `paymentRequestsSection.html` template, REST API endpoints at `/api/v1/requests/`, and `MessageService` routing for the new `payment_request` typeMessage. Schema migration v4 → v5
 - **Unit tests** for `PaymentRequestRepository` (16 tests) and `PaymentRequestService` (46 tests) — full coverage of create, approve, decline, cancel (with cancellation sync and race conditions), incoming request/response/cancel handling, and description-prefix formatting logic. Additional tests for `TransportUtilityService` fallback order (security-descending), `UserContext` HTTP address derivation from HTTPS, and `VendorAssetsTest` (5 tests) verifying bundled QR code libraries exist with valid signatures and license notices
@@ -38,6 +42,9 @@ The project is currently in **ALPHA** status.
 - **Payment request integration test fails due to missing contacts**: `apiEndpointsTest` (which runs before `paymentRequestTest`) deletes httpB from httpA's contacts and never restores it. `paymentRequestTest` now checks contact status and re-adds the contact if missing before running
 - **nodeIdentityTest "HTTP address in logs" always fails**: `banner.sh` outputs `HTTP address:  http://...` (two spaces for alignment with `HTTPS address:`), but the test grepped for exactly one space. Fixed with `.*` wildcard
 - **Security test "excessive amount rejection" always fails**: test used `9999999999999` (~10 trillion) but `TRANSACTION_MAX_AMOUNT` is ~2.3 quintillion, so validation correctly passed it. Changed to `9999999999999999999` (~10 quintillion) which actually exceeds the limit
+- **Fatal error in transaction modal AJAX**: `handleGetTransactionByTxid()` called `Security::validateCsrfToken()` which doesn't exist — changed to `$this->session->validateCSRFToken()` matching all other AJAX handlers
+- **AJAX rate limit returns HTML redirect instead of JSON**: `SecurityInit.php` rate limiting used `MessageHelper::redirectMessage()` for all requests, but AJAX endpoints expect JSON. The XHR followed the redirect, got HTML, and JSON.parse failed showing "Invalid response" or "Request failed". Now returns a proper 429 JSON response with `retry_after` for known AJAX actions (ping, chain drop, DLQ, P2P, payment requests). Non-AJAX form submissions still get the redirect
+- **Check Status 403 on Tor causes "Request failed" error**: when the session/CSRF token expires between page reloads (common on Tor due to session regeneration), the ping POST receives a 403. Instead of showing an error, the page now auto-reloads and reopens the contact modal on the Status tab with a fresh session
 
 ### Changed
 - **Tab renamed**: "Send" tab renamed to "Payment" (desktop and mobile); section heading changed to "New eIOU"
@@ -60,7 +67,6 @@ The project is currently in **ALPHA** status.
 - **Contact modal mobile layout**: Copy and QR buttons now wrap below the address/public key text on small screens, matching the Wallet Information page layout
 - **Send form amount hint spacing**: the minimum amount precision hint now sits closer to the Amount input instead of floating far below with a gap
 - **Removed redundant logout link** from the Wallet Information status bar ("Refresh now · Logout") — logout is always accessible in the top-right header
-- **Fatal error in transaction modal AJAX**: `handleGetTransactionByTxid()` called `Security::validateCsrfToken()` which doesn't exist — changed to `$this->session->validateCSRFToken()` matching all other AJAX handlers
 
 ---
 
