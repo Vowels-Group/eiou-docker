@@ -3290,7 +3290,8 @@ html {
         flex-direction: row;
         flex-wrap: wrap;
     }
-    .address-display-row-start .address-value-mono {
+    .address-display-row-start .address-value-mono,
+    .address-display-row-start .address-value {
         flex-basis: 100%;
         margin-bottom: 0.25rem;
     }
