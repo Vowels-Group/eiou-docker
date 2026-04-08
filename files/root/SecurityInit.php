@@ -115,7 +115,9 @@ if (php_sapi_name() !== 'cli') {
         if (!$result['allowed']) {
             $retryAfter = $result['retry_after'] ?? 60;
 
-            // AJAX actions expect JSON, not a redirect
+            // AJAX actions expect JSON, not a redirect. These are POST actions
+            // handled in Functions.php that return JSON and exit immediately.
+            // Keep in sync with the AJAX-only blocks in Functions.php.
             $ajaxActions = [
                 'pingContact', 'analyticsConsent', 'getDebugReportJson',
                 'proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop',
