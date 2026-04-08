@@ -2749,16 +2749,38 @@ function pingContact() {
                     }
                 } catch (e) {
                     resetPingButton();
+                    // Non-JSON response — likely a rate limit redirect page
+                    var fallbackMsg = 'Invalid response';
+                    if (xhr.responseText) {
+                        var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
+                        if (waitMatch) {
+                            fallbackMsg = 'Too many requests. Please wait ' + waitMatch[1] + ' seconds.';
+                        }
+                    }
                     if (resultMsg) {
-                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.textContent = fallbackMsg;
                         resultMsg.style.color = '#dc3545';
                     }
                 }
             } else if (xhr.status !== 0) {
                 resetPingButton();
-                // Status 0 means aborted/timeout (handled separately)
+                // Try to extract rate limit or error message from response
+                var errorMessage = 'Request failed (status ' + xhr.status + ')';
+                if (xhr.responseText) {
+                    // Check for redirect page with flash message (rate limit)
+                    var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
+                    if (waitMatch) {
+                        errorMessage = 'Too many requests. Please wait ' + waitMatch[1] + ' seconds.';
+                    } else {
+                        // Try JSON parse
+                        try {
+                            var errResp = JSON.parse(xhr.responseText);
+                            if (errResp.message) errorMessage = errResp.message;
+                        } catch (e2) {}
+                    }
+                }
                 if (resultMsg) {
-                    resultMsg.textContent = 'Request failed';
+                    resultMsg.textContent = errorMessage;
                     resultMsg.style.color = '#dc3545';
                 }
             }
