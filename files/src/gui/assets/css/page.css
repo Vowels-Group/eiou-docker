@@ -3692,18 +3692,6 @@ hr.currency-separator-double {
 .recipient-option { padding: 0.5rem 0.75rem; cursor: pointer; }
 .recipient-tag { color: #6c757d; font-size: 0.85em; }
 
-.tx-type-indicator {
-    padding: 0.25rem 0;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-    display: none;
-}
-
-.tx-type-indicator-inner {
-    display: -webkit-box; display: -ms-flexbox; display: flex;
-    -webkit-box-align: center; -ms-flex-align: center; align-items: center;
-    gap: 0.5rem;
-}
 
 .input-monospace { font-family: 'Courier New', monospace; }
 
@@ -4016,7 +4004,6 @@ hr.currency-separator-double {
 }
 .btn-outline-primary:hover { background: #0d6efd; color: white; }
 
-.tx-type-indicator-text { font-weight: 500; color: #6c757d; font-size: 0.85rem; }
 
 .tx-in-progress-spinner { flex-shrink: 0; }
 
