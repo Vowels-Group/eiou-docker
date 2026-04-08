@@ -455,7 +455,7 @@ echo -e "\n\t-> Testing excessive amount rejection (>max)"
 
 timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
-body="{\"address\":\"http://test.example.com\",\"amount\":\"9999999999999\",\"currency\":\"USD\"}"
+body="{\"address\":\"http://test.example.com\",\"amount\":\"9999999999999999999\",\"currency\":\"USD\"}"
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
