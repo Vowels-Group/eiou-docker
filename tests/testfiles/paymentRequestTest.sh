@@ -33,7 +33,7 @@ containerB="${containers[1]}"
 LOCAL_API_BASE="https://localhost"
 CURL_SSL_FLAG="-k"
 
-BOOTSTRAP_PATH="/app/eiou/src/startup/bootstrap.php"
+BOOTSTRAP_PATH="/app/eiou/src/bootstrap.php"
 
 echo -e "\t   Container A (requester): ${containerA}"
 echo -e "\t   Container B (recipient): ${containerB}"
