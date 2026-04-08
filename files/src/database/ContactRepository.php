@@ -628,11 +628,12 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByName(string $name): ?array {
-        $query = "SELECT * 
+        $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND LOWER(c.name) = LOWER(:name)
-                    Limit 1";
+                    ORDER BY c.created_at ASC
+                    LIMIT 1";
 
         $stmt = $this->execute($query, [':name' => $name]);
 

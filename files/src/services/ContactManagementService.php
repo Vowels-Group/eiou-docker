@@ -560,6 +560,17 @@ class ContactManagementService implements ContactManagementServiceInterface
     }
 
     /**
+     * Lookup all contacts matching a name (for disambiguation).
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return array Array of matching contacts (empty if none)
+     */
+    public function lookupAllByName(string $name): array
+    {
+        return $this->contactRepository->lookupAllByName($name);
+    }
+
+    /**
      * Lookup contact by address
      *
      * @param string $transportIndex Address type, i.e. http, https, tor

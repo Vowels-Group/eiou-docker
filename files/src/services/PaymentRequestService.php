@@ -89,11 +89,22 @@ class PaymentRequestService
             return ['success' => false, 'error' => 'Invalid currency: ' . $currencyValidation['error']];
         }
 
-        // Look up contact
-        $contact = $this->contactRepository->lookupByName($contactName);
-        if (!$contact) {
+        // Look up contact — check for duplicate names
+        $allMatches = $this->contactRepository->lookupAllByName($contactName);
+        if (empty($allMatches)) {
             return ['success' => false, 'error' => 'Contact not found: ' . htmlspecialchars($contactName)];
         }
+        if (count($allMatches) > 1) {
+            $addresses = array_map(function ($c) {
+                return $c['name'] . ' (' . ($c['http'] ?? $c['https'] ?? $c['tor'] ?? 'unknown') . ')';
+            }, $allMatches);
+            return [
+                'success' => false,
+                'error' => 'Multiple contacts named "' . htmlspecialchars($contactName) . '". Use an address instead: ' . implode(', ', $addresses),
+                'code' => 'multiple_matches'
+            ];
+        }
+        $contact = $allMatches[0];
 
         if (($contact['status'] ?? '') !== 'accepted') {
             return ['success' => false, 'error' => 'Contact must be accepted before sending payment requests'];

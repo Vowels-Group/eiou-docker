@@ -137,8 +137,13 @@ class TransactionController
             // Manual address entry - use as-is
             $finalRecipient = $manualRecipient;
         } elseif (!empty($recipient) && !empty($addressType)) {
-            // Contact selected with address type - lookup and use specific address
-            $contactInfo = $this->contactService->lookupByName($recipient);
+            // Contact selected with address type - check for duplicate names
+            $allMatches = $this->contactService->lookupAllByName($recipient);
+            if (count($allMatches) > 1) {
+                MessageHelper::redirectMessage('Multiple contacts named "' . htmlspecialchars($recipient) . '". Please use an address directly.', 'error');
+                return;
+            }
+            $contactInfo = $allMatches[0] ?? null;
             if ($contactInfo && isset($contactInfo[$addressType]) && !empty($contactInfo[$addressType])) {
                 $finalRecipient = $contactInfo[$addressType];
             } else {
