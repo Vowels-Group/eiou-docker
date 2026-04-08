@@ -66,9 +66,12 @@ create_api_key() {
 
 api_sig() {
     local container="$1" method="$2" path="$3" ts="$4" nonce="$5" body="$6" secret="$7"
-    docker exec ${container} php -r "
-        echo hash_hmac('sha256', \"${method}\n${path}\n${ts}\n${nonce}\n${body}\", '${secret}');
-    " 2>/dev/null
+    # Pass body via stdin to avoid shell/PHP double-quote escaping issues
+    echo -n "${body}" | docker exec -i ${container} php -r '
+        $body = file_get_contents("php://stdin");
+        $msg = "'"${method}"'\n'"${path}"'\n'"${ts}"'\n'"${nonce}"'\n" . $body;
+        echo hash_hmac("sha256", $msg, "'"${secret}"'");
+    ' 2>/dev/null
 }
 
 api_call() {
@@ -165,7 +168,7 @@ fi
 echo -e "\n[Test 2: Create payment request A→B]"
 totaltests=$(( totaltests + 1 ))
 
-createBody="{\"contact_name\":\"${contactBName}\",\"amount\":\"5.00\",\"currency\":\"USD\",\"description\":\"Integration test request\"}"
+createBody="{\"contact\":\"${contactBName}\",\"amount\":\"5.00\",\"currency\":\"USD\",\"description\":\"Integration test request\"}"
 createResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$createBody")
 
 requestId=""
@@ -257,7 +260,7 @@ fi
 echo -e "\n[Test 6: Create and cancel an outgoing request]"
 totaltests=$(( totaltests + 1 ))
 
-cancelBody="{\"contact_name\":\"${contactBName}\",\"amount\":\"3.00\",\"currency\":\"USD\",\"description\":\"Cancel test\"}"
+cancelBody="{\"contact\":\"${contactBName}\",\"amount\":\"3.00\",\"currency\":\"USD\",\"description\":\"Cancel test\"}"
 cancelCreateResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$cancelBody")
 
 cancelRequestId=""
@@ -285,7 +288,7 @@ fi
 echo -e "\n[Test 7: Invalid create — missing fields]"
 totaltests=$(( totaltests + 1 ))
 
-invalidBody="{\"contact_name\":\"${contactBName}\"}"
+invalidBody="{\"contact\":\"${contactBName}\"}"
 invalidResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$invalidBody")
 
 if [[ "$invalidResp" =~ '"success"' ]] && ( [[ "$invalidResp" =~ 'false' ]] || [[ "$invalidResp" =~ '"error"' ]] ); then
@@ -303,7 +306,7 @@ echo -e "\n[Test 8: Approve flow — B pays A, verify eIOU sent and balance chan
 totaltests=$(( totaltests + 1 ))
 
 # --- 8a: Create a fresh payment request from A → B ---
-approveTestBody="{\"contact_name\":\"${contactBName}\",\"amount\":\"2.00\",\"currency\":\"USD\",\"description\":\"Approve flow test\"}"
+approveTestBody="{\"contact\":\"${contactBName}\",\"amount\":\"2.00\",\"currency\":\"USD\",\"description\":\"Approve flow test\"}"
 approveCreateResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$approveTestBody")
 
 approveRequestId=""

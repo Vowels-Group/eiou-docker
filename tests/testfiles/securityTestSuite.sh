@@ -86,8 +86,8 @@ tableCheck=$(docker exec ${testContainer} php -r "
     require_once '${BOOTSTRAP_PATH}';
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$result = \$pdo->query(\"SHOW TABLES LIKE 'contacts'\");
-    echo \$result->rowCount() > 0 ? 'TABLE_EXISTS' : 'TABLE_MISSING';
+    \$result = \$pdo->query(\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'contacts'\");
+    echo (\$result && \$result->fetchColumn() > 0) ? 'TABLE_EXISTS' : 'TABLE_MISSING';
 " 2>/dev/null)
 
 if [[ "$tableCheck" == "TABLE_EXISTS" ]]; then
