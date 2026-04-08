@@ -38,6 +38,10 @@ use Eiou\Gui\Includes\SessionKeys;
 // Template helper functions — shorthand for FQN calls used in .html templates
 // =========================================================================
 
+function appVersion(): string {
+    return \Eiou\Core\Constants::APP_VERSION;
+}
+
 function displayDecimals(): int {
     return \Eiou\Core\Constants::getDisplayDecimals();
 }
@@ -122,6 +126,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $transactionController->routeAction();
     }
 
+    // Payment request actions
+    if (in_array($action, ['createPaymentRequest', 'approvePaymentRequest', 'declinePaymentRequest', 'cancelPaymentRequest'])) {
+        $paymentRequestController->routeAction();
+    }
+
     // Settings actions
     if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport'])) {
         $settingsController->routeAction();
@@ -174,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // AJAX-only P2P approval actions (returns JSON, exits immediately)
-    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates'])) {
+    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid'])) {
         try {
             $transactionController->routeAction();
         } catch (Exception $e) {
@@ -755,6 +764,16 @@ foreach ($contactArraysForCredit as &$contacts) {
     unset($contact);
 }
 unset($contacts);
+
+// Load payment requests for display in the Send tab
+$paymentRequests = ['incoming' => [], 'outgoing' => []];
+$pendingPaymentRequestCount = 0;
+try {
+    $paymentRequests = $serviceContainer->getPaymentRequestService()->getAllForDisplay(50);
+    $pendingPaymentRequestCount = $serviceContainer->getPaymentRequestService()->countPendingIncoming();
+} catch (Exception $e) {
+    // Non-critical — payment requests section will be empty
+}
 
 // Initialize ContactDataBuilder helper
 $contactDataBuilder = new ContactDataBuilder($addressTypes);

@@ -25,7 +25,8 @@ class SecureSeedphraseDisplay
     private const TEMP_DIR = '/dev/shm';
 
     /** @var int Seconds before automatic file deletion */
-    private const FILE_TTL = 300; // 5 minutes
+    private const FILE_TTL = 900; // 15 minutes
+    private const FILE_TTL_DISPLAY = '15 minutes';
 
     /** @var string Prefix for temp files */
     private const FILE_PREFIX = 'eiou_wallet_info_';
@@ -229,7 +230,7 @@ class SecureSeedphraseDisplay
         $content .= "     -e RESTORE_FILE=/seed eiou/eiou\n\n";
 
         $content .= "═══════════════════════════════════════════════════════════════\n";
-        $content .= " This file will be automatically deleted in " . self::FILE_TTL . " seconds.\n";
+        $content .= " This file will be automatically deleted in " . self::FILE_TTL_DISPLAY . ".\n";
         $content .= " Delete it immediately after saving: rm $filename\n";
         $content .= "═══════════════════════════════════════════════════════════════\n";
 
@@ -261,7 +262,7 @@ class SecureSeedphraseDisplay
             "To view it, run:",
             "  docker exec $containerName cat $filename",
             "",
-            "The file will be automatically deleted in " . self::FILE_TTL . " seconds.",
+            "The file will be automatically deleted in " . self::FILE_TTL_DISPLAY . ".",
             "For security, view and delete it immediately after saving.",
             "",
             "To delete manually:",
@@ -480,7 +481,7 @@ class SecureSeedphraseDisplay
         $content .= "═══════════════════════════════════════════════════════════════\n\n";
         $content .= "  " . $authcode . "\n\n";
         $content .= "═══════════════════════════════════════════════════════════════\n";
-        $content .= " This file will be automatically deleted in " . self::FILE_TTL . " seconds.\n";
+        $content .= " This file will be automatically deleted in " . self::FILE_TTL_DISPLAY . ".\n";
         $content .= " Delete it immediately after use: rm $filename\n";
         $content .= "═══════════════════════════════════════════════════════════════\n";
 
@@ -519,7 +520,7 @@ class SecureSeedphraseDisplay
                 "To view it, run:",
                 "  docker exec $containerName cat $filename",
                 "",
-                "The file will be automatically deleted in " . self::FILE_TTL . " seconds.",
+                "The file will be automatically deleted in " . self::FILE_TTL_DISPLAY . ".",
                 "",
                 "To delete manually:",
                 "  docker exec $containerName rm $filename"

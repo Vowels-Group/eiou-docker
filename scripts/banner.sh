@@ -94,35 +94,85 @@ show_alpha_warning_short() {
     echo ""
     printf "${Y}%s${R}\n" "$_HR"
     printf "${Y}  OPEN ALPHA: Decentralized P2P credit network. Active development.${R}\n"
+    printf "${Y}%s${R}\n" "$_HR"
+
+    # User information — uses variables set by startup.sh
+    # shellcheck disable=SC2154  # variables set in parent script
+    echo ""
+    echo "  User Information:"
+    if [ -n "${displayname:-}" ]; then
+        echo -e "\t Display name: $displayname"
+    fi
+    if [ -n "${tor:-}" ]; then
+        echo -e "\t Tor address: $tor"
+    fi
+    if [ -n "${http:-}" ]; then
+        if [[ ${http} == https://* ]]; then
+            local httpAddr="${http/https:\/\//http:\/\/}"
+            local httpsAddr="$http"
+        elif [[ ${http} == http://* ]]; then
+            local httpAddr="$http"
+            local httpsAddr="${http/http:\/\//https:\/\/}"
+        else
+            local httpAddr="http://$http"
+            local httpsAddr="https://$http"
+        fi
+        local ADDR_WARN=""
+        if [ "${EIOU_HOST:-false}" = "false" ] && [ "${QUICKSTART:-false}" != "false" ]; then
+            ADDR_WARN="\033[33m⚠\033[0m "
+        fi
+        echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
+        echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
+        if [ "${EIOU_HOST:-false}" = "false" ] && [ "${QUICKSTART:-false}" != "false" ]; then
+            echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
+            echo -e "\t   They are not reachable from outside the Docker network."
+            echo -e "\t   For external access, set EIOU_HOST to a real IP or domain and EIOU_PORT to the mapped port."
+            if [ "${P2P_SSL_VERIFY:-}" != "false" ] && [ -z "${P2P_CA_CERT:-}" ]; then
+                echo -e "\t   HTTPS between nodes will also fail — self-signed certs are rejected by default"
+                echo -e "\t   (P2P_SSL_VERIFY=true). Set P2P_SSL_VERIFY=false, use P2P_CA_CERT with a shared CA,"
+                echo -e "\t   or place nodes behind a reverse proxy with valid certificates."
+            fi
+            echo -e "\033[0m"
+        fi
+    fi
+    if [ -n "${pubkey:-}" ]; then
+        local readable="${pubkey//$'\n'/$'\n\t\t'}"
+        echo -e "\t Public Key: \n\t\t $readable"
+    fi
+    if [ "${authcode_file:-}" = "tty" ]; then
+        echo -e "\t Authentication Code: (displayed securely via terminal)"
+    elif [[ "${authcode_file:-}" == seedfile:* ]]; then
+        local seedfile_path="${authcode_file#seedfile:}"
+        echo -e "\t Seedphrase & Auth Code: (stored in secure temp file)"
+        echo -e "\t   View: docker exec \"$(hostname)\" cat \"$seedfile_path\""
+        echo -e "\t   Auto-deletes in 15 minutes"
+    elif [ -n "${authcode_file:-}" ]; then
+        echo -e "\t Authentication Code: (stored in secure temp file)"
+        echo -e "\t   View: docker exec \"$(hostname)\" cat \"$authcode_file\""
+        echo -e "\t   Auto-deletes in 15 minutes"
+    else
+        echo -e "\t Authentication Code: (unavailable - see 'eiou info --show-auth')"
+    fi
 
     # One-time analytics opt-in notice (shown until user makes a choice)
     local consent_asked
     consent_asked=$(php -r '$c = json_decode(@file_get_contents("/etc/eiou/config/defaultconfig.json"), true); echo ($c["analyticsConsentAsked"] ?? false) ? "true" : "false";' 2>/dev/null)
     if [ "$consent_asked" != "true" ]; then
-        printf "${Y}${R}\n"
+        printf "\n${Y}%s${R}\n" "$_HR"
         printf "${Y}  Anonymous analytics available — help improve eIOU by${R}\n"
         printf "${Y}  sharing fully anonymous, non-sensitive usage statistics.${R}\n"
         printf "${Y}  Sent once per week through Tor. Your identity and${R}\n"
         printf "${Y}  transactions remain completely private.${R}\n"
         printf "${Y}${R}\n"
-        printf "${Y}  To enable:${R}\n"
+        printf "${Y}  To enable (to disable replace true with false):${R}\n"
         printf "${Y}  CLI: eiou changesettings analyticsEnabled true${R}\n"
         printf "${Y}  API: PUT /api/v1/system/settings${R}\n"
         printf "${Y}       {\"analytics_enabled\": true}${R}\n"
         printf "${Y}${R}\n"
-        printf "${Y}  To disable:${R}\n"
-        printf "${Y}  CLI: eiou changesettings analyticsEnabled false${R}\n"
-        printf "${Y}  API: PUT /api/v1/system/settings${R}\n"
-        printf "${Y}       {\"analytics_enabled\": false}${R}\n"
-        printf "${Y}${R}\n"
-        printf "${Y}  This can be changed at any time.${R}\n"
-        printf "${Y}${R}\n"
-        printf "${Y}  No action required — nothing is sent unless you${R}\n"
-        printf "${Y}  opt in. This message will appear on each restart${R}\n"
-        printf "${Y}  until a choice is made.${R}\n"
+        printf "${Y}  No action required — nothing is sent unless you opt in.${R}\n"
+        printf "${Y}%s${R}\n" "$_HR"
     fi
 
-    printf "${Y}%s${R}\n" "$_HR"
     echo ""
 }
 

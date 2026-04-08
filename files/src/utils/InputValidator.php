@@ -263,10 +263,16 @@ class InputValidator {
 
         $address = trim($address);
 
+        // Strip http:// or https:// prefix from .onion addresses (common copy-paste error)
+        if (preg_match('/\.onion(\/|$)/i', $address)) {
+            $address = preg_replace('/^https?:\/\//i', '', $address);
+        }
+
         // Check for Tor address (v2 or v3)
         $torV2Pattern = '/^[a-z2-7]{' . Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH . '}\.onion(:\d+)?(\/.*)?$/i';
         $torV3Pattern = '/^[a-z2-7]{' . Constants::VALIDATION_TOR_V3_ADDRESS_LENGTH . '}\.onion(:\d+)?(\/.*)?$/i';
         if (preg_match($torV2Pattern, $address) || preg_match($torV3Pattern, $address)) {
+            $address = rtrim($address, '/');
             return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'tor'];
         }
 

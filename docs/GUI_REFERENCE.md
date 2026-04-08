@@ -270,18 +270,28 @@ Login page displayed when user is not authenticated.
 
 Main layout container that includes all subpart components.
 
+**Tab Structure:**
+
+| Tab | Components |
+|-----|------------|
+| Dashboard | `walletInformation.html` |
+| Send | `eiouForm.html`, `paymentRequestsSection.html` |
+| Contacts | `contactSection.html` |
+| Activity | `transactionHistory.html`, `dlqSection.html` |
+| Settings | `settingsSection.html`, `debugSection.html` |
+
 **Include Order:**
 1. banner.html
 2. header.html
 3. notifications.html
-4. quickActions.html
-5. walletInformation.html
-6. eiouForm.html
-7. contactForm.html
-8. contactSection.html
-9. transactionHistory.html
-10. dlqSection.html
-11. settingsSection.html
+4. walletInformation.html *(Dashboard tab)*
+5. eiouForm.html *(Send tab)*
+6. paymentRequestsSection.html *(Send tab)*
+7. contactSection.html *(Contacts tab)*
+8. transactionHistory.html *(Activity tab)*
+9. dlqSection.html *(Activity tab)*
+10. settingsSection.html *(Settings tab)*
+11. debugSection.html *(Settings tab — appended below settings form)*
 12. floatingButtons.html
 13. analyticsConsentModal.html
 
@@ -327,16 +337,7 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 
 #### quickActions.html
 
-Quick navigation cards linking to main sections:
-
-| Card | Target Section |
-|------|----------------|
-| Send eIOU | `#send-form` |
-| Add Contact | `#add-contact` |
-| View Contacts | `#contacts` |
-| Transaction History | `#transactions` |
-| Failed Messages | `#dlq` — always shown; displays a pending count badge and warning style when DLQ has pending items |
-| Settings | `#settings` |
+> **Note:** This component is no longer included in the dashboard layout. Navigation is now fully tab-based. The file is retained but unused.
 
 ---
 
@@ -344,15 +345,17 @@ Quick navigation cards linking to main sections:
 
 | Element | Purpose |
 |---------|---------|
-| Last updated timestamp | Shows data freshness |
-| Total Balance | Aggregated wallet balance per currency |
-| Total Fee Earnings | P2P relay fee earnings per currency |
-| Total Available Credit | Sum of available credit per currency (from ping/pong, ~5 min refresh) |
-| User Addresses | HTTP/HTTPS/Tor with copy buttons |
+| Last updated timestamp + Refresh link | Shows data freshness with manual refresh |
+| Total Balance | Aggregated wallet balance per currency (blue card) |
+| Total Fee Earnings | P2P relay fee earnings per currency (amber/gold card) |
+| Total Available Credit | Sum of available credit per currency (blue-purple card), from ping/pong, ~5 min refresh |
+| User Addresses | HTTP/HTTPS/Tor with Copy and QR code buttons |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
 
 All three dashboard cards display per-currency rows. When a card has no data for a given category, it shows "0.00" with the currency derived from other data sources for consistency.
+
+The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a small info modal on click (tap-friendly on mobile).
 
 ---
 
@@ -370,18 +373,48 @@ All three dashboard cards display per-currency rows. When a card has no data for
 
 **Features:**
 - P2P routing information alert
-- Dynamic address type selector
+- Dynamic address type selector (options sorted by security preference: Tor > HTTPS > HTTP)
 - Dynamic currency dropdown: shows all allowed currencies when no contact selected, filtered to contact's accepted currencies when a contact is selected
-- Transaction type indicator
+- Direct/P2P routing info integrated into address type and manual address hint text
 - Best-fee routing checkbox with experimental warning label
+
+---
+
+#### paymentRequestsSection.html
+
+Rendered below the Send form in the Send tab. Shows incoming and outgoing payment requests.
+
+**Incoming Requests (pending):**
+
+| Element | Purpose |
+|---------|---------|
+| Requester name/address | Who sent the request |
+| Amount + currency | Requested amount |
+| Description | Optional note from requester |
+| Approve & Pay button | Sends the eIOU automatically, marks request approved |
+| Decline button | Rejects the request, notifies requester |
+
+**Outgoing Requests (pending):**
+
+| Element | Purpose |
+|---------|---------|
+| Recipient name/address | Who you sent the request to |
+| Amount + currency | Requested amount |
+| Description | Optional note |
+| Status badge | Pending / Approved / Declined |
+| Cancel button | Cancels the outgoing request |
+
+Resolved requests (approved/declined) appear in a collapsed history section. Approved requests show a clickable truncated txid that opens the transaction detail modal.
 
 ---
 
 #### contactForm.html
 
+> **Note:** This file contains the Add Contact form fields. It is included as part of the Add Contact modal inside `contactSection.html`, not as a standalone include in `wallet.html`.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| address | text | Contact node address |
+| address | text | Contact node address (placeholder: "Enter Tor (.onion) or HTTP(S) address", with QR scan button) |
 | name | text | Display name |
 | credit | number | Credit limit (default from settings) |
 | fee | number | Fee percentage (default from settings) |
@@ -391,6 +424,8 @@ All three dashboard cards display per-currency rows. When a card has no data for
 ---
 
 #### contactSection.html
+
+The Contacts tab. The contact list is shown first. The "Add Contact" form is accessed via the "+ New Contact" button which opens a modal dialog (the form fields from `contactForm.html` are embedded in this modal, not rendered inline).
 
 **Contact Grid:**
 - Accepted contacts with balance
@@ -408,8 +443,9 @@ All three dashboard cards display per-currency rows. When a card has no data for
 
 | Tab | Contents |
 |-----|----------|
-| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
+| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), addresses (with Copy and QR code buttons; QR regenerates when switching address types), public key (single-line display with Copy button), contact ID |
 | Transactions | Recent transactions with this contact |
+| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, chain drop resolution section (propose/accept/reject) |
 | Settings | Edit form, block/unblock/delete buttons |
 
 **Chain Drop Resolution Section (in Info tab):**
@@ -492,8 +528,8 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 >
 > `p2p` and `rp2p` items show an **"Expired"** label instead of a Retry button. Use **Abandon** to clear them.
 
-**Quick Action Card:**
-A **"Failed Messages"** card is always present in the Quick Actions bar between Transaction History and Settings, linking directly to `#dlq`. When pending DLQ items exist the card gains an orange warning style and a count badge. The Quick Actions bar is a horizontal slider at all viewport widths — each card is a fixed 218px wide and the bar scrolls when cards overflow the container.
+**Tab Badge:**
+When pending DLQ items exist, the **Activity** tab in the navigation bar displays a count badge.
 
 **DLQ Indicator in Transaction History:**
 Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
@@ -513,7 +549,13 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 - Collapsible Advanced Settings with category dropdown (Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Sync, Network, Currency, Display)
 - Save/Reset buttons
 
-**Debug Section (Tabbed):**
+---
+
+#### debugSection.html
+
+Rendered at the bottom of the **Settings** tab (below the settings form).
+
+**Debug Logs (Tabbed):**
 
 | Tab | Contents |
 |-----|----------|

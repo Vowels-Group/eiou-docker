@@ -1030,6 +1030,7 @@ class ContactController
             case 'rejectChainDrop':
                 $this->handleRejectChainDrop();
                 break;
+
         }
     }
 
@@ -1150,4 +1151,5 @@ class ContactController
             file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX);
         }
     }
+
 }

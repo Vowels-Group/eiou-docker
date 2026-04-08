@@ -166,6 +166,7 @@ class ApiController {
                 'chaindrop' => $this->handleChainDrop($method, $action, $params, $body),
                 'p2p' => $this->handleP2p($method, $action, $id, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
+                'requests' => $this->handleRequests($method, $action, $id, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (ServiceException $e) {
@@ -2939,6 +2940,125 @@ class ApiController {
             'timestamp' => date('c'),
             'request_id' => $this->generateRequestId(),
             'status_code' => $statusCode
+        ];
+    }
+
+    /**
+     * Handle /api/v1/requests endpoints
+     *
+     * GET    /api/v1/requests              → list all requests
+     * POST   /api/v1/requests              → create a payment request
+     * POST   /api/v1/requests/approve      → approve an incoming request
+     * POST   /api/v1/requests/decline      → decline an incoming request
+     * DELETE /api/v1/requests/{id}         → cancel an outgoing request
+     */
+    private function handleRequests(string $method, ?string $action, ?string $id, array $params, string $body): array
+    {
+        $prService = $this->services->getPaymentRequestService();
+
+        return match (true) {
+            $method === 'GET' && $action === null => $this->listPaymentRequests($prService, $params),
+            $method === 'POST' && $action === null => $this->createPaymentRequest($prService, $body),
+            $method === 'POST' && $action === 'approve' => $this->approvePaymentRequest($prService, $body),
+            $method === 'POST' && $action === 'decline' => $this->declinePaymentRequest($prService, $body),
+            $method === 'DELETE' && $action !== null => $this->cancelPaymentRequest($prService, $action),
+            default => $this->errorResponse('Unknown requests action: ' . $action, 404, 'unknown_action')
+        };
+    }
+
+    private function listPaymentRequests($prService, array $params): array
+    {
+        $limit = min((int)($params['limit'] ?? 50), 200);
+        $requests = $prService->getAllForDisplay($limit);
+        return [
+            'success' => true,
+            'data'    => $requests,
+            'status_code' => 200,
+        ];
+    }
+
+    private function createPaymentRequest($prService, string $body): array
+    {
+        $data = json_decode($body, true) ?? [];
+        $contact  = trim($data['contact']     ?? '');
+        $amount   = trim((string)($data['amount']   ?? ''));
+        $currency = trim($data['currency']    ?? '');
+        $desc     = $data['description']      ?? null;
+        $addrType = $data['address_type']     ?? null;
+
+        if (empty($contact) || empty($amount) || empty($currency)) {
+            return $this->errorResponse('contact, amount, and currency are required', 400, 'missing_fields');
+        }
+
+        $result = $prService->create($contact, $amount, $currency, $desc, $addrType);
+        if (!$result['success']) {
+            return $this->errorResponse($result['error'], 400, 'request_failed');
+        }
+
+        return [
+            'success'     => true,
+            'data'        => ['request_id' => $result['request_id']],
+            'message'     => 'Payment request sent',
+            'status_code' => 201,
+        ];
+    }
+
+    private function approvePaymentRequest($prService, string $body): array
+    {
+        $data      = json_decode($body, true) ?? [];
+        $requestId = trim($data['request_id'] ?? '');
+
+        if (empty($requestId)) {
+            return $this->errorResponse('request_id is required', 400, 'missing_fields');
+        }
+
+        $result = $prService->approve($requestId);
+        if (!$result['success']) {
+            return $this->errorResponse($result['error'], 400, 'approve_failed');
+        }
+
+        return [
+            'success'     => true,
+            'data'        => ['txid' => $result['txid'] ?? null],
+            'message'     => $result['message'] ?? 'Payment sent',
+            'status_code' => 200,
+        ];
+    }
+
+    private function declinePaymentRequest($prService, string $body): array
+    {
+        $data      = json_decode($body, true) ?? [];
+        $requestId = trim($data['request_id'] ?? '');
+
+        if (empty($requestId)) {
+            return $this->errorResponse('request_id is required', 400, 'missing_fields');
+        }
+
+        $result = $prService->decline($requestId);
+        if (!$result['success']) {
+            return $this->errorResponse($result['error'], 400, 'decline_failed');
+        }
+
+        return [
+            'success'     => true,
+            'data'        => null,
+            'message'     => 'Payment request declined',
+            'status_code' => 200,
+        ];
+    }
+
+    private function cancelPaymentRequest($prService, string $requestId): array
+    {
+        $result = $prService->cancel($requestId);
+        if (!$result['success']) {
+            return $this->errorResponse($result['error'], 400, 'cancel_failed');
+        }
+
+        return [
+            'success'     => true,
+            'data'        => null,
+            'message'     => 'Payment request cancelled',
+            'status_code' => 200,
         ];
     }
 

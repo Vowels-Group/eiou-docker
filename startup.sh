@@ -1069,16 +1069,80 @@ if [ "$MARIADB_STARTED" = "false" ] && [ "$MARIADB_VERSION_CHANGED" = "false" ];
     fi
 fi
 
+# =========================================================================
+# LAST-RESORT RECOVERY: Wipe and reinitialize
+# =========================================================================
+# If MariaDB failed all startup and force-recovery attempts, the database
+# volume is likely corrupted or encrypted with a mismatched TDE key (e.g.,
+# config volume was recreated with a different master key). Rather than
+# exiting, wipe the data and reinitialize — the node can still start with
+# empty tables and restore from backup if one exists.
+# =========================================================================
 if [ "$MARIADB_STARTED" = "false" ]; then
     echo "========================================================================"
-    echo "FATAL: MariaDB failed to start after all recovery attempts."
-    echo ""
-    echo "The database volume may be corrupted. Options:"
-    echo "  - Check container logs: docker logs <container> 2>&1 | grep -i innodb"
-    echo "  - Restore from backup: eiou backup list / eiou backup restore"
-    echo "  - Restore from seed: use RESTORE_FILE with fresh volumes"
+    echo "WARNING: MariaDB failed all recovery attempts."
+    echo "The database volume appears corrupted or encrypted with a mismatched key."
+    echo "Wiping database and reinitializing from scratch..."
     echo "========================================================================"
-    exit 1
+
+    service mariadb stop 2>/dev/null || true
+    sleep 2
+
+    # Move broken data aside
+    BROKEN_DIR="/tmp/mysql-broken-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BROKEN_DIR"
+    for item in /var/lib/mysql/*; do
+        mv "$item" "$BROKEN_DIR/" 2>/dev/null
+    done
+    for item in /var/lib/mysql/.*; do
+        case "$item" in
+            /var/lib/mysql/.|/var/lib/mysql/..) continue ;;
+            *) mv "$item" "$BROKEN_DIR/" 2>/dev/null ;;
+        esac
+    done
+    echo "Broken data preserved in $BROKEN_DIR"
+
+    # Clean up TDE state so it can be recreated cleanly
+    rm -f /etc/mysql/conf.d/encryption.cnf
+    rm -f /dev/shm/.mariadb-encryption-key
+
+    # Reinitialize MariaDB
+    echo "Initializing fresh MariaDB system tables..."
+    mysql_install_db --user=mysql --datadir=/var/lib/mysql --skip-test-db 2>/dev/null
+
+    # Start MariaDB on the fresh database
+    service mariadb start
+    if wait_for_mariadb "MariaDB fresh init" 60; then
+        MARIADB_STARTED=true
+        echo "MariaDB started on fresh database."
+
+        # Delete stale dbconfig + schema version so freshInstall runs
+        rm -f /etc/eiou/config/dbconfig.json
+        rm -f /etc/eiou/config/.schema_version
+
+        echo "Recreating database and tables..."
+        DB_RECREATE_RESULT=$(php -r '
+            chdir("/app/eiou");
+            require_once "/app/eiou/vendor/autoload.php";
+            require_once "/app/eiou/src/bootstrap.php";
+            $app = \Eiou\Core\Application::getInstance();
+            echo "Database and tables created successfully.\n";
+        ' 2>&1)
+        echo "$DB_RECREATE_RESULT"
+
+        if echo "$DB_RECREATE_RESULT" | grep -q "ERROR\|Fatal"; then
+            echo "WARNING: Database recreation failed."
+        fi
+
+        # Flag for deferred auto-restore (after TDE setup)
+        REDO_LOG_RECOVERY=true
+    else
+        echo "========================================================================"
+        echo "FATAL: MariaDB failed to start even on a fresh database."
+        echo "This indicates a system-level issue (disk, memory, permissions)."
+        echo "========================================================================"
+        exit 1
+    fi
 fi
 
 # Complete MariaDB upgrade if version changed
@@ -1679,62 +1743,8 @@ if [ "$TOR_CONNECTED" = false ]; then
     echo "Continuing startup anyway. Tor-dependent features may not work."
 fi
 
-# Display user information
-echo "User Information: "
-if [[ ! -z ${displayname} ]]; then
-    echo -e "\t Display name: $displayname"
-fi
-echo -e "\t Tor address: $tor"
-if [[ ! -z ${http} ]]; then
-    # Always show both HTTP and HTTPS addresses regardless of configured protocol
-    if [[ ${http} == https://* ]]; then
-        # URL is HTTPS, derive HTTP from it
-        httpAddr="${http/https:\/\//http:\/\/}"
-        httpsAddr="$http"
-    elif [[ ${http} == http://* ]]; then
-        # URL is HTTP, derive HTTPS from it
-        httpAddr="$http"
-        httpsAddr="${http/http:\/\//https:\/\/}"
-    else
-        # No protocol prefix, add both
-        httpAddr="http://$http"
-        httpsAddr="https://$http"
-    fi
-    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
-        ADDR_WARN="\033[33m⚠\033[0m "
-    else
-        ADDR_WARN=""
-    fi
-    echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
-    echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
-    if [ "$EIOU_HOST" = "false" ] && [ "$QUICKSTART" != "false" ]; then
-        echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
-        echo -e "\t   They are not reachable from outside the Docker network."
-        echo -e "\t   For external access, set EIOU_HOST to a real IP or domain and EIOU_PORT to the mapped port."
-        if [ "${P2P_SSL_VERIFY:-}" != "false" ] && [ -z "${P2P_CA_CERT:-}" ]; then
-            echo -e "\t   HTTPS between nodes will also fail — self-signed certs are rejected by default"
-            echo -e "\t   (P2P_SSL_VERIFY=true). Set P2P_SSL_VERIFY=false or use P2P_CA_CERT with a shared CA."
-        fi
-        echo -e "\033[0m"
-    fi
-fi
-readable="${pubkey//$'\n'/$'\n\t\t'}"
-echo -e "\t Public Key: \n\t\t $readable"
-if [ "$authcode_file" = "tty" ]; then
-    echo -e "\t Authentication Code: (displayed securely via terminal)"
-elif [[ "$authcode_file" == seedfile:* ]]; then
-    # First wallet creation — seedphrase file already contains the authcode
-    seedfile_path="${authcode_file#seedfile:}"
-    echo -e "\t Seedphrase & Auth Code: (stored in secure temp file)"
-    echo -e "\t   View: docker exec \"$(hostname)\" cat \"$seedfile_path\""
-    echo -e "\t   Auto-deletes in 300 seconds"
-elif [ -n "$authcode_file" ]; then
-    echo -e "\t Authentication Code: (stored in secure temp file)"
-    echo -e "\t   View: docker exec \"$(hostname)\" cat \"$authcode_file\""
-    echo -e "\t   Auto-deletes in 300 seconds"
-else
-    echo -e "\t Authentication Code: (unavailable - see 'eiou info --show-auth')"
-fi
+# User information is displayed inside the OPEN ALPHA banner (banner.sh)
+# using the variables $displayname, $tor, $http, $pubkey, $authcode_file.
 
 # ========================
 # Backup System Setup
@@ -1778,13 +1788,13 @@ else
     echo "Update checks disabled via EIOU_UPDATE_CHECK_ENABLED"
 fi
 
-# Set up cron for weekly analytics submission (Sundays at 3 AM UTC)
+# Set up cron for daily analytics submission (3 AM UTC)
 # Always installed — the PHP script checks analyticsEnabled and exits
 # gracefully if disabled, so users can enable via GUI/CLI/API at any time
 # without needing a container restart.
-ANALYTICS_CRON_JOB="0 3 * * 0 runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
+ANALYTICS_CRON_JOB="0 3 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
 (crontab -l 2>/dev/null | grep -v "analytics-cron.php"; echo "$ANALYTICS_CRON_JOB") | crontab -
-echo "Analytics cron job installed (weekly, Sundays at 3 AM UTC)"
+echo "Analytics cron job installed (daily, 3 AM UTC)"
 
 # Clear any stale shutdown flag from previous runs
 rm -f "$SHUTDOWN_FLAG" 2>/dev/null
@@ -2136,7 +2146,7 @@ watchdog() {
     done
 }
 
-# Display alpha/testing reminder before watchdog starts
+# Display alpha/testing reminder (includes user information) before watchdog starts
 if type show_alpha_warning_short &>/dev/null; then
     show_alpha_warning_short
 fi

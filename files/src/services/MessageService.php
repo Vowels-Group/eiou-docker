@@ -109,6 +109,11 @@ class MessageService implements MessageServiceInterface {
     private ?ChainDropServiceInterface $chainDropService = null;
 
     /**
+     * @var \Eiou\Services\PaymentRequestService|null Payment request service (setter injected)
+     */
+    private ?\Eiou\Services\PaymentRequestService $paymentRequestService = null;
+
+    /**
      * @var \Eiou\Database\ContactCurrencyRepository|null Contact currency repository (setter injected)
      */
     private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
@@ -201,6 +206,10 @@ class MessageService implements MessageServiceInterface {
      */
     public function setChainDropService(ChainDropServiceInterface $service): void {
         $this->chainDropService = $service;
+    }
+
+    public function setPaymentRequestService(\Eiou\Services\PaymentRequestService $service): void {
+        $this->paymentRequestService = $service;
     }
 
 
@@ -369,6 +378,41 @@ class MessageService implements MessageServiceInterface {
         elseif($request['typeMessage'] === "chain_drop"){
             $this->handleChainDropMessageRequest($request);
         }
+        // Handle Payment Request messages
+        elseif($request['typeMessage'] === "payment_request"){
+            $this->handlePaymentRequestMessage($request);
+        }
+    }
+
+    /**
+     * Handle payment_request messages
+     *
+     * Routes to PaymentRequestService based on the action field:
+     *   action=request  → store incoming request
+     *   action=response → update outgoing request with outcome
+     *
+     * @param array $request The decoded message data
+     * @return void
+     */
+    private function handlePaymentRequestMessage(array $request): void {
+        if ($this->paymentRequestService === null) {
+            Logger::getInstance()->warning("payment_request message received but PaymentRequestService not injected");
+            return;
+        }
+
+        $action = $request['action'] ?? null;
+
+        if ($action === 'request') {
+            $this->paymentRequestService->handleIncomingRequest($request);
+        } elseif ($action === 'response') {
+            $this->paymentRequestService->handleIncomingResponse($request);
+        } elseif ($action === 'cancel') {
+            $this->paymentRequestService->handleIncomingCancel($request);
+        } else {
+            Logger::getInstance()->warning("Unknown payment_request action", ['action' => $action]);
+        }
+
+        echo json_encode(['success' => true, 'status' => 'received']);
     }
 
     /**
@@ -406,6 +450,8 @@ class MessageService implements MessageServiceInterface {
                     'action' => $action
                 ]);
         }
+
+        echo json_encode(['success' => true, 'status' => 'received']);
     }
 
     /**

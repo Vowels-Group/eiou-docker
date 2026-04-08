@@ -35,6 +35,7 @@ Quick lookup card for the eIOU Wallet web interface.
 |------------|------|---------|---------|
 | `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping, proposeChainDrop, acceptChainDrop, rejectChainDrop, acceptCurrency, addCurrency, acceptAllCurrencies | Contact management |
 | `TransactionController` | `controllers/TransactionController.php` | sendEIOU, checkUpdates, approveP2pTransaction, rejectP2pTransaction, getP2pCandidates | Sending transactions & P2P approval |
+| `PaymentRequestController` | `controllers/PaymentRequestController.php` | createPaymentRequest, approvePaymentRequest, declinePaymentRequest, cancelPaymentRequest | Payment request lifecycle |
 | `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson, analyticsConsent | User settings, debug & analytics |
 
 ---
@@ -73,6 +74,17 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 
 | `getP2pCandidates` | `hash` | JSON (AJAX) |
 
+### Payment Request Actions (PaymentRequestController)
+
+| Action | Required Fields | Response |
+|--------|-----------------|----------|
+| `createPaymentRequest` | `recipient`, `amount`, `currency` | Redirect with message |
+| `approvePaymentRequest` | `request_id` | Redirect with message |
+| `declinePaymentRequest` | `request_id` | Redirect with message |
+| `cancelPaymentRequest` | `request_id` | Redirect with message |
+
+Optional for create: `description`, `address_type`
+
 ### Settings Actions (SettingsController)
 
 | Action | Required Fields | Response |
@@ -96,23 +108,25 @@ Optional: `address_type` (when contact selected), `description`, `best_fee` (exp
 
 ## Layout Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| Main layout | `layout/wallet.html` | Page structure, includes all sections |
-| Auth form | `layout/authenticationForm.html` | Login form |
-| Banner | `layout/walletSubParts/banner.html` | Dynamic image banner carousel from `/gui/assets/banners/` |
-| Header | `layout/walletSubParts/header.html` | Page header |
-| Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
-| Quick actions | `layout/walletSubParts/quickActions.html` | Action buttons |
-| Wallet info | `layout/walletSubParts/walletInformation.html` | Balance, earnings, available credit display |
-| Send form | `layout/walletSubParts/eiouForm.html` | Send transaction form |
-| Contact form | `layout/walletSubParts/contactForm.html` | Add contact form |
-| Contact section | `layout/walletSubParts/contactSection.html` | Contact lists, modal with your/their credit |
-| Transaction history | `layout/walletSubParts/transactionHistory.html` | Transaction list |
-| DLQ section | `layout/walletSubParts/dlqSection.html` | Dead letter queue management |
-| Settings | `layout/walletSubParts/settingsSection.html` | Settings panel & debug tools |
-| Floating buttons | `layout/walletSubParts/floatingButtons.html` | Back-to-top, etc. |
-| Analytics consent | `layout/walletSubParts/analyticsConsentModal.html` | One-time analytics opt-in modal |
+| Component | File | Tab | Purpose |
+|-----------|------|-----|---------|
+| Main layout | `layout/wallet.html` | — | Page structure, tab bar, includes all sections |
+| Auth form | `layout/authenticationForm.html` | — | Login form |
+| Banner | `layout/walletSubParts/banner.html` | — | Dynamic image banner carousel from `/gui/assets/banners/` |
+| Header | `layout/walletSubParts/header.html` | — | Page header |
+| Notifications | `layout/walletSubParts/notifications.html` | — | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
+| Wallet info | `layout/walletSubParts/walletInformation.html` | Dashboard | Balance (blue), fee earnings (amber/gold), available credit (blue-purple); addresses with Copy + QR buttons; ⓘ icons open info modal on tap |
+| Send form | `layout/walletSubParts/eiouForm.html` | Send | Send transaction form; address type dropdown sorted Tor > HTTPS > HTTP; also contains the "Request Payment" button (changes form action to `createPaymentRequest`) |
+| Payment requests | `layout/walletSubParts/paymentRequestsSection.html` | Send | Incoming requests (Approve & Pay / Decline) and outgoing requests (Cancel); rendered below the Send form |
+| Contact form | `layout/walletSubParts/contactForm.html` | Contacts | Add contact form with QR scan button; placeholder "Enter Tor (.onion) or HTTP(S) address" |
+| Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists; detail modal (4 tabs: Info, Transactions, Status, Settings) with Copy + QR on addresses, single-line pubkey, connection/chain drop in Status tab |
+| Transaction history | `layout/walletSubParts/transactionHistory.html` | Activity | Transaction list |
+| DLQ section | `layout/walletSubParts/dlqSection.html` | Activity | Dead letter queue management |
+| Settings | `layout/walletSubParts/settingsSection.html` | Settings | Settings form |
+| Debug | `layout/walletSubParts/debugSection.html` | Settings | Debug logs & system info (below settings form) |
+| Quick actions | `layout/walletSubParts/quickActions.html` | *(unused)* | Retained but not rendered — navigation is tab-based |
+| Floating buttons | `layout/walletSubParts/floatingButtons.html` | — | Back-to-top, etc. |
+| Analytics consent | `layout/walletSubParts/analyticsConsentModal.html` | — | One-time analytics opt-in modal |
 
 ---
 
@@ -167,6 +181,10 @@ fetch(window.location.href, {
 | `initContactsDisplay()` | Initialize contact grid with scroll/filter | DOMContentLoaded |
 | `updateAmountPrecisionHint()` | Show min amount hint for selected currency | Send form currency change |
 | `initializeCurrencyAcceptHandlers()` | Set up accept forms for pending currencies | DOMContentLoaded |
+| `showInfoModal(el)` | Show tap-friendly info modal from an element's `title` attribute | ⓘ icon click |
+| `toggleAddressQr(el)` | Toggle QR code display for an address | QR button on addresses |
+| `generateQrSvg(text, size)` | Generate SVG QR code from text | Used by `toggleAddressQr` |
+| `showSelectedContactAddress()` | Update address display and regenerate QR when type changes | Contact modal address dropdown |
 | `showToast(message, type, duration)` | Display a temporary toast notification | Internal notifications |
 
 ### Constants

@@ -2,7 +2,7 @@
  
 <!-- Send eIOU Form -->
 <div id="send-form" class="form-container fade-in-up">
-    <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
+    <h2><i class="fas fa-paper-plane"></i> New eIOU</h2>
     
     <!-- P2P Information Alert (collapsible) -->
     <div class="p2p-info-alert" data-action="toggleP2pInfo">
@@ -16,8 +16,8 @@
         </p>
     </div>
     
-    <form method="POST">
-        <input type="hidden" name="action" value="sendEIOU">
+    <form method="POST" id="send-form-el">
+        <input type="hidden" name="action" id="send-form-action" value="sendEIOU">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
         
         <div class="form-group position-relative">
@@ -57,7 +57,7 @@
             </select>
             <small class="form-hint">
                 <i class="fas fa-network-wired"></i>
-                Choose which address to use for this contact
+                Direct transaction to contact — choose which address to use
             </small>
         </div>
         
@@ -87,7 +87,7 @@
                 </select>
             </div>
         </div>
-        <small id="amount-precision-hint" class="form-hint">
+        <small id="amount-precision-hint" class="form-hint" style="margin-top:-0.5rem;margin-bottom:0.75rem">
             <i class="fas fa-info-circle"></i>
             <span id="amount-precision-text"></span>
         </small>
@@ -118,17 +118,12 @@
             </small>
         </div>
 
-        <!-- Transaction Type Indicator -->
-        <div id="transaction-type-indicator" class="tx-type-indicator d-none">
-            <div class="d-flex align-center gap-sm">
-                <i class="fas fa-exchange-alt text-success"></i>
-                <span id="transaction-type-text" class="tx-type-indicator-text"></span>
-            </div>
-        </div>
-        
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-paper-plane"></i> Send eIOU
+            </button>
+            <button type="button" class="btn btn-outline-primary" data-action="requestPayment" title="Ask this contact to pay you the entered amount">
+                <i class="fas fa-hand-holding-usd"></i> Request Payment
             </button>
         </div>
     </form>

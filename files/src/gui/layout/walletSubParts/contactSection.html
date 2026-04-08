@@ -4,7 +4,7 @@
 <div id="contacts" class="contacts-section fade-in-up">
     <div class="section-header">
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-        <a href="#add-contact" class="btn btn-success btn-compact font-sm"><i class="fas fa-user-plus"></i> New Contact</a>
+        <button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal"><i class="fas fa-user-plus"></i> New Contact</button>
     </div>
     <?php if (!empty($allContacts)): ?>
     <div class="contacts-search-bar mb-lg">
@@ -241,6 +241,9 @@
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="transactions-tab">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
+            <button type="button" class="modal-tab" data-action="showModalTab" data-tab="status-tab">
+                <i class="fas fa-signal"></i> Status
+            </button>
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="settings-tab">
                 <i class="fas fa-cog"></i> Settings
             </button>
@@ -281,7 +284,7 @@
                         <div class="info-value"><span id="modal_fee">0.00</span>%</div>
                     </div>
                     <div class="info-item">
-                        <label title="How much credit you can use through this contact (received via ping)"><i class="fas fa-coins"></i> Your Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Refreshed on ~5 min intervals, may not be fully up to date"></i></label>
+                        <label title="How much credit you can use through this contact (received via ping)"><i class="fas fa-coins"></i> Your Available Credit <i class="fas fa-info-circle info-tooltip-icon" title="Refreshed on ~5 min intervals, may not be fully up to date" data-action="showInfoModal" role="button" aria-label="More information"></i></label>
                         <div class="info-value"><span id="modal_my_available_credit">—</span> <span id="modal_my_credit_currency">USD</span></div>
                     </div>
                     <div class="info-item">
@@ -297,6 +300,77 @@
                 <div id="pending-currency-container"></div>
             </div>
 
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
+                <div id="modal_address_container">
+                    <select id="modal_address_selector" class="info-value modal-address-selector" data-action-change="showSelectedContactAddress">
+                    </select>
+                    <div class="address-display-row-start">
+                        <span id="modal_address_display" class="info-value monospace address-value">Not Available</span>
+                        <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_address_display" data-copy-message="Address copied to clipboard!" title="Copy address">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="modal_address_display" data-qr-target="contact-address-qr-display" title="Show QR code">
+                            <i class="fas fa-qrcode"></i>
+                        </button>
+                    </div>
+                    <div id="contact-address-qr-display" class="address-qr-container" style="display:none"></div>
+                </div>
+            </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-key"></i> Public Key</h4>
+                <div class="address-display-row-start">
+                    <span id="modal_pubkey" class="info-value monospace pubkey-display address-value">Not Available</span>
+                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_pubkey" data-copy-message="Public key copied to clipboard!" title="Copy public key">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
+                <div class="address-display-row-start">
+                    <span id="modal_contact_id" class="info-value monospace address-value">Not Available</span>
+                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_contact_id" data-copy-message="Contact ID copied to clipboard!" title="Copy contact ID">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="transactions-tab" class="modal-tab-content">
+            <div class="modal-tab-scroll">
+                <!-- Transaction List View -->
+                <div id="tx-list-view">
+                    <div class="tx-tab-header">
+                        <p>
+                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
+                        </p>
+                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="modal_transactions" class="transactions-list">
+                        <p class="no-transactions">No recent transactions with this contact.</p>
+                    </div>
+                </div>
+                <!-- Transaction Detail View -->
+                <div id="tx-detail-view" class="d-none">
+                    <div class="text-right mb-sm">
+                        <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
+                    </div>
+                    <div id="contact-tx-detail-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+
+        <!-- Status Tab -->
+        <div id="status-tab" class="modal-tab-content">
             <div class="contact-info-section">
                 <h4><i class="fas fa-signal"></i> Connection Status</h4>
                 <div class="info-grid">
@@ -410,70 +484,8 @@
                     </div>
                 </div>
             </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
-                <div class="address-display-row-start">
-                    <span id="modal_contact_id" class="info-value monospace address-value">Not Available</span>
-                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_contact_id" data-copy-message="Contact ID copied to clipboard!" title="Copy contact ID">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                </div>
-            </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
-                <div id="modal_address_container">
-                    <select id="modal_address_selector" class="info-value modal-address-selector" data-action-change="showSelectedContactAddress">
-                    </select>
-                    <div class="address-display-row-start">
-                        <span id="modal_address_display" class="info-value monospace address-value">Not Available</span>
-                        <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_address_display" data-copy-message="Address copied to clipboard!" title="Copy address">
-                            <i class="fas fa-copy"></i> Copy
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-key"></i> Public Key</h4>
-                <div class="address-display-row-start">
-                    <span id="modal_pubkey" class="info-value monospace pubkey-display address-value">Not Available</span>
-                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_pubkey" data-copy-message="Public key copied to clipboard!" title="Copy public key">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                </div>
-            </div>
         </div>
 
-        <!-- Transactions Tab -->
-        <div id="transactions-tab" class="modal-tab-content">
-            <div class="modal-tab-scroll">
-                <!-- Transaction List View -->
-                <div id="tx-list-view">
-                    <div class="tx-tab-header">
-                        <p>
-                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
-                        </p>
-                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="modal_transactions" class="transactions-list">
-                        <p class="no-transactions">No recent transactions with this contact.</p>
-                    </div>
-                </div>
-                <!-- Transaction Detail View -->
-                <div id="tx-detail-view" class="d-none">
-                    <div class="text-right mb-sm">
-                        <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
-                    </div>
-                    <div id="contact-tx-detail-content"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
         <div id="settings-tab" class="modal-tab-content">
                 <form method="POST" id="editContactForm">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
@@ -783,3 +795,77 @@
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
+
+<!-- Add Contact Modal -->
+<div id="add-contact-modal" class="modal" style="display:none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <div class="modal-header-content">
+                <h3><i class="fas fa-user-plus"></i> Add New Contact</h3>
+            </div>
+            <span class="close" data-action="closeAddContactModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <form id="add-contact-form" method="POST">
+                <input type="hidden" name="action" value="addContact">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                <div class="form-group">
+                    <label for="address">Contact Address:</label>
+                    <div class="input-with-action">
+                        <input type="text" id="address" name="address" placeholder="Enter Tor (.onion) or HTTP(S) address" required>
+                        <button type="button" class="btn btn-sm btn-outline input-action-btn" data-action="openQrScanner" data-scan-target="address" title="Scan QR code">
+                            <i class="fas fa-qrcode"></i>
+                        </button>
+                    </div>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Supports any address type (Tor, HTTPS, HTTP). The contact will share additional addresses after connecting.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" placeholder="Enter contact name" required>
+                </div>
+                <div class="form-row contact-form-row">
+                    <div class="form-group">
+                        <label for="credit">Credit Limit:</label>
+                        <input type="number" id="credit" name="credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
+                    </div>
+                    <div class="form-group">
+                        <label for="fee">Fee (%):</label>
+                        <input type="number" id="fee" name="fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactCurrency">Currency:</label>
+                        <select id="contactCurrency" name="currency" required>
+                            <?php foreach ($user->getAllowedCurrencies() as $cur): ?>
+                                <option value="<?php echo htmlspecialchars($cur); ?>" <?php echo ($cur === $user->getDefaultCurrency()) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <small class="form-hint-defaults">
+                    <i class="fas fa-info-circle"></i>
+                    Default values from your wallet settings
+                </small>
+                <div class="form-group">
+                    <label for="requested_credit">Requested Credit Limit (optional):</label>
+                    <input type="number" id="requested_credit" name="requested_credit" placeholder="Credit limit you'd like from this contact" min="0" step="any">
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        The credit limit you would like this contact to set for you. They will see this as a suggestion when accepting your request.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="description">Message (optional):</label>
+                    <input type="text" id="description" name="description" placeholder="e.g. Hey, it's Dave!" maxlength="255">
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-action="closeAddContactModal">Cancel</button>
+            <button type="submit" form="add-contact-form" class="btn btn-success"><i class="fas fa-user-plus"></i> Add Contact</button>
+        </div>
+    </div>
+</div>

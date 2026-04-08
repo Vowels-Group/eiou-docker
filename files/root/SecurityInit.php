@@ -114,6 +114,29 @@ if (php_sapi_name() !== 'cli') {
         $result = $rateLimiterService->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
         if (!$result['allowed']) {
             $retryAfter = $result['retry_after'] ?? 60;
+
+            // AJAX actions expect JSON, not a redirect. These are POST actions
+            // handled in Functions.php that return JSON and exit immediately.
+            // Keep in sync with the AJAX-only blocks in Functions.php.
+            $ajaxActions = [
+                'pingContact', 'analyticsConsent', 'getDebugReportJson',
+                'proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop',
+                'approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid',
+                'dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll',
+                'createPaymentRequest', 'approvePaymentRequest', 'declinePaymentRequest', 'cancelPaymentRequest',
+            ];
+            if (isset($_POST['action']) && in_array($_POST['action'], $ajaxActions, true)) {
+                header('Content-Type: application/json');
+                http_response_code(429);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'rate_limited',
+                    'message' => "Too many requests. Please wait $retryAfter seconds before trying again.",
+                    'retry_after' => $retryAfter
+                ]);
+                exit;
+            }
+
             MessageHelper::redirectMessage(
                 "Too many requests. Please wait $retryAfter seconds before trying again.",
                 'warning'

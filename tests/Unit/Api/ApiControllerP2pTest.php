@@ -111,7 +111,7 @@ class ApiControllerP2pTest extends TestCase
         $this->mockP2pRepo->method('getAwaitingApprovalList')
             ->willReturn([
                 [
-                    'hash' => 'abc123',
+                    'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                     'amount' => 1000,
                     'currency' => 'USD',
                     'destination_address' => 'http://bob:8080',
@@ -135,7 +135,7 @@ class ApiControllerP2pTest extends TestCase
 
         $this->assertTrue($response['success']);
         $this->assertCount(1, $response['data']['transactions']);
-        $this->assertEquals('abc123', $response['data']['transactions'][0]['hash']);
+        $this->assertEquals('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $response['data']['transactions'][0]['hash']);
         $this->assertEquals(1, $response['data']['count']);
     }
 
@@ -171,9 +171,9 @@ class ApiControllerP2pTest extends TestCase
         $this->authenticateWith(['wallet:read']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn([
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'amount' => 1000,
                 'currency' => 'USD',
                 'fast' => 0,
@@ -183,7 +183,7 @@ class ApiControllerP2pTest extends TestCase
         $candidates = [
             [
                 'id' => 1,
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'sender_address' => 'http://relay1:8080',
                 'amount' => 1020,
                 'currency' => 'USD',
@@ -192,7 +192,7 @@ class ApiControllerP2pTest extends TestCase
         ];
 
         $this->mockRp2pCandidateRepo->method('getCandidatesByHash')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn($candidates);
 
         $this->mockRp2pRepo->method('getByHash')
@@ -200,14 +200,14 @@ class ApiControllerP2pTest extends TestCase
 
         $response = $this->controller->handleRequest(
             'GET',
-            '/api/v1/p2p/candidates/abc123',
+            '/api/v1/p2p/candidates/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             [],
             '',
             []
         );
 
         $this->assertTrue($response['success']);
-        $this->assertEquals('abc123', $response['data']['hash']);
+        $this->assertEquals('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $response['data']['hash']);
         $this->assertCount(1, $response['data']['candidates']);
     }
 
@@ -223,7 +223,7 @@ class ApiControllerP2pTest extends TestCase
 
         $response = $this->controller->handleRequest(
             'GET',
-            '/api/v1/p2p/candidates/invalid',
+            '/api/v1/p2p/candidates/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
             [],
             '',
             []
@@ -246,9 +246,9 @@ class ApiControllerP2pTest extends TestCase
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn([
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'amount' => 1000,
                 'currency' => 'USD',
                 'destination_address' => 'http://bob:8080',
@@ -260,7 +260,7 @@ class ApiControllerP2pTest extends TestCase
             ->with(5)
             ->willReturn([
                 'id' => 5,
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'sender_address' => 'http://relay1:8080',
                 'amount' => 1020,
                 'currency' => 'USD',
@@ -273,35 +273,35 @@ class ApiControllerP2pTest extends TestCase
         $this->mockRp2pRepo->expects($this->once())
             ->method('insertRp2pRequest')
             ->with($this->callback(function ($request) {
-                return $request['hash'] === 'abc123'
+                return $request['hash'] === 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
                     && $request['amount'] === 1020;
             }));
 
         $this->mockP2pRepo->expects($this->once())
             ->method('updateStatus')
-            ->with('abc123', 'found');
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'found');
 
         $this->mockSendService->expects($this->once())
             ->method('sendP2pEiou')
             ->with($this->callback(function ($request) {
-                return $request['hash'] === 'abc123'
+                return $request['hash'] === 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
                     && $request['amount'] === 1020;  // candidate amount (fee already included)
             }));
 
         $this->mockRp2pCandidateRepo->expects($this->once())
             ->method('deleteCandidatesByHash')
-            ->with('abc123');
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 
         $response = $this->controller->handleRequest(
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'abc123', 'candidate_id' => 5]),
+            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'candidate_id' => 5]),
             []
         );
 
         $this->assertTrue($response['success']);
-        $this->assertEquals('abc123', $response['data']['hash']);
+        $this->assertEquals('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $response['data']['hash']);
     }
 
     /**
@@ -312,9 +312,9 @@ class ApiControllerP2pTest extends TestCase
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn([
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'amount' => 1000,
                 'currency' => 'USD',
                 'destination_address' => 'http://bob:8080',
@@ -326,9 +326,9 @@ class ApiControllerP2pTest extends TestCase
             ->willReturn([]);
 
         $this->mockRp2pRepo->method('getByHash')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn([
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'sender_address' => 'http://relay1:8080',
                 'amount' => 1010,
                 'currency' => 'USD',
@@ -339,7 +339,7 @@ class ApiControllerP2pTest extends TestCase
 
         $this->mockP2pRepo->expects($this->once())
             ->method('updateStatus')
-            ->with('abc123', 'found');
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'found');
 
         $this->mockSendService->expects($this->once())
             ->method('sendP2pEiou');
@@ -348,7 +348,7 @@ class ApiControllerP2pTest extends TestCase
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'abc123']),
+            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
             []
         );
 
@@ -364,9 +364,9 @@ class ApiControllerP2pTest extends TestCase
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn([
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'amount' => 1000,
                 'currency' => 'USD',
                 'destination_address' => 'http://bob:8080',
@@ -376,8 +376,8 @@ class ApiControllerP2pTest extends TestCase
 
         $this->mockRp2pCandidateRepo->method('getCandidatesByHash')
             ->willReturn([
-                ['id' => 1, 'hash' => 'abc123'],
-                ['id' => 2, 'hash' => 'abc123'],
+                ['id' => 1, 'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+                ['id' => 2, 'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
             ]);
 
         $this->mockSendService->expects($this->never())
@@ -387,7 +387,7 @@ class ApiControllerP2pTest extends TestCase
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'abc123']),
+            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
             []
         );
 
@@ -407,7 +407,7 @@ class ApiControllerP2pTest extends TestCase
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'abc123']),
+            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
             []
         );
 
@@ -428,9 +428,9 @@ class ApiControllerP2pTest extends TestCase
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('abc123')
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
             ->willReturn([
-                'hash' => 'abc123',
+                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'amount' => 1000,
                 'currency' => 'USD',
                 'destination_address' => 'http://bob:8080',
@@ -438,26 +438,26 @@ class ApiControllerP2pTest extends TestCase
 
         $this->mockP2pRepo->expects($this->once())
             ->method('updateStatus')
-            ->with('abc123', Constants::STATUS_CANCELLED);
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', Constants::STATUS_CANCELLED);
 
         $this->mockP2pService->expects($this->once())
             ->method('sendCancelNotificationForHash')
-            ->with('abc123');
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 
         $this->mockRp2pCandidateRepo->expects($this->once())
             ->method('deleteCandidatesByHash')
-            ->with('abc123');
+            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 
         $response = $this->controller->handleRequest(
             'POST',
             '/api/v1/p2p/reject',
             [],
-            json_encode(['hash' => 'abc123']),
+            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
             []
         );
 
         $this->assertTrue($response['success']);
-        $this->assertEquals('abc123', $response['data']['hash']);
+        $this->assertEquals('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $response['data']['hash']);
     }
 
     /**
@@ -471,7 +471,7 @@ class ApiControllerP2pTest extends TestCase
             'POST',
             '/api/v1/p2p/reject',
             [],
-            json_encode(['hash' => 'abc123']),
+            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
             []
         );
 

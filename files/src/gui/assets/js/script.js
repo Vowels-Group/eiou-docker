@@ -141,6 +141,129 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ============================================================================
+// Tab Navigation
+// ============================================================================
+
+/**
+ * Map of legacy hash fragments to their tab and optional scroll target.
+ * Keeps old #anchor bookmarks and quick-action links working.
+ */
+var TAB_HASH_MAP = {
+    'dashboard':         { tab: 'dashboard' },
+    'send':              { tab: 'send' },
+    'send-form':         { tab: 'send', scrollTo: 'send-form' },
+    'payment-requests':  { tab: 'send', scrollTo: 'payment-requests-section' },
+    'add-contact':       { tab: 'contacts', openModal: 'openAddContactModal' },
+    'contacts':          { tab: 'contacts', scrollTo: 'contacts' },
+    'pending-contacts':  { tab: 'contacts', scrollTo: 'pending-contacts' },
+    'transactions':      { tab: 'activity', scrollTo: 'transactions' },
+    'dlq':               { tab: 'activity', scrollTo: 'dlq' },
+    'settings':          { tab: 'settings' },
+    'debug':             { tab: 'settings' },
+    'debug-section':     { tab: 'settings' }
+};
+
+/**
+ * Switches the visible tab panel and updates tab bar active states.
+ *
+ * @param {string} tabName - The tab identifier (dashboard, send, contacts, activity, settings)
+ * @param {string} [scrollToId] - Optional element ID to scroll to within the tab
+ */
+function switchTab(tabName, scrollToId) {
+    var panels = document.querySelectorAll('.tab-panel');
+    var desktopBtns = document.querySelectorAll('.tab-bar .tab-btn');
+    var mobileBtns = document.querySelectorAll('.tab-bar-mobile .tab-btn-mobile');
+    var targetPanel = document.getElementById('tab-panel-' + tabName);
+
+    if (!targetPanel) return;
+
+    // Hide all panels, show target
+    for (var i = 0; i < panels.length; i++) {
+        panels[i].style.display = 'none';
+    }
+    targetPanel.style.display = 'block';
+
+    // Update desktop tab bar
+    for (var j = 0; j < desktopBtns.length; j++) {
+        if (desktopBtns[j].getAttribute('data-tab') === tabName) {
+            desktopBtns[j].classList.add('tab-active');
+        } else {
+            desktopBtns[j].classList.remove('tab-active');
+        }
+    }
+
+    // Update mobile tab bar
+    for (var k = 0; k < mobileBtns.length; k++) {
+        if (mobileBtns[k].getAttribute('data-tab') === tabName) {
+            mobileBtns[k].classList.add('tab-active');
+        } else {
+            mobileBtns[k].classList.remove('tab-active');
+        }
+    }
+
+    // Update hash without triggering reload
+    try {
+        if (history.replaceState) {
+            history.replaceState(null, '', '#' + tabName);
+        }
+    } catch (e) { /* Tor strict mode fallback — hash won't update but tab still works */ }
+
+    // Persist last tab
+    safeStorageSet('eiou_active_tab', tabName);
+
+    // Scroll to specific element within the tab, or scroll to top
+    if (scrollToId) {
+        var scrollTarget = document.getElementById(scrollToId);
+        if (scrollTarget) {
+            scrollTarget.scrollIntoView({ block: 'start' });
+            return;
+        }
+    }
+    window.scrollTo(0, 0);
+}
+
+/**
+ * Initializes tab navigation on page load.
+ * Checks URL hash, then sessionStorage, then defaults to dashboard.
+ */
+function initTabNavigation() {
+    var hash = window.location.hash ? window.location.hash.substring(1) : '';
+    var tabToShow = 'dashboard';
+    var scrollToId = null;
+
+    // Check URL hash first
+    if (hash && TAB_HASH_MAP[hash]) {
+        tabToShow = TAB_HASH_MAP[hash].tab;
+        scrollToId = TAB_HASH_MAP[hash].scrollTo || null;
+        var openModalFn = TAB_HASH_MAP[hash].openModal || null;
+    } else if (hash && hash.indexOf('reopen_contact') !== -1) {
+        // Contact reopen hash — show contacts tab
+        tabToShow = 'contacts';
+    } else {
+        // Fall back to stored tab
+        var stored = safeStorageGet('eiou_active_tab');
+        if (stored && document.getElementById('tab-panel-' + stored)) {
+            tabToShow = stored;
+        }
+    }
+
+    switchTab(tabToShow, scrollToId);
+    if (openModalFn && typeof window[openModalFn] === 'function') {
+        window[openModalFn]();
+    }
+}
+
+// Re-run tab+scroll routing whenever the hash changes (e.g. clicking notification "View" links)
+window.addEventListener('hashchange', function() {
+    var hash = window.location.hash ? window.location.hash.substring(1) : '';
+    if (hash && TAB_HASH_MAP[hash]) {
+        switchTab(TAB_HASH_MAP[hash].tab, TAB_HASH_MAP[hash].scrollTo || null);
+        var fn = TAB_HASH_MAP[hash].openModal;
+        if (fn && typeof window[fn] === 'function') { window[fn](); }
+    }
+});
+
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
@@ -154,12 +277,14 @@ function escapeHtml(text) {
         }
     });
 
-    // Hide FAB initially
+    // Hide FAB initially and initialize tabs
     document.addEventListener('DOMContentLoaded', function() {
         var fab = document.getElementById('backToTop');
         if (fab) {
             fab.classList.add('hidden');
         }
+        // Initialize tab navigation
+        initTabNavigation();
     });
 
 /**
@@ -225,18 +350,11 @@ function initializeSendForm() {
     var recipientDropdown = document.getElementById('recipient-dropdown');
     var manualAddressGroup = document.getElementById('manual-address-group');
     var manualAddressInput = document.getElementById('manual-address');
-    var transactionTypeIndicator = document.getElementById('transaction-type-indicator');
-    var transactionTypeText = document.getElementById('transaction-type-text');
     var addressTypeGroup = document.getElementById('address-type-group');
     var addressTypeSelect = document.getElementById('address-type');
 
     // Set initial state - manual address is visible by default
     if (manualAddressInput) manualAddressInput.required = true;
-    if (transactionTypeIndicator) {
-        transactionTypeIndicator.style.display = 'block';
-        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-        transactionTypeText.style.color = '#ffc107';
-    }
 
     // Initialize searchable contact dropdown
     if (recipientSearch && recipientDropdown) {
@@ -256,9 +374,6 @@ function initializeSendForm() {
                 if (manualAddressInput) manualAddressInput.required = true;
                 addressTypeGroup.style.display = 'none';
                 if (addressTypeSelect) addressTypeSelect.required = false;
-                transactionTypeIndicator.style.display = 'block';
-                transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-                transactionTypeText.style.color = '#ffc107';
                 // Restore all currency options
                 var currSelect = document.getElementById('currency');
                 if (currSelect) {
@@ -333,6 +448,15 @@ function initializeSendForm() {
 
             addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
             var addressTypes = Object.keys(addresses);
+            // Sort by security preference: tor > https > http, then any others
+            var preferredDisplayOrder = ['tor', 'https', 'http'];
+            addressTypes.sort(function(a, b) {
+                var ai = preferredDisplayOrder.indexOf(a);
+                var bi = preferredDisplayOrder.indexOf(b);
+                if (ai === -1) ai = preferredDisplayOrder.length;
+                if (bi === -1) bi = preferredDisplayOrder.length;
+                return ai - bi;
+            });
 
             for (var j = 0; j < addressTypes.length; j++) {
                 var type = addressTypes[j];
@@ -345,7 +469,17 @@ function initializeSendForm() {
             if (addressTypes.length > 0) {
                 addressTypeGroup.style.display = 'block';
                 addressTypeSelect.required = true;
-                if (addressTypes.length === 1) {
+                // Auto-select best address: prefer security order (tor > https > http)
+                var preferredOrder = ['tor', 'https', 'http'];
+                var autoSelected = false;
+                for (var p = 0; p < preferredOrder.length; p++) {
+                    if (addressTypes.indexOf(preferredOrder[p]) !== -1) {
+                        addressTypeSelect.value = preferredOrder[p];
+                        autoSelected = true;
+                        break;
+                    }
+                }
+                if (!autoSelected) {
                     addressTypeSelect.value = addressTypes[0];
                 }
             } else {
@@ -372,9 +506,6 @@ function initializeSendForm() {
                 updateAmountPrecisionHint();
             }
 
-            transactionTypeIndicator.style.display = 'block';
-            transactionTypeText.textContent = 'Direct Transaction (to contact)';
-            transactionTypeText.style.color = '#28a745';
         }
 
         // Handle option click
@@ -467,24 +598,6 @@ function initializeSendForm() {
         });
     }
 
-    // Handle manual address input
-    if (manualAddressInput) {
-        manualAddressInput.addEventListener('input', function() {
-            var address = this.value.trim();
-            if (address) {
-                transactionTypeIndicator.style.display = 'block';
-                if (address.includes('.onion') || address.startsWith('http')) {
-                    transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-                    transactionTypeText.style.color = '#ffc107';
-                } else {
-                    transactionTypeText.textContent = 'P2P Transaction (address format detected)';
-                    transactionTypeText.style.color = '#ffc107';
-                }
-            } else {
-                transactionTypeIndicator.style.display = 'none';
-            }
-        });
-    }
 }
 
 /**
@@ -566,6 +679,14 @@ function closeEditContactModal() {
     document.getElementById('editContactModal').style.display = 'none';
 }
 
+function openAddContactModal() {
+    document.getElementById('add-contact-modal').style.display = 'flex';
+}
+
+function closeAddContactModal() {
+    document.getElementById('add-contact-modal').style.display = 'none';
+}
+
 /**
  * Opens the transaction detail modal for a specific transaction.
  *
@@ -592,8 +713,17 @@ function openTransactionModal(index) {
     if (typeof transactionData === 'undefined' || !transactionData[index]) {
         return;
     }
+    renderTransactionModal(transactionData[index]);
+}
 
-    var tx = transactionData[index];
+/**
+ * Renders and opens the transaction detail modal from a transaction data object.
+ * Called by openTransactionModal (from transactionData array) and
+ * openTransactionModalByTxid (which may fetch via AJAX).
+ *
+ * @param {Object} tx - Transaction object with the same keys as transactionData entries
+ */
+function renderTransactionModal(tx) {
     var modal = document.getElementById('transactionModal');
     var content = document.getElementById('tx-modal-content');
 
@@ -754,16 +884,87 @@ function closeTransactionModal() {
     }
 }
 
+/**
+ * Open the transaction detail modal for a given txid.
+ * Checks the in-page transactionData array first (fast path); if not found,
+ * falls back to an AJAX POST to fetch the transaction from the server.
+ *
+ * @param {string} txid - The transaction ID to look up and display
+ */
+function openTransactionModalByTxid(txid) {
+    if (!txid) { return; }
+
+    // Fast path: already in the page's transactionData array
+    if (typeof transactionData !== 'undefined') {
+        for (var i = 0; i < transactionData.length; i++) {
+            if (transactionData[i].txid === txid) {
+                renderTransactionModal(transactionData[i]);
+                return;
+            }
+        }
+    }
+
+    // Slow path: fetch from server via AJAX
+    var modal = document.getElementById('transactionModal');
+    var content = document.getElementById('tx-modal-content');
+    if (modal && content) {
+        content.innerHTML = '<div style="text-align:center;padding:2rem"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
+        modal.style.display = 'flex';
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Could not load transaction: CSRF token missing.</div>'; }
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'getTransactionByTxid');
+    formData.append('txid', txid);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 15000;
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            try {
+                var resp = JSON.parse(xhr.responseText);
+                if (resp.success && resp.transaction) {
+                    renderTransactionModal(resp.transaction);
+                } else {
+                    if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Transaction not found.</div>'; }
+                }
+            } catch (e) {
+                if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Error loading transaction.</div>'; }
+            }
+        } else {
+            if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Server error loading transaction.</div>'; }
+        }
+    };
+    xhr.ontimeout = function() {
+        if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Request timed out.</div>'; }
+    };
+    xhr.onerror = function() {
+        if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Network error loading transaction.</div>'; }
+    };
+    xhr.send(formData);
+}
+
 // Close modal when clicking outside of it
 window.onclick = function(event) {
     var editModal = document.getElementById('editContactModal');
     var txModal = document.getElementById('transactionModal');
+    var addContactModal = document.getElementById('add-contact-modal');
 
     if (event.target === editModal) {
         closeEditContactModal();
     }
     if (event.target === txModal) {
         closeTransactionModal();
+    }
+    if (event.target === addContactModal) {
+        closeAddContactModal();
     }
 }
 
@@ -774,6 +975,7 @@ document.addEventListener('keydown', function(event) {
         closeEditContactModal();
         closeTransactionModal();
         closeContactModal();
+        closeAddContactModal();
     }
 });
 
@@ -875,8 +1077,12 @@ function initializeTransactionToast() {
             var currency = document.getElementById('currency');
 
             var recipient = '';
-            if (recipientSelect && recipientSelect.value) {
-                recipient = recipientSelect.options[recipientSelect.selectedIndex].text;
+            var recipientSearch = document.getElementById('recipient-search');
+            if (recipientSelect && recipientSelect.value && recipientSearch && recipientSearch.value) {
+                recipient = recipientSearch.value;
+            } else if (recipientSelect && recipientSelect.value) {
+                var addr = recipientSelect.value;
+                recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
             } else if (manualAddress && manualAddress.value) {
                 var addr = manualAddress.value;
                 recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
@@ -1042,12 +1248,12 @@ function startOperationTimeout(operationType, timeoutMessage) {
         var storedOp = safeStorageSet('eiou_pending_operation', operationType);
         var storedMsg = safeStorageSet('eiou_timeout_message', timeoutMessage);
 
+        var currentUrl = window.location.href.split('?')[0].split('#')[0];
         if (storedOp && storedMsg) {
-            // Storage worked, simple reload
-            window.location.reload();
+            // Navigate via href (not reload()) so it interrupts any in-flight POST
+            window.location.href = currentUrl;
         } else {
-            // Storage failed (Tor Browser), use URL parameter fallback
-            var currentUrl = window.location.href.split('?')[0].split('#')[0];
+            // Storage failed (Tor Browser), pass message as URL parameter
             var encodedMsg = encodeURIComponent(timeoutMessage);
             window.location.href = currentUrl + '?timeout_msg=' + encodedMsg;
         }
@@ -1155,8 +1361,8 @@ function initializeFormLoaders() {
     // Retry info text for contact operations
     var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
 
-    // Add contact form
-    var addContactForm = document.querySelector('#add-contact form');
+    // Add contact form (now inside modal)
+    var addContactForm = document.getElementById('add-contact-form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
             showLoader('Adding contact...', retryInfoText);
@@ -1225,13 +1431,56 @@ function initializeFormLoaders() {
         });
     }
 
-    // Send form - already handled in initializeTransactionToast, add loader
-    var sendForm = document.querySelector('#send-form form');
+    // Send form — action field is mutated at submit time (sendEIOU vs createPaymentRequest)
+    var sendForm = document.getElementById('send-form-el');
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
-            showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
-            startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
+            var actionField = document.getElementById('send-form-action');
+            var action = actionField ? actionField.value : 'sendEIOU';
+            if (action === 'createPaymentRequest') {
+                showLoader('Sending payment request...', retryInfoText);
+                startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
+            } else {
+                showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
+                startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
+            }
         });
+    }
+
+    // Payment request — Approve & Pay (triggers a full sendEiou, can be slow over Tor)
+    var approveForms = document.querySelectorAll('form input[name="action"][value="approvePaymentRequest"]');
+    for (var i = 0; i < approveForms.length; i++) {
+        var form = approveForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
+                startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
+            });
+        }
+    }
+
+    // Payment request — Decline (sends a Tor response message, can be slow)
+    var declineForms = document.querySelectorAll('form input[name="action"][value="declinePaymentRequest"]');
+    for (var i = 0; i < declineForms.length; i++) {
+        var form = declineForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Declining payment request...', retryInfoText);
+                startOperationTimeout('declinePaymentRequest', 'Still waiting. The request has been declined locally. You can continue using the app and check back later.');
+            });
+        }
+    }
+
+    // Payment request — Cancel
+    var cancelPrForms = document.querySelectorAll('form input[name="action"][value="cancelPaymentRequest"]');
+    for (var i = 0; i < cancelPrForms.length; i++) {
+        var form = cancelPrForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Cancelling payment request...');
+                startOperationTimeout('cancelPaymentRequest', 'Still waiting. The request has been cancelled locally. You can continue using the app and check back later.');
+            });
+        }
     }
 }
 
@@ -1780,6 +2029,47 @@ function initContactsDisplay() {
 }
 
 /**
+ * Shows a small info modal with the text from an info icon's title attribute.
+ * Used so touch/mobile users can read tooltip text without hover.
+ *
+ * @param {HTMLElement} el - The info icon element with a title attribute
+ */
+function showInfoModal(el) {
+    var text = el.getAttribute('title') || '';
+    if (!text) return;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'info-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:340px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-info-circle" style="color:#6c757d"></i> Info</h3>' +
+                '<span class="close" id="info-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5">' +
+                escapeHtml(text) +
+            '</div>' +
+        '</div>';
+
+    function closeInfoModal() {
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', escHandler);
+    }
+
+    function escHandler(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) { closeInfoModal(); }
+    }
+
+    overlay.querySelector('#info-modal-close').onclick = closeInfoModal;
+    overlay.onclick = function(e) { if (e.target === overlay) { closeInfoModal(); } };
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+}
+
+/**
  * Opens the contact detail modal with all contact information and transaction history.
  *
  * This function populates the modal with contact details including addresses (HTTP, HTTPS, TOR),
@@ -2022,6 +2312,7 @@ function openContactModal(contact, openTab) {
         // Make clickable to scroll to chain drop section
         if (isClickable) {
             chainStatusEl.onclick = function() {
+                showModalTab('status-tab', null);
                 var section = document.getElementById('chain_drop_section');
                 if (section && section.style.display !== 'none') {
                     section.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2426,27 +2717,28 @@ function pingContact() {
                     var response = JSON.parse(xhr.responseText);
 
                     if (response.success) {
-                        // Show brief success message then reload to persist changes
+                        // Show success message briefly before reloading
                         var onlineStatus = response.online_status || 'unknown';
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Status updated, reloading...';
                             resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : (onlineStatus === 'partial' ? '#fd7e14' : '#dc3545');
                         }
-                        // Reload and reopen modal on info tab so updated values persist
-                        if (currentContactId) {
-                            var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
-                            var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
-                            if (storedId && storedTab) {
-                                window.location.reload();
+                        // Delay reload so the user sees the result before the page refreshes
+                        setTimeout(function() {
+                            if (currentContactId) {
+                                var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+                                var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
+                                if (storedId && storedTab) {
+                                    window.location.reload();
+                                } else {
+                                    var currentUrl = window.location.href.split('#')[0];
+                                    window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=status';
+                                    window.location.reload();
+                                }
                             } else {
-                                // Tor Browser fallback
-                                var currentUrl = window.location.href.split('#')[0];
-                                window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=info';
                                 window.location.reload();
                             }
-                        } else {
-                            window.location.reload();
-                        }
+                        }, 1500);
                         return;
                     } else {
                         resetPingButton();
@@ -2458,16 +2750,52 @@ function pingContact() {
                     }
                 } catch (e) {
                     resetPingButton();
+                    // Non-JSON response — likely a rate limit redirect page
+                    var fallbackMsg = 'Invalid response';
+                    if (xhr.responseText) {
+                        var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
+                        if (waitMatch) {
+                            fallbackMsg = 'Too many requests. Please wait ' + waitMatch[1] + ' seconds.';
+                        }
+                    }
                     if (resultMsg) {
-                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.textContent = fallbackMsg;
                         resultMsg.style.color = '#dc3545';
                     }
                 }
             } else if (xhr.status !== 0) {
                 resetPingButton();
-                // Status 0 means aborted/timeout (handled separately)
+                // Try to extract rate limit or error message from response
+                // 403 = session/CSRF expired — just reload and reopen modal
+                if (xhr.status === 403 && currentContactId) {
+                    var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+                    var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
+                    if (storedId && storedTab) {
+                        window.location.reload();
+                    } else {
+                        var currentUrl = window.location.href.split('#')[0];
+                        window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=status';
+                        window.location.reload();
+                    }
+                    return;
+                }
+                var errorMessage = 'Request failed (status ' + xhr.status + ')';
+                if (xhr.responseText) {
+                    // Check for redirect page with flash message (rate limit)
+                    var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
+                    if (waitMatch) {
+                        errorMessage = 'Too many requests. Please wait ' + waitMatch[1] + ' seconds.';
+                    } else if (xhr.responseText.charAt(0) === '{') {
+                        // Try JSON parse only if it looks like JSON
+                        try {
+                            var errResp = JSON.parse(xhr.responseText);
+                            if (errResp.message) errorMessage = errResp.message;
+                            else if (errResp.error) errorMessage = errResp.error;
+                        } catch (e2) {}
+                    }
+                }
                 if (resultMsg) {
-                    resultMsg.textContent = 'Request failed';
+                    resultMsg.textContent = errorMessage;
                     resultMsg.style.color = '#dc3545';
                 }
             }
@@ -2828,6 +3156,12 @@ function showSelectedContactAddress() {
     var selectedOption = select.options[select.selectedIndex];
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('modal_address_display').textContent = address;
+    // Regenerate QR if it was visible when address changed
+    var qrContainer = document.getElementById('contact-address-qr-display');
+    if (qrContainer && qrContainer.style.display !== 'none' && qrContainer.innerHTML) {
+        var svg = generateQrSvg(address, 200);
+        qrContainer.innerHTML = svg || '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
+    }
 }
 
 // Close contact modal when clicking outside (Tor Browser compatible)
@@ -3148,13 +3482,13 @@ function resetChainDropActionButtons() {
 function reloadAndReopenContactModal() {
     if (currentContactId) {
         var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
-        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
+        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
         if (storedId && storedTab) {
             window.location.reload();
         } else {
             // Tor Browser fallback
             var currentUrl = window.location.href.split('#')[0];
-            window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=info';
+            window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=status';
             window.location.reload();
         }
     } else {
@@ -3637,6 +3971,210 @@ function showSelectedUserAddress() {
     var selectedOption = select.options[select.selectedIndex];
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('user-address-value').textContent = address;
+
+    // If QR code is visible, regenerate it for the new address
+    var qrContainer = document.getElementById('address-qr-display');
+    if (qrContainer && qrContainer.style.display !== 'none' && qrContainer.innerHTML) {
+        var svg = generateQrSvg(address, 200);
+        if (svg) qrContainer.innerHTML = svg;
+    }
+}
+
+/**
+ * Switch visible wallet currency on mobile (tab per currency)
+ */
+function switchWalletCurrency(currency) {
+    var tabs = document.querySelectorAll('.wallet-currency-tab');
+    var rows = document.querySelectorAll('.wallet-stats-row[data-wallet-currency]');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.toggle('active', tabs[i].getAttribute('data-currency') === currency);
+    }
+    for (var j = 0; j < rows.length; j++) {
+        rows[j].classList.toggle('wallet-currency-active', rows[j].getAttribute('data-wallet-currency') === currency);
+    }
+}
+
+// Initialize first currency as active on load
+(function() {
+    var firstTab = document.querySelector('.wallet-currency-tab.active');
+    if (firstTab) {
+        switchWalletCurrency(firstTab.getAttribute('data-currency'));
+    }
+})();
+
+// ============================================================================
+// QR CODE FUNCTIONS
+// ============================================================================
+
+/**
+ * Generate a QR code SVG string for the given text using qrcode-generator.
+ * Returns an SVG element string, or null if the library is not loaded.
+ */
+function generateQrSvg(text, size) {
+    size = size || 200;
+    if (typeof qrcode === 'undefined') return null;
+
+    var qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+
+    var moduleCount = qr.getModuleCount();
+    var cellSize = size / moduleCount;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
+    svg += '<rect width="100%" height="100%" fill="white"/>';
+
+    for (var row = 0; row < moduleCount; row++) {
+        for (var col = 0; col < moduleCount; col++) {
+            if (qr.isDark(row, col)) {
+                svg += '<rect x="' + (col * cellSize) + '" y="' + (row * cellSize) + '" width="' + cellSize + '" height="' + cellSize + '" fill="black"/>';
+            }
+        }
+    }
+    svg += '</svg>';
+    return svg;
+}
+
+/**
+ * Toggle QR code display for an address.
+ * Reads the address from data-qr-text or data-qr-source (element ID),
+ * generates the QR, and shows/hides the target container.
+ */
+function toggleAddressQr(el) {
+    var targetId = el.getAttribute('data-qr-target');
+    var container = document.getElementById(targetId);
+    if (!container) return;
+
+    // Toggle visibility
+    if (container.style.display !== 'none' && container.innerHTML) {
+        container.style.display = 'none';
+        return;
+    }
+
+    // Get address text
+    var text = el.getAttribute('data-qr-text');
+    if (!text) {
+        var sourceId = el.getAttribute('data-qr-source');
+        if (sourceId) {
+            var sourceEl = document.getElementById(sourceId);
+            text = sourceEl ? sourceEl.textContent.trim() : '';
+        }
+    }
+    if (!text) return;
+
+    var svg = generateQrSvg(text, 200);
+    if (!svg) {
+        container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
+    } else {
+        container.innerHTML = svg;
+    }
+    container.style.display = 'block';
+}
+
+/**
+ * Open the QR code scanner modal.
+ * Uses html5-qrcode for camera scanning on regular browsers.
+ * Tor Browser is detected and blocked early (camera and canvas both fail).
+ */
+
+/**
+ * Detect Tor Browser fingerprinting protection (canvas data modified).
+ */
+function isCanvasBlocked() {
+    try {
+        var c = document.createElement('canvas');
+        c.width = 2; c.height = 1;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(0, 0, 1, 1);
+        ctx.fillStyle = '#0000ff';
+        ctx.fillRect(1, 0, 1, 1);
+        var d = ctx.getImageData(0, 0, 2, 1).data;
+        return (d[0] !== 255 || d[1] !== 0 || d[4] !== 0 || d[6] !== 255);
+    } catch (e) {
+        return true;
+    }
+}
+
+function openQrScanner(targetInputId) {
+    // Tor Browser blocks camera API and canvas — QR scanning cannot work
+    if (isCanvasBlocked()) {
+        showToast('QR Scanner Unavailable',
+            'Your browser blocks camera and image processing for privacy (Tor Browser). Please copy and paste the address manually.',
+            'warning');
+        return;
+    }
+
+    if (typeof Html5Qrcode === 'undefined') {
+        showToast('Error', 'QR scanner library not available', 'error');
+        return;
+    }
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'qr-scanner-modal';
+    overlay.style.zIndex = '10001';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:400px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-qrcode"></i> Scan QR Code</h3>' +
+                '<span class="close" id="qr-scanner-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1rem">' +
+                '<div id="qr-scanner-reader" style="width:100%"></div>' +
+                '<p style="text-align:center;color:#6c757d;font-size:0.85rem;margin-top:0.5rem">' +
+                    'Point your camera at a QR code containing an address' +
+                '</p>' +
+            '</div>' +
+        '</div>';
+
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+
+    var scanner = new Html5Qrcode('qr-scanner-reader');
+    var scanning = false;
+
+    function closeScanner() {
+        if (scanning) {
+            scanner.stop().catch(function() {});
+        }
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', escHandler);
+    }
+
+    function escHandler(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) closeScanner();
+    }
+
+    overlay.querySelector('#qr-scanner-close').onclick = closeScanner;
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closeScanner();
+    });
+    document.addEventListener('keydown', escHandler);
+
+    scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        function onScanSuccess(decodedText) {
+            var input = document.getElementById(targetInputId);
+            if (input) {
+                input.value = decodedText;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
+            closeScanner();
+        },
+        function() { /* ignore — fires continuously when no QR in frame */ }
+    ).then(function() {
+        scanning = true;
+    }).catch(function() {
+        var readerEl = document.getElementById('qr-scanner-reader');
+        if (readerEl) {
+            readerEl.innerHTML = '<p style="color:#dc3545;text-align:center;padding:2rem">' +
+                '<i class="fas fa-exclamation-triangle"></i> Camera access denied or unavailable.</p>';
+        }
+    });
 }
 
 // ============================================================================
@@ -3742,7 +4280,7 @@ function setDlqFilter(filter) {
         }
     }
 
-    // Show/hide rows
+    // Show/hide rows and mark filter state for search
     var rows = document.querySelectorAll('.dlq-row');
     var visibleCount = 0;
     for (var j = 0; j < rows.length; j++) {
@@ -3751,7 +4289,15 @@ function setDlqFilter(filter) {
             || (filter === 'active' && (status === 'pending' || status === 'retrying'))
             || (filter !== 'all' && filter !== 'active' && status === filter);
         rows[j].style.display = show ? '' : 'none';
+        rows[j].setAttribute('data-filter-hidden', show ? 'false' : 'true');
         if (show) { visibleCount++; }
+    }
+
+    // Re-apply search if active
+    var searchInput = document.getElementById('dlq-search');
+    if (searchInput && searchInput.value.trim()) {
+        searchDlq(searchInput.value);
+        return; // searchDlq updates the count
     }
 
     // Toggle filter-empty message vs table
@@ -3763,6 +4309,41 @@ function setDlqFilter(filter) {
     // Update footer count
     var countEl = document.getElementById('dlq-visible-count');
     if (countEl) { countEl.textContent = visibleCount; }
+}
+
+/**
+ * Search/filter DLQ rows by recipient, failure reason, or type.
+ * Works on top of the active status filter — only searches visible rows.
+ */
+function searchDlq(query) {
+    query = (query || '').toLowerCase().trim();
+    var rows = document.querySelectorAll('.dlq-row');
+    var visibleCount = 0;
+
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        // Skip rows already hidden by status filter
+        if (row.getAttribute('data-filter-hidden') === 'true') {
+            continue;
+        }
+        if (!query) {
+            row.style.display = '';
+            visibleCount++;
+            continue;
+        }
+        var text = (row.textContent || '').toLowerCase();
+        var match = text.indexOf(query) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+    }
+
+    var countEl = document.getElementById('dlq-visible-count');
+    if (countEl) { countEl.textContent = visibleCount; }
+
+    var filterEmpty = document.getElementById('dlq-filter-empty');
+    var tableWrapper = document.querySelector('#dlq .dlq-table-wrapper');
+    if (filterEmpty) { filterEmpty.style.display = visibleCount === 0 ? '' : 'none'; }
+    if (tableWrapper) { tableWrapper.style.display = visibleCount === 0 ? 'none' : ''; }
 }
 
 // Initialize DLQ toasts on page load (Tor Browser compatible)
@@ -3782,6 +4363,23 @@ document.addEventListener('DOMContentLoaded', function() {
  * On success the row is visually marked resolved; on failure the status
  * label is updated and the row remains actionable for another attempt.
  *
+ * Close all open DLQ dropdown menus
+ */
+function closeDlqDropdowns() {
+    var menus = document.querySelectorAll('.dlq-dropdown-menu.open');
+    for (var i = 0; i < menus.length; i++) {
+        menus[i].classList.remove('open');
+    }
+}
+
+// Close DLQ dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dlq-dropdown')) {
+        closeDlqDropdowns();
+    }
+});
+
+/**
  * @param {number} dlqId - The DLQ record ID
  * @param {HTMLElement} btn - The button element that was clicked
  */
@@ -4134,6 +4732,22 @@ function submitAnalyticsConsent(enable) {
 (function() {
     // Map of action names to handler functions
     var clickActions = {
+        // Tab navigation
+        'switchTab': function(el, event) {
+            event.preventDefault();
+            var tab = el.getAttribute('data-tab');
+            var scrollTo = el.getAttribute('data-scroll-to') || null;
+            switchTab(tab, scrollTo);
+        },
+        'switchWalletCurrency': function(el) {
+            switchWalletCurrency(el.getAttribute('data-currency'));
+        },
+        'toggleAddressQr': function(el) { toggleAddressQr(el); },
+        'openQrScanner': function(el) {
+            var target = el.getAttribute('data-scan-target');
+            if (target) openQrScanner(target);
+        },
+
         // Navigation & reload
         'reloadWithHash': function(el) {
             var hash = el.getAttribute('data-hash');
@@ -4146,6 +4760,9 @@ function submitAnalyticsConsent(enable) {
             var index = parseInt(el.getAttribute('data-index'), 10);
             openTransactionModal(index);
         },
+        'openTransactionModalByTxid': function(el) {
+            openTransactionModalByTxid(el.getAttribute('data-txid'));
+        },
         'closeTransactionModal': function() { closeTransactionModal(); },
 
         // P2P transaction approval
@@ -4157,6 +4774,12 @@ function submitAnalyticsConsent(enable) {
         'rejectP2pTransaction': function(el) {
             var txid = el.getAttribute('data-txid');
             rejectP2pTransaction(txid);
+        },
+
+        // Info icon modal (mobile-friendly tooltip replacement)
+        'showInfoModal': function(el, event) {
+            event.preventDefault();
+            showInfoModal(el);
         },
 
         // Contact modal
@@ -4243,8 +4866,16 @@ function submitAnalyticsConsent(enable) {
             var id = parseInt(el.getAttribute('data-dlq-id'), 10);
             abandonDlqItem(id, el);
         },
-        'retryAllDlqItems': function(el) { retryAllDlqItems(el); },
-        'abandonAllDlqItems': function(el) { abandonAllDlqItems(el); },
+        'retryAllDlqItems': function(el) { closeDlqDropdowns(); retryAllDlqItems(el); },
+        'abandonAllDlqItems': function(el) { closeDlqDropdowns(); abandonAllDlqItems(el); },
+        'toggleDlqDropdown': function(el) {
+            var targetId = el.getAttribute('data-target');
+            var menu = document.getElementById(targetId);
+            if (!menu) return;
+            var wasOpen = menu.classList.contains('open');
+            closeDlqDropdowns();
+            if (!wasOpen) menu.classList.add('open');
+        },
 
         // Settings
         'toggleConfigSection': function(el) {
@@ -4273,7 +4904,23 @@ function submitAnalyticsConsent(enable) {
 
         // Analytics consent modal
         'analyticsConsentEnable': function() { submitAnalyticsConsent(true); },
-        'analyticsConsentSkip': function() { submitAnalyticsConsent(false); }
+        'analyticsConsentSkip': function() { submitAnalyticsConsent(false); },
+
+        // Add contact modal
+        'openAddContactModal': function() { openAddContactModal(); },
+        'closeAddContactModal': function() { closeAddContactModal(); },
+
+        // Payment request — same form as Send, different action
+        'requestPayment': function(el, event) {
+            event.preventDefault();
+            var actionField = document.getElementById('send-form-action');
+            var form = document.getElementById('send-form-el');
+            if (!actionField || !form) { return; }
+            actionField.value = 'createPaymentRequest';
+            showLoader('Sending payment request...', 'Connecting to contact server. The message processor will continue retrying in the background.');
+            startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
+            form.submit();
+        }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
