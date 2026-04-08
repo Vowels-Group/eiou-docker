@@ -66,12 +66,15 @@ create_api_key() {
 
 api_sig() {
     local container="$1" method="$2" path="$3" ts="$4" nonce="$5" body="$6" secret="$7"
-    # Pass body via stdin to avoid shell/PHP double-quote escaping issues.
-    # PHP code uses double quotes for the \n separators (single quotes treat \n as literal).
-    echo -n "${body}" | docker exec -i ${container} php -r "
-        \$body = file_get_contents('php://stdin');
+    # Base64-encode body and secret to avoid all shell/PHP escaping issues
+    local bodyB64 secretB64
+    bodyB64=$(printf '%s' "$body" | base64 -w 0 2>/dev/null || printf '%s' "$body" | base64 2>/dev/null)
+    secretB64=$(printf '%s' "$secret" | base64 -w 0 2>/dev/null || printf '%s' "$secret" | base64 2>/dev/null)
+    docker exec ${container} php -r "
+        \$body = base64_decode('${bodyB64}');
+        \$secret = base64_decode('${secretB64}');
         \$msg = \"${method}\n${path}\n${ts}\n${nonce}\n\" . \$body;
-        echo hash_hmac('sha256', \$msg, '${secret}');
+        echo hash_hmac('sha256', \$msg, \$secret);
     " 2>/dev/null
 }
 
