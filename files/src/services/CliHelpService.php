@@ -671,6 +671,59 @@ class CliHelpService
                 ],
                 'note' => 'Backups are AES-256-CBC encrypted using the node\'s master key. Automatic backups run daily at midnight when enabled. Cleanup keeps the 3 most recent backups.'
             ],
+            'request' => [
+                'description' => 'Manage payment requests (ask a contact to pay you)',
+                'usage' => 'request [subcommand] [args]',
+                'arguments' => [
+                    'subcommand' => ['type' => 'optional', 'description' => 'Action: list, create, approve, decline, cancel (default: list)'],
+                ],
+                'actions' => [
+                    'list' => [
+                        'description' => 'List all incoming and outgoing payment requests',
+                        'usage' => 'request list',
+                    ],
+                    'create' => [
+                        'description' => 'Create a payment request (ask a contact to pay you)',
+                        'usage' => 'request create <contact> <amount> <currency> [description]',
+                        'arguments' => [
+                            'contact' => ['type' => 'required', 'description' => 'Contact name or address'],
+                            'amount' => ['type' => 'required', 'description' => 'Amount to request'],
+                            'currency' => ['type' => 'required', 'description' => 'Currency code (e.g. USD)'],
+                            'description' => ['type' => 'optional', 'description' => 'Memo or reason for the request']
+                        ]
+                    ],
+                    'approve' => [
+                        'description' => 'Approve an incoming request (sends the eIOU)',
+                        'usage' => 'request approve <request_id>',
+                        'arguments' => [
+                            'request_id' => ['type' => 'required', 'description' => 'The request ID to approve']
+                        ]
+                    ],
+                    'decline' => [
+                        'description' => 'Decline an incoming payment request',
+                        'usage' => 'request decline <request_id>',
+                        'arguments' => [
+                            'request_id' => ['type' => 'required', 'description' => 'The request ID to decline']
+                        ]
+                    ],
+                    'cancel' => [
+                        'description' => 'Cancel an outgoing payment request you created',
+                        'usage' => 'request cancel <request_id>',
+                        'arguments' => [
+                            'request_id' => ['type' => 'required', 'description' => 'The request ID to cancel']
+                        ]
+                    ],
+                ],
+                'examples' => [
+                    'request list' => 'List all payment requests',
+                    'request create "Alice" 25.00 USD "Dinner"' => 'Request 25 USD from Alice',
+                    'request approve req_abc123' => 'Approve and pay the request',
+                    'request decline req_abc123' => 'Decline the request',
+                    'request cancel req_abc123' => 'Cancel your outgoing request',
+                    'request --json' => 'JSON output'
+                ],
+                'note' => 'Payment requests allow you to ask a contact to send you an eIOU. The recipient can approve (which sends the eIOU automatically) or decline. You can cancel your own outgoing requests.'
+            ],
             'report' => [
                 'description' => 'Generate reports for troubleshooting and analysis',
                 'usage' => 'report <type> [description] [--full]',
