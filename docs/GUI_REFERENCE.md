@@ -345,11 +345,11 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 
 | Element | Purpose |
 |---------|---------|
-| Last updated timestamp | Shows data freshness |
+| Last updated timestamp + Refresh link | Shows data freshness with manual refresh |
 | Total Balance | Aggregated wallet balance per currency (blue card) |
 | Total Fee Earnings | P2P relay fee earnings per currency (amber/gold card) |
 | Total Available Credit | Sum of available credit per currency (blue-purple card), from ping/pong, ~5 min refresh |
-| User Addresses | HTTP/HTTPS/Tor with copy buttons |
+| User Addresses | HTTP/HTTPS/Tor with Copy and QR code buttons |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
 
@@ -373,9 +373,9 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 
 **Features:**
 - P2P routing information alert
-- Dynamic address type selector
+- Dynamic address type selector (options sorted by security preference: Tor > HTTPS > HTTP)
 - Dynamic currency dropdown: shows all allowed currencies when no contact selected, filtered to contact's accepted currencies when a contact is selected
-- Transaction type indicator
+- Transaction type indicator (subtle inline hint showing "Direct Transaction" or "P2P Transaction" based on routing)
 - Best-fee routing checkbox with experimental warning label
 
 ---
@@ -414,7 +414,7 @@ Resolved requests (approved/declined) appear in a collapsed history section. App
 
 | Field | Type | Description |
 |-------|------|-------------|
-| address | text | Contact node address |
+| address | text | Contact node address (placeholder: "Enter Tor (.onion) or HTTP(S) address", with QR scan button) |
 | name | text | Display name |
 | credit | number | Credit limit (default from settings) |
 | fee | number | Fee percentage (default from settings) |
@@ -443,7 +443,7 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 | Tab | Contents |
 |-----|----------|
-| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
+| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), online status, chain status (proposal-aware, clickable), addresses (with Copy and QR code buttons; QR hides when switching address types), public key (single-line display with Copy button), chain drop resolution section |
 | Transactions | Recent transactions with this contact |
 | Settings | Edit form, block/unblock/delete buttons |
 
