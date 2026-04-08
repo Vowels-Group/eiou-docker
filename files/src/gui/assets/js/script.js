@@ -2765,7 +2765,9 @@ function pingContact() {
             } else if (xhr.status !== 0) {
                 resetPingButton();
                 // Try to extract rate limit or error message from response
-                var errorMessage = 'Request failed (status ' + xhr.status + ')';
+                var errorMessage = xhr.status === 403
+                    ? 'Session expired — please refresh the page'
+                    : 'Request failed (status ' + xhr.status + ')';
                 if (xhr.responseText) {
                     // Check for redirect page with flash message (rate limit)
                     var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
@@ -2776,6 +2778,7 @@ function pingContact() {
                         try {
                             var errResp = JSON.parse(xhr.responseText);
                             if (errResp.message) errorMessage = errResp.message;
+                            else if (errResp.error) errorMessage = errResp.error;
                         } catch (e2) {}
                     }
                 }
