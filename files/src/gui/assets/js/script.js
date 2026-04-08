@@ -2343,6 +2343,7 @@ function openContactModal(contact, openTab) {
         // Make clickable to scroll to chain drop section
         if (isClickable) {
             chainStatusEl.onclick = function() {
+                showModalTab('status-tab', null);
                 var section = document.getElementById('chain_drop_section');
                 if (section && section.style.display !== 'none') {
                     section.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3149,9 +3150,12 @@ function showSelectedContactAddress() {
     var selectedOption = select.options[select.selectedIndex];
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('modal_address_display').textContent = address;
-    // Hide QR display when address changes
+    // Regenerate QR if it was visible when address changed
     var qrContainer = document.getElementById('contact-address-qr-display');
-    if (qrContainer) { qrContainer.style.display = 'none'; qrContainer.innerHTML = ''; }
+    if (qrContainer && qrContainer.style.display !== 'none' && qrContainer.innerHTML) {
+        var svg = generateQrSvg(address, 200);
+        qrContainer.innerHTML = svg || '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
+    }
 }
 
 // Close contact modal when clicking outside (Tor Browser compatible)
@@ -3472,7 +3476,7 @@ function resetChainDropActionButtons() {
 function reloadAndReopenContactModal() {
     if (currentContactId) {
         var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
-        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
+        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
         if (storedId && storedTab) {
             window.location.reload();
         } else {

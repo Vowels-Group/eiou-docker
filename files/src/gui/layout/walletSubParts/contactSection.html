@@ -241,6 +241,9 @@
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="transactions-tab">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
+            <button type="button" class="modal-tab" data-action="showModalTab" data-tab="status-tab">
+                <i class="fas fa-signal"></i> Status
+            </button>
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="settings-tab">
                 <i class="fas fa-cog"></i> Settings
             </button>
@@ -297,6 +300,76 @@
                 <div id="pending-currency-container"></div>
             </div>
 
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
+                <div id="modal_address_container">
+                    <select id="modal_address_selector" class="info-value modal-address-selector" data-action-change="showSelectedContactAddress">
+                    </select>
+                    <div class="address-display-row-start">
+                        <span id="modal_address_display" class="info-value monospace address-value">Not Available</span>
+                        <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_address_display" data-copy-message="Address copied to clipboard!" title="Copy address">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                        <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="modal_address_display" data-qr-target="contact-address-qr-display" title="Show QR code">
+                            <i class="fas fa-qrcode"></i>
+                        </button>
+                    </div>
+                    <div id="contact-address-qr-display" class="address-qr-container" style="display:none"></div>
+                </div>
+            </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-key"></i> Public Key</h4>
+                <div class="address-display-row-start">
+                    <span id="modal_pubkey" class="info-value monospace pubkey-display address-value">Not Available</span>
+                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_pubkey" data-copy-message="Public key copied to clipboard!" title="Copy public key">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
+                <div class="address-display-row-start">
+                    <span id="modal_contact_id" class="info-value monospace address-value">Not Available</span>
+                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_contact_id" data-copy-message="Contact ID copied to clipboard!" title="Copy contact ID">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="transactions-tab" class="modal-tab-content">
+            <div class="modal-tab-scroll">
+                <!-- Transaction List View -->
+                <div id="tx-list-view">
+                    <div class="tx-tab-header">
+                        <p>
+                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
+                        </p>
+                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="modal_transactions" class="transactions-list">
+                        <p class="no-transactions">No recent transactions with this contact.</p>
+                    </div>
+                </div>
+                <!-- Transaction Detail View -->
+                <div id="tx-detail-view" class="d-none">
+                    <div class="text-right mb-sm">
+                        <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
+                    </div>
+                    <div id="contact-tx-detail-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+
+        <!-- Status Tab -->
+        <div id="status-tab" class="modal-tab-content">
             <div class="contact-info-section">
                 <h4><i class="fas fa-signal"></i> Connection Status</h4>
                 <div class="info-grid">
@@ -410,74 +483,8 @@
                     </div>
                 </div>
             </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
-                <div class="address-display-row-start">
-                    <span id="modal_contact_id" class="info-value monospace address-value">Not Available</span>
-                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_contact_id" data-copy-message="Contact ID copied to clipboard!" title="Copy contact ID">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                </div>
-            </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
-                <div id="modal_address_container">
-                    <select id="modal_address_selector" class="info-value modal-address-selector" data-action-change="showSelectedContactAddress">
-                    </select>
-                    <div class="address-display-row-start">
-                        <span id="modal_address_display" class="info-value monospace address-value">Not Available</span>
-                        <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_address_display" data-copy-message="Address copied to clipboard!" title="Copy address">
-                            <i class="fas fa-copy"></i> Copy
-                        </button>
-                        <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="modal_address_display" data-qr-target="contact-address-qr-display" title="Show QR code">
-                            <i class="fas fa-qrcode"></i>
-                        </button>
-                    </div>
-                    <div id="contact-address-qr-display" class="address-qr-container" style="display:none"></div>
-                </div>
-            </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-key"></i> Public Key</h4>
-                <div class="address-display-row-start">
-                    <span id="modal_pubkey" class="info-value monospace pubkey-display address-value">Not Available</span>
-                    <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="modal_pubkey" data-copy-message="Public key copied to clipboard!" title="Copy public key">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                </div>
-            </div>
         </div>
 
-        <!-- Transactions Tab -->
-        <div id="transactions-tab" class="modal-tab-content">
-            <div class="modal-tab-scroll">
-                <!-- Transaction List View -->
-                <div id="tx-list-view">
-                    <div class="tx-tab-header">
-                        <p>
-                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
-                        </p>
-                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="modal_transactions" class="transactions-list">
-                        <p class="no-transactions">No recent transactions with this contact.</p>
-                    </div>
-                </div>
-                <!-- Transaction Detail View -->
-                <div id="tx-detail-view" class="d-none">
-                    <div class="text-right mb-sm">
-                        <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
-                    </div>
-                    <div id="contact-tx-detail-content"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
         <div id="settings-tab" class="modal-tab-content">
                 <form method="POST" id="editContactForm">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">

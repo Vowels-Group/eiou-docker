@@ -57,7 +57,7 @@
             </select>
             <small class="form-hint">
                 <i class="fas fa-network-wired"></i>
-                Choose which address to use for this contact
+                Direct transaction to contact — choose which address to use
             </small>
         </div>
         
@@ -87,7 +87,7 @@
                 </select>
             </div>
         </div>
-        <small id="amount-precision-hint" class="form-hint">
+        <small id="amount-precision-hint" class="form-hint" style="margin-top:-0.5rem;margin-bottom:0.75rem">
             <i class="fas fa-info-circle"></i>
             <span id="amount-precision-text"></span>
         </small>
@@ -115,14 +115,6 @@
                 <i class="fas fa-flask"></i> <strong>Experimental:</strong>
                 Finds the cheapest fee route but may be slower or less reliable than the default. When disabled, the first available route is used.
                 <br><strong>Note:</strong> Not used on Tor (.onion) — fast mode is always used for Tor routing.
-            </small>
-        </div>
-
-        <!-- Transaction Type Indicator -->
-        <div id="transaction-type-indicator" class="tx-type-indicator d-none">
-            <small class="d-flex align-center gap-sm">
-                <i class="fas fa-info-circle" style="color:#6c757d"></i>
-                <span id="transaction-type-text" class="tx-type-indicator-text"></span>
             </small>
         </div>
 
