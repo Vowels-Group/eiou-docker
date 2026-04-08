@@ -350,18 +350,11 @@ function initializeSendForm() {
     var recipientDropdown = document.getElementById('recipient-dropdown');
     var manualAddressGroup = document.getElementById('manual-address-group');
     var manualAddressInput = document.getElementById('manual-address');
-    var transactionTypeIndicator = document.getElementById('transaction-type-indicator');
-    var transactionTypeText = document.getElementById('transaction-type-text');
     var addressTypeGroup = document.getElementById('address-type-group');
     var addressTypeSelect = document.getElementById('address-type');
 
     // Set initial state - manual address is visible by default
     if (manualAddressInput) manualAddressInput.required = true;
-    if (transactionTypeIndicator) {
-        transactionTypeIndicator.style.display = 'block';
-        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-        transactionTypeText.style.color = '#ffc107';
-    }
 
     // Initialize searchable contact dropdown
     if (recipientSearch && recipientDropdown) {
@@ -381,9 +374,6 @@ function initializeSendForm() {
                 if (manualAddressInput) manualAddressInput.required = true;
                 addressTypeGroup.style.display = 'none';
                 if (addressTypeSelect) addressTypeSelect.required = false;
-                transactionTypeIndicator.style.display = 'block';
-                transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-                transactionTypeText.style.color = '#ffc107';
                 // Restore all currency options
                 var currSelect = document.getElementById('currency');
                 if (currSelect) {
@@ -516,9 +506,6 @@ function initializeSendForm() {
                 updateAmountPrecisionHint();
             }
 
-            transactionTypeIndicator.style.display = 'block';
-            transactionTypeText.textContent = 'Direct Transaction (to contact)';
-            transactionTypeText.style.color = '#28a745';
         }
 
         // Handle option click
@@ -611,24 +598,6 @@ function initializeSendForm() {
         });
     }
 
-    // Handle manual address input
-    if (manualAddressInput) {
-        manualAddressInput.addEventListener('input', function() {
-            var address = this.value.trim();
-            if (address) {
-                transactionTypeIndicator.style.display = 'block';
-                if (address.includes('.onion') || address.startsWith('http')) {
-                    transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-                    transactionTypeText.style.color = '#ffc107';
-                } else {
-                    transactionTypeText.textContent = 'P2P Transaction (address format detected)';
-                    transactionTypeText.style.color = '#ffc107';
-                }
-            } else {
-                transactionTypeIndicator.style.display = 'none';
-            }
-        });
-    }
 }
 
 /**
