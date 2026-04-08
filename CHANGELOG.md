@@ -54,8 +54,13 @@ The project is currently in **ALPHA** status.
 - **Address type ordering**: all address type dropdowns, placeholders, and hints now display in security-preferred order (Tor > HTTPS > HTTP) — affects the Add Contact modal, the Send eIOU address type selector, and the Contact Detail modal
 - **Add Contact modal wording**: placeholder changed to "Enter Tor (.onion) or HTTP(S) address"; hint text changed from "can share" to "will share" additional addresses after connecting
 - **Contact modal public key display**: changed from PEM-formatted multi-line display (`pre-wrap`) to a single unbroken string with word-break wrapping, matching the Wallet Information page style
-- **Transaction type indicator slimmed down**: the "P2P Transaction (routed through contacts)" / "Direct Transaction" indicator below the send form changed from a bordered box with green bold text to a subtle inline hint with muted text and info icon
+- **Transaction type indicator removed**: the standalone "Direct Transaction" / "P2P Transaction" indicator below the send form is removed. Direct/P2P routing info is now part of the Address Type hint ("Direct transaction to contact") and manual address hint ("P2P transactions are routed through your trusted contacts")
+- **Contact modal restructured**: Connection Status and Chain Drop Resolution moved from the Info tab to a dedicated **Status** tab (between Transactions and Settings). Contact ID moved below Public Key (was above Address). Chain drop actions now reload to the Status tab. Chain status badge click switches to Status tab before scrolling to the chain drop section
+- **Contact modal QR code regenerates on address switch**: switching address type in the contact modal now regenerates the QR code for the new address instead of hiding it
+- **Contact modal mobile layout**: Copy and QR buttons now wrap below the address/public key text on small screens, matching the Wallet Information page layout
+- **Send form amount hint spacing**: the minimum amount precision hint now sits closer to the Amount input instead of floating far below with a gap
 - **Removed redundant logout link** from the Wallet Information status bar ("Refresh now · Logout") — logout is always accessible in the top-right header
+- **Fatal error in transaction modal AJAX**: `handleGetTransactionByTxid()` called `Security::validateCsrfToken()` which doesn't exist — changed to `$this->session->validateCSRFToken()` matching all other AJAX handlers
 
 ---
 

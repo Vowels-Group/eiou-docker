@@ -119,7 +119,7 @@ Optional for create: `description`, `address_type`
 | Send form | `layout/walletSubParts/eiouForm.html` | Send | Send transaction form; address type dropdown sorted Tor > HTTPS > HTTP; also contains the "Request Payment" button (changes form action to `createPaymentRequest`) |
 | Payment requests | `layout/walletSubParts/paymentRequestsSection.html` | Send | Incoming requests (Approve & Pay / Decline) and outgoing requests (Cancel); rendered below the Send form |
 | Contact form | `layout/walletSubParts/contactForm.html` | Contacts | Add contact form with QR scan button; placeholder "Enter Tor (.onion) or HTTP(S) address" |
-| Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists; detail modal with Copy + QR buttons on addresses, single-line public key display |
+| Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists; detail modal (4 tabs: Info, Transactions, Status, Settings) with Copy + QR on addresses, single-line pubkey, connection/chain drop in Status tab |
 | Transaction history | `layout/walletSubParts/transactionHistory.html` | Activity | Transaction list |
 | DLQ section | `layout/walletSubParts/dlqSection.html` | Activity | Dead letter queue management |
 | Settings | `layout/walletSubParts/settingsSection.html` | Settings | Settings form |
@@ -184,7 +184,7 @@ fetch(window.location.href, {
 | `showInfoModal(el)` | Show tap-friendly info modal from an element's `title` attribute | ⓘ icon click |
 | `toggleAddressQr(el)` | Toggle QR code display for an address | QR button on addresses |
 | `generateQrSvg(text, size)` | Generate SVG QR code from text | Used by `toggleAddressQr` |
-| `showSelectedContactAddress()` | Update address display when type changes (hides QR) | Contact modal address dropdown |
+| `showSelectedContactAddress()` | Update address display and regenerate QR when type changes | Contact modal address dropdown |
 | `showToast(message, type, duration)` | Display a temporary toast notification | Internal notifications |
 
 ### Constants

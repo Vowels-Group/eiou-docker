@@ -375,7 +375,7 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 - P2P routing information alert
 - Dynamic address type selector (options sorted by security preference: Tor > HTTPS > HTTP)
 - Dynamic currency dropdown: shows all allowed currencies when no contact selected, filtered to contact's accepted currencies when a contact is selected
-- Transaction type indicator (subtle inline hint showing "Direct Transaction" or "P2P Transaction" based on routing)
+- Direct/P2P routing info integrated into address type and manual address hint text
 - Best-fee routing checkbox with experimental warning label
 
 ---
@@ -443,8 +443,9 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 | Tab | Contents |
 |-----|----------|
-| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), online status, chain status (proposal-aware, clickable), addresses (with Copy and QR code buttons; QR hides when switching address types), public key (single-line display with Copy button), chain drop resolution section |
+| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), addresses (with Copy and QR code buttons; QR regenerates when switching address types), public key (single-line display with Copy button), contact ID |
 | Transactions | Recent transactions with this contact |
+| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, chain drop resolution section (propose/accept/reject) |
 | Settings | Edit form, block/unblock/delete buttons |
 
 **Chain Drop Resolution Section (in Info tab):**
