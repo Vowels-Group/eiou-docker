@@ -2765,9 +2765,20 @@ function pingContact() {
             } else if (xhr.status !== 0) {
                 resetPingButton();
                 // Try to extract rate limit or error message from response
-                var errorMessage = xhr.status === 403
-                    ? 'Session expired — please refresh the page'
-                    : 'Request failed (status ' + xhr.status + ')';
+                // 403 = session/CSRF expired — just reload and reopen modal
+                if (xhr.status === 403 && currentContactId) {
+                    var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+                    var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
+                    if (storedId && storedTab) {
+                        window.location.reload();
+                    } else {
+                        var currentUrl = window.location.href.split('#')[0];
+                        window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=status';
+                        window.location.reload();
+                    }
+                    return;
+                }
+                var errorMessage = 'Request failed (status ' + xhr.status + ')';
                 if (xhr.responseText) {
                     // Check for redirect page with flash message (rate limit)
                     var waitMatch = xhr.responseText.match(/wait\s+(\d+)\s+seconds/i);
