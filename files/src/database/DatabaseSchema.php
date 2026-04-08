@@ -388,7 +388,7 @@ function getRp2pCandidatesTableSchema() {
 function getMessageDeliveryTableSchema() {
     return "CREATE TABLE IF NOT EXISTS message_delivery (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact') NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request') NOT NULL,
         message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. */
         recipient_address VARCHAR(255) NOT NULL,
         payload JSON NULL,  /* Stored payload for retry attempts */
@@ -420,7 +420,7 @@ function getMessageDeliveryTableSchema() {
 function getDeadLetterQueueTableSchema() {
     return "CREATE TABLE IF NOT EXISTS dead_letter_queue (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact') NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request') NOT NULL,
         message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. - matches message_delivery.message_id */
         payload JSON NOT NULL,
         recipient_address VARCHAR(255) NOT NULL,
@@ -448,7 +448,7 @@ function getDeliveryMetricsTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         period_start TIMESTAMP(6) NOT NULL,
         period_end TIMESTAMP(6) NOT NULL,
-        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all') NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all', 'payment_request') NOT NULL,
         total_sent INT DEFAULT 0,
         total_delivered INT DEFAULT 0,
         total_failed INT DEFAULT 0,
@@ -547,6 +547,48 @@ function getRateLimitsTableSchema() {
         blocked_until TIMESTAMP NULL,
         INDEX idx_identifier_action (identifier, action),
         INDEX idx_blocked_until (blocked_until)
+    )";
+}
+
+// ============================================================================
+// PAYMENT REQUESTS
+// Table for peer-to-peer payment requests (ask a contact to pay you)
+// ============================================================================
+
+// Payment Requests table - stores both outgoing (we sent) and incoming (sent to us) requests
+function getPaymentRequestsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS payment_requests (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        request_id VARCHAR(64) UNIQUE NOT NULL,         /* SHA-256 hex, uniquely identifies this request */
+        direction ENUM(
+            'incoming',  /* Request was sent to us — we are being asked to pay */
+            'outgoing'   /* We sent this request — we are asking someone to pay us */
+        ) NOT NULL,
+        status ENUM(
+            'pending',   /* Awaiting response */
+            'approved',  /* Recipient paid (resulting_txid set) */
+            'declined',  /* Recipient declined */
+            'cancelled', /* Requester cancelled before a response */
+            'expired'    /* Request expired (future: TTL-based cleanup) */
+        ) NOT NULL DEFAULT 'pending',
+        requester_pubkey_hash VARCHAR(64) NOT NULL,     /* Public key hash of the person requesting payment */
+        requester_address     VARCHAR(255) DEFAULT NULL, /* Transport address of requester (for sending response) */
+        contact_name          VARCHAR(255) DEFAULT NULL, /* Display name of the other party */
+        recipient_pubkey_hash VARCHAR(64) NOT NULL,     /* Public key hash of the person being asked to pay */
+        amount_whole BIGINT NOT NULL,
+        amount_frac  BIGINT NOT NULL DEFAULT 0,
+        currency     VARCHAR(10) NOT NULL,
+        description  VARCHAR(255) DEFAULT NULL,         /* Optional memo visible to both parties */
+        created_at   DATETIME(6) NOT NULL,
+        expires_at   DATETIME(6) DEFAULT NULL,          /* Optional TTL (future use) */
+        responded_at DATETIME(6) DEFAULT NULL,          /* When approve/decline was recorded */
+        resulting_txid VARCHAR(64) DEFAULT NULL,        /* txid of the payment transaction if approved */
+        signed_message_content TEXT DEFAULT NULL,       /* Raw signed payload for audit/verification */
+        INDEX idx_pr_requester (requester_pubkey_hash),
+        INDEX idx_pr_recipient (recipient_pubkey_hash),
+        INDEX idx_pr_status (status),
+        INDEX idx_pr_direction_status (direction, status),
+        INDEX idx_pr_created_at (created_at)
     )";
 }
 

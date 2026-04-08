@@ -86,8 +86,8 @@ tableCheck=$(docker exec ${testContainer} php -r "
     require_once '${BOOTSTRAP_PATH}';
     \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$result = \$pdo->query(\"SHOW TABLES LIKE 'contacts'\");
-    echo \$result->rowCount() > 0 ? 'TABLE_EXISTS' : 'TABLE_MISSING';
+    \$result = \$pdo->query(\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'contacts'\");
+    echo (\$result && \$result->fetchColumn() > 0) ? 'TABLE_EXISTS' : 'TABLE_MISSING';
 " 2>/dev/null)
 
 if [[ "$tableCheck" == "TABLE_EXISTS" ]]; then
@@ -455,7 +455,7 @@ echo -e "\n\t-> Testing excessive amount rejection (>max)"
 
 timestamp=$(date +%s); nonce=$(openssl rand -hex 16)
 path="/api/v1/wallet/send"
-body="{\"address\":\"http://test.example.com\",\"amount\":\"9999999999999\",\"currency\":\"USD\"}"
+body="{\"address\":\"http://test.example.com\",\"amount\":\"9999999999999999999\",\"currency\":\"USD\"}"
 bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "

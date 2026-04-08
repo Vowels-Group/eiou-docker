@@ -442,6 +442,47 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getUserLocaters derives HTTP from HTTPS in QUICKSTART mode
+     * When hostname is set to https:// (no separate HTTP), the HTTP version
+     * should be derived automatically since Apache serves both.
+     */
+    public function testGetUserLocatersDrivesHttpFromHttps(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'hostname' => 'https://eiou',  // QUICKSTART sets hostname to https://
+            'torAddress' => 'abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.onion'
+        ]);
+
+        $locaters = $instance->getUserLocaters();
+
+        $this->assertArrayHasKey('https', $locaters);
+        $this->assertEquals('https://eiou', $locaters['https']);
+        $this->assertArrayHasKey('http', $locaters);
+        $this->assertEquals('http://eiou', $locaters['http']);
+        $this->assertArrayHasKey('tor', $locaters);
+    }
+
+    /**
+     * Test getUserLocaters does NOT derive HTTP when explicit HTTP already exists
+     */
+    public function testGetUserLocatersDoesNotOverrideExplicitHttp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'hostname' => 'http://mynode.local',
+            'hostname_secure' => 'https://mynode.local',
+        ]);
+
+        $locaters = $instance->getUserLocaters();
+
+        $this->assertArrayHasKey('http', $locaters);
+        $this->assertEquals('http://mynode.local', $locaters['http']);
+        $this->assertArrayHasKey('https', $locaters);
+        $this->assertEquals('https://mynode.local', $locaters['https']);
+    }
+
+    /**
      * Test isMyAddress returns true for own address
      */
     public function testIsMyAddressReturnsTrueForOwnAddress(): void

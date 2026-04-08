@@ -18,6 +18,7 @@ use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Gui\Helpers\MessageHelper;
+use Eiou\Formatters\TransactionFormatter;
 
 /**
  * Transaction Controller
@@ -136,8 +137,13 @@ class TransactionController
             // Manual address entry - use as-is
             $finalRecipient = $manualRecipient;
         } elseif (!empty($recipient) && !empty($addressType)) {
-            // Contact selected with address type - lookup and use specific address
-            $contactInfo = $this->contactService->lookupByName($recipient);
+            // Contact selected with address type - check for duplicate names
+            $allMatches = $this->contactService->lookupAllByName($recipient);
+            if (count($allMatches) > 1) {
+                MessageHelper::redirectMessage('Multiple contacts named "' . htmlspecialchars($recipient) . '". Please use an address directly.', 'error');
+                return;
+            }
+            $contactInfo = $allMatches[0] ?? null;
             if ($contactInfo && isset($contactInfo[$addressType]) && !empty($contactInfo[$addressType])) {
                 $finalRecipient = $contactInfo[$addressType];
             } else {
@@ -552,6 +558,47 @@ class TransactionController
             case 'getP2pCandidates':
                 $this->handleGetP2pCandidates();
                 break;
+            case 'getTransactionByTxid':
+                $this->handleGetTransactionByTxid();
+                break;
         }
+    }
+
+    /**
+     * AJAX: return the full formatted transaction data for a given txid.
+     * Used by the GUI to open the transaction modal from payment request rows.
+     */
+    private function handleGetTransactionByTxid(): void
+    {
+        header('Content-Type: application/json');
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+        if (!$this->session->validateCSRFToken($csrfToken, false)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+            return;
+        }
+
+        $txid = trim($_POST['txid'] ?? '');
+        if (empty($txid)) {
+            echo json_encode(['success' => false, 'error' => 'Missing txid']);
+            return;
+        }
+
+        $rows = $this->transactionService->getByTxid($txid);
+        $tx   = is_array($rows) ? ($rows[0] ?? null) : null;
+
+        if (!$tx) {
+            echo json_encode(['success' => false, 'error' => 'Transaction not found']);
+            return;
+        }
+
+        $userContext   = UserContext::getInstance();
+        $userAddresses = array_values($userContext->getUserLocaters());
+        $formatted     = TransactionFormatter::formatHistory($tx, $userAddresses);
+
+        // Format the date the same way the wallet page does
+        $formatted['date'] = !empty($formatted['date']) ? formatTimestamp((string)$formatted['date']) : '';
+
+        echo json_encode(['success' => true, 'transaction' => $formatted]);
     }
 }

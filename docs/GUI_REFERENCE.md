@@ -275,8 +275,8 @@ Main layout container that includes all subpart components.
 | Tab | Components |
 |-----|------------|
 | Dashboard | `walletInformation.html` |
-| Send | `eiouForm.html` |
-| Contacts | `contactForm.html`, `contactSection.html` |
+| Send | `eiouForm.html`, `paymentRequestsSection.html` |
+| Contacts | `contactSection.html` |
 | Activity | `transactionHistory.html`, `dlqSection.html` |
 | Settings | `settingsSection.html`, `debugSection.html` |
 
@@ -286,7 +286,7 @@ Main layout container that includes all subpart components.
 3. notifications.html
 4. walletInformation.html *(Dashboard tab)*
 5. eiouForm.html *(Send tab)*
-6. contactForm.html *(Contacts tab)*
+6. paymentRequestsSection.html *(Send tab)*
 7. contactSection.html *(Contacts tab)*
 8. transactionHistory.html *(Activity tab)*
 9. dlqSection.html *(Activity tab)*
@@ -345,11 +345,11 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 
 | Element | Purpose |
 |---------|---------|
-| Last updated timestamp | Shows data freshness |
+| Last updated timestamp + Refresh link | Shows data freshness with manual refresh |
 | Total Balance | Aggregated wallet balance per currency (blue card) |
 | Total Fee Earnings | P2P relay fee earnings per currency (amber/gold card) |
 | Total Available Credit | Sum of available credit per currency (blue-purple card), from ping/pong, ~5 min refresh |
-| User Addresses | HTTP/HTTPS/Tor with copy buttons |
+| User Addresses | HTTP/HTTPS/Tor with Copy and QR code buttons |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
 
@@ -373,18 +373,48 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 
 **Features:**
 - P2P routing information alert
-- Dynamic address type selector
+- Dynamic address type selector (options sorted by security preference: Tor > HTTPS > HTTP)
 - Dynamic currency dropdown: shows all allowed currencies when no contact selected, filtered to contact's accepted currencies when a contact is selected
-- Transaction type indicator
+- Direct/P2P routing info integrated into address type and manual address hint text
 - Best-fee routing checkbox with experimental warning label
+
+---
+
+#### paymentRequestsSection.html
+
+Rendered below the Send form in the Send tab. Shows incoming and outgoing payment requests.
+
+**Incoming Requests (pending):**
+
+| Element | Purpose |
+|---------|---------|
+| Requester name/address | Who sent the request |
+| Amount + currency | Requested amount |
+| Description | Optional note from requester |
+| Approve & Pay button | Sends the eIOU automatically, marks request approved |
+| Decline button | Rejects the request, notifies requester |
+
+**Outgoing Requests (pending):**
+
+| Element | Purpose |
+|---------|---------|
+| Recipient name/address | Who you sent the request to |
+| Amount + currency | Requested amount |
+| Description | Optional note |
+| Status badge | Pending / Approved / Declined |
+| Cancel button | Cancels the outgoing request |
+
+Resolved requests (approved/declined) appear in a collapsed history section. Approved requests show a clickable truncated txid that opens the transaction detail modal.
 
 ---
 
 #### contactForm.html
 
+> **Note:** This file contains the Add Contact form fields. It is included as part of the Add Contact modal inside `contactSection.html`, not as a standalone include in `wallet.html`.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| address | text | Contact node address |
+| address | text | Contact node address (placeholder: "Enter Tor (.onion) or HTTP(S) address", with QR scan button) |
 | name | text | Display name |
 | credit | number | Credit limit (default from settings) |
 | fee | number | Fee percentage (default from settings) |
@@ -394,6 +424,8 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 ---
 
 #### contactSection.html
+
+The Contacts tab. The contact list is shown first. The "Add Contact" form is accessed via the "+ New Contact" button which opens a modal dialog (the form fields from `contactForm.html` are embedded in this modal, not rendered inline).
 
 **Contact Grid:**
 - Accepted contacts with balance
@@ -411,8 +443,9 @@ The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a s
 
 | Tab | Contents |
 |-----|----------|
-| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
+| Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), addresses (with Copy and QR code buttons; QR regenerates when switching address types), public key (single-line display with Copy button), contact ID |
 | Transactions | Recent transactions with this contact |
+| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, chain drop resolution section (propose/accept/reject) |
 | Settings | Edit form, block/unblock/delete buttons |
 
 **Chain Drop Resolution Section (in Info tab):**

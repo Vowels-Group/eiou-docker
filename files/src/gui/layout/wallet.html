@@ -10,6 +10,8 @@
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
     <style nonce="<?php echo cspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/page.css");?></style>
     <script nonce="<?php echo cspNonce(); ?>">var EIOU_DISPLAY_DECIMALS = <?php echo displayDecimals(); ?>; var EIOU_DATE_FORMAT = '<?php echo displayDateFormat(); ?>';</script>
+    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/qrcode-generator.js"></script>
+    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/html5-qrcode.min.js"></script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js"></script>
     <!-- Graceful degradation: show all sections when JS is disabled (Tor Safest mode) -->
     <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
@@ -29,7 +31,7 @@
                 <i class="fas fa-home"></i> <span class="tab-label">Dashboard</span>
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="send">
-                <i class="fas fa-paper-plane"></i> <span class="tab-label">Send</span>
+                <i class="fas fa-paper-plane"></i> <span class="tab-label">Payment</span>
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="contacts">
                 <i class="fas fa-address-book"></i> <span class="tab-label">Contacts</span>
@@ -53,11 +55,11 @@
         <!-- Tab: Send -->
         <div class="tab-panel" id="tab-panel-send" style="display:none">
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/paymentRequestsSection.html");?>
         </div>
 
         <!-- Tab: Contacts -->
         <div class="tab-panel" id="tab-panel-contacts" style="display:none">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactForm.html");?>
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");?>
         </div>
 
@@ -80,9 +82,9 @@
             <i class="fas fa-home"></i>
             <span class="tab-label-mobile">Home</span>
         </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Send">
+        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Payment">
             <i class="fas fa-paper-plane"></i>
-            <span class="tab-label-mobile">Send</span>
+            <span class="tab-label-mobile">Payment</span>
         </button>
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="contacts" title="Contacts">
             <i class="fas fa-address-book"></i>
@@ -105,6 +107,20 @@
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/floatingButtons.html");?>
     <!-- Analytics Consent Modal -->
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/analyticsConsentModal.html");?>
+    <!-- Transaction Detail Modal (body-level so it works from any tab) -->
+    <div id="transactionModal" class="modal d-none">
+        <div class="modal-content modal-content-md">
+            <div class="modal-header">
+                <h3><i class="fas fa-receipt"></i> Transaction Details</h3>
+                <span class="close" data-action="closeTransactionModal">&times;</span>
+            </div>
+            <div class="modal-body modal-body-padded">
+                <div id="tx-modal-content">
+                    <!-- Content populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner">

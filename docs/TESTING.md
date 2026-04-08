@@ -46,6 +46,8 @@ Integration tests validate the complete system behavior using Docker containers.
 
 **Route cancellation tests** (`routeCancellationTest.sh`): 13 tests covering route cancellation service wiring, capacity reservation table existence, hop budget distribution (deterministic-mode aware: accepts constant `maxHops` when `EIOU_HOP_BUDGET_RANDOMIZED=false`, requires variance when randomized), capacity reservation creation during relay, release after best-fee selection, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` flag propagation, cancel timing vs passive expiry, and relay status propagation. Best with collisions or collisionscluster topologies.
 
+**Payment request tests** (`paymentRequestTest.sh`): 8 tests covering the full payment request lifecycle via the REST API — baseline list, create, outgoing pending confirmation, incoming delivery (async-safe), decline, cancel, invalid-create error handling, and a full **approve flow**: creates a request, polls until it arrives at the recipient, approves (triggering `sendEiou` internally), then verifies the transaction landed by checking the txid in the transactions table and confirming balance changes on both nodes. Included in the `all` and `api` test subsets.
+
 ## Unit Test Inventory
 
 ### Security Tests (`tests/Unit/Security/`)
@@ -118,6 +120,7 @@ Integration tests validate the complete system behavior using Docker containers.
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
+| **PaymentRequestRepositoryTest.php** | 16 | `createRequest`, `getByRequestId`, `getPendingIncoming`, `getAllIncoming`/`getAllOutgoing` (with limit), `updateStatus` (with extra fields), `countPendingIncoming` (including query-failure → 0) |
 | **TransactionRepositoryTest.php** | 4 | Transaction status constants, type constants, hash length validation |
 | **AbstractRepositoryTest.php** | 30+ | Base CRUD operations, column validation, transactions, JSON decoding |
 | **AddressRepositoryTest.php** | 25+ | Address management, lookups, pubkey hashing, transport types |
@@ -164,6 +167,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | **P2pServiceTest.php** | 63 | P2P routing logic, fund availability via capacity reservations, matching, fee calculation |
 | **Rp2pServiceTest.php** | 46 | RP2P relay logic, fee calculation, two-phase relay selection, race condition coverage |
 | **RouteCancellationServiceTest.php** | 18 | Route cancellation for unselected candidates, partial route_cancel (multi-route safe acknowledge), full cancel (P2P cancel + reservation release + downstream propagation), hop budget (geometric distribution), capacity reservation release |
+| **PaymentRequestServiceTest.php** | 26 | Full lifecycle: `create` (amount/currency validation, contact lookup, address resolution, delivery failure non-fatal, tor address priority), `approve` (sendEiou integration, txid extraction, status update, response message), `decline`, `cancel`, `handleIncomingRequest` (idempotent, contact name lookup, invalid currency skip), `handleIncomingResponse` (approved with txid, declined), `getAllForDisplay`, `countPendingIncoming`. Note: 8 `create` tests skip when `bcmath` extension is not installed on the host (they run inside Docker). |
 | **SendOperationServiceTest.php** | 20+ | Send operations with locking, message delivery |
 | **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
 | **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |

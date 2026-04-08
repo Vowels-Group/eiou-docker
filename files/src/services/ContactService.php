@@ -134,6 +134,17 @@ class ContactService implements ContactServiceInterface
     }
 
     /**
+     * Lookup all contacts matching a name (for disambiguation).
+     *
+     * @param string $name The contact name to search for
+     * @return array Array of matching contacts (empty if none)
+     */
+    public function lookupAllByName(string $name): array
+    {
+        return $this->managementService->lookupAllByName($name);
+    }
+
+    /**
      * Lookup a contact by transport address.
      *
      * @param string $transportIndex The transport index type

@@ -9,10 +9,11 @@ Complete API documentation for the eIOU Docker node REST API.
 3. [Error Codes](#error-codes)
 4. [Wallet Endpoints](#wallet-endpoints)
 5. [Contact Endpoints](#contact-endpoints)
-6. [System Endpoints](#system-endpoints)
-7. [Chain Drop Endpoints](#chain-drop-endpoints)
-8. [Backup Endpoints](#backup-endpoints)
-9. [API Key Management](#api-key-management)
+6. [Payment Request Endpoints](#payment-request-endpoints)
+7. [System Endpoints](#system-endpoints)
+8. [Chain Drop Endpoints](#chain-drop-endpoints)
+9. [Backup Endpoints](#backup-endpoints)
+10. [API Key Management](#api-key-management)
 
 ---
 
@@ -967,6 +968,174 @@ Unblock a contact.
         "code": "contact_not_found"
     },
     "status_code": 404
+}
+```
+
+---
+
+## Payment Request Endpoints
+
+Payment requests let a user ask a contact to pay them a specific amount. The recipient can approve (which triggers `sendEiou` automatically) or decline. Both sides store the request locally; status updates are delivered via `payment_request` messages.
+
+### GET /api/v1/requests
+
+List all payment requests — both incoming (requests sent to you) and outgoing (requests you sent).
+
+**Required permission:** `wallet:read`
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 50 | Max records per direction (capped at 200) |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "incoming": [
+      {
+        "id": 3,
+        "request_id": "abc123...",
+        "direction": "incoming",
+        "status": "pending",
+        "contact_name": "Bob",
+        "requester_address": "http://bob:8080",
+        "amount": "10.00000000",
+        "currency": "USD",
+        "description": "Lunch",
+        "created_at": "2026-04-07 12:00:00"
+      }
+    ],
+    "outgoing": [
+      {
+        "id": 1,
+        "request_id": "def456...",
+        "direction": "outgoing",
+        "status": "approved",
+        "contact_name": "Alice",
+        "amount": "5.00000000",
+        "currency": "USD",
+        "resulting_txid": "txid-xyz",
+        "responded_at": "2026-04-07 12:05:00"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### POST /api/v1/requests
+
+Create and send a payment request to a contact.
+
+**Required permission:** `wallet:send`
+
+**Request body:**
+
+```json
+{
+  "contact_name": "Bob",
+  "amount": "10.00",
+  "currency": "USD",
+  "description": "Optional memo",
+  "address_type": "tor"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact_name` | string | Yes | Name of an accepted contact |
+| `amount` | string | Yes | Amount to request (e.g. `"10.00"`) |
+| `currency` | string | Yes | Currency code (e.g. `"USD"`) |
+| `description` | string | No | Optional memo shown to the recipient |
+| `address_type` | string | No | Preferred transport: `tor`, `https`, or `http` (auto-selects best if omitted) |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "request_id": "abc123def456..."
+  }
+}
+```
+
+The request is stored locally as `outgoing/pending` immediately. The `payment_request` message is sent to the contact's node. If delivery fails (contact temporarily offline), the request is still stored — the contact will receive it when they come back online via the normal message delivery retry system.
+
+---
+
+### POST /api/v1/requests/approve
+
+Approve an incoming payment request. Internally calls `sendEiou` to the requester using the full transaction pipeline (P2P routing, DLQ, retries).
+
+**Required permission:** `wallet:send`
+
+**Request body:**
+
+```json
+{
+  "request_id": "abc123def456..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Transaction sent successfully",
+    "txid": "txid-abc123"
+  }
+}
+```
+
+Returns an error if: request not found, direction is not `incoming`, status is not `pending`, no return address on the request, or `sendEiou` fails.
+
+---
+
+### POST /api/v1/requests/decline
+
+Decline an incoming payment request. Sends a response message back to the requester.
+
+**Required permission:** `wallet:send`
+
+**Request body:**
+
+```json
+{
+  "request_id": "abc123def456..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### DELETE /api/v1/requests/{request_id}
+
+Cancel an outgoing payment request (only while status is `pending`).
+
+**Required permission:** `wallet:send`
+
+**Example:** `DELETE /api/v1/requests/abc123def456`
+
+**Response:**
+
+```json
+{
+  "success": true
 }
 ```
 

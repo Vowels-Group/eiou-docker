@@ -151,10 +151,32 @@ class Application {
      * @return void
      */
     private function getDatabase(): void {
-        try{
-            $this->pdo = createPDOConnection();
-        } catch (Exception $e) {
-            Logger::getInstance()->logException($e, [], 'ERROR');
+        $maxAttempts = 5;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $this->pdo = createPDOConnection();
+                return;
+            } catch (RuntimeException $e) {
+                // "Database configuration incomplete" — likely a race with another process
+                // writing the encrypted dbconfig.json on first boot. Re-read the file and
+                // update DatabaseContext before retrying.
+                if ($attempt < $maxAttempts) {
+                    usleep(250000 * $attempt); // 250ms, 500ms, 750ms, 1s linear back-off
+                    $configPath = '/etc/eiou/config/dbconfig.json';
+                    if (file_exists($configPath)) {
+                        $raw = @file_get_contents($configPath);
+                        $decoded = ($raw !== false) ? json_decode($raw, true) : null;
+                        if (is_array($decoded) && !empty($decoded)) {
+                            DatabaseContext::getInstance()->setdatabaseData($decoded);
+                        }
+                    }
+                } else {
+                    Logger::getInstance()->logException($e, [], 'ERROR');
+                }
+            } catch (Exception $e) {
+                Logger::getInstance()->logException($e, [], 'ERROR');
+                return;
+            }
         }
     }
 
@@ -209,14 +231,18 @@ class Application {
                 unset($config['dbName']);
             }
 
+            // Write to a temp file then rename — atomic on Linux, so concurrent
+            // readers always see either the old complete file or the new one, never a partial write.
+            $tmpPath = $configPath . '.tmp.' . getmypid();
             $oldUmask = umask(0027);
-            file_put_contents($configPath, json_encode($config), LOCK_EX);
+            file_put_contents($tmpPath, json_encode($config));
             umask($oldUmask);
-            chmod($configPath, 0640);
+            chmod($tmpPath, 0640);
             // chgrp requires root; skip when already running as www-data
             if (posix_getuid() === 0) {
-                chgrp($configPath, 'www-data');
+                chgrp($tmpPath, 'www-data');
             }
+            rename($tmpPath, $configPath);
 
             // Reload DatabaseContext so subsequent reads use encrypted version
             DatabaseContext::getInstance()->setdatabaseData($config);

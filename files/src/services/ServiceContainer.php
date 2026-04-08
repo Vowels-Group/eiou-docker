@@ -41,6 +41,7 @@ use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
+use Eiou\Services\PaymentRequestService;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Proxies\SyncServiceProxy;
@@ -939,6 +940,26 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PaymentRequestService instance
+     *
+     * @return PaymentRequestService
+     */
+    public function getPaymentRequestService(): PaymentRequestService {
+        if (!isset($this->services['PaymentRequestService'])) {
+            $this->services['PaymentRequestService'] = new PaymentRequestService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class),
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(AddressRepository::class),
+                $this->getTransactionService(),
+                $this->getUtilityContainer()->getTransportUtility($this->currentUser),
+                $this->currentUser,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PaymentRequestService'];
+    }
+
+    /**
      * Get SyncServiceProxy instance
      *
      * Returns a lazy-loading proxy for SyncService that implements SyncTriggerInterface.
@@ -1126,6 +1147,16 @@ class ServiceContainer implements ContainerInterface {
             $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
         }
 
+        // MessageService -> PaymentRequestService
+        if (isset($this->services['MessageService']) && isset($this->services['PaymentRequestService'])) {
+            $this->services['MessageService']->setPaymentRequestService($this->services['PaymentRequestService']);
+        }
+
+        // PaymentRequestService -> MessageDeliveryService
+        if (isset($this->services['PaymentRequestService']) && isset($this->services['MessageDeliveryService'])) {
+            $this->services['PaymentRequestService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
+        }
+
         // ChainDropService -> BackupService
         if (isset($this->services['ChainDropService'])) {
             $this->services['ChainDropService']->setBackupService($this->getBackupService());
@@ -1297,6 +1328,10 @@ class ServiceContainer implements ContainerInterface {
         // Initialize CLI service (must be before wireCircularDependencies
         // so setter injection for ContactCreditRepository and P2pRepository runs)
         $this->getCliService();
+
+        // Initialize PaymentRequestService so wireCircularDependencies() can
+        // wire it into MessageService (required for incoming payment_request handling)
+        $this->getPaymentRequestService();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();

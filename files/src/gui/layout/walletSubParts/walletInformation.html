@@ -10,7 +10,7 @@
         <div class="wallet-status-bar">
             <i class="fas fa-clock"></i> Last updated: <?php echo date(displayDateFormat()); ?>
             <br>
-            <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="link-refresh">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" class="link-logout">Logout</a></small>
+            <small id="refresh-status"><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="link-refresh">Refresh now</a></small>
         </div>
         
         <?php
@@ -35,9 +35,21 @@
             }
         }
         ?>
+        <!-- Mobile: currency tabs + stacked cards -->
+        <?php $currencyKeys = array_keys($currencyRows); ?>
+        <?php if (count($currencyKeys) > 1): ?>
+        <div class="wallet-currency-tabs">
+            <?php foreach ($currencyKeys as $i => $cur): ?>
+            <button type="button" class="wallet-currency-tab<?php echo $i === 0 ? ' active' : ''; ?>" data-action="switchWalletCurrency" data-currency="<?php echo htmlspecialchars($cur); ?>">
+                <?php echo htmlspecialchars($cur); ?>
+            </button>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <div class="wallet-stats-container">
         <?php foreach ($currencyRows as $cur => $data): ?>
-        <div class="wallet-stats-row">
+        <div class="wallet-stats-row" data-wallet-currency="<?php echo htmlspecialchars($cur); ?>">
             <div class="balance-display">
                 <div class="balance-amount"><?php echo htmlspecialchars($data['balance']); ?> <span class="balance-amount-currency"><?php echo htmlspecialchars($cur); ?></span></div>
                 <div class="balance-currency">Total Balance</div>
@@ -79,7 +91,11 @@
                     <button class="btn btn-sm btn-outline" data-action="copyToClipboard" data-copy-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-copy-message="Address copied to clipboard!" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
+                    <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-qr-target="address-qr-display" title="Show QR code">
+                        <i class="fas fa-qrcode"></i>
+                    </button>
                 </div>
+                <div id="address-qr-display" class="address-qr-container" style="display:none"></div>
             <?php else: ?>
                 <!-- Multiple addresses - show dropdown -->
                 <div class="mb-sm">
@@ -96,7 +112,11 @@
                     <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="user-address-value" data-copy-message="Address copied to clipboard!" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
+                    <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="user-address-value" data-qr-target="address-qr-display" title="Show QR code">
+                        <i class="fas fa-qrcode"></i>
+                    </button>
                 </div>
+                <div id="address-qr-display" class="address-qr-container" style="display:none"></div>
             <?php endif; ?>
         </div>
         <div class="info-item">

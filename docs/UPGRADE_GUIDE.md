@@ -387,6 +387,17 @@ Your 24-word BIP39 mnemonic is displayed only once during initial wallet generat
 
 Always run `eiou backup create` before upgrading. The encrypted backup file can be used to restore your database if anything goes wrong. Backup files are stored on the `{node}-backups` volume, which is preserved across upgrades.
 
+### Schema Migrations by Version
+
+Database migrations run automatically on startup (step 8 above) and are idempotent — safe to run multiple times. No manual SQL is ever needed.
+
+| Schema version | Change | Released |
+|----------------|--------|---------|
+| v5 | Added `payment_requests` table — stores both outgoing requests you sent and incoming requests from contacts, with direction, status, amount, currency, description, requester address, timestamps, and resulting txid on approval | Unreleased |
+| v4 and earlier | Prior tables (transactions, contacts, balances, P2P, DLQ, etc.) | — |
+
+If you are upgrading from any version with schema ≤ v4, the `payment_requests` table is created automatically on first boot. No data is lost.
+
 ### Version Compatibility
 
 Starting with v0.1.5-alpha, nodes enforce version compatibility. Nodes running versions below `0.1.3-alpha` are rejected because earlier versions use an incompatible amount format (cents-based integers vs SplitAmount) that causes data corruption.

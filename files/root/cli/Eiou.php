@@ -21,6 +21,7 @@
  *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
  *   overview [limit]           - View wallet overview dashboard
  *   report <type>              - Generate reports (debug, etc.)
+ *   request [subcommand] [args] - Manage payment requests
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
  *   ping <contact>             - Check contact online status
@@ -100,6 +101,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 chain drop operations per minute
         'report' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 report generations per minute
         'p2p' => ['max' => 30, 'window' => 60, 'block' => 300],       // 30 P2P approval operations per minute
+        'request' => ['max' => 20, 'window' => 60, 'block' => 300],   // 20 payment request operations per minute
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -351,6 +353,108 @@ elseif($request === "chaindrop"){
   $debugService->output("Executing chain drop request", 'SILENT');
   $chainDropService = $app->services->getChainDropService();
   $chainDropService->handleCommand($cleanArgv, $output);
+}
+// Payment Requests
+elseif($request === "request"){
+  $debugService->output("Executing payment request command", 'SILENT');
+  $prService = $app->services->getPaymentRequestService();
+  $subcommand = strtolower($cleanArgv[2] ?? 'list');
+
+  if ($subcommand === 'create') {
+    // eiou request create <contact> <amount> <currency> [description]
+    $contact = $cleanArgv[3] ?? '';
+    $amount = $cleanArgv[4] ?? '';
+    $currency = $cleanArgv[5] ?? '';
+    $description = $cleanArgv[6] ?? null;
+
+    if (empty($contact) || empty($amount) || empty($currency)) {
+      $output->error("Usage: eiou request create <contact> <amount> <currency> [description]", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+
+    $result = $prService->create($contact, $amount, $currency, $description);
+    if ($result['success']) {
+      $output->success("Payment request sent", [
+        'request_id' => $result['request_id'],
+        'contact' => $contact,
+        'amount' => $amount,
+        'currency' => $currency,
+      ]);
+    } else {
+      $output->error($result['error'], $result['code'] ?? ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'approve') {
+    // eiou request approve <request_id>
+    $requestId = $cleanArgv[3] ?? '';
+    if (empty($requestId)) {
+      $output->error("Usage: eiou request approve <request_id>", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+
+    $result = $prService->approve($requestId);
+    if ($result['success']) {
+      $output->success($result['message'] ?? "Payment request approved", [
+        'request_id' => $requestId,
+        'txid' => $result['txid'] ?? null,
+      ]);
+    } else {
+      $output->error($result['error'], ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'decline') {
+    // eiou request decline <request_id>
+    $requestId = $cleanArgv[3] ?? '';
+    if (empty($requestId)) {
+      $output->error("Usage: eiou request decline <request_id>", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+
+    $result = $prService->decline($requestId);
+    if ($result['success']) {
+      $output->success($result['message'] ?? "Payment request declined", [
+        'request_id' => $requestId,
+      ]);
+    } else {
+      $output->error($result['error'], ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'cancel') {
+    // eiou request cancel <request_id>
+    $requestId = $cleanArgv[3] ?? '';
+    if (empty($requestId)) {
+      $output->error("Usage: eiou request cancel <request_id>", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+
+    $result = $prService->cancel($requestId);
+    if ($result['success']) {
+      $output->success($result['message'] ?? "Payment request cancelled", [
+        'request_id' => $requestId,
+      ]);
+    } else {
+      $output->error($result['error'], ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'list') {
+    // eiou request list
+    $requests = $prService->getAllForDisplay(50);
+    $output->success("Payment requests", $requests);
+  } else {
+    echo "Usage: eiou request <subcommand> [args]\n\n";
+    echo "Subcommands:\n";
+    echo "  list                                     List all payment requests\n";
+    echo "  create <contact> <amount> <currency> [desc]  Create a payment request\n";
+    echo "  approve <request_id>                     Approve an incoming request (sends eIOU)\n";
+    echo "  decline <request_id>                     Decline an incoming request\n";
+    echo "  cancel <request_id>                      Cancel an outgoing request\n";
+    echo "\nExamples:\n";
+    echo "  eiou request list\n";
+    echo "  eiou request create \"Alice\" 25.00 USD \"Dinner last week\"\n";
+    echo "  eiou request approve req_abc123\n";
+    echo "  eiou request decline req_abc123\n";
+    echo "  eiou request cancel req_abc123\n";
+  }
 }
 // Reports
 elseif($request === "report"){

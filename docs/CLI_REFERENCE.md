@@ -13,7 +13,8 @@ Complete command-line interface documentation for the eIOU Docker node.
 7. [Settings Commands](#settings-commands)
 8. [System Commands](#system-commands)
 9. [API Key Management](#api-key-management)
-10. [Chain Drop Commands](#chain-drop-commands)
+10. [Payment Request Commands](#payment-request-commands)
+11. [Chain Drop Commands](#chain-drop-commands)
 11. [Backup Commands](#backup-commands)
 12. [Report Commands](#report-commands)
 13. [Test Mode Commands](#test-mode-commands)
@@ -1264,6 +1265,59 @@ eiou apikey enable eiou_abc123
 
 ---
 
+## Payment Request Commands
+
+### request
+
+Manage payment requests — ask a contact to pay you a specific amount. The recipient can approve (which sends the eIOU automatically), decline, or you can cancel your own outgoing requests.
+
+**Syntax:**
+```bash
+eiou request [subcommand] [args...]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none/list)* | `eiou request` | List all incoming and outgoing payment requests |
+| `create` | `eiou request create <contact> <amount> <currency> [description]` | Create and send a payment request to a contact |
+| `approve` | `eiou request approve <request_id>` | Approve an incoming request (sends eIOU automatically) |
+| `decline` | `eiou request decline <request_id>` | Decline an incoming payment request |
+| `cancel` | `eiou request cancel <request_id>` | Cancel an outgoing request you created |
+
+**Examples:**
+
+```bash
+# List all payment requests
+eiou request list
+eiou request list --json
+
+# Request 25 USD from Alice
+eiou request create "Alice" 25.00 USD "Dinner last week"
+
+# Request payment using a contact address (avoids duplicate name ambiguity)
+eiou request create "http://alice-node.example.com" 50.00 USD
+
+# Approve an incoming request (pays the requester)
+eiou request approve req_abc123def456
+
+# Decline a request
+eiou request decline req_abc123def456
+
+# Cancel your own outgoing request (only while pending)
+eiou request cancel req_abc123def456
+```
+
+**Notes:**
+
+- When you approve a request, `sendEiou` is called internally — the full transaction pipeline applies (P2P routing, credit checks, DLQ retries)
+- If multiple contacts share the same name, `create` returns an error listing the matching contacts and their addresses — use an address instead
+- Cancelling sends a cancellation message to the recipient; if they already approved before the cancel arrives, the payment takes priority
+- Request IDs are returned in the `create` response and visible in `list` output
+
+---
+
 ## Chain Drop Commands
 
 ### chaindrop
@@ -1600,6 +1654,7 @@ CLI commands are rate-limited per wallet to prevent abuse:
 | `send` | 30 | 60 seconds | 5 minutes |
 | `add` | 20 | 60 seconds | 5 minutes |
 | `backup` | 10 | 60 seconds | 5 minutes |
+| `request` | 20 | 60 seconds | 5 minutes |
 | All others | 100 | 60 seconds | 5 minutes |
 
 When rate limited, you'll see an error with a retry-after time.
