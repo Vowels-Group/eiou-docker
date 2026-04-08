@@ -2717,27 +2717,28 @@ function pingContact() {
                     var response = JSON.parse(xhr.responseText);
 
                     if (response.success) {
-                        // Show brief success message then reload to persist changes
+                        // Show success message briefly before reloading
                         var onlineStatus = response.online_status || 'unknown';
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Status updated, reloading...';
                             resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : (onlineStatus === 'partial' ? '#fd7e14' : '#dc3545');
                         }
-                        // Reload and reopen modal on status tab so updated values persist
-                        if (currentContactId) {
-                            var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
-                            var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
-                            if (storedId && storedTab) {
-                                window.location.reload();
+                        // Delay reload so the user sees the result before the page refreshes
+                        setTimeout(function() {
+                            if (currentContactId) {
+                                var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+                                var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'status-tab');
+                                if (storedId && storedTab) {
+                                    window.location.reload();
+                                } else {
+                                    var currentUrl = window.location.href.split('#')[0];
+                                    window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=status';
+                                    window.location.reload();
+                                }
                             } else {
-                                // Tor Browser fallback
-                                var currentUrl = window.location.href.split('#')[0];
-                                window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=status';
                                 window.location.reload();
                             }
-                        } else {
-                            window.location.reload();
-                        }
+                        }, 1500);
                         return;
                     } else {
                         resetPingButton();
