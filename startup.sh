@@ -1764,7 +1764,7 @@ if [ "${EIOU_BACKUP_AUTO_ENABLED:-true}" = "true" ]; then
     service cron start 2>/dev/null || true
 
     # Install backup cron job (daily at midnight)
-    CRON_JOB="0 0 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
+    CRON_JOB="0 0 * * * /usr/sbin/runuser -u www-data -- /usr/bin/php /app/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
 
     # Remove existing backup cron entry and add new one
     (crontab -l 2>/dev/null | grep -v "backup-cron.php"; echo "$CRON_JOB") | crontab -
@@ -1776,7 +1776,7 @@ fi
 
 # Set up cron for daily update check (2 AM UTC, avoids overlap with midnight backup)
 if [ "${EIOU_UPDATE_CHECK_ENABLED:-true}" = "true" ]; then
-    UPDATE_CRON_JOB="0 2 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1"
+    UPDATE_CRON_JOB="0 2 * * * /usr/sbin/runuser -u www-data -- /usr/bin/php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1"
     (crontab -l 2>/dev/null | grep -v "update-check-cron.php"; echo "$UPDATE_CRON_JOB") | crontab -
     echo "Update check cron job installed (daily at 2 AM UTC)"
 
@@ -1792,7 +1792,7 @@ fi
 # Always installed — the PHP script checks analyticsEnabled and exits
 # gracefully if disabled, so users can enable via GUI/CLI/API at any time
 # without needing a container restart.
-ANALYTICS_CRON_JOB="0 3 * * * runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
+ANALYTICS_CRON_JOB="0 3 * * * /usr/sbin/runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
 (crontab -l 2>/dev/null | grep -v "analytics-cron.php"; echo "$ANALYTICS_CRON_JOB") | crontab -
 echo "Analytics cron job installed (daily, 3 AM UTC)"
 

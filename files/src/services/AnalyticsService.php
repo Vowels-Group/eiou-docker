@@ -251,6 +251,7 @@ class AnalyticsService
     public static function send(array $payload): bool
     {
         if (!function_exists('curl_init')) {
+            error_log('Analytics: curl extension not available');
             return false;
         }
 
