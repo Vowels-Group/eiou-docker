@@ -758,27 +758,41 @@ body {
 /* Contacts Table Layout */
 .contacts-table-wrapper {
     overflow-x: auto;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
 }
 .contacts-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 0.9rem;
 }
 .contacts-table thead th {
     text-align: left;
-    padding: 0.5rem 0.75rem;
+    padding: 0.65rem 0.75rem;
     font-weight: 600;
     color: #6c757d;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
-    border-bottom: 2px solid #dee2e6;
+    letter-spacing: 0.04em;
+    background: #f8f9fa;
     white-space: nowrap;
+    border-bottom: 1px solid #e9ecef;
 }
+.contacts-table thead th:first-child { border-top-left-radius: 12px; }
+.contacts-table thead th:last-child { border-top-right-radius: 12px; }
 .contacts-table tbody tr.contact-row {
-    border-bottom: 1px solid #f0f0f0;
     transition: background 0.15s;
 }
+.contacts-table tbody tr.contact-row td {
+    border-bottom: 1px solid #f3f4f6;
+}
+.contacts-table tbody tr.contact-row:last-child td {
+    border-bottom: none;
+}
+.contacts-table tbody tr.contact-row:last-child td:first-child { border-bottom-left-radius: 12px; }
+.contacts-table tbody tr.contact-row:last-child td:last-child { border-bottom-right-radius: 12px; }
 .contacts-table tbody tr.contact-row:hover {
     background: #f0f7ff;
 }
