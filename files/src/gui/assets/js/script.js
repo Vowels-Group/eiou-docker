@@ -4109,7 +4109,12 @@ function toggleAddressQr(el) {
     if (!svg) {
         container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
     } else {
-        container.innerHTML = svg;
+        container.innerHTML = svg +
+            '<div style="text-align:center;margin-top:0.5rem">' +
+                '<button class="btn btn-sm btn-outline" data-action="scanContactQr" title="Scan a contact\'s QR code to add them">' +
+                    '<i class="fas fa-camera"></i> Scan Contact QR' +
+                '</button>' +
+            '</div>';
     }
     container.style.display = 'block';
 }
