@@ -47,6 +47,8 @@
                     $validChain = $contact['valid_chain'] ?? null;
                     $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                     $displayCurrency = $primaryCur['currency'] ?? 'USD';
+                    $myCredit = $primaryCur['my_available_credit'] ?? $contact['my_available_credit'] ?? null;
+                    $theirCredit = $primaryCur['their_available_credit'] ?? $contact['their_available_credit'] ?? null;
                     $proposal = $contact['chain_drop_proposal'] ?? null;
                     $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
                     $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
@@ -56,8 +58,8 @@
                     <td class="col-icon"><div class="contact-avatar-sm contact-avatar-accepted"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div></td>
                     <td class="col-name contact-name-cell"><?php echo htmlspecialchars($contact['name']); ?></td>
                     <td class="col-number text-right"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
-                    <td class="col-number text-right"><?php echo $contact['my_available_credit'] !== null ? number_format($contact['my_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
-                    <td class="col-number text-right"><?php echo $contact['their_available_credit'] !== null ? number_format($contact['their_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
+                    <td class="col-number text-right"><?php echo $myCredit !== null ? number_format($myCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
+                    <td class="col-number text-right"><?php echo $theirCredit !== null ? number_format($theirCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
                     <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
                     <td class="col-chain text-center">
                         <?php if ($isIncoming): ?>
