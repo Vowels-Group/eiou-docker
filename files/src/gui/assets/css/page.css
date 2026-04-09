@@ -520,28 +520,18 @@ body {
     display: none; /* Chrome/Safari */
 }
 
-.contact-card {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    border-left: 4px solid #0d6efd;
-    transition: transform 0.2s ease;
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    min-width: 250px;
-    max-width: 250px;
-    flex-shrink: 0;
-}
-
-.contacts-grid .empty-state {
-    min-width: 100%;
-    max-width: none;
-    flex-shrink: 1;
-}
-
-.contact-card:hover {
-    transform: translateY(-2px);
+/* contact-card on table rows — reset old card styles */
+tr.contact-card {
+    display: table-row;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    border-left: none;
+    min-width: unset;
+    max-width: unset;
+    flex-shrink: unset;
+    gap: unset;
+    align-items: unset;
 }
 
 .pending {
@@ -1777,13 +1767,12 @@ html {
 }
 
 /* Enhanced contact card hover effect */
-.contact-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
-    border-left-color: #28a745;
+tr.contact-card:hover {
+    transform: none;
+    box-shadow: none;
 }
 
-.contact-card:hover .contact-name {
+tr.contact-card:hover .contact-name-cell {
     color: #28a745;
 }
 

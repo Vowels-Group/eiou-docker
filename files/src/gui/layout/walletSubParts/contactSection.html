@@ -34,8 +34,8 @@
                     <th class="col-number text-right">Your Av. Credit</th>
                     <th class="col-number text-right">Their Av. Credit</th>
                     <th class="col-status text-center">Status</th>
-                    <th class="col-online text-center">Online</th>
                     <th class="col-chain text-center">Chain</th>
+                    <th class="col-online text-center">Online</th>
                 </tr>
             </thead>
             <tbody id="contacts-grid">
@@ -59,7 +59,6 @@
                     <td class="col-number text-right"><?php echo $contact['my_available_credit'] !== null ? number_format($contact['my_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
                     <td class="col-number text-right"><?php echo $contact['their_available_credit'] !== null ? number_format($contact['their_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
                     <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
-                    <td class="col-online text-center"><span class="contact-status-dot status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?>"></span></td>
                     <td class="col-chain text-center">
                         <?php if ($isIncoming): ?>
                         <span class="badge badge-danger" title="Proposal to drop missing transaction(s) received — action required"><i class="fas fa-exclamation-triangle"></i> Action</span>
@@ -75,6 +74,7 @@
                         <span class="text-muted">—</span>
                         <?php endif; ?>
                     </td>
+                    <td class="col-online text-center"><span class="contact-status-dot status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?>"></span></td>
                 </tr>
             <?php endforeach; ?>
 
@@ -92,8 +92,8 @@
                     <td class="col-number text-right text-muted">—</td>
                     <td class="col-number text-right text-muted">—</td>
                     <td class="col-status text-center"><span class="badge badge-pending">Pending</span></td>
-                    <td class="col-online text-center text-muted">—</td>
                     <td class="col-chain text-center text-muted">—</td>
+                    <td class="col-online text-center text-muted">—</td>
                 </tr>
             <?php endforeach; ?>
 
@@ -111,8 +111,8 @@
                     <td class="col-number text-right text-muted">—</td>
                     <td class="col-number text-right text-muted">—</td>
                     <td class="col-status text-center"><span class="badge badge-blocked">Blocked</span></td>
-                    <td class="col-online text-center text-muted">—</td>
                     <td class="col-chain text-center text-muted">—</td>
+                    <td class="col-online text-center text-muted">—</td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
