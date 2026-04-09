@@ -373,7 +373,14 @@ class DebugReportService
             return ['success' => true, 'key' => $key, 'error' => null];
         }
 
-        $errorMsg = $error ?: 'HTTP ' . $httpCode;
+        // Try to extract the server's error message from the response body
+        $serverError = null;
+        if ($response) {
+            $decoded = json_decode($response, true);
+            $serverError = $decoded['error'] ?? null;
+        }
+        $errorMsg = $serverError ?: ($error ?: 'HTTP ' . $httpCode);
+
         Logger::getInstance()->info('Debug report submission failed', [
             'http_code' => $httpCode,
             'error' => $errorMsg,
