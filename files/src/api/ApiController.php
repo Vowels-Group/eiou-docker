@@ -58,6 +58,8 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
+ * - GET  /api/v1/system/debug-report        - Download debug report (JSON)
+ * - POST /api/v1/system/debug-report        - Submit debug report to support
  *
  * - POST /api/v1/chaindrop/propose           - Propose chain drop
  * - POST /api/v1/chaindrop/accept            - Accept chain drop proposal
@@ -261,6 +263,8 @@ class ApiController {
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
+            $method === 'GET' && $action === 'debug-report' => $this->getDebugReport($params),
+            $method === 'POST' && $action === 'debug-report' => $this->submitDebugReport($body),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
         };
     }
@@ -1942,6 +1946,74 @@ class ApiController {
             ]);
         } catch (Exception $e) {
             return $this->errorResponse('Start failed: ' . $e->getMessage(), 500, 'start_error');
+        }
+    }
+
+    // ==================== Debug Report Endpoints ====================
+
+    /**
+     * GET /api/v1/system/debug-report
+     *
+     * Download a debug report as JSON.
+     * Query params: full=1 (optional), description (optional)
+     */
+    private function getDebugReport(array $params): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        try {
+            $reportService = $this->services->getDebugReportService();
+            $full = !empty($params['full']);
+            $description = $params['description'] ?? '';
+
+            $report = $reportService->generateReport($description, $full);
+
+            return $this->successResponse([
+                'report' => $report,
+                'report_type' => $full ? 'full' : 'limited',
+                'debug_entries_count' => $report['debug_entries_count'],
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to generate debug report: ' . $e->getMessage(), 500, 'debug_report_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/system/debug-report
+     *
+     * Generate and submit a debug report to the support endpoint.
+     * Body JSON: { "description": "...", "full": true/false }
+     */
+    private function submitDebugReport(string $body): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        try {
+            $data = json_decode($body, true) ?? [];
+            $full = !empty($data['full']);
+            $description = $data['description'] ?? '';
+
+            $reportService = $this->services->getDebugReportService();
+            $report = $reportService->generateReport($description, $full);
+            $result = \Eiou\Services\DebugReportService::submit($report, $description);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'submitted' => true,
+                    'key' => $result['key'],
+                    'report_type' => $full ? 'full' : 'limited',
+                ]);
+            }
+
+            return $this->errorResponse(
+                $result['error'] ?? 'Submission failed',
+                502,
+                'debug_report_submit_failed'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to submit debug report: ' . $e->getMessage(), 500, 'debug_report_error');
         }
     }
 

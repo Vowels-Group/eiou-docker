@@ -1606,6 +1606,87 @@ Start background processors by removing the shutdown flag. The watchdog process 
 
 ---
 
+### GET /api/v1/system/debug-report
+
+Download a debug report as JSON. Includes system info, debug table entries, application logs, PHP errors, and nginx errors.
+
+**Permission:** `system:read`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `full` | boolean | `false` | Include full log history (default: last 50 lines per log) |
+| `description` | string | `""` | Optional issue description included in the report |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "report": { "..." },
+        "report_type": "limited",
+        "debug_entries_count": 42
+    }
+}
+```
+
+**Notes:**
+- Same report format as the CLI `eiou report debug` and the GUI Debug Report (all use `DebugReportService`)
+- Limited mode includes last 50 lines of each log file; full mode includes up to 5MB per log
+- Reports do not contain private keys, seed phrases, or authentication codes
+
+---
+
+### POST /api/v1/system/debug-report
+
+Generate a debug report, scrub sensitive data (addresses, keys, IPs), and submit it to the support endpoint via Tor.
+
+**Permission:** `system:read`
+
+**Request Body:**
+
+```json
+{
+    "description": "login page crash after update",
+    "full": false
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | No | Issue description (max 500 chars) |
+| `full` | boolean | No | Include full log history (default: false) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "submitted": true,
+        "key": "rpt_abc123",
+        "report_type": "limited"
+    }
+}
+```
+
+**Error Responses:**
+
+| Code | Status | Cause |
+|------|--------|-------|
+| `debug_report_submit_failed` | 502 | Tor submission failed or server rejected |
+| `debug_report_error` | 500 | Report generation failed |
+
+**Notes:**
+- Sensitive data (onion addresses, public keys, IPs, URLs) is scrubbed before submission
+- Rate-limited to 3 submissions per day (client-side)
+- Payloads over 4.5MB are automatically trimmed (debug entries first, then log fields)
+- If still over 5MB after trimming, returns an error suggesting manual download instead
+
+---
+
 ## Chain Drop Endpoints
 
 Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions). Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`). The balance guard (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`) can be disabled for unconditional auto-accept.

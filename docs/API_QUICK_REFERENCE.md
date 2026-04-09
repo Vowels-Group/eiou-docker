@@ -68,6 +68,8 @@ All requests require HMAC-SHA256 authentication:
 | `POST` | `/api/v1/system/sync` | `admin` | Trigger sync operation |
 | `POST` | `/api/v1/system/shutdown` | `admin` | Shutdown background processors |
 | `POST` | `/api/v1/system/start` | `admin` | Start background processors |
+| `GET` | `/api/v1/system/debug-report` | `system:read` | Download debug report (JSON) |
+| `POST` | `/api/v1/system/debug-report` | `system:read` | Submit debug report to support |
 
 ### P2P Approval Endpoints
 
@@ -223,6 +225,21 @@ All fields optional. `currency` required when updating `fee_percent` or `credit_
     "type": "contacts"
 }
 ```
+
+### GET /api/v1/system/debug-report
+
+Query params: `?full=1&description=login%20crash`
+
+### POST /api/v1/system/debug-report
+
+```json
+{
+    "description": "login page crash",
+    "full": false
+}
+```
+
+> Scrubs sensitive data and submits via Tor. Rate-limited to 3/day. Returns a reference `key` on success.
 
 ### POST /api/v1/p2p/approve
 

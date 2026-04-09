@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- **Debug report CLI `--send` flag and API endpoints**: `eiou report debug` now accepts `--send` to submit the report directly to support (via Tor) instead of saving to file. New REST API endpoints: `GET /api/v1/system/debug-report` (download report as JSON) and `POST /api/v1/system/debug-report` (submit to support). Both accept `description` and `full` parameters. Uses the existing scrubbing, rate-limiting, and Tor submission infrastructure from the GUI "Send to Support" feature
+
 ### Fixed
 - **All cron jobs silently failing (`runuser: not found`)**: backup, update-check, and analytics cron jobs used `runuser` without an absolute path. Cron's default PATH (`/usr/bin:/bin`) does not include `/usr/sbin/` where `runuser` lives on Debian 12, so every cron job silently failed with "runuser: not found". Changed all three cron definitions in `startup.sh` to use `/usr/sbin/runuser`. This is why daily analytics heartbeats were never sent (0 total heartbeats on analytics.eiou.org), and daily backups and update checks may also have been failing
 - **Session expired/timed out shows raw JSON instead of login page**: when a session expired during an AJAX-initiated POST, the server returned raw JSON (`{"error":"Session expired..."}`) which the browser rendered as plain text instead of redirecting to the login screen. Now always renders the authentication form with an inline error message ("Session expired. Please log in again." / "Session timed out. Please log in again.") so users see the login page regardless of how the request was made

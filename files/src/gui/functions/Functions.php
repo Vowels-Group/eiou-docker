@@ -148,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // AJAX-only settings actions (returns JSON, exits immediately)
-    if ($action === 'getDebugReportJson') {
+    if ($action === 'getDebugReportJson' || $action === 'submitDebugReport') {
         // Set JSON header early to ensure clean response
         header('Content-Type: application/json');
         try {

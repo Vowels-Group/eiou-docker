@@ -3871,7 +3871,6 @@ function fetchDebugReport(callback, reportMode) {
  */
 function downloadFullDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
-        // Add '-full' suffix to filename
         var fullFilename = filename.replace('.json', '-full.json');
         downloadDebugFile(jsonData, fullFilename);
         showToast('Success', 'Full debug report downloaded: ' + fullFilename, 'success');
@@ -3892,7 +3891,6 @@ function downloadFullDebugReport() {
  */
 function downloadLimitedDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
-        // Add '-limited' suffix to filename
         var limitedFilename = filename.replace('.json', '-limited.json');
         downloadDebugFile(jsonData, limitedFilename);
         showToast('Success', 'Limited debug report downloaded: ' + limitedFilename, 'success');
@@ -3900,21 +3898,59 @@ function downloadLimitedDebugReport() {
 }
 
 /**
- * Legacy function that redirects to downloadFullDebugReport.
- * @deprecated Use downloadFullDebugReport() instead
- * @returns {void}
+ * Submit a debug report directly to the support team via Tor.
+ *
+ * Generates a full debug report on the server and sends it to the
+ * support endpoint (debug-reports.eiou.org) through the Tor proxy.
+ * No manual download or email required.
+ *
+ * @param {string} reportMode - 'full' or 'limited'
  */
-function emailDebugReport() {
-    downloadFullDebugReport();
-}
+function submitDebugReportToSupport(reportMode) {
+    reportMode = reportMode || 'full';
+    var isFullReport = (reportMode === 'full');
 
-/**
- * Legacy function that redirects to downloadFullDebugReport.
- * @deprecated Use downloadFullDebugReport() instead
- * @returns {void}
- */
-function sendDebugReport() {
-    downloadFullDebugReport();
+    var descriptionEl = document.getElementById('debugDescription');
+    var csrfTokenEl = document.getElementById('debugCsrfToken');
+    var description = descriptionEl ? descriptionEl.value : '';
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    showToast('Sending Report', 'Generating and sending debug report via Tor. This may take a moment...', 'info');
+
+    var formData = new FormData();
+    formData.append('action', 'submitDebugReport');
+    formData.append('csrf_token', csrfToken);
+    formData.append('description', description);
+    formData.append('report_mode', reportMode);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = isFullReport ? 300000 : 120000; // 5 min full, 2 min limited
+    xhr.ontimeout = function() {
+        showToast('Error', 'Report submission timed out. The report may be too large for Tor. Try downloading instead.', 'error');
+    };
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var result = JSON.parse(xhr.responseText);
+                    if (result.success) {
+                        showToast('Report Sent', 'Debug report submitted to support successfully.', 'success');
+                    } else {
+                        showToast('Error', 'Failed to send report: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                } catch (e) {
+                    showToast('Error', 'Failed to parse response: ' + e.message, 'error');
+                }
+            } else {
+                showToast('Error', 'Failed to submit report. Status: ' + xhr.status, 'error');
+            }
+        }
+    };
+    xhr.onerror = function() {
+        showToast('Error', 'Network error while submitting report.', 'error');
+    };
+    xhr.send(formData);
 }
 
 /**
@@ -4889,6 +4925,10 @@ function submitAnalyticsConsent(enable) {
         },
         'downloadLimitedDebugReport': function() { downloadLimitedDebugReport(); },
         'downloadFullDebugReport': function() { downloadFullDebugReport(); },
+        'submitDebugReportToSupport': function(el) {
+            var mode = el.getAttribute('data-report-mode') || 'full';
+            submitDebugReportToSupport(mode);
+        },
 
         // Toast close
         'dismissToast': function(el) {

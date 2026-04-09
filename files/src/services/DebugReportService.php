@@ -7,13 +7,15 @@ namespace Eiou\Services;
 
 use Eiou\Core\Constants;
 use Eiou\Database\DebugRepository;
+use Eiou\Utils\Logger;
 use PDO;
 
 /**
  * Debug Report Service
  *
- * Generates debug reports for troubleshooting. Used by both the GUI
- * (SettingsController) and CLI (eiou debug) to produce identical reports.
+ * Generates debug reports for troubleshooting and submits them to the
+ * support endpoint. Used by both the GUI (SettingsController) and CLI
+ * (eiou debug) to produce identical reports.
  */
 class DebugReportService
 {
@@ -267,5 +269,220 @@ class DebugReportService
             return iconv('UTF-8', 'UTF-8//IGNORE', $str);
         }
         return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $str);
+    }
+
+    // =========================================================================
+    // Remote Submission (sends report to support endpoint via Tor)
+    // =========================================================================
+
+    private const SUBMIT_ENDPOINT = 'https://debug-reports.eiou.org/v1/report';
+    private const TOR_PROXY = '127.0.0.1:9050';
+    private const CONNECT_TIMEOUT = 30;
+    private const SUBMIT_TIMEOUT = 120;
+    private const RATE_LIMIT_FILE = '/tmp/debug-report-submissions.json';
+    private const MAX_SUBMISSIONS_PER_DAY = 3;
+
+    /**
+     * Submit a debug report to the support endpoint via Tor.
+     *
+     * @param array $report The debug report data (from generateReport())
+     * @param string $description User's issue description
+     * @return array{success: bool, key: string|null, error: string|null}
+     */
+    public static function submit(array $report, string $description = ''): array
+    {
+        // Client-side rate limit: max 3 submissions per day
+        $rateCheck = self::checkRateLimit();
+        if (!$rateCheck['allowed']) {
+            return ['success' => false, 'key' => null, 'error' => $rateCheck['error']];
+        }
+
+        if (!function_exists('curl_init')) {
+            return ['success' => false, 'key' => null, 'error' => 'curl extension not available'];
+        }
+
+        // Scrub sensitive data (addresses, pubkeys) before remote submission
+        $scrubbed = self::scrubReport($report);
+
+        $payload = [
+            'report' => $scrubbed,
+            'version' => Constants::APP_VERSION,
+            'description' => substr($description, 0, 500),
+            // Safe to use analytics_id since report content is scrubbed
+            // (no addresses/keys to correlate with). Needed for server-side rate limiting.
+            'analytics_id' => AnalyticsService::getAnonymousId(),
+        ];
+
+        $jsonPayload = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($jsonPayload === false) {
+            return ['success' => false, 'key' => null, 'error' => 'Failed to encode report'];
+        }
+
+        // Trim debug entries if payload exceeds 4.5MB (leave headroom for 5MB server limit)
+        $maxSize = 4.5 * 1024 * 1024;
+        if (strlen($jsonPayload) > $maxSize && !empty($scrubbed['debug_entries'])) {
+            // Remove oldest entries first until under limit
+            while (strlen($jsonPayload) > $maxSize && count($payload['report']['debug_entries']) > 10) {
+                array_shift($payload['report']['debug_entries']);
+                $payload['report']['debug_entries_trimmed'] = true;
+                $jsonPayload = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+            }
+        }
+
+        // If still too large after trimming, truncate log content
+        if (strlen($jsonPayload) > $maxSize) {
+            foreach (['eiou_app_log', 'php_errors', 'nginx_errors'] as $logField) {
+                if (isset($payload['report'][$logField]) && strlen($payload['report'][$logField]) > 50000) {
+                    $payload['report'][$logField] = '[truncated for size] ' . substr($payload['report'][$logField], -50000);
+                }
+            }
+            $jsonPayload = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+        }
+
+        if (strlen($jsonPayload) > 5 * 1024 * 1024) {
+            return ['success' => false, 'key' => null, 'error' => 'Report too large even after trimming. Please download and email it instead.'];
+        }
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => self::SUBMIT_ENDPOINT,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $jsonPayload,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'User-Agent: eiou-node/' . Constants::APP_VERSION,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => self::SUBMIT_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_PROXY => self::TOR_PROXY,
+            CURLOPT_PROXYTYPE => CURLPROXY_SOCKS5_HOSTNAME,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode >= 200 && $httpCode < 300) {
+            $decoded = json_decode($response, true);
+            $key = $decoded['key'] ?? null;
+            self::recordSubmission();
+            Logger::getInstance()->info('Debug report submitted', ['key' => $key]);
+            return ['success' => true, 'key' => $key, 'error' => null];
+        }
+
+        // Try to extract the server's error message from the response body
+        $serverError = null;
+        if ($response) {
+            $decoded = json_decode($response, true);
+            $serverError = $decoded['error'] ?? null;
+        }
+        $errorMsg = $serverError ?: ($error ?: 'HTTP ' . $httpCode);
+
+        Logger::getInstance()->info('Debug report submission failed', [
+            'http_code' => $httpCode,
+            'error' => $errorMsg,
+        ]);
+        return ['success' => false, 'key' => null, 'error' => $errorMsg];
+    }
+
+    /**
+     * Scrub sensitive data from a report before remote submission.
+     *
+     * Replaces addresses, public keys, and other identifiable data while
+     * preserving protocol indicators (http/https/tor) for debugging.
+     *
+     * @param array $report The raw report data
+     * @return array The scrubbed report
+     */
+    private static function scrubReport(array $report): array
+    {
+        // Patterns to scrub — keeps protocol prefix, redacts the rest
+        $patterns = [
+            // .onion addresses (56-char base32 + .onion)
+            '/[a-z2-7]{56}\.onion/' => '[redacted].onion',
+            // http:// and https:// URLs (keep protocol, redact host)
+            '#(https?://)[^\s<>"\']+#i' => '$1[redacted]',
+            // Public keys (64+ hex chars that look like keys)
+            '/\b[0-9a-f]{64,}\b/i' => '[redacted-key]',
+            // IP addresses (preserve as [redacted-ip] to show it was an IP)
+            '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/' => '[redacted-ip]',
+        ];
+
+        $json = json_encode($report, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return $report;
+        }
+
+        foreach ($patterns as $pattern => $replacement) {
+            $json = preg_replace($pattern, $replacement, $json);
+        }
+
+        $scrubbed = json_decode($json, true);
+        return is_array($scrubbed) ? $scrubbed : $report;
+    }
+
+    /**
+     * Check if submission is allowed (max 3 per day).
+     *
+     * @return array{allowed: bool, error: string|null}
+     */
+    private static function checkRateLimit(): array
+    {
+        $today = date('Y-m-d');
+        $data = self::readSubmissionLog();
+
+        // Filter to today's submissions only
+        $todayCount = 0;
+        foreach ($data['submissions'] ?? [] as $timestamp) {
+            if (str_starts_with($timestamp, $today)) {
+                $todayCount++;
+            }
+        }
+
+        if ($todayCount >= self::MAX_SUBMISSIONS_PER_DAY) {
+            $remaining = self::MAX_SUBMISSIONS_PER_DAY;
+            return [
+                'allowed' => false,
+                'error' => "Daily limit reached ({$remaining} reports per day). Please try again tomorrow or download the report instead.",
+            ];
+        }
+
+        return ['allowed' => true, 'error' => null];
+    }
+
+    /**
+     * Record a successful submission for rate limiting.
+     */
+    private static function recordSubmission(): void
+    {
+        $data = self::readSubmissionLog();
+        $today = date('Y-m-d');
+
+        // Keep only today's entries (prune old ones)
+        $data['submissions'] = array_filter(
+            $data['submissions'] ?? [],
+            fn($ts) => str_starts_with($ts, $today)
+        );
+        $data['submissions'][] = date('c');
+
+        @file_put_contents(self::RATE_LIMIT_FILE, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
+    }
+
+    /**
+     * Read the submission log file.
+     */
+    private static function readSubmissionLog(): array
+    {
+        if (!file_exists(self::RATE_LIMIT_FILE)) {
+            return ['submissions' => []];
+        }
+        $json = @file_get_contents(self::RATE_LIMIT_FILE);
+        if ($json === false) {
+            return ['submissions' => []];
+        }
+        return json_decode($json, true) ?: ['submissions' => []];
     }
 }
