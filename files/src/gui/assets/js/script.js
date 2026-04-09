@@ -1960,6 +1960,49 @@ function filterContacts() {
 }
 
 /**
+ * Filter the main transaction list by name, address, or description.
+ * Client-side filter — works on the already-rendered transaction items.
+ */
+function filterTransactions() {
+    var searchInput = document.getElementById('tx-search-input');
+    var searchStatus = document.getElementById('tx-search-status');
+    var searchCount = document.getElementById('tx-search-count');
+
+    if (!searchInput) return;
+
+    var term = searchInput.value.toLowerCase().trim();
+    var items = document.querySelectorAll('#transaction-list .transaction-item');
+    var visible = 0;
+
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (term === '') {
+            item.style.display = '';
+            visible++;
+        } else {
+            var name = item.getAttribute('data-tx-name') || '';
+            var desc = item.getAttribute('data-tx-desc') || '';
+            var addr = item.getAttribute('data-tx-address') || '';
+            if (name.indexOf(term) !== -1 || desc.indexOf(term) !== -1 || addr.indexOf(term) !== -1) {
+                item.style.display = '';
+                visible++;
+            } else {
+                item.style.display = 'none';
+            }
+        }
+    }
+
+    if (searchStatus && searchCount) {
+        if (term !== '') {
+            searchStatus.style.display = 'block';
+            searchCount.textContent = visible;
+        } else {
+            searchStatus.style.display = 'none';
+        }
+    }
+}
+
+/**
  * Toggles between showing all contacts and showing only the first 16.
  *
  * When collapsed, only the first 16 contacts (CONTACTS_DEFAULT_LIMIT) are visible.
@@ -5117,5 +5160,6 @@ function submitAnalyticsConsent(enable) {
         if (!action) return;
 
         if (action === 'filterContacts') { filterContacts(); }
+        if (action === 'filterTransactions') { filterTransactions(); }
     }, false);
 })();

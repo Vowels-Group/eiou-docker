@@ -90,6 +90,10 @@ function deliveryMaxRetries(): int {
     return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
 }
 
+function contactTransactionsLimit(): int {
+    return \Eiou\Core\Constants::CONTACT_TRANSACTIONS_LIMIT;
+}
+
 function p2pDefaultExpirationSeconds(): int {
     return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
 }
@@ -293,7 +297,8 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
     return $posA - $posB;
 });
 
-$transactions = $transactionService->getTransactionHistory($maxDisplayLines);
+$recentTransactionsLimit = $user->getDisplayRecentTransactionsLimit();
+$transactions = $transactionService->getTransactionHistory($recentTransactionsLimit);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Update check status (reads cache only — never triggers a new check on page load)
@@ -431,9 +436,10 @@ if (!empty($pendingContacts)) {
     }
 }
 
-$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
-$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
-$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);
+$contactTxLimit = contactTransactionsLimit();
+$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $contactTxLimit);
+$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $contactTxLimit);
+$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $contactTxLimit);
 
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {
