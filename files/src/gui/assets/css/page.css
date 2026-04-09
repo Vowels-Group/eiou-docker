@@ -767,7 +767,15 @@ body {
     border-collapse: separate;
     border-spacing: 0;
     font-size: 0.9rem;
+    table-layout: fixed;
 }
+/* Column widths — fixed layout ensures header/data alignment */
+.contacts-table .col-icon   { width: 48px; }
+.contacts-table .col-name   { width: 14%; }
+.contacts-table .col-status { width: 10%; }
+.contacts-table .col-online { width: 6%; }
+.contacts-table .col-chain  { width: 8%; }
+.contacts-table .col-number { width: 20%; }
 .contacts-table thead th {
     text-align: left;
     padding: 0.65rem 0.75rem;
@@ -815,9 +823,12 @@ body {
     flex-shrink: 0;
 }
 .contact-name-cell {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 1rem;
     color: #212529;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .contact-status-dot {
     display: inline-block;
