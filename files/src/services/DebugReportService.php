@@ -411,7 +411,7 @@ class DebugReportService
             '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/' => '[redacted-ip]',
         ];
 
-        $json = json_encode($report, JSON_INVALID_UTF8_SUBSTITUTE);
+        $json = json_encode($report, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
             return $report;
         }
