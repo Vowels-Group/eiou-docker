@@ -457,6 +457,11 @@ class Constants {
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
+    // Session
+    const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
+    const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
+
+
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';
 

@@ -701,4 +701,26 @@ class ConstantsTest extends TestCase
         $this->assertGreaterThan(0, Constants::P2P_MIN_EXPIRATION_SECONDS);
         $this->assertGreaterThan(Constants::P2P_MIN_EXPIRATION_SECONDS, Constants::P2P_DEFAULT_EXPIRATION_SECONDS);
     }
+
+    /**
+     * Test session timeout constants are valid
+     */
+    public function testSessionTimeoutConstantsAreValid(): void
+    {
+        $this->assertGreaterThan(0, Constants::SESSION_TIMEOUT_MINUTES);
+        $this->assertIsArray(Constants::SESSION_TIMEOUT_OPTIONS);
+        $this->assertNotEmpty(Constants::SESSION_TIMEOUT_OPTIONS);
+        $this->assertContains(Constants::SESSION_TIMEOUT_MINUTES, Constants::SESSION_TIMEOUT_OPTIONS);
+
+        // All options must be positive integers
+        foreach (Constants::SESSION_TIMEOUT_OPTIONS as $option) {
+            $this->assertIsInt($option);
+            $this->assertGreaterThan(0, $option);
+        }
+
+        // Options should be sorted ascending
+        $sorted = Constants::SESSION_TIMEOUT_OPTIONS;
+        sort($sorted);
+        $this->assertSame($sorted, Constants::SESSION_TIMEOUT_OPTIONS);
+    }
 }

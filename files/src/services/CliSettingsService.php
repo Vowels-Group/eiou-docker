@@ -163,6 +163,14 @@ class CliSettingsService
                     return;
                 }
                 $value = trim($argv[3]);
+            } elseif(strtolower($argv[2]) === 'sessiontimeoutminutes'){
+                $key = 'sessionTimeoutMinutes';
+                $val = (int) ($argv[3] ?? 0);
+                if (!in_array($val, Constants::SESSION_TIMEOUT_OPTIONS)) {
+                    $output->validationError($key, 'Must be one of: ' . implode(', ', Constants::SESSION_TIMEOUT_OPTIONS));
+                    return;
+                }
+                $value = $val;
             // Feature toggles
             } elseif(strtolower($argv[2]) === 'hopbudgetrandomized'){
                 $key = 'hopBudgetRandomized';
@@ -435,6 +443,7 @@ class CliSettingsService
                     ['num' => '41', 'label' => 'Date format'],
                     ['num' => '43', 'label' => 'Recent transactions limit'],
                     ['num' => '44a', 'label' => 'Display decimal places (0-8)'],
+                    ['num' => '52', 'label' => 'Session timeout (minutes)'],
                 ],
                 'Currency Management' => [
                     ['num' => '44', 'label' => 'Allowed currencies'],
@@ -1067,6 +1076,18 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
+                case '52':
+                    $options = implode(', ', Constants::SESSION_TIMEOUT_OPTIONS);
+                    echo "Enter session timeout in minutes ({$options}): ";
+                    $key = 'sessionTimeoutMinutes';
+                    $val = (int) trim(fgets(STDIN));
+                    if (!in_array($val, Constants::SESSION_TIMEOUT_OPTIONS)) {
+                        echo "Error: Must be one of: {$options}\n";
+                        return;
+                    }
+                    $value = $val;
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -1206,6 +1227,7 @@ class CliSettingsService
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
             'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
             'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
+            'session_timeout_minutes' => $this->currentUser->getSessionTimeoutMinutes(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
             'auto_reject_unknown_currency' => $this->currentUser->getAutoRejectUnknownCurrency(),
@@ -1271,6 +1293,7 @@ class CliSettingsService
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
             echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
             echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
+            echo "\tSession timeout: " . $settings['session_timeout_minutes'] . " minutes\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";
             echo "\tAuto-reject unknown currencies: " . ($settings['auto_reject_unknown_currency'] ? 'enabled' : 'disabled') . "\n";

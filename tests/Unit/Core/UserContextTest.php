@@ -1375,4 +1375,63 @@ class UserContextTest extends TestCase
         $instance->setUserData(['analyticsConsentAsked' => true]);
         $this->assertTrue($instance->getAnalyticsConsentAsked());
     }
+
+    // =========================================================================
+    // Session Timeout Tests
+    // =========================================================================
+
+    public function testGetSessionTimeoutMinutesDefault(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $instance->getSessionTimeoutMinutes());
+    }
+
+    public function testGetSessionTimeoutMinutesFromConfig(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['sessionTimeoutMinutes' => 60]);
+        $this->assertSame(60, $instance->getSessionTimeoutMinutes());
+    }
+
+    public function testGetSessionTimeoutMinutesAllValidOptions(): void
+    {
+        $instance = UserContext::getInstance();
+        foreach (Constants::SESSION_TIMEOUT_OPTIONS as $minutes) {
+            $instance->setUserData(['sessionTimeoutMinutes' => $minutes]);
+            $this->assertSame($minutes, $instance->getSessionTimeoutMinutes());
+        }
+    }
+
+    public function testGetSessionTimeoutMinutesRejectsInvalidValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['sessionTimeoutMinutes' => 42]);
+        $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $instance->getSessionTimeoutMinutes());
+    }
+
+    public function testGetSessionTimeoutMinutesRejectsNegativeValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['sessionTimeoutMinutes' => -5]);
+        $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $instance->getSessionTimeoutMinutes());
+    }
+
+    public function testGetSessionTimeoutMinutesRejectsZero(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['sessionTimeoutMinutes' => 0]);
+        $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $instance->getSessionTimeoutMinutes());
+    }
+
+    // =========================================================================
+    // Configurable Defaults — session timeout included
+    // =========================================================================
+
+    public function testConfigurableDefaultsIncludesSessionTimeout(): void
+    {
+        $defaults = UserContext::getConfigurableDefaults();
+        $this->assertArrayHasKey('sessionTimeoutMinutes', $defaults);
+        $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $defaults['sessionTimeoutMinutes']);
+    }
 }

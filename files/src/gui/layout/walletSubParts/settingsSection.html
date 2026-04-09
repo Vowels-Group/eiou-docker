@@ -8,6 +8,34 @@
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
         <div class="settings-grid">
+            <!-- Display Name -->
+            <div class="form-group">
+                <label for="settingsName">Display Name:</label>
+                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Your name shared when contacts scan your QR code. Leave empty to share address only.
+                </small>
+            </div>
+
+            <!-- Session Timeout -->
+            <div class="form-group">
+                <label for="sessionTimeoutMinutes">Session Timeout:</label>
+                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
+                    <?php
+                    $currentTimeout = $user->getSessionTimeoutMinutes();
+                    foreach (\Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS as $minutes): ?>
+                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
+                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Auto-logout after this period of inactivity
+                </small>
+            </div>
+
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>

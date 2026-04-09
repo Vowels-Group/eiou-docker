@@ -4087,17 +4087,25 @@ function toggleAddressQr(el) {
     }
 
     // Get address text
-    var text = el.getAttribute('data-qr-text');
-    if (!text) {
+    var address = el.getAttribute('data-qr-text');
+    if (!address) {
         var sourceId = el.getAttribute('data-qr-source');
         if (sourceId) {
             var sourceEl = document.getElementById(sourceId);
-            text = sourceEl ? sourceEl.textContent.trim() : '';
+            address = sourceEl ? sourceEl.textContent.trim() : '';
         }
     }
-    if (!text) return;
+    if (!address) return;
 
-    var svg = generateQrSvg(text, 200);
+    // Build QR payload: typed JSON envelope for add-contact
+    var displayName = el.getAttribute('data-qr-name') || '';
+    var qrPayload = { type: 'contact', address: address };
+    if (displayName) {
+        qrPayload.name = displayName;
+    }
+    var qrText = JSON.stringify(qrPayload);
+
+    var svg = generateQrSvg(qrText, 200);
     if (!svg) {
         container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
     } else {
@@ -4131,7 +4139,38 @@ function isCanvasBlocked() {
     }
 }
 
-function openQrScanner(targetInputId) {
+/**
+ * Parse eIOU QR code data. Returns a typed object so callers can
+ * distinguish between contact, payment request, or unknown payloads.
+ *
+ * Supported types:
+ *   "contact"  — { type, address, name? }
+ *   "payment"  — { type, address, amount?, currency?, description? }  (future)
+ *
+ * Legacy / plain-text QR codes are treated as type "contact" with
+ * address only (backward compatible).
+ *
+ * @param {string} text - Raw QR code text
+ * @returns {{ type: string, address: string, [key: string]: * }}
+ */
+function parseQrData(text) {
+    try {
+        var data = JSON.parse(text);
+        if (data && typeof data.type === 'string' && typeof data.address === 'string') {
+            return data;
+        }
+        // Legacy JSON without type — assume contact
+        if (data && typeof data.address === 'string') {
+            data.type = 'contact';
+            return data;
+        }
+    } catch (e) { /* not JSON — treat as plain address */ }
+    return { type: 'contact', address: text };
+}
+
+function openQrScanner(targetInputId, opts) {
+    opts = opts || {};
+
     // Tor Browser blocks camera API and canvas — QR scanning cannot work
     if (isCanvasBlocked()) {
         showToast('QR Scanner Unavailable',
@@ -4193,13 +4232,36 @@ function openQrScanner(targetInputId) {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         function onScanSuccess(decodedText) {
+            var qrData = parseQrData(decodedText);
+
             var input = document.getElementById(targetInputId);
             if (input) {
-                input.value = decodedText;
+                input.value = qrData.address;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
+
+            // If name field target provided and name is available, fill it
+            var nameInputId = opts.nameInputId;
+            if (nameInputId && qrData.name) {
+                var nameInput = document.getElementById(nameInputId);
+                if (nameInput) {
+                    nameInput.value = qrData.name;
+                    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+
+            var displayAddr = qrData.address.length > 30 ? qrData.address.substring(0, 30) + '...' : qrData.address;
+            var toastMsg = 'Address: ' + displayAddr;
+            if (qrData.name) {
+                toastMsg = qrData.name + ' — ' + displayAddr;
+            }
+            showToast('QR Scanned', toastMsg, 'success');
             closeScanner();
+
+            // If callback provided, call it after scan
+            if (typeof opts.onScan === 'function') {
+                opts.onScan(qrData);
+            }
         },
         function() { /* ignore — fires continuously when no QR in frame */ }
     ).then(function() {
@@ -4781,7 +4843,18 @@ function submitAnalyticsConsent(enable) {
         'toggleAddressQr': function(el) { toggleAddressQr(el); },
         'openQrScanner': function(el) {
             var target = el.getAttribute('data-scan-target');
-            if (target) openQrScanner(target);
+            var nameTarget = el.getAttribute('data-scan-name-target');
+            if (target) openQrScanner(target, { nameInputId: nameTarget || null });
+        },
+        'scanContactQr': function() {
+            // Open scanner, then navigate to contacts tab and open add contact modal
+            openQrScanner('address', {
+                nameInputId: 'name',
+                onScan: function() {
+                    switchTab('contacts');
+                    openAddContactModal();
+                }
+            });
         },
 
         // Navigation & reload

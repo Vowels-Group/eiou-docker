@@ -371,6 +371,27 @@ class SettingsController
             else { $errors[] = 'Invalid held TX sync timeout: ' . $validation['error']; }
         }
 
+        // Session timeout
+        if (isset($_POST['sessionTimeoutMinutes'])) {
+            $val = (int) $_POST['sessionTimeoutMinutes'];
+            if (in_array($val, Constants::SESSION_TIMEOUT_OPTIONS)) {
+                $settings['sessionTimeoutMinutes'] = $val;
+            } else {
+                $errors[] = 'Invalid session timeout: must be one of ' . implode(', ', Constants::SESSION_TIMEOUT_OPTIONS) . ' minutes';
+            }
+        }
+
+        // Display name — saved to userconfig.json (separate from defaultconfig.json)
+        $nameForUserConfig = null;
+        if (isset($_POST['name'])) {
+            $val = trim(Security::sanitizeInput($_POST['name']));
+            if (strlen($val) > 64) {
+                $errors[] = 'Display name must be 64 characters or fewer';
+            } else {
+                $nameForUserConfig = $val;
+            }
+        }
+
         // Display settings
         if (isset($_POST['displayDateFormat'])) {
             $validation = InputValidator::validateDateFormat($_POST['displayDateFormat']);
@@ -406,6 +427,19 @@ class SettingsController
             // Write back to file
             if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
+            }
+
+            // Save display name to userconfig.json (consistent with CLI/API)
+            if ($nameForUserConfig !== null) {
+                $userConfigFile = '/etc/eiou/config/userconfig.json';
+                $userConfig = [];
+                if (file_exists($userConfigFile)) {
+                    $userConfig = json_decode(file_get_contents($userConfigFile), true) ?? [];
+                }
+                $userConfig['name'] = $nameForUserConfig;
+                if (file_put_contents($userConfigFile, json_encode($userConfig, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+                    throw new Exception('Failed to write user configuration file');
+                }
             }
 
             // Trigger initial analytics event when toggled on for the first time

@@ -1036,6 +1036,16 @@ class UserContext {
         return max(1, (int) ($this->get('displayRecentTransactionsLimit') ?? Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT));
     }
 
+    /**
+     * Get session timeout in minutes
+     *
+     * @return int
+     */
+    public function getSessionTimeoutMinutes(): int {
+        $val = (int) ($this->get('sessionTimeoutMinutes') ?? Constants::SESSION_TIMEOUT_MINUTES);
+        return in_array($val, Constants::SESSION_TIMEOUT_OPTIONS) ? $val : Constants::SESSION_TIMEOUT_MINUTES;
+    }
+
     // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
@@ -1119,6 +1129,9 @@ class UserContext {
             'displayDateFormat' => Constants::DISPLAY_DATE_FORMAT,
             'displayCurrencyDecimals' => Constants::DISPLAY_CURRENCY_DECIMALS,
             'displayRecentTransactionsLimit' => Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT,
+
+            // Session
+            'sessionTimeoutMinutes' => Constants::SESSION_TIMEOUT_MINUTES,
         ];
     }
 

@@ -199,6 +199,8 @@ Handles settings and debug operations.
 
 | Setting | Type | Description |
 |---------|------|-------------|
+| `name` | string | Display name shared via QR codes (saved to userconfig.json) |
+| `sessionTimeoutMinutes` | int | Session inactivity timeout (5, 10, 15, 30, or 60 minutes) |
 | `defaultCurrency` | string | Default currency code |
 | `defaultFee` | float | Default fee percentage |
 | `minFee` | float | Minimum fee amount |
@@ -228,7 +230,7 @@ Handles settings and debug operations.
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
 | Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
 | Currency | `allowedCurrencies` |
-| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
+| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput`, `sessionTimeoutMinutes` |
 
 ---
 
@@ -350,12 +352,22 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 | Total Fee Earnings | P2P relay fee earnings per currency (amber/gold card) |
 | Total Available Credit | Sum of available credit per currency (blue-purple card), from ping/pong, ~5 min refresh |
 | User Addresses | HTTP/HTTPS/Tor with Copy and QR code buttons |
+| Scan Contact QR | Opens camera scanner — on scan, switches to Contacts tab and opens Add Contact modal with pre-filled address and name |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
 
 All three dashboard cards display per-currency rows. When a card has no data for a given category, it shows "0.00" with the currency derived from other data sources for consistency.
 
 The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a small info modal on click (tap-friendly on mobile).
+
+**QR Code Format:** QR codes use a typed JSON envelope for forward compatibility:
+
+| Type | Format | Description |
+|------|--------|-------------|
+| `contact` | `{"type":"contact","address":"...","name":"..."}` | Add contact (name optional) |
+| `payment` | `{"type":"payment","address":"...","amount":...,"currency":"...","description":"..."}` | Payment request (future) |
+
+Legacy plain-text QR codes (just an address string) are parsed as type `contact` for backward compatibility.
 
 ---
 
@@ -612,7 +624,7 @@ The `Session` class provides secure session handling.
 |--------|-------------|
 | `isAuthenticated()` | Check if user is logged in |
 | `authenticate($authCode, $userAuthCode)` | Validate auth code |
-| `checkSessionTimeout()` | Enforce 30-minute inactivity limit |
+| `checkSessionTimeout()` | Enforce configurable inactivity limit (default 30 min, reads from `sessionTimeoutMinutes` in config) |
 | `logout()` | Clear session and destroy cookie |
 | `requireAuth()` | Redirect to login if not authenticated |
 | `generateCSRFToken()` | Create secure token |
@@ -628,7 +640,7 @@ The `Session` class provides secure session handling.
 |---------|----------------|
 | Session regeneration | Every 5 minutes |
 | Auth code comparison | `hash_equals()` constant-time |
-| Session timeout | 30 minutes of inactivity |
+| Session timeout | Configurable (5/10/15/30/60 min, default 30) |
 | ID regeneration on login | Prevents session fixation |
 | CSRF token expiration | 1 hour max age |
 

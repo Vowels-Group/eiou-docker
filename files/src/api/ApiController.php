@@ -1597,6 +1597,8 @@ class ApiController {
                 // Display
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
                 'display_recent_transactions_limit' => $currentUser->getDisplayRecentTransactionsLimit(),
+                // Session
+                'session_timeout_minutes' => $currentUser->getSessionTimeoutMinutes(),
                 // Currency management
                 'allowed_currencies' => $currentUser->getAllowedCurrencies(),
             ]
@@ -1682,6 +1684,8 @@ class ApiController {
             // Display
             'display_date_format' => ['key' => 'displayDateFormat', 'validate' => 'validateDateFormat', 'config' => 'defaultconfig.json'],
             'display_recent_transactions_limit' => ['key' => 'displayRecentTransactionsLimit', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            // Session
+            'session_timeout_minutes' => ['key' => 'sessionTimeoutMinutes', 'validate' => null, 'config' => 'defaultconfig.json', 'enum' => Constants::SESSION_TIMEOUT_OPTIONS],
         ];
 
         $updated = [];
@@ -1728,6 +1732,14 @@ class ApiController {
                     continue;
                 }
                 $value = $validation['value'];
+            } elseif (isset($mapping['enum'])) {
+                // Value must be one of the allowed options
+                $intVal = (int) $rawValue;
+                if (!in_array($intVal, $mapping['enum'])) {
+                    $errors[] = "$apiKey: Must be one of: " . implode(', ', $mapping['enum']);
+                    continue;
+                }
+                $value = $intVal;
             } else {
                 // Custom validation for non-InputValidator fields
                 if ($configKey === 'maxOutput') {
