@@ -119,7 +119,7 @@ if (php_sapi_name() !== 'cli') {
             // handled in Functions.php that return JSON and exit immediately.
             // Keep in sync with the AJAX-only blocks in Functions.php.
             $ajaxActions = [
-                'pingContact', 'analyticsConsent', 'getDebugReportJson',
+                'pingContact', 'analyticsConsent', 'getDebugReportJson', 'submitDebugReport',
                 'proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop',
                 'approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid',
                 'dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll',

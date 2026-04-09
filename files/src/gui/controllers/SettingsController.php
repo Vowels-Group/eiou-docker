@@ -512,6 +512,37 @@ class SettingsController
     }
 
     /**
+     * Handle submit debug report to support (AJAX)
+     * Generates the report and sends it to the support endpoint via Tor.
+     *
+     * @return void
+     */
+    public function handleSubmitDebugReport(): void
+    {
+        $description = Security::sanitizeInput($_POST['description'] ?? '');
+        $reportMode = Security::sanitizeInput($_POST['report_mode'] ?? 'full');
+        $isFullReport = ($reportMode !== 'limited');
+
+        try {
+            $reportService = new DebugReportService(
+                new DebugRepository($this->getPdoConnection()),
+                $this->getPdoConnection()
+            );
+            $report = $reportService->generateReport($description, $isFullReport);
+            $result = DebugReportService::submit($report, $description);
+
+            header('Content-Type: application/json');
+            echo json_encode($result);
+            exit;
+
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'key' => null, 'error' => $e->getMessage()]);
+            exit;
+        }
+    }
+
+    /**
      * Route POST actions to appropriate handlers
      *
      * @return void
@@ -532,6 +563,9 @@ class SettingsController
                 break;
             case 'getDebugReportJson':
                 $this->handleGetDebugReportJson();
+                break;
+            case 'submitDebugReport':
+                $this->handleSubmitDebugReport();
                 break;
             case 'analyticsConsent':
                 $this->handleAnalyticsConsent();
