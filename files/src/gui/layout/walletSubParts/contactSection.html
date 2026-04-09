@@ -17,209 +17,106 @@
         </div>
     </div>
     <?php endif; ?>
-    <div class="contacts-slider">
-        <button type="button" id="contacts-scroll-left" class="contacts-scroll-btn contacts-scroll-left hidden" data-action="scrollContacts" data-direction="-1" title="Scroll left">
-            <i class="fas fa-chevron-left"></i>
-        </button>
-        <div class="contacts-grid" id="contacts-grid">
-        <?php if (empty($allContacts)): ?>
-            <div class="empty-state">
-                <i class="fas fa-users"></i>
-                <h3>No Contacts Yet</h3>
-                <p>Add your first contact to start using eIOU</p>
-            </div>
-        <?php else: ?>
-        <!-- Accepted Contacts (with Balance) -->
+    <?php if (empty($allContacts)): ?>
+    <div class="empty-state">
+        <i class="fas fa-users"></i>
+        <h3>No Contacts Yet</h3>
+        <p>Add your first contact to start using eIOU</p>
+    </div>
+    <?php else: ?>
+    <div class="contacts-table-wrapper">
+        <table class="contacts-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Chain</th>
+                    <th class="text-right">Balance</th>
+                    <th class="text-right">Your Av. Credit</th>
+                    <th class="text-right">Their Av. Credit</th>
+                    <th class="text-center">Online</th>
+                </tr>
+            </thead>
+            <tbody id="contacts-grid">
+            <!-- Accepted Contacts -->
             <?php foreach ($acceptedContacts as $contact): ?>
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
                     $onlineStatus = $contact['online_status'] ?? 'unknown';
                     $validChain = $contact['valid_chain'] ?? null;
+                    $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
+                    $displayCurrency = $primaryCur['currency'] ?? 'USD';
+                    $proposal = $contact['chain_drop_proposal'] ?? null;
+                    $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
+                    $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
+                    $isRejected = $proposal && $proposal['status'] === 'rejected';
                 ?>
-                <div class="contact-card cursor-pointer position-relative" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
-                    <!-- Online Status Indicator -->
-                    <span class="contact-status-indicator status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?><?php echo $validChain !== null ? ($validChain ? ' - Chain Valid' : ' - Chain Invalid') : ''; ?>"></span>
-                    <div class="contact-avatar contact-avatar-accepted">
-                        <?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?>
-                    </div>
-                    <div class="contact-info">
-                        <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                        <div class="contact-badges">
-                            <span class="badge badge-accepted">Accepted</span>
-                            <?php
-                                $proposal = $contact['chain_drop_proposal'] ?? null;
-                                $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
-                                $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
-                                $isRejected = $proposal && $proposal['status'] === 'rejected';
-                            ?>
-                            <?php if ($isIncoming): ?>
-                            <span class="badge badge-danger" title="Proposal to drop missing transaction(s) received — action required">
-                                <i class="fas fa-exclamation-triangle"></i> Action Required
-                            </span>
-                            <?php elseif ($isOutgoing): ?>
-                            <span class="badge badge-info-outline" title="Awaiting contact's response to proposal to drop missing transaction(s)">
-                                <i class="fas fa-clock"></i> Awaiting Response
-                            </span>
-                            <?php elseif ($isRejected): ?>
-                            <span class="badge badge-warning-strong" title="Chain gap unresolved — proposal was rejected, transactions blocked">
-                                <i class="fas fa-ban"></i> Blocked
-                            </span>
-                            <?php elseif ($validChain === 0): ?>
-                            <span class="badge badge-warning" title="Transaction chain needs sync"><i class="fas fa-exclamation-triangle"></i></span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="contact-address-icons">
-                            <?php if (!empty($contact['tor'])): ?>
-                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                                    <i class="fas fa-user-secret"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['https'])): ?>
-                                <span class="address-icon address-https" title="HTTPS Address: <?php echo htmlspecialchars($contact['https']); ?>">
-                                    <i class="fas fa-globe"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['http'])): ?>
-                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
-                                    <i class="fas fa-globe"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (empty($contact['http']) && empty($contact['https']) && empty($contact['tor'])): ?>
-                                <span class="address-icon address-none" title="No address available">
-                                    <i class="fas fa-question-circle"></i>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="contact-details">
-                            <?php
-                                $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
-                                $displayCurrency = $primaryCur['currency'] ?? 'USD';
-                            ?>
-                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
-                            <?php if ($contact['my_available_credit'] !== null): ?>
-                            <div>Your Av. Credit: <?php echo number_format($contact['my_available_credit'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
-                            <?php endif; ?>
-                            <?php if ($contact['their_available_credit'] !== null): ?>
-                            <div>Their Av. Credit: <?php echo number_format($contact['their_available_credit'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
-                            <?php endif; ?>
-                            <?php if (count($contact['currencies'] ?? []) > 1): ?>
-                                <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> more</div>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['pending_currencies'])): ?>
-                                <div class="multi-currency-badge badge-pending-currency"><?php echo count($contact['pending_currencies']); ?> pending</div>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['outgoing_currencies'])): ?>
-                                <div class="multi-currency-badge badge-requested-currency"><?php echo count($contact['outgoing_currencies']); ?> requested</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
+                <tr class="contact-card contact-row cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                    <td><div class="contact-avatar-sm contact-avatar-accepted"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div></td>
+                    <td class="contact-name-cell"><?php echo htmlspecialchars($contact['name']); ?></td>
+                    <td><span class="badge badge-accepted">Accepted</span></td>
+                    <td>
+                        <?php if ($isIncoming): ?>
+                        <span class="badge badge-danger" title="Proposal to drop missing transaction(s) received — action required"><i class="fas fa-exclamation-triangle"></i> Action</span>
+                        <?php elseif ($isOutgoing): ?>
+                        <span class="badge badge-info-outline" title="Awaiting contact's response"><i class="fas fa-clock"></i> Waiting</span>
+                        <?php elseif ($isRejected): ?>
+                        <span class="badge badge-warning-strong" title="Chain gap unresolved — proposal rejected"><i class="fas fa-ban"></i> Blocked</span>
+                        <?php elseif ($validChain === 0): ?>
+                        <span class="badge badge-warning" title="Transaction chain needs sync"><i class="fas fa-exclamation-triangle"></i></span>
+                        <?php elseif ($validChain === 1): ?>
+                        <span class="text-success" title="Chain valid"><i class="fas fa-check"></i></span>
+                        <?php else: ?>
+                        <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-right text-nowrap"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
+                    <td class="text-right text-nowrap"><?php echo $contact['my_available_credit'] !== null ? number_format($contact['my_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
+                    <td class="text-right text-nowrap"><?php echo $contact['their_available_credit'] !== null ? number_format($contact['their_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
+                    <td class="text-center"><span class="contact-status-dot status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?>"></span></td>
+                </tr>
             <?php endforeach; ?>
 
-            <!-- Pending User Contacts -->
+            <!-- Pending Contacts -->
             <?php foreach ($pendingUserContacts as $contact): ?>
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'pending');
+                    $pendCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
+                    $pendCurrency = $pendCur['currency'] ?? 'USD';
                 ?>
-                <div class="contact-card pending cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
-                    <div class="contact-avatar contact-avatar-pending">
-                        <?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?>
-                    </div>
-                    <div class="contact-info">
-                        <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                        <div class="contact-badges">
-                            <span class="badge badge-pending">Pending Response</span>
-                            <?php if (!empty($contact['pending_currencies'])): ?>
-                                <span class="badge badge-pending-currency"><?php echo count($contact['pending_currencies']); ?> incoming</span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="contact-address-icons">
-                            <?php if (!empty($contact['tor'])): ?>
-                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                                    <i class="fas fa-user-secret"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['https'])): ?>
-                                <span class="address-icon address-https" title="HTTPS Address: <?php echo htmlspecialchars($contact['https']); ?>">
-                                    <i class="fas fa-globe"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['http'])): ?>
-                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
-                                    <i class="fas fa-globe"></i>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="contact-details">
-                            <?php
-                                $pendCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
-                            ?>
-                            <?php if ($pendCur): ?>
-                            <div>Credit: <?php echo number_format($pendCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($pendCur['currency'] ?? 'USD'); ?></div>
-                            <div>Fee: <?php echo number_format($pendCur['fee'] ?? 0, 2); ?>%</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
+                <tr class="contact-card contact-row contact-row-pending cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                    <td><div class="contact-avatar-sm contact-avatar-pending"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div></td>
+                    <td class="contact-name-cell"><?php echo htmlspecialchars($contact['name']); ?></td>
+                    <td><span class="badge badge-pending">Pending</span></td>
+                    <td><span class="text-muted">—</span></td>
+                    <td class="text-right text-muted">—</td>
+                    <td class="text-right text-muted">—</td>
+                    <td class="text-right text-muted">—</td>
+                    <td class="text-center"><span class="text-muted">—</span></td>
+                </tr>
             <?php endforeach; ?>
 
             <!-- Blocked Contacts -->
             <?php foreach ($blockedContacts as $contact): ?>
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'blocked');
+                    $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
+                    $blkCurrency = $blkCur['currency'] ?? 'USD';
                 ?>
-                <div class="contact-card blocked cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
-                    <div class="contact-avatar contact-avatar-blocked">
-                        <?php echo htmlspecialchars($contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "X"); ?>
-                    </div>
-                    <div class="contact-info">
-                        <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
-                        <div class="contact-badges">
-                            <span class="badge badge-blocked">Blocked</span>
-                        </div>
-                        <div class="contact-address-icons">
-                            <?php if (!empty($contact['tor'])): ?>
-                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                                    <i class="fas fa-user-secret"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['https'])): ?>
-                                <span class="address-icon address-https" title="HTTPS Address: <?php echo htmlspecialchars($contact['https']); ?>">
-                                    <i class="fas fa-globe"></i>
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($contact['http'])): ?>
-                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
-                                    <i class="fas fa-globe"></i>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <div class="contact-details">
-                            <?php
-                                $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
-                                $blkCurrency = $blkCur['currency'] ?? 'USD';
-                            ?>
-                            <div>Balance: <?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
-                            <?php if ($blkCur): ?>
-                            <div>Credit: <?php echo number_format($blkCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></div>
-                            <div>Fee: <?php echo number_format($blkCur['fee'] ?? 0, 2); ?>%</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
+                <tr class="contact-card contact-row contact-row-blocked cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                    <td><div class="contact-avatar-sm contact-avatar-blocked"><?php echo htmlspecialchars($contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : 'X'); ?></div></td>
+                    <td class="contact-name-cell"><?php echo htmlspecialchars($contact['name'] ?? '-'); ?></td>
+                    <td><span class="badge badge-blocked">Blocked</span></td>
+                    <td><span class="text-muted">—</span></td>
+                    <td class="text-right text-nowrap"><?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></td>
+                    <td class="text-right text-muted">—</td>
+                    <td class="text-right text-muted">—</td>
+                    <td class="text-center"><span class="text-muted">—</span></td>
+                </tr>
             <?php endforeach; ?>
-
-        <?php endif; ?>
-    </div>
-        <button type="button" id="contacts-scroll-right" class="contacts-scroll-btn contacts-scroll-right" data-action="scrollContacts" data-direction="1" title="Scroll right">
-            <i class="fas fa-chevron-right"></i>
-        </button>
-    </div>
-    <?php if (count($allContacts) > 16): ?>
-    <div id="contacts-show-more" class="contacts-show-more">
-        <button type="button" class="btn btn-outline" data-action="toggleShowAllContacts" id="show-more-btn">
-            <i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
-        </button>
+            </tbody>
+        </table>
     </div>
     <?php endif; ?>
 </div>

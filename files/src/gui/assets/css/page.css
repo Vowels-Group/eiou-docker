@@ -755,6 +755,68 @@ body {
     color: #6c757d;
 }
 
+/* Contacts Table Layout */
+.contacts-table-wrapper {
+    overflow-x: auto;
+}
+.contacts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+.contacts-table thead th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+}
+.contacts-table tbody tr.contact-row {
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.15s;
+}
+.contacts-table tbody tr.contact-row:hover {
+    background: #f0f7ff;
+}
+.contacts-table tbody tr.contact-row-pending { opacity: 0.7; }
+.contacts-table tbody tr.contact-row-blocked { opacity: 0.5; }
+.contacts-table td {
+    padding: 0.6rem 0.75rem;
+    vertical-align: middle;
+}
+.contact-avatar-sm {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #fff;
+    flex-shrink: 0;
+}
+.contact-name-cell {
+    font-weight: 600;
+    color: #212529;
+    white-space: nowrap;
+}
+.contact-status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #adb5bd;
+}
+.contact-status-dot.status-online { background: #28a745; }
+.contact-status-dot.status-partial { background: #ffc107; }
+.contact-status-dot.status-offline { background: #dc3545; }
+.contact-status-dot.status-unknown { background: #adb5bd; }
+
 .contact-address {
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
@@ -3193,6 +3255,7 @@ html {
 .position-relative { position: relative; }
 .text-center { text-align: center; }
 .text-right { text-align: right; }
+.text-nowrap { white-space: nowrap; }
 .text-uppercase { text-transform: uppercase; }
 .font-sm { font-size: 0.85rem; }
 .font-xs { font-size: 0.8rem; }
