@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- **Session expired/timed out shows raw JSON instead of login page**: when a session expired during an AJAX-initiated POST, the server returned raw JSON (`{"error":"Session expired..."}`) which the browser rendered as plain text instead of redirecting to the login screen. Now always renders the authentication form with an inline error message ("Session expired. Please log in again." / "Session timed out. Please log in again.") so users see the login page regardless of how the request was made
+
 ---
 
 ## v0.1.10-alpha (2026-04-08)
