@@ -20,7 +20,7 @@
  *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
  *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
  *   overview [limit]           - View wallet overview dashboard
- *   report <type>              - Generate reports (debug, etc.)
+ *   report <type>              - Generate reports (debug [--send], etc.)
  *   request [subcommand] [args] - Manage payment requests
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
@@ -464,36 +464,65 @@ elseif($request === "report"){
   if ($subcommand === 'debug') {
     $description = $cleanArgv[3] ?? '';
     $full = in_array('--full', $cleanArgv, true);
+    $send = in_array('--send', $cleanArgv, true);
     $reportService = $app->services->getDebugReportService();
 
+    // Strip flags from description if user put them as positional arg
+    if ($description === '--full' || $description === '--send') {
+      $description = '';
+    }
+
     try {
-      $result = $reportService->generateAndSave($description, $full);
-      $sizeKb = round($result['size'] / 1024, 1);
-      $output->success(
-        "Debug report saved to {$result['path']} ({$sizeKb} KB)",
-        [
-          'path' => $result['path'],
-          'size' => $result['size'],
-          'size_human' => $sizeKb . ' KB',
-          'report_type' => $full ? 'full' : 'limited',
-          'debug_entries' => $result['report']['debug_entries_count'],
-        ],
-        'Debug report generated'
-      );
+      if ($send) {
+        // Generate and submit to support
+        $report = $reportService->generateReport($description, $full);
+        $result = \Eiou\Services\DebugReportService::submit($report, $description);
+
+        if ($result['success']) {
+          $output->success(
+            "Debug report sent to support" . ($result['key'] ? " (ref: {$result['key']})" : ''),
+            [
+              'key' => $result['key'],
+              'report_type' => $full ? 'full' : 'limited',
+            ],
+            'Debug report submitted'
+          );
+        } else {
+          $output->error($result['error'] ?? 'Submission failed', ErrorCodes::GENERAL_ERROR, 500);
+        }
+      } else {
+        // Generate and save to file (existing behavior)
+        $result = $reportService->generateAndSave($description, $full);
+        $sizeKb = round($result['size'] / 1024, 1);
+        $output->success(
+          "Debug report saved to {$result['path']} ({$sizeKb} KB)",
+          [
+            'path' => $result['path'],
+            'size' => $result['size'],
+            'size_human' => $sizeKb . ' KB',
+            'report_type' => $full ? 'full' : 'limited',
+            'debug_entries' => $result['report']['debug_entries_count'],
+          ],
+          'Debug report generated'
+        );
+      }
     } catch (\RuntimeException $e) {
       $output->error($e->getMessage(), ErrorCodes::INTERNAL_ERROR, 500);
     }
   } else {
     echo "Usage: eiou report <type>\n\n";
     echo "Available report types:\n";
-    echo "  debug [description] [--full]   Generate a debug report (JSON)\n";
+    echo "  debug [description] [--full] [--send]   Generate a debug report\n";
     echo "\nOptions:\n";
     echo "  --full    Include full log history (default: last 50 lines)\n";
+    echo "  --send    Send report to support (default: save to file)\n";
     echo "\nExamples:\n";
     echo "  eiou report debug\n";
     echo "  eiou report debug \"login page crash\"\n";
     echo "  eiou report debug --full\n";
     echo "  eiou report debug \"issue description\" --full\n";
+    echo "  eiou report debug --send\n";
+    echo "  eiou report debug \"login crash\" --full --send\n";
   }
 }
 // Update Check

@@ -1554,7 +1554,7 @@ Generate reports for troubleshooting and analysis.
 
 **Usage:**
 ```bash
-eiou report <type> [description] [--full]
+eiou report <type> [description] [--full] [--send]
 ```
 
 **Available report types:**
@@ -1568,6 +1568,7 @@ eiou report <type> [description] [--full]
 | Option | Description |
 |--------|-------------|
 | `--full` | Include full log history (default: last 50 lines per log file) |
+| `--send` | Submit report to support via Tor instead of saving to file |
 
 **Examples:**
 ```bash
@@ -1582,9 +1583,17 @@ eiou report debug --full
 
 # Full report with description
 eiou report debug "sync failure after restore" --full
+
+# Send report to support instead of saving to file
+eiou report debug --send
+
+# Send full report with description to support
+eiou report debug "login crash" --full --send
 ```
 
-**Output:** Reports are saved as JSON files in `/tmp/` (e.g., `/tmp/eiou-debug-report-20260314170000.json`). The file path and size are printed to stdout. With `--json`, structured output includes `path`, `size`, `report_type`, and `debug_entries` count.
+**Output (default):** Reports are saved as JSON files in `/tmp/` (e.g., `/tmp/eiou-debug-report-20260314170000.json`). The file path and size are printed to stdout. With `--json`, structured output includes `path`, `size`, `report_type`, and `debug_entries` count.
+
+**Output (`--send`):** The report is scrubbed of sensitive data (addresses, keys, IPs) and submitted to the support endpoint via Tor. On success, a reference key is returned. Rate-limited to 3 submissions per day. With `--json`, structured output includes `key` and `report_type`.
 
 **Report Contents:**
 - System info: PHP version, MariaDB version, OS, memory limits, loaded extensions
