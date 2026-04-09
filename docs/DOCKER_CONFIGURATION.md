@@ -1365,15 +1365,21 @@ See `.env.example` for the full list of tunable PHP-FPM and Nginx variables.
 
 | Log | Location | Purpose |
 |-----|----------|---------|
+| Application | `/var/log/eiou/app.log` | eIOU application log (always active) |
+| Analytics | `/var/log/eiou/analytics.log` | Daily analytics cron output (3 AM UTC) |
+| Backup | `/var/log/eiou/backup.log` | Daily backup cron output (midnight UTC) |
+| Update check | `/var/log/eiou/update-check.log` | Daily update check cron output (2 AM UTC) |
 | nginx access | `/var/log/nginx/access.log` | HTTP requests |
 | nginx error | `/var/log/nginx/error.log` | Web server errors |
-| PHP errors | `/var/log/php_errors.log` | Application errors |
+| PHP errors | `/var/log/php_errors.log` | PHP runtime errors |
 | Tor | `/var/log/tor/log` | Tor network status |
 
 ```bash
 # View logs inside container
+docker exec <container> tail -f /var/log/eiou/app.log
+docker exec <container> cat /var/log/eiou/analytics.log
+docker exec <container> cat /var/log/eiou/backup.log
 docker exec <container> tail -f /var/log/nginx/error.log
-docker exec <container> tail -f /var/log/php_errors.log
 ```
 
 ### Expected Warnings (Safe to Ignore)

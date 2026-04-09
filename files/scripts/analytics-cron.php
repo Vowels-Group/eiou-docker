@@ -88,9 +88,7 @@ try {
         echo "[analytics] PDO connection established\n";
 
         $payload = AnalyticsService::buildHeartbeatPayload($pdo, 1);
-        echo "[analytics] Built heartbeat payload: tx_sent=" . ($payload['metrics']['tx_sent_count'] ?? '?')
-            . " tx_received=" . ($payload['metrics']['tx_received_count'] ?? '?')
-            . " contacts=" . ($payload['metrics']['contact_count'] ?? '?') . "\n";
+        echo "[analytics] Built heartbeat payload\n";
     }
 
     // Dry run — show payload without sending
