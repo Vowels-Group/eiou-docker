@@ -96,9 +96,11 @@
                                 $displayCurrency = $primaryCur['currency'] ?? 'USD';
                             ?>
                             <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
-                            <?php if ($primaryCur): ?>
-                            <div>Credit: <?php echo number_format($primaryCur['credit_limit'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
-                            <div>Fee: <?php echo number_format($primaryCur['fee'] ?? 0, 2); ?>%</div>
+                            <?php if ($contact['my_available_credit'] !== null): ?>
+                            <div>Your Av. Credit: <?php echo number_format($contact['my_available_credit'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
+                            <?php endif; ?>
+                            <?php if ($contact['their_available_credit'] !== null): ?>
+                            <div>Their Av. Credit: <?php echo number_format($contact['their_available_credit'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></div>
                             <?php endif; ?>
                             <?php if (count($contact['currencies'] ?? []) > 1): ?>
                                 <div class="multi-currency-badge">+<?php echo count($contact['currencies']) - 1; ?> more</div>
@@ -357,12 +359,14 @@
                         <p class="no-transactions">No recent transactions with this contact.</p>
                     </div>
                 </div>
-                <!-- Transaction Detail View -->
+                <!-- Transaction Detail View (card-style popup within the modal) -->
                 <div id="tx-detail-view" class="d-none">
-                    <div class="text-right mb-sm">
-                        <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
+                    <div class="contact-tx-popup">
+                        <div class="text-right mb-sm">
+                            <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
+                        </div>
+                        <div id="contact-tx-detail-content"></div>
                     </div>
-                    <div id="contact-tx-detail-content"></div>
                 </div>
             </div>
         </div>

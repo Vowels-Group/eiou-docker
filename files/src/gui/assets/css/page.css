@@ -1778,6 +1778,22 @@ html {
 }
 
 /* Transaction Detail Modal */
+/* Transaction detail popup within the contact modal */
+.contact-tx-popup {
+    max-width: 85%;
+    margin: 0.5rem auto;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 0.75rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.contact-tx-popup .tx-modal-amount { font-size: 1.2rem; }
+.contact-tx-popup .tx-modal-header { border-radius: 8px; padding: 0.75rem; }
+.contact-tx-popup .tx-detail-row { padding: 0.5rem 0.75rem; }
+.contact-tx-popup .tx-detail-label { font-size: 0.8rem; min-width: 90px; }
+.contact-tx-popup .tx-detail-value { font-size: 0.8rem; }
+
 .tx-detail-section {
     border: 1px solid #dee2e6;
     border-radius: 8px;
