@@ -430,7 +430,7 @@ class Constants {
     ];
 
     // UI/Display
-    const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
+    const DISPLAY_DATE_FORMAT = 'd/m/Y H:i:s';
     const VALID_DATE_FORMATS = [
         'Y-m-d H:i:s.u',   // 2026-03-24 17:43:20.123456 (default, microseconds)
         'Y-m-d H:i:s',     // 2026-03-24 17:43:20
