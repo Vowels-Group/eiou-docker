@@ -21,9 +21,9 @@ tests/baseconfig/credentials.sh
 tests/.phpunit.cache/
 tests/phpunit.xml
 
-# Composer dependencies and lock file (in files/ directory)
+# Composer dependencies (in files/ directory)
+# composer.lock is tracked — ensures deterministic Docker builds
 files/vendor/
-files/composer.lock
 
 # OS / editor artifacts
 .DS_Store
