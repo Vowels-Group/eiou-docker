@@ -30,12 +30,12 @@
                 <tr>
                     <th class="col-icon"></th>
                     <th class="col-name">Name</th>
-                    <th class="col-status">Status</th>
-                    <th class="col-online text-center">Online</th>
-                    <th class="col-chain text-center">Chain</th>
                     <th class="col-number text-right">Balance</th>
                     <th class="col-number text-right">Your Av. Credit</th>
                     <th class="col-number text-right">Their Av. Credit</th>
+                    <th class="col-status text-center">Status</th>
+                    <th class="col-online text-center">Online</th>
+                    <th class="col-chain text-center">Chain</th>
                 </tr>
             </thead>
             <tbody id="contacts-grid">
@@ -55,7 +55,10 @@
                 <tr class="contact-card contact-row cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <td class="col-icon"><div class="contact-avatar-sm contact-avatar-accepted"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div></td>
                     <td class="col-name contact-name-cell"><?php echo htmlspecialchars($contact['name']); ?></td>
-                    <td class="col-status"><span class="badge badge-accepted">Accepted</span></td>
+                    <td class="col-number text-right"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
+                    <td class="col-number text-right"><?php echo $contact['my_available_credit'] !== null ? number_format($contact['my_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
+                    <td class="col-number text-right"><?php echo $contact['their_available_credit'] !== null ? number_format($contact['their_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
+                    <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
                     <td class="col-online text-center"><span class="contact-status-dot status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?>"></span></td>
                     <td class="col-chain text-center">
                         <?php if ($isIncoming): ?>
@@ -72,9 +75,6 @@
                         <span class="text-muted">—</span>
                         <?php endif; ?>
                     </td>
-                    <td class="col-number text-right text-nowrap"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
-                    <td class="col-number text-right text-nowrap"><?php echo $contact['my_available_credit'] !== null ? number_format($contact['my_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
-                    <td class="col-number text-right text-nowrap"><?php echo $contact['their_available_credit'] !== null ? number_format($contact['their_available_credit'], displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
                 </tr>
             <?php endforeach; ?>
 
@@ -88,12 +88,12 @@
                 <tr class="contact-card contact-row contact-row-pending cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <td class="col-icon"><div class="contact-avatar-sm contact-avatar-pending"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div></td>
                     <td class="col-name contact-name-cell"><?php echo htmlspecialchars($contact['name']); ?></td>
-                    <td class="col-status"><span class="badge badge-pending">Pending</span></td>
+                    <td class="col-number text-right text-muted">—</td>
+                    <td class="col-number text-right text-muted">—</td>
+                    <td class="col-number text-right text-muted">—</td>
+                    <td class="col-status text-center"><span class="badge badge-pending">Pending</span></td>
                     <td class="col-online text-center text-muted">—</td>
                     <td class="col-chain text-center text-muted">—</td>
-                    <td class="col-number text-right text-muted">—</td>
-                    <td class="col-number text-right text-muted">—</td>
-                    <td class="col-number text-right text-muted">—</td>
                 </tr>
             <?php endforeach; ?>
 
@@ -107,12 +107,12 @@
                 <tr class="contact-card contact-row contact-row-blocked cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <td class="col-icon"><div class="contact-avatar-sm contact-avatar-blocked"><?php echo htmlspecialchars($contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : 'X'); ?></div></td>
                     <td class="col-name contact-name-cell"><?php echo htmlspecialchars($contact['name'] ?? '-'); ?></td>
-                    <td class="col-status"><span class="badge badge-blocked">Blocked</span></td>
+                    <td class="col-number text-right"><?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></td>
+                    <td class="col-number text-right text-muted">—</td>
+                    <td class="col-number text-right text-muted">—</td>
+                    <td class="col-status text-center"><span class="badge badge-blocked">Blocked</span></td>
                     <td class="col-online text-center text-muted">—</td>
                     <td class="col-chain text-center text-muted">—</td>
-                    <td class="col-number text-right text-nowrap"><?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></td>
-                    <td class="col-number text-right text-muted">—</td>
-                    <td class="col-number text-right text-muted">—</td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
