@@ -760,12 +760,11 @@ tr.contact-card {
     table-layout: fixed;
 }
 /* Column widths — fixed layout ensures header/data alignment */
-.contacts-table .col-icon   { width: 40px; padding-right: 0; }
-.contacts-table .col-name   { width: 10%; padding-left: 0.25rem; }
+.contacts-table .col-name   { width: 22%; }
 .contacts-table .col-number { width: 18%; white-space: nowrap; }
-.contacts-table .col-status { width: 8%; }
-.contacts-table .col-online { width: 5%; }
-.contacts-table .col-chain  { width: 6%; }
+.contacts-table .col-status { width: 10%; }
+.contacts-table .col-chain  { width: 8%; }
+.contacts-table .col-online { width: 6%; }
 .contacts-table thead th {
     text-align: left;
     padding: 0.65rem 0.75rem;
@@ -778,6 +777,8 @@ tr.contact-card {
     white-space: nowrap;
     border-bottom: 1px solid #e9ecef;
 }
+.contacts-table thead th.text-right  { text-align: right; }
+.contacts-table thead th.text-center { text-align: center; }
 .contacts-table thead th:first-child { border-top-left-radius: 12px; }
 .contacts-table thead th:last-child { border-top-right-radius: 12px; }
 .contacts-table tbody tr.contact-row {
@@ -813,6 +814,12 @@ tr.contact-card {
     flex-shrink: 0;
 }
 .contact-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+.contact-name-text {
     font-weight: 700;
     font-size: 1rem;
     color: #212529;
