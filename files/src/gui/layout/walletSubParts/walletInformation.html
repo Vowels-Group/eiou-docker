@@ -76,6 +76,7 @@
             $keys = array_keys($userAddresses);
             $firstAddressType = $keys[0];
         }
+        $walletDisplayName = $user->getName() ?? '';
         ?>
         <div class="info-item">
             <div class="info-label">Your Address<?php echo $addressCount > 1 ? 'es' : ''; ?>:</div>
@@ -91,7 +92,7 @@
                     <button class="btn btn-sm btn-outline" data-action="copyToClipboard" data-copy-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-copy-message="Address copied to clipboard!" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
-                    <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-qr-target="address-qr-display" title="Show QR code">
+                    <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-qr-name="<?php echo htmlspecialchars($walletDisplayName, ENT_QUOTES); ?>" data-qr-target="address-qr-display" title="Show QR code">
                         <i class="fas fa-qrcode"></i>
                     </button>
                 </div>
@@ -112,7 +113,7 @@
                     <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="user-address-value" data-copy-message="Address copied to clipboard!" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
-                    <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="user-address-value" data-qr-target="address-qr-display" title="Show QR code">
+                    <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="user-address-value" data-qr-name="<?php echo htmlspecialchars($walletDisplayName, ENT_QUOTES); ?>" data-qr-target="address-qr-display" title="Show QR code">
                         <i class="fas fa-qrcode"></i>
                     </button>
                 </div>

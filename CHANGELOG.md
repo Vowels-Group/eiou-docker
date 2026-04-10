@@ -14,6 +14,11 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - **Debug report CLI `--send` flag and API endpoints**: `eiou report debug` now accepts `--send` to submit the report directly to support (via Tor) instead of saving to file. New REST API endpoints: `GET /api/v1/system/debug-report` (download report as JSON) and `POST /api/v1/system/debug-report` (submit to support). Both accept `description` and `full` parameters. Uses the existing scrubbing, rate-limiting, and Tor submission infrastructure from the GUI "Send to Support" feature
+- **Configurable session timeout**: GUI session inactivity timeout is now user-configurable (5, 10, 15, 30, or 60 minutes; default: 30). Available in GUI Settings, CLI (`changesettings sessionTimeoutMinutes 60`), and API (`PUT /api/v1/system/settings {"session_timeout_minutes": 60}`)
+- **Display name in GUI settings**: the existing `name` setting (previously CLI/API only) is now editable in the GUI Settings page as the first field. Used as the display name shared when contacts scan your QR code
+- **Typed QR code format**: QR codes now use a JSON envelope with a `type` field (`{"type":"contact","address":"...","name":"..."}`) for forward compatibility. Future QR types (e.g. `payment`) can be added without breaking existing scanners. Legacy plain-text QR codes are still parsed correctly (backward compatible)
+- **Scan Contact QR button**: new "Scan Contact QR" button in Wallet Information. Scanning a contact's QR code automatically switches to the Contacts tab, opens the Add Contact modal, and pre-fills the address and name fields
+- **QR scanner auto-fills contact name**: the existing QR scanner in the Add Contact modal now also fills the contact name field when the scanned QR contains one
 
 ### Fixed
 - **All cron jobs silently failing (`runuser: not found`)**: backup, update-check, and analytics cron jobs used `runuser` without an absolute path. Cron's default PATH (`/usr/bin:/bin`) does not include `/usr/sbin/` where `runuser` lives on Debian 12, so every cron job silently failed with "runuser: not found". Changed all three cron definitions in `startup.sh` to use `/usr/sbin/runuser`. This is why daily analytics heartbeats were never sent (0 total heartbeats on analytics.eiou.org), and daily backups and update checks may also have been failing

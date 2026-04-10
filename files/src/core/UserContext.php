@@ -1036,6 +1036,26 @@ class UserContext {
         return max(1, (int) ($this->get('displayRecentTransactionsLimit') ?? Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT));
     }
 
+    /**
+     * Get session timeout in minutes
+     *
+     * @return int
+     */
+    public function getSessionTimeoutMinutes(): int {
+        $val = (int) ($this->get('sessionTimeoutMinutes') ?? Constants::SESSION_TIMEOUT_MINUTES);
+        return in_array($val, Constants::SESSION_TIMEOUT_OPTIONS) ? $val : Constants::SESSION_TIMEOUT_MINUTES;
+    }
+
+    /**
+     * Get the contact avatar style for the contacts list
+     *
+     * @return string  One of: gradient, tile, pixel
+     */
+    public function getContactAvatarStyle(): string {
+        $val = (string) ($this->get('contactAvatarStyle') ?? Constants::CONTACT_AVATAR_STYLE);
+        return in_array($val, Constants::CONTACT_AVATAR_STYLE_OPTIONS, true) ? $val : Constants::CONTACT_AVATAR_STYLE;
+    }
+
     // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
@@ -1119,6 +1139,12 @@ class UserContext {
             'displayDateFormat' => Constants::DISPLAY_DATE_FORMAT,
             'displayCurrencyDecimals' => Constants::DISPLAY_CURRENCY_DECIMALS,
             'displayRecentTransactionsLimit' => Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT,
+
+            // Session
+            'sessionTimeoutMinutes' => Constants::SESSION_TIMEOUT_MINUTES,
+
+            // Contact list
+            'contactAvatarStyle' => Constants::CONTACT_AVATAR_STYLE,
         ];
     }
 

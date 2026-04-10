@@ -8,6 +8,70 @@
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
         <div class="settings-grid">
+            <!-- Display Name -->
+            <div class="form-group">
+                <label for="settingsName">Display Name:</label>
+                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Your display name shown in the GUI and shared when contacts scan your QR code
+                </small>
+            </div>
+
+            <!-- Session Timeout -->
+            <div class="form-group">
+                <label for="sessionTimeoutMinutes">Session Timeout:</label>
+                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
+                    <?php
+                    $currentTimeout = $user->getSessionTimeoutMinutes();
+                    foreach (\Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS as $minutes): ?>
+                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
+                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Auto-logout after this period of inactivity
+                </small>
+            </div>
+
+            <!-- Contact Avatar Style -->
+            <div class="form-group">
+                <label>Contact Avatar Style:</label>
+                <?php
+                $currentAvatarStyle = $user->getContactAvatarStyle();
+                $avatarStyleLabels = [
+                    'gradient' => 'Gradient',
+                    'pixel'    => 'Pixel',
+                    'tile'     => 'Tile',
+                ];
+                // Fixed sample seed picked specifically so the previews look
+                // visually balanced for all three styles. Keep this stable so
+                // the settings page is the same for everyone.
+                $previewSeed = '77a01489afbcaf6940efe5b761b4dfa3';
+                $previewName = 'Sample';
+                $previews = [
+                    'gradient' => renderContactGradientAvatar($previewSeed, $previewName),
+                    'pixel'    => renderContactPixelAvatar($previewSeed),
+                    'tile'     => renderContactTileAvatar($previewSeed),
+                ];
+                ?>
+                <div class="avatar-style-previews" role="radiogroup" aria-label="Contact avatar style">
+                    <?php foreach (\Eiou\Core\Constants::CONTACT_AVATAR_STYLE_OPTIONS as $styleKey): ?>
+                        <label class="avatar-style-preview" title="Use the <?php echo htmlspecialchars($avatarStyleLabels[$styleKey] ?? $styleKey); ?> style">
+                            <input type="radio" name="contactAvatarStyle" value="<?php echo htmlspecialchars($styleKey); ?>" <?php echo ($styleKey === $currentAvatarStyle) ? 'checked' : ''; ?>>
+                            <?php echo $previews[$styleKey] ?? ''; ?>
+                            <span><?php echo htmlspecialchars($avatarStyleLabels[$styleKey] ?? $styleKey); ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    How contact avatars appear in the contacts list. Pick one and save.
+                </small>
+            </div>
+
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>

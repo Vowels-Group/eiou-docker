@@ -430,7 +430,7 @@ class Constants {
     ];
 
     // UI/Display
-    const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
+    const DISPLAY_DATE_FORMAT = 'd/m/Y H:i:s';
     const VALID_DATE_FORMATS = [
         'Y-m-d H:i:s.u',   // 2026-03-24 17:43:20.123456 (default, microseconds)
         'Y-m-d H:i:s',     // 2026-03-24 17:43:20
@@ -456,6 +456,15 @@ class Constants {
     const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
+
+    // Session
+    const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
+    const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
+
+    // Contact avatar style — controls how contact avatars are rendered in the contacts list
+    const CONTACT_AVATAR_STYLE = 'gradient';
+    const CONTACT_AVATAR_STYLE_OPTIONS = ['gradient', 'pixel', 'tile'];
+
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';
@@ -485,7 +494,7 @@ class Constants {
     const HELD_TX_SYNC_TIMEOUT_SECONDS = 120;      // Max seconds a sync can be in_progress before considered stale (must be < P2P_DEFAULT_EXPIRATION_SECONDS since P2P hops expire on all relay nodes independently)
 
     // Display/Query limits
-    const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 5;   // Max recent transactions shown in lists (default: 5)
+    const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 100;  // Max recent transactions shown in Activity tab (default: 100)
     const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
     const CONTACT_TRANSACTIONS_LIMIT = 5;          // Max transactions per contact in combined queries (default: 5)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)

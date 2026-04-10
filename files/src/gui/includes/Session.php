@@ -94,7 +94,7 @@ class Session
     }
 
     /**
-     * Check for session timeout (30 minutes of inactivity)
+     * Check for session timeout based on configured inactivity period
      *
      * @return bool
      */
@@ -102,7 +102,7 @@ class Session
     {
         if (isset($_SESSION[SessionKeys::LAST_ACTIVITY])) {
             $inactive = time() - $_SESSION[SessionKeys::LAST_ACTIVITY];
-            $timeout = 1800; // 30 minutes
+            $timeout = $this->getTimeoutSeconds();
 
             if ($inactive >= $timeout) {
                 $this->logout();
@@ -112,6 +112,29 @@ class Session
 
         $_SESSION[SessionKeys::LAST_ACTIVITY] = time();
         return true;
+    }
+
+    /**
+     * Get session timeout in seconds from user config
+     *
+     * @return int
+     */
+    private function getTimeoutSeconds(): int
+    {
+        $configFile = '/etc/eiou/config/defaultconfig.json';
+        $defaultMinutes = 30;
+
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true);
+            if (is_array($config) && isset($config['sessionTimeoutMinutes'])) {
+                $minutes = (int) $config['sessionTimeoutMinutes'];
+                if (in_array($minutes, [5, 10, 15, 30, 60])) {
+                    return $minutes * 60;
+                }
+            }
+        }
+
+        return $defaultMinutes * 60;
     }
 
     /**

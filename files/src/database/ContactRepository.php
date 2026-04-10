@@ -446,15 +446,16 @@ class ContactRepository extends AbstractRepository {
     public function getUserPendingContactRequests(): array
     {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
-        $query = "SELECT * 
+        $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    WHERE c.name IS NOT NULL 
-                    AND c.status = 'pending'";
+                    WHERE c.name IS NOT NULL
+                    AND c.status = 'pending'
+                    ORDER BY c.name ASC";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
-        } 
+        }
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -465,15 +466,16 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAcceptedContacts(): array
     {
-        $query = "SELECT * 
+        $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND c.status = 'accepted'";
+                    AND c.status = 'accepted'
+                    ORDER BY c.name ASC";
 
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
-        } 
+        }
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -484,15 +486,16 @@ class ContactRepository extends AbstractRepository {
      */
     public function getBlockedContacts(): array
     {
-        $query = "SELECT * 
+        $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND c.status = 'blocked'";
+                    AND c.status = 'blocked'
+                    ORDER BY c.name ASC";
 
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
-        } 
+        }
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 

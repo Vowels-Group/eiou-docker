@@ -133,9 +133,18 @@
     <?php endif; ?>
 
     <?php if (!empty($transactions)): ?>
+    <div class="contacts-search-bar mb-lg">
+        <div class="search-icon-wrapper">
+            <i class="fas fa-search search-icon-positioned"></i>
+            <input type="text" id="tx-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterTransactions">
+        </div>
+        <div id="tx-search-status" class="search-status">
+            <span id="tx-search-count">0</span> transactions found
+        </div>
+    </div>
     <div class="d-flex justify-between align-center mb-lg">
         <p class="tx-meta-info">
-            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong>
+            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $recentTransactionsLimit; ?> transactions</strong>
         </p>
     </div>
     <?php endif; ?>
@@ -149,7 +158,7 @@
             </div>
         <?php else: ?>
             <?php foreach ($transactions as $index => $tx): ?>
-                <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?> cursor-pointer" data-action="openTransactionModal" data-index="<?php echo $index; ?>" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>">
+                <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?> cursor-pointer" data-action="openTransactionModal" data-index="<?php echo $index; ?>" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>" data-tx-name="<?php echo htmlspecialchars(strtolower($tx['counterparty_name'] ?? '')); ?>" data-tx-desc="<?php echo htmlspecialchars(strtolower($tx['description'] ?? '')); ?>" data-tx-address="<?php echo htmlspecialchars(strtolower(($tx['type'] === 'sent' ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '')))); ?>">
                     <div class="transaction-info">
                         <div>
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'Unknown'); ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>

@@ -212,6 +212,11 @@ function switchTab(tabName, scrollToId) {
     // Persist last tab
     safeStorageSet('eiou_active_tab', tabName);
 
+    // Recompute truncation on the contacts table once it's visible
+    if (tabName === 'contacts' && typeof markTruncatedContactNumberCells === 'function') {
+        markTruncatedContactNumberCells();
+    }
+
     // Scroll to specific element within the tab, or scroll to top
     if (scrollToId) {
         var scrollTarget = document.getElementById(scrollToId);
@@ -1911,6 +1916,16 @@ function filterContacts() {
     if (!searchInput) return;
 
     var searchTerm = searchInput.value.toLowerCase().trim();
+
+    var statusEl = document.getElementById('contact-filter-status');
+    var chainEl = document.getElementById('contact-filter-chain');
+    var onlineEl = document.getElementById('contact-filter-online');
+    var statusFilter = statusEl ? statusEl.value : '';
+    var chainFilter = chainEl ? chainEl.value : '';
+    var onlineFilter = onlineEl ? onlineEl.value : '';
+
+    var hasActiveFilter = (searchTerm !== '') || (statusFilter !== '') || (chainFilter !== '') || (onlineFilter !== '');
+
     var contactCards = document.querySelectorAll('.contact-card');
     var visibleCount = 0;
 
@@ -1918,12 +1933,39 @@ function filterContacts() {
         var card = contactCards[i];
         var contactName = card.getAttribute('data-contact-name') || '';
         var contactAddress = card.getAttribute('data-contact-address') || '';
-        var matchesSearch = contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
+        var rowStatus = card.getAttribute('data-status') || '';
+        var rowChain = card.getAttribute('data-chain-state') || '';
+        var rowOnline = card.getAttribute('data-online') || '';
 
-        if (searchTerm === '' || matchesSearch) {
-            // Show card if matches search (respecting limit when not searching)
-            if (searchTerm === '') {
-                // When not searching, respect the show all / limited state
+        // Match each filter dimension; an empty filter passes everything
+        var matchesSearch = (searchTerm === '') || contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
+        var matchesStatus = (statusFilter === '') || rowStatus === statusFilter;
+        var matchesChain;
+        if (chainFilter === '') {
+            matchesChain = true;
+        } else if (chainFilter === 'issues') {
+            // Anything that needs attention: incoming proposal, awaiting response, rejected, or chain warning
+            matchesChain = (rowChain === 'action') || (rowChain === 'waiting') || (rowChain === 'rejected') || (rowChain === 'warning');
+        } else if (chainFilter === 'valid') {
+            matchesChain = rowChain === 'valid';
+        } else {
+            matchesChain = rowChain === chainFilter;
+        }
+        var matchesOnline;
+        if (onlineFilter === '') {
+            matchesOnline = true;
+        } else if (onlineFilter === 'online') {
+            // Lump partial in with online — both mean "at least one address reachable"
+            matchesOnline = (rowOnline === 'online') || (rowOnline === 'partial');
+        } else {
+            matchesOnline = rowOnline === onlineFilter;
+        }
+
+        var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
+
+        if (matches) {
+            if (!hasActiveFilter) {
+                // No filters active — respect the show all / limited state
                 if (contactsShowAll || visibleCount < CONTACTS_DEFAULT_LIMIT) {
                     card.style.display = '';
                     visibleCount++;
@@ -1931,7 +1973,7 @@ function filterContacts() {
                     card.style.display = 'none';
                 }
             } else {
-                // When searching, show all matches
+                // Any filter active — show all matches
                 card.style.display = '';
                 visibleCount++;
             }
@@ -1940,9 +1982,9 @@ function filterContacts() {
         }
     }
 
-    // Update search status
+    // Show the "X contacts found" status whenever any filter is active
     if (searchStatus && searchCount) {
-        if (searchTerm !== '') {
+        if (hasActiveFilter) {
             searchStatus.style.display = 'block';
             searchCount.textContent = visibleCount;
         } else {
@@ -1950,13 +1992,194 @@ function filterContacts() {
         }
     }
 
-    // Hide show more button when searching
+    // Hide show more button when any filter is active
     if (showMoreBtn) {
-        showMoreBtn.style.display = searchTerm !== '' ? 'none' : '';
+        showMoreBtn.style.display = hasActiveFilter ? 'none' : '';
     }
 
     // Update scroll button visibility after filtering
     setTimeout(updateContactsScrollButtons, 50);
+}
+
+/**
+ * Contact sort state — held in module scope so repeated header clicks
+ * cycle through asc → desc → clear → asc on the same column.
+ * `originalOrder` is captured the first time a sort runs so we can restore
+ * the default alphabetical layout when the user clears the sort.
+ */
+var contactsSortState = { column: null, direction: null, originalOrder: null };
+
+/**
+ * Sort the contacts table by a numeric column. Click cycle on the same
+ * column: asc → desc → clear (back to default order).
+ *
+ * @param {string} column - 'balance', 'your-credit', or 'their-credit'
+ */
+function sortContacts(column) {
+    var tbody = document.getElementById('contacts-grid');
+    if (!tbody) return;
+
+    // Snapshot the original DOM order on first sort so we can restore it later
+    if (!contactsSortState.originalOrder) {
+        contactsSortState.originalOrder = [];
+        var initial = tbody.querySelectorAll('.contact-card');
+        for (var k = 0; k < initial.length; k++) {
+            contactsSortState.originalOrder.push(initial[k]);
+        }
+    }
+
+    // Determine new direction based on current state
+    var newDirection;
+    if (contactsSortState.column !== column) {
+        newDirection = 'asc';
+    } else if (contactsSortState.direction === 'asc') {
+        newDirection = 'desc';
+    } else if (contactsSortState.direction === 'desc') {
+        newDirection = null; // clear → restore default
+    } else {
+        newDirection = 'asc';
+    }
+
+    if (!newDirection) {
+        // Restore default alphabetical order
+        for (var i = 0; i < contactsSortState.originalOrder.length; i++) {
+            tbody.appendChild(contactsSortState.originalOrder[i]);
+        }
+        contactsSortState.column = null;
+        contactsSortState.direction = null;
+    } else {
+        var attr = 'data-' + column;
+        var rows = [];
+        var current = tbody.querySelectorAll('.contact-card');
+        for (var j = 0; j < current.length; j++) rows.push(current[j]);
+
+        rows.sort(function (a, b) {
+            var av = parseFloat(a.getAttribute(attr));
+            var bv = parseFloat(b.getAttribute(attr));
+            // Missing / NaN values always sort to the bottom regardless of direction
+            var aMissing = isNaN(av);
+            var bMissing = isNaN(bv);
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+            return newDirection === 'asc' ? av - bv : bv - av;
+        });
+
+        for (var m = 0; m < rows.length; m++) tbody.appendChild(rows[m]);
+        contactsSortState.column = column;
+        contactsSortState.direction = newDirection;
+    }
+
+    updateSortIndicators();
+}
+
+/**
+ * Update the visual state of the sort arrow icons in the contacts table
+ * header to reflect the current contactsSortState.
+ */
+function updateSortIndicators() {
+    var headers = document.querySelectorAll('.contacts-table thead th.sortable');
+    for (var i = 0; i < headers.length; i++) {
+        var th = headers[i];
+        var col = th.getAttribute('data-sort-column');
+        var icon = th.querySelector('.sort-indicator');
+        if (!icon) continue;
+
+        // Reset to base classes
+        icon.className = 'fas sort-indicator';
+        th.classList.remove('sort-asc', 'sort-desc');
+
+        if (col === contactsSortState.column) {
+            if (contactsSortState.direction === 'asc') {
+                icon.classList.add('fa-sort-up');
+                th.classList.add('sort-asc');
+            } else if (contactsSortState.direction === 'desc') {
+                icon.classList.add('fa-sort-down');
+                th.classList.add('sort-desc');
+            } else {
+                icon.classList.add('fa-sort');
+            }
+        } else {
+            icon.classList.add('fa-sort');
+        }
+    }
+}
+
+/**
+ * Mark contacts-table number cells whose content overflows the column.
+ * Truncated cells get a dotted underline and a click handler that opens the
+ * existing info modal showing the full value — a touch-friendly alternative
+ * to native hover tooltips. Non-truncated cells stay actionless so the click
+ * bubbles up to the row's openContactModal handler.
+ */
+function markTruncatedContactNumberCells() {
+    var cells = document.querySelectorAll('.contacts-table .col-number');
+    for (var i = 0; i < cells.length; i++) {
+        var cell = cells[i];
+        // Skip cells in hidden ancestors (clientWidth is 0)
+        if (cell.clientWidth === 0) continue;
+        if (cell.scrollWidth > cell.clientWidth + 1) {
+            cell.classList.add('truncated');
+            cell.setAttribute('data-action', 'showInfoModal');
+            cell.setAttribute('title', cell.textContent.replace(/\s+/g, ' ').trim());
+        } else if (cell.classList.contains('truncated')) {
+            cell.classList.remove('truncated');
+            cell.removeAttribute('data-action');
+            cell.removeAttribute('title');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    markTruncatedContactNumberCells();
+    var resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(markTruncatedContactNumberCells, 150);
+    });
+});
+
+/**
+ * Filter the main transaction list by name, address, or description.
+ * Client-side filter — works on the already-rendered transaction items.
+ */
+function filterTransactions() {
+    var searchInput = document.getElementById('tx-search-input');
+    var searchStatus = document.getElementById('tx-search-status');
+    var searchCount = document.getElementById('tx-search-count');
+
+    if (!searchInput) return;
+
+    var term = searchInput.value.toLowerCase().trim();
+    var items = document.querySelectorAll('#transaction-list .transaction-item');
+    var visible = 0;
+
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (term === '') {
+            item.style.display = '';
+            visible++;
+        } else {
+            var name = item.getAttribute('data-tx-name') || '';
+            var desc = item.getAttribute('data-tx-desc') || '';
+            var addr = item.getAttribute('data-tx-address') || '';
+            if (name.indexOf(term) !== -1 || desc.indexOf(term) !== -1 || addr.indexOf(term) !== -1) {
+                item.style.display = '';
+                visible++;
+            } else {
+                item.style.display = 'none';
+            }
+        }
+    }
+
+    if (searchStatus && searchCount) {
+        if (term !== '') {
+            searchStatus.style.display = 'block';
+            searchCount.textContent = visible;
+        } else {
+            searchStatus.style.display = 'none';
+        }
+    }
 }
 
 /**
@@ -4087,21 +4310,34 @@ function toggleAddressQr(el) {
     }
 
     // Get address text
-    var text = el.getAttribute('data-qr-text');
-    if (!text) {
+    var address = el.getAttribute('data-qr-text');
+    if (!address) {
         var sourceId = el.getAttribute('data-qr-source');
         if (sourceId) {
             var sourceEl = document.getElementById(sourceId);
-            text = sourceEl ? sourceEl.textContent.trim() : '';
+            address = sourceEl ? sourceEl.textContent.trim() : '';
         }
     }
-    if (!text) return;
+    if (!address) return;
 
-    var svg = generateQrSvg(text, 200);
+    // Build QR payload: typed JSON envelope for add-contact
+    var displayName = el.getAttribute('data-qr-name') || '';
+    var qrPayload = { type: 'contact', address: address };
+    if (displayName) {
+        qrPayload.name = displayName;
+    }
+    var qrText = JSON.stringify(qrPayload);
+
+    var svg = generateQrSvg(qrText, 200);
     if (!svg) {
         container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
     } else {
-        container.innerHTML = svg;
+        container.innerHTML = svg +
+            '<div style="text-align:center;margin-top:0.5rem">' +
+                '<button class="btn btn-sm btn-outline" data-action="scanContactQr" title="Scan a contact\'s QR code to add them">' +
+                    '<i class="fas fa-camera"></i> Scan Contact QR' +
+                '</button>' +
+            '</div>';
     }
     container.style.display = 'block';
 }
@@ -4131,7 +4367,38 @@ function isCanvasBlocked() {
     }
 }
 
-function openQrScanner(targetInputId) {
+/**
+ * Parse eIOU QR code data. Returns a typed object so callers can
+ * distinguish between contact, payment request, or unknown payloads.
+ *
+ * Supported types:
+ *   "contact"  — { type, address, name? }
+ *   "payment"  — { type, address, amount?, currency?, description? }  (future)
+ *
+ * Legacy / plain-text QR codes are treated as type "contact" with
+ * address only (backward compatible).
+ *
+ * @param {string} text - Raw QR code text
+ * @returns {{ type: string, address: string, [key: string]: * }}
+ */
+function parseQrData(text) {
+    try {
+        var data = JSON.parse(text);
+        if (data && typeof data.type === 'string' && typeof data.address === 'string') {
+            return data;
+        }
+        // Legacy JSON without type — assume contact
+        if (data && typeof data.address === 'string') {
+            data.type = 'contact';
+            return data;
+        }
+    } catch (e) { /* not JSON — treat as plain address */ }
+    return { type: 'contact', address: text };
+}
+
+function openQrScanner(targetInputId, opts) {
+    opts = opts || {};
+
     // Tor Browser blocks camera API and canvas — QR scanning cannot work
     if (isCanvasBlocked()) {
         showToast('QR Scanner Unavailable',
@@ -4193,13 +4460,36 @@ function openQrScanner(targetInputId) {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         function onScanSuccess(decodedText) {
+            var qrData = parseQrData(decodedText);
+
             var input = document.getElementById(targetInputId);
             if (input) {
-                input.value = decodedText;
+                input.value = qrData.address;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
+
+            // If name field target provided and name is available, fill it
+            var nameInputId = opts.nameInputId;
+            if (nameInputId && qrData.name) {
+                var nameInput = document.getElementById(nameInputId);
+                if (nameInput) {
+                    nameInput.value = qrData.name;
+                    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+
+            var displayAddr = qrData.address.length > 30 ? qrData.address.substring(0, 30) + '...' : qrData.address;
+            var toastMsg = 'Address: ' + displayAddr;
+            if (qrData.name) {
+                toastMsg = qrData.name + ' — ' + displayAddr;
+            }
+            showToast('QR Scanned', toastMsg, 'success');
             closeScanner();
+
+            // If callback provided, call it after scan
+            if (typeof opts.onScan === 'function') {
+                opts.onScan(qrData);
+            }
         },
         function() { /* ignore — fires continuously when no QR in frame */ }
     ).then(function() {
@@ -4781,7 +5071,18 @@ function submitAnalyticsConsent(enable) {
         'toggleAddressQr': function(el) { toggleAddressQr(el); },
         'openQrScanner': function(el) {
             var target = el.getAttribute('data-scan-target');
-            if (target) openQrScanner(target);
+            var nameTarget = el.getAttribute('data-scan-name-target');
+            if (target) openQrScanner(target, { nameInputId: nameTarget || null });
+        },
+        'scanContactQr': function() {
+            // Open scanner, then navigate to contacts tab and open add contact modal
+            openQrScanner('address', {
+                nameInputId: 'name',
+                onScan: function() {
+                    switchTab('contacts');
+                    openAddContactModal();
+                }
+            });
         },
 
         // Navigation & reload
@@ -4789,6 +5090,12 @@ function submitAnalyticsConsent(enable) {
             var hash = el.getAttribute('data-hash');
             window.location.href = window.location.pathname + '#' + hash;
             window.location.reload();
+        },
+
+        // Contacts table — sort by clicking a numeric column header
+        'sortContacts': function(el) {
+            var col = el.getAttribute('data-sort-column');
+            if (col) sortContacts(col);
         },
 
         // Transaction history
@@ -5018,6 +5325,7 @@ function submitAnalyticsConsent(enable) {
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
+        else if (action === 'filterContacts') { filterContacts(); }
     }, false);
 
     // Delegated input handler
@@ -5039,5 +5347,6 @@ function submitAnalyticsConsent(enable) {
         if (!action) return;
 
         if (action === 'filterContacts') { filterContacts(); }
+        if (action === 'filterTransactions') { filterTransactions(); }
     }, false);
 })();

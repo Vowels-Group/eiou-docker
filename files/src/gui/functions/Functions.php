@@ -90,6 +90,10 @@ function deliveryMaxRetries(): int {
     return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
 }
 
+function contactTransactionsLimit(): int {
+    return \Eiou\Core\Constants::CONTACT_TRANSACTIONS_LIMIT;
+}
+
 function p2pDefaultExpirationSeconds(): int {
     return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
 }
@@ -108,6 +112,196 @@ function formatTimestamp(string $timestamp): string {
        ?: \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
        ?: new \DateTime($timestamp);
     return $dt->format($fmt);
+}
+
+// =========================================================================
+// Contact avatar generation
+//
+// Three styles, picked per-user via the contactAvatarStyle setting:
+//   gradient (default) — two-color linear gradient with the contact's letter
+//   tile               — Don Park-style 9-block geometric pattern
+//   pixel              — GitHub-style 5x5 mirrored pixel grid
+// =========================================================================
+
+function _contactAvatarPalette(): array {
+    // Hand-curated 16 colors, all WCAG AA against white text.
+    return [
+        '#e53935', '#d81b60', '#8e24aa', '#5e35b1',
+        '#3949ab', '#1e88e5', '#039be5', '#00897b',
+        '#43a047', '#7cb342', '#fb8c00', '#f4511e',
+        '#6d4c41', '#546e7a', '#c0ca33', '#00acc1',
+    ];
+}
+
+function _contactAvatarSeedBytes(string $seedHex): string {
+    $hex = $seedHex !== '' ? $seedHex : str_repeat('0', 64);
+    return hex2bin(substr($hex, 0, 16));
+}
+
+/**
+ * 16 polygon patches for the tile-style avatar, inspired by Don Park's 2007
+ * identicon. Each patch is a polygon in a 5×5 unit cell. Patch 15 is empty.
+ */
+function _contactAvatarTilePatches(): array {
+    return [
+        '0,0 5,0 5,5',                                  // 0: triangle ◣
+        '0,0 5,0 0,5',                                  // 1: triangle ◤
+        '0,0 5,0 5,5 0,5',                              // 2: full square
+        '0,0 5,0 5,2.5 0,2.5',                          // 3: top half rectangle
+        '0,0 2.5,0 2.5,5 0,5',                          // 4: left half rectangle
+        '2.5,0 5,2.5 2.5,5 0,2.5',                      // 5: diamond
+        '0,0 2.5,0 2.5,2.5 0,2.5',                      // 6: top-left quarter
+        '2.5,2.5 5,2.5 5,5 2.5,5',                      // 7: bottom-right quarter
+        '1.25,0 3.75,0 5,2.5 3.75,5 1.25,5 0,2.5',      // 8: hexagon
+        '0,5 2.5,0 5,5',                                // 9: triangle ▲
+        '0,0 5,2.5 0,5',                                // 10: triangle ▶
+        '0,0 5,0 5,1.5 0,1.5',                          // 11: top stripe
+        '0,5 5,5 3.75,2.5 1.25,2.5',                    // 12: trapezoid
+        '1.5,1.5 3.5,1.5 3.5,3.5 1.5,3.5',              // 13: small centered square
+        '2.5,1 4,2.5 2.5,4 1,2.5',                      // 14: small centered diamond
+        '',                                              // 15: empty
+    ];
+}
+
+/**
+ * Tile avatar — 3×3 grid of polygon patches with rotational symmetry.
+ * Corner cells share one patch rotated 0/90/180/270°. Edge cells likewise.
+ * Center cell has its own patch. Background color is also drawn from palette.
+ */
+function renderContactTileAvatar(string $seedHex): string {
+    $bytes = _contactAvatarSeedBytes($seedHex);
+    $palette = _contactAvatarPalette();
+    $patches = _contactAvatarTilePatches();
+
+    $fg = $palette[ord($bytes[0]) % count($palette)];
+    // Pick a contrasting background — offset by half the palette so it doesn't match fg
+    $bgIdx = (ord($bytes[3]) + 8) % count($palette);
+    if ($palette[$bgIdx] === $fg) {
+        $bgIdx = ($bgIdx + 1) % count($palette);
+    }
+    $bg = $palette[$bgIdx];
+
+    $centerPatch = ord($bytes[1]) & 0x0F;
+    $cornerPatch = (ord($bytes[1]) >> 4) & 0x0F;
+    $edgePatch   = ord($bytes[2]) & 0x0F;
+    $cornerRot   = (ord($bytes[2]) >> 4) & 0x03;
+    $edgeRot     = (ord($bytes[2]) >> 6) & 0x03;
+
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15">';
+    $svg .= '<rect width="15" height="15" fill="' . $bg . '"/>';
+
+    $drawCell = function (int $col, int $row, int $patchIdx, int $rot) use (&$svg, $patches, $fg): void {
+        if ($patchIdx === 15 || $patches[$patchIdx] === '') {
+            return;
+        }
+        $x = $col * 5;
+        $y = $row * 5;
+        $svg .= '<g transform="translate(' . $x . ',' . $y . ') rotate(' . ($rot * 90) . ' 2.5 2.5)">';
+        $svg .= '<polygon points="' . $patches[$patchIdx] . '" fill="' . $fg . '"/>';
+        $svg .= '</g>';
+    };
+
+    // Corners: TL, TR, BR, BL with rotation offset
+    $drawCell(0, 0, $cornerPatch, ($cornerRot + 0) % 4);
+    $drawCell(2, 0, $cornerPatch, ($cornerRot + 1) % 4);
+    $drawCell(2, 2, $cornerPatch, ($cornerRot + 2) % 4);
+    $drawCell(0, 2, $cornerPatch, ($cornerRot + 3) % 4);
+
+    // Edges: T, R, B, L with rotation offset
+    $drawCell(1, 0, $edgePatch, ($edgeRot + 0) % 4);
+    $drawCell(2, 1, $edgePatch, ($edgeRot + 1) % 4);
+    $drawCell(1, 2, $edgePatch, ($edgeRot + 2) % 4);
+    $drawCell(0, 1, $edgePatch, ($edgeRot + 3) % 4);
+
+    // Center
+    $drawCell(1, 1, $centerPatch, 0);
+
+    $svg .= '</svg>';
+
+    return '<div class="contact-avatar-sm contact-avatar-identicon">' . $svg . '</div>';
+}
+
+/**
+ * Pixel avatar — 5×5 mirrored grid in a single palette color.
+ * Returns a div with inline SVG. No CSS variables — colors live in SVG fill
+ * attributes (not CSS), so this works under strict CSP.
+ */
+function renderContactPixelAvatar(string $seedHex): string {
+    $bytes = _contactAvatarSeedBytes($seedHex);
+    $palette = _contactAvatarPalette();
+    $color = $palette[ord($bytes[0]) % count($palette)];
+
+    // 15 cells: 3 left columns × 5 rows, mirrored to right
+    $bits = (ord($bytes[1]) << 16) | (ord($bytes[2]) << 8) | ord($bytes[3]);
+
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 5" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges">';
+    for ($row = 0; $row < 5; $row++) {
+        for ($col = 0; $col < 3; $col++) {
+            $bitIdx = ($row * 3) + $col;
+            if (($bits >> $bitIdx) & 1) {
+                $svg .= '<rect x="' . $col . '" y="' . $row . '" width="1" height="1" fill="' . $color . '"/>';
+                if ($col < 2) {
+                    $svg .= '<rect x="' . (4 - $col) . '" y="' . $row . '" width="1" height="1" fill="' . $color . '"/>';
+                }
+            }
+        }
+    }
+    $svg .= '</svg>';
+
+    return '<div class="contact-avatar-sm contact-avatar-identicon">' . $svg . '</div>';
+}
+
+/**
+ * Gradient avatar — two-color linear-gradient circle with the contact's
+ * first letter overlaid in white. Renders entirely as inline SVG so all
+ * colors are SVG attributes, not CSS (CSP-safe).
+ */
+function renderContactGradientAvatar(string $seedHex, string $name): string {
+    $bytes = _contactAvatarSeedBytes($seedHex);
+    $palette = _contactAvatarPalette();
+    $idx1 = ord($bytes[0]) % count($palette);
+    $idx2 = ord($bytes[1]) % count($palette);
+    if ($idx2 === $idx1) {
+        $idx2 = ($idx2 + 1) % count($palette);
+    }
+    $c1 = $palette[$idx1];
+    $c2 = $palette[$idx2];
+
+    // 4 gradient directions
+    $dirs = [
+        ['0', '0', '100', '100'], // diagonal TL → BR
+        ['100', '0', '0', '100'], // diagonal TR → BL
+        ['0', '0', '100', '0'],   // horizontal L → R
+        ['0', '0', '0', '100'],   // vertical T → B
+    ];
+    $d = $dirs[ord($bytes[2]) % 4];
+
+    $letter = htmlspecialchars(strtoupper(mb_substr($name !== '' ? $name : '?', 0, 1)));
+    // Unique gradient ID per contact so multiple gradients on the page don't collide
+    $gid = 'cag' . substr(bin2hex($bytes), 0, 12);
+
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">'
+         . '<defs><linearGradient id="' . $gid . '" x1="' . $d[0] . '%" y1="' . $d[1] . '%" x2="' . $d[2] . '%" y2="' . $d[3] . '%">'
+         . '<stop offset="0%" stop-color="' . $c1 . '"/>'
+         . '<stop offset="100%" stop-color="' . $c2 . '"/>'
+         . '</linearGradient></defs>'
+         . '<circle cx="50" cy="50" r="50" fill="url(#' . $gid . ')"/>'
+         . '<text x="50" y="50" text-anchor="middle" dy="0.35em" font-size="48" font-weight="700" fill="#fff" font-family="sans-serif">' . $letter . '</text>'
+         . '</svg>';
+
+    return '<div class="contact-avatar-sm contact-avatar-hybrid">' . $svg . '</div>';
+}
+
+/**
+ * Router — picks the avatar style based on the user's contactAvatarStyle setting.
+ * Falls back to gradient if the setting value is unknown.
+ */
+function renderContactAvatar(string $seedHex, string $name, string $style): string {
+    return match ($style) {
+        'tile'  => renderContactTileAvatar($seedHex),
+        'pixel' => renderContactPixelAvatar($seedHex),
+        default => renderContactGradientAvatar($seedHex, $name),
+    };
 }
 
 // =========================================================================
@@ -293,7 +487,8 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
     return $posA - $posB;
 });
 
-$transactions = $transactionService->getTransactionHistory($maxDisplayLines);
+$recentTransactionsLimit = $user->getDisplayRecentTransactionsLimit();
+$transactions = $transactionService->getTransactionHistory($recentTransactionsLimit);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Update check status (reads cache only — never triggers a new check on page load)
@@ -431,9 +626,10 @@ if (!empty($pendingContacts)) {
     }
 }
 
-$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
-$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
-$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);
+$contactTxLimit = contactTransactionsLimit();
+$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $contactTxLimit);
+$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $contactTxLimit);
+$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $contactTxLimit);
 
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {
