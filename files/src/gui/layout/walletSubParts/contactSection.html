@@ -16,6 +16,25 @@
             <span id="contact-search-count">0</span> contacts found
         </div>
     </div>
+    <div class="contacts-filters mb-lg">
+        <select id="contact-filter-status" class="contacts-filter-select" data-action-change="filterContacts" aria-label="Filter by status">
+            <option value="">Any status</option>
+            <option value="accepted">Accepted</option>
+            <option value="pending">Pending</option>
+            <option value="blocked">Blocked</option>
+        </select>
+        <select id="contact-filter-chain" class="contacts-filter-select" data-action-change="filterContacts" aria-label="Filter by chain state">
+            <option value="">Any chain</option>
+            <option value="issues">Has issues</option>
+            <option value="valid">Valid only</option>
+        </select>
+        <select id="contact-filter-online" class="contacts-filter-select" data-action-change="filterContacts" aria-label="Filter by online state">
+            <option value="">Any online</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+            <option value="unknown">Unknown</option>
+        </select>
+    </div>
     <?php endif; ?>
     <?php if (empty($allContacts)): ?>
     <div class="empty-state">
@@ -29,9 +48,9 @@
             <thead>
                 <tr>
                     <th class="col-name">Name</th>
-                    <th class="col-number text-right">Balance</th>
-                    <th class="col-number text-right">Your Av. Credit <i class="fas fa-info-circle info-tooltip-icon" title="How much credit you can still spend with each contact. Equals the credit limit they set for you minus what you currently owe them. Will exceed the limit when they owe you money. Updates on every transaction, plus periodic background refreshes." data-action="showInfoModal" role="button" aria-label="More information"></i></th>
-                    <th class="col-number text-right">Their Av. Credit <i class="fas fa-info-circle info-tooltip-icon" title="How much credit each contact still has with you. Equals their credit limit minus what they currently owe you. Will exceed the limit when you owe them money." data-action="showInfoModal" role="button" aria-label="More information"></i></th>
+                    <th class="col-number text-right sortable" data-action="sortContacts" data-sort-column="balance" role="button" aria-label="Sort by balance"><span class="sort-label">Balance</span><i class="fas fa-sort sort-indicator"></i></th>
+                    <th class="col-number text-right sortable" data-action="sortContacts" data-sort-column="your-credit" role="button" aria-label="Sort by your available credit"><span class="sort-label">Your Av. Credit</span><i class="fas fa-info-circle info-tooltip-icon" title="How much credit you can still spend with each contact. Equals the credit limit they set for you minus what you currently owe them. Will exceed the limit when they owe you money. Updates on every transaction, plus periodic background refreshes." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information"></i><i class="fas fa-sort sort-indicator"></i></th>
+                    <th class="col-number text-right sortable" data-action="sortContacts" data-sort-column="their-credit" role="button" aria-label="Sort by their available credit"><span class="sort-label">Their Av. Credit</span><i class="fas fa-info-circle info-tooltip-icon" title="How much credit each contact still has with you. Equals their credit limit minus what they currently owe you. Will exceed the limit when you owe them money." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information"></i><i class="fas fa-sort sort-indicator"></i></th>
                     <th class="col-status text-center">Status</th>
                     <th class="col-chain text-center">Chain</th>
                     <th class="col-online text-center">Online</th>
@@ -52,8 +71,26 @@
                     $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
                     $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
                     $isRejected = $proposal && $proposal['status'] === 'rejected';
+                    // One-word chain state for filtering
+                    if ($isIncoming)            { $chainState = 'action'; }
+                    elseif ($isOutgoing)        { $chainState = 'waiting'; }
+                    elseif ($isRejected)        { $chainState = 'rejected'; }
+                    elseif ($validChain === 0)  { $chainState = 'warning'; }
+                    elseif ($validChain === 1)  { $chainState = 'valid'; }
+                    else                        { $chainState = 'none'; }
                 ?>
-                <tr class="contact-card contact-row cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                <tr class="contact-card contact-row cursor-pointer"
+                    data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
+                    data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-status="accepted"
+                    data-chain-state="<?php echo $chainState; ?>"
+                    data-online="<?php echo htmlspecialchars($onlineStatus); ?>"
+                    data-balance="<?php echo (float) ($contact['balance'] ?? 0); ?>"
+                    data-your-credit="<?php echo $myCredit !== null ? (float) $myCredit : ''; ?>"
+                    data-their-credit="<?php echo $theirCredit !== null ? (float) $theirCredit : ''; ?>"
+                    data-action="openContactModal"
+                    data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
                             <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
@@ -90,7 +127,18 @@
                     $pendCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                     $pendCurrency = $pendCur['currency'] ?? 'USD';
                 ?>
-                <tr class="contact-card contact-row contact-row-pending cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                <tr class="contact-card contact-row contact-row-pending cursor-pointer"
+                    data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
+                    data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-status="pending"
+                    data-chain-state="none"
+                    data-online="unknown"
+                    data-balance=""
+                    data-your-credit=""
+                    data-their-credit=""
+                    data-action="openContactModal"
+                    data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
                             <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
@@ -113,7 +161,18 @@
                     $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                     $blkCurrency = $blkCur['currency'] ?? 'USD';
                 ?>
-                <tr class="contact-card contact-row contact-row-blocked cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
+                <tr class="contact-card contact-row contact-row-blocked cursor-pointer"
+                    data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
+                    data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-status="blocked"
+                    data-chain-state="none"
+                    data-online="unknown"
+                    data-balance="<?php echo (float) ($contact['balance'] ?? 0); ?>"
+                    data-your-credit=""
+                    data-their-credit=""
+                    data-action="openContactModal"
+                    data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
                             <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>

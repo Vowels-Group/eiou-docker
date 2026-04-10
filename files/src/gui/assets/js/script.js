@@ -1916,6 +1916,16 @@ function filterContacts() {
     if (!searchInput) return;
 
     var searchTerm = searchInput.value.toLowerCase().trim();
+
+    var statusEl = document.getElementById('contact-filter-status');
+    var chainEl = document.getElementById('contact-filter-chain');
+    var onlineEl = document.getElementById('contact-filter-online');
+    var statusFilter = statusEl ? statusEl.value : '';
+    var chainFilter = chainEl ? chainEl.value : '';
+    var onlineFilter = onlineEl ? onlineEl.value : '';
+
+    var hasActiveFilter = (searchTerm !== '') || (statusFilter !== '') || (chainFilter !== '') || (onlineFilter !== '');
+
     var contactCards = document.querySelectorAll('.contact-card');
     var visibleCount = 0;
 
@@ -1923,12 +1933,39 @@ function filterContacts() {
         var card = contactCards[i];
         var contactName = card.getAttribute('data-contact-name') || '';
         var contactAddress = card.getAttribute('data-contact-address') || '';
-        var matchesSearch = contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
+        var rowStatus = card.getAttribute('data-status') || '';
+        var rowChain = card.getAttribute('data-chain-state') || '';
+        var rowOnline = card.getAttribute('data-online') || '';
 
-        if (searchTerm === '' || matchesSearch) {
-            // Show card if matches search (respecting limit when not searching)
-            if (searchTerm === '') {
-                // When not searching, respect the show all / limited state
+        // Match each filter dimension; an empty filter passes everything
+        var matchesSearch = (searchTerm === '') || contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
+        var matchesStatus = (statusFilter === '') || rowStatus === statusFilter;
+        var matchesChain;
+        if (chainFilter === '') {
+            matchesChain = true;
+        } else if (chainFilter === 'issues') {
+            // Anything that needs attention: incoming proposal, awaiting response, rejected, or chain warning
+            matchesChain = (rowChain === 'action') || (rowChain === 'waiting') || (rowChain === 'rejected') || (rowChain === 'warning');
+        } else if (chainFilter === 'valid') {
+            matchesChain = rowChain === 'valid';
+        } else {
+            matchesChain = rowChain === chainFilter;
+        }
+        var matchesOnline;
+        if (onlineFilter === '') {
+            matchesOnline = true;
+        } else if (onlineFilter === 'online') {
+            // Lump partial in with online — both mean "at least one address reachable"
+            matchesOnline = (rowOnline === 'online') || (rowOnline === 'partial');
+        } else {
+            matchesOnline = rowOnline === onlineFilter;
+        }
+
+        var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
+
+        if (matches) {
+            if (!hasActiveFilter) {
+                // No filters active — respect the show all / limited state
                 if (contactsShowAll || visibleCount < CONTACTS_DEFAULT_LIMIT) {
                     card.style.display = '';
                     visibleCount++;
@@ -1936,7 +1973,7 @@ function filterContacts() {
                     card.style.display = 'none';
                 }
             } else {
-                // When searching, show all matches
+                // Any filter active — show all matches
                 card.style.display = '';
                 visibleCount++;
             }
@@ -1945,9 +1982,9 @@ function filterContacts() {
         }
     }
 
-    // Update search status
+    // Show the "X contacts found" status whenever any filter is active
     if (searchStatus && searchCount) {
-        if (searchTerm !== '') {
+        if (hasActiveFilter) {
             searchStatus.style.display = 'block';
             searchCount.textContent = visibleCount;
         } else {
@@ -1955,13 +1992,117 @@ function filterContacts() {
         }
     }
 
-    // Hide show more button when searching
+    // Hide show more button when any filter is active
     if (showMoreBtn) {
-        showMoreBtn.style.display = searchTerm !== '' ? 'none' : '';
+        showMoreBtn.style.display = hasActiveFilter ? 'none' : '';
     }
 
     // Update scroll button visibility after filtering
     setTimeout(updateContactsScrollButtons, 50);
+}
+
+/**
+ * Contact sort state — held in module scope so repeated header clicks
+ * cycle through asc → desc → clear → asc on the same column.
+ * `originalOrder` is captured the first time a sort runs so we can restore
+ * the default alphabetical layout when the user clears the sort.
+ */
+var contactsSortState = { column: null, direction: null, originalOrder: null };
+
+/**
+ * Sort the contacts table by a numeric column. Click cycle on the same
+ * column: asc → desc → clear (back to default order).
+ *
+ * @param {string} column - 'balance', 'your-credit', or 'their-credit'
+ */
+function sortContacts(column) {
+    var tbody = document.getElementById('contacts-grid');
+    if (!tbody) return;
+
+    // Snapshot the original DOM order on first sort so we can restore it later
+    if (!contactsSortState.originalOrder) {
+        contactsSortState.originalOrder = [];
+        var initial = tbody.querySelectorAll('.contact-card');
+        for (var k = 0; k < initial.length; k++) {
+            contactsSortState.originalOrder.push(initial[k]);
+        }
+    }
+
+    // Determine new direction based on current state
+    var newDirection;
+    if (contactsSortState.column !== column) {
+        newDirection = 'asc';
+    } else if (contactsSortState.direction === 'asc') {
+        newDirection = 'desc';
+    } else if (contactsSortState.direction === 'desc') {
+        newDirection = null; // clear → restore default
+    } else {
+        newDirection = 'asc';
+    }
+
+    if (!newDirection) {
+        // Restore default alphabetical order
+        for (var i = 0; i < contactsSortState.originalOrder.length; i++) {
+            tbody.appendChild(contactsSortState.originalOrder[i]);
+        }
+        contactsSortState.column = null;
+        contactsSortState.direction = null;
+    } else {
+        var attr = 'data-' + column;
+        var rows = [];
+        var current = tbody.querySelectorAll('.contact-card');
+        for (var j = 0; j < current.length; j++) rows.push(current[j]);
+
+        rows.sort(function (a, b) {
+            var av = parseFloat(a.getAttribute(attr));
+            var bv = parseFloat(b.getAttribute(attr));
+            // Missing / NaN values always sort to the bottom regardless of direction
+            var aMissing = isNaN(av);
+            var bMissing = isNaN(bv);
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+            return newDirection === 'asc' ? av - bv : bv - av;
+        });
+
+        for (var m = 0; m < rows.length; m++) tbody.appendChild(rows[m]);
+        contactsSortState.column = column;
+        contactsSortState.direction = newDirection;
+    }
+
+    updateSortIndicators();
+}
+
+/**
+ * Update the visual state of the sort arrow icons in the contacts table
+ * header to reflect the current contactsSortState.
+ */
+function updateSortIndicators() {
+    var headers = document.querySelectorAll('.contacts-table thead th.sortable');
+    for (var i = 0; i < headers.length; i++) {
+        var th = headers[i];
+        var col = th.getAttribute('data-sort-column');
+        var icon = th.querySelector('.sort-indicator');
+        if (!icon) continue;
+
+        // Reset to base classes
+        icon.className = 'fas sort-indicator';
+        th.classList.remove('sort-asc', 'sort-desc');
+
+        if (col === contactsSortState.column) {
+            if (contactsSortState.direction === 'asc') {
+                icon.classList.add('fa-sort-up');
+                th.classList.add('sort-asc');
+            } else if (contactsSortState.direction === 'desc') {
+                icon.classList.add('fa-sort-down');
+                th.classList.add('sort-desc');
+            } else {
+                icon.classList.add('fa-sort');
+            }
+        } else {
+            icon.classList.add('fa-sort');
+        }
+    }
 }
 
 /**
@@ -4951,6 +5092,12 @@ function submitAnalyticsConsent(enable) {
             window.location.reload();
         },
 
+        // Contacts table — sort by clicking a numeric column header
+        'sortContacts': function(el) {
+            var col = el.getAttribute('data-sort-column');
+            if (col) sortContacts(col);
+        },
+
         // Transaction history
         'openTransactionModal': function(el) {
             var index = parseInt(el.getAttribute('data-index'), 10);
@@ -5178,6 +5325,7 @@ function submitAnalyticsConsent(enable) {
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
+        else if (action === 'filterContacts') { filterContacts(); }
     }, false);
 
     // Delegated input handler
