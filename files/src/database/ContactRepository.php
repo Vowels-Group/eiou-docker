@@ -451,7 +451,7 @@ class ContactRepository extends AbstractRepository {
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE c.name IS NOT NULL
                     AND c.status = 'pending'
-                    ORDER BY c.name COLLATE NOCASE ASC";
+                    ORDER BY c.name ASC";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
@@ -470,7 +470,7 @@ class ContactRepository extends AbstractRepository {
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'accepted'
-                    ORDER BY c.name COLLATE NOCASE ASC";
+                    ORDER BY c.name ASC";
 
         $stmt = $this->execute($query);
         if(!$stmt){
@@ -490,7 +490,7 @@ class ContactRepository extends AbstractRepository {
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'blocked'
-                    ORDER BY c.name COLLATE NOCASE ASC";
+                    ORDER BY c.name ASC";
 
         $stmt = $this->execute($query);
         if(!$stmt){
