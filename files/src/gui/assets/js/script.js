@@ -212,6 +212,11 @@ function switchTab(tabName, scrollToId) {
     // Persist last tab
     safeStorageSet('eiou_active_tab', tabName);
 
+    // Recompute truncation on the contacts table once it's visible
+    if (tabName === 'contacts' && typeof markTruncatedContactNumberCells === 'function') {
+        markTruncatedContactNumberCells();
+    }
+
     // Scroll to specific element within the tab, or scroll to top
     if (scrollToId) {
         var scrollTarget = document.getElementById(scrollToId);
@@ -1958,6 +1963,40 @@ function filterContacts() {
     // Update scroll button visibility after filtering
     setTimeout(updateContactsScrollButtons, 50);
 }
+
+/**
+ * Mark contacts-table number cells whose content overflows the column.
+ * Truncated cells get a dotted underline and a click handler that opens the
+ * existing info modal showing the full value — a touch-friendly alternative
+ * to native hover tooltips. Non-truncated cells stay actionless so the click
+ * bubbles up to the row's openContactModal handler.
+ */
+function markTruncatedContactNumberCells() {
+    var cells = document.querySelectorAll('.contacts-table .col-number');
+    for (var i = 0; i < cells.length; i++) {
+        var cell = cells[i];
+        // Skip cells in hidden ancestors (clientWidth is 0)
+        if (cell.clientWidth === 0) continue;
+        if (cell.scrollWidth > cell.clientWidth + 1) {
+            cell.classList.add('truncated');
+            cell.setAttribute('data-action', 'showInfoModal');
+            cell.setAttribute('title', cell.textContent.replace(/\s+/g, ' ').trim());
+        } else if (cell.classList.contains('truncated')) {
+            cell.classList.remove('truncated');
+            cell.removeAttribute('data-action');
+            cell.removeAttribute('title');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    markTruncatedContactNumberCells();
+    var resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(markTruncatedContactNumberCells, 150);
+    });
+});
 
 /**
  * Filter the main transaction list by name, address, or description.
