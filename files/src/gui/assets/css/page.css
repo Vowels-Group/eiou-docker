@@ -772,6 +772,13 @@ tr.contact-card {
 .contacts-table .col-status { width: 10%; }
 .contacts-table .col-chain  { width: 8%; }
 .contacts-table .col-online { width: 6%; }
+/* Narrow screens: hide credits / status / chain / online — keep Name + Balance only */
+@media (max-width: 600px) {
+    .contacts-table thead th:nth-child(n+3),
+    .contacts-table tbody td:nth-child(n+3) {
+        display: none;
+    }
+}
 .contacts-table thead th {
     text-align: left;
     padding: 0.65rem 0.75rem;
