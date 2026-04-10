@@ -286,7 +286,7 @@ function renderContactGradientAvatar(string $seedHex, string $name): string {
          . '<stop offset="100%" stop-color="' . $c2 . '"/>'
          . '</linearGradient></defs>'
          . '<circle cx="50" cy="50" r="50" fill="url(#' . $gid . ')"/>'
-         . '<text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-size="52" font-weight="700" fill="#fff" font-family="-apple-system, system-ui, sans-serif">' . $letter . '</text>'
+         . '<text x="50" y="50" text-anchor="middle" dy="0.35em" font-size="48" font-weight="700" fill="#fff" font-family="sans-serif">' . $letter . '</text>'
          . '</svg>';
 
     return '<div class="contact-avatar-sm contact-avatar-hybrid">' . $svg . '</div>';

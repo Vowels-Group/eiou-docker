@@ -46,8 +46,10 @@
                     'pixel'    => 'Pixel',
                     'tile'     => 'Tile',
                 ];
-                // Fixed sample seed so the previews are consistent across users
-                $previewSeed = 'e7a3f2d8b1c9e4f6a8d3b7c2e9f1a4b6';
+                // Fixed sample seed picked specifically so the previews look
+                // visually balanced for all three styles. Keep this stable so
+                // the settings page is the same for everyone.
+                $previewSeed = '77a01489afbcaf6940efe5b761b4dfa3';
                 $previewName = 'Sample';
                 $previews = [
                     'gradient' => renderContactGradientAvatar($previewSeed, $previewName),
