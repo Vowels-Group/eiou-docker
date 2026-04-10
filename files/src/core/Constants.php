@@ -461,6 +461,10 @@ class Constants {
     const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
     const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
 
+    // Contact avatar style — controls how contact avatars are rendered in the contacts list
+    const CONTACT_AVATAR_STYLE = 'gradient';
+    const CONTACT_AVATAR_STYLE_OPTIONS = ['gradient', 'pixel', 'tile'];
+
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';

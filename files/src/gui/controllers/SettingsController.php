@@ -381,6 +381,16 @@ class SettingsController
             }
         }
 
+        // Contact avatar style
+        if (isset($_POST['contactAvatarStyle'])) {
+            $val = trim((string) $_POST['contactAvatarStyle']);
+            if (in_array($val, Constants::CONTACT_AVATAR_STYLE_OPTIONS, true)) {
+                $settings['contactAvatarStyle'] = $val;
+            } else {
+                $errors[] = 'Invalid contact avatar style: must be one of ' . implode(', ', Constants::CONTACT_AVATAR_STYLE_OPTIONS);
+            }
+        }
+
         // Display name — saved to userconfig.json (separate from defaultconfig.json)
         $nameForUserConfig = null;
         if (isset($_POST['name'])) {

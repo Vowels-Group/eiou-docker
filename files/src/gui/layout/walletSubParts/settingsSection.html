@@ -36,6 +36,40 @@
                 </small>
             </div>
 
+            <!-- Contact Avatar Style -->
+            <div class="form-group">
+                <label>Contact Avatar Style:</label>
+                <?php
+                $currentAvatarStyle = $user->getContactAvatarStyle();
+                $avatarStyleLabels = [
+                    'gradient' => 'Gradient',
+                    'pixel'    => 'Pixel',
+                    'tile'     => 'Tile',
+                ];
+                // Fixed sample seed so the previews are consistent across users
+                $previewSeed = 'e7a3f2d8b1c9e4f6a8d3b7c2e9f1a4b6';
+                $previewName = 'Sample';
+                $previews = [
+                    'gradient' => renderContactGradientAvatar($previewSeed, $previewName),
+                    'pixel'    => renderContactPixelAvatar($previewSeed),
+                    'tile'     => renderContactTileAvatar($previewSeed),
+                ];
+                ?>
+                <div class="avatar-style-previews" role="radiogroup" aria-label="Contact avatar style">
+                    <?php foreach (\Eiou\Core\Constants::CONTACT_AVATAR_STYLE_OPTIONS as $styleKey): ?>
+                        <label class="avatar-style-preview" title="Use the <?php echo htmlspecialchars($avatarStyleLabels[$styleKey] ?? $styleKey); ?> style">
+                            <input type="radio" name="contactAvatarStyle" value="<?php echo htmlspecialchars($styleKey); ?>" <?php echo ($styleKey === $currentAvatarStyle) ? 'checked' : ''; ?>>
+                            <?php echo $previews[$styleKey] ?? ''; ?>
+                            <span><?php echo htmlspecialchars($avatarStyleLabels[$styleKey] ?? $styleKey); ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    How contact avatars appear in the contacts list. Pick one and save.
+                </small>
+            </div>
+
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>

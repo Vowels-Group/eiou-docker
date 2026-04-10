@@ -1046,6 +1046,16 @@ class UserContext {
         return in_array($val, Constants::SESSION_TIMEOUT_OPTIONS) ? $val : Constants::SESSION_TIMEOUT_MINUTES;
     }
 
+    /**
+     * Get the contact avatar style for the contacts list
+     *
+     * @return string  One of: gradient, tile, pixel
+     */
+    public function getContactAvatarStyle(): string {
+        $val = (string) ($this->get('contactAvatarStyle') ?? Constants::CONTACT_AVATAR_STYLE);
+        return in_array($val, Constants::CONTACT_AVATAR_STYLE_OPTIONS, true) ? $val : Constants::CONTACT_AVATAR_STYLE;
+    }
+
     // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
@@ -1132,6 +1142,9 @@ class UserContext {
 
             // Session
             'sessionTimeoutMinutes' => Constants::SESSION_TIMEOUT_MINUTES,
+
+            // Contact list
+            'contactAvatarStyle' => Constants::CONTACT_AVATAR_STYLE,
         ];
     }
 

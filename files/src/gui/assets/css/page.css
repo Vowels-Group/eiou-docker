@@ -820,6 +820,70 @@ tr.contact-card {
     color: #fff;
     flex-shrink: 0;
 }
+/* Generated identicon / hybrid SVG avatars */
+.contact-avatar-identicon {
+    background: #f6f8fa;
+    overflow: hidden;
+    padding: 0;
+}
+.contact-avatar-hybrid {
+    background: transparent;
+    overflow: hidden;
+    padding: 0;
+}
+.contact-avatar-identicon svg,
+.contact-avatar-hybrid svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Avatar style preview cards in settings — radio inputs hidden, label is the card */
+.avatar-style-previews {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+.avatar-style-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.avatar-style-preview input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+.avatar-style-preview:hover {
+    border-color: #adb5bd;
+}
+.avatar-style-preview span {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+.avatar-style-preview:has(input:checked) {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+}
+.avatar-style-preview:has(input:checked) span {
+    color: #0d6efd;
+    font-weight: 600;
+}
+.avatar-style-preview:focus-within {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
 .contact-name-cell {
     display: flex;
     align-items: center;

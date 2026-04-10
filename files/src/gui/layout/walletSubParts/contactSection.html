@@ -56,7 +56,7 @@
                 <tr class="contact-card contact-row cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
-                            <div class="contact-avatar-sm contact-avatar-accepted"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div>
+                            <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
                             <span class="contact-name-text"><?php echo htmlspecialchars($contact['name']); ?></span>
                         </div>
                     </td>
@@ -93,7 +93,7 @@
                 <tr class="contact-card contact-row contact-row-pending cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
-                            <div class="contact-avatar-sm contact-avatar-pending"><?php echo htmlspecialchars(strtoupper(substr($contact['name'], 0, 1))); ?></div>
+                            <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
                             <span class="contact-name-text"><?php echo htmlspecialchars($contact['name']); ?></span>
                         </div>
                     </td>
@@ -116,7 +116,7 @@
                 <tr class="contact-card contact-row contact-row-blocked cursor-pointer" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" data-action="openContactModal" data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
-                            <div class="contact-avatar-sm contact-avatar-blocked"><?php echo htmlspecialchars($contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : 'X'); ?></div>
+                            <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
                             <span class="contact-name-text"><?php echo htmlspecialchars($contact['name'] ?? '-'); ?></span>
                         </div>
                     </td>
