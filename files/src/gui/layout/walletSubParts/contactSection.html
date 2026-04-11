@@ -97,7 +97,7 @@
                             <span class="contact-name-text"><?php echo htmlspecialchars($contact['name']); ?></span>
                         </div>
                     </td>
-                    <td class="col-number text-right"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
+                    <td class="col-number text-right <?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
                     <td class="col-number text-right"><?php echo $myCredit !== null ? number_format($myCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
                     <td class="col-number text-right"><?php echo $theirCredit !== null ? number_format($theirCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
                     <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
@@ -179,7 +179,7 @@
                             <span class="contact-name-text"><?php echo htmlspecialchars($contact['name'] ?? '-'); ?></span>
                         </div>
                     </td>
-                    <td class="col-number text-right"><?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></td>
+                    <td class="col-number text-right <?php echo ($contact['balance'] ?? 0) >= 0 ? 'balance-positive' : 'balance-negative'; ?>"><?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></td>
                     <td class="col-number text-right text-muted">—</td>
                     <td class="col-number text-right text-muted">—</td>
                     <td class="col-status text-center"><span class="badge badge-blocked">Blocked</span></td>
@@ -641,7 +641,7 @@
                         <?php endif; ?>
 
                         <?php
-                            $hasRequestedCredit = ($pc['credit_limit'] !== null && $pc['credit_limit'] instanceof \Eiou\Core\SplitAmount);
+                            $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
                             $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
                         ?>
                         <div class="form-row currency-form-row">

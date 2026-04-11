@@ -391,6 +391,26 @@ class SettingsController
             }
         }
 
+        // Amount color scheme — neutral / western / eastern
+        if (isset($_POST['amountColorScheme'])) {
+            $val = trim((string) $_POST['amountColorScheme']);
+            if (in_array($val, Constants::AMOUNT_COLOR_SCHEME_OPTIONS, true)) {
+                $settings['amountColorScheme'] = $val;
+            } else {
+                $errors[] = 'Invalid amount color scheme: must be one of ' . implode(', ', Constants::AMOUNT_COLOR_SCHEME_OPTIONS);
+            }
+        }
+
+        // Status color scheme — neutral / western / eastern
+        if (isset($_POST['statusColorScheme'])) {
+            $val = trim((string) $_POST['statusColorScheme']);
+            if (in_array($val, Constants::STATUS_COLOR_SCHEME_OPTIONS, true)) {
+                $settings['statusColorScheme'] = $val;
+            } else {
+                $errors[] = 'Invalid status color scheme: must be one of ' . implode(', ', Constants::STATUS_COLOR_SCHEME_OPTIONS);
+            }
+        }
+
         // Display name — saved to userconfig.json (separate from defaultconfig.json)
         $nameForUserConfig = null;
         if (isset($_POST['name'])) {

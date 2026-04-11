@@ -465,6 +465,22 @@ class Constants {
     const CONTACT_AVATAR_STYLE = 'gradient';
     const CONTACT_AVATAR_STYLE_OPTIONS = ['gradient', 'pixel', 'tile'];
 
+    // Amount color scheme — controls how +/- transaction amounts and balances are colored
+    //   neutral: black for both (default)
+    //   western: green positive, red negative (Rest of the World)
+    //   eastern: red positive, green negative (Asia)
+    const AMOUNT_COLOR_SCHEME = 'neutral';
+    const AMOUNT_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
+
+    // Status color scheme — controls accepted/completed/resolved (success)
+    // and rejected/blocked/failed (failure) badges. Sent/received direction
+    // badges are always neutral, regardless of this setting.
+    //   neutral: muted gray for both (default)
+    //   western: green success, red failure
+    //   eastern: red success, green failure
+    const STATUS_COLOR_SCHEME = 'neutral';
+    const STATUS_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
+
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';

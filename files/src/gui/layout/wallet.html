@@ -16,7 +16,7 @@
     <!-- Graceful degradation: show all sections when JS is disabled (Tor Safest mode) -->
     <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
 </head>
-<body>
+<body data-page="wallet" data-amount-colors="<?php echo htmlspecialchars($user->getAmountColorScheme()); ?>" data-status-colors="<?php echo htmlspecialchars($user->getStatusColorScheme()); ?>">
     <div class="container">
         <!-- Banner -->
         <?php require_once("/app/eiou/src/gui/layout/walletSubParts/banner.html");?>

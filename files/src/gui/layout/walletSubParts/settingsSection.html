@@ -8,34 +8,6 @@
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
         <div class="settings-grid">
-            <!-- Display Name -->
-            <div class="form-group">
-                <label for="settingsName">Display Name:</label>
-                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Your display name shown in the GUI and shared when contacts scan your QR code
-                </small>
-            </div>
-
-            <!-- Session Timeout -->
-            <div class="form-group">
-                <label for="sessionTimeoutMinutes">Session Timeout:</label>
-                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
-                    <?php
-                    $currentTimeout = $user->getSessionTimeoutMinutes();
-                    foreach (\Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS as $minutes): ?>
-                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
-                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Auto-logout after this period of inactivity
-                </small>
-            </div>
-
             <!-- Contact Avatar Style -->
             <div class="form-group">
                 <label>Contact Avatar Style:</label>
@@ -58,7 +30,7 @@
                 ];
                 ?>
                 <div class="avatar-style-previews" role="radiogroup" aria-label="Contact avatar style">
-                    <?php foreach (\Eiou\Core\Constants::CONTACT_AVATAR_STYLE_OPTIONS as $styleKey): ?>
+                    <?php foreach (contactAvatarStyleOptions() as $styleKey): ?>
                         <label class="avatar-style-preview" title="Use the <?php echo htmlspecialchars($avatarStyleLabels[$styleKey] ?? $styleKey); ?> style">
                             <input type="radio" name="contactAvatarStyle" value="<?php echo htmlspecialchars($styleKey); ?>" <?php echo ($styleKey === $currentAvatarStyle) ? 'checked' : ''; ?>>
                             <?php echo $previews[$styleKey] ?? ''; ?>
@@ -69,6 +41,94 @@
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     How contact avatars appear in the contacts list. Pick one and save.
+                </small>
+            </div>
+
+            <!-- Amount Color Scheme -->
+            <div class="form-group">
+                <label for="amountColorScheme">Amount Color Scheme:</label>
+                <?php
+                $currentAmountScheme = $user->getAmountColorScheme();
+                $amountSchemeLabels = [
+                    'neutral' => 'Neutral (black)',
+                    'western' => 'Western (green +, red −)',
+                    'eastern' => 'Eastern (red +, green −)',
+                ];
+                ?>
+                <div class="color-scheme-row">
+                    <select id="amountColorScheme" name="amountColorScheme" class="default-value" data-action-change="previewColorScheme" data-preview-target="amountColorSchemePreview" data-preview-attr="data-amount-colors">
+                        <?php foreach (amountColorSchemeOptions() as $schemeKey): ?>
+                            <option value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentAmountScheme) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($amountSchemeLabels[$schemeKey] ?? $schemeKey); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span id="amountColorSchemePreview" class="color-scheme-swatch" data-amount-colors="<?php echo htmlspecialchars($currentAmountScheme); ?>" aria-hidden="true">
+                        <span class="transaction-received">+100</span>
+                        <span class="transaction-sent">−100</span>
+                    </span>
+                </div>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Color for positive and negative transaction amounts and balances throughout the wallet.
+                </small>
+            </div>
+
+            <!-- Status Color Scheme -->
+            <div class="form-group">
+                <label for="statusColorScheme">Status Color Scheme:</label>
+                <?php
+                $currentStatusScheme = $user->getStatusColorScheme();
+                $statusSchemeLabels = [
+                    'neutral' => 'Neutral (gray)',
+                    'western' => 'Western (green success, red failure)',
+                    'eastern' => 'Eastern (red success, green failure)',
+                ];
+                ?>
+                <div class="color-scheme-row">
+                    <select id="statusColorScheme" name="statusColorScheme" class="default-value" data-action-change="previewColorScheme" data-preview-target="statusColorSchemePreview" data-preview-attr="data-status-colors">
+                        <?php foreach (statusColorSchemeOptions() as $schemeKey): ?>
+                            <option value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentStatusScheme) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($statusSchemeLabels[$schemeKey] ?? $schemeKey); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span id="statusColorSchemePreview" class="color-scheme-swatch color-scheme-swatch-status" data-status-colors="<?php echo htmlspecialchars($currentStatusScheme); ?>" aria-hidden="true">
+                        <span class="tx-status-badge tx-status-completed">OK</span>
+                        <span class="tx-status-badge tx-status-rejected">FAIL</span>
+                    </span>
+                </div>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Color for accepted/completed/resolved vs rejected/blocked/failed badges. Sent/Received direction labels are always neutral to avoid conflicting semantics.
+                </small>
+            </div>
+
+            <!-- Display Name -->
+            <div class="form-group">
+                <label for="settingsName">Display Name:</label>
+                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Your display name shown in the GUI and shared when contacts scan your QR code
+                </small>
+            </div>
+
+            <!-- Session Timeout -->
+            <div class="form-group">
+                <label for="sessionTimeoutMinutes">Session Timeout:</label>
+                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
+                    <?php
+                    $currentTimeout = $user->getSessionTimeoutMinutes();
+                    foreach (sessionTimeoutOptions() as $minutes): ?>
+                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
+                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Auto-logout after this period of inactivity
                 </small>
             </div>
 
@@ -742,7 +802,7 @@
                             <label for="displayDateFormat">Date Format:</label>
                             <?php $currentDateFormat = $user->getDisplayDateFormat(); $now = new \DateTime(); ?>
                             <select id="displayDateFormat" name="displayDateFormat" class="default-value">
-                                <?php foreach (\Eiou\Core\Constants::VALID_DATE_FORMATS as $fmt): ?>
+                                <?php foreach (validDateFormats() as $fmt): ?>
                                     <option value="<?php echo htmlspecialchars($fmt); ?>" <?php echo ($fmt === $currentDateFormat) ? 'selected' : ''; ?>><?php echo htmlspecialchars($now->format($fmt)); ?> (<?php echo htmlspecialchars($fmt); ?>)</option>
                                 <?php endforeach; ?>
                             </select>

@@ -115,6 +115,29 @@ function safeStorageRemove(key) {
     }
 }
 
+// ============================================================================
+// Auth page: clear wallet state from localStorage
+//
+// When the user lands on the unauthenticated login page (body[data-page="auth"])
+// we wipe any wallet-state keys left behind by a previous session, so stale
+// "Background Processing" toasts and reopen-contact hints don't leak across
+// the session boundary. Safe no-op on the wallet page.
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    if (!document.body || document.body.getAttribute('data-page') !== 'auth') return;
+    var authPageKeys = [
+        'eiou_pending_operation',
+        'eiou_timeout_message',
+        'eiou_reopen_contact_id',
+        'eiou_reopen_contact_tab'
+    ];
+    try {
+        for (var i = 0; i < authPageKeys.length; i++) {
+            localStorage.removeItem(authPageKeys[i]);
+        }
+    } catch (e) {}
+});
+
 /**
  * Escapes HTML special characters to prevent XSS attacks.
  *
@@ -1763,64 +1786,6 @@ function showManualCopyModal(text, successMessage) {
 // ============================================================================
 
 /**
- * Updates the visibility of the left/right contacts scroll buttons
- * based on the current scroll position of the contacts grid.
- * Hides the left button when scrolled to the start and the right
- * button when scrolled to the end.
- */
-function updateContactsScrollButtons() {
-    var grid = document.getElementById('contacts-grid');
-    if (!grid) return;
-    var leftBtn = document.getElementById('contacts-scroll-left');
-    var rightBtn = document.getElementById('contacts-scroll-right');
-    if (leftBtn) {
-        if (grid.scrollLeft <= 0) {
-            leftBtn.className = leftBtn.className.replace(' hidden', '') + ' hidden';
-        } else {
-            leftBtn.className = leftBtn.className.replace(' hidden', '');
-        }
-    }
-    if (rightBtn) {
-        // 1px tolerance for rounding
-        var atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 1;
-        if (atEnd) {
-            rightBtn.className = rightBtn.className.replace(' hidden', '') + ' hidden';
-        } else {
-            rightBtn.className = rightBtn.className.replace(' hidden', '');
-        }
-    }
-}
-
-/**
- * Scrolls the contacts grid left or right by one card width.
- * @param {number} direction - -1 for left, 1 for right
- */
-function scrollContacts(direction) {
-    var grid = document.getElementById('contacts-grid');
-    if (!grid) return;
-    // Card width (250px) + gap (16px)
-    var scrollAmount = 266 * direction;
-    grid.scrollLeft = grid.scrollLeft + scrollAmount;
-    // Delay update to let scroll settle
-    setTimeout(updateContactsScrollButtons, 50);
-}
-
-// Update scroll buttons on page load and when the grid is scrolled
-(function() {
-    var initScrollButtons = function() {
-        var grid = document.getElementById('contacts-grid');
-        if (!grid) return;
-        grid.addEventListener('scroll', updateContactsScrollButtons);
-        updateContactsScrollButtons();
-    };
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initScrollButtons);
-    } else {
-        initScrollButtons();
-    }
-})();
-
-/**
  * Updates the visibility of the quick actions scroll buttons
  * based on the current scroll position.
  */
@@ -1885,33 +1850,18 @@ var currentContactPubkeyHash = null;
 var contactTransactionData = [];
 var currentContactCurrencies = [];
 var currentContactBalances = {};
-var contactsShowAll = false;
-var CONTACTS_DEFAULT_LIMIT = 16;
 
 /**
- * Filters the contact list based on a search term entered by the user.
- *
- * Performs case-insensitive substring matching against contact names and addresses.
- * When searching, all matching contacts are displayed regardless of the pagination limit.
- * When the search is cleared, the display respects the current show all/limited state.
- *
- * The function updates:
- * - Contact card visibility (display: '' or display: 'none')
- * - Search status indicator showing match count
- * - Show more button visibility (hidden during active search)
- *
- * Uses Tor Browser compatible code (var declarations, indexOf instead of includes).
+ * Filters the contact list based on search text, status / chain / online
+ * dropdowns. Case-insensitive substring match against name and address.
+ * Tor-Browser-friendly (var + indexOf).
  *
  * @returns {void}
- * @example
- * // Called from search input oninput event
- * <input type="text" id="contact-search-input" oninput="filterContacts()">
  */
 function filterContacts() {
     var searchInput = document.getElementById('contact-search-input');
     var searchStatus = document.getElementById('contact-search-status');
     var searchCount = document.getElementById('contact-search-count');
-    var showMoreBtn = document.getElementById('contacts-show-more');
 
     if (!searchInput) return;
 
@@ -1964,19 +1914,8 @@ function filterContacts() {
         var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
 
         if (matches) {
-            if (!hasActiveFilter) {
-                // No filters active — respect the show all / limited state
-                if (contactsShowAll || visibleCount < CONTACTS_DEFAULT_LIMIT) {
-                    card.style.display = '';
-                    visibleCount++;
-                } else {
-                    card.style.display = 'none';
-                }
-            } else {
-                // Any filter active — show all matches
-                card.style.display = '';
-                visibleCount++;
-            }
+            card.style.display = '';
+            visibleCount++;
         } else {
             card.style.display = 'none';
         }
@@ -1991,14 +1930,6 @@ function filterContacts() {
             searchStatus.style.display = 'none';
         }
     }
-
-    // Hide show more button when any filter is active
-    if (showMoreBtn) {
-        showMoreBtn.style.display = hasActiveFilter ? 'none' : '';
-    }
-
-    // Update scroll button visibility after filtering
-    setTimeout(updateContactsScrollButtons, 50);
 }
 
 /**
@@ -2182,74 +2113,6 @@ function filterTransactions() {
     }
 }
 
-/**
- * Toggles between showing all contacts and showing only the first 16.
- *
- * When collapsed, only the first 16 contacts (CONTACTS_DEFAULT_LIMIT) are visible.
- * When expanded, all contacts are shown. Updates the button text to reflect
- * the current state. Uses Tor Browser compatible code (var declarations, for loops).
- *
- * @returns {void}
- * @example
- * // Called from "Show All" button onclick
- * <button id="show-more-btn" onclick="toggleShowAllContacts()">Show All</button>
- */
-function toggleShowAllContacts() {
-    contactsShowAll = !contactsShowAll;
-
-    var showMoreBtn = document.getElementById('show-more-btn');
-    var hiddenCount = document.getElementById('hidden-contacts-count');
-    var contactCards = document.querySelectorAll('.contact-card');
-    var totalContacts = contactCards.length;
-
-    if (contactsShowAll) {
-        // Show all contacts
-        for (var i = 0; i < contactCards.length; i++) {
-            contactCards[i].style.display = '';
-        }
-        if (showMoreBtn) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Show Less';
-        }
-    } else {
-        // Show only first 16 contacts
-        for (var j = 0; j < contactCards.length; j++) {
-            if (j < CONTACTS_DEFAULT_LIMIT) {
-                contactCards[j].style.display = '';
-            } else {
-                contactCards[j].style.display = 'none';
-            }
-        }
-        if (showMoreBtn && hiddenCount) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
-        }
-    }
-
-    // Update scroll button visibility after toggling
-    setTimeout(updateContactsScrollButtons, 50);
-}
-
-/**
- * Initializes the contact list display with pagination limit.
- *
- * Hides all contact cards beyond the first 16 (CONTACTS_DEFAULT_LIMIT) on page load.
- * This improves initial page performance for users with many contacts and provides
- * a cleaner UI. Users can click "Show All" to see the remaining contacts.
- *
- * @returns {void}
- * @example
- * // Called automatically on DOMContentLoaded
- * window.addEventListener('DOMContentLoaded', function() {
- *     initContactsDisplay();
- * });
- */
-function initContactsDisplay() {
-    var contactCards = document.querySelectorAll('.contact-card');
-    if (contactCards.length > CONTACTS_DEFAULT_LIMIT) {
-        for (var i = CONTACTS_DEFAULT_LIMIT; i < contactCards.length; i++) {
-            contactCards[i].style.display = 'none';
-        }
-    }
-}
 
 /**
  * Shows a small info modal with the text from an info icon's title attribute.
@@ -3261,11 +3124,16 @@ function showContactTxDetail(index) {
     var status = tx.status || 'completed';
     var statusBadge = '<span class="tx-status-badge tx-status-' + escapeHtml(status) + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
 
-    // Build transaction type badge (both yellow for consistency)
+    // Build transaction type badge
     var txType = tx.tx_type || 'standard';
-    var txTypeBadge = txType === 'p2p'
-        ? '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>'
-        : '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-exchange-alt"></i> Direct</span>';
+    var txTypeBadge;
+    if (txType === 'contact') {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-contact"><i class="fas fa-user-plus"></i> Contact Request</span>';
+    } else if (txType === 'p2p') {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>';
+    } else {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-direct"><i class="fas fa-exchange-alt"></i> Direct</span>';
+    }
 
     // Build role badge (Sent/Received/Relay)
     var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
@@ -3401,9 +3269,6 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Check if we need to reopen contact modal after refresh
     checkReopenContactModal();
-
-    // Initialize contacts display limit (show only first 16 by default)
-    initContactsDisplay();
 });
 
 // Chain Drop Resolution state
@@ -5164,6 +5029,189 @@ function submitAnalyticsConsent(enable) {
 }
 
 // ============================================================================
+// Transaction history — auto-refresh and P2P approval
+//
+// The data bootstrap (transactionData, hasInProgressTx, autoRefreshEnabled,
+// syncingTransactionCount) is rendered by transactionHistory.html as an inline
+// <script> block with PHP-interpolated values. Everything static lives here.
+// ============================================================================
+
+var AUTO_REFRESH_DELAY = 15000; // 15 seconds
+var autoRefreshInterval = null;
+
+function startAutoRefresh() {
+    // Only start if enabled in settings AND there are in-progress transactions
+    if (!(typeof hasInProgressTx !== 'undefined' && hasInProgressTx)) return;
+    if (!(typeof autoRefreshEnabled !== 'undefined' && autoRefreshEnabled)) return;
+    if (autoRefreshInterval) return;
+
+    var indicator = document.getElementById('tx-auto-refresh-status');
+    if (indicator) indicator.classList.add('active');
+
+    autoRefreshInterval = setInterval(function() {
+        // Skip if manual refresh is already in progress
+        if (window.isRefreshing) { return; }
+
+        // XMLHttpRequest — Tor Browser compatible (no fetch/AbortController)
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', window.location.pathname + '?check_updates=1&_=' + Date.now(), true);
+        xhr.timeout = 30000; // 30s for Tor
+
+        xhr.ontimeout = function() { /* retry next interval */ };
+        xhr.onerror = function() { /* retry next interval */ };
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) { return; }
+            if (window.isRefreshing) { return; }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                window.location.reload();
+            }
+        };
+        xhr.send();
+    }, AUTO_REFRESH_DELAY);
+}
+
+window.stopAutoRefresh = function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        var indicator = document.getElementById('tx-auto-refresh-status');
+        if (indicator) indicator.classList.remove('active');
+    }
+};
+
+// P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
+function approveP2pTransaction(hash, candidateId) {
+    var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
+    if (!confirm(msg)) return;
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { alert('CSRF token not found'); return; }
+    var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    if (candidateId) {
+        body = body + '&candidate_id=' + encodeURIComponent(candidateId);
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) { window.location.reload(); }
+                    else { alert('Error: ' + (data.message || 'Unknown error')); }
+                } catch (e) {
+                    alert('Error parsing response');
+                }
+            } else {
+                alert('Network error');
+            }
+        }
+    };
+    xhr.ontimeout = function() { alert('Request timed out'); };
+    xhr.send(body);
+}
+
+function rejectP2pTransaction(hash) {
+    if (!confirm('Are you sure you want to reject this transaction?')) return;
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { alert('CSRF token not found'); return; }
+    var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) { window.location.reload(); }
+                    else { alert('Error: ' + (data.message || 'Unknown error')); }
+                } catch (e) {
+                    alert('Error parsing response');
+                }
+            } else {
+                alert('Network error');
+            }
+        }
+    };
+    xhr.ontimeout = function() { alert('Request timed out'); };
+    xhr.send(body);
+}
+
+function loadP2pCandidates(hash, container) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
+    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success && data.candidates && data.candidates.length > 0) {
+                        // Update the route count header dynamically (late candidates may arrive)
+                        var countEl = document.getElementById('p2p-count-' + hash);
+                        if (countEl) { countEl.textContent = data.candidates.length + ' route(s) found — choose one:'; }
+                        var html = '';
+                        var currency = 'USD';
+                        for (var i = 0; i < data.candidates.length; i++) {
+                            var c = data.candidates[i];
+                            var routeFee = (c.amount - data.base_amount) / 100;
+                            var totalCost = c.amount / 100;
+                            var addr = c.sender_address;
+                            var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
+                            html = html + '<div class="p2p-candidate-row">';
+                            html = html + '<div class="p2p-candidate-info">';
+                            html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</strong></div>';
+                            html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</div>';
+                            html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
+                            html = html + '</div>';
+                            html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';
+                            html = html + '<i class="fas fa-check"></i> Choose</button>';
+                            html = html + '</div>';
+                        }
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = '<div class="status-msg-muted">No candidates available</div>';
+                    }
+                } catch (e) {
+                    container.innerHTML = '<div class="status-msg-danger">Error loading routes</div>';
+                }
+            } else {
+                container.innerHTML = '<div class="status-msg-danger">Failed to load routes</div>';
+            }
+        }
+    };
+    xhr.ontimeout = function() { container.innerHTML = '<div class="status-msg-danger">Request timed out</div>'; };
+    xhr.send(body);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Start auto-refresh if there are in-progress transactions
+    if (typeof hasInProgressTx !== 'undefined' && hasInProgressTx) {
+        startAutoRefresh();
+        if (typeof showInProgressToasts === 'function') {
+            showInProgressToasts();
+        }
+    }
+
+    // Load candidates for multi-candidate P2P approval rows on page load
+    var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');
+    for (var i = 0; i < candidateContainers.length; i++) {
+        var el = candidateContainers[i];
+        var hash = el.id.replace('p2p-candidates-', '');
+        loadP2pCandidates(hash, el);
+    }
+});
+
+window.addEventListener('beforeunload', window.stopAutoRefresh);
+
+// ============================================================================
 // CSP nonce-compatible event delegation (L-32)
 // Replaces all inline on* handlers with data-action attributes
 // ============================================================================
@@ -5275,11 +5323,6 @@ function submitAnalyticsConsent(enable) {
         'hideContactTxDetail': function() { hideContactTxDetail(); },
 
         // Contact list
-        'scrollContacts': function(el) {
-            var dir = parseInt(el.getAttribute('data-direction'), 10);
-            scrollContacts(dir);
-        },
-        'toggleShowAllContacts': function() { toggleShowAllContacts(); },
 
         // Quick actions
         'scrollQuickActions': function(el) {
@@ -5439,6 +5482,17 @@ function submitAnalyticsConsent(enable) {
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
+        else if (action === 'previewColorScheme') {
+            // Live preview: flip the swatch next to the select to the
+            // chosen scheme without saving. Target element is named by
+            // data-preview-target on the select; data-preview-attr tells
+            // us which attribute to set (data-amount-colors for the
+            // amount scheme, data-status-colors for the status scheme).
+            var targetId = el.getAttribute('data-preview-target');
+            var attrName = el.getAttribute('data-preview-attr') || 'data-amount-colors';
+            var preview = targetId ? document.getElementById(targetId) : null;
+            if (preview) { preview.setAttribute(attrName, el.value); }
+        }
     }, false);
 
     // Delegated input handler
@@ -5450,6 +5504,8 @@ function submitAnalyticsConsent(enable) {
         if (action === 'filterDebugLogs') {
             var target = el.getAttribute('data-target');
             filterDebugLogs(el, target);
+        } else if (action === 'searchDlq') {
+            searchDlq(el.value);
         }
     }, false);
 

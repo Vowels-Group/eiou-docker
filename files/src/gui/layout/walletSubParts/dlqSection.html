@@ -81,6 +81,12 @@
     </div>
     <?php endif; ?>
 
+    <!-- Search bar — rendered above the filter tabs to match the Contacts
+         section layout (Title → Search → Filter → Table). -->
+    <div class="dlq-search-bar">
+        <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
+    </div>
+
     <!-- Filter tabs — client-side, no page reload -->
     <div class="dlq-filter-tabs">
         <button class="dlq-filter-tab active" data-filter="active"    data-action="setDlqFilter">Pending &amp; Retrying</button>
@@ -89,12 +95,6 @@
         <button class="dlq-filter-tab"        data-filter="abandoned" data-action="setDlqFilter">Abandoned</button>
         <button class="dlq-filter-tab"        data-filter="all"       data-action="setDlqFilter">All</button>
     </div>
-
-    <?php if (count($dlqItems ?? []) > 3): ?>
-    <div class="dlq-search-bar">
-        <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." oninput="searchDlq(this.value)">
-    </div>
-    <?php endif; ?>
 
     <?php if (empty($dlqItems)): ?>
     <div class="empty-state">
