@@ -2056,6 +2056,15 @@ tr.contact-card:hover .contact-name-cell {
     border-left: 3px solid #ffc107;
     animation: tx-pulse 2s ease-in-out infinite;
 }
+/* When applied to a table row (tx-table), border-left can't render on <tr>
+   with border-collapse:separate — paint it on the first cell instead. */
+tr.tx-item-in-progress {
+    border-left: none;
+    animation: tx-pulse 2s ease-in-out infinite;
+}
+tr.tx-item-in-progress > td:first-child {
+    border-left: 3px solid #ffc107;
+}
 
 @keyframes tx-pulse {
     0%, 100% { background: white; }

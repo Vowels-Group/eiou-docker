@@ -2091,7 +2091,7 @@ function filterTransactions() {
     var dirFilter = dirSelect ? dirSelect.value : '';
     var typeFilter = typeSelect ? typeSelect.value : '';
     var statusFilter = statusSelect ? statusSelect.value : '';
-    var items = document.querySelectorAll('#transaction-list .transaction-item');
+    var items = document.querySelectorAll('#transaction-list .tx-row');
     var visible = 0;
     var anyFilterActive = (term !== '' || dirFilter !== '' || typeFilter !== '' || statusFilter !== '');
 
@@ -2144,7 +2144,7 @@ function sortTransactions(column) {
 
     if (!transactionsSortState.originalOrder) {
         transactionsSortState.originalOrder = [];
-        var initial = tbody.querySelectorAll('.transaction-item');
+        var initial = tbody.querySelectorAll('.tx-row');
         for (var k = 0; k < initial.length; k++) {
             transactionsSortState.originalOrder.push(initial[k]);
         }
@@ -2170,7 +2170,7 @@ function sortTransactions(column) {
     } else {
         var attr = 'data-' + column;
         var rows = [];
-        var current = tbody.querySelectorAll('.transaction-item');
+        var current = tbody.querySelectorAll('.tx-row');
         for (var j = 0; j < current.length; j++) rows.push(current[j]);
 
         rows.sort(function (a, b) {
