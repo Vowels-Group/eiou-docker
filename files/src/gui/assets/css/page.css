@@ -1460,13 +1460,20 @@ body {
     color: white;
 }
 
+/* Used for positive-action buttons (New Contact, Accept, Retry, Approve & Pay,
+   Approve P2P, etc.). Renders blue — same palette as .btn-primary — so the
+   wallet has no "green for good" semantics for buttons, leaving green/red
+   free for the amount and status color schemes without overloading meaning.
+   `.btn-danger` and `.btn-warning` are deliberately left red / yellow so
+   truly destructive or cautionary actions (Delete, Reject, Logout, Block,
+   Propose chain drop) stay visually distinct. */
 .btn-success {
-    background: #198754;
+    background: #0d6efd;
     color: white;
 }
 
 .btn-success:hover {
-    background: #157347;
+    background: #0b5ed7;
     text-decoration: none;
     color: white;
 }
