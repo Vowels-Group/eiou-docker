@@ -4396,6 +4396,47 @@ function parseQrData(text) {
     return { type: 'contact', address: text };
 }
 
+// QR scanner — uses html5-qrcode (vendored at vendor/html5-qrcode.min.js).
+//
+// Tor Browser is handled by the isCanvasBlocked() early-exit below: it
+// blocks both camera and canvas APIs for fingerprinting protection, so any
+// in-browser QR library will fail. We tell the user to copy/paste instead.
+//
+// iOS Safari notes for future maintainers — if iOS users still report
+// "QR scanner doesn't work" after the layered fixes below:
+//   1. The relaxed `{ facingMode: { ideal: 'environment' } }` constraint
+//      and the getCameras() fallback (Layer 2 below) should handle most
+//      iOS quirks within html5-qrcode. Check console.warn output from
+//      showCameraError() to find the exact err.name reported by the user.
+//   2. html5-qrcode v2.3.8 is the last release (April 2023) — the library
+//      is essentially unmaintained. There is no upgrade path within it.
+//      That said, Snyk reports zero known vulnerabilities for 2.3.8 as of
+//      2026-04, and the library is vendored (vendor/html5-qrcode.min.js)
+//      and loaded under a nonce-based CSP, so supply-chain surface is nil
+//      until someone re-vendors. "Unmaintained" is a latent concern, not
+//      an active security risk.
+//   3. Do NOT swap to @zxing/browser as a drop-in "maintained" replacement
+//      — that premise is wrong as of 2026-04. @zxing/browser is still at
+//      0.1.5, last published ~2 years ago, and is effectively just as
+//      unmaintained as html5-qrcode. It also ships a lower-level API with
+//      no built-in modal/viewfinder, so switching would mean rewriting the
+//      overlay in openQrScanner() AND adding a bundle step (ESM-only
+//      distribution), for zero proven security upside. Only revisit if a
+//      maintained fork emerges.
+//   4. If (1)+(2) prove insufficient, the right next step is the native
+//      BarcodeDetector API with html5-qrcode as a fallback. Supported in
+//      iOS Safari 17+, Chrome, Edge. NOT supported in Firefox. Pattern:
+//      feature-detect first, use BarcodeDetector if available, fall back
+//      to html5-qrcode for Firefox and older iOS. Roughly 50–80 lines
+//      additional, no new dependency. Uses the most modern API exactly
+//      where iOS reports matter, smallest blast radius.
+//      Reminder: none of these options help Tor Browser, which blocks
+//      camera and canvas APIs outright — the isCanvasBlocked() guard
+//      above handles that case regardless of which library is used.
+//      NOT the same as the previous "PHP ZXing" attempt removed in
+//      commit 3e804e11 (that was a server-side wrapper around the Java
+//      ZXing CLI, removed because Tor uploads were too slow) — in-browser
+//      decoding is a different approach entirely.
 function openQrScanner(targetInputId, opts) {
     opts = opts || {};
 
@@ -4456,51 +4497,123 @@ function openQrScanner(targetInputId, opts) {
     });
     document.addEventListener('keydown', escHandler);
 
+    function onScanSuccess(decodedText) {
+        var qrData = parseQrData(decodedText);
+
+        var input = document.getElementById(targetInputId);
+        if (input) {
+            input.value = qrData.address;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        // If name field target provided and name is available, fill it
+        var nameInputId = opts.nameInputId;
+        if (nameInputId && qrData.name) {
+            var nameInput = document.getElementById(nameInputId);
+            if (nameInput) {
+                nameInput.value = qrData.name;
+                nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+
+        var displayAddr = qrData.address.length > 30 ? qrData.address.substring(0, 30) + '...' : qrData.address;
+        var toastMsg = 'Address: ' + displayAddr;
+        if (qrData.name) {
+            toastMsg = qrData.name + ' — ' + displayAddr;
+        }
+        showToast('QR Scanned', toastMsg, 'success');
+        closeScanner();
+
+        // If callback provided, call it after scan
+        if (typeof opts.onScan === 'function') {
+            opts.onScan(qrData);
+        }
+    }
+
+    var scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+    function noopFrameError() { /* ignore — fires continuously when no QR in frame */ }
+
+    // Use { ideal: 'environment' } instead of literal 'environment'. iOS Safari
+    // (and some Android browsers) reject the strict form on devices where the
+    // camera enumeration doesn't tag a camera as 'environment', and fail with
+    // OverconstrainedError instead of just picking another camera.
     scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        function onScanSuccess(decodedText) {
-            var qrData = parseQrData(decodedText);
-
-            var input = document.getElementById(targetInputId);
-            if (input) {
-                input.value = qrData.address;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-
-            // If name field target provided and name is available, fill it
-            var nameInputId = opts.nameInputId;
-            if (nameInputId && qrData.name) {
-                var nameInput = document.getElementById(nameInputId);
-                if (nameInput) {
-                    nameInput.value = qrData.name;
-                    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
-
-            var displayAddr = qrData.address.length > 30 ? qrData.address.substring(0, 30) + '...' : qrData.address;
-            var toastMsg = 'Address: ' + displayAddr;
-            if (qrData.name) {
-                toastMsg = qrData.name + ' — ' + displayAddr;
-            }
-            showToast('QR Scanned', toastMsg, 'success');
-            closeScanner();
-
-            // If callback provided, call it after scan
-            if (typeof opts.onScan === 'function') {
-                opts.onScan(qrData);
-            }
-        },
-        function() { /* ignore — fires continuously when no QR in frame */ }
+        { facingMode: { ideal: 'environment' } },
+        scanConfig,
+        onScanSuccess,
+        noopFrameError
     ).then(function() {
         scanning = true;
-    }).catch(function() {
-        var readerEl = document.getElementById('qr-scanner-reader');
-        if (readerEl) {
-            readerEl.innerHTML = '<p style="color:#dc3545;text-align:center;padding:2rem">' +
-                '<i class="fas fa-exclamation-triangle"></i> Camera access denied or unavailable.</p>';
+    }).catch(function(err) {
+        // Layer 2: if the constraint failed (no camera matched), enumerate
+        // the device's cameras and start the scanner with an explicit deviceId.
+        // Pick the LAST camera in the list — on phones the rear camera is
+        // typically last; on desktops there's only one anyway.
+        var name = err && err.name;
+        if (name === 'OverconstrainedError' || name === 'NotFoundError') {
+            Html5Qrcode.getCameras().then(function(devices) {
+                if (!devices || !devices.length) {
+                    throw err;
+                }
+                var preferred = devices[devices.length - 1];
+                return scanner.start(preferred.id, scanConfig, onScanSuccess, noopFrameError)
+                    .then(function() { scanning = true; });
+            }).catch(function(secondErr) {
+                showCameraError(secondErr || err);
+            });
+        } else {
+            showCameraError(err);
         }
     });
+
+    function showCameraError(err) {
+        var name = (err && err.name) || 'Unknown';
+        var msg = (err && err.message) || '';
+        var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+        var isiOS = /iPad|iPhone|iPod/.test(ua);
+        var heading = 'Camera unavailable';
+        var detail = '';
+
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+            heading = 'Camera permission denied';
+            if (isiOS) {
+                detail = 'You blocked camera access for this site. Open Settings → Safari → Camera, set this site to "Allow", then reload the page and try again.';
+            } else {
+                detail = 'You blocked camera access for this site. Click the camera icon in your browser address bar to grant access, then reopen the scanner.';
+            }
+        } else if (name === 'NotFoundError') {
+            heading = 'No camera found';
+            detail = 'No camera is available on this device.';
+        } else if (name === 'NotReadableError') {
+            heading = 'Camera in use';
+            detail = 'The camera is being used by another application. Close other apps using the camera and try again.';
+        } else if (name === 'OverconstrainedError') {
+            heading = 'No compatible camera';
+            detail = 'No camera matched the requested settings. Your device may not have a usable rear camera.';
+        } else if (name === 'SecurityError') {
+            heading = 'Insecure connection';
+            detail = 'Camera access requires a secure (HTTPS) connection. Reload the page over HTTPS and try again.';
+        } else {
+            heading = 'Camera error';
+            detail = 'Could not start the camera (' + escapeHtml(name) + ').';
+            if (msg) {
+                detail += ' ' + escapeHtml(msg);
+            }
+        }
+
+        var readerEl = document.getElementById('qr-scanner-reader');
+        if (readerEl) {
+            readerEl.innerHTML = '<div style="color:#dc3545;text-align:center;padding:2rem;font-size:0.9rem;line-height:1.5">' +
+                '<i class="fas fa-exclamation-triangle" style="font-size:1.5rem;display:block;margin-bottom:0.75rem"></i>' +
+                '<strong>' + escapeHtml(heading) + '</strong>' +
+                '<p style="margin:0.75rem 0 0">' + detail + '</p>' +
+                '</div>';
+        }
+
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('QR scanner camera error:', name, msg, err);
+        }
+    }
 }
 
 // ============================================================================
