@@ -4582,46 +4582,27 @@ hr.currency-separator-double {
 }
 
 /* ============================================================
-   AMOUNT COLOR SCHEME — Settings page preview swatches
+   AMOUNT COLOR SCHEME — Settings page: compact dropdown + live preview
    ============================================================ */
-.color-scheme-previews {
+.color-scheme-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
-}
-.color-scheme-preview {
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    cursor: pointer;
-    background: #fff;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    gap: 0.75rem;
 }
-.color-scheme-preview:hover {
-    border-color: #0d6efd;
-}
-.color-scheme-preview input[type="radio"] {
-    margin-bottom: 0.35rem;
-}
-.color-scheme-preview input[type="radio"]:checked ~ .color-scheme-swatch {
-    box-shadow: 0 0 0 2px #0d6efd;
+.color-scheme-row select {
+    flex: 1;
+    min-width: 0;
 }
 .color-scheme-swatch {
     display: inline-flex;
     gap: 0.5rem;
-    padding: 0.25rem 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #dee2e6;
     border-radius: 4px;
     background: #f8f9fa;
     font-weight: 600;
     font-family: 'Consolas', 'Monaco', monospace;
-}
-.color-scheme-label {
-    margin-top: 0.35rem;
-    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 /* ============================================================

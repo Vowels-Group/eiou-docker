@@ -5645,6 +5645,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
+        else if (action === 'previewColorScheme') {
+            // Live preview: flip the swatch next to the select to the
+            // chosen scheme without saving. Target element is named by
+            // data-preview-target on the select.
+            var targetId = el.getAttribute('data-preview-target');
+            var preview = targetId ? document.getElementById(targetId) : null;
+            if (preview) { preview.setAttribute('data-amount-colors', el.value); }
+        }
     }, false);
 
     // Delegated input handler

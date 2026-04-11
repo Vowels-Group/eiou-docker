@@ -74,35 +74,31 @@
 
             <!-- Amount Color Scheme -->
             <div class="form-group">
-                <label>Amount Color Scheme:</label>
+                <label for="amountColorScheme">Amount Color Scheme:</label>
                 <?php
                 $currentColorScheme = $user->getAmountColorScheme();
                 $colorSchemeLabels = [
-                    'neutral' => 'Neutral',
-                    'western' => 'Western',
-                    'eastern' => 'Eastern',
-                ];
-                $colorSchemeHints = [
-                    'neutral' => 'Black for both',
-                    'western' => 'Green +, red − (Rest of the World)',
-                    'eastern' => 'Red +, green − (Asia)',
+                    'neutral' => 'Neutral (black)',
+                    'western' => 'Western (green +, red −)',
+                    'eastern' => 'Eastern (red +, green −)',
                 ];
                 ?>
-                <div class="color-scheme-previews" role="radiogroup" aria-label="Amount color scheme">
-                    <?php foreach (amountColorSchemeOptions() as $schemeKey): ?>
-                        <label class="color-scheme-preview" title="<?php echo htmlspecialchars($colorSchemeHints[$schemeKey] ?? ''); ?>">
-                            <input type="radio" name="amountColorScheme" value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentColorScheme) ? 'checked' : ''; ?>>
-                            <span class="color-scheme-swatch" data-amount-colors="<?php echo htmlspecialchars($schemeKey); ?>">
-                                <span class="transaction-received">+100</span>
-                                <span class="transaction-sent">−100</span>
-                            </span>
-                            <span class="color-scheme-label"><?php echo htmlspecialchars($colorSchemeLabels[$schemeKey] ?? $schemeKey); ?></span>
-                        </label>
-                    <?php endforeach; ?>
+                <div class="color-scheme-row">
+                    <select id="amountColorScheme" name="amountColorScheme" class="default-value" data-action-change="previewColorScheme" data-preview-target="amountColorSchemePreview">
+                        <?php foreach (amountColorSchemeOptions() as $schemeKey): ?>
+                            <option value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentColorScheme) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($colorSchemeLabels[$schemeKey] ?? $schemeKey); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span id="amountColorSchemePreview" class="color-scheme-swatch" data-amount-colors="<?php echo htmlspecialchars($currentColorScheme); ?>" aria-hidden="true">
+                        <span class="transaction-received">+100</span>
+                        <span class="transaction-sent">−100</span>
+                    </span>
                 </div>
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
-                    Color for positive and negative transaction amounts and balances throughout the wallet. Pick one and save.
+                    Color for positive and negative transaction amounts and balances throughout the wallet.
                 </small>
             </div>
 
