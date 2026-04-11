@@ -4410,25 +4410,33 @@ function parseQrData(text) {
 //      showCameraError() to find the exact err.name reported by the user.
 //   2. html5-qrcode v2.3.8 is the last release (April 2023) — the library
 //      is essentially unmaintained. There is no upgrade path within it.
-//   3. Two larger options if the layered fixes are not enough:
-//      a) BarcodeDetector native API. Supported in iOS Safari 17+, Chrome,
-//         Edge. NOT supported in Firefox. Pattern: feature-detect first,
-//         use BarcodeDetector if available, fall back to html5-qrcode for
-//         Firefox and older iOS. Roughly 50–80 lines additional, no new
-//         dependency. Most direct fix for any latent iOS bug in html5-qrcode.
-//      b) Replace html5-qrcode with @zxing/browser (a maintained JS port
-//         of the Java ZXing library). NOT the same as the previous
-//         "PHP ZXing" attempt that was removed in commit 3e804e11 — that
-//         was a server-side wrapper around Java ZXing CLI, removed because
-//         Tor uploads were too slow. @zxing/browser runs entirely in the
-//         browser, similar to html5-qrcode but actively maintained.
-//         ZXing-js does NOT solve the Tor canvas-blocked problem; same
-//         early-exit guard would still apply. Bigger change because the
-//         API is lower-level (no built-in modal/viewfinder UI) and would
-//         require porting the UI bits in openQrScanner().
-//      Recommendation: try option (a) first if (1)+(2) prove insufficient,
-//      since it has the smallest blast radius and uses the most modern API
-//      where it matters (iOS Safari).
+//      That said, Snyk reports zero known vulnerabilities for 2.3.8 as of
+//      2026-04, and the library is vendored (vendor/html5-qrcode.min.js)
+//      and loaded under a nonce-based CSP, so supply-chain surface is nil
+//      until someone re-vendors. "Unmaintained" is a latent concern, not
+//      an active security risk.
+//   3. Do NOT swap to @zxing/browser as a drop-in "maintained" replacement
+//      — that premise is wrong as of 2026-04. @zxing/browser is still at
+//      0.1.5, last published ~2 years ago, and is effectively just as
+//      unmaintained as html5-qrcode. It also ships a lower-level API with
+//      no built-in modal/viewfinder, so switching would mean rewriting the
+//      overlay in openQrScanner() AND adding a bundle step (ESM-only
+//      distribution), for zero proven security upside. Only revisit if a
+//      maintained fork emerges.
+//   4. If (1)+(2) prove insufficient, the right next step is the native
+//      BarcodeDetector API with html5-qrcode as a fallback. Supported in
+//      iOS Safari 17+, Chrome, Edge. NOT supported in Firefox. Pattern:
+//      feature-detect first, use BarcodeDetector if available, fall back
+//      to html5-qrcode for Firefox and older iOS. Roughly 50–80 lines
+//      additional, no new dependency. Uses the most modern API exactly
+//      where iOS reports matter, smallest blast radius.
+//      Reminder: none of these options help Tor Browser, which blocks
+//      camera and canvas APIs outright — the isCanvasBlocked() guard
+//      above handles that case regardless of which library is used.
+//      NOT the same as the previous "PHP ZXing" attempt removed in
+//      commit 3e804e11 (that was a server-side wrapper around the Java
+//      ZXing CLI, removed because Tor uploads were too slow) — in-browser
+//      decoding is a different approach entirely.
 function openQrScanner(targetInputId, opts) {
     opts = opts || {};
 
