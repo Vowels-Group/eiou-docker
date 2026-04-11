@@ -4150,27 +4150,28 @@ hr.currency-separator-double {
     padding: 1rem;
     border-radius: 8px;
     margin-bottom: 1.5rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
 }
 
-.tx-modal-header-sent {
-    background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
-}
-
+/* Legacy direction classes. Left as no-op selectors so existing JS that
+   emits `tx-modal-header-sent` / `tx-modal-header-received` still renders.
+   The actual direction color is driven by the amount color scheme further
+   down in this file. */
+.tx-modal-header-sent,
 .tx-modal-header-received {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    /* background/border inherited from .tx-modal-header above */
 }
 
 .tx-modal-amount {
     font-size: 2rem;
     font-weight: bold;
-    color: white;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
+    color: inherit;
 }
 
 .tx-modal-direction {
-    color: white;
+    color: inherit;
     margin-top: 0.5rem;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
 .tx-modal-badges {
@@ -4190,9 +4191,15 @@ hr.currency-separator-double {
 .tx-modal-badge-contact { background: #17a2b8; }
 .tx-modal-badge-p2p { background: #ffc107; color: #000; }
 .tx-modal-badge-direct { background: #ffc107; color: #000; }
-.tx-modal-badge-sent { background: #dc3545; }
-.tx-modal-badge-received { background: #28a745; }
 .tx-modal-badge-relay { background: #17a2b8; }
+/* Direction badges (sent/received) follow the amount color scheme —
+   neutral by default, green/red under western, flipped under eastern.
+   See the AMOUNT COLOR SCHEME OVERRIDES block at the bottom of this file. */
+.tx-modal-badge-sent,
+.tx-modal-badge-received {
+    background: #e9ecef;
+    color: #495057;
+}
 
 .tx-modal-mono {
     font-family: monospace;
@@ -4620,21 +4627,27 @@ hr.currency-separator-double {
 [data-amount-colors="western"] .balance-amount.balance-positive,
 [data-amount-colors="western"] .transaction-received,
 [data-amount-colors="western"] .tx-in-progress-amount.amount-received,
-[data-amount-colors="western"] .tx-received .tx-amount {
+[data-amount-colors="western"] .tx-received .tx-amount,
+[data-amount-colors="western"] .tx-modal-header-received .tx-modal-amount,
+[data-amount-colors="western"] .tx-modal-header-received .tx-modal-direction {
     color: #198754;
 }
 [data-amount-colors="western"] .balance-negative,
 [data-amount-colors="western"] .balance-amount.balance-negative,
 [data-amount-colors="western"] .transaction-sent,
 [data-amount-colors="western"] .tx-in-progress-amount.amount-sent,
-[data-amount-colors="western"] .tx-sent .tx-amount {
+[data-amount-colors="western"] .tx-sent .tx-amount,
+[data-amount-colors="western"] .tx-modal-header-sent .tx-modal-amount,
+[data-amount-colors="western"] .tx-modal-header-sent .tx-modal-direction {
     color: #dc3545;
 }
-[data-amount-colors="western"] .tx-received .tx-icon {
+[data-amount-colors="western"] .tx-received .tx-icon,
+[data-amount-colors="western"] .tx-modal-badge-received {
     background: #d4edda;
     color: #198754;
 }
-[data-amount-colors="western"] .tx-sent .tx-icon {
+[data-amount-colors="western"] .tx-sent .tx-icon,
+[data-amount-colors="western"] .tx-modal-badge-sent {
     background: #f8d7da;
     color: #dc3545;
 }
@@ -4644,21 +4657,27 @@ hr.currency-separator-double {
 [data-amount-colors="eastern"] .balance-amount.balance-positive,
 [data-amount-colors="eastern"] .transaction-received,
 [data-amount-colors="eastern"] .tx-in-progress-amount.amount-received,
-[data-amount-colors="eastern"] .tx-received .tx-amount {
+[data-amount-colors="eastern"] .tx-received .tx-amount,
+[data-amount-colors="eastern"] .tx-modal-header-received .tx-modal-amount,
+[data-amount-colors="eastern"] .tx-modal-header-received .tx-modal-direction {
     color: #dc3545;
 }
 [data-amount-colors="eastern"] .balance-negative,
 [data-amount-colors="eastern"] .balance-amount.balance-negative,
 [data-amount-colors="eastern"] .transaction-sent,
 [data-amount-colors="eastern"] .tx-in-progress-amount.amount-sent,
-[data-amount-colors="eastern"] .tx-sent .tx-amount {
+[data-amount-colors="eastern"] .tx-sent .tx-amount,
+[data-amount-colors="eastern"] .tx-modal-header-sent .tx-modal-amount,
+[data-amount-colors="eastern"] .tx-modal-header-sent .tx-modal-direction {
     color: #198754;
 }
-[data-amount-colors="eastern"] .tx-received .tx-icon {
+[data-amount-colors="eastern"] .tx-received .tx-icon,
+[data-amount-colors="eastern"] .tx-modal-badge-received {
     background: #f8d7da;
     color: #dc3545;
 }
-[data-amount-colors="eastern"] .tx-sent .tx-icon {
+[data-amount-colors="eastern"] .tx-sent .tx-icon,
+[data-amount-colors="eastern"] .tx-modal-badge-sent {
     background: #d4edda;
     color: #198754;
 }
