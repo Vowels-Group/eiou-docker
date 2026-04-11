@@ -472,6 +472,15 @@ class Constants {
     const AMOUNT_COLOR_SCHEME = 'neutral';
     const AMOUNT_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
 
+    // Status color scheme — controls accepted/completed/resolved (success)
+    // and rejected/blocked/failed (failure) badges. Sent/received direction
+    // badges are always neutral, regardless of this setting.
+    //   neutral: muted gray for both (default)
+    //   western: green success, red failure
+    //   eastern: red success, green failure
+    const STATUS_COLOR_SCHEME = 'neutral';
+    const STATUS_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
+
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';

@@ -3284,11 +3284,16 @@ function showContactTxDetail(index) {
     var status = tx.status || 'completed';
     var statusBadge = '<span class="tx-status-badge tx-status-' + escapeHtml(status) + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
 
-    // Build transaction type badge (both yellow for consistency)
+    // Build transaction type badge
     var txType = tx.tx_type || 'standard';
-    var txTypeBadge = txType === 'p2p'
-        ? '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>'
-        : '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-exchange-alt"></i> Direct</span>';
+    var txTypeBadge;
+    if (txType === 'contact') {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-contact"><i class="fas fa-user-plus"></i> Contact Request</span>';
+    } else if (txType === 'p2p') {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>';
+    } else {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-direct"><i class="fas fa-exchange-alt"></i> Direct</span>';
+    }
 
     // Build role badge (Sent/Received/Relay)
     var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
@@ -5648,10 +5653,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
-            // data-preview-target on the select.
+            // data-preview-target on the select; data-preview-attr tells
+            // us which attribute to set (data-amount-colors for the
+            // amount scheme, data-status-colors for the status scheme).
             var targetId = el.getAttribute('data-preview-target');
+            var attrName = el.getAttribute('data-preview-attr') || 'data-amount-colors';
             var preview = targetId ? document.getElementById(targetId) : null;
-            if (preview) { preview.setAttribute('data-amount-colors', el.value); }
+            if (preview) { preview.setAttribute(attrName, el.value); }
         }
     }, false);
 

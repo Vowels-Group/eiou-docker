@@ -401,6 +401,16 @@ class SettingsController
             }
         }
 
+        // Status color scheme — neutral / western / eastern
+        if (isset($_POST['statusColorScheme'])) {
+            $val = trim((string) $_POST['statusColorScheme']);
+            if (in_array($val, Constants::STATUS_COLOR_SCHEME_OPTIONS, true)) {
+                $settings['statusColorScheme'] = $val;
+            } else {
+                $errors[] = 'Invalid status color scheme: must be one of ' . implode(', ', Constants::STATUS_COLOR_SCHEME_OPTIONS);
+            }
+        }
+
         // Display name — saved to userconfig.json (separate from defaultconfig.json)
         $nameForUserConfig = null;
         if (isset($_POST['name'])) {

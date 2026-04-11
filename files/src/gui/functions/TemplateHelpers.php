@@ -103,6 +103,10 @@ function amountColorSchemeOptions(): array {
     return \Eiou\Core\Constants::AMOUNT_COLOR_SCHEME_OPTIONS;
 }
 
+function statusColorSchemeOptions(): array {
+    return \Eiou\Core\Constants::STATUS_COLOR_SCHEME_OPTIONS;
+}
+
 function displayDateFormat(): string {
     return \Eiou\Core\UserContext::getInstance()->getDisplayDateFormat();
 }

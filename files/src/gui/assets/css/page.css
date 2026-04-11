@@ -649,10 +649,11 @@ tr.contact-card {
     padding: 0.15rem 0.4rem;
 }
 
-/* Chain drop proposal badges on contact card */
+/* Chain drop proposal badges on contact card — default neutral, flipped
+   by the status color scheme overrides at the bottom of this file. */
 .badge-danger {
-    background-color: #f8d7da;
-    color: #842029;
+    background-color: #e9ecef;
+    color: #495057;
     font-size: 0.75rem;
     padding: 0.15rem 0.4rem;
 }
@@ -1965,23 +1966,22 @@ tr.contact-card:hover .contact-name-cell {
     color: #fff;
 }
 
-.tx-status-accepted {
-    background: #28a745;
-    color: #fff;
+/* Success/failure badges — default to neutral. Scheme overrides at the
+   bottom of this file (status color scheme) flip to green/red or red/green. */
+.tx-status-accepted,
+.tx-status-completed,
+.tx-status-found {
+    background: #e9ecef;
+    color: #495057;
 }
 
 .tx-status-rejected {
-    background: #dc3545;
-    color: #fff;
+    background: #e9ecef;
+    color: #495057;
 }
 
 .tx-status-cancelled {
     background: #6c757d;
-    color: #fff;
-}
-
-.tx-status-completed {
-    background: #28a745;
     color: #fff;
 }
 
@@ -1990,11 +1990,6 @@ tr.contact-card:hover .contact-name-cell {
 .tx-status-initial {
     background: #ffc107;
     color: #000;
-}
-
-.tx-status-found {
-    background: #28a745;
-    color: #fff;
 }
 
 /* Transaction Detail Modal */
@@ -2606,19 +2601,17 @@ tr.contact-card:hover .contact-name-cell {
     color: #495057;
 }
 
-.badge-accepted {
-    background: #d1e7dd;
-    color: #0f5132;
+/* Contact status badges — .badge-accepted and .badge-blocked default to
+   neutral, flipped by the status color scheme overrides at the bottom. */
+.badge-accepted,
+.badge-blocked {
+    background: #e9ecef;
+    color: #495057;
 }
 
 .badge-pending {
     background: #fff3cd;
     color: #664d03;
-}
-
-.badge-blocked {
-    background: #f8d7da;
-    color: #842029;
 }
 
 /* Modal Enhancements */
@@ -4021,7 +4014,8 @@ hr.currency-separator-double {
 
 .dlq-badge-pending { background: #fff3cd; color: #856404; }
 .dlq-badge-retrying { background: #cff4fc; color: #055160; }
-.dlq-badge-resolved { background: #d1e7dd; color: #0a3622; }
+/* Resolved defaults to neutral; status scheme overrides flip to green/red. */
+.dlq-badge-resolved { background: #e9ecef; color: #495057; }
 .dlq-badge-abandoned { background: #e2e3e5; color: #383d41; }
 
 .dlq-retry-count { font-weight: 600; color: #6c757d; }
@@ -4611,6 +4605,12 @@ hr.currency-separator-double {
     font-family: 'Consolas', 'Monaco', monospace;
     white-space: nowrap;
 }
+/* Status variant — drop the monospace font so the child .tx-status-badge
+   pills render in the normal UI font like they do in the wallet. */
+.color-scheme-swatch-status {
+    font-family: inherit;
+    align-items: center;
+}
 
 /* ============================================================
    AMOUNT COLOR SCHEME OVERRIDES
@@ -4622,14 +4622,20 @@ hr.currency-separator-double {
    which carry their own data-amount-colors attribute, also work.
    ============================================================ */
 
+/* The amount color scheme ONLY affects the amount number itself (the
+   "+100 USD" / "−100 USD" text). Direction labels (Sent / Received) and
+   direction icons are always neutral regardless of scheme — see the
+   design note below about the three-axis split (amount / direction /
+   status), which avoids the counterintuitive Eastern case where a
+   "Sent" label would otherwise end up green. */
+
 /* Western scheme — green for positive, red for negative (Rest of the World) */
 [data-amount-colors="western"] .balance-positive,
 [data-amount-colors="western"] .balance-amount.balance-positive,
 [data-amount-colors="western"] .transaction-received,
 [data-amount-colors="western"] .tx-in-progress-amount.amount-received,
 [data-amount-colors="western"] .tx-received .tx-amount,
-[data-amount-colors="western"] .tx-modal-header-received .tx-modal-amount,
-[data-amount-colors="western"] .tx-modal-header-received .tx-modal-direction {
+[data-amount-colors="western"] .tx-modal-header-received .tx-modal-amount {
     color: #198754;
 }
 [data-amount-colors="western"] .balance-negative,
@@ -4637,18 +4643,7 @@ hr.currency-separator-double {
 [data-amount-colors="western"] .transaction-sent,
 [data-amount-colors="western"] .tx-in-progress-amount.amount-sent,
 [data-amount-colors="western"] .tx-sent .tx-amount,
-[data-amount-colors="western"] .tx-modal-header-sent .tx-modal-amount,
-[data-amount-colors="western"] .tx-modal-header-sent .tx-modal-direction {
-    color: #dc3545;
-}
-[data-amount-colors="western"] .tx-received .tx-icon,
-[data-amount-colors="western"] .tx-modal-badge-received {
-    background: #d4edda;
-    color: #198754;
-}
-[data-amount-colors="western"] .tx-sent .tx-icon,
-[data-amount-colors="western"] .tx-modal-badge-sent {
-    background: #f8d7da;
+[data-amount-colors="western"] .tx-modal-header-sent .tx-modal-amount {
     color: #dc3545;
 }
 
@@ -4658,8 +4653,7 @@ hr.currency-separator-double {
 [data-amount-colors="eastern"] .transaction-received,
 [data-amount-colors="eastern"] .tx-in-progress-amount.amount-received,
 [data-amount-colors="eastern"] .tx-received .tx-amount,
-[data-amount-colors="eastern"] .tx-modal-header-received .tx-modal-amount,
-[data-amount-colors="eastern"] .tx-modal-header-received .tx-modal-direction {
+[data-amount-colors="eastern"] .tx-modal-header-received .tx-modal-amount {
     color: #dc3545;
 }
 [data-amount-colors="eastern"] .balance-negative,
@@ -4667,17 +4661,71 @@ hr.currency-separator-double {
 [data-amount-colors="eastern"] .transaction-sent,
 [data-amount-colors="eastern"] .tx-in-progress-amount.amount-sent,
 [data-amount-colors="eastern"] .tx-sent .tx-amount,
-[data-amount-colors="eastern"] .tx-modal-header-sent .tx-modal-amount,
-[data-amount-colors="eastern"] .tx-modal-header-sent .tx-modal-direction {
+[data-amount-colors="eastern"] .tx-modal-header-sent .tx-modal-amount {
     color: #198754;
 }
-[data-amount-colors="eastern"] .tx-received .tx-icon,
-[data-amount-colors="eastern"] .tx-modal-badge-received {
+
+/* ============================================================
+   STATUS COLOR SCHEME OVERRIDES
+   Default (no attribute, or "neutral") uses muted gray for both
+   success and failure — labels remain readable but without red/green
+   semantics. Activated via <body data-status-colors="western|eastern">
+   from UserContext::getStatusColorScheme(). Affects only the binary
+   success/failure badges: Accepted / Completed / Resolved / chain-valid
+   vs Rejected / Blocked / chain-gap. Pending / sending / retrying /
+   cancelled / abandoned badges stay as they are — they're orthogonal
+   states, not success/failure.
+   Direction badges (tx-modal-badge-sent/received, tx-received/sent
+   .tx-icon) deliberately do NOT appear here — they stay neutral under
+   all schemes.
+   ============================================================ */
+
+/* Western scheme — green success, red failure */
+[data-status-colors="western"] .tx-status-accepted,
+[data-status-colors="western"] .tx-status-completed,
+[data-status-colors="western"] .tx-status-found {
+    background: #28a745;
+    color: #fff;
+}
+[data-status-colors="western"] .tx-status-rejected {
+    background: #dc3545;
+    color: #fff;
+}
+[data-status-colors="western"] .badge-accepted {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+[data-status-colors="western"] .badge-blocked,
+[data-status-colors="western"] .badge-danger {
+    background-color: #f8d7da;
+    color: #842029;
+}
+[data-status-colors="western"] .dlq-badge-resolved {
+    background: #d1e7dd;
+    color: #0a3622;
+}
+
+/* Eastern scheme — red success, green failure (flipped) */
+[data-status-colors="eastern"] .tx-status-accepted,
+[data-status-colors="eastern"] .tx-status-completed,
+[data-status-colors="eastern"] .tx-status-found {
+    background: #dc3545;
+    color: #fff;
+}
+[data-status-colors="eastern"] .tx-status-rejected {
+    background: #28a745;
+    color: #fff;
+}
+[data-status-colors="eastern"] .badge-accepted {
     background: #f8d7da;
-    color: #dc3545;
+    color: #842029;
 }
-[data-amount-colors="eastern"] .tx-sent .tx-icon,
-[data-amount-colors="eastern"] .tx-modal-badge-sent {
-    background: #d4edda;
-    color: #198754;
+[data-status-colors="eastern"] .badge-blocked,
+[data-status-colors="eastern"] .badge-danger {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+[data-status-colors="eastern"] .dlq-badge-resolved {
+    background: #f8d7da;
+    color: #842029;
 }

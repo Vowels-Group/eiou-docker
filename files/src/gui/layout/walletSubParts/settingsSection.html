@@ -76,22 +76,22 @@
             <div class="form-group">
                 <label for="amountColorScheme">Amount Color Scheme:</label>
                 <?php
-                $currentColorScheme = $user->getAmountColorScheme();
-                $colorSchemeLabels = [
+                $currentAmountScheme = $user->getAmountColorScheme();
+                $amountSchemeLabels = [
                     'neutral' => 'Neutral (black)',
                     'western' => 'Western (green +, red −)',
                     'eastern' => 'Eastern (red +, green −)',
                 ];
                 ?>
                 <div class="color-scheme-row">
-                    <select id="amountColorScheme" name="amountColorScheme" class="default-value" data-action-change="previewColorScheme" data-preview-target="amountColorSchemePreview">
+                    <select id="amountColorScheme" name="amountColorScheme" class="default-value" data-action-change="previewColorScheme" data-preview-target="amountColorSchemePreview" data-preview-attr="data-amount-colors">
                         <?php foreach (amountColorSchemeOptions() as $schemeKey): ?>
-                            <option value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentColorScheme) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($colorSchemeLabels[$schemeKey] ?? $schemeKey); ?>
+                            <option value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentAmountScheme) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($amountSchemeLabels[$schemeKey] ?? $schemeKey); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <span id="amountColorSchemePreview" class="color-scheme-swatch" data-amount-colors="<?php echo htmlspecialchars($currentColorScheme); ?>" aria-hidden="true">
+                    <span id="amountColorSchemePreview" class="color-scheme-swatch" data-amount-colors="<?php echo htmlspecialchars($currentAmountScheme); ?>" aria-hidden="true">
                         <span class="transaction-received">+100</span>
                         <span class="transaction-sent">−100</span>
                     </span>
@@ -99,6 +99,36 @@
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Color for positive and negative transaction amounts and balances throughout the wallet.
+                </small>
+            </div>
+
+            <!-- Status Color Scheme -->
+            <div class="form-group">
+                <label for="statusColorScheme">Status Color Scheme:</label>
+                <?php
+                $currentStatusScheme = $user->getStatusColorScheme();
+                $statusSchemeLabels = [
+                    'neutral' => 'Neutral (gray)',
+                    'western' => 'Western (green success, red failure)',
+                    'eastern' => 'Eastern (red success, green failure)',
+                ];
+                ?>
+                <div class="color-scheme-row">
+                    <select id="statusColorScheme" name="statusColorScheme" class="default-value" data-action-change="previewColorScheme" data-preview-target="statusColorSchemePreview" data-preview-attr="data-status-colors">
+                        <?php foreach (statusColorSchemeOptions() as $schemeKey): ?>
+                            <option value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentStatusScheme) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($statusSchemeLabels[$schemeKey] ?? $schemeKey); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span id="statusColorSchemePreview" class="color-scheme-swatch color-scheme-swatch-status" data-status-colors="<?php echo htmlspecialchars($currentStatusScheme); ?>" aria-hidden="true">
+                        <span class="tx-status-badge tx-status-completed">OK</span>
+                        <span class="tx-status-badge tx-status-rejected">FAIL</span>
+                    </span>
+                </div>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Color for accepted/completed/resolved vs rejected/blocked/failed badges. Sent/Received direction labels are always neutral to avoid conflicting semantics.
                 </small>
             </div>
 
