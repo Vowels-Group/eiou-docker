@@ -465,6 +465,13 @@ class Constants {
     const CONTACT_AVATAR_STYLE = 'gradient';
     const CONTACT_AVATAR_STYLE_OPTIONS = ['gradient', 'pixel', 'tile'];
 
+    // Amount color scheme — controls how +/- transaction amounts and balances are colored
+    //   neutral: black for both (default)
+    //   western: green positive, red negative (Rest of the World)
+    //   eastern: red positive, green negative (Asia)
+    const AMOUNT_COLOR_SCHEME = 'neutral';
+    const AMOUNT_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
+
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';

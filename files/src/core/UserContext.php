@@ -1056,6 +1056,16 @@ class UserContext {
         return in_array($val, Constants::CONTACT_AVATAR_STYLE_OPTIONS, true) ? $val : Constants::CONTACT_AVATAR_STYLE;
     }
 
+    /**
+     * Get the amount color scheme for transaction/balance displays
+     *
+     * @return string  One of: neutral, western, eastern
+     */
+    public function getAmountColorScheme(): string {
+        $val = (string) ($this->get('amountColorScheme') ?? Constants::AMOUNT_COLOR_SCHEME);
+        return in_array($val, Constants::AMOUNT_COLOR_SCHEME_OPTIONS, true) ? $val : Constants::AMOUNT_COLOR_SCHEME;
+    }
+
     // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
@@ -1145,6 +1155,9 @@ class UserContext {
 
             // Contact list
             'contactAvatarStyle' => Constants::CONTACT_AVATAR_STYLE,
+
+            // Amount color scheme — neutral / western / eastern
+            'amountColorScheme' => Constants::AMOUNT_COLOR_SCHEME,
         ];
     }
 

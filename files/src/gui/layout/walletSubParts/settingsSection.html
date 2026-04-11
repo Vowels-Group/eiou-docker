@@ -72,6 +72,40 @@
                 </small>
             </div>
 
+            <!-- Amount Color Scheme -->
+            <div class="form-group">
+                <label>Amount Color Scheme:</label>
+                <?php
+                $currentColorScheme = $user->getAmountColorScheme();
+                $colorSchemeLabels = [
+                    'neutral' => 'Neutral',
+                    'western' => 'Western',
+                    'eastern' => 'Eastern',
+                ];
+                $colorSchemeHints = [
+                    'neutral' => 'Black for both',
+                    'western' => 'Green +, red − (Rest of the World)',
+                    'eastern' => 'Red +, green − (Asia)',
+                ];
+                ?>
+                <div class="color-scheme-previews" role="radiogroup" aria-label="Amount color scheme">
+                    <?php foreach (amountColorSchemeOptions() as $schemeKey): ?>
+                        <label class="color-scheme-preview" title="<?php echo htmlspecialchars($colorSchemeHints[$schemeKey] ?? ''); ?>">
+                            <input type="radio" name="amountColorScheme" value="<?php echo htmlspecialchars($schemeKey); ?>" <?php echo ($schemeKey === $currentColorScheme) ? 'checked' : ''; ?>>
+                            <span class="color-scheme-swatch" data-amount-colors="<?php echo htmlspecialchars($schemeKey); ?>">
+                                <span class="transaction-received">+100</span>
+                                <span class="transaction-sent">−100</span>
+                            </span>
+                            <span class="color-scheme-label"><?php echo htmlspecialchars($colorSchemeLabels[$schemeKey] ?? $schemeKey); ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Color for positive and negative transaction amounts and balances throughout the wallet. Pick one and save.
+                </small>
+            </div>
+
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>

@@ -989,12 +989,12 @@ tr.contact-card {
     border: 1px solid #dee2e6;
 }
 
-.balance-positive {
-    color: #198754;
-}
-
+/* Amount color scheme — default is "neutral" (inherit parent text color).
+   The `western` and `eastern` scheme overrides live near the bottom of the
+   file so there's a single consolidated place to tweak them. */
+.balance-positive,
 .balance-negative {
-    color: #dc3545;
+    color: inherit;
 }
 
 /* Transaction History */
@@ -1032,12 +1032,10 @@ tr.contact-card {
     color: #0d6efd;
 }
 
-.transaction-sent {
-    color: #dc3545;
-}
-
+/* Neutral default; see amount-color-scheme overrides further below. */
+.transaction-sent,
 .transaction-received {
-    color: #198754;
+    color: inherit;
 }
 
 /* Form styles */
@@ -2178,12 +2176,9 @@ tr.contact-card:hover .contact-name-cell {
     font-size: 1rem;
 }
 
-.tx-in-progress-amount.amount-sent {
-    color: #dc3545;
-}
-
+.tx-in-progress-amount.amount-sent,
 .tx-in-progress-amount.amount-received {
-    color: #198754;
+    color: inherit;
 }
 
 .tx-type-badge {
@@ -2883,12 +2878,9 @@ tr.contact-card:hover .contact-name-cell {
     font-weight: 700;
 }
 
-.balance-amount.balance-positive {
-    color: #198754;
-}
-
+.balance-amount.balance-positive,
 .balance-amount.balance-negative {
-    color: #dc3545;
+    color: inherit;
 }
 
 .balance-currency {
@@ -2970,14 +2962,10 @@ tr.contact-card:hover .contact-name-cell {
     font-size: 0.875rem;
 }
 
-.tx-sent .tx-icon {
-    background: #f8d7da;
-    color: #dc3545;
-}
-
+.tx-sent .tx-icon,
 .tx-received .tx-icon {
-    background: #d4edda;
-    color: #198754;
+    background: #e9ecef;
+    color: #495057;
 }
 
 .tx-details {
@@ -2999,12 +2987,9 @@ tr.contact-card:hover .contact-name-cell {
     font-family: 'Consolas', 'Monaco', monospace;
 }
 
-.tx-sent .tx-amount {
-    color: #dc3545;
-}
-
+.tx-sent .tx-amount,
 .tx-received .tx-amount {
-    color: #198754;
+    color: inherit;
 }
 
 /* Address Line */
@@ -4594,4 +4579,105 @@ hr.currency-separator-double {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+}
+
+/* ============================================================
+   AMOUNT COLOR SCHEME — Settings page preview swatches
+   ============================================================ */
+.color-scheme-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+.color-scheme-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.color-scheme-preview:hover {
+    border-color: #0d6efd;
+}
+.color-scheme-preview input[type="radio"] {
+    margin-bottom: 0.35rem;
+}
+.color-scheme-preview input[type="radio"]:checked ~ .color-scheme-swatch {
+    box-shadow: 0 0 0 2px #0d6efd;
+}
+.color-scheme-swatch {
+    display: inline-flex;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: #f8f9fa;
+    font-weight: 600;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+.color-scheme-label {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+}
+
+/* ============================================================
+   AMOUNT COLOR SCHEME OVERRIDES
+   Default (no data-amount-colors attribute, or =="neutral") inherits
+   parent text color so +/- amounts render black. Activated via
+   <body data-amount-colors="western|eastern">, set in wallet.html
+   from UserContext::getAmountColorScheme(). Selectors are attribute-
+   only (no `body` prefix) so the settings-page preview swatches,
+   which carry their own data-amount-colors attribute, also work.
+   ============================================================ */
+
+/* Western scheme — green for positive, red for negative (Rest of the World) */
+[data-amount-colors="western"] .balance-positive,
+[data-amount-colors="western"] .balance-amount.balance-positive,
+[data-amount-colors="western"] .transaction-received,
+[data-amount-colors="western"] .tx-in-progress-amount.amount-received,
+[data-amount-colors="western"] .tx-received .tx-amount {
+    color: #198754;
+}
+[data-amount-colors="western"] .balance-negative,
+[data-amount-colors="western"] .balance-amount.balance-negative,
+[data-amount-colors="western"] .transaction-sent,
+[data-amount-colors="western"] .tx-in-progress-amount.amount-sent,
+[data-amount-colors="western"] .tx-sent .tx-amount {
+    color: #dc3545;
+}
+[data-amount-colors="western"] .tx-received .tx-icon {
+    background: #d4edda;
+    color: #198754;
+}
+[data-amount-colors="western"] .tx-sent .tx-icon {
+    background: #f8d7da;
+    color: #dc3545;
+}
+
+/* Eastern scheme — red for positive, green for negative (Asia) */
+[data-amount-colors="eastern"] .balance-positive,
+[data-amount-colors="eastern"] .balance-amount.balance-positive,
+[data-amount-colors="eastern"] .transaction-received,
+[data-amount-colors="eastern"] .tx-in-progress-amount.amount-received,
+[data-amount-colors="eastern"] .tx-received .tx-amount {
+    color: #dc3545;
+}
+[data-amount-colors="eastern"] .balance-negative,
+[data-amount-colors="eastern"] .balance-amount.balance-negative,
+[data-amount-colors="eastern"] .transaction-sent,
+[data-amount-colors="eastern"] .tx-in-progress-amount.amount-sent,
+[data-amount-colors="eastern"] .tx-sent .tx-amount {
+    color: #198754;
+}
+[data-amount-colors="eastern"] .tx-received .tx-icon {
+    background: #f8d7da;
+    color: #dc3545;
+}
+[data-amount-colors="eastern"] .tx-sent .tx-icon {
+    background: #d4edda;
+    color: #198754;
 }
