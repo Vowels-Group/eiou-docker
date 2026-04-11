@@ -3,6 +3,12 @@
 // GUI Entry Point - Web interface for wallet authentication and dashboard
 require_once '/app/eiou/src/startup/MaintenanceCheck.php';
 require_once '/app/eiou/Functions.php';
+// Template helpers (cspNonce, appVersion, getAlphaWarning, etc.) must be
+// available to both the unauthenticated login page (authenticationForm.html)
+// and the authenticated wallet page (wallet.html) — load them here, before
+// the auth check, rather than deferring to src/gui/functions/Functions.php
+// which only runs for authenticated requests.
+require_once '/app/eiou/src/gui/functions/TemplateHelpers.php';
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
