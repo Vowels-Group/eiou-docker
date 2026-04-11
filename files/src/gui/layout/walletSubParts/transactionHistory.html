@@ -133,11 +133,17 @@
     <?php endif; ?>
 
     <?php
-    // Build address → contact map for end-recipient name/avatar resolution.
-    // Each contact may have http/https/tor address fields; index by all of them.
+    // Build contact lookup maps for avatar/name resolution. Key by all known
+    // identifiers — name (lowercased) AND each address field — because the
+    // counterparty in $tx may match by name (formatter populates it) but the
+    // address format isn't always identical to the contact's stored address.
     $txContactsByAddress = [];
+    $txContactsByName = [];
     if (!empty($acceptedContacts)) {
         foreach ($acceptedContacts as $tc) {
+            if (!empty($tc['name'])) {
+                $txContactsByName[strtolower($tc['name'])] = $tc;
+            }
             foreach (['http', 'https', 'tor'] as $addrField) {
                 if (!empty($tc[$addrField])) {
                     $txContactsByAddress[$tc[$addrField]] = $tc;
@@ -229,7 +235,14 @@
 
                 $cpAddr  = $isSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
                 $cpName  = !empty($tx['counterparty_name']) ? $tx['counterparty_name'] : null;
-                $cpContact = $cpAddr && isset($txContactsByAddress[$cpAddr]) ? $txContactsByAddress[$cpAddr] : null;
+                // Resolve contact: prefer name lookup (formatter populates it
+                // reliably), fall back to address lookup if no name match.
+                $cpContact = null;
+                if ($cpName && isset($txContactsByName[strtolower($cpName)])) {
+                    $cpContact = $txContactsByName[strtolower($cpName)];
+                } elseif ($cpAddr && isset($txContactsByAddress[$cpAddr])) {
+                    $cpContact = $txContactsByAddress[$cpAddr];
+                }
                 $cpHash  = $cpContact['pubkey_hash'] ?? '';
 
                 // Final recipient — only meaningful for outgoing P2P I originated
@@ -265,7 +278,7 @@
                     data-tx-type="<?php echo $typeKey; ?>"
                     data-status="<?php echo htmlspecialchars($statusLower); ?>"
                     data-amount="<?php echo (float) ($tx['amount'] ?? 0); ?>"
-                    data-date="<?php echo (int) ($tx['date'] ?? 0); ?>">
+                    data-date="<?php echo !empty($tx['date']) ? (int) strtotime($tx['date']) : 0; ?>">
                     <td class="col-name">
                         <div class="contact-name-cell">
                             <?php echo renderContactAvatar($cpHash, $cpName ?? $cpAddr ?? '', $txAvatarStyle); ?>
@@ -288,11 +301,18 @@
                     <td class="col-tx-type text-center">
                         <span class="tx-type-badge tx-type-<?php echo $typeKey; ?>"><i class="fas <?php echo $typeIcon; ?>"></i> <?php echo $typeLabel; ?></span>
                     </td>
-                    <td class="col-tx-endpoint">
+                    <?php
+                    // When populated, the cell becomes click-to-show-info-modal
+                    // showing the full address (and contact name if known) so a
+                    // truncated address is still discoverable. Stop-propagation
+                    // prevents the row's openTransactionModal from also firing.
+                    $endTitle = $endAddr ? ($endName ? $endName . ' — ' . $endAddr : $endAddr) : '';
+                    ?>
+                    <td class="col-tx-endpoint<?php echo $endAddr ? ' tx-endpoint-clickable' : ''; ?>"<?php if ($endAddr): ?> data-action="showInfoModal" data-stop-propagation="true" title="<?php echo htmlspecialchars($endTitle); ?>"<?php endif; ?>>
                         <?php if ($endAddr): ?>
                             <div class="contact-name-cell">
                                 <?php echo renderContactAvatar($endHash, $endName ?? $endAddr, $txAvatarStyle); ?>
-                                <span class="contact-name-text" title="<?php echo htmlspecialchars($endAddr); ?>"><?php echo htmlspecialchars($endName ?: (substr($endAddr, 0, 18) . (strlen($endAddr) > 18 ? '…' : ''))); ?></span>
+                                <span class="contact-name-text"><?php echo htmlspecialchars($endName ?: (substr($endAddr, 0, 18) . (strlen($endAddr) > 18 ? '…' : ''))); ?></span>
                             </div>
                         <?php else: ?>
                             <span class="text-muted">—</span>

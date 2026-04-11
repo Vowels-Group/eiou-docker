@@ -729,7 +729,9 @@ body {
 .tx-table .col-tx-date       { width: 12%; white-space: nowrap; }
 .tx-table .col-status        { width: 10%; }
 
-/* Direction pill (Sent/Received) */
+/* Direction pill (Sent/Received) — neutral grey for both, matching the
+   transaction details modal. The +/− on the Amount column carries the
+   semantic color, so the direction badge stays visually quiet. */
 .tx-dir-badge {
     display: inline-flex;
     align-items: center;
@@ -743,8 +745,14 @@ body {
     background: #f1f3f5;
     color: #495057;
 }
-.tx-dir-badge.tx-dir-sent     { background: #fff3e0; color: #c67100; }
-.tx-dir-badge.tx-dir-received { background: #e3f7e8; color: #137333; }
+
+/* Final Recipient cell — clickable look when populated */
+.tx-table .tx-endpoint-clickable {
+    cursor: pointer;
+}
+.tx-table .tx-endpoint-clickable:hover {
+    background: #f0f7ff;
+}
 
 /* Compact DLQ icon next to the Status badge */
 .tx-table .dlq-tx-icon {
@@ -756,12 +764,18 @@ body {
 
 /* Mobile (≤600px): only Counterparty (1), Amount (2), Status (7).
    Cols 1+2 stay visible automatically (generic rule hides cols 3+); we just
-   need to re-show col 7 (Status) with a higher-specificity override. */
+   need to re-show col 7 (Status) with a higher-specificity override. The
+   Status column shrinks to icon width so Counterparty and Amount can breathe
+   — important because Amounts were getting truncated at the desktop's 10%
+   width allocation. */
 @media (max-width: 600px) {
     .contacts-table.tx-table thead th:nth-child(7),
     .contacts-table.tx-table tbody td:nth-child(7) {
         display: table-cell;
     }
+    .contacts-table.tx-table .col-status { width: 44px; padding-left: 0.25rem; padding-right: 0.25rem; }
+    .contacts-table.tx-table .col-name   { width: auto; }
+    .contacts-table.tx-table .col-tx-amount { width: auto; }
     /* Collapse status to icon-only on mobile */
     .tx-table .tx-status-label { display: none; }
     .tx-table .tx-status-badge { padding: 0.25rem 0.4rem; }
