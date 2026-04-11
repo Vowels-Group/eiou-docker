@@ -7,60 +7,21 @@
     <title>₳ Wallet - Authentication</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₳</text></svg>">
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
-    <style nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/authentication-form.css");?></style>
+    <style nonce="<?php echo cspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/authentication-form.css");?></style>
 </head>
-<body>
+<body data-page="auth">
     <!-- Alpha Warning — loaded from /app/scripts/banners/alpha-warning.txt -->
-    <?php
-    // Auto-link URLs in already-escaped text (safe: runs after htmlspecialchars)
-    function autoLinkUrls(string $escaped): string {
-        return preg_replace_callback(
-            '~(https?://[^\s<]+|(?:[\w-]+\.)+(?:com|org|net|io|dev)(?:/[^\s<]*)?)~i',
-            function ($m) {
-                $url = $m[1];
-                $href = preg_match('~^https?://~i', $url) ? $url : 'https://' . $url;
-                return '<a href="' . $href . '" target="_blank" rel="noopener noreferrer">' . $url . '</a>';
-            },
-            $escaped
-        );
-    }
-    $warningFile = '/app/scripts/banners/alpha-warning.txt';
-    if (file_exists($warningFile)):
-        // Split file into paragraphs (separated by blank lines)
-        $warnText = trim(file_get_contents($warningFile));
-        $warnParagraphs = preg_split('/\n\s*\n/', $warnText);
-        $warnTitle = htmlspecialchars(trim($warnParagraphs[0]));
-        // Paragraphs before "IMPORTANT:" are the intro
-        $introParagraphs = [];
-        $detailParagraphs = [];
-        $foundImportant = false;
-        for ($w = 1; $w < count($warnParagraphs); $w++) {
-            $para = trim($warnParagraphs[$w]);
-            if (!$foundImportant && preg_match('/^IMPORTANT/i', $para)) {
-                $foundImportant = true;
-            }
-            if ($foundImportant) {
-                $detailParagraphs[] = $para;
-            } else {
-                $introParagraphs[] = $para;
-            }
-        }
-    ?>
+    <?php $alphaWarning = getAlphaWarning(); if ($alphaWarning !== null): ?>
     <div class="alpha-warning">
-        <strong>&#9888; <?php echo $warnTitle; ?></strong>
-        <?php foreach ($introParagraphs as $para): ?>
+        <strong>&#9888; <?php echo $alphaWarning['title']; ?></strong>
+        <?php foreach ($alphaWarning['intro'] as $para): ?>
             <p><?php echo autoLinkUrls(htmlspecialchars($para)); ?></p>
         <?php endforeach; ?>
-        <?php if (!empty($detailParagraphs)): ?>
+        <?php if (!empty($alphaWarning['details'])): ?>
         <details class="alpha-details">
             <summary>Important</summary>
             <div class="alpha-details-body">
-                <?php foreach ($detailParagraphs as $para):
-                    $para = preg_replace('/^IMPORTANT:\s*/i', '', $para);
-                    if (trim($para) === '') continue;
-                    // Join hard-wrapped lines into flowing text (the txt file uses ~55 char lines)
-                    $para = preg_replace('/\s*\n\s*/', ' ', trim($para));
-                ?>
+                <?php foreach ($alphaWarning['details'] as $para): ?>
                     <p><?php echo autoLinkUrls(htmlspecialchars($para)); ?></p>
                 <?php endforeach; ?>
             </div>
@@ -97,21 +58,6 @@
             <div class="loading-text" id="loadingText">Loading...</div>
         </div>
     </div>
-    <script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>">
-        // Clear all wallet state from localStorage to prevent information leakage
-        // on the unauthenticated login page (e.g. "Background Processing" toasts).
-        try {
-            var keysToRemove = [
-                'eiou_pending_operation',
-                'eiou_timeout_message',
-                'eiou_reopen_contact_id',
-                'eiou_reopen_contact_tab'
-            ];
-            for (var i = 0; i < keysToRemove.length; i++) {
-                localStorage.removeItem(keysToRemove[i]);
-            }
-        } catch (e) {}
-    </script>
-    <script nonce="<?php echo \Eiou\Utils\Security::getCspNonce(); ?>" src="/gui/assets/js/script.js"></script>
+    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js?v=<?php echo appVersion(); ?>"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@
                 <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
                     <?php
                     $currentTimeout = $user->getSessionTimeoutMinutes();
-                    foreach (\Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS as $minutes): ?>
+                    foreach (sessionTimeoutOptions() as $minutes): ?>
                         <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
                             <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
                         </option>
@@ -58,7 +58,7 @@
                 ];
                 ?>
                 <div class="avatar-style-previews" role="radiogroup" aria-label="Contact avatar style">
-                    <?php foreach (\Eiou\Core\Constants::CONTACT_AVATAR_STYLE_OPTIONS as $styleKey): ?>
+                    <?php foreach (contactAvatarStyleOptions() as $styleKey): ?>
                         <label class="avatar-style-preview" title="Use the <?php echo htmlspecialchars($avatarStyleLabels[$styleKey] ?? $styleKey); ?> style">
                             <input type="radio" name="contactAvatarStyle" value="<?php echo htmlspecialchars($styleKey); ?>" <?php echo ($styleKey === $currentAvatarStyle) ? 'checked' : ''; ?>>
                             <?php echo $previews[$styleKey] ?? ''; ?>
@@ -742,7 +742,7 @@
                             <label for="displayDateFormat">Date Format:</label>
                             <?php $currentDateFormat = $user->getDisplayDateFormat(); $now = new \DateTime(); ?>
                             <select id="displayDateFormat" name="displayDateFormat" class="default-value">
-                                <?php foreach (\Eiou\Core\Constants::VALID_DATE_FORMATS as $fmt): ?>
+                                <?php foreach (validDateFormats() as $fmt): ?>
                                     <option value="<?php echo htmlspecialchars($fmt); ?>" <?php echo ($fmt === $currentDateFormat) ? 'selected' : ''; ?>><?php echo htmlspecialchars($now->format($fmt)); ?> (<?php echo htmlspecialchars($fmt); ?>)</option>
                                 <?php endforeach; ?>
                             </select>

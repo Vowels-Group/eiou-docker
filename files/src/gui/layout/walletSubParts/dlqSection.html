@@ -92,7 +92,7 @@
 
     <?php if (count($dlqItems ?? []) > 3): ?>
     <div class="dlq-search-bar">
-        <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." oninput="searchDlq(this.value)">
+        <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
     </div>
     <?php endif; ?>
 

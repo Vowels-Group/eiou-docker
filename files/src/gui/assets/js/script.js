@@ -115,6 +115,29 @@ function safeStorageRemove(key) {
     }
 }
 
+// ============================================================================
+// Auth page: clear wallet state from localStorage
+//
+// When the user lands on the unauthenticated login page (body[data-page="auth"])
+// we wipe any wallet-state keys left behind by a previous session, so stale
+// "Background Processing" toasts and reopen-contact hints don't leak across
+// the session boundary. Safe no-op on the wallet page.
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    if (!document.body || document.body.getAttribute('data-page') !== 'auth') return;
+    var authPageKeys = [
+        'eiou_pending_operation',
+        'eiou_timeout_message',
+        'eiou_reopen_contact_id',
+        'eiou_reopen_contact_tab'
+    ];
+    try {
+        for (var i = 0; i < authPageKeys.length; i++) {
+            localStorage.removeItem(authPageKeys[i]);
+        }
+    } catch (e) {}
+});
+
 /**
  * Escapes HTML special characters to prevent XSS attacks.
  *
@@ -5164,6 +5187,189 @@ function submitAnalyticsConsent(enable) {
 }
 
 // ============================================================================
+// Transaction history — auto-refresh and P2P approval
+//
+// The data bootstrap (transactionData, hasInProgressTx, autoRefreshEnabled,
+// syncingTransactionCount) is rendered by transactionHistory.html as an inline
+// <script> block with PHP-interpolated values. Everything static lives here.
+// ============================================================================
+
+var AUTO_REFRESH_DELAY = 15000; // 15 seconds
+var autoRefreshInterval = null;
+
+function startAutoRefresh() {
+    // Only start if enabled in settings AND there are in-progress transactions
+    if (!(typeof hasInProgressTx !== 'undefined' && hasInProgressTx)) return;
+    if (!(typeof autoRefreshEnabled !== 'undefined' && autoRefreshEnabled)) return;
+    if (autoRefreshInterval) return;
+
+    var indicator = document.getElementById('tx-auto-refresh-status');
+    if (indicator) indicator.classList.add('active');
+
+    autoRefreshInterval = setInterval(function() {
+        // Skip if manual refresh is already in progress
+        if (window.isRefreshing) { return; }
+
+        // XMLHttpRequest — Tor Browser compatible (no fetch/AbortController)
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', window.location.pathname + '?check_updates=1&_=' + Date.now(), true);
+        xhr.timeout = 30000; // 30s for Tor
+
+        xhr.ontimeout = function() { /* retry next interval */ };
+        xhr.onerror = function() { /* retry next interval */ };
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) { return; }
+            if (window.isRefreshing) { return; }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                window.location.reload();
+            }
+        };
+        xhr.send();
+    }, AUTO_REFRESH_DELAY);
+}
+
+window.stopAutoRefresh = function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        var indicator = document.getElementById('tx-auto-refresh-status');
+        if (indicator) indicator.classList.remove('active');
+    }
+};
+
+// P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
+function approveP2pTransaction(hash, candidateId) {
+    var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
+    if (!confirm(msg)) return;
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { alert('CSRF token not found'); return; }
+    var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    if (candidateId) {
+        body = body + '&candidate_id=' + encodeURIComponent(candidateId);
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) { window.location.reload(); }
+                    else { alert('Error: ' + (data.message || 'Unknown error')); }
+                } catch (e) {
+                    alert('Error parsing response');
+                }
+            } else {
+                alert('Network error');
+            }
+        }
+    };
+    xhr.ontimeout = function() { alert('Request timed out'); };
+    xhr.send(body);
+}
+
+function rejectP2pTransaction(hash) {
+    if (!confirm('Are you sure you want to reject this transaction?')) return;
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { alert('CSRF token not found'); return; }
+    var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) { window.location.reload(); }
+                    else { alert('Error: ' + (data.message || 'Unknown error')); }
+                } catch (e) {
+                    alert('Error parsing response');
+                }
+            } else {
+                alert('Network error');
+            }
+        }
+    };
+    xhr.ontimeout = function() { alert('Request timed out'); };
+    xhr.send(body);
+}
+
+function loadP2pCandidates(hash, container) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
+    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success && data.candidates && data.candidates.length > 0) {
+                        // Update the route count header dynamically (late candidates may arrive)
+                        var countEl = document.getElementById('p2p-count-' + hash);
+                        if (countEl) { countEl.textContent = data.candidates.length + ' route(s) found — choose one:'; }
+                        var html = '';
+                        var currency = 'USD';
+                        for (var i = 0; i < data.candidates.length; i++) {
+                            var c = data.candidates[i];
+                            var routeFee = (c.amount - data.base_amount) / 100;
+                            var totalCost = c.amount / 100;
+                            var addr = c.sender_address;
+                            var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
+                            html = html + '<div class="p2p-candidate-row">';
+                            html = html + '<div class="p2p-candidate-info">';
+                            html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</strong></div>';
+                            html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</div>';
+                            html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
+                            html = html + '</div>';
+                            html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';
+                            html = html + '<i class="fas fa-check"></i> Choose</button>';
+                            html = html + '</div>';
+                        }
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = '<div class="status-msg-muted">No candidates available</div>';
+                    }
+                } catch (e) {
+                    container.innerHTML = '<div class="status-msg-danger">Error loading routes</div>';
+                }
+            } else {
+                container.innerHTML = '<div class="status-msg-danger">Failed to load routes</div>';
+            }
+        }
+    };
+    xhr.ontimeout = function() { container.innerHTML = '<div class="status-msg-danger">Request timed out</div>'; };
+    xhr.send(body);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Start auto-refresh if there are in-progress transactions
+    if (typeof hasInProgressTx !== 'undefined' && hasInProgressTx) {
+        startAutoRefresh();
+        if (typeof showInProgressToasts === 'function') {
+            showInProgressToasts();
+        }
+    }
+
+    // Load candidates for multi-candidate P2P approval rows on page load
+    var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');
+    for (var i = 0; i < candidateContainers.length; i++) {
+        var el = candidateContainers[i];
+        var hash = el.id.replace('p2p-candidates-', '');
+        loadP2pCandidates(hash, el);
+    }
+});
+
+window.addEventListener('beforeunload', window.stopAutoRefresh);
+
+// ============================================================================
 // CSP nonce-compatible event delegation (L-32)
 // Replaces all inline on* handlers with data-action attributes
 // ============================================================================
@@ -5450,6 +5656,8 @@ function submitAnalyticsConsent(enable) {
         if (action === 'filterDebugLogs') {
             var target = el.getAttribute('data-target');
             filterDebugLogs(el, target);
+        } else if (action === 'searchDlq') {
+            searchDlq(el.value);
         }
     }, false);
 

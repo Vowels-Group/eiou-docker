@@ -3462,6 +3462,23 @@ tr.contact-card:hover .contact-name-cell {
     display: block;
 }
 
+/* Form hint — tight: pull up against preceding row, small bottom gap */
+.form-hint-tight {
+    margin-top: -0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Tab badge rendered inline inside a heading (not absolutely positioned) */
+.tab-badge-inline {
+    position: static;
+    margin-left: 0.4rem;
+}
+
+/* Small modal-content variant — narrower than the default modal */
+.modal-content-sm {
+    max-width: 520px;
+}
+
 /* Text color variants */
 .text-muted { color: #6c757d; }
 .text-primary { color: #0d6efd; }

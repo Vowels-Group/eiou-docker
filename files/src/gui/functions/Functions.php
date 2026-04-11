@@ -42,6 +42,11 @@ function appVersion(): string {
     return \Eiou\Core\Constants::APP_VERSION;
 }
 
+function appVersionDisplay(): string {
+    // Strip pre-release suffix (-alpha, -beta, -rcN) and prefix with 'v'
+    return 'v' . preg_replace('/-(alpha|beta|rc\d*)$/i', '', \Eiou\Core\Constants::APP_VERSION);
+}
+
 function displayDecimals(): int {
     return \Eiou\Core\Constants::getDisplayDecimals();
 }
@@ -102,6 +107,18 @@ function cleanupDlqRetentionDays(): int {
     return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
 }
 
+function sessionTimeoutOptions(): array {
+    return \Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS;
+}
+
+function contactAvatarStyleOptions(): array {
+    return \Eiou\Core\Constants::CONTACT_AVATAR_STYLE_OPTIONS;
+}
+
+function validDateFormats(): array {
+    return \Eiou\Core\Constants::VALID_DATE_FORMATS;
+}
+
 function displayDateFormat(): string {
     return \Eiou\Core\UserContext::getInstance()->getDisplayDateFormat();
 }
@@ -112,6 +129,86 @@ function formatTimestamp(string $timestamp): string {
        ?: \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
        ?: new \DateTime($timestamp);
     return $dt->format($fmt);
+}
+
+/**
+ * Auto-link bare URLs and domain-like tokens inside already-escaped text.
+ * Runs AFTER htmlspecialchars — do not pass raw user input.
+ */
+function autoLinkUrls(string $escaped): string {
+    return preg_replace_callback(
+        '~(https?://[^\s<]+|(?:[\w-]+\.)+(?:com|org|net|io|dev)(?:/[^\s<]*)?)~i',
+        function ($m) {
+            $url = $m[1];
+            $href = preg_match('~^https?://~i', $url) ? $url : 'https://' . $url;
+            return '<a href="' . $href . '" target="_blank" rel="noopener noreferrer">' . $url . '</a>';
+        },
+        $escaped
+    );
+}
+
+/**
+ * Scan /app/eiou/src/gui/assets/banners/ for banner image files.
+ * Returns a sorted list of filenames (no path). Dotfiles are skipped.
+ */
+function getBanners(): array {
+    $dir = '/app/eiou/src/gui/assets/banners';
+    $exts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+    if (!is_dir($dir)) {
+        return [];
+    }
+    $banners = [];
+    foreach (scandir($dir) as $file) {
+        if ($file === '.' || $file === '..' || $file[0] === '.') {
+            continue;
+        }
+        if (in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)), $exts, true)) {
+            $banners[] = $file;
+        }
+    }
+    sort($banners);
+    return $banners;
+}
+
+/**
+ * Parse the alpha-warning text file into title + intro paragraphs + detail
+ * paragraphs. Returns null if the file does not exist.
+ *
+ * The file format: first line is the title, paragraphs are separated by
+ * blank lines, and everything after the first paragraph starting with
+ * "IMPORTANT:" goes into the collapsible details section.
+ */
+function getAlphaWarning(): ?array {
+    $warningFile = '/app/scripts/banners/alpha-warning.txt';
+    if (!file_exists($warningFile)) {
+        return null;
+    }
+    $warnText = trim(file_get_contents($warningFile));
+    $paragraphs = preg_split('/\n\s*\n/', $warnText);
+    $title = htmlspecialchars(trim($paragraphs[0]));
+    $intro = [];
+    $details = [];
+    $foundImportant = false;
+    for ($i = 1; $i < count($paragraphs); $i++) {
+        $para = trim($paragraphs[$i]);
+        if (!$foundImportant && preg_match('/^IMPORTANT/i', $para)) {
+            $foundImportant = true;
+        }
+        if ($foundImportant) {
+            // Strip "IMPORTANT:" prefix, join hard-wrapped lines into flowing text
+            $para = preg_replace('/^IMPORTANT:\s*/i', '', $para);
+            if (trim($para) === '') continue;
+            $para = preg_replace('/\s*\n\s*/', ' ', trim($para));
+            $details[] = $para;
+        } else {
+            $intro[] = $para;
+        }
+    }
+    return [
+        'title'   => $title,
+        'intro'   => $intro,
+        'details' => $details,
+    ];
 }
 
 // =========================================================================

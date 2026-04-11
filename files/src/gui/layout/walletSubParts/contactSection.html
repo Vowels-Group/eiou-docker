@@ -641,7 +641,7 @@
                         <?php endif; ?>
 
                         <?php
-                            $hasRequestedCredit = ($pc['credit_limit'] !== null && $pc['credit_limit'] instanceof \Eiou\Core\SplitAmount);
+                            $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
                             $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
                         ?>
                         <div class="form-row currency-form-row">
