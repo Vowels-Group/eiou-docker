@@ -8,16 +8,6 @@
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
         <div class="settings-grid">
-            <!-- Display Name -->
-            <div class="form-group">
-                <label for="settingsName">Display Name:</label>
-                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Your display name shown in the GUI and shared when contacts scan your QR code
-                </small>
-            </div>
-
             <!-- Contact Avatar Style -->
             <div class="form-group">
                 <label>Contact Avatar Style:</label>
@@ -111,6 +101,16 @@
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Color for accepted/completed/resolved vs rejected/blocked/failed badges. Sent/Received direction labels are always neutral to avoid conflicting semantics.
+                </small>
+            </div>
+
+            <!-- Display Name -->
+            <div class="form-group">
+                <label for="settingsName">Display Name:</label>
+                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Your display name shown in the GUI and shared when contacts scan your QR code
                 </small>
             </div>
 
