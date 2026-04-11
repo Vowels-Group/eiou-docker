@@ -2044,7 +2044,10 @@ function updateSortIndicators() {
  * bubbles up to the row's openContactModal handler.
  */
 function markTruncatedContactNumberCells() {
-    var cells = document.querySelectorAll('.contacts-table .col-number');
+    // Scope to the Your Contacts table only — the tx-table reuses the same
+    // contacts-table chrome but its rows have their own click-to-open-modal
+    // handler that we don't want stolen by an injected showInfoModal action.
+    var cells = document.querySelectorAll('.contacts-table:not(.tx-table) .col-number');
     for (var i = 0; i < cells.length; i++) {
         var cell = cells[i];
         // Skip cells in hidden ancestors (clientWidth is 0)
@@ -2078,37 +2081,140 @@ function filterTransactions() {
     var searchInput = document.getElementById('tx-search-input');
     var searchStatus = document.getElementById('tx-search-status');
     var searchCount = document.getElementById('tx-search-count');
+    var dirSelect = document.getElementById('tx-filter-direction');
+    var typeSelect = document.getElementById('tx-filter-type');
+    var statusSelect = document.getElementById('tx-filter-status');
 
     if (!searchInput) return;
 
     var term = searchInput.value.toLowerCase().trim();
+    var dirFilter = dirSelect ? dirSelect.value : '';
+    var typeFilter = typeSelect ? typeSelect.value : '';
+    var statusFilter = statusSelect ? statusSelect.value : '';
     var items = document.querySelectorAll('#transaction-list .transaction-item');
     var visible = 0;
+    var anyFilterActive = (term !== '' || dirFilter !== '' || typeFilter !== '' || statusFilter !== '');
 
     for (var i = 0; i < items.length; i++) {
         var item = items[i];
-        if (term === '') {
-            item.style.display = '';
-            visible++;
-        } else {
+        var matches = true;
+
+        if (term !== '') {
             var name = item.getAttribute('data-tx-name') || '';
             var desc = item.getAttribute('data-tx-desc') || '';
             var addr = item.getAttribute('data-tx-address') || '';
-            if (name.indexOf(term) !== -1 || desc.indexOf(term) !== -1 || addr.indexOf(term) !== -1) {
-                item.style.display = '';
-                visible++;
-            } else {
-                item.style.display = 'none';
+            if (name.indexOf(term) === -1 && desc.indexOf(term) === -1 && addr.indexOf(term) === -1) {
+                matches = false;
             }
+        }
+        if (matches && dirFilter !== '' && (item.getAttribute('data-direction') || '') !== dirFilter) {
+            matches = false;
+        }
+        if (matches && typeFilter !== '' && (item.getAttribute('data-tx-type') || '') !== typeFilter) {
+            matches = false;
+        }
+        if (matches && statusFilter !== '' && (item.getAttribute('data-status') || '') !== statusFilter) {
+            matches = false;
+        }
+
+        if (matches) {
+            item.style.display = '';
+            visible++;
+        } else {
+            item.style.display = 'none';
         }
     }
 
     if (searchStatus && searchCount) {
-        if (term !== '') {
+        if (anyFilterActive) {
             searchStatus.style.display = 'block';
             searchCount.textContent = visible;
         } else {
             searchStatus.style.display = 'none';
+        }
+    }
+}
+
+// Independent sort state for the Recent Transactions table.
+var transactionsSortState = { column: null, direction: null, originalOrder: null };
+
+function sortTransactions(column) {
+    var tbody = document.getElementById('transaction-list');
+    if (!tbody) return;
+
+    if (!transactionsSortState.originalOrder) {
+        transactionsSortState.originalOrder = [];
+        var initial = tbody.querySelectorAll('.transaction-item');
+        for (var k = 0; k < initial.length; k++) {
+            transactionsSortState.originalOrder.push(initial[k]);
+        }
+    }
+
+    var newDirection;
+    if (transactionsSortState.column !== column) {
+        newDirection = 'asc';
+    } else if (transactionsSortState.direction === 'asc') {
+        newDirection = 'desc';
+    } else if (transactionsSortState.direction === 'desc') {
+        newDirection = null;
+    } else {
+        newDirection = 'asc';
+    }
+
+    if (!newDirection) {
+        for (var i = 0; i < transactionsSortState.originalOrder.length; i++) {
+            tbody.appendChild(transactionsSortState.originalOrder[i]);
+        }
+        transactionsSortState.column = null;
+        transactionsSortState.direction = null;
+    } else {
+        var attr = 'data-' + column;
+        var rows = [];
+        var current = tbody.querySelectorAll('.transaction-item');
+        for (var j = 0; j < current.length; j++) rows.push(current[j]);
+
+        rows.sort(function (a, b) {
+            var av = parseFloat(a.getAttribute(attr));
+            var bv = parseFloat(b.getAttribute(attr));
+            var aMissing = isNaN(av);
+            var bMissing = isNaN(bv);
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+            return newDirection === 'asc' ? av - bv : bv - av;
+        });
+
+        for (var m = 0; m < rows.length; m++) tbody.appendChild(rows[m]);
+        transactionsSortState.column = column;
+        transactionsSortState.direction = newDirection;
+    }
+
+    updateTransactionsSortIndicators();
+}
+
+function updateTransactionsSortIndicators() {
+    var headers = document.querySelectorAll('.tx-table thead th.sortable');
+    for (var i = 0; i < headers.length; i++) {
+        var th = headers[i];
+        var col = th.getAttribute('data-sort-column');
+        var icon = th.querySelector('.sort-indicator');
+        if (!icon) continue;
+
+        icon.className = 'fas sort-indicator';
+        th.classList.remove('sort-asc', 'sort-desc');
+
+        if (col === transactionsSortState.column) {
+            if (transactionsSortState.direction === 'asc') {
+                icon.classList.add('fa-sort-up');
+                th.classList.add('sort-asc');
+            } else if (transactionsSortState.direction === 'desc') {
+                icon.classList.add('fa-sort-down');
+                th.classList.add('sort-desc');
+            } else {
+                icon.classList.add('fa-sort');
+            }
+        } else {
+            icon.classList.add('fa-sort');
         }
     }
 }
@@ -5259,6 +5365,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (col) sortContacts(col);
         },
 
+        // Transactions table — sort by clicking a sortable column header
+        'sortTransactions': function(el) {
+            var col = el.getAttribute('data-sort-column');
+            if (col) sortTransactions(col);
+        },
+
         // Transaction history
         'openTransactionModal': function(el) {
             var index = parseInt(el.getAttribute('data-index'), 10);
@@ -5482,6 +5594,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
+        else if (action === 'filterTransactions') { filterTransactions(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by

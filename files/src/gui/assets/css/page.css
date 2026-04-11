@@ -708,6 +708,65 @@ body {
     }
 }
 
+/* ─── Recent Transactions table — extends .contacts-table with .tx-table ───
+   Same chrome as Your Contacts; tx-specific column widths, direction badge,
+   description ellipsis, and a mobile collapse that keeps Counterparty + Amount
+   + Status (the +/− on Amount carries direction; Status icon confirms it
+   actually completed). */
+.tx-table .col-name          { width: 16%; }
+.tx-table .col-tx-direction  { width: 9%;  }
+.tx-table .col-tx-type       { width: 9%;  }
+.tx-table .col-tx-endpoint   { width: 14%; }
+.tx-table .col-tx-desc       {
+    width: 18%;
+    max-width: 0; /* table-layout:fixed lets the cell collapse to col width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+}
+.tx-table .col-tx-amount     { width: 12%; }
+.tx-table .col-tx-date       { width: 12%; white-space: nowrap; }
+.tx-table .col-status        { width: 10%; }
+
+/* Direction pill (Sent/Received) */
+.tx-dir-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: #f1f3f5;
+    color: #495057;
+}
+.tx-dir-badge.tx-dir-sent     { background: #fff3e0; color: #c67100; }
+.tx-dir-badge.tx-dir-received { background: #e3f7e8; color: #137333; }
+
+/* Compact DLQ icon next to the Status badge */
+.tx-table .dlq-tx-icon {
+    margin-left: 0.35rem;
+    color: #c67100;
+    text-decoration: none;
+}
+.tx-table .dlq-tx-icon:hover { color: #a0570e; }
+
+/* Mobile (≤600px): only Counterparty (1), Amount (2), Status (7).
+   Cols 1+2 stay visible automatically (generic rule hides cols 3+); we just
+   need to re-show col 7 (Status) with a higher-specificity override. */
+@media (max-width: 600px) {
+    .contacts-table.tx-table thead th:nth-child(7),
+    .contacts-table.tx-table tbody td:nth-child(7) {
+        display: table-cell;
+    }
+    /* Collapse status to icon-only on mobile */
+    .tx-table .tx-status-label { display: none; }
+    .tx-table .tx-status-badge { padding: 0.25rem 0.4rem; }
+}
+
 /* Sortable column headers */
 .contacts-table thead th.sortable {
     cursor: pointer;
