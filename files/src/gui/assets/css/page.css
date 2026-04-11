@@ -570,11 +570,11 @@ body {
     padding: 0.15rem 0.4rem;
 }
 
-/* Chain drop proposal badges on contact card — default neutral, flipped
-   by the status color scheme overrides at the bottom of this file. */
+/* Chain drop proposal badges on contact card — same soft failure
+   palette as .badge-blocked above, driven by the status color scheme. */
 .badge-danger {
-    background-color: #e9ecef;
-    color: #495057;
+    background-color: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
     font-size: 0.75rem;
     padding: 0.15rem 0.4rem;
 }
@@ -922,12 +922,16 @@ body {
     border: 1px solid #dee2e6;
 }
 
-/* Amount color scheme — default is "neutral" (inherit parent text color).
-   The `western` and `eastern` scheme overrides live near the bottom of the
-   file so there's a single consolidated place to tweak them. */
-.balance-positive,
+/* Amount color scheme — driven by CSS custom properties set on the
+   nearest ancestor carrying data-amount-colors. See the AMOUNT COLOR
+   SCHEME block near the bottom of this file for the scheme values.
+   Variables default to `initial` (unset) so `var(--x, inherit)` falls
+   back to inheriting the parent text color — the neutral default. */
+.balance-positive {
+    color: var(--amount-pos-color, inherit);
+}
 .balance-negative {
-    color: inherit;
+    color: var(--amount-neg-color, inherit);
 }
 
 /* Transaction History */
@@ -965,10 +969,11 @@ body {
     color: #0d6efd;
 }
 
-/* Neutral default; see amount-color-scheme overrides further below. */
-.transaction-sent,
+.transaction-sent {
+    color: var(--amount-neg-color, inherit);
+}
 .transaction-received {
-    color: inherit;
+    color: var(--amount-pos-color, inherit);
 }
 
 /* Form styles */
@@ -1898,18 +1903,19 @@ tr.contact-card:hover .contact-name-cell {
     color: #fff;
 }
 
-/* Success/failure badges — default to neutral. Scheme overrides at the
-   bottom of this file (status color scheme) flip to green/red or red/green. */
+/* Success/failure badges — driven by the status color scheme custom
+   properties set at the nearest data-status-colors ancestor. Defaults
+   resolve to neutral gray when no scheme (or "neutral") is in effect. */
 .tx-status-accepted,
 .tx-status-completed,
 .tx-status-found {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--status-success-bg, #e9ecef);
+    color: var(--status-success-fg, #495057);
 }
 
 .tx-status-rejected {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--status-failure-bg, #e9ecef);
+    color: var(--status-failure-fg, #495057);
 }
 
 .tx-status-cancelled {
@@ -2103,9 +2109,11 @@ tr.contact-card:hover .contact-name-cell {
     font-size: 1rem;
 }
 
-.tx-in-progress-amount.amount-sent,
+.tx-in-progress-amount.amount-sent {
+    color: var(--amount-neg-color, inherit);
+}
 .tx-in-progress-amount.amount-received {
-    color: inherit;
+    color: var(--amount-pos-color, inherit);
 }
 
 .tx-type-badge {
@@ -2533,12 +2541,16 @@ tr.contact-card:hover .contact-name-cell {
     color: #495057;
 }
 
-/* Contact status badges — .badge-accepted and .badge-blocked default to
-   neutral, flipped by the status color scheme overrides at the bottom. */
-.badge-accepted,
+/* Contact status badges — driven by the status color scheme custom
+   properties (see the STATUS COLOR SCHEME block at the bottom). These
+   use the "soft" (pastel) variant. */
+.badge-accepted {
+    background: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+}
 .badge-blocked {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
 }
 
 .badge-pending {
@@ -2803,9 +2815,11 @@ tr.contact-card:hover .contact-name-cell {
     font-weight: 700;
 }
 
-.balance-amount.balance-positive,
+.balance-amount.balance-positive {
+    color: var(--amount-pos-color, inherit);
+}
 .balance-amount.balance-negative {
-    color: inherit;
+    color: var(--amount-neg-color, inherit);
 }
 
 .balance-currency {
@@ -2912,9 +2926,11 @@ tr.contact-card:hover .contact-name-cell {
     font-family: 'Consolas', 'Monaco', monospace;
 }
 
-.tx-sent .tx-amount,
+.tx-sent .tx-amount {
+    color: var(--amount-neg-color, inherit);
+}
 .tx-received .tx-amount {
-    color: inherit;
+    color: var(--amount-pos-color, inherit);
 }
 
 /* Address Line */
@@ -3946,8 +3962,11 @@ hr.currency-separator-double {
 
 .dlq-badge-pending { background: #fff3cd; color: #856404; }
 .dlq-badge-retrying { background: #cff4fc; color: #055160; }
-/* Resolved defaults to neutral; status scheme overrides flip to green/red. */
-.dlq-badge-resolved { background: #e9ecef; color: #495057; }
+/* Resolved follows the status color scheme (success-soft palette). */
+.dlq-badge-resolved {
+    background: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+}
 .dlq-badge-abandoned { background: #e2e3e5; color: #383d41; }
 
 .dlq-retry-count { font-weight: 600; color: #6c757d; }
@@ -4093,6 +4112,17 @@ hr.currency-separator-double {
     font-size: 2rem;
     font-weight: bold;
     color: inherit;
+}
+
+/* Direction-specific overrides for the amount number — driven by the
+   amount color scheme custom properties. The header itself stays neutral
+   gray regardless of scheme (that's the .tx-modal-header rule above),
+   only the +/- NUMBER flips with the scheme. */
+.tx-modal-header-received .tx-modal-amount {
+    color: var(--amount-pos-color, inherit);
+}
+.tx-modal-header-sent .tx-modal-amount {
+    color: var(--amount-neg-color, inherit);
 }
 
 .tx-modal-direction {
@@ -4545,119 +4575,81 @@ hr.currency-separator-double {
 }
 
 /* ============================================================
-   AMOUNT COLOR SCHEME OVERRIDES
-   Default (no data-amount-colors attribute, or =="neutral") inherits
-   parent text color so +/- amounts render black. Activated via
-   <body data-amount-colors="western|eastern">, set in wallet.html
-   from UserContext::getAmountColorScheme(). Selectors are attribute-
-   only (no `body` prefix) so the settings-page preview swatches,
-   which carry their own data-amount-colors attribute, also work.
+   AMOUNT COLOR SCHEME
+   Set on the nearest ancestor carrying data-amount-colors="..."
+   (the <body> for the wallet, the preview swatch on the Settings
+   page). Values cascade as CSS custom properties so the NEAREST
+   ancestor wins — which means the Settings preview swatch can
+   override the body-level scheme for its own subtree, fixing the
+   bug where a Western body locked the preview into Western even
+   when you picked Neutral or Eastern in the dropdown.
+
+   The amount color scheme ONLY affects the amount number itself
+   ("+100 USD" / "−100 USD"). Direction labels (Sent / Received
+   badges, direction icon circles) are always neutral regardless
+   of scheme — see the three-axis split (amount / direction /
+   status), which avoids the counterintuitive Eastern case where
+   a "Sent" label would otherwise end up green.
    ============================================================ */
 
-/* The amount color scheme ONLY affects the amount number itself (the
-   "+100 USD" / "−100 USD" text). Direction labels (Sent / Received) and
-   direction icons are always neutral regardless of scheme — see the
-   design note below about the three-axis split (amount / direction /
-   status), which avoids the counterintuitive Eastern case where a
-   "Sent" label would otherwise end up green. */
-
-/* Western scheme — green for positive, red for negative (Rest of the World) */
-[data-amount-colors="western"] .balance-positive,
-[data-amount-colors="western"] .balance-amount.balance-positive,
-[data-amount-colors="western"] .transaction-received,
-[data-amount-colors="western"] .tx-in-progress-amount.amount-received,
-[data-amount-colors="western"] .tx-received .tx-amount,
-[data-amount-colors="western"] .tx-modal-header-received .tx-modal-amount {
-    color: #198754;
+[data-amount-colors="western"] {
+    --amount-pos-color: #198754;
+    --amount-neg-color: #dc3545;
 }
-[data-amount-colors="western"] .balance-negative,
-[data-amount-colors="western"] .balance-amount.balance-negative,
-[data-amount-colors="western"] .transaction-sent,
-[data-amount-colors="western"] .tx-in-progress-amount.amount-sent,
-[data-amount-colors="western"] .tx-sent .tx-amount,
-[data-amount-colors="western"] .tx-modal-header-sent .tx-modal-amount {
-    color: #dc3545;
+[data-amount-colors="eastern"] {
+    --amount-pos-color: #dc3545;
+    --amount-neg-color: #198754;
 }
-
-/* Eastern scheme — red for positive, green for negative (Asia) */
-[data-amount-colors="eastern"] .balance-positive,
-[data-amount-colors="eastern"] .balance-amount.balance-positive,
-[data-amount-colors="eastern"] .transaction-received,
-[data-amount-colors="eastern"] .tx-in-progress-amount.amount-received,
-[data-amount-colors="eastern"] .tx-received .tx-amount,
-[data-amount-colors="eastern"] .tx-modal-header-received .tx-modal-amount {
-    color: #dc3545;
-}
-[data-amount-colors="eastern"] .balance-negative,
-[data-amount-colors="eastern"] .balance-amount.balance-negative,
-[data-amount-colors="eastern"] .transaction-sent,
-[data-amount-colors="eastern"] .tx-in-progress-amount.amount-sent,
-[data-amount-colors="eastern"] .tx-sent .tx-amount,
-[data-amount-colors="eastern"] .tx-modal-header-sent .tx-modal-amount {
-    color: #198754;
+/* Neutral clears the variables to the guaranteed-invalid value so
+   `var(--x, inherit)` in the consuming rules falls back to `inherit`.
+   Needed when a child scope (e.g. Settings preview swatch) wants to
+   render as neutral despite the body being western/eastern. */
+[data-amount-colors="neutral"] {
+    --amount-pos-color: initial;
+    --amount-neg-color: initial;
 }
 
 /* ============================================================
-   STATUS COLOR SCHEME OVERRIDES
-   Default (no attribute, or "neutral") uses muted gray for both
-   success and failure — labels remain readable but without red/green
-   semantics. Activated via <body data-status-colors="western|eastern">
-   from UserContext::getStatusColorScheme(). Affects only the binary
-   success/failure badges: Accepted / Completed / Resolved / chain-valid
-   vs Rejected / Blocked / chain-gap. Pending / sending / retrying /
-   cancelled / abandoned badges stay as they are — they're orthogonal
-   states, not success/failure.
-   Direction badges (tx-modal-badge-sent/received, tx-received/sent
-   .tx-icon) deliberately do NOT appear here — they stay neutral under
-   all schemes.
+   STATUS COLOR SCHEME
+   Same approach. Affects only the binary success/failure badges:
+   Accepted / Completed / Resolved / chain-valid vs Rejected /
+   Blocked / chain-gap. Pending / sending / retrying / cancelled /
+   abandoned badges stay as they are — they're orthogonal states,
+   not success/failure.
+
+   Two palettes are exposed:
+     - solid (bg + fg): used by .tx-status-* badges (high-contrast)
+     - soft (pastel bg + dark fg): used by .badge-accepted/blocked/
+       danger + .dlq-badge-resolved
    ============================================================ */
 
-/* Western scheme — green success, red failure */
-[data-status-colors="western"] .tx-status-accepted,
-[data-status-colors="western"] .tx-status-completed,
-[data-status-colors="western"] .tx-status-found {
-    background: #28a745;
-    color: #fff;
+[data-status-colors="western"] {
+    --status-success-bg: #28a745;
+    --status-success-fg: #fff;
+    --status-failure-bg: #dc3545;
+    --status-failure-fg: #fff;
+    --status-success-soft-bg: #d1e7dd;
+    --status-success-soft-fg: #0f5132;
+    --status-failure-soft-bg: #f8d7da;
+    --status-failure-soft-fg: #842029;
 }
-[data-status-colors="western"] .tx-status-rejected {
-    background: #dc3545;
-    color: #fff;
+[data-status-colors="eastern"] {
+    --status-success-bg: #dc3545;
+    --status-success-fg: #fff;
+    --status-failure-bg: #28a745;
+    --status-failure-fg: #fff;
+    --status-success-soft-bg: #f8d7da;
+    --status-success-soft-fg: #842029;
+    --status-failure-soft-bg: #d1e7dd;
+    --status-failure-soft-fg: #0f5132;
 }
-[data-status-colors="western"] .badge-accepted {
-    background: #d1e7dd;
-    color: #0f5132;
-}
-[data-status-colors="western"] .badge-blocked,
-[data-status-colors="western"] .badge-danger {
-    background-color: #f8d7da;
-    color: #842029;
-}
-[data-status-colors="western"] .dlq-badge-resolved {
-    background: #d1e7dd;
-    color: #0a3622;
-}
-
-/* Eastern scheme — red success, green failure (flipped) */
-[data-status-colors="eastern"] .tx-status-accepted,
-[data-status-colors="eastern"] .tx-status-completed,
-[data-status-colors="eastern"] .tx-status-found {
-    background: #dc3545;
-    color: #fff;
-}
-[data-status-colors="eastern"] .tx-status-rejected {
-    background: #28a745;
-    color: #fff;
-}
-[data-status-colors="eastern"] .badge-accepted {
-    background: #f8d7da;
-    color: #842029;
-}
-[data-status-colors="eastern"] .badge-blocked,
-[data-status-colors="eastern"] .badge-danger {
-    background-color: #d1e7dd;
-    color: #0f5132;
-}
-[data-status-colors="eastern"] .dlq-badge-resolved {
-    background: #f8d7da;
-    color: #842029;
+[data-status-colors="neutral"] {
+    --status-success-bg: initial;
+    --status-success-fg: initial;
+    --status-failure-bg: initial;
+    --status-failure-fg: initial;
+    --status-success-soft-bg: initial;
+    --status-success-soft-fg: initial;
+    --status-failure-soft-bg: initial;
+    --status-failure-soft-fg: initial;
 }
