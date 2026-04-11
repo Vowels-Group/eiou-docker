@@ -355,7 +355,8 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             $this->releaseContactSendLock($contactPubkeyHash);
         }
 
-        $output->success("Transaction sent successfully to " . $data['receiverAddress'], [
+        $recipientDisplay = !empty($contactInfo['receiverName']) ? $contactInfo['receiverName'] : $data['receiverAddress'];
+        $output->success("Transaction sent successfully to " . $recipientDisplay, [
             'status' => Constants::STATUS_SENT, 'type' => 'direct',
             'recipient' => $contactInfo['receiverName'] ?? $request[2], 'recipient_address' => $data['receiverAddress'] ?? null,
             'amount' => $data['amount']->toMajorUnits(),

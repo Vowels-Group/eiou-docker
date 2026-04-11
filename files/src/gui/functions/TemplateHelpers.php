@@ -111,6 +111,22 @@ function formatTimestamp(string $timestamp): string {
     return $dt->format($fmt);
 }
 
+/**
+ * Human-readable display label for a transaction counterparty. Prefers the
+ * contact name when known, falls back to a truncated address (first 20 chars
+ * + ellipsis), and finally to "a contact" if neither is available. Used by
+ * toast notifications so users see "Bob" instead of "https://bob.onion/…".
+ */
+function counterpartyDisplay(?string $name, ?string $address): string {
+    if (!empty($name)) {
+        return $name;
+    }
+    if (!empty($address)) {
+        return strlen($address) > 20 ? substr($address, 0, 20) . '…' : $address;
+    }
+    return 'a contact';
+}
+
 // =========================================================================
 // Text + template-content helpers
 // =========================================================================
