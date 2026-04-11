@@ -18,24 +18,6 @@
                 </small>
             </div>
 
-            <!-- Session Timeout -->
-            <div class="form-group">
-                <label for="sessionTimeoutMinutes">Session Timeout:</label>
-                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
-                    <?php
-                    $currentTimeout = $user->getSessionTimeoutMinutes();
-                    foreach (sessionTimeoutOptions() as $minutes): ?>
-                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
-                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Auto-logout after this period of inactivity
-                </small>
-            </div>
-
             <!-- Contact Avatar Style -->
             <div class="form-group">
                 <label>Contact Avatar Style:</label>
@@ -129,6 +111,24 @@
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Color for accepted/completed/resolved vs rejected/blocked/failed badges. Sent/Received direction labels are always neutral to avoid conflicting semantics.
+                </small>
+            </div>
+
+            <!-- Session Timeout -->
+            <div class="form-group">
+                <label for="sessionTimeoutMinutes">Session Timeout:</label>
+                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
+                    <?php
+                    $currentTimeout = $user->getSessionTimeoutMinutes();
+                    foreach (sessionTimeoutOptions() as $minutes): ?>
+                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
+                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Auto-logout after this period of inactivity
                 </small>
             </div>
 
