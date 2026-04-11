@@ -1786,64 +1786,6 @@ function showManualCopyModal(text, successMessage) {
 // ============================================================================
 
 /**
- * Updates the visibility of the left/right contacts scroll buttons
- * based on the current scroll position of the contacts grid.
- * Hides the left button when scrolled to the start and the right
- * button when scrolled to the end.
- */
-function updateContactsScrollButtons() {
-    var grid = document.getElementById('contacts-grid');
-    if (!grid) return;
-    var leftBtn = document.getElementById('contacts-scroll-left');
-    var rightBtn = document.getElementById('contacts-scroll-right');
-    if (leftBtn) {
-        if (grid.scrollLeft <= 0) {
-            leftBtn.className = leftBtn.className.replace(' hidden', '') + ' hidden';
-        } else {
-            leftBtn.className = leftBtn.className.replace(' hidden', '');
-        }
-    }
-    if (rightBtn) {
-        // 1px tolerance for rounding
-        var atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 1;
-        if (atEnd) {
-            rightBtn.className = rightBtn.className.replace(' hidden', '') + ' hidden';
-        } else {
-            rightBtn.className = rightBtn.className.replace(' hidden', '');
-        }
-    }
-}
-
-/**
- * Scrolls the contacts grid left or right by one card width.
- * @param {number} direction - -1 for left, 1 for right
- */
-function scrollContacts(direction) {
-    var grid = document.getElementById('contacts-grid');
-    if (!grid) return;
-    // Card width (250px) + gap (16px)
-    var scrollAmount = 266 * direction;
-    grid.scrollLeft = grid.scrollLeft + scrollAmount;
-    // Delay update to let scroll settle
-    setTimeout(updateContactsScrollButtons, 50);
-}
-
-// Update scroll buttons on page load and when the grid is scrolled
-(function() {
-    var initScrollButtons = function() {
-        var grid = document.getElementById('contacts-grid');
-        if (!grid) return;
-        grid.addEventListener('scroll', updateContactsScrollButtons);
-        updateContactsScrollButtons();
-    };
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initScrollButtons);
-    } else {
-        initScrollButtons();
-    }
-})();
-
-/**
  * Updates the visibility of the quick actions scroll buttons
  * based on the current scroll position.
  */
@@ -5381,10 +5323,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'hideContactTxDetail': function() { hideContactTxDetail(); },
 
         // Contact list
-        'scrollContacts': function(el) {
-            var dir = parseInt(el.getAttribute('data-direction'), 10);
-            scrollContacts(dir);
-        },
 
         // Quick actions
         'scrollQuickActions': function(el) {
