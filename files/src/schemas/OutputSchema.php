@@ -78,7 +78,7 @@ function outputContactUnblockedAndOverwrittenFailure(): string {
 }
 
 function outputContactUpdatedAddress(): string {
-    return "[Contact] Was updated succesfully with new address.\n";
+    return "[Contact] Was updated successfully with new address.\n";
 }
 
 function outputContactUpdatedAddressFailure(): string {
@@ -201,12 +201,17 @@ function outputTransactionInquiryResponse(array $response): string {
     return "[Transaction] Inquiry response: " . json_encode($response, JSON_UNESCAPED_SLASHES)."\n";
 }
 
-function outputTransactionP2pSentSuccesfully(array $p2p): string {
-    return "[Transaction] Sent " . displayAmount($p2p['amount'], $p2p['currency']) . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
+function outputTransactionP2pSentSuccessfully(array $p2p, ?string $contactName = null): string {
+    $recipient = !empty($contactName) ? $contactName : $p2p['destination_address'];
+    return "[Transaction] Sent " . displayAmount($p2p['amount'], $p2p['currency']) . " " . $p2p['currency'] . " to " . $recipient . " successfully\n";
 }
 
-function outputTransactionDirectSentSuccesfully(array $data): string {
-    return "[Transaction] Sent " . displayAmount($data['amount'], $data['currency']) . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
+function outputTransactionDirectSentSuccessfully(array $data, ?string $contactName = null): string {
+    // Note: in this context `senderAddress` is the address on the INCOMING
+    // completion message — which was sent back to us by our original
+    // recipient. From our perspective that is who we sent money to.
+    $recipient = !empty($contactName) ? $contactName : $data['senderAddress'];
+    return "[Transaction] Sent " . displayAmount($data['amount'], $data['currency']) . " " . $data['currency'] . " to " . $recipient . " successfully\n";
 }
 
 function outputTransactionDescriptionUpdated(string $description, string $typeTransaction, string $memo): string {
