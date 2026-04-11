@@ -748,7 +748,13 @@ tr.contact-card {
 
 /* Contacts Table Layout */
 .contacts-table-wrapper {
+    /* Horizontal scroll for narrow screens, vertical scroll past ~60% of the
+       viewport height so power users with many contacts don't stretch the
+       whole page. 60vh ≈ 11 rows on a 1080p display, 14 on 1440p, 8 on a
+       768p laptop — scales with the actual monitor, no magic row count. */
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 60vh;
     background: #fff;
     border-radius: 12px;
     border: 1px solid #e9ecef;
@@ -846,6 +852,11 @@ tr.contact-card {
     background: #f8f9fa;
     white-space: nowrap;
     border-bottom: 1px solid #e9ecef;
+    /* Stick to the top of the scrollable .contacts-table-wrapper so column
+       labels stay visible while the user scrolls through contacts. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 .contacts-table thead th.text-right  { text-align: right; }
 .contacts-table thead th.text-center { text-align: center; }

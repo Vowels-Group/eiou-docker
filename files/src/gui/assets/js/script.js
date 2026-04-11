@@ -1908,33 +1908,18 @@ var currentContactPubkeyHash = null;
 var contactTransactionData = [];
 var currentContactCurrencies = [];
 var currentContactBalances = {};
-var contactsShowAll = false;
-var CONTACTS_DEFAULT_LIMIT = 16;
 
 /**
- * Filters the contact list based on a search term entered by the user.
- *
- * Performs case-insensitive substring matching against contact names and addresses.
- * When searching, all matching contacts are displayed regardless of the pagination limit.
- * When the search is cleared, the display respects the current show all/limited state.
- *
- * The function updates:
- * - Contact card visibility (display: '' or display: 'none')
- * - Search status indicator showing match count
- * - Show more button visibility (hidden during active search)
- *
- * Uses Tor Browser compatible code (var declarations, indexOf instead of includes).
+ * Filters the contact list based on search text, status / chain / online
+ * dropdowns. Case-insensitive substring match against name and address.
+ * Tor-Browser-friendly (var + indexOf).
  *
  * @returns {void}
- * @example
- * // Called from search input oninput event
- * <input type="text" id="contact-search-input" oninput="filterContacts()">
  */
 function filterContacts() {
     var searchInput = document.getElementById('contact-search-input');
     var searchStatus = document.getElementById('contact-search-status');
     var searchCount = document.getElementById('contact-search-count');
-    var showMoreBtn = document.getElementById('contacts-show-more');
 
     if (!searchInput) return;
 
@@ -1987,19 +1972,8 @@ function filterContacts() {
         var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
 
         if (matches) {
-            if (!hasActiveFilter) {
-                // No filters active — respect the show all / limited state
-                if (contactsShowAll || visibleCount < CONTACTS_DEFAULT_LIMIT) {
-                    card.style.display = '';
-                    visibleCount++;
-                } else {
-                    card.style.display = 'none';
-                }
-            } else {
-                // Any filter active — show all matches
-                card.style.display = '';
-                visibleCount++;
-            }
+            card.style.display = '';
+            visibleCount++;
         } else {
             card.style.display = 'none';
         }
@@ -2014,14 +1988,6 @@ function filterContacts() {
             searchStatus.style.display = 'none';
         }
     }
-
-    // Hide show more button when any filter is active
-    if (showMoreBtn) {
-        showMoreBtn.style.display = hasActiveFilter ? 'none' : '';
-    }
-
-    // Update scroll button visibility after filtering
-    setTimeout(updateContactsScrollButtons, 50);
 }
 
 /**
@@ -2205,74 +2171,6 @@ function filterTransactions() {
     }
 }
 
-/**
- * Toggles between showing all contacts and showing only the first 16.
- *
- * When collapsed, only the first 16 contacts (CONTACTS_DEFAULT_LIMIT) are visible.
- * When expanded, all contacts are shown. Updates the button text to reflect
- * the current state. Uses Tor Browser compatible code (var declarations, for loops).
- *
- * @returns {void}
- * @example
- * // Called from "Show All" button onclick
- * <button id="show-more-btn" onclick="toggleShowAllContacts()">Show All</button>
- */
-function toggleShowAllContacts() {
-    contactsShowAll = !contactsShowAll;
-
-    var showMoreBtn = document.getElementById('show-more-btn');
-    var hiddenCount = document.getElementById('hidden-contacts-count');
-    var contactCards = document.querySelectorAll('.contact-card');
-    var totalContacts = contactCards.length;
-
-    if (contactsShowAll) {
-        // Show all contacts
-        for (var i = 0; i < contactCards.length; i++) {
-            contactCards[i].style.display = '';
-        }
-        if (showMoreBtn) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Show Less';
-        }
-    } else {
-        // Show only first 16 contacts
-        for (var j = 0; j < contactCards.length; j++) {
-            if (j < CONTACTS_DEFAULT_LIMIT) {
-                contactCards[j].style.display = '';
-            } else {
-                contactCards[j].style.display = 'none';
-            }
-        }
-        if (showMoreBtn && hiddenCount) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
-        }
-    }
-
-    // Update scroll button visibility after toggling
-    setTimeout(updateContactsScrollButtons, 50);
-}
-
-/**
- * Initializes the contact list display with pagination limit.
- *
- * Hides all contact cards beyond the first 16 (CONTACTS_DEFAULT_LIMIT) on page load.
- * This improves initial page performance for users with many contacts and provides
- * a cleaner UI. Users can click "Show All" to see the remaining contacts.
- *
- * @returns {void}
- * @example
- * // Called automatically on DOMContentLoaded
- * window.addEventListener('DOMContentLoaded', function() {
- *     initContactsDisplay();
- * });
- */
-function initContactsDisplay() {
-    var contactCards = document.querySelectorAll('.contact-card');
-    if (contactCards.length > CONTACTS_DEFAULT_LIMIT) {
-        for (var i = CONTACTS_DEFAULT_LIMIT; i < contactCards.length; i++) {
-            contactCards[i].style.display = 'none';
-        }
-    }
-}
 
 /**
  * Shows a small info modal with the text from an info icon's title attribute.
@@ -3429,9 +3327,6 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Check if we need to reopen contact modal after refresh
     checkReopenContactModal();
-
-    // Initialize contacts display limit (show only first 16 by default)
-    initContactsDisplay();
 });
 
 // Chain Drop Resolution state
@@ -5490,7 +5385,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var dir = parseInt(el.getAttribute('data-direction'), 10);
             scrollContacts(dir);
         },
-        'toggleShowAllContacts': function() { toggleShowAllContacts(); },
 
         // Quick actions
         'scrollQuickActions': function(el) {
