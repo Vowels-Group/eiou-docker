@@ -26,7 +26,6 @@ interface CliServiceInterface
      * - p2pExpiration: P2P request expiration time in seconds
      * - maxOutput: Maximum lines of output to display
      * - defaultTransportMode: Default transport type (http, https, tor)
-     * - autoRefreshEnabled: Enable auto-refresh for pending transactions
      * - hostname: Node hostname
      *
      * @param array $argv The CLI input data

@@ -193,6 +193,7 @@ Handles settings and debug operations.
 | `handleClearDebugLogs()` | `clearDebugLogs` | Clear debug entries | None |
 | `handleSendDebugReport()` | `sendDebugReport` | Generate debug file | `description` |
 | `handleGetDebugReportJson()` | `getDebugReportJson` | Download debug JSON (AJAX) | `description`, `report_mode` |
+| `handleSubmitDebugReport()` | `submitDebugReport` | Submit debug report to support via Tor (AJAX, non-blocking) | `description`, `report_mode` |
 | `handleAnalyticsConsent()` | `analyticsConsent` | Save one-time analytics consent choice (AJAX) | `consent` (0 or 1) |
 
 **Available Settings:**
@@ -212,6 +213,9 @@ Handles settings and debug operations.
 | `maxOutput` | int | Max display lines |
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
+| `contactAvatarStyle` | string | Contact avatar rendering style (`gradient`, `pixel`, `tile`) |
+| `amountColorScheme` | string | Color scheme for transaction amounts (`neutral`, `western`, `eastern`) |
+| `statusColorScheme` | string | Color scheme for status badges (`neutral`, `western`, `eastern`) |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
 | `updateCheckEnabled` | bool | Check Docker Hub daily for newer versions (read-only API call) |
 | `autoAcceptTransaction` | bool | Auto-accept P2P transactions when route found (when OFF, transactions pause at `awaiting_approval` for user review in both fast and best-fee modes) |
@@ -230,7 +234,7 @@ Handles settings and debug operations.
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
 | Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
 | Currency | `allowedCurrencies` |
-| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput`, `sessionTimeoutMinutes` |
+| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput`, `sessionTimeoutMinutes`, `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme` |
 
 ---
 

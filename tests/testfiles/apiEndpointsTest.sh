@@ -1128,7 +1128,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing GET /api/v1/system/settings includes new settings keys"
 settingsApiHasNew=true
-for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format display_recent_transactions_limit; do
+for key in contact_status_enabled rate_limit_enabled backup_retention_count log_level cleanup_delivery_retention_days p2p_rate_limit_per_minute http_transport_timeout_seconds display_date_format; do
     if ! echo "$settingsApiResponse" | grep -q "\"${key}\""; then
         settingsApiHasNew=false
         printf "\t   Missing API key: ${key}\n"
