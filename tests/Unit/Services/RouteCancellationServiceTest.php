@@ -88,7 +88,11 @@ class RouteCancellationServiceTest extends TestCase
         ];
 
         $this->p2pService->expects($this->exactly(3))
-            ->method('sendP2pMessage');
+            ->method('sendCancelToAddress')
+            ->willReturnCallback(function (string $hash, string $address) {
+                $this->assertEquals(self::TEST_HASH, $hash);
+                $this->assertNotEmpty($address);
+            });
 
         $result = $this->service->cancelUnselectedRoutes(self::TEST_HASH, self::TEST_SELECTED_ID, $unselectedCandidates);
 

@@ -122,6 +122,116 @@ class P2pServiceCascadeCancelTest extends TestCase
     }
 
     // =========================================================================
+    // sendCancelToAddress() Tests
+    // =========================================================================
+
+    /**
+     * Test sendCancelToAddress sends rp2p type with proper payload fields
+     */
+    public function testSendCancelToAddressSendsRp2pWithSenderFields(): void
+    {
+        $targetAddress = 'http://node2.test';
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->with($targetAddress)
+            ->willReturn($targetAddress);
+        $this->userContext->method('getPublicKey')
+            ->willReturn(self::TEST_PUBLIC_KEY);
+
+        // Verify sendP2pMessage is called with correct message type and payload
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'route_cancel',
+                $targetAddress,
+                $this->callback(function ($payload) use ($targetAddress) {
+                    return $payload['type'] === 'route_cancel'
+                        && $payload['hash'] === self::TEST_HASH
+                        && $payload['cancelled'] === true
+                        && $payload['senderAddress'] === $targetAddress
+                        && $payload['senderPublicKey'] === self::TEST_PUBLIC_KEY;
+                }),
+                $this->stringContains('route-cancel-'),
+                true  // async
+            )
+            ->willReturn(['success' => true, 'response' => [], 'raw' => '', 'messageId' => 'test']);
+
+        $this->service->sendCancelToAddress(self::TEST_HASH, $targetAddress);
+    }
+
+    /**
+     * Test sendCancelToAddress generates unique message IDs per address
+     */
+    public function testSendCancelToAddressGeneratesUniqueMessageIds(): void
+    {
+        $messageIds = [];
+
+        $this->messageDeliveryService->expects($this->exactly(2))
+            ->method('sendMessage')
+            ->willReturnCallback(function ($type, $addr, $payload, $msgId) use (&$messageIds) {
+                $messageIds[] = $msgId;
+                return ['success' => true, 'response' => [], 'raw' => '', 'messageId' => $msgId];
+            });
+
+        $this->service->sendCancelToAddress(self::TEST_HASH, 'http://node1.test');
+        $this->service->sendCancelToAddress(self::TEST_HASH, 'http://node2.test');
+
+        $this->assertCount(2, $messageIds);
+        $this->assertNotEquals($messageIds[0], $messageIds[1]);
+    }
+
+    // =========================================================================
+    // broadcastFullCancelForHash() Tests
+    // =========================================================================
+
+    /**
+     * Test broadcastFullCancelForHash includes senderAddress and senderPublicKey
+     */
+    public function testBroadcastFullCancelIncludesSenderFields(): void
+    {
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'destination_address' => 'http://destination.test',
+                'sender_address' => 'http://sender.test',
+                'currency' => 'USD',
+            ]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn([
+                ['http' => 'http://contact1.test'],
+            ]);
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn(self::TEST_ADDRESS);
+
+        // Verify payload includes sender identification
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'route_cancel',
+                'http://contact1.test',
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'route_cancel'
+                        && $payload['full_cancel'] === true
+                        && array_key_exists('senderAddress', $payload)
+                        && array_key_exists('senderPublicKey', $payload)
+                        && !empty($payload['senderAddress'])
+                        && !empty($payload['senderPublicKey']);
+                }),
+                $this->stringContains('full-cancel-'),
+                true
+            )
+            ->willReturn(['success' => true, 'response' => [], 'raw' => '', 'messageId' => 'test']);
+
+        $this->service->broadcastFullCancelForHash(self::TEST_HASH);
+    }
+
+    // =========================================================================
     // sendCancelNotificationForHash() - Originator Node Tests
     // =========================================================================
 
@@ -203,6 +313,7 @@ class P2pServiceCascadeCancelTest extends TestCase
             ->willReturn(1700000000000000);
 
         // Expect cancel sent to all 3 senders
+        // Amount is SplitAmount::zero()->toArray() = ['whole' => 0, 'frac' => 0]
         $this->messageDeliveryService->expects($this->exactly(3))
             ->method('sendMessage')
             ->with(
@@ -211,7 +322,7 @@ class P2pServiceCascadeCancelTest extends TestCase
                 $this->callback(function ($payload) {
                     return $payload['type'] === 'rp2p'
                         && $payload['cancelled'] === true
-                        && $payload['amount'] === 0
+                        && $payload['amount'] === ['whole' => 0, 'frac' => 0]
                         && $payload['hash'] === self::TEST_HASH;
                 }),
                 $this->stringContains('cancel-'),
@@ -521,6 +632,7 @@ class P2pServiceCascadeCancelTest extends TestCase
             ->with($p2pHash, Constants::STATUS_CANCELLED);
 
         // Cancel notification should be sent upstream
+        // Amount is SplitAmount::zero()->toArray() = ['whole' => 0, 'frac' => 0]
         $this->messageDeliveryService->expects($this->once())
             ->method('sendMessage')
             ->with(
@@ -529,7 +641,7 @@ class P2pServiceCascadeCancelTest extends TestCase
                 $this->callback(function ($payload) use ($p2pHash) {
                     return $payload['type'] === 'rp2p'
                         && $payload['cancelled'] === true
-                        && $payload['amount'] === 0
+                        && $payload['amount'] === ['whole' => 0, 'frac' => 0]
                         && $payload['hash'] === $p2pHash;
                 }),
                 $this->stringContains('cancel-'),
