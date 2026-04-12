@@ -957,15 +957,14 @@ eiou changesettings [setting] [value]
 | `directTxExpiration` | Direct (non-P2P) transaction delivery timeout in seconds; 0 = no expiry (default); recommended: `120` (two Tor round-trips) | `0` |
 | `maxOutput` | Max display lines (0 = unlimited) | `50` |
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
-| `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
 | `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
-| `updateCheckEnabled` | Check Docker Hub daily for newer versions | `true`, `false` |
 | `analyticsEnabled` | Share anonymous usage statistics (opt-in) | `true`, `false` |
 | `autoAcceptTransaction` | Auto-accept P2P transactions when route found | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 | `name` | Display name for this node | `Alice` |
 | `trustedProxies` | Trusted proxy IPs for header forwarding | `10.0.0.1,172.16.0.0/12` |
 | `allowedCurrencies` | Allowed currencies (comma-separated) | `USD,EUR` |
+| `autoRejectUnknownCurrency` | Auto-reject contact requests with currencies not in your allowed list | `true`, `false` |
 
 **Advanced Settings (Feature Toggles):**
 
@@ -1022,21 +1021,12 @@ eiou changesettings [setting] [value]
 | `torFailureTransportFallback` | Fall back to HTTP/HTTPS when Tor fails | `true`, `false` |
 | `torFallbackRequireEncrypted` | Only fall back to HTTPS, never plain HTTP | `true`, `false` |
 
-**Advanced Settings (Sync):**
-
-| Setting | Description | Example Value |
-|---------|-------------|---------------|
-| `syncChunkSize` | Transactions per sync chunk (10-500) | `50` |
-| `syncMaxChunks` | Max sync chunks per cycle (10-1000) | `100` |
-| `heldTxSyncTimeoutSeconds` | Held tx sync timeout in seconds (30-299) | `120` |
-
 **Advanced Settings (Display):**
 
 | Setting | Description | Example Value |
 |---------|-------------|---------------|
 | `displayDecimals` | Display decimal places for all currencies (0-8, default 2). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage. | `2` |
 | `displayDateFormat` | PHP date format string | `Y-m-d H:i:s.u` |
-| `displayRecentTransactionsLimit` | Recent transactions on dashboard (min 1) | `5` |
 
 **Interactive Mode:**
 
@@ -1051,7 +1041,6 @@ eiou changesettings
 eiou changesettings defaultCurrency USD
 eiou changesettings maxP2pLevel 5
 eiou changesettings maxOutput 0           # Unlimited output
-eiou changesettings autoRefreshEnabled true
 eiou changesettings autoBackupEnabled false
 eiou changesettings autoAcceptTransaction false  # Require approval before sending P2P
 eiou changesettings trustedProxies "10.0.0.1,172.16.0.1"

@@ -12,6 +12,16 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- **Removed GUI-only settings from CLI and API**: `autoRefreshEnabled`, `sessionTimeoutMinutes`, and `displayRecentTransactionsLimit` are now GUI-only settings. They had no effect when changed via CLI or API (auto-refresh controls GUI JavaScript polling, session timeout controls GUI web sessions, and recent transactions limit only affects the GUI dashboard). These can still be changed in the GUI Settings page
+- **Removed undocumented sync settings from CLI**: `syncChunkSize`, `syncMaxChunks`, and `heldTxSyncTimeoutSeconds` were documented in CLI_REFERENCE.md but had no CLI handler — removed from docs. They remain configurable via API
+
+### Docs
+- **CLI_REFERENCE.md**: Added `autoRejectUnknownCurrency` setting (was implemented but undocumented). Removed `updateCheckEnabled` (no CLI handler). Removed GUI-only settings (`autoRefreshEnabled`, `displayRecentTransactionsLimit`) and sync settings (`syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds`) that had no CLI handlers
+- **API_REFERENCE.md**: Added `auto_reject_unknown_currency` setting (was implemented but undocumented). Removed GUI-only settings (`auto_refresh_enabled`, `display_recent_transactions_limit`, `session_timeout_minutes`) and `update_check_enabled` (not in API code)
+- **GUI_REFERENCE.md**: Added `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme` display settings and `submitDebugReport` controller action (all were implemented but undocumented)
+- **GUI_QUICK_REFERENCE.md**: Added `submitDebugReport` action and new display settings to updateSettings field list
+
 ---
 
 ## v0.1.11-alpha (2026-04-12)

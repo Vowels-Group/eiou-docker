@@ -1261,7 +1261,6 @@ Get system settings.
             "hostname": "http://alice",
             "hostname_secure": "https://alice",
             "trusted_proxies": "",
-            "auto_refresh_enabled": true,
             "auto_backup_enabled": true,
             "auto_accept_transaction": true,
             "hop_budget_randomized": true,
@@ -1295,7 +1294,6 @@ Get system settings.
             "tor_failure_transport_fallback": true,
             "tor_fallback_require_encrypted": true,
             "display_date_format": "Y-m-d H:i:s.u",
-            "display_recent_transactions_limit": 5,
             "allowed_currencies": ["USD", "EUR"]
         }
     }
@@ -1317,9 +1315,7 @@ Get system settings.
 - `hostname`: HTTP hostname of the node (e.g., "http://alice")
 - `hostname_secure`: HTTPS hostname of the node (e.g., "https://alice")
 - `trusted_proxies`: Trusted proxy IPs for header forwarding (comma-separated, empty = none)
-- `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
-- `update_check_enabled`: Whether daily Docker Hub update checks are enabled (no data sent — read-only API call)
 - `analytics_enabled`: Whether anonymous usage analytics are enabled (opt-in, default off — sends only aggregate counts weekly)
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
@@ -1353,8 +1349,8 @@ Get system settings.
 - `tor_failure_transport_fallback`: Fall back to HTTP/HTTPS when Tor delivery fails
 - `tor_fallback_require_encrypted`: Only fall back to HTTPS, never plain HTTP
 - `display_date_format`: PHP date format string for timestamps
-- `display_recent_transactions_limit`: Number of recent transactions on dashboard (min 1)
 - `allowed_currencies`: List of allowed currency codes
+- `auto_reject_unknown_currency`: Whether to auto-reject incoming contact requests with currencies not in allowed list
 
 ---
 
@@ -1386,12 +1382,12 @@ Update system settings.
 | `direct_tx_expiration` | int | Direct TX delivery timeout in seconds (0 = no expiry) |
 | `max_output` | int | Maximum CLI output lines (0 = unlimited) |
 | `default_transport_mode` | string | Default transport protocol (http, https, tor) |
-| `auto_refresh_enabled` | boolean | Enable/disable auto-refresh |
 | `auto_backup_enabled` | boolean | Enable/disable automatic backups |
 | `trusted_proxies` | string | Trusted proxy IPs (comma-separated, empty = none) |
 | `hostname` | string | Node hostname (triggers SSL cert regeneration) |
 | `name` | string | Node display name |
 | `allowed_currencies` | string | Allowed currencies (comma-separated, e.g., "USD,EUR") |
+| `auto_reject_unknown_currency` | boolean | Auto-reject contact requests with currencies not in allowed list |
 | `hop_budget_randomized` | boolean | Randomize P2P hop depth (disable for max reachability) |
 | `contact_status_enabled` | boolean | Enable/disable contact status tracking |
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
@@ -1399,7 +1395,6 @@ Update system settings.
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
-| `update_check_enabled` | boolean | Enable/disable daily Docker Hub update checks |
 | `analytics_enabled` | boolean | Enable/disable anonymous usage analytics (opt-in, default off) |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
@@ -1428,7 +1423,6 @@ Update system settings.
 | `sync_max_chunks` | int | Max sync chunks per cycle (10-1000) |
 | `held_tx_sync_timeout_seconds` | int | Held tx sync timeout (30-299 seconds) |
 | `display_date_format` | string | PHP date format string |
-| `display_recent_transactions_limit` | int | Recent transactions on dashboard (min 1) |
 
 All fields are optional. Only provided fields will be updated. Unknown fields return warnings.
 

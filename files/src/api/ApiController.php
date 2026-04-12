@@ -1555,7 +1555,6 @@ class ApiController {
                 'hostname' => $currentUser->getHttpAddress(),
                 'hostname_secure' => $currentUser->getHttpsAddress(),
                 'trusted_proxies' => $currentUser->getTrustedProxies(),
-                'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled(),
                 'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
                 'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
                 // Feature toggles
@@ -1596,9 +1595,6 @@ class ApiController {
                 'tor_fallback_require_encrypted' => $currentUser->isTorFallbackRequireEncrypted(),
                 // Display
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
-                'display_recent_transactions_limit' => $currentUser->getDisplayRecentTransactionsLimit(),
-                // Session
-                'session_timeout_minutes' => $currentUser->getSessionTimeoutMinutes(),
                 // Currency management
                 'allowed_currencies' => $currentUser->getAllowedCurrencies(),
             ]
@@ -1631,7 +1627,6 @@ class ApiController {
             'p2p_expiration' => ['key' => 'p2pExpiration', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
             'max_output' => ['key' => 'maxOutput', 'validate' => null, 'config' => 'defaultconfig.json'],
             'default_transport_mode' => ['key' => 'defaultTransportMode', 'validate' => null, 'config' => 'defaultconfig.json'],
-            'auto_refresh_enabled' => ['key' => 'autoRefreshEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_backup_enabled' => ['key' => 'autoBackupEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_accept_transaction' => ['key' => 'autoAcceptTransaction', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'direct_tx_expiration' => ['key' => 'directTxExpiration', 'validate' => null, 'config' => 'defaultconfig.json', 'intMin' => 0],
@@ -1683,9 +1678,6 @@ class ApiController {
             'held_tx_sync_timeout_seconds' => ['key' => 'heldTxSyncTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [30, 299]],
             // Display
             'display_date_format' => ['key' => 'displayDateFormat', 'validate' => 'validateDateFormat', 'config' => 'defaultconfig.json'],
-            'display_recent_transactions_limit' => ['key' => 'displayRecentTransactionsLimit', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
-            // Session
-            'session_timeout_minutes' => ['key' => 'sessionTimeoutMinutes', 'validate' => null, 'config' => 'defaultconfig.json', 'enum' => Constants::SESSION_TIMEOUT_OPTIONS],
         ];
 
         $updated = [];
@@ -1750,7 +1742,7 @@ class ApiController {
                     $value = intval($rawValue);
                 } elseif ($configKey === 'defaultTransportMode') {
                     $value = strtolower((string) $rawValue);
-                } elseif ($configKey === 'autoRefreshEnabled' || $configKey === 'autoBackupEnabled') {
+                } elseif ($configKey === 'autoBackupEnabled') {
                     $validation = InputValidator::validateBoolean($rawValue);
                     if (!$validation['valid']) {
                         $errors[] = "$apiKey: " . $validation['error'];
