@@ -104,6 +104,18 @@ interface P2pServiceInterface
     public function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array;
 
     /**
+     * Send a cancel notification to a specific address
+     *
+     * Builds a properly formed rp2p cancel payload (with senderAddress,
+     * senderPublicKey, etc.) and sends it to the given address.
+     *
+     * @param string $hash The P2P hash
+     * @param string $address Recipient address to cancel
+     * @return void
+     */
+    public function sendCancelToAddress(string $hash, string $address): void;
+
+    /**
      * Broadcast a full cancellation downstream to all accepted contacts
      *
      * Called when the originator rejects a P2P or when a relay receives a

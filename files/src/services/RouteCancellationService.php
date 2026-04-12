@@ -49,15 +49,7 @@ class RouteCancellationService implements RouteCancellationServiceInterface {
 
             // Send cancellation message to the unselected candidate's contact
             if ($this->p2pService !== null && $contactAddress !== '') {
-                $cancelPayload = [
-                    'type' => 'route_cancel',
-                    'hash' => $hash,
-                    'cancelled' => true,
-                ];
-                $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
-                $messageId = 'route-cancel-' . $hash . '-' . $contactHash;
-
-                $this->p2pService->sendP2pMessage('route_cancel', $contactAddress, $cancelPayload, $messageId);
+                $this->p2pService->sendCancelToAddress($hash, $contactAddress);
                 $cancelledCount++;
 
                 $cancelledRoutes[] = [

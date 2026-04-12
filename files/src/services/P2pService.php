@@ -1306,6 +1306,20 @@ class P2pService implements P2pServiceInterface {
      * @param string $hash The P2P hash to cancel
      * @return void
      */
+    public function sendCancelToAddress(string $hash, string $address): void
+    {
+        $cancelPayload = [
+            'type' => 'route_cancel',
+            'hash' => $hash,
+            'cancelled' => true,
+            'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($address),
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+        $contactHash = substr(hash('sha256', $address), 0, 8);
+        $messageId = 'route-cancel-' . $hash . '-' . $contactHash;
+        $this->sendP2pMessage('route_cancel', $address, $cancelPayload, $messageId);
+    }
+
     public function sendCancelNotificationForHash(string $hash): void
     {
         $p2p = $this->p2pRepository->getByHash($hash);
@@ -1389,13 +1403,6 @@ class P2pService implements P2pServiceInterface {
         $currency = $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
         $contacts = $this->contactService->getAllAcceptedAddresses($currency);
 
-        $cancelPayload = [
-            'type' => 'route_cancel',
-            'hash' => $hash,
-            'cancelled' => true,
-            'full_cancel' => true,
-        ];
-
         $sentCount = 0;
         foreach ($contacts as $contact) {
             $contactAddress = $contact[$transportIndex] ?? '';
@@ -1403,6 +1410,14 @@ class P2pService implements P2pServiceInterface {
                 continue;
             }
 
+            $cancelPayload = [
+                'type' => 'route_cancel',
+                'hash' => $hash,
+                'cancelled' => true,
+                'full_cancel' => true,
+                'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($contactAddress),
+                'senderPublicKey' => $this->currentUser->getPublicKey(),
+            ];
             $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
             $messageId = 'full-cancel-' . $hash . '-' . $contactHash;
             $this->sendP2pMessage('route_cancel', $contactAddress, $cancelPayload, $messageId);

@@ -308,13 +308,13 @@ function runColumnMigrations(PDO $pdo): array {
     // Update ENUM columns to add new values
     $enumUpdates = [
         'message_delivery' => [
-            'message_type' => "ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request') NOT NULL",
+            'message_type' => "ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request', 'route_cancel') NOT NULL",
         ],
         'dead_letter_queue' => [
-            'message_type' => "ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request') NOT NULL",
+            'message_type' => "ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request', 'route_cancel') NOT NULL",
         ],
         'delivery_metrics' => [
-            'message_type' => "ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all', 'payment_request') NOT NULL",
+            'message_type' => "ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all', 'payment_request', 'route_cancel') NOT NULL",
         ],
     ];
 
