@@ -4530,7 +4530,7 @@ hr.currency-separator-double {
 }
 
 .pr-item--approved {
-    border-left: 3px solid var(--status-success-bg, #28a745);
+    border-left: 3px solid var(--status-success-bg, #6c757d);
     opacity: 0.85;
 }
 
@@ -4585,7 +4585,7 @@ hr.currency-separator-double {
 
 .pr-badge--incoming  { background: #fff3cd; color: #856404; }
 .pr-badge--pending   { background: #fff3cd; color: #856404; }
-.pr-badge--approved  { background: var(--status-success-soft-bg, #d4edda); color: var(--status-success-soft-fg, #155724); }
+.pr-badge--approved  { background: var(--status-success-soft-bg, #e9ecef); color: var(--status-success-soft-fg, #495057); }
 .pr-badge--declined  { background: var(--status-failure-soft-bg, #e9ecef); color: var(--status-failure-soft-fg, #495057); }
 .pr-badge--cancelled { background: #e9ecef; color: #495057; }
 

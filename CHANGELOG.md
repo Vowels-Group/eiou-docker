@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- **Payment Request badges still green on neutral Status Color Scheme**: the `var()` fallback values for `.pr-badge--approved` and `.pr-item--approved` were hardcoded to green (`#d4edda`, `#28a745`) instead of neutral gray (`#e9ecef`, `#6c757d`). When the neutral scheme sets the CSS custom properties to `initial`, the fallback kicks in — so approved badges and left borders showed green instead of gray. Aligned fallbacks with every other badge in the codebase
+
 ---
 
 ## v0.1.11-alpha (2026-04-12)
