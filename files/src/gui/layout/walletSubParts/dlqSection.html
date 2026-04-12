@@ -87,13 +87,15 @@
         <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
     </div>
 
-    <!-- Filter tabs — client-side, no page reload -->
-    <div class="dlq-filter-tabs">
-        <button class="dlq-filter-tab active" data-filter="active"    data-action="setDlqFilter">Pending &amp; Retrying</button>
-        <button class="dlq-filter-tab"        data-filter="pending"   data-action="setDlqFilter">Pending Only</button>
-        <button class="dlq-filter-tab"        data-filter="resolved"  data-action="setDlqFilter">Resolved</button>
-        <button class="dlq-filter-tab"        data-filter="abandoned" data-action="setDlqFilter">Abandoned</button>
-        <button class="dlq-filter-tab"        data-filter="all"       data-action="setDlqFilter">All</button>
+    <!-- Status filter — client-side dropdown, no page reload -->
+    <div class="contacts-filters mb-lg">
+        <select id="dlq-filter-status" class="contacts-filter-select" data-action-change="setDlqFilter" aria-label="Filter by status">
+            <option value="all">Any status</option>
+            <option value="active">Pending &amp; Retrying</option>
+            <option value="pending">Pending Only</option>
+            <option value="resolved">Resolved</option>
+            <option value="abandoned">Abandoned</option>
+        </select>
     </div>
 
     <?php if (empty($dlqItems)): ?>

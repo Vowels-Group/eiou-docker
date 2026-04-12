@@ -3074,14 +3074,9 @@ tr.tx-item-in-progress > td:first-child {
     font-weight: 600;
 }
 
-/* Filter tabs */
-.dlq-filter-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 1rem;
-}
-
+/* Filter dropdown reuses .contacts-filter-select from the shared table chrome.
+   The old tab-button styles below are kept as no-ops for any residual references. */
+.dlq-filter-tabs { display: none; }
 .dlq-filter-tab {
     padding: 0.3rem 0.85rem;
     border-radius: 20px;
@@ -3105,9 +3100,11 @@ tr.tx-item-in-progress > td:first-child {
     border-color: #0d6efd;
 }
 
-/* Table wrapper — horizontal scroll on small screens */
+/* Table wrapper — scrollable like contacts/transactions tables */
 .dlq-table-wrapper {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 60vh;
     margin-bottom: 0.5rem;
 }
 
@@ -3320,11 +3317,8 @@ tr.tx-item-in-progress > td:first-child {
     margin-top: 0.75rem;
 }
 
-/* Scrollable DLQ table wrapper — applied when >5 items */
-.dlq-table-scrollable {
-    max-height: 420px; /* ~5 rows + header */
-    overflow-y: auto;
-}
+/* Legacy class — scroll is now always enabled on .dlq-table-wrapper */
+.dlq-table-scrollable { }
 
 /* Centre-align th for recipient and reason columns */
 .dlq-table th:nth-child(2),

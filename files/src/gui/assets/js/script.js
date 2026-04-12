@@ -4679,15 +4679,10 @@ function showDlqToasts() {
  * @param {string} filter
  */
 function setDlqFilter(filter) {
-    // Update active tab
-    var tabs = document.querySelectorAll('.dlq-filter-tab');
-    for (var i = 0; i < tabs.length; i++) {
-        var isActive = tabs[i].getAttribute('data-filter') === filter;
-        if (isActive) {
-            tabs[i].classList.add('active');
-        } else {
-            tabs[i].classList.remove('active');
-        }
+    // If called without argument, read from the dropdown
+    if (!filter) {
+        var sel = document.getElementById('dlq-filter-status');
+        filter = sel ? sel.value : 'active';
     }
 
     // Show/hide rows and mark filter state for search
@@ -4759,9 +4754,9 @@ function searchDlq(query) {
 // Initialize DLQ toasts on page load (Tor Browser compatible)
 document.addEventListener('DOMContentLoaded', function() {
     showDlqToasts();
-    // Apply default filter (pending & retrying) on load
-    if (document.querySelector('.dlq-filter-tab')) {
-        setDlqFilter('active');
+    // Apply default filter (show all) on load
+    if (document.getElementById('dlq-filter-status')) {
+        setDlqFilter('all');
     }
 });
 
@@ -5468,10 +5463,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'toggleP2pInfo': function() { toggleP2pInfo(); },
 
         // DLQ
-        'setDlqFilter': function(el) {
-            var filter = el.getAttribute('data-filter');
-            setDlqFilter(filter);
-        },
         'retryDlqItem': function(el) {
             var id = parseInt(el.getAttribute('data-dlq-id'), 10);
             retryDlqItem(id, el);
@@ -5598,6 +5589,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
         else if (action === 'filterTransactions') { filterTransactions(); }
+        else if (action === 'setDlqFilter') { setDlqFilter(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
