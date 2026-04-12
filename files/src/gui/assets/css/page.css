@@ -708,6 +708,67 @@ body {
     }
 }
 
+/* ─── Recent Transactions table — extends .contacts-table with .tx-table ───
+   Same chrome as Your Contacts; tx-specific column widths and a mobile
+   collapse that keeps Status-icon + Counterparty + Amount (the +/− on Amount
+   carries direction; the status icon confirms completion state). */
+/* Status-icon column: narrow leading column, icon-only.  All widths are
+   percentages because table-layout:fixed distributes leftover space to
+   non-percentage columns — mixing units leaves the icon col too wide. */
+.tx-table th.col-tx-status-icon,
+.tx-table td.col-tx-status-icon { width: 2.5%; padding: 0.4rem 0 0.4rem 0.6rem; text-align: center; }
+.tx-table .col-name          { width: 19%; }
+.tx-table .col-tx-type       { width: 9%;  }
+.tx-table .col-tx-endpoint   { width: 15%; }
+.tx-table .col-tx-desc       {
+    width: 22%;
+    max-width: 0; /* table-layout:fixed lets the cell collapse to col width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+}
+.tx-table .col-tx-amount     { width: 16%; }
+.tx-table .col-tx-date       { width: 13%; white-space: nowrap; }
+
+/* Status icon in the leading column — bare icon colored by status. */
+.tx-table .tx-status-icon { font-size: 0.85rem; background: none; padding: 0; border-radius: 0; }
+.tx-status-icon.tx-status-pending   { color: #b8860b; }
+.tx-status-icon.tx-status-sending   { color: #fd7e14; }
+.tx-status-icon.tx-status-sent      { color: #6c757d; }
+.tx-status-icon.tx-status-accepted  { color: #6c757d; }
+.tx-status-icon.tx-status-completed { color: #6c757d; }
+.tx-status-icon.tx-status-rejected  { color: var(--status-failure-fg, #dc3545); }
+.tx-status-icon.tx-status-cancelled { color: #6c757d; }
+
+/* Origin / Dest. cell — clickable look when populated */
+.tx-table .tx-endpoint-clickable {
+    cursor: pointer;
+}
+.tx-table .tx-endpoint-clickable:hover {
+    background: #f0f7ff;
+}
+
+/* Compact DLQ icon next to the Status badge */
+.tx-table .dlq-tx-icon {
+    margin-left: 0.35rem;
+    color: #c67100;
+    text-decoration: none;
+}
+.tx-table .dlq-tx-icon:hover { color: #a0570e; }
+
+/* Mobile (≤600px): Status-icon (1) + Counterparty (2) + Amount (3).
+   Generic rule hides cols 3+; re-show col 3 (Amount) for the tx-table. */
+@media (max-width: 600px) {
+    .contacts-table.tx-table thead th:nth-child(3),
+    .contacts-table.tx-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.tx-table .col-tx-status-icon { width: 28px; padding-left: 0.25rem; padding-right: 0; }
+    .contacts-table.tx-table .col-name   { width: auto; }
+    .contacts-table.tx-table .col-tx-amount { width: auto; }
+}
+
 /* Sortable column headers */
 .contacts-table thead th.sortable {
     cursor: pointer;
@@ -1996,6 +2057,15 @@ tr.contact-card:hover .contact-name-cell {
 .tx-item-in-progress {
     border-left: 3px solid #ffc107;
     animation: tx-pulse 2s ease-in-out infinite;
+}
+/* When applied to a table row (tx-table), border-left can't render on <tr>
+   with border-collapse:separate — paint it on the first cell instead. */
+tr.tx-item-in-progress {
+    border-left: none;
+    animation: tx-pulse 2s ease-in-out infinite;
+}
+tr.tx-item-in-progress > td:first-child {
+    border-left: 3px solid #ffc107;
 }
 
 @keyframes tx-pulse {
@@ -3915,31 +3985,44 @@ hr.currency-separator-double {
 .modal-content-md { max-width: 600px; }
 .modal-body-padded { padding: 1.5rem; }
 
+/* Inline amount shown before approval actions (avoids flex overlap with candidates) */
+.tx-in-progress-amount-inline {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0.3rem 0;
+}
+
 /* P2P approval callout */
 .p2p-approval-callout {
     font-size: 0.85rem;
-    color: #adb5bd;
-    padding: 0.4rem 0.6rem;
-    background: rgba(232, 62, 140, 0.1);
-    border-radius: 4px;
+    color: #6c757d;
+    padding: 0.4rem 0;
     margin-bottom: 0.5rem;
 }
 
 .p2p-candidate-row {
-    display: -webkit-box; display: -ms-flexbox; display: flex;
-    -webkit-box-align: center; -ms-flex-align: center; align-items: center;
-    -webkit-box-pack: justify; -ms-flex-pack: justify; justify-content: space-between;
-    padding: 0.4rem 0.6rem;
-    background: rgba(255,255,255,0.05);
-    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f0f0;
     margin-bottom: 0.3rem;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
-.p2p-candidate-info { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; }
-.p2p-candidate-fee { color: #adb5bd; }
-.p2p-candidate-fee-value { color: #ffc107; }
-.p2p-candidate-total { color: #6c757d; }
+.p2p-candidate-info { flex: 1; min-width: 0; }
+.p2p-candidate-fee { color: #6c757d; }
+.p2p-candidate-fee-value { color: #d4880f; font-weight: 600; }
+.p2p-candidate-total { color: #495057; }
+
+@media (max-width: 576px) {
+    .p2p-candidate-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.4rem;
+    }
+    .p2p-candidate-row .btn { align-self: flex-start; }
+}
 
 .status-msg-danger { color: #dc3545; font-size: 0.8rem; }
 .status-msg-muted { color: #6c757d; font-size: 0.8rem; }
@@ -3948,7 +4031,7 @@ hr.currency-separator-double {
 .tx-phase-pending { background: #6c757d; color: white; }
 .tx-phase-route_search { background: #ffc107; color: white; }
 .tx-phase-route_found { background: #17a2b8; color: white; }
-.tx-phase-awaiting_approval { background: #e83e8c; color: white; }
+.tx-phase-awaiting_approval { background: #0d6efd; color: white; }
 .tx-phase-sending { background: #0d6efd; color: white; }
 .tx-phase-syncing { background: #fd7e14; color: white; }
 

@@ -332,7 +332,7 @@ class Rp2pService implements Rp2pServiceInterface {
             // Applies to fast mode and best-fee auto-selection (called from selectAndForwardBestRp2p).
             // Best-fee manual approval is handled earlier in selectAndForwardBestRp2p() and never reaches here.
             if (!$this->currentUser->getAutoAcceptTransaction()) {
-                $this->p2pRepository->setRp2pAmount($request['hash'], $request['amount']);
+                $this->p2pRepository->setRp2pAmount($request['hash'], SplitAmount::from($request['amount']));
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_AWAITING_APPROVAL);
                 Logger::getInstance()->info("P2P route awaiting user approval", [
                     'hash' => $request['hash'],
@@ -421,15 +421,21 @@ class Rp2pService implements Rp2pServiceInterface {
                     if ($sendResult['success']) {
                         output(outputRp2pResponse($response), 'SILENT');
                     } else {
-                        // Log delivery failure details
                         $trackingResult = $sendResult['tracking'] ?? [];
                         $attempts = $trackingResult['attempts'] ?? 'unknown';
                         $lastError = $trackingResult['error'] ?? 'No response received';
+                        $reason = $response['reason'] ?? null;
 
                         if (class_exists(Logger::class)) {
-                            Logger::getInstance()->warning("RP2P message delivery failed", [
+                            // Expected rejections (duplicate, fee) are info — only
+                            // genuine delivery failures (no response, network) are warnings.
+                            $isExpectedRejection = in_array($reason, ['duplicate', 'rejected', 'fee_too_high', 'processing_error'], true);
+                            $logMethod = $isExpectedRejection ? 'info' : 'warning';
+                            $logMessage = $isExpectedRejection ? 'RP2P delivery rejected by peer' : 'RP2P message delivery failed';
+                            Logger::getInstance()->$logMethod($logMessage, [
                                 'hash' => $request['hash'],
                                 'sender_address' => $sender['sender_address'],
+                                'reason' => $reason,
                                 'attempts' => $attempts,
                                 'error' => $lastError,
                                 'moved_to_dlq' => $trackingResult['dlq'] ?? false
@@ -842,7 +848,7 @@ class Rp2pService implements Rp2pServiceInterface {
         $request = [
             'hash' => $bestCandidate['hash'],
             'time' => $bestCandidate['time'],
-            'amount' => (int) $bestCandidate['amount'],
+            'amount' => $bestCandidate['amount'],
             'currency' => $bestCandidate['currency'],
             'senderPublicKey' => $bestCandidate['sender_public_key'],
             'senderAddress' => $bestCandidate['sender_address'],
@@ -1033,7 +1039,7 @@ class Rp2pService implements Rp2pServiceInterface {
             $request = [
                 'hash' => $candidate['hash'],
                 'time' => $candidate['time'],
-                'amount' => (int) $candidate['amount'],
+                'amount' => $candidate['amount'],
                 'currency' => $candidate['currency'],
                 'senderPublicKey' => $candidate['sender_public_key'],
                 'senderAddress' => $candidate['sender_address'],

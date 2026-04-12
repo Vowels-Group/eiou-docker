@@ -388,7 +388,7 @@ function getRp2pCandidatesTableSchema() {
 function getMessageDeliveryTableSchema() {
     return "CREATE TABLE IF NOT EXISTS message_delivery (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request') NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request', 'route_cancel') NOT NULL,
         message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. */
         recipient_address VARCHAR(255) NOT NULL,
         payload JSON NULL,  /* Stored payload for retry attempts */
@@ -420,7 +420,7 @@ function getMessageDeliveryTableSchema() {
 function getDeadLetterQueueTableSchema() {
     return "CREATE TABLE IF NOT EXISTS dead_letter_queue (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request') NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'payment_request', 'route_cancel') NOT NULL,
         message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. - matches message_delivery.message_id */
         payload JSON NOT NULL,
         recipient_address VARCHAR(255) NOT NULL,
@@ -448,7 +448,7 @@ function getDeliveryMetricsTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         period_start TIMESTAMP(6) NOT NULL,
         period_end TIMESTAMP(6) NOT NULL,
-        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all', 'payment_request') NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all', 'payment_request', 'route_cancel') NOT NULL,
         total_sent INT DEFAULT 0,
         total_delivered INT DEFAULT 0,
         total_failed INT DEFAULT 0,

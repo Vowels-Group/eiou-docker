@@ -2592,7 +2592,7 @@ class ApiController {
                 $candidateCount = $rp2pCandidateRepo->getCandidateCount($p2p['hash']);
                 $transactions[] = [
                     'hash' => $p2p['hash'],
-                    'amount' => (int) $p2p['amount'],
+                    'amount' => $p2p['amount'],
                     'currency' => $p2p['currency'],
                     'destination_address' => $p2p['destination_address'],
                     'my_fee_amount' => (int) ($p2p['my_fee_amount'] ?? 0),
@@ -2641,7 +2641,7 @@ class ApiController {
 
             return $this->successResponse([
                 'hash' => $hash,
-                'amount' => (int) $p2p['amount'],
+                'amount' => $p2p['amount'],
                 'currency' => $p2p['currency'],
                 'fast' => (int) $p2p['fast'],
                 'candidates' => $candidates,
@@ -2700,7 +2700,7 @@ class ApiController {
                 $request = [
                     'hash' => $candidate['hash'],
                     'time' => $candidate['time'],
-                    'amount' => (int) $candidate['amount'],
+                    'amount' => $candidate['amount'],
                     'currency' => $candidate['currency'],
                     'senderPublicKey' => $candidate['sender_public_key'],
                     'senderAddress' => $candidate['sender_address'],
@@ -2737,7 +2737,7 @@ class ApiController {
                 $request = [
                     'hash' => $candidate['hash'],
                     'time' => $candidate['time'],
-                    'amount' => (int) $candidate['amount'],
+                    'amount' => $candidate['amount'],
                     'currency' => $candidate['currency'],
                     'senderPublicKey' => $candidate['sender_public_key'],
                     'senderAddress' => $candidate['sender_address'],
@@ -2764,7 +2764,7 @@ class ApiController {
                 $request = [
                     'hash' => $rp2p['hash'],
                     'time' => $rp2p['time'],
-                    'amount' => (int) $rp2p['amount'],
+                    'amount' => $rp2p['amount'],
                     'currency' => $rp2p['currency'],
                     'senderPublicKey' => $rp2p['sender_public_key'],
                     'senderAddress' => $rp2p['sender_address'],

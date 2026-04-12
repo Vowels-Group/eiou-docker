@@ -340,7 +340,7 @@ class TransactionController
             $request = [
                 'hash' => $candidate['hash'],
                 'time' => $candidate['time'],
-                'amount' => (int) $candidate['amount'],
+                'amount' => $candidate['amount'],
                 'currency' => $candidate['currency'],
                 'senderPublicKey' => $candidate['sender_public_key'],
                 'senderAddress' => $candidate['sender_address'],
@@ -388,7 +388,7 @@ class TransactionController
         $request = [
             'hash' => $rp2p['hash'],
             'time' => $rp2p['time'],
-            'amount' => (int) $rp2p['amount'],
+            'amount' => $rp2p['amount'],
             'currency' => $rp2p['currency'],
             'senderPublicKey' => $rp2p['sender_public_key'],
             'senderAddress' => $rp2p['sender_address'],

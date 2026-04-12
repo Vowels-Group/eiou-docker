@@ -480,17 +480,28 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 **In-Progress Section:**
 - Phase indicators (pending, route_search, route_found, sending, syncing)
-- P2P vs Direct badges
+- Direct badge shown for non-P2P transactions (P2P type is implied by route/fee info)
 - Held transaction notices
-- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` with route selection UI
-  - Fast mode: shows 1 route with fee breakdown, accept/reject buttons
-  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one
+- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` (blue badge) with route selection UI. Send amount shown inline before candidates
+  - Fast mode: shows 1 route with fee breakdown, Accept/Reject buttons
+  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one. On mobile (≤576px) candidate rows stack vertically
   - Route count updates dynamically as late-arriving candidates are received
+  - Node fee hidden during awaiting_approval (route fee shown per-candidate instead)
 
-**Transaction List:**
-- Status badges (pending, sent, accepted, completed, rejected, cancelled)
+**Transaction Table Columns:**
+
+| Column | Description |
+|--------|-------------|
+| Status icon | Leading column, no header. Single check (sent/accepted), double check (completed), hourglass (pending), cross (rejected), ban (cancelled). Muted grey for normal states; amber for pending, red for rejected |
+| Counterparty | Avatar + contact name |
+| Amount | Sortable. ±value carries sent/received direction |
+| Description | CSS-truncated; full text on hover |
+| Type | Direct / P2P / Contact badge |
+| Origin / Dest. | P2P only: final destination (sent) or original sender (received) |
+| Date | Sortable, formatted timestamp |
+
 - Type badges (Contact, P2P, Direct)
-- Click to open detail modal
+- Click any row to open detail modal
 
 **Transaction Modal:**
 - Full transaction details
@@ -544,10 +555,10 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 When pending DLQ items exist, the **Activity** tab in the navigation bar displays a count badge.
 
 **DLQ Indicator in Transaction History:**
-Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
+Transactions that have a pending or retrying DLQ entry display a DLQ icon next to the status icon in the Recent Transactions table and a **DLQ** badge in the In-Progress Transactions list. Clicking the icon/badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
 
-**Mobile Layout:**
-At ≤640px the table collapses to a stacked card layout — each cell shows its column label as a prefix.
+**Mobile Layout (≤600px):**
+Collapses to three columns: **Status icon | Counterparty | Amount**. The +/− on Amount carries direction; the status icon confirms completion state.
 
 **Notifications:**
 A warning toast appears when new items are added to the DLQ (tracked per session — each item fires once per browser session).
