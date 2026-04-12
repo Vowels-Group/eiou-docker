@@ -842,7 +842,7 @@ class Rp2pService implements Rp2pServiceInterface {
         $request = [
             'hash' => $bestCandidate['hash'],
             'time' => $bestCandidate['time'],
-            'amount' => (int) $bestCandidate['amount'],
+            'amount' => $bestCandidate['amount'],
             'currency' => $bestCandidate['currency'],
             'senderPublicKey' => $bestCandidate['sender_public_key'],
             'senderAddress' => $bestCandidate['sender_address'],
@@ -1033,7 +1033,7 @@ class Rp2pService implements Rp2pServiceInterface {
             $request = [
                 'hash' => $candidate['hash'],
                 'time' => $candidate['time'],
-                'amount' => (int) $candidate['amount'],
+                'amount' => $candidate['amount'],
                 'currency' => $candidate['currency'],
                 'senderPublicKey' => $candidate['sender_public_key'],
                 'senderAddress' => $candidate['sender_address'],

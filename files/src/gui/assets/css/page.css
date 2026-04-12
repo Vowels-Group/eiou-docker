@@ -3985,31 +3985,44 @@ hr.currency-separator-double {
 .modal-content-md { max-width: 600px; }
 .modal-body-padded { padding: 1.5rem; }
 
+/* Inline amount shown before approval actions (avoids flex overlap with candidates) */
+.tx-in-progress-amount-inline {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0.3rem 0;
+}
+
 /* P2P approval callout */
 .p2p-approval-callout {
     font-size: 0.85rem;
-    color: #adb5bd;
-    padding: 0.4rem 0.6rem;
-    background: rgba(232, 62, 140, 0.1);
-    border-radius: 4px;
+    color: #6c757d;
+    padding: 0.4rem 0;
     margin-bottom: 0.5rem;
 }
 
 .p2p-candidate-row {
-    display: -webkit-box; display: -ms-flexbox; display: flex;
-    -webkit-box-align: center; -ms-flex-align: center; align-items: center;
-    -webkit-box-pack: justify; -ms-flex-pack: justify; justify-content: space-between;
-    padding: 0.4rem 0.6rem;
-    background: rgba(255,255,255,0.05);
-    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f0f0;
     margin-bottom: 0.3rem;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
-.p2p-candidate-info { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; }
-.p2p-candidate-fee { color: #adb5bd; }
-.p2p-candidate-fee-value { color: #ffc107; }
-.p2p-candidate-total { color: #6c757d; }
+.p2p-candidate-info { flex: 1; min-width: 0; }
+.p2p-candidate-fee { color: #6c757d; }
+.p2p-candidate-fee-value { color: #d4880f; font-weight: 600; }
+.p2p-candidate-total { color: #495057; }
+
+@media (max-width: 576px) {
+    .p2p-candidate-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.4rem;
+    }
+    .p2p-candidate-row .btn { align-self: flex-start; }
+}
 
 .status-msg-danger { color: #dc3545; font-size: 0.8rem; }
 .status-msg-muted { color: #6c757d; font-size: 0.8rem; }
@@ -4018,7 +4031,7 @@ hr.currency-separator-double {
 .tx-phase-pending { background: #6c757d; color: white; }
 .tx-phase-route_search { background: #ffc107; color: white; }
 .tx-phase-route_found { background: #17a2b8; color: white; }
-.tx-phase-awaiting_approval { background: #e83e8c; color: white; }
+.tx-phase-awaiting_approval { background: #0d6efd; color: white; }
 .tx-phase-sending { background: #0d6efd; color: white; }
 .tx-phase-syncing { background: #fd7e14; color: white; }
 

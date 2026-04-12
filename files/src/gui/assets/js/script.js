@@ -5265,10 +5265,13 @@ function loadP2pCandidates(hash, container) {
                         if (countEl) { countEl.textContent = data.candidates.length + ' route(s) found — choose one:'; }
                         var html = '';
                         var currency = 'USD';
+                        // Convert SplitAmount {whole, frac} to float (frac modulus = 10^8)
+                        function saToFloat(v) { return typeof v === 'number' ? v / 100 : (v.whole || 0) + (v.frac || 0) / 100000000; }
+                        var baseFloat = saToFloat(data.base_amount);
                         for (var i = 0; i < data.candidates.length; i++) {
                             var c = data.candidates[i];
-                            var routeFee = (c.amount - data.base_amount) / 100;
-                            var totalCost = c.amount / 100;
+                            var totalCost = saToFloat(c.amount);
+                            var routeFee = totalCost - baseFloat;
                             var addr = c.sender_address;
                             var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
                             html = html + '<div class="p2p-candidate-row">';
