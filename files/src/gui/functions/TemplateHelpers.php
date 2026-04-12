@@ -382,8 +382,11 @@ function renderContactGradientAvatar(string $seedHex, string $name): string {
     $d = $dirs[ord($bytes[2]) % 4];
 
     $letter = htmlspecialchars(strtoupper(mb_substr($name !== '' ? $name : '?', 0, 1)));
-    // Unique gradient ID per contact so multiple gradients on the page don't collide
-    $gid = 'cag' . substr(bin2hex($bytes), 0, 12);
+    // Unique gradient ID per SVG instance — same contact can appear in multiple
+    // tables (contacts + transactions), so a per-hash ID causes duplicate-ID
+    // collisions that break fill="url(#…)" resolution in inline SVGs.
+    static $cagCounter = 0;
+    $gid = 'cag' . substr(bin2hex($bytes), 0, 8) . dechex(++$cagCounter);
 
     $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">'
          . '<defs><linearGradient id="' . $gid . '" x1="' . $d[0] . '%" y1="' . $d[1] . '%" x2="' . $d[2] . '%" y2="' . $d[3] . '%">'

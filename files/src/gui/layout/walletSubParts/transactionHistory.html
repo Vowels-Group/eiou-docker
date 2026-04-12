@@ -204,13 +204,12 @@
         <table class="contacts-table tx-table">
             <thead>
                 <tr>
+                    <th class="col-tx-status-icon"></th>
                     <th class="col-name">Counterparty</th>
                     <th class="col-number col-tx-amount text-right sortable" data-action="sortTransactions" data-sort-column="amount" role="button" aria-label="Sort by amount"><span class="sort-label">Amount</span><i class="fas fa-sort sort-indicator"></i></th>
                     <th class="col-tx-desc">Description</th>
-                    <th class="col-tx-direction text-center">Direction</th>
                     <th class="col-tx-type text-center">Type</th>
-                    <th class="col-tx-endpoint">Final Recipient</th>
-                    <th class="col-status text-center">Status</th>
+                    <th class="col-tx-endpoint">Origin / Dest.</th>
                     <th class="col-tx-date text-right sortable" data-action="sortTransactions" data-sort-column="date" role="button" aria-label="Sort by date"><span class="sort-label">Date</span><i class="fas fa-sort sort-indicator"></i></th>
                 </tr>
             </thead>
@@ -218,7 +217,7 @@
             <?php
             $statusIcons = [
                 'pending'   => 'fa-hourglass-half',
-                'sent'      => 'fa-paper-plane',
+                'sent'      => 'fa-check',
                 'accepted'  => 'fa-check',
                 'completed' => 'fa-check-double',
                 'rejected'  => 'fa-times',
@@ -245,8 +244,15 @@
                 }
                 $cpHash  = $cpContact['pubkey_hash'] ?? '';
 
-                // Final recipient — only meaningful for outgoing P2P I originated
-                $endAddr = ($isSent && $isP2P) ? ($tx['end_recipient_address'] ?? '') : '';
+                // P2P endpoint — for sent P2P show the final destination;
+                // for received P2P show the original sender who initiated the route.
+                if ($isSent && $isP2P) {
+                    $endAddr = $tx['end_recipient_address'] ?? '';
+                } elseif (!$isSent && $isP2P) {
+                    $endAddr = $tx['initial_sender_address'] ?? '';
+                } else {
+                    $endAddr = '';
+                }
                 $endContact = $endAddr && isset($txContactsByAddress[$endAddr]) ? $txContactsByAddress[$endAddr] : null;
                 $endName = $endContact['name'] ?? null;
                 $endHash = $endContact['pubkey_hash'] ?? '';
@@ -279,6 +285,14 @@
                     data-status="<?php echo htmlspecialchars($statusLower); ?>"
                     data-amount="<?php echo (float) ($tx['amount'] ?? 0); ?>"
                     data-date="<?php echo !empty($tx['date']) ? (int) strtotime($tx['date']) : 0; ?>">
+                    <td class="col-tx-status-icon text-center">
+                        <span class="tx-status-icon tx-status-<?php echo htmlspecialchars($statusLower); ?>" title="<?php echo ucfirst(htmlspecialchars($statusLower)); ?>">
+                            <i class="fas <?php echo $statusIcon; ?>"></i>
+                        </span>
+                        <?php if ($txidInDlq): ?>
+                            <a href="#dlq" class="dlq-tx-icon" title="Delivery failed — see Failed Messages to retry or abandon" data-stop-propagation="true"><i class="fas fa-inbox"></i></a>
+                        <?php endif; ?>
+                    </td>
                     <td class="col-name">
                         <div class="contact-name-cell">
                             <?php echo renderContactAvatar($cpHash, $cpName ?? $cpAddr ?? '', $txAvatarStyle); ?>
@@ -290,13 +304,6 @@
                     </td>
                     <td class="col-tx-desc" title="<?php echo htmlspecialchars($description ?: 'No description'); ?>">
                         <?php echo htmlspecialchars($description ?: '—'); ?>
-                    </td>
-                    <td class="col-tx-direction text-center">
-                        <?php if ($isSent): ?>
-                            <span class="tx-dir-badge tx-dir-sent" title="Sent"><i class="fas fa-arrow-up"></i><span class="tx-dir-label"> Sent</span></span>
-                        <?php else: ?>
-                            <span class="tx-dir-badge tx-dir-received" title="Received"><i class="fas fa-arrow-down"></i><span class="tx-dir-label"> Received</span></span>
-                        <?php endif; ?>
                     </td>
                     <td class="col-tx-type text-center">
                         <span class="tx-type-badge tx-type-<?php echo $typeKey; ?>"><i class="fas <?php echo $typeIcon; ?>"></i> <?php echo $typeLabel; ?></span>
@@ -316,14 +323,6 @@
                             </div>
                         <?php else: ?>
                             <span class="text-muted">—</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="col-status text-center">
-                        <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($statusLower); ?>" title="<?php echo ucfirst(htmlspecialchars($statusLower)); ?>">
-                            <i class="fas <?php echo $statusIcon; ?>"></i><span class="tx-status-label"> <?php echo ucfirst(htmlspecialchars($statusLower)); ?></span>
-                        </span>
-                        <?php if ($txidInDlq): ?>
-                            <a href="#dlq" class="dlq-tx-icon" title="Delivery failed — see Failed Messages to retry or abandon" data-stop-propagation="true"><i class="fas fa-inbox"></i></a>
                         <?php endif; ?>
                     </td>
                     <td class="col-tx-date text-right">
@@ -368,6 +367,8 @@
             'memo' => $tx['memo'] ?? '',
             'description' => $tx['description'] ?? '',
             'previous_txid' => $tx['previous_txid'] ?? '',
+            'initial_sender_address' => $tx['initial_sender_address'] ?? null,
+            'end_recipient_address' => $tx['end_recipient_address'] ?? null,
             'p2p_destination' => $tx['p2p_destination'] ?? null,
             'p2p_amount' => $tx['p2p_amount'] ?? null,
             'p2p_fee' => $tx['p2p_fee'] ?? null
