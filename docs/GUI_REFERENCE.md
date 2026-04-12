@@ -517,19 +517,13 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 The Dead Letter Queue section displays messages that could not be delivered after all automatic retry attempts.
 
-**Filter Tabs:**
-
-| Tab | Shows |
-|-----|-------|
-| Pending & Retrying *(default)* | All actionable items |
-| Pending Only | Items awaiting action |
-| Resolved | Successfully re-delivered items |
-| Abandoned | Manually discarded items |
-| All | Every DLQ record |
+**Status Filter:** Dropdown matching contacts/transactions pattern — Any status (default), Pending & Retrying, Pending Only, Resolved, Abandoned.
 
 **Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
 
-**Table Columns:** Type, Recipient, Failure Reason, Retries, Added, Status, Actions.
+**Table Columns:** Type, Recipient, Failure Reason (truncated), Added, Status, Actions. Uses `contacts-table` chrome with 60vh scrollable wrapper. Clicking any row opens a detail modal with all fields + Retry/Abandon buttons.
+
+**Mobile (≤600px):** Shows Type + Recipient. Tap row for detail modal with full info and actions. Action buttons and status collapse to icon-only at ≤900px.
 
 **Actions per row:**
 
