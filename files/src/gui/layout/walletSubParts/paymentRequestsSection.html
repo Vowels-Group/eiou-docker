@@ -17,12 +17,12 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
         <h3 class="pr-group-title pr-group-title--incoming">
             <i class="fas fa-inbox"></i>
             Incoming Requests
-            <span class="tab-badge" style="position:static;margin-left:0.4rem"><?php echo count($pendingIncoming); ?></span>
+            <span class="tab-badge tab-badge-inline"><?php echo count($pendingIncoming); ?></span>
         </h3>
         <?php foreach ($incomingRequests as $req): ?>
             <?php if (($req['status'] ?? '') !== 'pending') continue; ?>
             <?php
-                $amount = ($req['amount'] instanceof \Eiou\Core\SplitAmount)
+                $amount = isSplitAmount($req['amount'])
                     ? number_format($req['amount']->toMajorUnits(), displayDecimals())
                     : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
                 $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
@@ -40,7 +40,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                 <?php endif; ?>
                 <div class="pr-meta">Received: <?php echo $createdAt; ?></div>
                 <div class="pr-actions">
-                    <form method="POST" class="pr-action-form" style="display:inline">
+                    <form method="POST" class="pr-action-form d-inline">
                         <input type="hidden" name="action" value="approvePaymentRequest">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
@@ -48,7 +48,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                             <i class="fas fa-check"></i> Approve &amp; Pay
                         </button>
                     </form>
-                    <form method="POST" class="pr-action-form" style="display:inline">
+                    <form method="POST" class="pr-action-form d-inline">
                         <input type="hidden" name="action" value="declinePaymentRequest">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
@@ -73,7 +73,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
         </h3>
         <?php foreach ($resolvedIncoming as $req): ?>
             <?php
-                $amount = ($req['amount'] instanceof \Eiou\Core\SplitAmount)
+                $amount = isSplitAmount($req['amount'])
                     ? number_format($req['amount']->toMajorUnits(), displayDecimals())
                     : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
                 $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
@@ -113,7 +113,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
         </h3>
         <?php foreach ($outgoingRequests as $req): ?>
             <?php
-                $amount = ($req['amount'] instanceof \Eiou\Core\SplitAmount)
+                $amount = isSplitAmount($req['amount'])
                     ? number_format($req['amount']->toMajorUnits(), displayDecimals())
                     : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
                 $toName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['recipient_pubkey_hash'] ?? ''), 0, 12) . '…';
@@ -148,7 +148,7 @@ $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '
                 </div>
                 <?php if ($status === 'pending'): ?>
                 <div class="pr-actions">
-                    <form method="POST" class="pr-action-form" style="display:inline">
+                    <form method="POST" class="pr-action-form d-inline">
                         <input type="hidden" name="action" value="cancelPaymentRequest">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">

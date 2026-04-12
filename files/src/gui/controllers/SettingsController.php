@@ -371,6 +371,57 @@ class SettingsController
             else { $errors[] = 'Invalid held TX sync timeout: ' . $validation['error']; }
         }
 
+        // Session timeout
+        if (isset($_POST['sessionTimeoutMinutes'])) {
+            $val = (int) $_POST['sessionTimeoutMinutes'];
+            if (in_array($val, Constants::SESSION_TIMEOUT_OPTIONS)) {
+                $settings['sessionTimeoutMinutes'] = $val;
+            } else {
+                $errors[] = 'Invalid session timeout: must be one of ' . implode(', ', Constants::SESSION_TIMEOUT_OPTIONS) . ' minutes';
+            }
+        }
+
+        // Contact avatar style
+        if (isset($_POST['contactAvatarStyle'])) {
+            $val = trim((string) $_POST['contactAvatarStyle']);
+            if (in_array($val, Constants::CONTACT_AVATAR_STYLE_OPTIONS, true)) {
+                $settings['contactAvatarStyle'] = $val;
+            } else {
+                $errors[] = 'Invalid contact avatar style: must be one of ' . implode(', ', Constants::CONTACT_AVATAR_STYLE_OPTIONS);
+            }
+        }
+
+        // Amount color scheme — neutral / western / eastern
+        if (isset($_POST['amountColorScheme'])) {
+            $val = trim((string) $_POST['amountColorScheme']);
+            if (in_array($val, Constants::AMOUNT_COLOR_SCHEME_OPTIONS, true)) {
+                $settings['amountColorScheme'] = $val;
+            } else {
+                $errors[] = 'Invalid amount color scheme: must be one of ' . implode(', ', Constants::AMOUNT_COLOR_SCHEME_OPTIONS);
+            }
+        }
+
+        // Status color scheme — neutral / western / eastern
+        if (isset($_POST['statusColorScheme'])) {
+            $val = trim((string) $_POST['statusColorScheme']);
+            if (in_array($val, Constants::STATUS_COLOR_SCHEME_OPTIONS, true)) {
+                $settings['statusColorScheme'] = $val;
+            } else {
+                $errors[] = 'Invalid status color scheme: must be one of ' . implode(', ', Constants::STATUS_COLOR_SCHEME_OPTIONS);
+            }
+        }
+
+        // Display name — saved to userconfig.json (separate from defaultconfig.json)
+        $nameForUserConfig = null;
+        if (isset($_POST['name'])) {
+            $val = trim(Security::sanitizeInput($_POST['name']));
+            if (strlen($val) > 64) {
+                $errors[] = 'Display name must be 64 characters or fewer';
+            } else {
+                $nameForUserConfig = $val;
+            }
+        }
+
         // Display settings
         if (isset($_POST['displayDateFormat'])) {
             $validation = InputValidator::validateDateFormat($_POST['displayDateFormat']);
@@ -406,6 +457,19 @@ class SettingsController
             // Write back to file
             if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
+            }
+
+            // Save display name to userconfig.json (consistent with CLI/API)
+            if ($nameForUserConfig !== null) {
+                $userConfigFile = '/etc/eiou/config/userconfig.json';
+                $userConfig = [];
+                if (file_exists($userConfigFile)) {
+                    $userConfig = json_decode(file_get_contents($userConfigFile), true) ?? [];
+                }
+                $userConfig['name'] = $nameForUserConfig;
+                if (file_put_contents($userConfigFile, json_encode($userConfig, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+                    throw new Exception('Failed to write user configuration file');
+                }
             }
 
             // Trigger initial analytics event when toggled on for the first time
@@ -512,6 +576,37 @@ class SettingsController
     }
 
     /**
+     * Handle submit debug report to support (AJAX)
+     * Generates the report and sends it to the support endpoint via Tor.
+     *
+     * @return void
+     */
+    public function handleSubmitDebugReport(): void
+    {
+        $description = Security::sanitizeInput($_POST['description'] ?? '');
+        $reportMode = Security::sanitizeInput($_POST['report_mode'] ?? 'full');
+        $isFullReport = ($reportMode !== 'limited');
+
+        try {
+            $reportService = new DebugReportService(
+                new DebugRepository($this->getPdoConnection()),
+                $this->getPdoConnection()
+            );
+            $report = $reportService->generateReport($description, $isFullReport);
+            $result = DebugReportService::submit($report, $description);
+
+            header('Content-Type: application/json');
+            echo json_encode($result);
+            exit;
+
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'key' => null, 'error' => $e->getMessage()]);
+            exit;
+        }
+    }
+
+    /**
      * Route POST actions to appropriate handlers
      *
      * @return void
@@ -532,6 +627,9 @@ class SettingsController
                 break;
             case 'getDebugReportJson':
                 $this->handleGetDebugReportJson();
+                break;
+            case 'submitDebugReport':
+                $this->handleSubmitDebugReport();
                 break;
             case 'analyticsConsent':
                 $this->handleAnalyticsConsent();

@@ -110,8 +110,6 @@ class CliServiceTest extends TestCase
             ->willReturn(50);
         $this->userContext->method('getDefaultTransportMode')
             ->willReturn('http');
-        $this->userContext->method('getAutoRefreshEnabled')
-            ->willReturn(true);
         $this->userContext->method('getAutoBackupEnabled')
             ->willReturn(false);
         // New settings getters
@@ -171,8 +169,6 @@ class CliServiceTest extends TestCase
             ->willReturn('Y-m-d H:i:s.u');
         $this->userContext->method('getDisplayCurrencyDecimals')
             ->willReturn(2);
-        $this->userContext->method('getDisplayRecentTransactionsLimit')
-            ->willReturn(5);
 
         $this->outputManager->expects($this->once())
             ->method('settings')
@@ -186,7 +182,6 @@ class CliServiceTest extends TestCase
                     && $settings['p2p_expiration_seconds'] === 300
                     && $settings['max_output_lines'] === 50
                     && $settings['default_transport_mode'] === 'http'
-                    && $settings['auto_refresh_enabled'] === true
                     && $settings['auto_backup_enabled'] === false
                     // New settings assertions
                     && $settings['contact_status_enabled'] === true
@@ -213,7 +208,6 @@ class CliServiceTest extends TestCase
                     && $settings['http_transport_timeout_seconds'] === 15
                     && $settings['tor_transport_timeout_seconds'] === 30
                     && $settings['display_date_format'] === 'Y-m-d H:i:s.u'
-                    && $settings['display_recent_transactions_limit'] === 5
                     && array_key_exists('display_decimals', $settings)
                     && array_key_exists('auto_reject_unknown_currency', $settings);
             }));
@@ -247,8 +241,6 @@ class CliServiceTest extends TestCase
             ->willReturn(50);
         $this->userContext->method('getDefaultTransportMode')
             ->willReturn('http');
-        $this->userContext->method('getAutoRefreshEnabled')
-            ->willReturn(true);
         $this->userContext->method('getAutoBackupEnabled')
             ->willReturn(false);
         // New settings getters
@@ -308,8 +300,6 @@ class CliServiceTest extends TestCase
             ->willReturn('Y-m-d H:i:s.u');
         $this->userContext->method('getDisplayCurrencyDecimals')
             ->willReturn(2);
-        $this->userContext->method('getDisplayRecentTransactionsLimit')
-            ->willReturn(5);
 
         // Should not call settings() in text mode
         $this->outputManager->expects($this->never())
@@ -1217,28 +1207,6 @@ class CliServiceTest extends TestCase
             );
 
         @$this->service->changeSettings(['eiou', 'changesettings', 'apiCorsAllowedOrigins', 'https://example.com'], $this->outputManager);
-    }
-
-    /**
-     * Test changeSettings accepts valid recent transactions limit
-     */
-    public function testChangeSettingsAcceptsRecentTransactionsLimit(): void
-    {
-        $this->outputManager->method('isJsonMode')
-            ->willReturn(true);
-
-        $this->outputManager->expects($this->once())
-            ->method('success')
-            ->with(
-                'Setting updated successfully.',
-                $this->callback(function ($data) {
-                    return $data['setting'] === 'displayRecentTransactionsLimit'
-                        && $data['value'] === 10;
-                }),
-                $this->anything()
-            );
-
-        @$this->service->changeSettings(['eiou', 'changesettings', 'displayRecentTransactionsLimit', '10'], $this->outputManager);
     }
 
     /**

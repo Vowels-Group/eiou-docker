@@ -115,6 +115,29 @@ function safeStorageRemove(key) {
     }
 }
 
+// ============================================================================
+// Auth page: clear wallet state from localStorage
+//
+// When the user lands on the unauthenticated login page (body[data-page="auth"])
+// we wipe any wallet-state keys left behind by a previous session, so stale
+// "Background Processing" toasts and reopen-contact hints don't leak across
+// the session boundary. Safe no-op on the wallet page.
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    if (!document.body || document.body.getAttribute('data-page') !== 'auth') return;
+    var authPageKeys = [
+        'eiou_pending_operation',
+        'eiou_timeout_message',
+        'eiou_reopen_contact_id',
+        'eiou_reopen_contact_tab'
+    ];
+    try {
+        for (var i = 0; i < authPageKeys.length; i++) {
+            localStorage.removeItem(authPageKeys[i]);
+        }
+    } catch (e) {}
+});
+
 /**
  * Escapes HTML special characters to prevent XSS attacks.
  *
@@ -211,6 +234,11 @@ function switchTab(tabName, scrollToId) {
 
     // Persist last tab
     safeStorageSet('eiou_active_tab', tabName);
+
+    // Recompute truncation on the contacts table once it's visible
+    if (tabName === 'contacts' && typeof markTruncatedContactNumberCells === 'function') {
+        markTruncatedContactNumberCells();
+    }
 
     // Scroll to specific element within the tab, or scroll to top
     if (scrollToId) {
@@ -1758,64 +1786,6 @@ function showManualCopyModal(text, successMessage) {
 // ============================================================================
 
 /**
- * Updates the visibility of the left/right contacts scroll buttons
- * based on the current scroll position of the contacts grid.
- * Hides the left button when scrolled to the start and the right
- * button when scrolled to the end.
- */
-function updateContactsScrollButtons() {
-    var grid = document.getElementById('contacts-grid');
-    if (!grid) return;
-    var leftBtn = document.getElementById('contacts-scroll-left');
-    var rightBtn = document.getElementById('contacts-scroll-right');
-    if (leftBtn) {
-        if (grid.scrollLeft <= 0) {
-            leftBtn.className = leftBtn.className.replace(' hidden', '') + ' hidden';
-        } else {
-            leftBtn.className = leftBtn.className.replace(' hidden', '');
-        }
-    }
-    if (rightBtn) {
-        // 1px tolerance for rounding
-        var atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 1;
-        if (atEnd) {
-            rightBtn.className = rightBtn.className.replace(' hidden', '') + ' hidden';
-        } else {
-            rightBtn.className = rightBtn.className.replace(' hidden', '');
-        }
-    }
-}
-
-/**
- * Scrolls the contacts grid left or right by one card width.
- * @param {number} direction - -1 for left, 1 for right
- */
-function scrollContacts(direction) {
-    var grid = document.getElementById('contacts-grid');
-    if (!grid) return;
-    // Card width (250px) + gap (16px)
-    var scrollAmount = 266 * direction;
-    grid.scrollLeft = grid.scrollLeft + scrollAmount;
-    // Delay update to let scroll settle
-    setTimeout(updateContactsScrollButtons, 50);
-}
-
-// Update scroll buttons on page load and when the grid is scrolled
-(function() {
-    var initScrollButtons = function() {
-        var grid = document.getElementById('contacts-grid');
-        if (!grid) return;
-        grid.addEventListener('scroll', updateContactsScrollButtons);
-        updateContactsScrollButtons();
-    };
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initScrollButtons);
-    } else {
-        initScrollButtons();
-    }
-})();
-
-/**
  * Updates the visibility of the quick actions scroll buttons
  * based on the current scroll position.
  */
@@ -1880,37 +1850,32 @@ var currentContactPubkeyHash = null;
 var contactTransactionData = [];
 var currentContactCurrencies = [];
 var currentContactBalances = {};
-var contactsShowAll = false;
-var CONTACTS_DEFAULT_LIMIT = 16;
 
 /**
- * Filters the contact list based on a search term entered by the user.
- *
- * Performs case-insensitive substring matching against contact names and addresses.
- * When searching, all matching contacts are displayed regardless of the pagination limit.
- * When the search is cleared, the display respects the current show all/limited state.
- *
- * The function updates:
- * - Contact card visibility (display: '' or display: 'none')
- * - Search status indicator showing match count
- * - Show more button visibility (hidden during active search)
- *
- * Uses Tor Browser compatible code (var declarations, indexOf instead of includes).
+ * Filters the contact list based on search text, status / chain / online
+ * dropdowns. Case-insensitive substring match against name and address.
+ * Tor-Browser-friendly (var + indexOf).
  *
  * @returns {void}
- * @example
- * // Called from search input oninput event
- * <input type="text" id="contact-search-input" oninput="filterContacts()">
  */
 function filterContacts() {
     var searchInput = document.getElementById('contact-search-input');
     var searchStatus = document.getElementById('contact-search-status');
     var searchCount = document.getElementById('contact-search-count');
-    var showMoreBtn = document.getElementById('contacts-show-more');
 
     if (!searchInput) return;
 
     var searchTerm = searchInput.value.toLowerCase().trim();
+
+    var statusEl = document.getElementById('contact-filter-status');
+    var chainEl = document.getElementById('contact-filter-chain');
+    var onlineEl = document.getElementById('contact-filter-online');
+    var statusFilter = statusEl ? statusEl.value : '';
+    var chainFilter = chainEl ? chainEl.value : '';
+    var onlineFilter = onlineEl ? onlineEl.value : '';
+
+    var hasActiveFilter = (searchTerm !== '') || (statusFilter !== '') || (chainFilter !== '') || (onlineFilter !== '');
+
     var contactCards = document.querySelectorAll('.contact-card');
     var visibleCount = 0;
 
@@ -1918,115 +1883,342 @@ function filterContacts() {
         var card = contactCards[i];
         var contactName = card.getAttribute('data-contact-name') || '';
         var contactAddress = card.getAttribute('data-contact-address') || '';
-        var matchesSearch = contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
+        var rowStatus = card.getAttribute('data-status') || '';
+        var rowChain = card.getAttribute('data-chain-state') || '';
+        var rowOnline = card.getAttribute('data-online') || '';
 
-        if (searchTerm === '' || matchesSearch) {
-            // Show card if matches search (respecting limit when not searching)
-            if (searchTerm === '') {
-                // When not searching, respect the show all / limited state
-                if (contactsShowAll || visibleCount < CONTACTS_DEFAULT_LIMIT) {
-                    card.style.display = '';
-                    visibleCount++;
-                } else {
-                    card.style.display = 'none';
-                }
-            } else {
-                // When searching, show all matches
-                card.style.display = '';
-                visibleCount++;
-            }
+        // Match each filter dimension; an empty filter passes everything
+        var matchesSearch = (searchTerm === '') || contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
+        var matchesStatus = (statusFilter === '') || rowStatus === statusFilter;
+        var matchesChain;
+        if (chainFilter === '') {
+            matchesChain = true;
+        } else if (chainFilter === 'issues') {
+            // Anything that needs attention: incoming proposal, awaiting response, rejected, or chain warning
+            matchesChain = (rowChain === 'action') || (rowChain === 'waiting') || (rowChain === 'rejected') || (rowChain === 'warning');
+        } else if (chainFilter === 'valid') {
+            matchesChain = rowChain === 'valid';
+        } else {
+            matchesChain = rowChain === chainFilter;
+        }
+        var matchesOnline;
+        if (onlineFilter === '') {
+            matchesOnline = true;
+        } else if (onlineFilter === 'online') {
+            // Lump partial in with online — both mean "at least one address reachable"
+            matchesOnline = (rowOnline === 'online') || (rowOnline === 'partial');
+        } else {
+            matchesOnline = rowOnline === onlineFilter;
+        }
+
+        var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
+
+        if (matches) {
+            card.style.display = '';
+            visibleCount++;
         } else {
             card.style.display = 'none';
         }
     }
 
-    // Update search status
+    // Show the "X contacts found" status whenever any filter is active
     if (searchStatus && searchCount) {
-        if (searchTerm !== '') {
+        if (hasActiveFilter) {
             searchStatus.style.display = 'block';
             searchCount.textContent = visibleCount;
         } else {
             searchStatus.style.display = 'none';
         }
     }
-
-    // Hide show more button when searching
-    if (showMoreBtn) {
-        showMoreBtn.style.display = searchTerm !== '' ? 'none' : '';
-    }
-
-    // Update scroll button visibility after filtering
-    setTimeout(updateContactsScrollButtons, 50);
 }
 
 /**
- * Toggles between showing all contacts and showing only the first 16.
- *
- * When collapsed, only the first 16 contacts (CONTACTS_DEFAULT_LIMIT) are visible.
- * When expanded, all contacts are shown. Updates the button text to reflect
- * the current state. Uses Tor Browser compatible code (var declarations, for loops).
- *
- * @returns {void}
- * @example
- * // Called from "Show All" button onclick
- * <button id="show-more-btn" onclick="toggleShowAllContacts()">Show All</button>
+ * Contact sort state — held in module scope so repeated header clicks
+ * cycle through asc → desc → clear → asc on the same column.
+ * `originalOrder` is captured the first time a sort runs so we can restore
+ * the default alphabetical layout when the user clears the sort.
  */
-function toggleShowAllContacts() {
-    contactsShowAll = !contactsShowAll;
+var contactsSortState = { column: null, direction: null, originalOrder: null };
 
-    var showMoreBtn = document.getElementById('show-more-btn');
-    var hiddenCount = document.getElementById('hidden-contacts-count');
-    var contactCards = document.querySelectorAll('.contact-card');
-    var totalContacts = contactCards.length;
+/**
+ * Sort the contacts table by a numeric column. Click cycle on the same
+ * column: asc → desc → clear (back to default order).
+ *
+ * @param {string} column - 'balance', 'your-credit', or 'their-credit'
+ */
+function sortContacts(column) {
+    var tbody = document.getElementById('contacts-grid');
+    if (!tbody) return;
 
-    if (contactsShowAll) {
-        // Show all contacts
-        for (var i = 0; i < contactCards.length; i++) {
-            contactCards[i].style.display = '';
+    // Snapshot the original DOM order on first sort so we can restore it later
+    if (!contactsSortState.originalOrder) {
+        contactsSortState.originalOrder = [];
+        var initial = tbody.querySelectorAll('.contact-card');
+        for (var k = 0; k < initial.length; k++) {
+            contactsSortState.originalOrder.push(initial[k]);
         }
-        if (showMoreBtn) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Show Less';
-        }
+    }
+
+    // Determine new direction based on current state
+    var newDirection;
+    if (contactsSortState.column !== column) {
+        newDirection = 'asc';
+    } else if (contactsSortState.direction === 'asc') {
+        newDirection = 'desc';
+    } else if (contactsSortState.direction === 'desc') {
+        newDirection = null; // clear → restore default
     } else {
-        // Show only first 16 contacts
-        for (var j = 0; j < contactCards.length; j++) {
-            if (j < CONTACTS_DEFAULT_LIMIT) {
-                contactCards[j].style.display = '';
+        newDirection = 'asc';
+    }
+
+    if (!newDirection) {
+        // Restore default alphabetical order
+        for (var i = 0; i < contactsSortState.originalOrder.length; i++) {
+            tbody.appendChild(contactsSortState.originalOrder[i]);
+        }
+        contactsSortState.column = null;
+        contactsSortState.direction = null;
+    } else {
+        var attr = 'data-' + column;
+        var rows = [];
+        var current = tbody.querySelectorAll('.contact-card');
+        for (var j = 0; j < current.length; j++) rows.push(current[j]);
+
+        rows.sort(function (a, b) {
+            var av = parseFloat(a.getAttribute(attr));
+            var bv = parseFloat(b.getAttribute(attr));
+            // Missing / NaN values always sort to the bottom regardless of direction
+            var aMissing = isNaN(av);
+            var bMissing = isNaN(bv);
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+            return newDirection === 'asc' ? av - bv : bv - av;
+        });
+
+        for (var m = 0; m < rows.length; m++) tbody.appendChild(rows[m]);
+        contactsSortState.column = column;
+        contactsSortState.direction = newDirection;
+    }
+
+    updateSortIndicators();
+}
+
+/**
+ * Update the visual state of the sort arrow icons in the contacts table
+ * header to reflect the current contactsSortState.
+ */
+function updateSortIndicators() {
+    var headers = document.querySelectorAll('.contacts-table thead th.sortable');
+    for (var i = 0; i < headers.length; i++) {
+        var th = headers[i];
+        var col = th.getAttribute('data-sort-column');
+        var icon = th.querySelector('.sort-indicator');
+        if (!icon) continue;
+
+        // Reset to base classes
+        icon.className = 'fas sort-indicator';
+        th.classList.remove('sort-asc', 'sort-desc');
+
+        if (col === contactsSortState.column) {
+            if (contactsSortState.direction === 'asc') {
+                icon.classList.add('fa-sort-up');
+                th.classList.add('sort-asc');
+            } else if (contactsSortState.direction === 'desc') {
+                icon.classList.add('fa-sort-down');
+                th.classList.add('sort-desc');
             } else {
-                contactCards[j].style.display = 'none';
+                icon.classList.add('fa-sort');
+            }
+        } else {
+            icon.classList.add('fa-sort');
+        }
+    }
+}
+
+/**
+ * Mark contacts-table number cells whose content overflows the column.
+ * Truncated cells get a dotted underline and a click handler that opens the
+ * existing info modal showing the full value — a touch-friendly alternative
+ * to native hover tooltips. Non-truncated cells stay actionless so the click
+ * bubbles up to the row's openContactModal handler.
+ */
+function markTruncatedContactNumberCells() {
+    // Scope to the Your Contacts table only — the tx-table reuses the same
+    // contacts-table chrome but its rows have their own click-to-open-modal
+    // handler that we don't want stolen by an injected showInfoModal action.
+    var cells = document.querySelectorAll('.contacts-table:not(.tx-table) .col-number');
+    for (var i = 0; i < cells.length; i++) {
+        var cell = cells[i];
+        // Skip cells in hidden ancestors (clientWidth is 0)
+        if (cell.clientWidth === 0) continue;
+        if (cell.scrollWidth > cell.clientWidth + 1) {
+            cell.classList.add('truncated');
+            cell.setAttribute('data-action', 'showInfoModal');
+            cell.setAttribute('title', cell.textContent.replace(/\s+/g, ' ').trim());
+        } else if (cell.classList.contains('truncated')) {
+            cell.classList.remove('truncated');
+            cell.removeAttribute('data-action');
+            cell.removeAttribute('title');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    markTruncatedContactNumberCells();
+    var resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(markTruncatedContactNumberCells, 150);
+    });
+});
+
+/**
+ * Filter the main transaction list by name, address, or description.
+ * Client-side filter — works on the already-rendered transaction items.
+ */
+function filterTransactions() {
+    var searchInput = document.getElementById('tx-search-input');
+    var searchStatus = document.getElementById('tx-search-status');
+    var searchCount = document.getElementById('tx-search-count');
+    var dirSelect = document.getElementById('tx-filter-direction');
+    var typeSelect = document.getElementById('tx-filter-type');
+    var statusSelect = document.getElementById('tx-filter-status');
+
+    if (!searchInput) return;
+
+    var term = searchInput.value.toLowerCase().trim();
+    var dirFilter = dirSelect ? dirSelect.value : '';
+    var typeFilter = typeSelect ? typeSelect.value : '';
+    var statusFilter = statusSelect ? statusSelect.value : '';
+    var items = document.querySelectorAll('#transaction-list .tx-row');
+    var visible = 0;
+    var anyFilterActive = (term !== '' || dirFilter !== '' || typeFilter !== '' || statusFilter !== '');
+
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var matches = true;
+
+        if (term !== '') {
+            var name = item.getAttribute('data-tx-name') || '';
+            var desc = item.getAttribute('data-tx-desc') || '';
+            var addr = item.getAttribute('data-tx-address') || '';
+            if (name.indexOf(term) === -1 && desc.indexOf(term) === -1 && addr.indexOf(term) === -1) {
+                matches = false;
             }
         }
-        if (showMoreBtn && hiddenCount) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
+        if (matches && dirFilter !== '' && (item.getAttribute('data-direction') || '') !== dirFilter) {
+            matches = false;
+        }
+        if (matches && typeFilter !== '' && (item.getAttribute('data-tx-type') || '') !== typeFilter) {
+            matches = false;
+        }
+        if (matches && statusFilter !== '' && (item.getAttribute('data-status') || '') !== statusFilter) {
+            matches = false;
+        }
+
+        if (matches) {
+            item.style.display = '';
+            visible++;
+        } else {
+            item.style.display = 'none';
         }
     }
 
-    // Update scroll button visibility after toggling
-    setTimeout(updateContactsScrollButtons, 50);
-}
-
-/**
- * Initializes the contact list display with pagination limit.
- *
- * Hides all contact cards beyond the first 16 (CONTACTS_DEFAULT_LIMIT) on page load.
- * This improves initial page performance for users with many contacts and provides
- * a cleaner UI. Users can click "Show All" to see the remaining contacts.
- *
- * @returns {void}
- * @example
- * // Called automatically on DOMContentLoaded
- * window.addEventListener('DOMContentLoaded', function() {
- *     initContactsDisplay();
- * });
- */
-function initContactsDisplay() {
-    var contactCards = document.querySelectorAll('.contact-card');
-    if (contactCards.length > CONTACTS_DEFAULT_LIMIT) {
-        for (var i = CONTACTS_DEFAULT_LIMIT; i < contactCards.length; i++) {
-            contactCards[i].style.display = 'none';
+    if (searchStatus && searchCount) {
+        if (anyFilterActive) {
+            searchStatus.style.display = 'block';
+            searchCount.textContent = visible;
+        } else {
+            searchStatus.style.display = 'none';
         }
     }
 }
+
+// Independent sort state for the Recent Transactions table.
+var transactionsSortState = { column: null, direction: null, originalOrder: null };
+
+function sortTransactions(column) {
+    var tbody = document.getElementById('transaction-list');
+    if (!tbody) return;
+
+    if (!transactionsSortState.originalOrder) {
+        transactionsSortState.originalOrder = [];
+        var initial = tbody.querySelectorAll('.tx-row');
+        for (var k = 0; k < initial.length; k++) {
+            transactionsSortState.originalOrder.push(initial[k]);
+        }
+    }
+
+    var newDirection;
+    if (transactionsSortState.column !== column) {
+        newDirection = 'asc';
+    } else if (transactionsSortState.direction === 'asc') {
+        newDirection = 'desc';
+    } else if (transactionsSortState.direction === 'desc') {
+        newDirection = null;
+    } else {
+        newDirection = 'asc';
+    }
+
+    if (!newDirection) {
+        for (var i = 0; i < transactionsSortState.originalOrder.length; i++) {
+            tbody.appendChild(transactionsSortState.originalOrder[i]);
+        }
+        transactionsSortState.column = null;
+        transactionsSortState.direction = null;
+    } else {
+        var attr = 'data-' + column;
+        var rows = [];
+        var current = tbody.querySelectorAll('.tx-row');
+        for (var j = 0; j < current.length; j++) rows.push(current[j]);
+
+        rows.sort(function (a, b) {
+            var av = parseFloat(a.getAttribute(attr));
+            var bv = parseFloat(b.getAttribute(attr));
+            var aMissing = isNaN(av);
+            var bMissing = isNaN(bv);
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+            return newDirection === 'asc' ? av - bv : bv - av;
+        });
+
+        for (var m = 0; m < rows.length; m++) tbody.appendChild(rows[m]);
+        transactionsSortState.column = column;
+        transactionsSortState.direction = newDirection;
+    }
+
+    updateTransactionsSortIndicators();
+}
+
+function updateTransactionsSortIndicators() {
+    var headers = document.querySelectorAll('.tx-table thead th.sortable');
+    for (var i = 0; i < headers.length; i++) {
+        var th = headers[i];
+        var col = th.getAttribute('data-sort-column');
+        var icon = th.querySelector('.sort-indicator');
+        if (!icon) continue;
+
+        icon.className = 'fas sort-indicator';
+        th.classList.remove('sort-asc', 'sort-desc');
+
+        if (col === transactionsSortState.column) {
+            if (transactionsSortState.direction === 'asc') {
+                icon.classList.add('fa-sort-up');
+                th.classList.add('sort-asc');
+            } else if (transactionsSortState.direction === 'desc') {
+                icon.classList.add('fa-sort-down');
+                th.classList.add('sort-desc');
+            } else {
+                icon.classList.add('fa-sort');
+            }
+        } else {
+            icon.classList.add('fa-sort');
+        }
+    }
+}
+
 
 /**
  * Shows a small info modal with the text from an info icon's title attribute.
@@ -3038,11 +3230,16 @@ function showContactTxDetail(index) {
     var status = tx.status || 'completed';
     var statusBadge = '<span class="tx-status-badge tx-status-' + escapeHtml(status) + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
 
-    // Build transaction type badge (both yellow for consistency)
+    // Build transaction type badge
     var txType = tx.tx_type || 'standard';
-    var txTypeBadge = txType === 'p2p'
-        ? '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>'
-        : '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-exchange-alt"></i> Direct</span>';
+    var txTypeBadge;
+    if (txType === 'contact') {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-contact"><i class="fas fa-user-plus"></i> Contact Request</span>';
+    } else if (txType === 'p2p') {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>';
+    } else {
+        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-direct"><i class="fas fa-exchange-alt"></i> Direct</span>';
+    }
 
     // Build role badge (Sent/Received/Relay)
     var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
@@ -3178,9 +3375,6 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Check if we need to reopen contact modal after refresh
     checkReopenContactModal();
-
-    // Initialize contacts display limit (show only first 16 by default)
-    initContactsDisplay();
 });
 
 // Chain Drop Resolution state
@@ -3871,7 +4065,6 @@ function fetchDebugReport(callback, reportMode) {
  */
 function downloadFullDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
-        // Add '-full' suffix to filename
         var fullFilename = filename.replace('.json', '-full.json');
         downloadDebugFile(jsonData, fullFilename);
         showToast('Success', 'Full debug report downloaded: ' + fullFilename, 'success');
@@ -3892,7 +4085,6 @@ function downloadFullDebugReport() {
  */
 function downloadLimitedDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
-        // Add '-limited' suffix to filename
         var limitedFilename = filename.replace('.json', '-limited.json');
         downloadDebugFile(jsonData, limitedFilename);
         showToast('Success', 'Limited debug report downloaded: ' + limitedFilename, 'success');
@@ -3900,21 +4092,59 @@ function downloadLimitedDebugReport() {
 }
 
 /**
- * Legacy function that redirects to downloadFullDebugReport.
- * @deprecated Use downloadFullDebugReport() instead
- * @returns {void}
+ * Submit a debug report directly to the support team via Tor.
+ *
+ * Generates a full debug report on the server and sends it to the
+ * support endpoint (debug-reports.eiou.org) through the Tor proxy.
+ * No manual download or email required.
+ *
+ * @param {string} reportMode - 'full' or 'limited'
  */
-function emailDebugReport() {
-    downloadFullDebugReport();
-}
+function submitDebugReportToSupport(reportMode) {
+    reportMode = reportMode || 'full';
+    var isFullReport = (reportMode === 'full');
 
-/**
- * Legacy function that redirects to downloadFullDebugReport.
- * @deprecated Use downloadFullDebugReport() instead
- * @returns {void}
- */
-function sendDebugReport() {
-    downloadFullDebugReport();
+    var descriptionEl = document.getElementById('debugDescription');
+    var csrfTokenEl = document.getElementById('debugCsrfToken');
+    var description = descriptionEl ? descriptionEl.value : '';
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    showToast('Sending Report', 'Generating and sending debug report via Tor. This may take a moment...', 'info');
+
+    var formData = new FormData();
+    formData.append('action', 'submitDebugReport');
+    formData.append('csrf_token', csrfToken);
+    formData.append('description', description);
+    formData.append('report_mode', reportMode);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = isFullReport ? 300000 : 120000; // 5 min full, 2 min limited
+    xhr.ontimeout = function() {
+        showToast('Error', 'Report submission timed out. The report may be too large for Tor. Try downloading instead.', 'error');
+    };
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var result = JSON.parse(xhr.responseText);
+                    if (result.success) {
+                        showToast('Report Sent', 'Debug report submitted to support successfully.', 'success');
+                    } else {
+                        showToast('Error', 'Failed to send report: ' + (result.error || 'Unknown error'), 'error');
+                    }
+                } catch (e) {
+                    showToast('Error', 'Failed to parse response: ' + e.message, 'error');
+                }
+            } else {
+                showToast('Error', 'Failed to submit report. Status: ' + xhr.status, 'error');
+            }
+        }
+    };
+    xhr.onerror = function() {
+        showToast('Error', 'Network error while submitting report.', 'error');
+    };
+    xhr.send(formData);
 }
 
 /**
@@ -4051,21 +4281,34 @@ function toggleAddressQr(el) {
     }
 
     // Get address text
-    var text = el.getAttribute('data-qr-text');
-    if (!text) {
+    var address = el.getAttribute('data-qr-text');
+    if (!address) {
         var sourceId = el.getAttribute('data-qr-source');
         if (sourceId) {
             var sourceEl = document.getElementById(sourceId);
-            text = sourceEl ? sourceEl.textContent.trim() : '';
+            address = sourceEl ? sourceEl.textContent.trim() : '';
         }
     }
-    if (!text) return;
+    if (!address) return;
 
-    var svg = generateQrSvg(text, 200);
+    // Build QR payload: typed JSON envelope for add-contact
+    var displayName = el.getAttribute('data-qr-name') || '';
+    var qrPayload = { type: 'contact', address: address };
+    if (displayName) {
+        qrPayload.name = displayName;
+    }
+    var qrText = JSON.stringify(qrPayload);
+
+    var svg = generateQrSvg(qrText, 200);
     if (!svg) {
         container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
     } else {
-        container.innerHTML = svg;
+        container.innerHTML = svg +
+            '<div style="text-align:center;margin-top:0.5rem">' +
+                '<button class="btn btn-sm btn-outline" data-action="scanContactQr" title="Scan a contact\'s QR code to add them">' +
+                    '<i class="fas fa-camera"></i> Scan Contact QR' +
+                '</button>' +
+            '</div>';
     }
     container.style.display = 'block';
 }
@@ -4095,7 +4338,79 @@ function isCanvasBlocked() {
     }
 }
 
-function openQrScanner(targetInputId) {
+/**
+ * Parse eIOU QR code data. Returns a typed object so callers can
+ * distinguish between contact, payment request, or unknown payloads.
+ *
+ * Supported types:
+ *   "contact"  — { type, address, name? }
+ *   "payment"  — { type, address, amount?, currency?, description? }  (future)
+ *
+ * Legacy / plain-text QR codes are treated as type "contact" with
+ * address only (backward compatible).
+ *
+ * @param {string} text - Raw QR code text
+ * @returns {{ type: string, address: string, [key: string]: * }}
+ */
+function parseQrData(text) {
+    try {
+        var data = JSON.parse(text);
+        if (data && typeof data.type === 'string' && typeof data.address === 'string') {
+            return data;
+        }
+        // Legacy JSON without type — assume contact
+        if (data && typeof data.address === 'string') {
+            data.type = 'contact';
+            return data;
+        }
+    } catch (e) { /* not JSON — treat as plain address */ }
+    return { type: 'contact', address: text };
+}
+
+// QR scanner — uses html5-qrcode (vendored at vendor/html5-qrcode.min.js).
+//
+// Tor Browser is handled by the isCanvasBlocked() early-exit below: it
+// blocks both camera and canvas APIs for fingerprinting protection, so any
+// in-browser QR library will fail. We tell the user to copy/paste instead.
+//
+// iOS Safari notes for future maintainers — if iOS users still report
+// "QR scanner doesn't work" after the layered fixes below:
+//   1. The relaxed `{ facingMode: { ideal: 'environment' } }` constraint
+//      and the getCameras() fallback (Layer 2 below) should handle most
+//      iOS quirks within html5-qrcode. Check console.warn output from
+//      showCameraError() to find the exact err.name reported by the user.
+//   2. html5-qrcode v2.3.8 is the last release (April 2023) — the library
+//      is essentially unmaintained. There is no upgrade path within it.
+//      That said, Snyk reports zero known vulnerabilities for 2.3.8 as of
+//      2026-04, and the library is vendored (vendor/html5-qrcode.min.js)
+//      and loaded under a nonce-based CSP, so supply-chain surface is nil
+//      until someone re-vendors. "Unmaintained" is a latent concern, not
+//      an active security risk.
+//   3. Do NOT swap to @zxing/browser as a drop-in "maintained" replacement
+//      — that premise is wrong as of 2026-04. @zxing/browser is still at
+//      0.1.5, last published ~2 years ago, and is effectively just as
+//      unmaintained as html5-qrcode. It also ships a lower-level API with
+//      no built-in modal/viewfinder, so switching would mean rewriting the
+//      overlay in openQrScanner() AND adding a bundle step (ESM-only
+//      distribution), for zero proven security upside. Only revisit if a
+//      maintained fork emerges.
+//   4. If (1)+(2) prove insufficient, the right next step is the native
+//      BarcodeDetector API with html5-qrcode as a fallback. Supported in
+//      iOS Safari 17+, Chrome, Edge. NOT supported in Firefox. Pattern:
+//      feature-detect first, use BarcodeDetector if available, fall back
+//      to html5-qrcode for Firefox and older iOS. Roughly 50–80 lines
+//      additional, no new dependency. Uses the most modern API exactly
+//      where iOS reports matter, smallest blast radius.
+//      Reminder: none of these options help Tor Browser, which blocks
+//      camera and canvas APIs outright — the isCanvasBlocked() guard
+//      above handles that case regardless of which library is used.
+//      NOT the same as the previous "PHP ZXing" attempt removed in
+//      commit 3e804e11 (that was a server-side wrapper around the Java
+//      ZXing CLI, removed because Tor uploads were too slow) — in-browser
+//      decoding is a different approach entirely.
+function openQrScanner(targetInputId, opts) {
+    opts = opts || {};
+
     // Tor Browser blocks camera API and canvas — QR scanning cannot work
     if (isCanvasBlocked()) {
         showToast('QR Scanner Unavailable',
@@ -4153,28 +4468,123 @@ function openQrScanner(targetInputId) {
     });
     document.addEventListener('keydown', escHandler);
 
-    scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        function onScanSuccess(decodedText) {
-            var input = document.getElementById(targetInputId);
-            if (input) {
-                input.value = decodedText;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+    function onScanSuccess(decodedText) {
+        var qrData = parseQrData(decodedText);
+
+        var input = document.getElementById(targetInputId);
+        if (input) {
+            input.value = qrData.address;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        // If name field target provided and name is available, fill it
+        var nameInputId = opts.nameInputId;
+        if (nameInputId && qrData.name) {
+            var nameInput = document.getElementById(nameInputId);
+            if (nameInput) {
+                nameInput.value = qrData.name;
+                nameInput.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            showToast('QR Scanned', 'Address: ' + (decodedText.length > 30 ? decodedText.substring(0, 30) + '...' : decodedText), 'success');
-            closeScanner();
-        },
-        function() { /* ignore — fires continuously when no QR in frame */ }
+        }
+
+        var displayAddr = qrData.address.length > 30 ? qrData.address.substring(0, 30) + '...' : qrData.address;
+        var toastMsg = 'Address: ' + displayAddr;
+        if (qrData.name) {
+            toastMsg = qrData.name + ' — ' + displayAddr;
+        }
+        showToast('QR Scanned', toastMsg, 'success');
+        closeScanner();
+
+        // If callback provided, call it after scan
+        if (typeof opts.onScan === 'function') {
+            opts.onScan(qrData);
+        }
+    }
+
+    var scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+    function noopFrameError() { /* ignore — fires continuously when no QR in frame */ }
+
+    // Use { ideal: 'environment' } instead of literal 'environment'. iOS Safari
+    // (and some Android browsers) reject the strict form on devices where the
+    // camera enumeration doesn't tag a camera as 'environment', and fail with
+    // OverconstrainedError instead of just picking another camera.
+    scanner.start(
+        { facingMode: { ideal: 'environment' } },
+        scanConfig,
+        onScanSuccess,
+        noopFrameError
     ).then(function() {
         scanning = true;
-    }).catch(function() {
-        var readerEl = document.getElementById('qr-scanner-reader');
-        if (readerEl) {
-            readerEl.innerHTML = '<p style="color:#dc3545;text-align:center;padding:2rem">' +
-                '<i class="fas fa-exclamation-triangle"></i> Camera access denied or unavailable.</p>';
+    }).catch(function(err) {
+        // Layer 2: if the constraint failed (no camera matched), enumerate
+        // the device's cameras and start the scanner with an explicit deviceId.
+        // Pick the LAST camera in the list — on phones the rear camera is
+        // typically last; on desktops there's only one anyway.
+        var name = err && err.name;
+        if (name === 'OverconstrainedError' || name === 'NotFoundError') {
+            Html5Qrcode.getCameras().then(function(devices) {
+                if (!devices || !devices.length) {
+                    throw err;
+                }
+                var preferred = devices[devices.length - 1];
+                return scanner.start(preferred.id, scanConfig, onScanSuccess, noopFrameError)
+                    .then(function() { scanning = true; });
+            }).catch(function(secondErr) {
+                showCameraError(secondErr || err);
+            });
+        } else {
+            showCameraError(err);
         }
     });
+
+    function showCameraError(err) {
+        var name = (err && err.name) || 'Unknown';
+        var msg = (err && err.message) || '';
+        var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+        var isiOS = /iPad|iPhone|iPod/.test(ua);
+        var heading = 'Camera unavailable';
+        var detail = '';
+
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+            heading = 'Camera permission denied';
+            if (isiOS) {
+                detail = 'You blocked camera access for this site. Open Settings → Safari → Camera, set this site to "Allow", then reload the page and try again.';
+            } else {
+                detail = 'You blocked camera access for this site. Click the camera icon in your browser address bar to grant access, then reopen the scanner.';
+            }
+        } else if (name === 'NotFoundError') {
+            heading = 'No camera found';
+            detail = 'No camera is available on this device.';
+        } else if (name === 'NotReadableError') {
+            heading = 'Camera in use';
+            detail = 'The camera is being used by another application. Close other apps using the camera and try again.';
+        } else if (name === 'OverconstrainedError') {
+            heading = 'No compatible camera';
+            detail = 'No camera matched the requested settings. Your device may not have a usable rear camera.';
+        } else if (name === 'SecurityError') {
+            heading = 'Insecure connection';
+            detail = 'Camera access requires a secure (HTTPS) connection. Reload the page over HTTPS and try again.';
+        } else {
+            heading = 'Camera error';
+            detail = 'Could not start the camera (' + escapeHtml(name) + ').';
+            if (msg) {
+                detail += ' ' + escapeHtml(msg);
+            }
+        }
+
+        var readerEl = document.getElementById('qr-scanner-reader');
+        if (readerEl) {
+            readerEl.innerHTML = '<div style="color:#dc3545;text-align:center;padding:2rem;font-size:0.9rem;line-height:1.5">' +
+                '<i class="fas fa-exclamation-triangle" style="font-size:1.5rem;display:block;margin-bottom:0.75rem"></i>' +
+                '<strong>' + escapeHtml(heading) + '</strong>' +
+                '<p style="margin:0.75rem 0 0">' + detail + '</p>' +
+                '</div>';
+        }
+
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('QR scanner camera error:', name, msg, err);
+        }
+    }
 }
 
 // ============================================================================
@@ -4268,16 +4678,72 @@ function showDlqToasts() {
  *
  * @param {string} filter
  */
-function setDlqFilter(filter) {
-    // Update active tab
-    var tabs = document.querySelectorAll('.dlq-filter-tab');
-    for (var i = 0; i < tabs.length; i++) {
-        var isActive = tabs[i].getAttribute('data-filter') === filter;
-        if (isActive) {
-            tabs[i].classList.add('active');
-        } else {
-            tabs[i].classList.remove('active');
+/**
+ * Open a detail modal for a DLQ item, showing all fields + action buttons.
+ */
+function openDlqModal(el) {
+    var row = el.closest('.dlq-row');
+    if (!row) return;
+
+    var dlqId = row.getAttribute('data-dlq-id');
+    var type = row.getAttribute('data-dlq-type') || 'Unknown';
+    var typeClass = row.getAttribute('data-dlq-type-class') || '';
+    var typeIcon = row.getAttribute('data-dlq-type-icon') || 'fa-envelope';
+    var recipient = row.getAttribute('data-dlq-recipient') || '—';
+    var reason = row.getAttribute('data-dlq-reason') || '—';
+    var date = row.getAttribute('data-dlq-date') || '—';
+    var status = row.getAttribute('data-status') || 'pending';
+    var canRetry = row.getAttribute('data-dlq-can-retry') === '1';
+    var canAct = row.getAttribute('data-dlq-can-act') === '1';
+
+    var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    var typeBadge = '<span class="tx-type-badge ' + escapeHtml(typeClass) + '"><i class="fas ' + escapeHtml(typeIcon) + '"></i> ' + escapeHtml(type) + '</span>';
+
+    var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + typeBadge + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Recipient</div><div class="tx-detail-value tx-modal-mono">' + escapeHtml(recipient) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Failure Reason</div><div class="tx-detail-value">' + escapeHtml(reason) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Added</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value"><span class="dlq-status-badge dlq-badge-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div></div>';
+
+    if (canAct) {
+        html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
+        if (canRetry) {
+            html += '<button class="btn btn-success btn-sm" data-action="retryDlqItem" data-dlq-id="' + dlqId + '" data-stop-propagation="true"><i class="fas fa-redo"></i> Retry</button>';
         }
+        html += '<button class="btn btn-secondary btn-sm" data-action="abandonDlqItem" data-dlq-id="' + dlqId + '" data-stop-propagation="true"><i class="fas fa-ban"></i> Abandon</button>';
+        html += '</div>';
+    }
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'dlq-detail-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:480px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-inbox" style="color:#6c757d"></i> Failed Message Details</h3>' +
+                '<span class="close" id="dlq-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem">' + html + '</div>' +
+        '</div>';
+
+    function closeDlqModal() {
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) { if (e.key === 'Escape' || e.keyCode === 27) closeDlqModal(); }
+
+    overlay.querySelector('#dlq-modal-close').onclick = closeDlqModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeDlqModal(); });
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+}
+
+function setDlqFilter(filter) {
+    // If called without argument, read from the dropdown
+    if (!filter) {
+        var sel = document.getElementById('dlq-filter-status');
+        filter = sel ? sel.value : 'active';
     }
 
     // Show/hide rows and mark filter state for search
@@ -4349,9 +4815,9 @@ function searchDlq(query) {
 // Initialize DLQ toasts on page load (Tor Browser compatible)
 document.addEventListener('DOMContentLoaded', function() {
     showDlqToasts();
-    // Apply default filter (pending & retrying) on load
-    if (document.querySelector('.dlq-filter-tab')) {
-        setDlqFilter('active');
+    // Apply default filter (show all) on load
+    if (document.getElementById('dlq-filter-status')) {
+        setDlqFilter('all');
     }
 });
 
@@ -4390,10 +4856,11 @@ function retryDlqItem(dlqId, btn) {
         return;
     }
 
-    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
-    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
-    if (retryBtn)  { retryBtn.disabled  = true; retryBtn.innerHTML  = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
-    if (abandonBtn) { abandonBtn.disabled = true; }
+    // Close the detail modal if open
+    var dlqModal = document.getElementById('dlq-detail-modal');
+    if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
+
+    showLoader('Retrying delivery...', 'Attempting to re-send the message to the recipient.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
@@ -4405,34 +4872,32 @@ function retryDlqItem(dlqId, btn) {
     xhr.timeout = 90000; // 90s — Tor connections can be slow
 
     xhr.ontimeout = function() {
+        hideLoader();
         showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
-        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-        if (abandonBtn) { abandonBtn.disabled = false; }
     };
 
     xhr.onerror = function() {
+        hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
-        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-        if (abandonBtn) { abandonBtn.disabled = false; }
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Delivered', 'Message successfully re-sent', 'success');
                 setTimeout(function() { window.location.reload(); }, 1500);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 var errMsg = response.error || 'Retry failed — try again later';
                 showToast('Retry Failed', errMsg, 'error');
-                if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-                if (abandonBtn) { abandonBtn.disabled = false; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-            if (abandonBtn) { abandonBtn.disabled = false; }
         }
     };
 
@@ -4459,10 +4924,11 @@ function abandonDlqItem(dlqId, btn) {
         return;
     }
 
-    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
-    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
-    if (retryBtn)  { retryBtn.disabled  = true; }
-    if (abandonBtn) { abandonBtn.disabled = true; abandonBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+    // Close the detail modal if open
+    var dlqModal = document.getElementById('dlq-detail-modal');
+    if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
+
+    if (btn) { btn.disabled = true; }
 
     var formData = new FormData();
     formData.append('action',     'dlqAbandon');
@@ -4471,18 +4937,14 @@ function abandonDlqItem(dlqId, btn) {
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 30000; // 30s — enough for a simple DB update even over Tor
+    xhr.timeout = 30000;
 
     xhr.ontimeout = function() {
         showToast('Timeout', 'Request timed out — please try again', 'warning');
-        if (retryBtn)  { retryBtn.disabled  = false; }
-        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
     };
 
     xhr.onerror = function() {
         showToast('Error', 'Network error — please try again', 'error');
-        if (retryBtn)  { retryBtn.disabled  = false; }
-        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
     };
 
     xhr.onreadystatechange = function() {
@@ -4491,16 +4953,15 @@ function abandonDlqItem(dlqId, btn) {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Abandoned', 'Message marked as abandoned', 'info');
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 showToast('Error', response.error || 'Failed to abandon item', 'error');
-                if (retryBtn)  { retryBtn.disabled  = false; }
-                if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (retryBtn)  { retryBtn.disabled  = false; }
-            if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
         }
     };
 
@@ -4519,7 +4980,7 @@ function retryAllDlqItems(btn) {
         return;
     }
 
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+    showLoader('Retrying all failed messages...', 'Each message is being re-sent to its recipient.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetryAll');
@@ -4530,30 +4991,40 @@ function retryAllDlqItems(btn) {
     xhr.timeout = 120000; // 2 min — bulk retries can be slow over Tor
 
     xhr.ontimeout = function() {
-        showToast('Timeout', 'Bulk retry timed out — some messages may still be queued', 'warning');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+        hideLoader();
+        showToast('Timeout', 'Bulk retry timed out — some messages may not have been retried', 'warning');
     };
 
     xhr.onerror = function() {
+        hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
-                var count = response.queued || 0;
-                showToast('Retry All', count + ' message' + (count !== 1 ? 's' : '') + ' queued for retry', 'success');
-                setTimeout(function() { window.location.reload(); }, 1500);
+                var delivered = response.delivered || 0;
+                var failed = response.failed || 0;
+                var total = response.total || 0;
+                if (delivered > 0 && failed === 0) {
+                    showToast('All delivered', delivered + ' message' + (delivered !== 1 ? 's' : '') + ' successfully re-sent', 'success');
+                } else if (delivered > 0) {
+                    showToast('Partial success', delivered + ' delivered, ' + failed + ' failed', 'warning');
+                } else {
+                    showToast('All failed', total + ' message' + (total !== 1 ? 's' : '') + ' could not be delivered', 'error');
+                }
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 2000);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 showToast('Error', response.error || 'Bulk retry failed', 'error');
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
         }
     };
 
@@ -4603,7 +5074,7 @@ function abandonAllDlqItems(btn) {
             if (response.success) {
                 var count = response.abandoned || 0;
                 showToast('Abandoned', count + ' message' + (count !== 1 ? 's' : '') + ' abandoned', 'info');
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
             } else {
                 showToast('Error', response.error || 'Bulk abandon failed', 'error');
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
@@ -4725,6 +5196,192 @@ function submitAnalyticsConsent(enable) {
 }
 
 // ============================================================================
+// Transaction history — auto-refresh and P2P approval
+//
+// The data bootstrap (transactionData, hasInProgressTx, autoRefreshEnabled,
+// syncingTransactionCount) is rendered by transactionHistory.html as an inline
+// <script> block with PHP-interpolated values. Everything static lives here.
+// ============================================================================
+
+var AUTO_REFRESH_DELAY = 15000; // 15 seconds
+var autoRefreshInterval = null;
+
+function startAutoRefresh() {
+    // Only start if enabled in settings AND there are in-progress transactions
+    if (!(typeof hasInProgressTx !== 'undefined' && hasInProgressTx)) return;
+    if (!(typeof autoRefreshEnabled !== 'undefined' && autoRefreshEnabled)) return;
+    if (autoRefreshInterval) return;
+
+    var indicator = document.getElementById('tx-auto-refresh-status');
+    if (indicator) indicator.classList.add('active');
+
+    autoRefreshInterval = setInterval(function() {
+        // Skip if manual refresh is already in progress
+        if (window.isRefreshing) { return; }
+
+        // XMLHttpRequest — Tor Browser compatible (no fetch/AbortController)
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', window.location.pathname + '?check_updates=1&_=' + Date.now(), true);
+        xhr.timeout = 30000; // 30s for Tor
+
+        xhr.ontimeout = function() { /* retry next interval */ };
+        xhr.onerror = function() { /* retry next interval */ };
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) { return; }
+            if (window.isRefreshing) { return; }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                window.location.reload();
+            }
+        };
+        xhr.send();
+    }, AUTO_REFRESH_DELAY);
+}
+
+window.stopAutoRefresh = function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        var indicator = document.getElementById('tx-auto-refresh-status');
+        if (indicator) indicator.classList.remove('active');
+    }
+};
+
+// P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
+function approveP2pTransaction(hash, candidateId) {
+    var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
+    if (!confirm(msg)) return;
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { alert('CSRF token not found'); return; }
+    var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    if (candidateId) {
+        body = body + '&candidate_id=' + encodeURIComponent(candidateId);
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) { window.location.reload(); }
+                    else { alert('Error: ' + (data.message || 'Unknown error')); }
+                } catch (e) {
+                    alert('Error parsing response');
+                }
+            } else {
+                alert('Network error');
+            }
+        }
+    };
+    xhr.ontimeout = function() { alert('Request timed out'); };
+    xhr.send(body);
+}
+
+function rejectP2pTransaction(hash) {
+    if (!confirm('Are you sure you want to reject this transaction?')) return;
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { alert('CSRF token not found'); return; }
+    var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) { window.location.reload(); }
+                    else { alert('Error: ' + (data.message || 'Unknown error')); }
+                } catch (e) {
+                    alert('Error parsing response');
+                }
+            } else {
+                alert('Network error');
+            }
+        }
+    };
+    xhr.ontimeout = function() { alert('Request timed out'); };
+    xhr.send(body);
+}
+
+function loadP2pCandidates(hash, container) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
+    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success && data.candidates && data.candidates.length > 0) {
+                        // Update the route count header dynamically (late candidates may arrive)
+                        var countEl = document.getElementById('p2p-count-' + hash);
+                        if (countEl) { countEl.textContent = data.candidates.length + ' route(s) found — choose one:'; }
+                        var html = '';
+                        var currency = 'USD';
+                        // Convert SplitAmount {whole, frac} to float (frac modulus = 10^8)
+                        function saToFloat(v) { return typeof v === 'number' ? v / 100 : (v.whole || 0) + (v.frac || 0) / 100000000; }
+                        var baseFloat = saToFloat(data.base_amount);
+                        for (var i = 0; i < data.candidates.length; i++) {
+                            var c = data.candidates[i];
+                            var totalCost = saToFloat(c.amount);
+                            var routeFee = totalCost - baseFloat;
+                            var addr = c.sender_address;
+                            var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
+                            html = html + '<div class="p2p-candidate-row">';
+                            html = html + '<div class="p2p-candidate-info">';
+                            html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</strong></div>';
+                            html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</div>';
+                            html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
+                            html = html + '</div>';
+                            html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';
+                            html = html + '<i class="fas fa-check"></i> Choose</button>';
+                            html = html + '</div>';
+                        }
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = '<div class="status-msg-muted">No candidates available</div>';
+                    }
+                } catch (e) {
+                    container.innerHTML = '<div class="status-msg-danger">Error loading routes</div>';
+                }
+            } else {
+                container.innerHTML = '<div class="status-msg-danger">Failed to load routes</div>';
+            }
+        }
+    };
+    xhr.ontimeout = function() { container.innerHTML = '<div class="status-msg-danger">Request timed out</div>'; };
+    xhr.send(body);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Start auto-refresh if there are in-progress transactions
+    if (typeof hasInProgressTx !== 'undefined' && hasInProgressTx) {
+        startAutoRefresh();
+        if (typeof showInProgressToasts === 'function') {
+            showInProgressToasts();
+        }
+    }
+
+    // Load candidates for multi-candidate P2P approval rows on page load
+    var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');
+    for (var i = 0; i < candidateContainers.length; i++) {
+        var el = candidateContainers[i];
+        var hash = el.id.replace('p2p-candidates-', '');
+        loadP2pCandidates(hash, el);
+    }
+});
+
+window.addEventListener('beforeunload', window.stopAutoRefresh);
+
+// ============================================================================
 // CSP nonce-compatible event delegation (L-32)
 // Replaces all inline on* handlers with data-action attributes
 // ============================================================================
@@ -4745,7 +5402,18 @@ function submitAnalyticsConsent(enable) {
         'toggleAddressQr': function(el) { toggleAddressQr(el); },
         'openQrScanner': function(el) {
             var target = el.getAttribute('data-scan-target');
-            if (target) openQrScanner(target);
+            var nameTarget = el.getAttribute('data-scan-name-target');
+            if (target) openQrScanner(target, { nameInputId: nameTarget || null });
+        },
+        'scanContactQr': function() {
+            // Open scanner, then navigate to contacts tab and open add contact modal
+            openQrScanner('address', {
+                nameInputId: 'name',
+                onScan: function() {
+                    switchTab('contacts');
+                    openAddContactModal();
+                }
+            });
         },
 
         // Navigation & reload
@@ -4753,6 +5421,18 @@ function submitAnalyticsConsent(enable) {
             var hash = el.getAttribute('data-hash');
             window.location.href = window.location.pathname + '#' + hash;
             window.location.reload();
+        },
+
+        // Contacts table — sort by clicking a numeric column header
+        'sortContacts': function(el) {
+            var col = el.getAttribute('data-sort-column');
+            if (col) sortContacts(col);
+        },
+
+        // Transactions table — sort by clicking a sortable column header
+        'sortTransactions': function(el) {
+            var col = el.getAttribute('data-sort-column');
+            if (col) sortTransactions(col);
         },
 
         // Transaction history
@@ -4819,11 +5499,6 @@ function submitAnalyticsConsent(enable) {
         'hideContactTxDetail': function() { hideContactTxDetail(); },
 
         // Contact list
-        'scrollContacts': function(el) {
-            var dir = parseInt(el.getAttribute('data-direction'), 10);
-            scrollContacts(dir);
-        },
-        'toggleShowAllContacts': function() { toggleShowAllContacts(); },
 
         // Quick actions
         'scrollQuickActions': function(el) {
@@ -4854,10 +5529,7 @@ function submitAnalyticsConsent(enable) {
         'toggleP2pInfo': function() { toggleP2pInfo(); },
 
         // DLQ
-        'setDlqFilter': function(el) {
-            var filter = el.getAttribute('data-filter');
-            setDlqFilter(filter);
-        },
+        'openDlqModal': function(el) { openDlqModal(el); },
         'retryDlqItem': function(el) {
             var id = parseInt(el.getAttribute('data-dlq-id'), 10);
             retryDlqItem(id, el);
@@ -4889,6 +5561,10 @@ function submitAnalyticsConsent(enable) {
         },
         'downloadLimitedDebugReport': function() { downloadLimitedDebugReport(); },
         'downloadFullDebugReport': function() { downloadFullDebugReport(); },
+        'submitDebugReportToSupport': function(el) {
+            var mode = el.getAttribute('data-report-mode') || 'full';
+            submitDebugReportToSupport(mode);
+        },
 
         // Toast close
         'dismissToast': function(el) {
@@ -4978,6 +5654,20 @@ function submitAnalyticsConsent(enable) {
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
+        else if (action === 'filterContacts') { filterContacts(); }
+        else if (action === 'filterTransactions') { filterTransactions(); }
+        else if (action === 'setDlqFilter') { setDlqFilter(); }
+        else if (action === 'previewColorScheme') {
+            // Live preview: flip the swatch next to the select to the
+            // chosen scheme without saving. Target element is named by
+            // data-preview-target on the select; data-preview-attr tells
+            // us which attribute to set (data-amount-colors for the
+            // amount scheme, data-status-colors for the status scheme).
+            var targetId = el.getAttribute('data-preview-target');
+            var attrName = el.getAttribute('data-preview-attr') || 'data-amount-colors';
+            var preview = targetId ? document.getElementById(targetId) : null;
+            if (preview) { preview.setAttribute(attrName, el.value); }
+        }
     }, false);
 
     // Delegated input handler
@@ -4989,6 +5679,8 @@ function submitAnalyticsConsent(enable) {
         if (action === 'filterDebugLogs') {
             var target = el.getAttribute('data-target');
             filterDebugLogs(el, target);
+        } else if (action === 'searchDlq') {
+            searchDlq(el.value);
         }
     }, false);
 
@@ -4999,5 +5691,6 @@ function submitAnalyticsConsent(enable) {
         if (!action) return;
 
         if (action === 'filterContacts') { filterContacts(); }
+        if (action === 'filterTransactions') { filterTransactions(); }
     }, false);
 })();

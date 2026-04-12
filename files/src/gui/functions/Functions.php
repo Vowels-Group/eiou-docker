@@ -35,82 +35,13 @@ use Eiou\Gui\Includes\SessionKeys;
  */
 
 // =========================================================================
-// Template helper functions — shorthand for FQN calls used in .html templates
+// Template helpers — shorthand for FQN calls used in .html templates.
+// Loaded early (before auth) by /app/eiou/src/gui/functions/TemplateHelpers.php
+// so the unauthenticated login page can use them too. The require_once below
+// is idempotent; the functions have already been defined by the time we get
+// here on the authenticated path.
 // =========================================================================
-
-function appVersion(): string {
-    return \Eiou\Core\Constants::APP_VERSION;
-}
-
-function displayDecimals(): int {
-    return \Eiou\Core\Constants::getDisplayDecimals();
-}
-
-function cspNonce(): string {
-    return \Eiou\Utils\Security::getCspNonce();
-}
-
-function internalPrecision(): int {
-    return \Eiou\Core\Constants::INTERNAL_PRECISION;
-}
-
-function conversionFactor(): int {
-    return \Eiou\Core\Constants::INTERNAL_CONVERSION_FACTOR;
-}
-
-function isSplitAmount($value): bool {
-    return $value instanceof \Eiou\Core\SplitAmount;
-}
-
-function transactionMinimumFee(): float {
-    return \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE;
-}
-
-function validTransportIndices(): array {
-    return \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
-}
-
-function p2pMaxRoutingLevel(): int {
-    return \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL;
-}
-
-function p2pMinExpirationSeconds(): int {
-    return \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS;
-}
-
-function isDebugMode(): bool {
-    return \Eiou\Core\Constants::isDebug();
-}
-
-function allConstants(): array {
-    return \Eiou\Core\Constants::all();
-}
-
-function deliveryMaxRetries(): int {
-    return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
-}
-
-function p2pDefaultExpirationSeconds(): int {
-    return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
-}
-
-function cleanupDlqRetentionDays(): int {
-    return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
-}
-
-function displayDateFormat(): string {
-    return \Eiou\Core\UserContext::getInstance()->getDisplayDateFormat();
-}
-
-function formatTimestamp(string $timestamp): string {
-    $fmt = displayDateFormat();
-    $dt = \DateTime::createFromFormat('Y-m-d H:i:s.u', $timestamp)
-       ?: \DateTime::createFromFormat('Y-m-d H:i:s', $timestamp)
-       ?: new \DateTime($timestamp);
-    return $dt->format($fmt);
-}
-
-// =========================================================================
+require_once __DIR__ . '/TemplateHelpers.php';
 
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -148,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // AJAX-only settings actions (returns JSON, exits immediately)
-    if ($action === 'getDebugReportJson') {
+    if ($action === 'getDebugReportJson' || $action === 'submitDebugReport') {
         // Set JSON header early to ensure clean response
         header('Content-Type: application/json');
         try {
@@ -293,7 +224,8 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
     return $posA - $posB;
 });
 
-$transactions = $transactionService->getTransactionHistory($maxDisplayLines);
+$recentTransactionsLimit = $user->getDisplayRecentTransactionsLimit();
+$transactions = $transactionService->getTransactionHistory($recentTransactionsLimit);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Update check status (reads cache only — never triggers a new check on page load)
@@ -431,9 +363,10 @@ if (!empty($pendingContacts)) {
     }
 }
 
-$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
-$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
-$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);
+$contactTxLimit = contactTransactionsLimit();
+$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $contactTxLimit);
+$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $contactTxLimit);
+$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $contactTxLimit);
 
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {

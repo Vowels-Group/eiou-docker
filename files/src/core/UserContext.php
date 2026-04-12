@@ -1036,6 +1036,46 @@ class UserContext {
         return max(1, (int) ($this->get('displayRecentTransactionsLimit') ?? Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT));
     }
 
+    /**
+     * Get session timeout in minutes
+     *
+     * @return int
+     */
+    public function getSessionTimeoutMinutes(): int {
+        $val = (int) ($this->get('sessionTimeoutMinutes') ?? Constants::SESSION_TIMEOUT_MINUTES);
+        return in_array($val, Constants::SESSION_TIMEOUT_OPTIONS) ? $val : Constants::SESSION_TIMEOUT_MINUTES;
+    }
+
+    /**
+     * Get the contact avatar style for the contacts list
+     *
+     * @return string  One of: gradient, tile, pixel
+     */
+    public function getContactAvatarStyle(): string {
+        $val = (string) ($this->get('contactAvatarStyle') ?? Constants::CONTACT_AVATAR_STYLE);
+        return in_array($val, Constants::CONTACT_AVATAR_STYLE_OPTIONS, true) ? $val : Constants::CONTACT_AVATAR_STYLE;
+    }
+
+    /**
+     * Get the amount color scheme for transaction/balance displays
+     *
+     * @return string  One of: neutral, western, eastern
+     */
+    public function getAmountColorScheme(): string {
+        $val = (string) ($this->get('amountColorScheme') ?? Constants::AMOUNT_COLOR_SCHEME);
+        return in_array($val, Constants::AMOUNT_COLOR_SCHEME_OPTIONS, true) ? $val : Constants::AMOUNT_COLOR_SCHEME;
+    }
+
+    /**
+     * Get the status color scheme for accepted/blocked/completed/failed badges
+     *
+     * @return string  One of: neutral, western, eastern
+     */
+    public function getStatusColorScheme(): string {
+        $val = (string) ($this->get('statusColorScheme') ?? Constants::STATUS_COLOR_SCHEME);
+        return in_array($val, Constants::STATUS_COLOR_SCHEME_OPTIONS, true) ? $val : Constants::STATUS_COLOR_SCHEME;
+    }
+
     // =========================================================================
     // CONFIGURABLE DEFAULTS (canonical source of truth)
     // =========================================================================
@@ -1119,6 +1159,18 @@ class UserContext {
             'displayDateFormat' => Constants::DISPLAY_DATE_FORMAT,
             'displayCurrencyDecimals' => Constants::DISPLAY_CURRENCY_DECIMALS,
             'displayRecentTransactionsLimit' => Constants::DISPLAY_RECENT_TRANSACTIONS_LIMIT,
+
+            // Session
+            'sessionTimeoutMinutes' => Constants::SESSION_TIMEOUT_MINUTES,
+
+            // Contact list
+            'contactAvatarStyle' => Constants::CONTACT_AVATAR_STYLE,
+
+            // Amount color scheme — neutral / western / eastern
+            'amountColorScheme' => Constants::AMOUNT_COLOR_SCHEME,
+
+            // Status color scheme — neutral / western / eastern
+            'statusColorScheme' => Constants::STATUS_COLOR_SCHEME,
         ];
     }
 

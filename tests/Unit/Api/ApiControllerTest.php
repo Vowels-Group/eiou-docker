@@ -1961,6 +1961,242 @@ class ApiControllerTest extends TestCase
         $this->assertEquals(403, $response['status_code']);
     }
 
+    // ==================== Debug Report Endpoint Tests ====================
+
+    /**
+     * Test GET debug-report requires system:read permission
+     */
+    public function testGetDebugReportRequiresPermission(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/system/debug-report',
+            [],
+            '',
+            []
+        );
+
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Test POST debug-report requires system:read permission
+     */
+    public function testSubmitDebugReportRequiresPermission(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/system/debug-report',
+            [],
+            json_encode(['description' => 'test']),
+            []
+        );
+
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Test GET debug-report returns report data on success
+     */
+    public function testGetDebugReportReturnsReportData(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['system:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $mockReport = [
+            'description' => 'test issue',
+            'system_info' => ['php_version' => '8.1'],
+            'debug_entries' => [],
+            'debug_entries_count' => 0,
+            'php_errors' => '',
+            'nginx_errors' => '',
+            'eiou_app_log' => '',
+            'report_type' => 'limited',
+        ];
+
+        $mockReportService = $this->createMock(\Eiou\Services\DebugReportService::class);
+        $mockReportService->method('generateReport')
+            ->willReturn($mockReport);
+
+        $this->mockServices->method('getDebugReportService')
+            ->willReturn($mockReportService);
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/system/debug-report',
+            ['description' => 'test issue'],
+            '',
+            []
+        );
+
+        $this->assertTrue($response['success']);
+        $this->assertEquals(200, $response['status_code']);
+        $this->assertArrayHasKey('report', $response['data']);
+        $this->assertEquals('limited', $response['data']['report_type']);
+        $this->assertEquals(0, $response['data']['debug_entries_count']);
+    }
+
+    /**
+     * Test GET debug-report passes full parameter
+     */
+    public function testGetDebugReportPassesFullParam(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['system:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $mockReportService = $this->createMock(\Eiou\Services\DebugReportService::class);
+        $mockReportService->expects($this->once())
+            ->method('generateReport')
+            ->with('', true)
+            ->willReturn([
+                'description' => '',
+                'system_info' => [],
+                'debug_entries' => [],
+                'debug_entries_count' => 0,
+                'php_errors' => '',
+                'nginx_errors' => '',
+                'eiou_app_log' => '',
+                'report_type' => 'full',
+            ]);
+
+        $this->mockServices->method('getDebugReportService')
+            ->willReturn($mockReportService);
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/system/debug-report',
+            ['full' => '1'],
+            '',
+            []
+        );
+
+        $this->assertTrue($response['success']);
+        $this->assertEquals('full', $response['data']['report_type']);
+    }
+
+    /**
+     * Test GET debug-report handles service exception
+     */
+    public function testGetDebugReportHandlesException(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['system:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $mockReportService = $this->createMock(\Eiou\Services\DebugReportService::class);
+        $mockReportService->method('generateReport')
+            ->willThrowException(new \Exception('Database error'));
+
+        $this->mockServices->method('getDebugReportService')
+            ->willReturn($mockReportService);
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/system/debug-report',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(500, $response['status_code']);
+        $this->assertEquals('debug_report_error', $response['error']['code']);
+    }
+
+    /**
+     * Test POST debug-report routes correctly with valid body
+     */
+    public function testSubmitDebugReportRoutesCorrectly(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['system:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $mockReportService = $this->createMock(\Eiou\Services\DebugReportService::class);
+        $mockReportService->expects($this->once())
+            ->method('generateReport')
+            ->with('test issue', false)
+            ->willReturn([
+                'description' => 'test issue',
+                'system_info' => [],
+                'debug_entries' => [],
+                'debug_entries_count' => 0,
+                'php_errors' => '',
+                'nginx_errors' => '',
+                'eiou_app_log' => '',
+                'report_type' => 'limited',
+            ]);
+
+        $this->mockServices->method('getDebugReportService')
+            ->willReturn($mockReportService);
+
+        // submit() is static and will fail (no Tor), but we verify routing
+        // reaches generateReport() — the static call is an integration concern
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/system/debug-report',
+            [],
+            json_encode(['description' => 'test issue']),
+            []
+        );
+
+        // Will return 502 because submit() can't reach Tor in unit tests,
+        // but the key assertion is that generateReport was called (expects once)
+        $this->assertIsArray($response);
+    }
+
     /**
      * Data provider for key enable/disable endpoints
      */

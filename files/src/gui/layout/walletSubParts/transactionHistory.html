@@ -40,7 +40,7 @@
                             'pending' => ['label' => 'Pending', 'short' => 'Pending', 'icon' => 'fa-hourglass-half', 'color' => '#6c757d'],
                             'route_search' => ['label' => 'Searching for route...', 'short' => 'Searching...', 'icon' => 'fa-search', 'color' => '#ffc107'],
                             'route_found' => ['label' => 'Route found', 'short' => 'Found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
-                            'awaiting_approval' => ['label' => 'Awaiting your approval', 'short' => 'Approve?', 'icon' => 'fa-question-circle', 'color' => '#e83e8c'],
+                            'awaiting_approval' => ['label' => 'Awaiting your approval', 'short' => 'Awaiting your approval', 'icon' => 'fa-question-circle', 'color' => '#0d6efd'],
                             'sending' => ['label' => 'Sending...', 'short' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
                             'syncing' => ['label' => 'Syncing chain...', 'short' => 'Syncing...', 'icon' => 'fa-link', 'color' => '#fd7e14']
                         ];
@@ -53,9 +53,7 @@
                             <span class="phase-label-full"><?php echo htmlspecialchars($phaseInfo['label']); ?></span>
                             <span class="phase-label-short"><?php echo htmlspecialchars($phaseInfo['short']); ?></span>
                         </span>
-                        <?php if ($ipTx['source_type'] === 'p2p_request'): ?>
-                            <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
-                        <?php else: ?>
+                        <?php if ($ipTx['source_type'] !== 'p2p_request'): ?>
                             <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                         <?php endif; ?>
                         <?php
@@ -76,12 +74,15 @@
                     <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
                     <div class="tx-in-progress-details tx-ip-details">
                         <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
-                        <?php if (!empty($ipTx['fee_amount'])): ?>
+                        <?php if (!empty($ipTx['fee_amount']) && ($ipTx['phase'] ?? '') !== 'awaiting_approval'): ?>
                         <div><i class="fas fa-coins"></i> Fee: <?php echo isSplitAmount($ipTx['fee_amount']) ? $ipTx['fee_amount']->toDisplayString(displayDecimals()) : number_format($ipTx['fee_amount'] / conversionFactor(), displayDecimals()); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
                     <?php if (($ipTx['phase'] ?? '') === 'awaiting_approval'): ?>
+                    <div class="tx-in-progress-amount-inline <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
+                        Amount: <?php echo $ipTx['amount']->toDisplayString(displayDecimals()); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
+                    </div>
                     <div class="tx-approval-actions tx-approval-section">
                         <?php if (!empty($ipTx['candidate_count']) && (int) $ipTx['candidate_count'] > 0): ?>
                         <!-- Multi-candidate best-fee mode: show candidate list -->
@@ -106,7 +107,7 @@
                         <?php endif; ?>
                         <div class="d-flex gap-sm">
                             <button class="btn btn-success btn-sm" data-action="approveP2pTransaction" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-stop-propagation="true">
-                                <i class="fas fa-check"></i> Approve &amp; Send
+                                <i class="fas fa-check"></i> Accept
                             </button>
                             <button class="btn btn-danger btn-sm" data-action="rejectP2pTransaction" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-stop-propagation="true">
                                 <i class="fas fa-times"></i> Reject
@@ -132,83 +133,210 @@
     </div>
     <?php endif; ?>
 
+    <?php
+    // Build contact lookup maps for avatar/name resolution. Key by all known
+    // identifiers — name (lowercased) AND each address field — because the
+    // counterparty in $tx may match by name (formatter populates it) but the
+    // address format isn't always identical to the contact's stored address.
+    $txContactsByAddress = [];
+    $txContactsByName = [];
+    if (!empty($acceptedContacts)) {
+        foreach ($acceptedContacts as $tc) {
+            if (!empty($tc['name'])) {
+                $txContactsByName[strtolower($tc['name'])] = $tc;
+            }
+            foreach (['http', 'https', 'tor'] as $addrField) {
+                if (!empty($tc[$addrField])) {
+                    $txContactsByAddress[$tc[$addrField]] = $tc;
+                }
+            }
+        }
+    }
+    $txAvatarStyle = $user->getContactAvatarStyle();
+    ?>
+
     <?php if (!empty($transactions)): ?>
+    <div class="contacts-search-bar mb-lg">
+        <div class="search-icon-wrapper">
+            <i class="fas fa-search search-icon-positioned"></i>
+            <input type="text" id="tx-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterTransactions">
+        </div>
+        <div id="tx-search-status" class="search-status">
+            <span id="tx-search-count">0</span> transactions found
+        </div>
+    </div>
+    <div class="contacts-filters mb-lg">
+        <select id="tx-filter-direction" class="contacts-filter-select" data-action-change="filterTransactions" aria-label="Filter by direction">
+            <option value="">Any direction</option>
+            <option value="sent">Sent</option>
+            <option value="received">Received</option>
+        </select>
+        <select id="tx-filter-type" class="contacts-filter-select" data-action-change="filterTransactions" aria-label="Filter by type">
+            <option value="">Any type</option>
+            <option value="direct">Direct</option>
+            <option value="p2p">P2P</option>
+            <option value="contact">Contact request</option>
+        </select>
+        <select id="tx-filter-status" class="contacts-filter-select" data-action-change="filterTransactions" aria-label="Filter by status">
+            <option value="">Any status</option>
+            <option value="pending">Pending</option>
+            <option value="sent">Sent</option>
+            <option value="accepted">Accepted</option>
+            <option value="completed">Completed</option>
+            <option value="rejected">Rejected</option>
+            <option value="cancelled">Cancelled</option>
+        </select>
+    </div>
     <div class="d-flex justify-between align-center mb-lg">
         <p class="tx-meta-info">
-            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong>
+            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $recentTransactionsLimit; ?> transactions</strong>
         </p>
     </div>
     <?php endif; ?>
 
-    <div class="transactions-list" id="transaction-list">
-        <?php if (empty($transactions)): ?>
-            <div class="empty-state">
-                <i class="fas fa-receipt"></i>
-                <h3>No Transactions Yet</h3>
-                <p>Your transaction history will appear here</p>
-            </div>
-        <?php else: ?>
+    <?php if (empty($transactions)): ?>
+        <div class="empty-state">
+            <i class="fas fa-receipt"></i>
+            <h3>No Transactions Yet</h3>
+            <p>Your transaction history will appear here</p>
+        </div>
+    <?php else: ?>
+    <div class="contacts-table-wrapper">
+        <table class="contacts-table tx-table">
+            <thead>
+                <tr>
+                    <th class="col-tx-status-icon"></th>
+                    <th class="col-name">Counterparty</th>
+                    <th class="col-number col-tx-amount text-right sortable" data-action="sortTransactions" data-sort-column="amount" role="button" aria-label="Sort by amount"><span class="sort-label">Amount</span><i class="fas fa-sort sort-indicator"></i></th>
+                    <th class="col-tx-desc">Description</th>
+                    <th class="col-tx-type text-center">Type</th>
+                    <th class="col-tx-endpoint">Origin / Dest.</th>
+                    <th class="col-tx-date text-right sortable" data-action="sortTransactions" data-sort-column="date" role="button" aria-label="Sort by date"><span class="sort-label">Date</span><i class="fas fa-sort sort-indicator"></i></th>
+                </tr>
+            </thead>
+            <tbody id="transaction-list">
+            <?php
+            $statusIcons = [
+                'pending'   => 'fa-hourglass-half',
+                'sent'      => 'fa-check',
+                'accepted'  => 'fa-check',
+                'completed' => 'fa-check-double',
+                'rejected'  => 'fa-times',
+                'cancelled' => 'fa-ban',
+            ];
+            ?>
             <?php foreach ($transactions as $index => $tx): ?>
-                <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?> cursor-pointer" data-action="openTransactionModal" data-index="<?php echo $index; ?>" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>">
-                    <div class="transaction-info">
-                        <div>
-                            <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars(!empty($tx['counterparty_name']) ? $tx['counterparty_name'] : 'Unknown'); ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>
+                <?php
+                $isSent      = ($tx['type'] === 'sent');
+                $isP2P       = (($tx['tx_type'] ?? '') === 'p2p');
+                $isContactReq = (($tx['tx_type'] ?? '') === 'contact');
+                $statusLower = strtolower($tx['status'] ?? '');
+                $inProgress  = ($statusLower !== 'completed' && $statusLower !== 'rejected' && $statusLower !== 'cancelled');
+
+                $cpAddr  = $isSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+                $cpName  = !empty($tx['counterparty_name']) ? $tx['counterparty_name'] : null;
+                // Resolve contact: prefer name lookup (formatter populates it
+                // reliably), fall back to address lookup if no name match.
+                $cpContact = null;
+                if ($cpName && isset($txContactsByName[strtolower($cpName)])) {
+                    $cpContact = $txContactsByName[strtolower($cpName)];
+                } elseif ($cpAddr && isset($txContactsByAddress[$cpAddr])) {
+                    $cpContact = $txContactsByAddress[$cpAddr];
+                }
+                $cpHash  = $cpContact['pubkey_hash'] ?? '';
+
+                // P2P endpoint — for sent P2P show the final destination;
+                // for received P2P show the original sender who initiated the route.
+                if ($isSent && $isP2P) {
+                    $endAddr = $tx['end_recipient_address'] ?? '';
+                } elseif (!$isSent && $isP2P) {
+                    $endAddr = $tx['initial_sender_address'] ?? '';
+                } else {
+                    $endAddr = '';
+                }
+                $endContact = $endAddr && isset($txContactsByAddress[$endAddr]) ? $txContactsByAddress[$endAddr] : null;
+                $endName = $endContact['name'] ?? null;
+                $endHash = $endContact['pubkey_hash'] ?? '';
+
+                $description = !empty($tx['description']) ? $tx['description'] : '';
+
+                if ($isContactReq) { $typeKey = 'contact'; $typeLabel = 'Contact'; $typeIcon = 'fa-user-plus'; }
+                elseif ($isP2P)    { $typeKey = 'p2p';     $typeLabel = 'P2P';     $typeIcon = 'fa-network-wired'; }
+                else               { $typeKey = 'direct';  $typeLabel = 'Direct';  $typeIcon = 'fa-exchange-alt'; }
+
+                $txidInDlq = false;
+                if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                    foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                        if (strpos($dlqMsgId, $tx['txid']) !== false) { $txidInDlq = true; break; }
+                    }
+                }
+
+                $statusIcon = $statusIcons[$statusLower] ?? 'fa-circle';
+                ?>
+                <tr class="tx-row cursor-pointer<?php echo $inProgress ? ' tx-item-in-progress' : ''; ?>"
+                    data-action="openTransactionModal"
+                    data-index="<?php echo $index; ?>"
+                    title="Click for details"
+                    data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>"
+                    data-tx-name="<?php echo htmlspecialchars(strtolower($cpName ?? '')); ?>"
+                    data-tx-desc="<?php echo htmlspecialchars(strtolower($description)); ?>"
+                    data-tx-address="<?php echo htmlspecialchars(strtolower($cpAddr)); ?>"
+                    data-direction="<?php echo $isSent ? 'sent' : 'received'; ?>"
+                    data-tx-type="<?php echo $typeKey; ?>"
+                    data-status="<?php echo htmlspecialchars($statusLower); ?>"
+                    data-amount="<?php echo (float) ($tx['amount'] ?? 0); ?>"
+                    data-date="<?php echo !empty($tx['date']) ? (int) strtotime($tx['date']) : 0; ?>">
+                    <td class="col-tx-status-icon text-center">
+                        <span class="tx-status-icon tx-status-<?php echo htmlspecialchars($statusLower); ?>" title="<?php echo ucfirst(htmlspecialchars($statusLower)); ?>">
+                            <i class="fas <?php echo $statusIcon; ?>"></i>
+                        </span>
+                        <?php if ($txidInDlq): ?>
+                            <a href="#dlq" class="dlq-tx-icon" title="Delivery failed — see Failed Messages to retry or abandon" data-stop-propagation="true"><i class="fas fa-inbox"></i></a>
+                        <?php endif; ?>
+                    </td>
+                    <td class="col-name">
+                        <div class="contact-name-cell">
+                            <?php if ($cpContact): ?>
+                                <?php echo renderContactAvatar($cpHash, $cpName ?? $cpAddr ?? '', $txAvatarStyle); ?>
+                            <?php endif; ?>
+                            <span class="contact-name-text"><?php echo htmlspecialchars($cpName ?: 'Unknown'); ?></span>
                         </div>
-                        <div class="tx-meta-row">
-                            <?php echo htmlspecialchars(formatTimestamp($tx['date'])); ?>
-                            <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
-                                <?php if ($tx['status'] === 'pending'): ?>
-                                    <i class="fas fa-hourglass-half"></i>
-                                <?php elseif ($tx['status'] === 'sent'): ?>
-                                    <i class="fas fa-paper-plane"></i>
-                                <?php elseif ($tx['status'] === 'accepted'): ?>
-                                    <i class="fas fa-check"></i>
-                                <?php elseif ($tx['status'] === 'completed'): ?>
-                                    <i class="fas fa-check-double"></i>
-                                <?php elseif ($tx['status'] === 'rejected'): ?>
-                                    <i class="fas fa-times"></i>
-                                <?php elseif ($tx['status'] === 'cancelled'): ?>
-                                    <i class="fas fa-ban"></i>
+                    </td>
+                    <td class="col-number col-tx-amount text-right <?php echo $isSent ? 'transaction-sent' : 'transaction-received'; ?>">
+                        <?php echo ($isSent ? '−' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+                    </td>
+                    <td class="col-tx-desc" title="<?php echo htmlspecialchars($description ?: 'No description'); ?>">
+                        <?php echo htmlspecialchars($description ?: '—'); ?>
+                    </td>
+                    <td class="col-tx-type text-center">
+                        <span class="tx-type-badge tx-type-<?php echo $typeKey; ?>"><i class="fas <?php echo $typeIcon; ?>"></i> <?php echo $typeLabel; ?></span>
+                    </td>
+                    <td class="col-tx-endpoint" title="<?php echo htmlspecialchars($endAddr ? ($endName ? $endName . ' — ' . $endAddr : $endAddr) : ''); ?>">
+                        <?php if ($endAddr): ?>
+                            <div class="contact-name-cell">
+                                <?php if ($endContact): ?>
+                                    <?php echo renderContactAvatar($endHash, $endName ?? $endAddr, $txAvatarStyle); ?>
                                 <?php endif; ?>
-                                <?php echo ucfirst(htmlspecialchars($tx['status'])); ?>
-                            </span>
-                            <?php if ($tx['tx_type'] === 'contact'): ?>
-                                <span class="tx-type-badge tx-type-contact"><i class="fas fa-user-plus"></i> Contact</span>
-                            <?php elseif ($tx['tx_type'] === 'p2p'): ?>
-                                <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
-                            <?php else: ?>
-                                <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
-                            <?php endif; ?>
-                            <?php
-                            $txidInDlq = false;
-                            if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
-                                foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
-                                    if (strpos($dlqMsgId, $tx['txid']) !== false) {
-                                        $txidInDlq = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            ?>
-                            <?php if ($txidInDlq): ?>
-                                <a href="#dlq" class="tx-type-badge dlq-tx-indicator" title="Delivery failed — see Failed Messages to retry or abandon" data-stop-propagation="true"><i class="fas fa-inbox"></i> DLQ</a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
-                        <i class="fas fa-chevron-right chevron-indicator"></i>
-                    </div>
-                </div>
+                                <span class="contact-name-text"><?php echo htmlspecialchars($endName ?: (substr($endAddr, 0, 18) . (strlen($endAddr) > 18 ? '…' : ''))); ?></span>
+                            </div>
+                        <?php else: ?>
+                            <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="col-tx-date text-right">
+                        <?php echo htmlspecialchars(formatTimestamp($tx['date'])); ?>
+                    </td>
+                </tr>
             <?php endforeach; ?>
-        <?php endif; ?>
+            </tbody>
+        </table>
     </div>
+    <?php endif; ?>
 </div>
 
 
-<!-- Store transaction data for JavaScript -->
+<!-- Data bootstrap for transaction history — consumed by script.js -->
 <script nonce="<?php echo cspNonce(); ?>">
-    // Count syncing transactions for toast notification
     var syncingTransactionCount = <?php
         $syncingCount = 0;
         foreach ($inProgressTransactions ?? [] as $ipTx) {
@@ -237,194 +365,14 @@
             'memo' => $tx['memo'] ?? '',
             'description' => $tx['description'] ?? '',
             'previous_txid' => $tx['previous_txid'] ?? '',
+            'initial_sender_address' => $tx['initial_sender_address'] ?? null,
+            'end_recipient_address' => $tx['end_recipient_address'] ?? null,
             'p2p_destination' => $tx['p2p_destination'] ?? null,
             'p2p_amount' => $tx['p2p_amount'] ?? null,
             'p2p_fee' => $tx['p2p_fee'] ?? null
         ];
     }, $transactions ?? []), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 
-    // Auto-refresh for in-progress transactions
     var hasInProgressTx = <?php echo !empty($inProgressTransactions) ? 'true' : 'false'; ?>;
     var autoRefreshEnabled = <?php echo $user->getAutoRefreshEnabled() ? 'true' : 'false'; ?>;
-    var autoRefreshInterval = null;
-    var AUTO_REFRESH_DELAY = 15000; // 15 seconds
-
-    function startAutoRefresh() {
-        // Only start auto-refresh if enabled in settings AND there are in-progress transactions
-        if (hasInProgressTx && autoRefreshEnabled && !autoRefreshInterval) {
-            var indicator = document.getElementById('tx-auto-refresh-status');
-            if (indicator) indicator.classList.add('active');
-
-            autoRefreshInterval = setInterval(function() {
-                // Skip if manual refresh is already in progress
-                if (window.isRefreshing) { return; }
-
-                // XMLHttpRequest — Tor Browser compatible (no fetch/AbortController)
-                var xhr = new XMLHttpRequest();
-                xhr.open('GET', window.location.pathname + '?check_updates=1&_=' + Date.now(), true);
-                xhr.timeout = 30000; // 30s for Tor
-
-                xhr.ontimeout = function() {
-                    // Silently ignore timeout — will retry on next interval
-                };
-                xhr.onerror = function() {
-                    // Silently ignore network errors — will retry on next interval
-                };
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState !== 4) { return; }
-                    if (window.isRefreshing) { return; }
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        window.location.reload();
-                    }
-                };
-                xhr.send();
-            }, AUTO_REFRESH_DELAY);
-        }
-    }
-
-    window.stopAutoRefresh = function() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-            var indicator = document.getElementById('tx-auto-refresh-status');
-            if (indicator) indicator.classList.remove('active');
-        }
-    }
-
-    // Start auto-refresh when page loads if there are in-progress transactions
-    document.addEventListener('DOMContentLoaded', function() {
-        if (hasInProgressTx) {
-            startAutoRefresh();
-
-            // Show toast notifications (function defined in script.js)
-            if (typeof showInProgressToasts === 'function') {
-                showInProgressToasts();
-            }
-        }
-    });
-
-    // Stop auto-refresh when leaving page
-    window.addEventListener('beforeunload', window.stopAutoRefresh);
-
-    // P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
-    function approveP2pTransaction(hash, candidateId) {
-        var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
-        if (!confirm(msg)) return;
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
-        if (!csrfToken) { alert('CSRF token not found'); return; }
-        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-        if (candidateId) {
-            body = body + '&candidate_id=' + encodeURIComponent(candidateId);
-        }
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', window.location.pathname, true);
-        xhr.timeout = 60000;
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        var data = JSON.parse(xhr.responseText);
-                        if (data.success) { window.location.reload(); }
-                        else { alert('Error: ' + (data.message || 'Unknown error')); }
-                    } catch (e) {
-                        alert('Error parsing response');
-                    }
-                } else {
-                    alert('Network error');
-                }
-            }
-        };
-        xhr.ontimeout = function() { alert('Request timed out'); };
-        xhr.send(body);
-    }
-
-    function rejectP2pTransaction(hash) {
-        if (!confirm('Are you sure you want to reject this transaction?')) return;
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
-        if (!csrfToken) { alert('CSRF token not found'); return; }
-        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', window.location.pathname, true);
-        xhr.timeout = 60000;
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        var data = JSON.parse(xhr.responseText);
-                        if (data.success) { window.location.reload(); }
-                        else { alert('Error: ' + (data.message || 'Unknown error')); }
-                    } catch (e) {
-                        alert('Error parsing response');
-                    }
-                } else {
-                    alert('Network error');
-                }
-            }
-        };
-        xhr.ontimeout = function() { alert('Request timed out'); };
-        xhr.send(body);
-    }
-
-    function loadP2pCandidates(hash, container) {
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
-        if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
-        var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', window.location.pathname, true);
-        xhr.timeout = 60000;
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        var data = JSON.parse(xhr.responseText);
-                        if (data.success && data.candidates && data.candidates.length > 0) {
-                            // Update the route count header dynamically (late candidates may arrive)
-                            var countEl = document.getElementById('p2p-count-' + hash);
-                            if (countEl) { countEl.textContent = data.candidates.length + ' route(s) found — choose one:'; }
-                            var html = '';
-                            var currency = 'USD';
-                            for (var i = 0; i < data.candidates.length; i++) {
-                                var c = data.candidates[i];
-                                var routeFee = (c.amount - data.base_amount) / 100;
-                                var totalCost = c.amount / 100;
-                                var addr = c.sender_address;
-                                var shortAddr = addr.length > 20 ? addr.substring(0, 20) + '...' : addr;
-                                html = html + '<div class="p2p-candidate-row">';
-                                html = html + '<div class="p2p-candidate-info">';
-                                html = html + '<div class="p2p-candidate-fee">Route Fee: <strong class="p2p-candidate-fee-value">' + routeFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</strong></div>';
-                                html = html + '<div class="p2p-candidate-total">Total: ' + totalCost.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + currency + '</div>';
-                                html = html + '<div class="text-muted monospace" title="' + addr + '">' + shortAddr + '</div>';
-                                html = html + '</div>';
-                                html = html + '<button class="btn btn-success btn-sm ml-sm btn-nowrap" data-action="approveP2pTransaction" data-txid="' + escapeHtml(hash) + '" data-candidate-id="' + c.id + '" data-stop-propagation="true">';
-                                html = html + '<i class="fas fa-check"></i> Choose</button>';
-                                html = html + '</div>';
-                            }
-                            container.innerHTML = html;
-                        } else {
-                            container.innerHTML = '<div class="status-msg-muted">No candidates available</div>';
-                        }
-                    } catch (e) {
-                        container.innerHTML = '<div class="status-msg-danger">Error loading routes</div>';
-                    }
-                } else {
-                    container.innerHTML = '<div class="status-msg-danger">Failed to load routes</div>';
-                }
-            }
-        };
-        xhr.ontimeout = function() { container.innerHTML = '<div class="status-msg-danger">Request timed out</div>'; };
-        xhr.send(body);
-    }
-
-    // Load candidates for multi-candidate approval on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');
-        for (var i = 0; i < candidateContainers.length; i++) {
-            var el = candidateContainers[i];
-            var hash = el.id.replace('p2p-candidates-', '');
-            loadP2pCandidates(hash, el);
-        }
-    });
 </script>

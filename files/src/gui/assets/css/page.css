@@ -455,95 +455,6 @@ body {
     padding-bottom: 0.5rem;
 }
 
-.contacts-slider {
-    position: relative;
-}
-
-.contacts-scroll-btn {
-    position: absolute;
-    top: 50%;
-    -webkit-transform: translateY(-50%);
-    -ms-transform: translateY(-50%);
-    transform: translateY(-50%);
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -webkit-box-align: center;
-    -ms-flex-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    -ms-flex-pack: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #495057;
-    font-size: 0.75rem;
-    z-index: 2;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-    -webkit-transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
-    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
-}
-
-.contacts-scroll-btn:hover {
-    background: #e9ecef;
-    color: #0d6efd;
-}
-
-.contacts-scroll-btn.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.contacts-scroll-left {
-    left: -14px;
-}
-
-.contacts-scroll-right {
-    right: -14px;
-}
-
-.contacts-grid {
-    display: flex;
-    gap: 1rem;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-    min-width: 0;
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE */
-}
-
-.contacts-grid::-webkit-scrollbar {
-    display: none; /* Chrome/Safari */
-}
-
-.contact-card {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    border-left: 4px solid #0d6efd;
-    transition: transform 0.2s ease;
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    min-width: 250px;
-    max-width: 250px;
-    flex-shrink: 0;
-}
-
-.contacts-grid .empty-state {
-    min-width: 100%;
-    max-width: none;
-    flex-shrink: 1;
-}
-
-.contact-card:hover {
-    transform: translateY(-2px);
-}
-
 .pending {
     border-left: 4px solid grey;
 }
@@ -565,11 +476,11 @@ body {
 }
 
 .contact-status-indicator.status-online {
-    background-color: #28a745; /* Green */
+    background-color: var(--status-success-bg, #6c757d);
 }
 
 .contact-status-indicator.status-offline {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-failure-bg, #6c757d);
 }
 
 .contact-status-indicator.status-partial {
@@ -591,9 +502,9 @@ body {
 }
 
 .status-badge.status-online {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+    border: 1px solid var(--status-success-soft-bg, #dee2e6);
 }
 
 .status-badge.status-partial {
@@ -603,9 +514,9 @@ body {
 }
 
 .status-badge.status-offline {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background-color: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
+    border: 1px solid var(--status-failure-soft-bg, #dee2e6);
 }
 
 .status-badge.status-unknown {
@@ -624,9 +535,9 @@ body {
 }
 
 .chain-badge.chain-valid {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+    border: 1px solid var(--status-success-soft-bg, #dee2e6);
 }
 
 .chain-badge.chain-invalid {
@@ -659,10 +570,11 @@ body {
     padding: 0.15rem 0.4rem;
 }
 
-/* Chain drop proposal badges on contact card */
+/* Chain drop proposal badges on contact card — same soft failure
+   palette as .badge-blocked above, driven by the status color scheme. */
 .badge-danger {
-    background-color: #f8d7da;
-    color: #842029;
+    background-color: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
     font-size: 0.75rem;
     padding: 0.15rem 0.4rem;
 }
@@ -755,6 +667,311 @@ body {
     color: #6c757d;
 }
 
+/* Contacts Table Layout */
+.contacts-table-wrapper {
+    /* Horizontal scroll for narrow screens, vertical scroll past ~60% of the
+       viewport height so power users with many contacts don't stretch the
+       whole page. 60vh ≈ 11 rows on a 1080p display, 14 on 1440p, 8 on a
+       768p laptop — scales with the actual monitor, no magic row count. */
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 60vh;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+}
+.contacts-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
+    table-layout: fixed;
+}
+/* Column widths — fixed layout ensures header/data alignment */
+.contacts-table .col-name   { width: 22%; }
+.contacts-table .col-number { width: 18%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contacts-table .col-number.truncated {
+    text-decoration: underline dotted #ced4da;
+    text-underline-offset: 3px;
+}
+.contacts-table .col-number.truncated:hover {
+    text-decoration-color: #6c757d;
+}
+.contacts-table .col-status { width: 10%; }
+.contacts-table .col-chain  { width: 8%; }
+.contacts-table .col-online { width: 6%; }
+/* Narrow screens: hide credits / status / chain / online — keep Name + Balance only */
+@media (max-width: 600px) {
+    .contacts-table thead th:nth-child(n+3),
+    .contacts-table tbody td:nth-child(n+3) {
+        display: none;
+    }
+}
+
+/* ─── Recent Transactions table — extends .contacts-table with .tx-table ───
+   Same chrome as Your Contacts; tx-specific column widths and a mobile
+   collapse that keeps Status-icon + Counterparty + Amount (the +/− on Amount
+   carries direction; the status icon confirms completion state). */
+/* Status-icon column: narrow leading column, icon-only.  All widths are
+   percentages because table-layout:fixed distributes leftover space to
+   non-percentage columns — mixing units leaves the icon col too wide. */
+.tx-table th.col-tx-status-icon,
+.tx-table td.col-tx-status-icon { width: 2.5%; padding: 0.4rem 0 0.4rem 0.6rem; text-align: center; }
+.tx-table .col-name          { width: 19%; }
+.tx-table .col-tx-type       { width: 9%;  }
+.tx-table .col-tx-endpoint   { width: 15%; }
+.tx-table .col-tx-desc       {
+    width: 22%;
+    max-width: 0; /* table-layout:fixed lets the cell collapse to col width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+}
+.tx-table .col-tx-amount     { width: 16%; }
+.tx-table .col-tx-date       { width: 13%; white-space: nowrap; }
+
+/* Status icon in the leading column — bare icon colored by status. */
+.tx-table .tx-status-icon { font-size: 0.85rem; background: none; padding: 0; border-radius: 0; }
+.tx-status-icon.tx-status-pending   { color: #b8860b; }
+.tx-status-icon.tx-status-sending   { color: #fd7e14; }
+.tx-status-icon.tx-status-sent      { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-accepted  { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-completed { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-rejected  { color: var(--status-failure-bg, #6c757d); }
+.tx-status-icon.tx-status-cancelled { color: var(--status-failure-bg, #6c757d); }
+
+/* Row hover for tx-table — matches contacts-table hover color */
+.tx-table .tx-row:hover {
+    background: #f0f7ff;
+}
+
+/* Compact DLQ icon next to the Status badge */
+.tx-table .dlq-tx-icon {
+    margin-left: 0.35rem;
+    color: #c67100;
+    text-decoration: none;
+}
+.tx-table .dlq-tx-icon:hover { color: #a0570e; }
+
+/* Mobile (≤600px): Status-icon (1) + Counterparty (2) + Amount (3).
+   Generic rule hides cols 3+; re-show col 3 (Amount) for the tx-table. */
+@media (max-width: 600px) {
+    .contacts-table.tx-table thead th:nth-child(3),
+    .contacts-table.tx-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.tx-table .col-tx-status-icon { width: 28px; padding-left: 0.25rem; padding-right: 0; }
+    .contacts-table.tx-table .col-name   { width: auto; }
+    .contacts-table.tx-table .col-tx-amount { width: auto; }
+}
+
+/* Sortable column headers */
+.contacts-table thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.contacts-table thead th.sortable:hover {
+    background: #eef2f6;
+}
+.contacts-table thead th.sortable .sort-indicator {
+    margin-left: 0.35rem;
+    font-size: 0.7rem;
+    color: #adb5bd;
+    transition: color 0.15s;
+}
+.contacts-table thead th.sortable.sort-asc .sort-indicator,
+.contacts-table thead th.sortable.sort-desc .sort-indicator {
+    color: #0d6efd;
+}
+.contacts-table thead th.sortable.sort-asc,
+.contacts-table thead th.sortable.sort-desc {
+    color: #0d6efd;
+}
+
+/* Filter dropdown row above the contacts table */
+.contacts-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+.contacts-filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 0.45rem 2rem 0.45rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%236c757d' d='M6 8L1.5 3.5h9z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 12px;
+    font-size: 0.875rem;
+    color: #495057;
+    cursor: pointer;
+    min-width: 140px;
+}
+.contacts-filter-select:hover {
+    border-color: #adb5bd;
+}
+.contacts-filter-select:focus {
+    outline: 2px solid #0d6efd;
+    outline-offset: 1px;
+    border-color: #0d6efd;
+}
+.contacts-table thead {
+    background: #f8f9fa;
+}
+.contacts-table thead th {
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    font-weight: 600;
+    color: #6c757d;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: inherit;
+    white-space: nowrap;
+    border-bottom: 1px solid #e9ecef;
+    /* Stick to the top of the scrollable .contacts-table-wrapper so column
+       labels stay visible while the user scrolls through contacts. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.contacts-table thead th.text-right  { text-align: right; }
+.contacts-table thead th.text-center { text-align: center; }
+.contacts-table thead th:first-child { border-top-left-radius: 12px; }
+.contacts-table thead th:last-child { border-top-right-radius: 12px; }
+.contacts-table tbody tr.contact-row {
+    transition: background 0.15s;
+}
+.contacts-table tbody tr.contact-row td {
+    border-bottom: 1px solid #f3f4f6;
+}
+.contacts-table tbody tr.contact-row:last-child td {
+    border-bottom: none;
+}
+.contacts-table tbody tr.contact-row:last-child td:first-child { border-bottom-left-radius: 12px; }
+.contacts-table tbody tr.contact-row:last-child td:last-child { border-bottom-right-radius: 12px; }
+.contacts-table tbody tr.contact-row:hover {
+    background: #f0f7ff;
+}
+.contacts-table tbody tr.contact-row-pending { opacity: 0.7; }
+.contacts-table tbody tr.contact-row-blocked { opacity: 0.5; }
+.contacts-table td {
+    padding: 0.6rem 0.75rem;
+    vertical-align: middle;
+}
+.contact-avatar-sm {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #fff;
+    flex-shrink: 0;
+}
+/* Generated identicon / hybrid SVG avatars */
+.contact-avatar-identicon {
+    background: #f6f8fa;
+    overflow: hidden;
+    padding: 0;
+}
+.contact-avatar-hybrid {
+    background: transparent;
+    overflow: hidden;
+    padding: 0;
+}
+.contact-avatar-identicon svg,
+.contact-avatar-hybrid svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Avatar style preview cards in settings — radio inputs hidden, label is the card.
+   Selectors are .form-group-prefixed so they out-specificity the generic
+   `.form-group label { display: block }` rule further down in this file. */
+.form-group .avatar-style-previews {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+.form-group .avatar-style-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    color: inherit;
+    font-weight: normal;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.form-group .avatar-style-preview input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+.form-group .avatar-style-preview:hover {
+    border-color: #adb5bd;
+}
+.form-group .avatar-style-preview span {
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+.form-group .avatar-style-preview:has(input:checked) {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+}
+.form-group .avatar-style-preview:has(input:checked) span {
+    color: #0d6efd;
+    font-weight: 600;
+}
+.form-group .avatar-style-preview:focus-within {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
+.contact-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+.contact-name-text {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.contact-status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #adb5bd;
+}
+.contact-status-dot.status-online { background: var(--status-success-bg, #6c757d); }
+.contact-status-dot.status-partial { background: #ffc107; }
+.contact-status-dot.status-offline { background: var(--status-failure-bg, #6c757d); }
+.contact-status-dot.status-unknown { background: #adb5bd; }
+
 .contact-address {
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
@@ -766,12 +983,16 @@ body {
     border: 1px solid #dee2e6;
 }
 
+/* Amount color scheme — driven by CSS custom properties set on the
+   nearest ancestor carrying data-amount-colors. See the AMOUNT COLOR
+   SCHEME block near the bottom of this file for the scheme values.
+   Variables default to `initial` (unset) so `var(--x, inherit)` falls
+   back to inheriting the parent text color — the neutral default. */
 .balance-positive {
-    color: #198754;
+    color: var(--amount-pos-color, inherit);
 }
-
 .balance-negative {
-    color: #dc3545;
+    color: var(--amount-neg-color, inherit);
 }
 
 /* Transaction History */
@@ -810,11 +1031,10 @@ body {
 }
 
 .transaction-sent {
-    color: #dc3545;
+    color: var(--amount-neg-color, inherit);
 }
-
 .transaction-received {
-    color: #198754;
+    color: var(--amount-pos-color, inherit);
 }
 
 /* Form styles */
@@ -1301,13 +1521,20 @@ body {
     color: white;
 }
 
+/* Used for positive-action buttons (New Contact, Accept, Retry, Approve & Pay,
+   Approve P2P, etc.). Renders blue — same palette as .btn-primary — so the
+   wallet has no "green for good" semantics for buttons, leaving green/red
+   free for the amount and status color schemes without overloading meaning.
+   `.btn-danger` and `.btn-warning` are deliberately left red / yellow so
+   truly destructive or cautionary actions (Delete, Reject, Logout, Block,
+   Propose chain drop) stay visually distinct. */
 .btn-success {
-    background: #198754;
+    background: #0d6efd;
     color: white;
 }
 
 .btn-success:hover {
-    background: #157347;
+    background: #0b5ed7;
     text-decoration: none;
     color: white;
 }
@@ -1690,13 +1917,12 @@ html {
 }
 
 /* Enhanced contact card hover effect */
-.contact-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
-    border-left-color: #28a745;
+tr.contact-card:hover {
+    transform: none;
+    box-shadow: none;
 }
 
-.contact-card:hover .contact-name {
+tr.contact-card:hover .contact-name-cell {
     color: #28a745;
 }
 
@@ -1745,24 +1971,24 @@ html {
     color: #fff;
 }
 
-.tx-status-accepted {
-    background: #28a745;
-    color: #fff;
+/* Success/failure badges — driven by the status color scheme custom
+   properties set at the nearest data-status-colors ancestor. Defaults
+   resolve to neutral gray when no scheme (or "neutral") is in effect. */
+.tx-status-accepted,
+.tx-status-completed,
+.tx-status-found {
+    background: var(--status-success-bg, #6c757d);
+    color: var(--status-success-fg, #fff);
 }
 
 .tx-status-rejected {
-    background: #dc3545;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
 
 .tx-status-cancelled {
-    background: #6c757d;
-    color: #fff;
-}
-
-.tx-status-completed {
-    background: #28a745;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
 
 /* P2P request statuses */
@@ -1772,12 +1998,23 @@ html {
     color: #000;
 }
 
-.tx-status-found {
-    background: #28a745;
-    color: #fff;
-}
-
 /* Transaction Detail Modal */
+/* Transaction detail popup within the contact modal */
+.contact-tx-popup {
+    max-width: 85%;
+    margin: 0.5rem auto;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 0.75rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.contact-tx-popup .tx-modal-amount { font-size: 1.2rem; }
+.contact-tx-popup .tx-modal-header { border-radius: 8px; padding: 0.75rem; }
+.contact-tx-popup .tx-detail-row { padding: 0.5rem 0.75rem; }
+.contact-tx-popup .tx-detail-label { font-size: 0.8rem; min-width: 90px; }
+.contact-tx-popup .tx-detail-value { font-size: 0.8rem; }
+
 .tx-detail-section {
     border: 1px solid #dee2e6;
     border-radius: 8px;
@@ -1820,6 +2057,15 @@ html {
 .tx-item-in-progress {
     border-left: 3px solid #ffc107;
     animation: tx-pulse 2s ease-in-out infinite;
+}
+/* When applied to a table row (tx-table), border-left can't render on <tr>
+   with border-collapse:separate — paint it on the first cell instead. */
+tr.tx-item-in-progress {
+    border-left: none;
+    animation: tx-pulse 2s ease-in-out infinite;
+}
+tr.tx-item-in-progress > td:first-child {
+    border-left: 3px solid #ffc107;
 }
 
 @keyframes tx-pulse {
@@ -1941,11 +2187,10 @@ html {
 }
 
 .tx-in-progress-amount.amount-sent {
-    color: #dc3545;
+    color: var(--amount-neg-color, inherit);
 }
-
 .tx-in-progress-amount.amount-received {
-    color: #198754;
+    color: var(--amount-pos-color, inherit);
 }
 
 .tx-type-badge {
@@ -2373,19 +2618,21 @@ html {
     color: #495057;
 }
 
+/* Contact status badges — driven by the status color scheme custom
+   properties (see the STATUS COLOR SCHEME block at the bottom). These
+   use the "soft" (pastel) variant. */
 .badge-accepted {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+}
+.badge-blocked {
+    background: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
 }
 
 .badge-pending {
     background: #fff3cd;
     color: #664d03;
-}
-
-.badge-blocked {
-    background: #f8d7da;
-    color: #842029;
 }
 
 /* Modal Enhancements */
@@ -2646,11 +2893,10 @@ html {
 }
 
 .balance-amount.balance-positive {
-    color: #198754;
+    color: var(--amount-pos-color, inherit);
 }
-
 .balance-amount.balance-negative {
-    color: #dc3545;
+    color: var(--amount-neg-color, inherit);
 }
 
 .balance-currency {
@@ -2732,14 +2978,10 @@ html {
     font-size: 0.875rem;
 }
 
-.tx-sent .tx-icon {
-    background: #f8d7da;
-    color: #dc3545;
-}
-
+.tx-sent .tx-icon,
 .tx-received .tx-icon {
-    background: #d4edda;
-    color: #198754;
+    background: #e9ecef;
+    color: #495057;
 }
 
 .tx-details {
@@ -2762,11 +3004,10 @@ html {
 }
 
 .tx-sent .tx-amount {
-    color: #dc3545;
+    color: var(--amount-neg-color, inherit);
 }
-
 .tx-received .tx-amount {
-    color: #198754;
+    color: var(--amount-pos-color, inherit);
 }
 
 /* Address Line */
@@ -2802,8 +3043,8 @@ html {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #dc3545;
-    color: white;
+    background: var(--status-failure-bg, #dc3545);
+    color: var(--status-failure-fg, #fff);
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 700;
@@ -2833,14 +3074,9 @@ html {
     font-weight: 600;
 }
 
-/* Filter tabs */
-.dlq-filter-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 1rem;
-}
-
+/* Filter dropdown reuses .contacts-filter-select from the shared table chrome.
+   The old tab-button styles below are kept as no-ops for any residual references. */
+.dlq-filter-tabs { display: none; }
 .dlq-filter-tab {
     padding: 0.3rem 0.85rem;
     border-radius: 20px;
@@ -2864,19 +3100,46 @@ html {
     border-color: #0d6efd;
 }
 
-/* Table wrapper — horizontal scroll on small screens */
+/* Table wrapper — scrollable like contacts/transactions tables */
 .dlq-table-wrapper {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 60vh;
     margin-bottom: 0.5rem;
 }
 
-.dlq-table {
+/* DLQ table — extends .contacts-table with dlq-specific column widths.
+   Reason column truncates with ellipsis so actions always fit on one line. */
+.dlq-table.contacts-table .col-dlq-type    { width: 9%; }
+.dlq-table.contacts-table .col-name        { width: 15%; }
+.dlq-table.contacts-table .col-dlq-reason  {
+    width: 16%;
+    max-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+}
+.dlq-table.contacts-table .col-dlq-date    { width: 13%; white-space: nowrap; }
+.dlq-table.contacts-table .col-dlq-status  { width: 8%; }
+.dlq-table.contacts-table .col-dlq-actions { width: 20%; white-space: nowrap; }
+
+/* Narrow screens: collapse action buttons and status to icon-only */
+@media (max-width: 900px) {
+    .dlq-action-label { display: none; }
+    .dlq-status-label { display: none; }
+}
+/* Mobile (≤600px): generic contacts-table rule hides cols 3+.
+   Actions and details are accessible via the row-click detail modal. */
+
+/* Legacy — replaced by contacts-table chrome */
+.dlq-table:not(.contacts-table) {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
 }
 
-.dlq-table th {
+.dlq-table:not(.contacts-table) th {
     background: #f8f9fa;
     padding: 0.6rem 0.75rem;
     text-align: left;
@@ -2893,7 +3156,7 @@ html {
 }
 
 .dlq-row:hover {
-    background: #f8f9fa;
+    background: #f0f7ff;
 }
 
 /* Inline status badge for DLQ rows */
@@ -2962,77 +3225,32 @@ html {
     border-color: #e0a800;
 }
 
-/* DLQ mobile: convert table rows to stacked cards */
+/* Legacy DLQ mobile card layout — only for non-contacts-table DLQ (no longer used) */
 @media (max-width: 640px) {
-    .dlq-table thead {
-        display: none;
-    }
-
-    .dlq-table,
-    .dlq-table tbody,
-    .dlq-table tr,
-    .dlq-table td {
-        display: block;
-        width: 100%;
-    }
-
-    .dlq-table tr {
-        margin-bottom: 0.75rem;
-        border: 1px solid #dee2e6;
-        border-radius: 6px;
-        padding: 0.5rem 0.75rem;
-        padding-top: 0.75rem;
-        background: #fff;
-        position: relative;
-    }
-
-    .dlq-table td {
-        padding: 0.3rem 0;
-        border: none;
-        display: flex;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    .dlq-table td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: #495057;
-        font-size: 0.8rem;
-        min-width: 90px;
-        flex-shrink: 0;
-    }
-
-    .dlq-table td[data-label=""]::before {
-        display: none;
-    }
-
-    .dlq-actions-cell {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        padding-top: 0.5rem;
-    }
-
-    .dlq-table-wrapper {
-        overflow-x: visible;
-    }
-
-    /* Card-level ⋮ actions pinned to top-right of each mobile card */
-    .dlq-card-actions-mobile {
-        display: block;
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        z-index: 10;
-    }
+    .dlq-table:not(.contacts-table) thead { display: none; }
+    .dlq-table:not(.contacts-table),
+    .dlq-table:not(.contacts-table) tbody,
+    .dlq-table:not(.contacts-table) tr,
+    .dlq-table:not(.contacts-table) td { display: block; width: 100%; }
 }
 
-/* DLQ section header actions bar (Refresh button container) */
+/* DLQ section header actions bar */
 .dlq-section-header-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-shrink: 0;
+}
+/* Wrap DLQ header on narrow screens so buttons don't collide with title */
+@media (max-width: 768px) {
+    .dlq-section .section-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .dlq-section .dlq-section-header-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }
 
 /* DLQ description / info paragraph */
@@ -3079,11 +3297,8 @@ html {
     margin-top: 0.75rem;
 }
 
-/* Scrollable DLQ table wrapper — applied when >5 items */
-.dlq-table-scrollable {
-    max-height: 420px; /* ~5 rows + header */
-    overflow-y: auto;
-}
+/* Legacy class — scroll is now always enabled on .dlq-table-wrapper */
+.dlq-table-scrollable { }
 
 /* Centre-align th for recipient and reason columns */
 .dlq-table th:nth-child(2),
@@ -3177,6 +3392,7 @@ html {
 .position-relative { position: relative; }
 .text-center { text-align: center; }
 .text-right { text-align: right; }
+.text-nowrap { white-space: nowrap; }
 .text-uppercase { text-transform: uppercase; }
 .font-sm { font-size: 0.85rem; }
 .font-xs { font-size: 0.8rem; }
@@ -3223,11 +3439,28 @@ html {
     display: block;
 }
 
+/* Form hint — tight: pull up against preceding row, small bottom gap */
+.form-hint-tight {
+    margin-top: -0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Tab badge rendered inline inside a heading (not absolutely positioned) */
+.tab-badge-inline {
+    position: static;
+    margin-left: 0.4rem;
+}
+
+/* Small modal-content variant — narrower than the default modal */
+.modal-content-sm {
+    max-width: 520px;
+}
+
 /* Text color variants */
 .text-muted { color: #6c757d; }
 .text-primary { color: #0d6efd; }
 .text-danger { color: #dc3545; }
-.text-success { color: #28a745; }
+.text-success { color: var(--status-success-bg, #6c757d); }
 .text-warning-dark { color: #664d03; }
 .text-error-dark { color: #842029; }
 .text-info-header { color: #0dcaf0; }
@@ -3310,7 +3543,7 @@ html {
     border: 1px solid #ced4da;
 }
 
-.status-active { color: #198754; }
+.status-active { color: var(--status-success-bg, #6c757d); }
 
 /* --- Contacts --- */
 .search-icon-wrapper { position: relative; }
@@ -3642,8 +3875,8 @@ hr.currency-separator-double {
     padding-top: 0.25rem;
 }
 
-.chain-gap-valid { color: #28a745; }
-.chain-gap-missing { color: #dc3545; text-decoration: line-through; }
+.chain-gap-valid { color: var(--status-success-bg, #6c757d); }
+.chain-gap-missing { color: var(--status-failure-bg, #6c757d); text-decoration: line-through; }
 .chain-gap-arrow { color: #6c757d; font-size: 0.75rem; }
 
 /* --- Notifications --- */
@@ -3726,31 +3959,44 @@ hr.currency-separator-double {
 .modal-content-md { max-width: 600px; }
 .modal-body-padded { padding: 1.5rem; }
 
+/* Inline amount shown before approval actions (avoids flex overlap with candidates) */
+.tx-in-progress-amount-inline {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0.3rem 0;
+}
+
 /* P2P approval callout */
 .p2p-approval-callout {
     font-size: 0.85rem;
-    color: #adb5bd;
-    padding: 0.4rem 0.6rem;
-    background: rgba(232, 62, 140, 0.1);
-    border-radius: 4px;
+    color: #6c757d;
+    padding: 0.4rem 0;
     margin-bottom: 0.5rem;
 }
 
 .p2p-candidate-row {
-    display: -webkit-box; display: -ms-flexbox; display: flex;
-    -webkit-box-align: center; -ms-flex-align: center; align-items: center;
-    -webkit-box-pack: justify; -ms-flex-pack: justify; justify-content: space-between;
-    padding: 0.4rem 0.6rem;
-    background: rgba(255,255,255,0.05);
-    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f0f0;
     margin-bottom: 0.3rem;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
-.p2p-candidate-info { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; }
-.p2p-candidate-fee { color: #adb5bd; }
-.p2p-candidate-fee-value { color: #ffc107; }
-.p2p-candidate-total { color: #6c757d; }
+.p2p-candidate-info { flex: 1; min-width: 0; }
+.p2p-candidate-fee { color: #6c757d; }
+.p2p-candidate-fee-value { color: #d4880f; font-weight: 600; }
+.p2p-candidate-total { color: #495057; }
+
+@media (max-width: 576px) {
+    .p2p-candidate-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.4rem;
+    }
+    .p2p-candidate-row .btn { align-self: flex-start; }
+}
 
 .status-msg-danger { color: #dc3545; font-size: 0.8rem; }
 .status-msg-muted { color: #6c757d; font-size: 0.8rem; }
@@ -3759,7 +4005,7 @@ hr.currency-separator-double {
 .tx-phase-pending { background: #6c757d; color: white; }
 .tx-phase-route_search { background: #ffc107; color: white; }
 .tx-phase-route_found { background: #17a2b8; color: white; }
-.tx-phase-awaiting_approval { background: #e83e8c; color: white; }
+.tx-phase-awaiting_approval { background: #0d6efd; color: white; }
 .tx-phase-sending { background: #0d6efd; color: white; }
 .tx-phase-syncing { background: #fd7e14; color: white; }
 
@@ -3775,12 +4021,16 @@ hr.currency-separator-double {
 /* --- DLQ dynamic variants --- */
 .dlq-chip-pending { border-color: #ffc107; color: #ffc107; }
 .dlq-chip-retrying { border-color: #17a2b8; color: #17a2b8; }
-.dlq-chip-resolved { border-color: #28a745; color: #28a745; }
+.dlq-chip-resolved { border-color: var(--status-success-bg, #6c757d); color: var(--status-success-bg, #6c757d); }
 .dlq-chip-abandoned { border-color: #6c757d; color: #6c757d; }
 
 .dlq-badge-pending { background: #fff3cd; color: #856404; }
 .dlq-badge-retrying { background: #cff4fc; color: #055160; }
-.dlq-badge-resolved { background: #d1e7dd; color: #0a3622; }
+/* Resolved follows the status color scheme (success-soft palette). */
+.dlq-badge-resolved {
+    background: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+}
 .dlq-badge-abandoned { background: #e2e3e5; color: #383d41; }
 
 .dlq-retry-count { font-weight: 600; color: #6c757d; }
@@ -3909,27 +4159,39 @@ hr.currency-separator-double {
     padding: 1rem;
     border-radius: 8px;
     margin-bottom: 1.5rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
 }
 
-.tx-modal-header-sent {
-    background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
-}
-
+/* Legacy direction classes. Left as no-op selectors so existing JS that
+   emits `tx-modal-header-sent` / `tx-modal-header-received` still renders.
+   The actual direction color is driven by the amount color scheme further
+   down in this file. */
+.tx-modal-header-sent,
 .tx-modal-header-received {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    /* background/border inherited from .tx-modal-header above */
 }
 
 .tx-modal-amount {
     font-size: 2rem;
     font-weight: bold;
-    color: white;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
+    color: inherit;
+}
+
+/* Direction-specific overrides for the amount number — driven by the
+   amount color scheme custom properties. The header itself stays neutral
+   gray regardless of scheme (that's the .tx-modal-header rule above),
+   only the +/- NUMBER flips with the scheme. */
+.tx-modal-header-received .tx-modal-amount {
+    color: var(--amount-pos-color, inherit);
+}
+.tx-modal-header-sent .tx-modal-amount {
+    color: var(--amount-neg-color, inherit);
 }
 
 .tx-modal-direction {
-    color: white;
+    color: inherit;
     margin-top: 0.5rem;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
 .tx-modal-badges {
@@ -3949,9 +4211,15 @@ hr.currency-separator-double {
 .tx-modal-badge-contact { background: #17a2b8; }
 .tx-modal-badge-p2p { background: #ffc107; color: #000; }
 .tx-modal-badge-direct { background: #ffc107; color: #000; }
-.tx-modal-badge-sent { background: #dc3545; }
-.tx-modal-badge-received { background: #28a745; }
 .tx-modal-badge-relay { background: #17a2b8; }
+/* Direction badges (sent/received) follow the amount color scheme —
+   neutral by default, green/red under western, flipped under eastern.
+   See the AMOUNT COLOR SCHEME OVERRIDES block at the bottom of this file. */
+.tx-modal-badge-sent,
+.tx-modal-badge-received {
+    background: #e9ecef;
+    color: #495057;
+}
 
 .tx-modal-mono {
     font-family: monospace;
@@ -4125,8 +4393,8 @@ hr.currency-separator-double {
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: #dc3545;
-    color: #fff;
+    background: var(--status-failure-bg, #dc3545);
+    color: var(--status-failure-fg, #fff);
     font-size: 0.7rem;
     font-weight: 700;
     line-height: 1;
@@ -4203,8 +4471,8 @@ hr.currency-separator-double {
         height: 16px;
         padding: 0 4px;
         border-radius: 8px;
-        background: #dc3545;
-        color: #fff;
+        background: var(--status-failure-bg, #dc3545);
+        color: var(--status-failure-fg, #fff);
         font-size: 0.6rem;
         font-weight: 700;
         line-height: 1;
@@ -4262,7 +4530,7 @@ hr.currency-separator-double {
 }
 
 .pr-item--approved {
-    border-left: 3px solid #28a745;
+    border-left: 3px solid var(--status-success-bg, #28a745);
     opacity: 0.85;
 }
 
@@ -4285,7 +4553,10 @@ hr.currency-separator-double {
     color: #0d6efd;
 }
 
-.pr-item--declined,
+.pr-item--declined {
+    border-left: 3px solid var(--status-failure-bg, #6c757d);
+    opacity: 0.7;
+}
 .pr-item--cancelled {
     border-left: 3px solid #6c757d;
     opacity: 0.7;
@@ -4314,8 +4585,8 @@ hr.currency-separator-double {
 
 .pr-badge--incoming  { background: #fff3cd; color: #856404; }
 .pr-badge--pending   { background: #fff3cd; color: #856404; }
-.pr-badge--approved  { background: #d4edda; color: #155724; }
-.pr-badge--declined,
+.pr-badge--approved  { background: var(--status-success-soft-bg, #d4edda); color: var(--status-success-soft-fg, #155724); }
+.pr-badge--declined  { background: var(--status-failure-soft-bg, #e9ecef); color: var(--status-failure-soft-fg, #495057); }
 .pr-badge--cancelled { background: #e9ecef; color: #495057; }
 
 .pr-from   { flex: 1; min-width: 0; }
@@ -4338,4 +4609,114 @@ hr.currency-separator-double {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+}
+
+/* ============================================================
+   AMOUNT COLOR SCHEME — Settings page: compact dropdown + live preview
+   ============================================================ */
+.color-scheme-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.color-scheme-row select {
+    flex: 1;
+    min-width: 0;
+}
+.color-scheme-swatch {
+    display: inline-flex;
+    gap: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #f8f9fa;
+    font-weight: 600;
+    font-family: 'Consolas', 'Monaco', monospace;
+    white-space: nowrap;
+}
+/* Status variant — drop the monospace font so the child .tx-status-badge
+   pills render in the normal UI font like they do in the wallet. */
+.color-scheme-swatch-status {
+    font-family: inherit;
+    align-items: center;
+}
+
+/* ============================================================
+   AMOUNT COLOR SCHEME
+   Set on the nearest ancestor carrying data-amount-colors="..."
+   (the <body> for the wallet, the preview swatch on the Settings
+   page). Values cascade as CSS custom properties so the NEAREST
+   ancestor wins — which means the Settings preview swatch can
+   override the body-level scheme for its own subtree, fixing the
+   bug where a Western body locked the preview into Western even
+   when you picked Neutral or Eastern in the dropdown.
+
+   The amount color scheme ONLY affects the amount number itself
+   ("+100 USD" / "−100 USD"). Direction labels (Sent / Received
+   badges, direction icon circles) are always neutral regardless
+   of scheme — see the three-axis split (amount / direction /
+   status), which avoids the counterintuitive Eastern case where
+   a "Sent" label would otherwise end up green.
+   ============================================================ */
+
+[data-amount-colors="western"] {
+    --amount-pos-color: #198754;
+    --amount-neg-color: #dc3545;
+}
+[data-amount-colors="eastern"] {
+    --amount-pos-color: #dc3545;
+    --amount-neg-color: #198754;
+}
+/* Neutral clears the variables to the guaranteed-invalid value so
+   `var(--x, inherit)` in the consuming rules falls back to `inherit`.
+   Needed when a child scope (e.g. Settings preview swatch) wants to
+   render as neutral despite the body being western/eastern. */
+[data-amount-colors="neutral"] {
+    --amount-pos-color: initial;
+    --amount-neg-color: initial;
+}
+
+/* ============================================================
+   STATUS COLOR SCHEME
+   Same approach. Affects only the binary success/failure badges:
+   Accepted / Completed / Resolved / chain-valid vs Rejected /
+   Blocked / chain-gap. Pending / sending / retrying / cancelled /
+   abandoned badges stay as they are — they're orthogonal states,
+   not success/failure.
+
+   Two palettes are exposed:
+     - solid (bg + fg): used by .tx-status-* badges (high-contrast)
+     - soft (pastel bg + dark fg): used by .badge-accepted/blocked/
+       danger + .dlq-badge-resolved
+   ============================================================ */
+
+[data-status-colors="western"] {
+    --status-success-bg: #28a745;
+    --status-success-fg: #fff;
+    --status-failure-bg: #dc3545;
+    --status-failure-fg: #fff;
+    --status-success-soft-bg: #d1e7dd;
+    --status-success-soft-fg: #0f5132;
+    --status-failure-soft-bg: #f8d7da;
+    --status-failure-soft-fg: #842029;
+}
+[data-status-colors="eastern"] {
+    --status-success-bg: #dc3545;
+    --status-success-fg: #fff;
+    --status-failure-bg: #28a745;
+    --status-failure-fg: #fff;
+    --status-success-soft-bg: #f8d7da;
+    --status-success-soft-fg: #842029;
+    --status-failure-soft-bg: #d1e7dd;
+    --status-failure-soft-fg: #0f5132;
+}
+[data-status-colors="neutral"] {
+    --status-success-bg: initial;
+    --status-success-fg: initial;
+    --status-failure-bg: initial;
+    --status-failure-fg: initial;
+    --status-success-soft-bg: initial;
+    --status-success-soft-fg: initial;
+    --status-failure-soft-bg: initial;
+    --status-failure-soft-fg: initial;
 }

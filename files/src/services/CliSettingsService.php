@@ -113,17 +113,6 @@ class CliSettingsService
             } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
                 $key = 'defaultTransportMode';
                 $value = strtolower($argv[3]);
-            } elseif(strtolower($argv[2]) === 'autorefreshenabled'){
-                $key = 'autoRefreshEnabled';
-                $inputValue = strtolower($argv[3]);
-                if ($inputValue === 'true' || $inputValue === '1' || $inputValue === 'on' || $inputValue === 'yes') {
-                    $value = true;
-                } elseif ($inputValue === 'false' || $inputValue === '0' || $inputValue === 'off' || $inputValue === 'no') {
-                    $value = false;
-                } else {
-                    $output->validationError('autoRefreshEnabled', 'Value must be true/false, on/off, yes/no, or 1/0');
-                    return;
-                }
             } elseif(strtolower($argv[2]) === 'autobackupenabled'){
                 $key = 'autoBackupEnabled';
                 $validation = InputValidator::validateBoolean($argv[3] ?? '');
@@ -332,11 +321,6 @@ class CliSettingsService
                 $validation = InputValidator::validateDateFormat($argv[3] ?? '');
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
-            } elseif(strtolower($argv[2]) === 'displayrecenttransactionslimit'){
-                $key = 'displayRecentTransactionsLimit';
-                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
-                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
-                $value = $validation['value'];
             // Currency management
             } elseif(strtolower($argv[2]) === 'allowedcurrencies'){
                 $key = 'allowedCurrencies';
@@ -397,7 +381,6 @@ class CliSettingsService
                 ],
                 'Feature Toggles' => [
                     ['num' => '15', 'label' => 'Display name'],
-                    ['num' => '16', 'label' => 'Auto-refresh transactions'],
                     ['num' => '50', 'label' => 'Hop budget randomization'],
                     ['num' => '17', 'label' => 'Contact status pinging'],
                     ['num' => '18', 'label' => 'Contact status sync on ping'],
@@ -433,7 +416,6 @@ class CliSettingsService
                 'Display' => [
                     ['num' => '40', 'label' => 'Maximum lines of balance/transaction output'],
                     ['num' => '41', 'label' => 'Date format'],
-                    ['num' => '43', 'label' => 'Recent transactions limit'],
                     ['num' => '44a', 'label' => 'Display decimal places (0-8)'],
                 ],
                 'Currency Management' => [
@@ -650,17 +632,6 @@ class CliSettingsService
                         return;
                     }
                     $value = $rawInput;
-                    break;
-
-                case '16':
-                    echo "Enable auto-refresh for pending transactions? (yes/no): ";
-                    $key = 'autoRefreshEnabled';
-                    $validation = InputValidator::validateBoolean(trim(fgets(STDIN)));
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
-                    }
-                    $value = $validation['value'];
                     break;
 
                 case '17':
@@ -948,17 +919,6 @@ class CliSettingsService
                     }
                     break;
 
-                case '43':
-                    echo "Enter recent transactions limit (minimum 1): ";
-                    $key = 'displayRecentTransactionsLimit';
-                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
-                    }
-                    $value = $validation['value'];
-                    break;
-
                 // Currency Management
                 case '44':
                     echo "Current allowed currencies: " . implode(', ', UserContext::getInstance()->getAllowedCurrencies()) . "\n";
@@ -1164,7 +1124,6 @@ class CliSettingsService
             'hostname' => $this->currentUser->getHttpAddress(),
             'hostname_secure' => $this->currentUser->getHttpsAddress(),
             'trusted_proxies' => $this->currentUser->getTrustedProxies(),
-            'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
             'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled(),
             'auto_accept_transaction' => $this->currentUser->getAutoAcceptTransaction(),
             // Feature toggles
@@ -1204,7 +1163,6 @@ class CliSettingsService
             'tor_fallback_require_encrypted' => $this->currentUser->isTorFallbackRequireEncrypted(),
             // Display
             'display_date_format' => $this->currentUser->getDisplayDateFormat(),
-            'display_recent_transactions_limit' => $this->currentUser->getDisplayRecentTransactionsLimit(),
             'display_decimals' => $this->currentUser->getAllDisplayDecimals(),
             // Currency management
             'allowed_currencies' => $this->currentUser->getAllowedCurrencies(),
@@ -1238,7 +1196,6 @@ class CliSettingsService
             echo "\tAuto-accept P2P transactions: " . ($settings['auto_accept_transaction'] ? 'enabled' : 'disabled') . "\n";
             echo "\n  Feature Toggles:\n";
             if ($settings['name']) echo "\tDisplay name: " . $settings['name'] . "\n";
-            echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tHop budget randomization: " . ($settings['hop_budget_randomized'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status pinging: " . ($settings['contact_status_enabled'] ? 'enabled' : 'disabled') . "\n";
             echo "\tContact status sync on ping: " . ($settings['contact_status_sync_on_ping'] ? 'enabled' : 'disabled') . "\n";
@@ -1269,7 +1226,6 @@ class CliSettingsService
             echo "\n  Display:\n";
             echo "\tDefault maximum lines of balance output: " .  ($settings['max_output_lines'] === 0 ? 'unlimited' : $settings['max_output_lines']) . "\n";
             echo "\tDate format: " . $settings['display_date_format'] . "\n";
-            echo "\tRecent transactions limit: " . $settings['display_recent_transactions_limit'] . "\n";
             echo "\tDisplay decimal places: " . $settings['display_decimals'] . " (internal precision: " . Constants::INTERNAL_PRECISION . ")\n";
             echo "\n  Currency Management:\n";
             echo "\tAllowed currencies: " . (is_array($settings['allowed_currencies']) ? implode(', ', $settings['allowed_currencies']) : ($settings['allowed_currencies'] ?: '(all)')) . "\n";

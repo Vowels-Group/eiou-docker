@@ -1038,7 +1038,7 @@ Create and send a payment request to a contact.
 
 ```json
 {
-  "contact_name": "Bob",
+  "contact": "Bob",
   "amount": "10.00",
   "currency": "USD",
   "description": "Optional memo",
@@ -1048,20 +1048,21 @@ Create and send a payment request to a contact.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `contact_name` | string | Yes | Name of an accepted contact |
+| `contact` | string | Yes | Name of an accepted contact |
 | `amount` | string | Yes | Amount to request (e.g. `"10.00"`) |
 | `currency` | string | Yes | Currency code (e.g. `"USD"`) |
 | `description` | string | No | Optional memo shown to the recipient |
 | `address_type` | string | No | Preferred transport: `tor`, `https`, or `http` (auto-selects best if omitted) |
 
-**Response:**
+**Response (201 Created):**
 
 ```json
 {
   "success": true,
   "data": {
     "request_id": "abc123def456..."
-  }
+  },
+  "message": "Payment request sent"
 }
 ```
 
@@ -1089,9 +1090,9 @@ Approve an incoming payment request. Internally calls `sendEiou` to the requeste
 {
   "success": true,
   "data": {
-    "message": "Transaction sent successfully",
     "txid": "txid-abc123"
-  }
+  },
+  "message": "Payment sent"
 }
 ```
 
@@ -1117,7 +1118,9 @@ Decline an incoming payment request. Sends a response message back to the reques
 
 ```json
 {
-  "success": true
+  "success": true,
+  "data": null,
+  "message": "Payment request declined"
 }
 ```
 
@@ -1135,7 +1138,9 @@ Cancel an outgoing payment request (only while status is `pending`).
 
 ```json
 {
-  "success": true
+  "success": true,
+  "data": null,
+  "message": "Payment request cancelled"
 }
 ```
 
@@ -1172,6 +1177,11 @@ Get system health status.
             "source": "docker-hub",
             "error": null
         },
+        "analytics": {
+            "enabled": false,
+            "consent_pending": true,
+            "last_submitted": null
+        },
         "timestamp": "2026-03-31T12:00:00+00:00"
     },
     "request_id": "req_abc123"
@@ -1188,6 +1198,9 @@ Get system health status.
 - `update.last_checked`: ISO 8601 timestamp of last check (null if never checked)
 - `update.source`: `"docker-hub"` or `"github"` (null if not checked)
 - `update.error`: Error message if the last check failed (null on success)
+- `analytics.enabled`: Whether anonymous usage analytics are enabled
+- `analytics.consent_pending`: Whether the user has not yet been asked for analytics consent
+- `analytics.last_submitted`: ISO 8601 timestamp of last analytics submission (null if never submitted)
 
 ---
 
@@ -1261,7 +1274,6 @@ Get system settings.
             "hostname": "http://alice",
             "hostname_secure": "https://alice",
             "trusted_proxies": "",
-            "auto_refresh_enabled": true,
             "auto_backup_enabled": true,
             "auto_accept_transaction": true,
             "hop_budget_randomized": true,
@@ -1295,7 +1307,6 @@ Get system settings.
             "tor_failure_transport_fallback": true,
             "tor_fallback_require_encrypted": true,
             "display_date_format": "Y-m-d H:i:s.u",
-            "display_recent_transactions_limit": 5,
             "allowed_currencies": ["USD", "EUR"]
         }
     }
@@ -1317,10 +1328,7 @@ Get system settings.
 - `hostname`: HTTP hostname of the node (e.g., "http://alice")
 - `hostname_secure`: HTTPS hostname of the node (e.g., "https://alice")
 - `trusted_proxies`: Trusted proxy IPs for header forwarding (comma-separated, empty = none)
-- `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
-- `update_check_enabled`: Whether daily Docker Hub update checks are enabled (no data sent — read-only API call)
-- `analytics_enabled`: Whether anonymous usage analytics are enabled (opt-in, default off — sends only aggregate counts weekly)
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
@@ -1353,7 +1361,6 @@ Get system settings.
 - `tor_failure_transport_fallback`: Fall back to HTTP/HTTPS when Tor delivery fails
 - `tor_fallback_require_encrypted`: Only fall back to HTTPS, never plain HTTP
 - `display_date_format`: PHP date format string for timestamps
-- `display_recent_transactions_limit`: Number of recent transactions on dashboard (min 1)
 - `allowed_currencies`: List of allowed currency codes
 
 ---
@@ -1386,12 +1393,12 @@ Update system settings.
 | `direct_tx_expiration` | int | Direct TX delivery timeout in seconds (0 = no expiry) |
 | `max_output` | int | Maximum CLI output lines (0 = unlimited) |
 | `default_transport_mode` | string | Default transport protocol (http, https, tor) |
-| `auto_refresh_enabled` | boolean | Enable/disable auto-refresh |
 | `auto_backup_enabled` | boolean | Enable/disable automatic backups |
 | `trusted_proxies` | string | Trusted proxy IPs (comma-separated, empty = none) |
 | `hostname` | string | Node hostname (triggers SSL cert regeneration) |
 | `name` | string | Node display name |
 | `allowed_currencies` | string | Allowed currencies (comma-separated, e.g., "USD,EUR") |
+| `auto_reject_unknown_currency` | boolean | Auto-reject contact requests with currencies not in allowed list |
 | `hop_budget_randomized` | boolean | Randomize P2P hop depth (disable for max reachability) |
 | `contact_status_enabled` | boolean | Enable/disable contact status tracking |
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
@@ -1399,7 +1406,6 @@ Update system settings.
 | `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
-| `update_check_enabled` | boolean | Enable/disable daily Docker Hub update checks |
 | `analytics_enabled` | boolean | Enable/disable anonymous usage analytics (opt-in, default off) |
 | `api_enabled` | boolean | Enable/disable REST API endpoint |
 | `api_cors_allowed_origins` | string | Allowed CORS origins (empty = none) |
@@ -1428,7 +1434,6 @@ Update system settings.
 | `sync_max_chunks` | int | Max sync chunks per cycle (10-1000) |
 | `held_tx_sync_timeout_seconds` | int | Held tx sync timeout (30-299 seconds) |
 | `display_date_format` | string | PHP date format string |
-| `display_recent_transactions_limit` | int | Recent transactions on dashboard (min 1) |
 
 All fields are optional. Only provided fields will be updated. Unknown fields return warnings.
 
@@ -1603,6 +1608,87 @@ Start background processors by removing the shutdown flag. The watchdog process 
     }
 }
 ```
+
+---
+
+### GET /api/v1/system/debug-report
+
+Download a debug report as JSON. Includes system info, debug table entries, application logs, PHP errors, and nginx errors.
+
+**Permission:** `system:read`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `full` | boolean | `false` | Include full log history (default: last 50 lines per log) |
+| `description` | string | `""` | Optional issue description included in the report |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "report": { "..." },
+        "report_type": "limited",
+        "debug_entries_count": 42
+    }
+}
+```
+
+**Notes:**
+- Same report format as the CLI `eiou report debug` and the GUI Debug Report (all use `DebugReportService`)
+- Limited mode includes last 50 lines of each log file; full mode includes up to 5MB per log
+- Reports do not contain private keys, seed phrases, or authentication codes
+
+---
+
+### POST /api/v1/system/debug-report
+
+Generate a debug report, scrub sensitive data (addresses, keys, IPs), and submit it to the support endpoint via Tor.
+
+**Permission:** `system:read`
+
+**Request Body:**
+
+```json
+{
+    "description": "login page crash after update",
+    "full": false
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | No | Issue description (max 500 chars) |
+| `full` | boolean | No | Include full log history (default: false) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "submitted": true,
+        "key": "rpt_abc123",
+        "report_type": "limited"
+    }
+}
+```
+
+**Error Responses:**
+
+| Code | Status | Cause |
+|------|--------|-------|
+| `debug_report_submit_failed` | 502 | Tor submission failed or server rejected |
+| `debug_report_error` | 500 | Report generation failed |
+
+**Notes:**
+- Sensitive data (onion addresses, public keys, IPs, URLs) is scrubbed before submission
+- Rate-limited to 3 submissions per day (client-side)
+- Payloads over 4.5MB are automatically trimmed (debug entries first, then log fields)
+- If still over 5MB after trimming, returns an error suggesting manual download instead
 
 ---
 

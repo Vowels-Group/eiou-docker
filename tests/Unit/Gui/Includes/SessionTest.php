@@ -567,4 +567,33 @@ class SessionTest extends TestCase
         $this->assertArrayHasKey('last_regeneration', $_SESSION);
         $this->assertLessThanOrEqual(time(), $_SESSION['last_regeneration']);
     }
+
+    // =========================================================================
+    // Configurable Session Timeout Tests
+    // =========================================================================
+
+    /**
+     * Test that session timeout defaults to 30 minutes when no config file exists
+     */
+    public function testSessionTimeoutDefaultsTo30Minutes(): void
+    {
+        // With no config file, timeout should be 1800 seconds (30 min)
+        // Set activity to 29 minutes ago — should still be active
+        $_SESSION['last_activity'] = time() - (29 * 60);
+
+        $result = $this->session->checkSessionTimeout();
+        $this->assertTrue($result);
+    }
+
+    /**
+     * Test that session expires after default 30 minute timeout
+     */
+    public function testSessionExpiresAfterDefaultTimeout(): void
+    {
+        $_SESSION['authenticated'] = true;
+        $_SESSION['last_activity'] = time() - (31 * 60); // 31 minutes ago
+
+        $result = $this->session->checkSessionTimeout();
+        $this->assertFalse($result);
+    }
 }

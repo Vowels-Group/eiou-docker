@@ -795,7 +795,8 @@ class MessageService implements MessageServiceInterface {
                                 if (!$p2pAlreadyCompleted) {
                                     $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                                 }
-                                output(outputTransactionP2pSentSuccesfully($p2p), 'SILENT');
+                                $p2pContact = $this->contactRepository->getContactByNameOrAddress($p2p['destination_address'] ?? '');
+                                output(outputTransactionP2pSentSuccessfully($p2p, $p2pContact['name'] ?? null), 'SILENT');
 
                                 // Store description from completion message if provided
                                 if (isset($response['description']) && $response['description'] !== null) {
@@ -872,7 +873,8 @@ class MessageService implements MessageServiceInterface {
                     if (!$txAlreadyCompleted) {
                         $this->balanceRepository->updateBalanceGivenTransactions($transaction);
                     }
-                    output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
+                    $directContact = $this->contactRepository->getContactByNameOrAddress($decodedMessage['senderAddress'] ?? '');
+                    output(outputTransactionDirectSentSuccessfully($decodedMessage, $directContact['name'] ?? null), 'SILENT');
 
                     // Store description from completion message if provided
                     if (isset($decodedMessage['description']) && $decodedMessage['description'] !== null) {

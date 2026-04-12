@@ -58,7 +58,7 @@ RUN curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php \
     && rm /tmp/composer-setup.php
 
 # Copy application code needed for autoload generation
-COPY files/composer.json /app/eiou/composer.json
+COPY files/composer.json files/composer.lock /app/eiou/
 COPY files/src/ /app/eiou/src/
 COPY files/root/ /app/eiou/
 
@@ -202,7 +202,7 @@ COPY files/root/ /app/eiou/
 # Copy src folder (namespaced PHP classes)
 COPY files/src/ /app/eiou/src/
 
-# Copy scripts (backup-cron, validate-autoload)
+# Copy scripts (analytics-cron, backup-cron, update-check-cron, validate-autoload)
 COPY files/scripts/ /app/eiou/scripts/
 
 # Copy composer.json (needed for autoloader path reference)

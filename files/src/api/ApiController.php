@@ -58,6 +58,8 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
+ * - GET  /api/v1/system/debug-report        - Download debug report (JSON)
+ * - POST /api/v1/system/debug-report        - Submit debug report to support
  *
  * - POST /api/v1/chaindrop/propose           - Propose chain drop
  * - POST /api/v1/chaindrop/accept            - Accept chain drop proposal
@@ -261,6 +263,8 @@ class ApiController {
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
+            $method === 'GET' && $action === 'debug-report' => $this->getDebugReport($params),
+            $method === 'POST' && $action === 'debug-report' => $this->submitDebugReport($body),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
         };
     }
@@ -1551,7 +1555,6 @@ class ApiController {
                 'hostname' => $currentUser->getHttpAddress(),
                 'hostname_secure' => $currentUser->getHttpsAddress(),
                 'trusted_proxies' => $currentUser->getTrustedProxies(),
-                'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled(),
                 'auto_backup_enabled' => $currentUser->getAutoBackupEnabled(),
                 'auto_accept_transaction' => $currentUser->getAutoAcceptTransaction(),
                 // Feature toggles
@@ -1592,7 +1595,6 @@ class ApiController {
                 'tor_fallback_require_encrypted' => $currentUser->isTorFallbackRequireEncrypted(),
                 // Display
                 'display_date_format' => $currentUser->getDisplayDateFormat(),
-                'display_recent_transactions_limit' => $currentUser->getDisplayRecentTransactionsLimit(),
                 // Currency management
                 'allowed_currencies' => $currentUser->getAllowedCurrencies(),
             ]
@@ -1625,7 +1627,6 @@ class ApiController {
             'p2p_expiration' => ['key' => 'p2pExpiration', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
             'max_output' => ['key' => 'maxOutput', 'validate' => null, 'config' => 'defaultconfig.json'],
             'default_transport_mode' => ['key' => 'defaultTransportMode', 'validate' => null, 'config' => 'defaultconfig.json'],
-            'auto_refresh_enabled' => ['key' => 'autoRefreshEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_backup_enabled' => ['key' => 'autoBackupEnabled', 'validate' => null, 'config' => 'defaultconfig.json'],
             'auto_accept_transaction' => ['key' => 'autoAcceptTransaction', 'validate' => 'validateBoolean', 'config' => 'defaultconfig.json'],
             'direct_tx_expiration' => ['key' => 'directTxExpiration', 'validate' => null, 'config' => 'defaultconfig.json', 'intMin' => 0],
@@ -1677,7 +1678,6 @@ class ApiController {
             'held_tx_sync_timeout_seconds' => ['key' => 'heldTxSyncTimeoutSeconds', 'validate' => null, 'config' => 'defaultconfig.json', 'intRange' => [30, 299]],
             // Display
             'display_date_format' => ['key' => 'displayDateFormat', 'validate' => 'validateDateFormat', 'config' => 'defaultconfig.json'],
-            'display_recent_transactions_limit' => ['key' => 'displayRecentTransactionsLimit', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
         ];
 
         $updated = [];
@@ -1724,6 +1724,14 @@ class ApiController {
                     continue;
                 }
                 $value = $validation['value'];
+            } elseif (isset($mapping['enum'])) {
+                // Value must be one of the allowed options
+                $intVal = (int) $rawValue;
+                if (!in_array($intVal, $mapping['enum'])) {
+                    $errors[] = "$apiKey: Must be one of: " . implode(', ', $mapping['enum']);
+                    continue;
+                }
+                $value = $intVal;
             } else {
                 // Custom validation for non-InputValidator fields
                 if ($configKey === 'maxOutput') {
@@ -1734,7 +1742,7 @@ class ApiController {
                     $value = intval($rawValue);
                 } elseif ($configKey === 'defaultTransportMode') {
                     $value = strtolower((string) $rawValue);
-                } elseif ($configKey === 'autoRefreshEnabled' || $configKey === 'autoBackupEnabled') {
+                } elseif ($configKey === 'autoBackupEnabled') {
                     $validation = InputValidator::validateBoolean($rawValue);
                     if (!$validation['valid']) {
                         $errors[] = "$apiKey: " . $validation['error'];
@@ -1942,6 +1950,74 @@ class ApiController {
             ]);
         } catch (Exception $e) {
             return $this->errorResponse('Start failed: ' . $e->getMessage(), 500, 'start_error');
+        }
+    }
+
+    // ==================== Debug Report Endpoints ====================
+
+    /**
+     * GET /api/v1/system/debug-report
+     *
+     * Download a debug report as JSON.
+     * Query params: full=1 (optional), description (optional)
+     */
+    private function getDebugReport(array $params): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        try {
+            $reportService = $this->services->getDebugReportService();
+            $full = !empty($params['full']);
+            $description = $params['description'] ?? '';
+
+            $report = $reportService->generateReport($description, $full);
+
+            return $this->successResponse([
+                'report' => $report,
+                'report_type' => $full ? 'full' : 'limited',
+                'debug_entries_count' => $report['debug_entries_count'],
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to generate debug report: ' . $e->getMessage(), 500, 'debug_report_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/system/debug-report
+     *
+     * Generate and submit a debug report to the support endpoint.
+     * Body JSON: { "description": "...", "full": true/false }
+     */
+    private function submitDebugReport(string $body): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        try {
+            $data = json_decode($body, true) ?? [];
+            $full = !empty($data['full']);
+            $description = $data['description'] ?? '';
+
+            $reportService = $this->services->getDebugReportService();
+            $report = $reportService->generateReport($description, $full);
+            $result = \Eiou\Services\DebugReportService::submit($report, $description);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'submitted' => true,
+                    'key' => $result['key'],
+                    'report_type' => $full ? 'full' : 'limited',
+                ]);
+            }
+
+            return $this->errorResponse(
+                $result['error'] ?? 'Submission failed',
+                502,
+                'debug_report_submit_failed'
+            );
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to submit debug report: ' . $e->getMessage(), 500, 'debug_report_error');
         }
     }
 
@@ -2508,7 +2584,7 @@ class ApiController {
                 $candidateCount = $rp2pCandidateRepo->getCandidateCount($p2p['hash']);
                 $transactions[] = [
                     'hash' => $p2p['hash'],
-                    'amount' => (int) $p2p['amount'],
+                    'amount' => $p2p['amount'],
                     'currency' => $p2p['currency'],
                     'destination_address' => $p2p['destination_address'],
                     'my_fee_amount' => (int) ($p2p['my_fee_amount'] ?? 0),
@@ -2557,7 +2633,7 @@ class ApiController {
 
             return $this->successResponse([
                 'hash' => $hash,
-                'amount' => (int) $p2p['amount'],
+                'amount' => $p2p['amount'],
                 'currency' => $p2p['currency'],
                 'fast' => (int) $p2p['fast'],
                 'candidates' => $candidates,
@@ -2616,7 +2692,7 @@ class ApiController {
                 $request = [
                     'hash' => $candidate['hash'],
                     'time' => $candidate['time'],
-                    'amount' => (int) $candidate['amount'],
+                    'amount' => $candidate['amount'],
                     'currency' => $candidate['currency'],
                     'senderPublicKey' => $candidate['sender_public_key'],
                     'senderAddress' => $candidate['sender_address'],
@@ -2653,7 +2729,7 @@ class ApiController {
                 $request = [
                     'hash' => $candidate['hash'],
                     'time' => $candidate['time'],
-                    'amount' => (int) $candidate['amount'],
+                    'amount' => $candidate['amount'],
                     'currency' => $candidate['currency'],
                     'senderPublicKey' => $candidate['sender_public_key'],
                     'senderAddress' => $candidate['sender_address'],
@@ -2680,7 +2756,7 @@ class ApiController {
                 $request = [
                     'hash' => $rp2p['hash'],
                     'time' => $rp2p['time'],
-                    'amount' => (int) $rp2p['amount'],
+                    'amount' => $rp2p['amount'],
                     'currency' => $rp2p['currency'],
                     'senderPublicKey' => $rp2p['sender_public_key'],
                     'senderAddress' => $rp2p['sender_address'],

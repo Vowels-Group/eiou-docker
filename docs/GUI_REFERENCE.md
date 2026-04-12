@@ -193,12 +193,15 @@ Handles settings and debug operations.
 | `handleClearDebugLogs()` | `clearDebugLogs` | Clear debug entries | None |
 | `handleSendDebugReport()` | `sendDebugReport` | Generate debug file | `description` |
 | `handleGetDebugReportJson()` | `getDebugReportJson` | Download debug JSON (AJAX) | `description`, `report_mode` |
+| `handleSubmitDebugReport()` | `submitDebugReport` | Submit debug report to support via Tor (AJAX, non-blocking) | `description`, `report_mode` |
 | `handleAnalyticsConsent()` | `analyticsConsent` | Save one-time analytics consent choice (AJAX) | `consent` (0 or 1) |
 
 **Available Settings:**
 
 | Setting | Type | Description |
 |---------|------|-------------|
+| `name` | string | Display name shared via QR codes (saved to userconfig.json) |
+| `sessionTimeoutMinutes` | int | Session inactivity timeout (5, 10, 15, 30, or 60 minutes) |
 | `defaultCurrency` | string | Default currency code |
 | `defaultFee` | float | Default fee percentage |
 | `minFee` | float | Minimum fee amount |
@@ -210,6 +213,9 @@ Handles settings and debug operations.
 | `maxOutput` | int | Max display lines |
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
+| `contactAvatarStyle` | string | Contact avatar rendering style (`gradient`, `pixel`, `tile`) |
+| `amountColorScheme` | string | Color scheme for transaction amounts (`neutral`, `western`, `eastern`) |
+| `statusColorScheme` | string | Color scheme for status badges (`neutral`, `western`, `eastern`) |
 | `autoBackupEnabled` | bool | Enable automatic daily database backups |
 | `updateCheckEnabled` | bool | Check Docker Hub daily for newer versions (read-only API call) |
 | `autoAcceptTransaction` | bool | Auto-accept P2P transactions when route found (when OFF, transactions pause at `awaiting_approval` for user review in both fast and best-fee modes) |
@@ -228,7 +234,7 @@ Handles settings and debug operations.
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
 | Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
 | Currency | `allowedCurrencies` |
-| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput` |
+| Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput`, `sessionTimeoutMinutes`, `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme` |
 
 ---
 
@@ -350,12 +356,22 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 | Total Fee Earnings | P2P relay fee earnings per currency (amber/gold card) |
 | Total Available Credit | Sum of available credit per currency (blue-purple card), from ping/pong, ~5 min refresh |
 | User Addresses | HTTP/HTTPS/Tor with Copy and QR code buttons |
+| Scan Contact QR | Opens camera scanner — on scan, switches to Contacts tab and opens Add Contact modal with pre-filled address and name |
 | Public Key | Wallet public key with copy button |
 | Status | Always "Active" |
 
 All three dashboard cards display per-currency rows. When a card has no data for a given category, it shows "0.00" with the currency derived from other data sources for consistency.
 
 The ⓘ icons next to "Total Fee Earnings" and "Total Available Credit" open a small info modal on click (tap-friendly on mobile).
+
+**QR Code Format:** QR codes use a typed JSON envelope for forward compatibility:
+
+| Type | Format | Description |
+|------|--------|-------------|
+| `contact` | `{"type":"contact","address":"...","name":"..."}` | Add contact (name optional) |
+| `payment` | `{"type":"payment","address":"...","amount":...,"currency":"...","description":"..."}` | Payment request (future) |
+
+Legacy plain-text QR codes (just an address string) are parsed as type `contact` for backward compatibility.
 
 ---
 
@@ -468,17 +484,28 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 **In-Progress Section:**
 - Phase indicators (pending, route_search, route_found, sending, syncing)
-- P2P vs Direct badges
+- Direct badge shown for non-P2P transactions (P2P type is implied by route/fee info)
 - Held transaction notices
-- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` with route selection UI
-  - Fast mode: shows 1 route with fee breakdown, accept/reject buttons
-  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one
+- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` (blue badge) with route selection UI. Send amount shown inline before candidates
+  - Fast mode: shows 1 route with fee breakdown, Accept/Reject buttons
+  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one. On mobile (≤576px) candidate rows stack vertically
   - Route count updates dynamically as late-arriving candidates are received
+  - Node fee hidden during awaiting_approval (route fee shown per-candidate instead)
 
-**Transaction List:**
-- Status badges (pending, sent, accepted, completed, rejected, cancelled)
+**Transaction Table Columns:**
+
+| Column | Description |
+|--------|-------------|
+| Status icon | Leading column, no header. Single check (sent/accepted), double check (completed), hourglass (pending), cross (rejected), ban (cancelled). Muted grey for normal states; amber for pending, red for rejected |
+| Counterparty | Avatar + contact name |
+| Amount | Sortable. ±value carries sent/received direction |
+| Description | CSS-truncated; full text on hover |
+| Type | Direct / P2P / Contact badge |
+| Origin / Dest. | P2P only: final destination (sent) or original sender (received) |
+| Date | Sortable, formatted timestamp |
+
 - Type badges (Contact, P2P, Direct)
-- Click to open detail modal
+- Click any row to open detail modal
 
 **Transaction Modal:**
 - Full transaction details
@@ -494,19 +521,13 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 The Dead Letter Queue section displays messages that could not be delivered after all automatic retry attempts.
 
-**Filter Tabs:**
-
-| Tab | Shows |
-|-----|-------|
-| Pending & Retrying *(default)* | All actionable items |
-| Pending Only | Items awaiting action |
-| Resolved | Successfully re-delivered items |
-| Abandoned | Manually discarded items |
-| All | Every DLQ record |
+**Status Filter:** Dropdown matching contacts/transactions pattern — Any status (default), Pending & Retrying, Pending Only, Resolved, Abandoned.
 
 **Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
 
-**Table Columns:** Type, Recipient, Failure Reason, Retries, Added, Status, Actions.
+**Table Columns:** Type, Recipient, Failure Reason (truncated), Added, Status, Actions. Uses `contacts-table` chrome with 60vh scrollable wrapper. Clicking any row opens a detail modal with all fields + Retry/Abandon buttons.
+
+**Mobile (≤600px):** Shows Type + Recipient. Tap row for detail modal with full info and actions. Action buttons and status collapse to icon-only at ≤900px.
 
 **Actions per row:**
 
@@ -532,10 +553,10 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 When pending DLQ items exist, the **Activity** tab in the navigation bar displays a count badge.
 
 **DLQ Indicator in Transaction History:**
-Transactions that have a pending or retrying DLQ entry display a red **DLQ** badge in the Recent Transactions and In-Progress Transactions lists. Clicking the badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
+Transactions that have a pending or retrying DLQ entry display a DLQ icon next to the status icon in the Recent Transactions table and a **DLQ** badge in the In-Progress Transactions list. Clicking the icon/badge navigates to `#dlq` to retry or abandon the delivery. When a transaction's delivery is exhausted and it moves to the DLQ, its status is immediately set to `cancelled` so it is removed from the In-Progress panel and stops triggering auto-refresh. Retrying from the DLQ resets the status to `sending` and re-delivers the original signed payload.
 
-**Mobile Layout:**
-At ≤640px the table collapses to a stacked card layout — each cell shows its column label as a prefix.
+**Mobile Layout (≤600px):**
+Collapses to three columns: **Status icon | Counterparty | Amount**. The +/− on Amount carries direction; the status icon confirms completion state.
 
 **Notifications:**
 A warning toast appears when new items are added to the DLQ (tracked per session — each item fires once per browser session).
@@ -612,7 +633,7 @@ The `Session` class provides secure session handling.
 |--------|-------------|
 | `isAuthenticated()` | Check if user is logged in |
 | `authenticate($authCode, $userAuthCode)` | Validate auth code |
-| `checkSessionTimeout()` | Enforce 30-minute inactivity limit |
+| `checkSessionTimeout()` | Enforce configurable inactivity limit (default 30 min, reads from `sessionTimeoutMinutes` in config) |
 | `logout()` | Clear session and destroy cookie |
 | `requireAuth()` | Redirect to login if not authenticated |
 | `generateCSRFToken()` | Create secure token |
@@ -628,7 +649,7 @@ The `Session` class provides secure session handling.
 |---------|----------------|
 | Session regeneration | Every 5 minutes |
 | Auth code comparison | `hash_equals()` constant-time |
-| Session timeout | 30 minutes of inactivity |
+| Session timeout | Configurable (5/10/15/30/60 min, default 30) |
 | ID regeneration on login | Prevents session fixation |
 | CSRF token expiration | 1 hour max age |
 

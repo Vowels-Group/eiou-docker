@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.10-alpha';
+    const APP_VERSION = '0.1.11-alpha';
     const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 6;
+    const SCHEMA_VERSION = 7;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -430,7 +430,7 @@ class Constants {
     ];
 
     // UI/Display
-    const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
+    const DISPLAY_DATE_FORMAT = 'd/m/Y H:i:s';
     const VALID_DATE_FORMATS = [
         'Y-m-d H:i:s.u',   // 2026-03-24 17:43:20.123456 (default, microseconds)
         'Y-m-d H:i:s',     // 2026-03-24 17:43:20
@@ -456,6 +456,31 @@ class Constants {
     const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
+
+    // Session
+    const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
+    const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
+
+    // Contact avatar style — controls how contact avatars are rendered in the contacts list
+    const CONTACT_AVATAR_STYLE = 'gradient';
+    const CONTACT_AVATAR_STYLE_OPTIONS = ['gradient', 'pixel', 'tile'];
+
+    // Amount color scheme — controls how +/- transaction amounts and balances are colored
+    //   neutral: black for both (default)
+    //   western: green positive, red negative (Rest of the World)
+    //   eastern: red positive, green negative (Asia)
+    const AMOUNT_COLOR_SCHEME = 'neutral';
+    const AMOUNT_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
+
+    // Status color scheme — controls accepted/completed/resolved (success)
+    // and rejected/blocked/failed (failure) badges. Sent/received direction
+    // badges are always neutral, regardless of this setting.
+    //   neutral: muted gray for both (default)
+    //   western: green success, red failure
+    //   eastern: red success, green failure
+    const STATUS_COLOR_SCHEME = 'neutral';
+    const STATUS_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
+
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';
@@ -485,7 +510,7 @@ class Constants {
     const HELD_TX_SYNC_TIMEOUT_SECONDS = 120;      // Max seconds a sync can be in_progress before considered stale (must be < P2P_DEFAULT_EXPIRATION_SECONDS since P2P hops expire on all relay nodes independently)
 
     // Display/Query limits
-    const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 5;   // Max recent transactions shown in lists (default: 5)
+    const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 100;  // Max recent transactions shown in Activity tab (default: 100)
     const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
     const CONTACT_TRANSACTIONS_LIMIT = 5;          // Max transactions per contact in combined queries (default: 5)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)

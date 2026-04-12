@@ -36,7 +36,7 @@ Quick lookup card for the eIOU Wallet web interface.
 | `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping, proposeChainDrop, acceptChainDrop, rejectChainDrop, acceptCurrency, addCurrency, acceptAllCurrencies | Contact management |
 | `TransactionController` | `controllers/TransactionController.php` | sendEIOU, checkUpdates, approveP2pTransaction, rejectP2pTransaction, getP2pCandidates | Sending transactions & P2P approval |
 | `PaymentRequestController` | `controllers/PaymentRequestController.php` | createPaymentRequest, approvePaymentRequest, declinePaymentRequest, cancelPaymentRequest | Payment request lifecycle |
-| `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson, analyticsConsent | User settings, debug & analytics |
+| `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson, submitDebugReport, analyticsConsent | User settings, debug & analytics |
 
 ---
 
@@ -89,10 +89,11 @@ Optional for create: `description`, `address_type`
 
 | Action | Required Fields | Response |
 |--------|-----------------|----------|
-| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled`, `autoAcceptTransaction`, plus advanced settings | Redirect with message |
+| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled`, `autoAcceptTransaction`, `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme`, plus advanced settings | Redirect with message |
 | `clearDebugLogs` | (none) | Redirect with message |
 | `sendDebugReport` | `description` (optional) | Redirect with message |
 | `getDebugReportJson` | `description` (optional), `report_mode` (full/limited) | JSON (AJAX) |
+| `submitDebugReport` | `description` (optional), `report_mode` (full/limited) | JSON (AJAX) — sends to support via Tor |
 | `analyticsConsent` | `consent` (0 or 1) | JSON (AJAX) |
 
 ### DLQ Actions (DlqController)

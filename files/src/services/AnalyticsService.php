@@ -251,6 +251,7 @@ class AnalyticsService
     public static function send(array $payload): bool
     {
         if (!function_exists('curl_init')) {
+            error_log('Analytics: curl extension not available');
             return false;
         }
 
@@ -281,10 +282,20 @@ class AnalyticsService
         if ($success) {
             self::writeCache($payload['event']);
         } else {
+            // Try to extract the server's error message from the response body
+            $serverError = null;
+            if ($response) {
+                $decoded = json_decode($response, true);
+                if (is_array($decoded)) {
+                    $serverError = $decoded['error'] ?? null;
+                } else {
+                    $serverError = substr($response, 0, 200);
+                }
+            }
             Logger::getInstance()->info('Analytics submission failed', [
                 'event' => $payload['event'],
                 'http_code' => $httpCode,
-                'error' => $error ?: 'HTTP ' . $httpCode,
+                'error' => $serverError ?: ($error ?: 'HTTP ' . $httpCode),
             ]);
         }
 

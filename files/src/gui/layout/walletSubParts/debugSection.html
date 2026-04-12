@@ -322,18 +322,21 @@
         </div>
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
         <div class="debug-actions">
+            <button type="button" class="btn btn-primary" data-action="submitDebugReportToSupport" data-report-mode="full" title="Send full report to eIOU support via Tor">
+                <i class="fas fa-paper-plane"></i> Send to Support
+            </button>
             <button type="button" class="btn btn-secondary" data-action="downloadLimitedDebugReport" title="Quick download - same data shown in GUI above">
                 <i class="fas fa-download"></i> Limited Report
             </button>
-            <button type="button" class="btn btn-info" data-action="downloadFullDebugReport" title="Complete logs - may take longer over Tor">
-                <i class="fas fa-file-archive"></i> Full Report
+            <button type="button" class="btn btn-secondary" data-action="downloadFullDebugReport" title="Complete logs - may take longer over Tor">
+                <i class="fas fa-download"></i> Full Report
             </button>
         </div>
         <p class="text-muted font-sm mt-md">
-            <i class="fas fa-info-circle"></i> <strong>Limited:</strong> Quick download with recent logs (same as displayed above).<br>
-            <i class="fas fa-info-circle"></i> <strong>Full:</strong> Complete log history for thorough debugging (larger file, slower over Tor).<br>
-            Please email the report to
+            <i class="fas fa-paper-plane"></i> <strong>Send to Support:</strong> Sends the full report directly to the eIOU support team via Tor. No download or email needed. Limited to 3 reports per day.<br>
+            <i class="fas fa-download"></i> <strong>Download:</strong> Save a copy locally for your own records, or to email manually to
             <span class="debug-email-badge" data-action="copyToClipboard" data-copy-text="dockersupport@eiou.org" title="Click to copy">dockersupport@eiou.org <i class="fas fa-copy debug-email-badge-icon"></i></span>
+            if the support connection is unavailable.
         </p>
     </div>
 </div>

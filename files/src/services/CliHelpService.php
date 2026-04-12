@@ -303,7 +303,6 @@ class CliHelpService
                     'autoAcceptTransaction' => 'Auto-accept P2P transactions when route found (true/false)',
                     // Feature Toggles
                     'name' => 'Display name for this node (shown in local UI)',
-                    'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
                     'contactStatusEnabled' => 'Enable contact status pinging (true/false)',
                     'contactStatusSyncOnPing' => 'Enable contact status sync on ping (true/false)',
                     'autoChainDropPropose' => 'Enable auto chain drop propose (true/false)',
@@ -334,7 +333,6 @@ class CliHelpService
                     // Display
                     'maxOutput' => 'Maximum lines of output to display (0 = unlimited)',
                     'displayDateFormat' => 'Date format — must be one of: ' . implode(', ', Constants::VALID_DATE_FORMATS),
-                    'displayRecentTransactionsLimit' => 'Recent transactions display limit (minimum 1)',
                     'displayDecimals' => 'Display decimal places for all currencies (0-8, default 4). Truncates (floors) — does not round, so displayed amounts never exceed actual value. Does not affect internal storage.',
                     // Currency Management
                     'allowedCurrencies' => 'Allowed currencies (comma-separated, e.g., USD,EUR)',
@@ -344,7 +342,7 @@ class CliHelpService
                     'changesettings' => 'Interactive mode (prompts for setting)',
                     'changesettings defaultCurrency USD' => 'Change default currency',
                     'changesettings maxP2pLevel 5' => 'Change max P2P routing hops',
-                    'changesettings autoRefreshEnabled true' => 'Enable auto-refresh',
+                    'changesettings autoBackupEnabled true' => 'Enable auto-backup',
                     'changesettings defaultFee 1.5 --json' => 'JSON output'
                 ]
             ],
