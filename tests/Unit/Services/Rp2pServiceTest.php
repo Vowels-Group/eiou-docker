@@ -237,6 +237,100 @@ class Rp2pServiceTest extends TestCase
     }
 
     /**
+     * Test handleRp2pRequest holds for manual approval when auto-accept is off
+     * and amount is converted to SplitAmount for setRp2pAmount
+     */
+    public function testHandleRp2pRequestManualApprovalConvertsSplitAmount(): void
+    {
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => ['whole' => 12, 'frac' => 0]  // SplitAmount-style array from network
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'destination_address' => self::TEST_ADDRESS,
+            'my_fee_amount' => 100,
+            'sender_public_key' => self::TEST_PUBLIC_KEY
+        ];
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn($p2p);
+
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+
+        $this->service->setP2pTransactionSender($this->p2pTransactionSender);
+
+        // Manual approval: auto-accept OFF
+        $this->userContext->method('getAutoAcceptTransaction')
+            ->willReturn(false);
+
+        // setRp2pAmount must receive a SplitAmount, not a raw array
+        $this->p2pRepository->expects($this->once())
+            ->method('setRp2pAmount')
+            ->with(
+                self::TEST_HASH,
+                $this->callback(fn($amount) => $amount instanceof \Eiou\Core\SplitAmount
+                    && $amount->whole === 12 && $amount->frac === 0)
+            );
+
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_AWAITING_APPROVAL);
+
+        // Should NOT call sendP2pEiou when manual approval is on
+        $this->p2pTransactionSender->expects($this->never())
+            ->method('sendP2pEiou');
+
+        $result = $this->service->handleRp2pRequest($request);
+        $this->assertTrue($result);
+    }
+
+    /**
+     * Test handleRp2pRequest passes SplitAmount objects through without (int) cast
+     * when auto-accept is on (originator node)
+     */
+    public function testHandleRp2pRequestPassesSplitAmountWithoutIntCast(): void
+    {
+        $splitAmount = new \Eiou\Core\SplitAmount(13, 1200000);
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => $splitAmount
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'destination_address' => self::TEST_ADDRESS,
+            'my_fee_amount' => 100,
+            'sender_public_key' => self::TEST_PUBLIC_KEY
+        ];
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn($p2p);
+
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+
+        $this->service->setP2pTransactionSender($this->p2pTransactionSender);
+
+        $this->userContext->method('getAutoAcceptTransaction')
+            ->willReturn(true);
+
+        // sendP2pEiou receives the request — amount must still be a SplitAmount, not 1
+        $this->p2pTransactionSender->expects($this->once())
+            ->method('sendP2pEiou')
+            ->with($this->callback(fn($req) =>
+                $req['amount'] instanceof \Eiou\Core\SplitAmount
+                && $req['amount']->whole === 13
+            ));
+
+        $this->service->handleRp2pRequest($request);
+    }
+
+    /**
      * Test handleRp2pRequest relays to next hop for intermediate node
      */
     public function testHandleRp2pRequestRelaysForIntermediateNode(): void
