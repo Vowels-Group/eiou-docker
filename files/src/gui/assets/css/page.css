@@ -476,11 +476,11 @@ body {
 }
 
 .contact-status-indicator.status-online {
-    background-color: #28a745; /* Green */
+    background-color: var(--status-success-bg, #6c757d);
 }
 
 .contact-status-indicator.status-offline {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-failure-bg, #6c757d);
 }
 
 .contact-status-indicator.status-partial {
@@ -502,9 +502,9 @@ body {
 }
 
 .status-badge.status-online {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+    border: 1px solid var(--status-success-soft-bg, #dee2e6);
 }
 
 .status-badge.status-partial {
@@ -514,9 +514,9 @@ body {
 }
 
 .status-badge.status-offline {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background-color: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
+    border: 1px solid var(--status-failure-soft-bg, #dee2e6);
 }
 
 .status-badge.status-unknown {
@@ -535,9 +535,9 @@ body {
 }
 
 .chain-badge.chain-valid {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+    border: 1px solid var(--status-success-soft-bg, #dee2e6);
 }
 
 .chain-badge.chain-invalid {
@@ -735,17 +735,14 @@ body {
 .tx-table .tx-status-icon { font-size: 0.85rem; background: none; padding: 0; border-radius: 0; }
 .tx-status-icon.tx-status-pending   { color: #b8860b; }
 .tx-status-icon.tx-status-sending   { color: #fd7e14; }
-.tx-status-icon.tx-status-sent      { color: #6c757d; }
-.tx-status-icon.tx-status-accepted  { color: #6c757d; }
-.tx-status-icon.tx-status-completed { color: #6c757d; }
-.tx-status-icon.tx-status-rejected  { color: var(--status-failure-fg, #dc3545); }
-.tx-status-icon.tx-status-cancelled { color: #6c757d; }
+.tx-status-icon.tx-status-sent      { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-accepted  { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-completed { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-rejected  { color: var(--status-failure-bg, #6c757d); }
+.tx-status-icon.tx-status-cancelled { color: var(--status-failure-bg, #6c757d); }
 
-/* Origin / Dest. cell — clickable look when populated */
-.tx-table .tx-endpoint-clickable {
-    cursor: pointer;
-}
-.tx-table .tx-endpoint-clickable:hover {
+/* Row hover for tx-table — matches contacts-table hover color */
+.tx-table .tx-row:hover {
     background: #f0f7ff;
 }
 
@@ -823,6 +820,9 @@ body {
     outline-offset: 1px;
     border-color: #0d6efd;
 }
+.contacts-table thead {
+    background: #f8f9fa;
+}
 .contacts-table thead th {
     text-align: left;
     padding: 0.65rem 0.75rem;
@@ -831,7 +831,7 @@ body {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    background: #f8f9fa;
+    background: inherit;
     white-space: nowrap;
     border-bottom: 1px solid #e9ecef;
     /* Stick to the top of the scrollable .contacts-table-wrapper so column
@@ -967,9 +967,9 @@ body {
     border-radius: 50%;
     background: #adb5bd;
 }
-.contact-status-dot.status-online { background: #28a745; }
+.contact-status-dot.status-online { background: var(--status-success-bg, #6c757d); }
 .contact-status-dot.status-partial { background: #ffc107; }
-.contact-status-dot.status-offline { background: #dc3545; }
+.contact-status-dot.status-offline { background: var(--status-failure-bg, #6c757d); }
 .contact-status-dot.status-unknown { background: #adb5bd; }
 
 .contact-address {
@@ -1977,18 +1977,18 @@ tr.contact-card:hover .contact-name-cell {
 .tx-status-accepted,
 .tx-status-completed,
 .tx-status-found {
-    background: var(--status-success-bg, #e9ecef);
-    color: var(--status-success-fg, #495057);
+    background: var(--status-success-bg, #6c757d);
+    color: var(--status-success-fg, #fff);
 }
 
 .tx-status-rejected {
-    background: var(--status-failure-bg, #e9ecef);
-    color: var(--status-failure-fg, #495057);
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
 
 .tx-status-cancelled {
-    background: #6c757d;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
 
 /* P2P request statuses */
@@ -3043,8 +3043,8 @@ tr.tx-item-in-progress > td:first-child {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #dc3545;
-    color: white;
+    background: var(--status-failure-bg, #dc3545);
+    color: var(--status-failure-fg, #fff);
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 700;
@@ -3074,14 +3074,9 @@ tr.tx-item-in-progress > td:first-child {
     font-weight: 600;
 }
 
-/* Filter tabs */
-.dlq-filter-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 1rem;
-}
-
+/* Filter dropdown reuses .contacts-filter-select from the shared table chrome.
+   The old tab-button styles below are kept as no-ops for any residual references. */
+.dlq-filter-tabs { display: none; }
 .dlq-filter-tab {
     padding: 0.3rem 0.85rem;
     border-radius: 20px;
@@ -3105,19 +3100,46 @@ tr.tx-item-in-progress > td:first-child {
     border-color: #0d6efd;
 }
 
-/* Table wrapper — horizontal scroll on small screens */
+/* Table wrapper — scrollable like contacts/transactions tables */
 .dlq-table-wrapper {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 60vh;
     margin-bottom: 0.5rem;
 }
 
-.dlq-table {
+/* DLQ table — extends .contacts-table with dlq-specific column widths.
+   Reason column truncates with ellipsis so actions always fit on one line. */
+.dlq-table.contacts-table .col-dlq-type    { width: 9%; }
+.dlq-table.contacts-table .col-name        { width: 15%; }
+.dlq-table.contacts-table .col-dlq-reason  {
+    width: 16%;
+    max-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+}
+.dlq-table.contacts-table .col-dlq-date    { width: 13%; white-space: nowrap; }
+.dlq-table.contacts-table .col-dlq-status  { width: 8%; }
+.dlq-table.contacts-table .col-dlq-actions { width: 20%; white-space: nowrap; }
+
+/* Narrow screens: collapse action buttons and status to icon-only */
+@media (max-width: 900px) {
+    .dlq-action-label { display: none; }
+    .dlq-status-label { display: none; }
+}
+/* Mobile (≤600px): generic contacts-table rule hides cols 3+.
+   Actions and details are accessible via the row-click detail modal. */
+
+/* Legacy — replaced by contacts-table chrome */
+.dlq-table:not(.contacts-table) {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
 }
 
-.dlq-table th {
+.dlq-table:not(.contacts-table) th {
     background: #f8f9fa;
     padding: 0.6rem 0.75rem;
     text-align: left;
@@ -3134,7 +3156,7 @@ tr.tx-item-in-progress > td:first-child {
 }
 
 .dlq-row:hover {
-    background: #f8f9fa;
+    background: #f0f7ff;
 }
 
 /* Inline status badge for DLQ rows */
@@ -3203,77 +3225,32 @@ tr.tx-item-in-progress > td:first-child {
     border-color: #e0a800;
 }
 
-/* DLQ mobile: convert table rows to stacked cards */
+/* Legacy DLQ mobile card layout — only for non-contacts-table DLQ (no longer used) */
 @media (max-width: 640px) {
-    .dlq-table thead {
-        display: none;
-    }
-
-    .dlq-table,
-    .dlq-table tbody,
-    .dlq-table tr,
-    .dlq-table td {
-        display: block;
-        width: 100%;
-    }
-
-    .dlq-table tr {
-        margin-bottom: 0.75rem;
-        border: 1px solid #dee2e6;
-        border-radius: 6px;
-        padding: 0.5rem 0.75rem;
-        padding-top: 0.75rem;
-        background: #fff;
-        position: relative;
-    }
-
-    .dlq-table td {
-        padding: 0.3rem 0;
-        border: none;
-        display: flex;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    .dlq-table td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: #495057;
-        font-size: 0.8rem;
-        min-width: 90px;
-        flex-shrink: 0;
-    }
-
-    .dlq-table td[data-label=""]::before {
-        display: none;
-    }
-
-    .dlq-actions-cell {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        padding-top: 0.5rem;
-    }
-
-    .dlq-table-wrapper {
-        overflow-x: visible;
-    }
-
-    /* Card-level ⋮ actions pinned to top-right of each mobile card */
-    .dlq-card-actions-mobile {
-        display: block;
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        z-index: 10;
-    }
+    .dlq-table:not(.contacts-table) thead { display: none; }
+    .dlq-table:not(.contacts-table),
+    .dlq-table:not(.contacts-table) tbody,
+    .dlq-table:not(.contacts-table) tr,
+    .dlq-table:not(.contacts-table) td { display: block; width: 100%; }
 }
 
-/* DLQ section header actions bar (Refresh button container) */
+/* DLQ section header actions bar */
 .dlq-section-header-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-shrink: 0;
+}
+/* Wrap DLQ header on narrow screens so buttons don't collide with title */
+@media (max-width: 768px) {
+    .dlq-section .section-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .dlq-section .dlq-section-header-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }
 
 /* DLQ description / info paragraph */
@@ -3320,11 +3297,8 @@ tr.tx-item-in-progress > td:first-child {
     margin-top: 0.75rem;
 }
 
-/* Scrollable DLQ table wrapper — applied when >5 items */
-.dlq-table-scrollable {
-    max-height: 420px; /* ~5 rows + header */
-    overflow-y: auto;
-}
+/* Legacy class — scroll is now always enabled on .dlq-table-wrapper */
+.dlq-table-scrollable { }
 
 /* Centre-align th for recipient and reason columns */
 .dlq-table th:nth-child(2),
@@ -3486,7 +3460,7 @@ tr.tx-item-in-progress > td:first-child {
 .text-muted { color: #6c757d; }
 .text-primary { color: #0d6efd; }
 .text-danger { color: #dc3545; }
-.text-success { color: #28a745; }
+.text-success { color: var(--status-success-bg, #6c757d); }
 .text-warning-dark { color: #664d03; }
 .text-error-dark { color: #842029; }
 .text-info-header { color: #0dcaf0; }
@@ -3569,7 +3543,7 @@ tr.tx-item-in-progress > td:first-child {
     border: 1px solid #ced4da;
 }
 
-.status-active { color: #198754; }
+.status-active { color: var(--status-success-bg, #6c757d); }
 
 /* --- Contacts --- */
 .search-icon-wrapper { position: relative; }
@@ -3901,8 +3875,8 @@ hr.currency-separator-double {
     padding-top: 0.25rem;
 }
 
-.chain-gap-valid { color: #28a745; }
-.chain-gap-missing { color: #dc3545; text-decoration: line-through; }
+.chain-gap-valid { color: var(--status-success-bg, #6c757d); }
+.chain-gap-missing { color: var(--status-failure-bg, #6c757d); text-decoration: line-through; }
 .chain-gap-arrow { color: #6c757d; font-size: 0.75rem; }
 
 /* --- Notifications --- */
@@ -4047,7 +4021,7 @@ hr.currency-separator-double {
 /* --- DLQ dynamic variants --- */
 .dlq-chip-pending { border-color: #ffc107; color: #ffc107; }
 .dlq-chip-retrying { border-color: #17a2b8; color: #17a2b8; }
-.dlq-chip-resolved { border-color: #28a745; color: #28a745; }
+.dlq-chip-resolved { border-color: var(--status-success-bg, #6c757d); color: var(--status-success-bg, #6c757d); }
 .dlq-chip-abandoned { border-color: #6c757d; color: #6c757d; }
 
 .dlq-badge-pending { background: #fff3cd; color: #856404; }
@@ -4419,8 +4393,8 @@ hr.currency-separator-double {
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: #dc3545;
-    color: #fff;
+    background: var(--status-failure-bg, #dc3545);
+    color: var(--status-failure-fg, #fff);
     font-size: 0.7rem;
     font-weight: 700;
     line-height: 1;
@@ -4497,8 +4471,8 @@ hr.currency-separator-double {
         height: 16px;
         padding: 0 4px;
         border-radius: 8px;
-        background: #dc3545;
-        color: #fff;
+        background: var(--status-failure-bg, #dc3545);
+        color: var(--status-failure-fg, #fff);
         font-size: 0.6rem;
         font-weight: 700;
         line-height: 1;

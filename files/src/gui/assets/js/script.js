@@ -4678,16 +4678,72 @@ function showDlqToasts() {
  *
  * @param {string} filter
  */
-function setDlqFilter(filter) {
-    // Update active tab
-    var tabs = document.querySelectorAll('.dlq-filter-tab');
-    for (var i = 0; i < tabs.length; i++) {
-        var isActive = tabs[i].getAttribute('data-filter') === filter;
-        if (isActive) {
-            tabs[i].classList.add('active');
-        } else {
-            tabs[i].classList.remove('active');
+/**
+ * Open a detail modal for a DLQ item, showing all fields + action buttons.
+ */
+function openDlqModal(el) {
+    var row = el.closest('.dlq-row');
+    if (!row) return;
+
+    var dlqId = row.getAttribute('data-dlq-id');
+    var type = row.getAttribute('data-dlq-type') || 'Unknown';
+    var typeClass = row.getAttribute('data-dlq-type-class') || '';
+    var typeIcon = row.getAttribute('data-dlq-type-icon') || 'fa-envelope';
+    var recipient = row.getAttribute('data-dlq-recipient') || '—';
+    var reason = row.getAttribute('data-dlq-reason') || '—';
+    var date = row.getAttribute('data-dlq-date') || '—';
+    var status = row.getAttribute('data-status') || 'pending';
+    var canRetry = row.getAttribute('data-dlq-can-retry') === '1';
+    var canAct = row.getAttribute('data-dlq-can-act') === '1';
+
+    var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    var typeBadge = '<span class="tx-type-badge ' + escapeHtml(typeClass) + '"><i class="fas ' + escapeHtml(typeIcon) + '"></i> ' + escapeHtml(type) + '</span>';
+
+    var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + typeBadge + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Recipient</div><div class="tx-detail-value tx-modal-mono">' + escapeHtml(recipient) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Failure Reason</div><div class="tx-detail-value">' + escapeHtml(reason) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Added</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value"><span class="dlq-status-badge dlq-badge-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div></div>';
+
+    if (canAct) {
+        html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
+        if (canRetry) {
+            html += '<button class="btn btn-success btn-sm" data-action="retryDlqItem" data-dlq-id="' + dlqId + '" data-stop-propagation="true"><i class="fas fa-redo"></i> Retry</button>';
         }
+        html += '<button class="btn btn-secondary btn-sm" data-action="abandonDlqItem" data-dlq-id="' + dlqId + '" data-stop-propagation="true"><i class="fas fa-ban"></i> Abandon</button>';
+        html += '</div>';
+    }
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'dlq-detail-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:480px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-inbox" style="color:#6c757d"></i> Failed Message Details</h3>' +
+                '<span class="close" id="dlq-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem">' + html + '</div>' +
+        '</div>';
+
+    function closeDlqModal() {
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) { if (e.key === 'Escape' || e.keyCode === 27) closeDlqModal(); }
+
+    overlay.querySelector('#dlq-modal-close').onclick = closeDlqModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeDlqModal(); });
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+}
+
+function setDlqFilter(filter) {
+    // If called without argument, read from the dropdown
+    if (!filter) {
+        var sel = document.getElementById('dlq-filter-status');
+        filter = sel ? sel.value : 'active';
     }
 
     // Show/hide rows and mark filter state for search
@@ -4759,9 +4815,9 @@ function searchDlq(query) {
 // Initialize DLQ toasts on page load (Tor Browser compatible)
 document.addEventListener('DOMContentLoaded', function() {
     showDlqToasts();
-    // Apply default filter (pending & retrying) on load
-    if (document.querySelector('.dlq-filter-tab')) {
-        setDlqFilter('active');
+    // Apply default filter (show all) on load
+    if (document.getElementById('dlq-filter-status')) {
+        setDlqFilter('all');
     }
 });
 
@@ -4800,10 +4856,11 @@ function retryDlqItem(dlqId, btn) {
         return;
     }
 
-    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
-    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
-    if (retryBtn)  { retryBtn.disabled  = true; retryBtn.innerHTML  = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
-    if (abandonBtn) { abandonBtn.disabled = true; }
+    // Close the detail modal if open
+    var dlqModal = document.getElementById('dlq-detail-modal');
+    if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
+
+    showLoader('Retrying delivery...', 'Attempting to re-send the message to the recipient.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
@@ -4815,34 +4872,32 @@ function retryDlqItem(dlqId, btn) {
     xhr.timeout = 90000; // 90s — Tor connections can be slow
 
     xhr.ontimeout = function() {
+        hideLoader();
         showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
-        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-        if (abandonBtn) { abandonBtn.disabled = false; }
     };
 
     xhr.onerror = function() {
+        hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
-        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-        if (abandonBtn) { abandonBtn.disabled = false; }
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Delivered', 'Message successfully re-sent', 'success');
                 setTimeout(function() { window.location.reload(); }, 1500);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 var errMsg = response.error || 'Retry failed — try again later';
                 showToast('Retry Failed', errMsg, 'error');
-                if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-                if (abandonBtn) { abandonBtn.disabled = false; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-            if (abandonBtn) { abandonBtn.disabled = false; }
         }
     };
 
@@ -4869,10 +4924,11 @@ function abandonDlqItem(dlqId, btn) {
         return;
     }
 
-    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
-    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
-    if (retryBtn)  { retryBtn.disabled  = true; }
-    if (abandonBtn) { abandonBtn.disabled = true; abandonBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+    // Close the detail modal if open
+    var dlqModal = document.getElementById('dlq-detail-modal');
+    if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
+
+    if (btn) { btn.disabled = true; }
 
     var formData = new FormData();
     formData.append('action',     'dlqAbandon');
@@ -4881,18 +4937,14 @@ function abandonDlqItem(dlqId, btn) {
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 30000; // 30s — enough for a simple DB update even over Tor
+    xhr.timeout = 30000;
 
     xhr.ontimeout = function() {
         showToast('Timeout', 'Request timed out — please try again', 'warning');
-        if (retryBtn)  { retryBtn.disabled  = false; }
-        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
     };
 
     xhr.onerror = function() {
         showToast('Error', 'Network error — please try again', 'error');
-        if (retryBtn)  { retryBtn.disabled  = false; }
-        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
     };
 
     xhr.onreadystatechange = function() {
@@ -4901,16 +4953,15 @@ function abandonDlqItem(dlqId, btn) {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Abandoned', 'Message marked as abandoned', 'info');
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 showToast('Error', response.error || 'Failed to abandon item', 'error');
-                if (retryBtn)  { retryBtn.disabled  = false; }
-                if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (retryBtn)  { retryBtn.disabled  = false; }
-            if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
         }
     };
 
@@ -4929,7 +4980,7 @@ function retryAllDlqItems(btn) {
         return;
     }
 
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+    showLoader('Retrying all failed messages...', 'Each message is being re-sent to its recipient.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetryAll');
@@ -4940,30 +4991,40 @@ function retryAllDlqItems(btn) {
     xhr.timeout = 120000; // 2 min — bulk retries can be slow over Tor
 
     xhr.ontimeout = function() {
-        showToast('Timeout', 'Bulk retry timed out — some messages may still be queued', 'warning');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+        hideLoader();
+        showToast('Timeout', 'Bulk retry timed out — some messages may not have been retried', 'warning');
     };
 
     xhr.onerror = function() {
+        hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
-                var count = response.queued || 0;
-                showToast('Retry All', count + ' message' + (count !== 1 ? 's' : '') + ' queued for retry', 'success');
-                setTimeout(function() { window.location.reload(); }, 1500);
+                var delivered = response.delivered || 0;
+                var failed = response.failed || 0;
+                var total = response.total || 0;
+                if (delivered > 0 && failed === 0) {
+                    showToast('All delivered', delivered + ' message' + (delivered !== 1 ? 's' : '') + ' successfully re-sent', 'success');
+                } else if (delivered > 0) {
+                    showToast('Partial success', delivered + ' delivered, ' + failed + ' failed', 'warning');
+                } else {
+                    showToast('All failed', total + ' message' + (total !== 1 ? 's' : '') + ' could not be delivered', 'error');
+                }
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 2000);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 showToast('Error', response.error || 'Bulk retry failed', 'error');
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
         }
     };
 
@@ -5013,7 +5074,7 @@ function abandonAllDlqItems(btn) {
             if (response.success) {
                 var count = response.abandoned || 0;
                 showToast('Abandoned', count + ' message' + (count !== 1 ? 's' : '') + ' abandoned', 'info');
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
             } else {
                 showToast('Error', response.error || 'Bulk abandon failed', 'error');
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }
@@ -5468,10 +5529,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'toggleP2pInfo': function() { toggleP2pInfo(); },
 
         // DLQ
-        'setDlqFilter': function(el) {
-            var filter = el.getAttribute('data-filter');
-            setDlqFilter(filter);
-        },
+        'openDlqModal': function(el) { openDlqModal(el); },
         'retryDlqItem': function(el) {
             var id = parseInt(el.getAttribute('data-dlq-id'), 10);
             retryDlqItem(id, el);
@@ -5598,6 +5656,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
         else if (action === 'filterTransactions') { filterTransactions(); }
+        else if (action === 'setDlqFilter') { setDlqFilter(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by

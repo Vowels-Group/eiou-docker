@@ -423,10 +423,12 @@ class TransportUtilityService implements TransportServiceInterface
                 'curl_errno' => $curlErrno
             ]);
 
-            // Return a structured error response that can be parsed
+            // Return a structured error response that can be parsed.
+            // Include the full recipient address so DLQ failure reasons
+            // show the address, not just the hostname from curl.
             return json_encode([
                 'status' => 'error',
-                'message' => 'HTTP request failed: ' . $curlError,
+                'message' => 'HTTP request failed (' . $recipient . '): ' . $curlError,
                 'error_code' => $curlErrno
             ]);
         }
@@ -508,7 +510,7 @@ class TransportUtilityService implements TransportServiceInterface
             // Return a structured error response that can be parsed
             return json_encode([
                 'status' => 'error',
-                'message' => 'TOR request failed: ' . $curlError,
+                'message' => 'TOR request failed (' . $recipient . '): ' . $curlError,
                 'error_code' => $curlErrno
             ]);
         }

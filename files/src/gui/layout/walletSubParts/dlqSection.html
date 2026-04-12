@@ -87,13 +87,15 @@
         <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
     </div>
 
-    <!-- Filter tabs — client-side, no page reload -->
-    <div class="dlq-filter-tabs">
-        <button class="dlq-filter-tab active" data-filter="active"    data-action="setDlqFilter">Pending &amp; Retrying</button>
-        <button class="dlq-filter-tab"        data-filter="pending"   data-action="setDlqFilter">Pending Only</button>
-        <button class="dlq-filter-tab"        data-filter="resolved"  data-action="setDlqFilter">Resolved</button>
-        <button class="dlq-filter-tab"        data-filter="abandoned" data-action="setDlqFilter">Abandoned</button>
-        <button class="dlq-filter-tab"        data-filter="all"       data-action="setDlqFilter">All</button>
+    <!-- Status filter — client-side dropdown, no page reload -->
+    <div class="contacts-filters mb-lg">
+        <select id="dlq-filter-status" class="contacts-filter-select" data-action-change="setDlqFilter" aria-label="Filter by status">
+            <option value="all">Any status</option>
+            <option value="active">Pending &amp; Retrying</option>
+            <option value="pending">Pending Only</option>
+            <option value="resolved">Resolved</option>
+            <option value="abandoned">Abandoned</option>
+        </select>
     </div>
 
     <?php if (empty($dlqItems)): ?>
@@ -109,18 +111,17 @@
         <p>No items match the selected filter.</p>
     </div>
 
-    <!-- DLQ table: visible on desktop, card-stack on mobile -->
-    <div class="dlq-table-wrapper<?php echo count($dlqItems) > 5 ? ' dlq-table-scrollable' : ''; ?>">
-        <table class="dlq-table">
+    <!-- DLQ table: uses contacts-table chrome for consistent styling -->
+    <div class="contacts-table-wrapper">
+        <table class="contacts-table dlq-table">
             <thead>
                 <tr>
-                    <th>Type</th>
-                    <th>Recipient</th>
-                    <th>Failure Reason</th>
-                    <th>Retries</th>
-                    <th>Added</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th class="col-dlq-type text-center">Type</th>
+                    <th class="col-name">Recipient</th>
+                    <th class="col-dlq-reason">Failure Reason</th>
+                    <th class="col-dlq-date text-right">Added</th>
+                    <th class="col-dlq-status text-center">Status</th>
+                    <th class="col-dlq-actions text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -130,7 +131,6 @@
                 $msgType   = $item['message_type'] ?? 'unknown';
                 $recipient = $item['recipient_address'] ?? '';
                 $reason    = $item['failure_reason'] ?? '';
-                $retries   = (int)($item['retry_count'] ?? 0);
                 $createdAt = $item['created_at'] ?? '';
                 $dlqId     = (int)$item['id'];
 
@@ -142,109 +142,62 @@
                 ];
                 $typeInfo = $typeIcons[$msgType] ?? ['icon' => 'fa-envelope', 'label' => ucfirst($msgType), 'class' => ''];
 
-                $statusColors = [
-                    'pending'   => ['bg' => '#fff3cd', 'color' => '#856404', 'icon' => 'fa-hourglass-half'],
-                    'retrying'  => ['bg' => '#cff4fc', 'color' => '#055160', 'icon' => 'fa-sync-alt fa-spin'],
-                    'resolved'  => ['bg' => '#d1e7dd', 'color' => '#0a3622', 'icon' => 'fa-check'],
-                    'abandoned' => ['bg' => '#e2e3e5', 'color' => '#383d41', 'icon' => 'fa-ban'],
+                $statusIcons = [
+                    'pending'   => 'fa-hourglass-half',
+                    'retrying'  => 'fa-sync-alt fa-spin',
+                    'resolved'  => 'fa-check',
+                    'abandoned' => 'fa-ban',
                 ];
-                $statusStyle = $statusColors[$status] ?? $statusColors['pending'];
+                $statusIcon = $statusIcons[$status] ?? 'fa-circle';
 
                 $canAct      = in_array($status, ['pending', 'retrying'], true);
-                // p2p/rp2p are time-sensitive relay messages — expired by the time they
-                // reach the DLQ. Only transaction and contact messages are safe to retry.
                 $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact'], true);
 
-                // Format date
                 $dateDisplay = '';
                 if ($createdAt) {
                     $ts = strtotime($createdAt);
                     $dateDisplay = $ts ? date(displayDateFormat(), $ts) : $createdAt;
                 }
             ?>
-            <tr class="dlq-row" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>">
-                <!-- Mobile: ⋮ menu pinned to top-right of card -->
-                <?php if ($canAct): ?>
-                <div class="dlq-card-actions-mobile">
-                    <div class="dlq-dropdown">
-                        <button type="button" class="btn btn-sm btn-outline dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="dlq-card-dropdown-<?php echo $dlqId; ?>">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
-                        <div class="dlq-dropdown-menu" id="dlq-card-dropdown-<?php echo $dlqId; ?>">
-                            <?php if ($canRetry): ?>
-                            <button type="button" class="dlq-dropdown-item" data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
-                                <i class="fas fa-redo"></i> Retry
-                            </button>
-                            <?php else: ?>
-                            <span class="dlq-dropdown-item dlq-dropdown-item-disabled">
-                                <i class="fas fa-clock"></i> Expired
-                            </span>
-                            <?php endif; ?>
-                            <button type="button" class="dlq-dropdown-item dlq-dropdown-item-danger" data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>">
-                                <i class="fas fa-ban"></i> Abandon
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-                <td data-label="Type">
+            <tr class="dlq-row cursor-pointer" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>" data-action="openDlqModal" data-dlq-type="<?php echo htmlspecialchars($typeInfo['label']); ?>" data-dlq-type-class="<?php echo htmlspecialchars($typeInfo['class']); ?>" data-dlq-type-icon="<?php echo htmlspecialchars($typeInfo['icon']); ?>" data-dlq-recipient="<?php echo htmlspecialchars($recipient); ?>" data-dlq-reason="<?php echo htmlspecialchars($reason); ?>" data-dlq-date="<?php echo htmlspecialchars($dateDisplay); ?>" data-dlq-can-retry="<?php echo $canRetry ? '1' : '0'; ?>" data-dlq-can-act="<?php echo $canAct ? '1' : '0'; ?>" title="Click for details">
+                <td class="col-dlq-type text-center">
                     <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
                         <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>
                         <?php echo htmlspecialchars($typeInfo['label']); ?>
                     </span>
                 </td>
-                <td data-label="Recipient" class="dlq-cell-center">
-                    <span class="monospace dlq-address dlq-truncate dlq-tap-detail" title="<?php echo htmlspecialchars($recipient); ?>" data-action="showInfoModal" role="button">
+                <td class="col-name">
+                    <span class="monospace dlq-truncate" title="<?php echo htmlspecialchars($recipient); ?>">
                         <?php echo htmlspecialchars($recipient); ?>
                     </span>
                 </td>
-                <td data-label="Reason" class="dlq-cell-center">
-                    <span class="dlq-reason-text dlq-truncate dlq-tap-detail" title="<?php echo htmlspecialchars($reason); ?>" data-action="showInfoModal" role="button">
-                        <?php echo htmlspecialchars($reason ?: '—'); ?>
-                    </span>
+                <td class="col-dlq-reason" title="<?php echo htmlspecialchars($reason); ?>">
+                    <?php echo htmlspecialchars($reason ?: '—'); ?>
                 </td>
-                <td data-label="Retries" class="dlq-cell-center">
-                    <span class="<?php echo $retries >= 5 ? 'dlq-retry-count-high' : 'dlq-retry-count'; ?>">
-                        <?php echo $retries; ?>
-                    </span>
-                </td>
-                <td data-label="Added" class="dlq-date-cell">
+                <td class="col-dlq-date text-right">
                     <?php echo htmlspecialchars($dateDisplay); ?>
                 </td>
-                <td data-label="Status">
+                <td class="col-dlq-status text-center">
                     <span class="dlq-status-badge dlq-badge-<?php echo htmlspecialchars($status); ?>">
-                        <i class="fas <?php echo $statusStyle['icon']; ?>"></i>
-                        <?php echo ucfirst(htmlspecialchars($status)); ?>
+                        <i class="fas <?php echo $statusIcon; ?>"></i>
+                        <span class="dlq-status-label"><?php echo ucfirst(htmlspecialchars($status)); ?></span>
                     </span>
                 </td>
-                <td data-label="">
-                    <!-- Desktop: inline buttons -->
-                    <div class="dlq-actions-cell dlq-desktop-actions">
+                <td class="col-dlq-actions text-center">
                     <?php if ($canRetry): ?>
-                    <button type="button"
-                            class="btn btn-sm btn-success dlq-retry-btn"
-                            data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>"
-                            title="Retry sending this message">
-                        <i class="fas fa-redo"></i> Retry
+                    <button type="button" class="btn btn-sm btn-success" data-action="retryDlqItem" data-dlq-id="<?php echo $dlqId; ?>" title="Retry sending this message">
+                        <i class="fas fa-redo"></i><span class="dlq-action-label"> Retry</span>
                     </button>
                     <?php elseif ($canAct && !$canRetry): ?>
-                    <span class="dlq-no-retry-note" title="P2P and relay messages are time-sensitive and expire quickly — retry is not meaningful after automatic attempts are exhausted">
-                        <i class="fas fa-clock"></i> Expired
-                    </span>
+                    <span class="text-muted" title="Expired routing message"><i class="fas fa-clock"></i></span>
                     <?php endif; ?>
                     <?php if ($canAct): ?>
-                    <button type="button"
-                            class="btn btn-sm btn-secondary dlq-abandon-btn"
-                            data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>"
-                            title="Abandon this message (cannot be undone)">
-                        <i class="fas fa-ban"></i> Abandon
+                    <button type="button" class="btn btn-sm btn-secondary" data-action="abandonDlqItem" data-dlq-id="<?php echo $dlqId; ?>" title="Abandon this message">
+                        <i class="fas fa-ban"></i><span class="dlq-action-label"> Abandon</span>
                     </button>
                     <?php elseif (!$canAct): ?>
-                    <span class="dlq-final-state">
-                        <?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?>
-                    </span>
+                    <span class="text-muted"><?php echo $status === 'resolved' ? 'Delivered' : 'Abandoned'; ?></span>
                     <?php endif; ?>
-                    </div>
                 </td>
             </tr>
             <?php endforeach; ?>

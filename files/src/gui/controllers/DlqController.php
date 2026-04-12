@@ -125,9 +125,12 @@ class DlqController
                         return ['success' => true];
                     }
 
-                    return ['success' => false, 'error' => 'Recipient returned: ' . ($status ?? 'no response')];
+                    // Surface the actual error from the response if available
+                    $errorDetail = $decoded['error'] ?? $decoded['message'] ?? $status ?? 'no response from recipient';
+                    return ['success' => false, 'error' => 'Delivery failed: ' . $errorDetail];
                 } catch (\Exception $e) {
-                    return ['success' => false, 'error' => $e->getMessage()];
+                    // Surface the transport error (e.g. "Could not resolve host")
+                    return ['success' => false, 'error' => 'Delivery failed: ' . $e->getMessage()];
                 }
             }
         );
@@ -197,7 +200,8 @@ class DlqController
             $this->dlqRepository->getByMessageType('contact',     'retrying')
         );
 
-        $queued = 0;
+        $delivered = 0;
+        $failed = 0;
         $transportUtility = $this->transportUtility;
         $successStatuses  = self::SUCCESS_STATUSES;
 
@@ -221,7 +225,7 @@ class DlqController
                 }
             }
 
-            $this->messageDeliveryService->retryFromDlq(
+            $result = $this->messageDeliveryService->retryFromDlq(
                 $dlqId,
                 function (array $payload, string $recipient) use ($transportUtility, $successStatuses): array {
                     try {
@@ -232,16 +236,21 @@ class DlqController
                         if ($status && in_array($status, $successStatuses, true)) {
                             return ['success' => true];
                         }
-                        return ['success' => false, 'error' => 'Recipient returned: ' . ($status ?? 'no response')];
+                        $errorDetail = $decoded['error'] ?? $decoded['message'] ?? $status ?? 'no response from recipient';
+                        return ['success' => false, 'error' => 'Delivery failed: ' . $errorDetail];
                     } catch (\Exception $e) {
-                        return ['success' => false, 'error' => $e->getMessage()];
+                        return ['success' => false, 'error' => 'Delivery failed: ' . $e->getMessage()];
                     }
                 }
             );
-            $queued++;
+            if ($result['success'] ?? false) {
+                $delivered++;
+            } else {
+                $failed++;
+            }
         }
 
-        echo json_encode(['success' => true, 'queued' => $queued]);
+        echo json_encode(['success' => true, 'delivered' => $delivered, 'failed' => $failed, 'total' => $delivered + $failed]);
         exit;
     }
 

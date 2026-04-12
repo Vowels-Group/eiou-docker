@@ -549,7 +549,56 @@ class TransactionService implements TransactionServiceInterface {
     }
 
     public function getTransactionHistory(int $limit = 10): array {
-        return $this->transactionRepository->getTransactionHistory($limit);
+        $transactions = $this->transactionRepository->getTransactionHistory($limit);
+
+        // Merge in cancelled/expired originator P2Ps that never created a transaction,
+        // so failed P2P attempts are visible in the Recent Transactions view.
+        try {
+            $cancelledP2ps = $this->p2pRepository->getCancelledOriginatorP2ps($limit);
+            foreach ($cancelledP2ps as $p2p) {
+                $amount = ($p2p['amount'] instanceof SplitAmount) ? $p2p['amount'] : SplitAmount::from($p2p['amount'] ?? 0);
+                $transactions[] = [
+                    'id' => 0,
+                    'txid' => $p2p['hash'],
+                    'tx_type' => 'p2p',
+                    'direction' => null,
+                    'status' => $p2p['status'],
+                    'date' => $p2p['created_at'] ?? null,
+                    'type' => Constants::TX_TYPE_SENT,
+                    'amount' => $amount->toMajorUnits(),
+                    'currency' => $p2p['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY,
+                    'counterparty' => null,
+                    'counterparty_address' => null,
+                    'counterparty_name' => null,
+                    'sender_address' => null,
+                    'receiver_address' => null,
+                    'sender_public_key' => null,
+                    'receiver_public_key' => null,
+                    'memo' => $p2p['hash'],
+                    'description' => $p2p['description'] ?? 'No P2P route found',
+                    'previous_txid' => null,
+                    'end_recipient_address' => $p2p['destination_address'],
+                    'initial_sender_address' => null,
+                    'p2p_destination' => $p2p['destination_address'],
+                    'p2p_amount' => null,
+                    'p2p_fee' => null,
+                ];
+            }
+        } catch (\Throwable $e) {
+            // Non-critical — transaction history still works without cancelled P2Ps
+            Logger::getInstance()->warning("Failed to merge cancelled P2Ps into transaction history", [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Re-sort by date descending and trim to limit
+        usort($transactions, function ($a, $b) {
+            $dateA = strtotime($a['date'] ?? '') ?: 0;
+            $dateB = strtotime($b['date'] ?? '') ?: 0;
+            return $dateB <=> $dateA;
+        });
+
+        return array_slice($transactions, 0, $limit);
     }
 
     public function getStatistics(): array {

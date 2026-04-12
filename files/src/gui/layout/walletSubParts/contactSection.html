@@ -52,7 +52,7 @@
                     <th class="col-number text-right sortable" data-action="sortContacts" data-sort-column="your-credit" role="button" aria-label="Sort by your available credit"><span class="sort-label">Your Av. Credit</span><i class="fas fa-info-circle info-tooltip-icon" title="How much credit you can still spend with each contact. Equals the credit limit they set for you minus what you currently owe them. Will exceed the limit when they owe you money. Updates on every transaction, plus periodic background refreshes." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information"></i><i class="fas fa-sort sort-indicator"></i></th>
                     <th class="col-number text-right sortable" data-action="sortContacts" data-sort-column="their-credit" role="button" aria-label="Sort by their available credit"><span class="sort-label">Their Av. Credit</span><i class="fas fa-info-circle info-tooltip-icon" title="How much credit each contact still has with you. Equals their credit limit minus what they currently owe you. Will exceed the limit when you owe them money." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information"></i><i class="fas fa-sort sort-indicator"></i></th>
                     <th class="col-status text-center">Status</th>
-                    <th class="col-chain text-center">Chain</th>
+                    <th class="col-chain text-center">Chain <i class="fas fa-info-circle info-tooltip-icon" title="Transaction chain integrity — a checkmark means your transaction history with this contact is complete and verified. A warning means the chain has gaps that may need syncing." data-action="showInfoModal" role="button" aria-label="More information"></i></th>
                     <th class="col-online text-center">Online</th>
                 </tr>
             </thead>
@@ -255,11 +255,11 @@
                         <div class="info-value"><span id="modal_their_available_credit">—</span> <span id="modal_their_credit_currency">USD</span></div>
                     </div>
                     <div class="info-item">
-                        <label><i class="fas fa-credit-card"></i> Their Credit Limit <i class="fas fa-info-circle info-tooltip-icon" title="The maximum amount this contact is allowed to owe you. You set this limit when you added them; it caps how much credit you'll extend." data-action="showInfoModal" role="button" aria-label="More information"></i></label>
+                        <label><i class="fas fa-credit-card"></i> Their Credit Limit <i class="fas fa-info-circle info-tooltip-icon" title="The maximum amount this contact is allowed to owe you. You can change this from the Settings tab of this contact." data-action="showInfoModal" role="button" aria-label="More information"></i></label>
                         <div class="info-value"><span id="modal_credit_limit">0.00</span> <span id="modal_credit_currency">USD</span></div>
                     </div>
                     <div class="info-item">
-                        <label><i class="fas fa-percent"></i> Their Relay Fee <i class="fas fa-info-circle info-tooltip-icon" title="The fee this contact charges when routing transactions through them" data-action="showInfoModal" role="button" aria-label="More information"></i></label>
+                        <label><i class="fas fa-percent"></i> Their Relay Fee <i class="fas fa-info-circle info-tooltip-icon" title="The fee you charge this contact when routing their transactions through you. You can change this from the Settings tab of this contact." data-action="showInfoModal" role="button" aria-label="More information"></i></label>
                         <div class="info-value"><span id="modal_fee">0.00</span>%</div>
                     </div>
                 </div>
