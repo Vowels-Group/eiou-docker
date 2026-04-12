@@ -125,9 +125,12 @@ class DlqController
                         return ['success' => true];
                     }
 
-                    return ['success' => false, 'error' => 'Recipient returned: ' . ($status ?? 'no response')];
+                    // Surface the actual error from the response if available
+                    $errorDetail = $decoded['error'] ?? $decoded['message'] ?? $status ?? 'no response from recipient';
+                    return ['success' => false, 'error' => 'Delivery failed: ' . $errorDetail];
                 } catch (\Exception $e) {
-                    return ['success' => false, 'error' => $e->getMessage()];
+                    // Surface the transport error (e.g. "Could not resolve host")
+                    return ['success' => false, 'error' => 'Delivery failed: ' . $e->getMessage()];
                 }
             }
         );

@@ -4687,6 +4687,8 @@ function openDlqModal(el) {
 
     var dlqId = row.getAttribute('data-dlq-id');
     var type = row.getAttribute('data-dlq-type') || 'Unknown';
+    var typeClass = row.getAttribute('data-dlq-type-class') || '';
+    var typeIcon = row.getAttribute('data-dlq-type-icon') || 'fa-envelope';
     var recipient = row.getAttribute('data-dlq-recipient') || '—';
     var reason = row.getAttribute('data-dlq-reason') || '—';
     var date = row.getAttribute('data-dlq-date') || '—';
@@ -4695,8 +4697,9 @@ function openDlqModal(el) {
     var canAct = row.getAttribute('data-dlq-can-act') === '1';
 
     var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    var typeBadge = '<span class="tx-type-badge ' + escapeHtml(typeClass) + '"><i class="fas ' + escapeHtml(typeIcon) + '"></i> ' + escapeHtml(type) + '</span>';
 
-    var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + escapeHtml(type) + '</div></div>';
+    var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + typeBadge + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Recipient</div><div class="tx-detail-value tx-modal-mono">' + escapeHtml(recipient) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Failure Reason</div><div class="tx-detail-value">' + escapeHtml(reason) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Added</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';

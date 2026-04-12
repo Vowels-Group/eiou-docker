@@ -820,6 +820,9 @@ body {
     outline-offset: 1px;
     border-color: #0d6efd;
 }
+.contacts-table thead {
+    background: #f8f9fa;
+}
 .contacts-table thead th {
     text-align: left;
     padding: 0.65rem 0.75rem;
@@ -828,7 +831,7 @@ body {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    background: #f8f9fa;
+    background: inherit;
     white-space: nowrap;
     border-bottom: 1px solid #e9ecef;
     /* Stick to the top of the scrollable .contacts-table-wrapper so column
@@ -3105,27 +3108,29 @@ tr.tx-item-in-progress > td:first-child {
     margin-bottom: 0.5rem;
 }
 
-/* DLQ table — extends .contacts-table with dlq-specific column widths */
-.dlq-table.contacts-table .col-dlq-type    { width: 10%; }
-.dlq-table.contacts-table .col-name        { width: 18%; }
+/* DLQ table — extends .contacts-table with dlq-specific column widths.
+   Reason column truncates with ellipsis so actions always fit on one line. */
+.dlq-table.contacts-table .col-dlq-type    { width: 9%; }
+.dlq-table.contacts-table .col-name        { width: 15%; }
 .dlq-table.contacts-table .col-dlq-reason  {
-    width: 28%;
+    width: 16%;
     max-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: #495057;
 }
-.dlq-table.contacts-table .col-dlq-date    { width: 14%; white-space: nowrap; }
-.dlq-table.contacts-table .col-dlq-status  { width: 10%; }
+.dlq-table.contacts-table .col-dlq-date    { width: 13%; white-space: nowrap; }
+.dlq-table.contacts-table .col-dlq-status  { width: 8%; }
 .dlq-table.contacts-table .col-dlq-actions { width: 20%; white-space: nowrap; }
 
-/* Mobile (≤600px): show Type (1) + Recipient (2) only.
-   Actions and details are accessible via the row-click detail modal. */
-@media (max-width: 600px) {
+/* Narrow screens: collapse action buttons and status to icon-only */
+@media (max-width: 900px) {
     .dlq-action-label { display: none; }
     .dlq-status-label { display: none; }
 }
+/* Mobile (≤600px): generic contacts-table rule hides cols 3+.
+   Actions and details are accessible via the row-click detail modal. */
 
 /* Legacy — replaced by contacts-table chrome */
 .dlq-table:not(.contacts-table) {
@@ -3229,11 +3234,23 @@ tr.tx-item-in-progress > td:first-child {
     .dlq-table:not(.contacts-table) td { display: block; width: 100%; }
 }
 
-/* DLQ section header actions bar (Refresh button container) */
+/* DLQ section header actions bar */
 .dlq-section-header-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-shrink: 0;
+}
+/* Wrap DLQ header on narrow screens so buttons don't collide with title */
+@media (max-width: 768px) {
+    .dlq-section .section-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .dlq-section .dlq-section-header-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }
 
 /* DLQ description / info paragraph */
