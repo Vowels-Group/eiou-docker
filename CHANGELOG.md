@@ -16,9 +16,13 @@ The project is currently in **ALPHA** status.
 - **Removed GUI-only settings from CLI and API**: `autoRefreshEnabled`, `sessionTimeoutMinutes`, and `displayRecentTransactionsLimit` are now GUI-only settings. They had no effect when changed via CLI or API (auto-refresh controls GUI JavaScript polling, session timeout controls GUI web sessions, and recent transactions limit only affects the GUI dashboard). These can still be changed in the GUI Settings page
 - **Removed undocumented sync settings from CLI**: `syncChunkSize`, `syncMaxChunks`, and `heldTxSyncTimeoutSeconds` were documented in CLI_REFERENCE.md but had no CLI handler — removed from docs. They remain configurable via API
 
+### Fixed
+- **Unit tests asserting removed GUI-only settings in CLI**: removed `auto_refresh_enabled` and `display_recent_transactions_limit` assertions from `CliServiceTest::testDisplayCurrentSettingsInJsonMode` and removed `testChangeSettingsAcceptsRecentTransactionsLimit` test (setting no longer exists in CLI)
+- **Integration test checking removed API setting**: removed `display_recent_transactions_limit` from the key list in `apiEndpointsTest.sh`
+
 ### Docs
 - **CLI_REFERENCE.md**: Added `autoRejectUnknownCurrency` setting (was implemented but undocumented). Removed `updateCheckEnabled` (no CLI handler). Removed GUI-only settings (`autoRefreshEnabled`, `displayRecentTransactionsLimit`) and sync settings (`syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds`) that had no CLI handlers
-- **API_REFERENCE.md**: Added `auto_reject_unknown_currency` setting (was implemented but undocumented). Removed GUI-only settings (`auto_refresh_enabled`, `display_recent_transactions_limit`, `session_timeout_minutes`) and `update_check_enabled` (not in API code)
+- **API_REFERENCE.md**: Added `auto_reject_unknown_currency` to PUT settings table (was implemented but undocumented). Removed GUI-only settings (`auto_refresh_enabled`, `display_recent_transactions_limit`, `session_timeout_minutes`) and `update_check_enabled` (not in API code). Added missing `analytics` object to GET `/api/v1/system/status` response. Fixed payment request endpoints: `POST /requests` uses field name `contact` (not `contact_name`), responses now show actual `message` field placement and `data: null` for decline/cancel, approve response correctly shows `txid` in data with `message` at top level, create response shows 201 status
 - **GUI_REFERENCE.md**: Added `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme` display settings and `submitDebugReport` controller action (all were implemented but undocumented)
 - **GUI_QUICK_REFERENCE.md**: Added `submitDebugReport` action and new display settings to updateSettings field list
 

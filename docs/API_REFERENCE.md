@@ -1038,7 +1038,7 @@ Create and send a payment request to a contact.
 
 ```json
 {
-  "contact_name": "Bob",
+  "contact": "Bob",
   "amount": "10.00",
   "currency": "USD",
   "description": "Optional memo",
@@ -1048,20 +1048,21 @@ Create and send a payment request to a contact.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `contact_name` | string | Yes | Name of an accepted contact |
+| `contact` | string | Yes | Name of an accepted contact |
 | `amount` | string | Yes | Amount to request (e.g. `"10.00"`) |
 | `currency` | string | Yes | Currency code (e.g. `"USD"`) |
 | `description` | string | No | Optional memo shown to the recipient |
 | `address_type` | string | No | Preferred transport: `tor`, `https`, or `http` (auto-selects best if omitted) |
 
-**Response:**
+**Response (201 Created):**
 
 ```json
 {
   "success": true,
   "data": {
     "request_id": "abc123def456..."
-  }
+  },
+  "message": "Payment request sent"
 }
 ```
 
@@ -1089,9 +1090,9 @@ Approve an incoming payment request. Internally calls `sendEiou` to the requeste
 {
   "success": true,
   "data": {
-    "message": "Transaction sent successfully",
     "txid": "txid-abc123"
-  }
+  },
+  "message": "Payment sent"
 }
 ```
 
@@ -1117,7 +1118,9 @@ Decline an incoming payment request. Sends a response message back to the reques
 
 ```json
 {
-  "success": true
+  "success": true,
+  "data": null,
+  "message": "Payment request declined"
 }
 ```
 
@@ -1135,7 +1138,9 @@ Cancel an outgoing payment request (only while status is `pending`).
 
 ```json
 {
-  "success": true
+  "success": true,
+  "data": null,
+  "message": "Payment request cancelled"
 }
 ```
 
@@ -1172,6 +1177,11 @@ Get system health status.
             "source": "docker-hub",
             "error": null
         },
+        "analytics": {
+            "enabled": false,
+            "consent_pending": true,
+            "last_submitted": null
+        },
         "timestamp": "2026-03-31T12:00:00+00:00"
     },
     "request_id": "req_abc123"
@@ -1188,6 +1198,9 @@ Get system health status.
 - `update.last_checked`: ISO 8601 timestamp of last check (null if never checked)
 - `update.source`: `"docker-hub"` or `"github"` (null if not checked)
 - `update.error`: Error message if the last check failed (null on success)
+- `analytics.enabled`: Whether anonymous usage analytics are enabled
+- `analytics.consent_pending`: Whether the user has not yet been asked for analytics consent
+- `analytics.last_submitted`: ISO 8601 timestamp of last analytics submission (null if never submitted)
 
 ---
 
@@ -1316,7 +1329,6 @@ Get system settings.
 - `hostname_secure`: HTTPS hostname of the node (e.g., "https://alice")
 - `trusted_proxies`: Trusted proxy IPs for header forwarding (comma-separated, empty = none)
 - `auto_backup_enabled`: Whether daily automatic database backup is enabled
-- `analytics_enabled`: Whether anonymous usage analytics are enabled (opt-in, default off — sends only aggregate counts weekly)
 - `auto_accept_transaction`: Whether to auto-accept P2P transactions when route found
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
@@ -1350,7 +1362,6 @@ Get system settings.
 - `tor_fallback_require_encrypted`: Only fall back to HTTPS, never plain HTTP
 - `display_date_format`: PHP date format string for timestamps
 - `allowed_currencies`: List of allowed currency codes
-- `auto_reject_unknown_currency`: Whether to auto-reject incoming contact requests with currencies not in allowed list
 
 ---
 
