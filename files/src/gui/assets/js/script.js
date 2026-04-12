@@ -4678,6 +4678,64 @@ function showDlqToasts() {
  *
  * @param {string} filter
  */
+/**
+ * Open a detail modal for a DLQ item, showing all fields + action buttons.
+ */
+function openDlqModal(el) {
+    var row = el.closest('.dlq-row');
+    if (!row) return;
+
+    var dlqId = row.getAttribute('data-dlq-id');
+    var type = row.getAttribute('data-dlq-type') || 'Unknown';
+    var recipient = row.getAttribute('data-dlq-recipient') || '—';
+    var reason = row.getAttribute('data-dlq-reason') || '—';
+    var date = row.getAttribute('data-dlq-date') || '—';
+    var status = row.getAttribute('data-status') || 'pending';
+    var canRetry = row.getAttribute('data-dlq-can-retry') === '1';
+    var canAct = row.getAttribute('data-dlq-can-act') === '1';
+
+    var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+
+    var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + escapeHtml(type) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Recipient</div><div class="tx-detail-value tx-modal-mono">' + escapeHtml(recipient) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Failure Reason</div><div class="tx-detail-value">' + escapeHtml(reason) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Added</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value"><span class="dlq-status-badge dlq-badge-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div></div>';
+
+    if (canAct) {
+        html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
+        if (canRetry) {
+            html += '<button class="btn btn-success btn-sm" data-action="retryDlqItem" data-dlq-id="' + dlqId + '" data-stop-propagation="true"><i class="fas fa-redo"></i> Retry</button>';
+        }
+        html += '<button class="btn btn-secondary btn-sm" data-action="abandonDlqItem" data-dlq-id="' + dlqId + '" data-stop-propagation="true"><i class="fas fa-ban"></i> Abandon</button>';
+        html += '</div>';
+    }
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'dlq-detail-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:480px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-inbox" style="color:#6c757d"></i> Failed Message Details</h3>' +
+                '<span class="close" id="dlq-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem">' + html + '</div>' +
+        '</div>';
+
+    function closeDlqModal() {
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) { if (e.key === 'Escape' || e.keyCode === 27) closeDlqModal(); }
+
+    overlay.querySelector('#dlq-modal-close').onclick = closeDlqModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeDlqModal(); });
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+}
+
 function setDlqFilter(filter) {
     // If called without argument, read from the dropdown
     if (!filter) {
@@ -5463,6 +5521,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'toggleP2pInfo': function() { toggleP2pInfo(); },
 
         // DLQ
+        'openDlqModal': function(el) { openDlqModal(el); },
         'retryDlqItem': function(el) {
             var id = parseInt(el.getAttribute('data-dlq-id'), 10);
             retryDlqItem(id, el);

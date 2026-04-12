@@ -296,7 +296,9 @@
                     </td>
                     <td class="col-name">
                         <div class="contact-name-cell">
-                            <?php echo renderContactAvatar($cpHash, $cpName ?? $cpAddr ?? '', $txAvatarStyle); ?>
+                            <?php if ($cpContact): ?>
+                                <?php echo renderContactAvatar($cpHash, $cpName ?? $cpAddr ?? '', $txAvatarStyle); ?>
+                            <?php endif; ?>
                             <span class="contact-name-text"><?php echo htmlspecialchars($cpName ?: 'Unknown'); ?></span>
                         </div>
                     </td>
@@ -309,14 +311,7 @@
                     <td class="col-tx-type text-center">
                         <span class="tx-type-badge tx-type-<?php echo $typeKey; ?>"><i class="fas <?php echo $typeIcon; ?>"></i> <?php echo $typeLabel; ?></span>
                     </td>
-                    <?php
-                    // When populated, the cell becomes click-to-show-info-modal
-                    // showing the full address (and contact name if known) so a
-                    // truncated address is still discoverable. Stop-propagation
-                    // prevents the row's openTransactionModal from also firing.
-                    $endTitle = $endAddr ? ($endName ? $endName . ' — ' . $endAddr : $endAddr) : '';
-                    ?>
-                    <td class="col-tx-endpoint<?php echo $endAddr ? ' tx-endpoint-clickable' : ''; ?>"<?php if ($endAddr): ?> data-action="showInfoModal" data-stop-propagation="true" title="<?php echo htmlspecialchars($endTitle); ?>"<?php endif; ?>>
+                    <td class="col-tx-endpoint" title="<?php echo htmlspecialchars($endAddr ? ($endName ? $endName . ' — ' . $endAddr : $endAddr) : ''); ?>">
                         <?php if ($endAddr): ?>
                             <div class="contact-name-cell">
                                 <?php if ($endContact): ?>

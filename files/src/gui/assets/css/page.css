@@ -741,11 +741,8 @@ body {
 .tx-status-icon.tx-status-rejected  { color: var(--status-failure-fg, #dc3545); }
 .tx-status-icon.tx-status-cancelled { color: #6c757d; }
 
-/* Origin / Dest. cell — clickable look when populated */
-.tx-table .tx-endpoint-clickable {
-    cursor: pointer;
-}
-.tx-table .tx-endpoint-clickable:hover {
+/* Row hover for tx-table — matches contacts-table hover color */
+.tx-table .tx-row:hover {
     background: #f0f7ff;
 }
 
@@ -3108,13 +3105,36 @@ tr.tx-item-in-progress > td:first-child {
     margin-bottom: 0.5rem;
 }
 
-.dlq-table {
+/* DLQ table — extends .contacts-table with dlq-specific column widths */
+.dlq-table.contacts-table .col-dlq-type    { width: 10%; }
+.dlq-table.contacts-table .col-name        { width: 18%; }
+.dlq-table.contacts-table .col-dlq-reason  {
+    width: 28%;
+    max-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+}
+.dlq-table.contacts-table .col-dlq-date    { width: 14%; white-space: nowrap; }
+.dlq-table.contacts-table .col-dlq-status  { width: 10%; }
+.dlq-table.contacts-table .col-dlq-actions { width: 20%; white-space: nowrap; }
+
+/* Mobile (≤600px): show Type (1) + Recipient (2) only.
+   Actions and details are accessible via the row-click detail modal. */
+@media (max-width: 600px) {
+    .dlq-action-label { display: none; }
+    .dlq-status-label { display: none; }
+}
+
+/* Legacy — replaced by contacts-table chrome */
+.dlq-table:not(.contacts-table) {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
 }
 
-.dlq-table th {
+.dlq-table:not(.contacts-table) th {
     background: #f8f9fa;
     padding: 0.6rem 0.75rem;
     text-align: left;
@@ -3131,7 +3151,7 @@ tr.tx-item-in-progress > td:first-child {
 }
 
 .dlq-row:hover {
-    background: #f8f9fa;
+    background: #f0f7ff;
 }
 
 /* Inline status badge for DLQ rows */
@@ -3200,70 +3220,13 @@ tr.tx-item-in-progress > td:first-child {
     border-color: #e0a800;
 }
 
-/* DLQ mobile: convert table rows to stacked cards */
+/* Legacy DLQ mobile card layout — only for non-contacts-table DLQ (no longer used) */
 @media (max-width: 640px) {
-    .dlq-table thead {
-        display: none;
-    }
-
-    .dlq-table,
-    .dlq-table tbody,
-    .dlq-table tr,
-    .dlq-table td {
-        display: block;
-        width: 100%;
-    }
-
-    .dlq-table tr {
-        margin-bottom: 0.75rem;
-        border: 1px solid #dee2e6;
-        border-radius: 6px;
-        padding: 0.5rem 0.75rem;
-        padding-top: 0.75rem;
-        background: #fff;
-        position: relative;
-    }
-
-    .dlq-table td {
-        padding: 0.3rem 0;
-        border: none;
-        display: flex;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    .dlq-table td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: #495057;
-        font-size: 0.8rem;
-        min-width: 90px;
-        flex-shrink: 0;
-    }
-
-    .dlq-table td[data-label=""]::before {
-        display: none;
-    }
-
-    .dlq-actions-cell {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        padding-top: 0.5rem;
-    }
-
-    .dlq-table-wrapper {
-        overflow-x: visible;
-    }
-
-    /* Card-level ⋮ actions pinned to top-right of each mobile card */
-    .dlq-card-actions-mobile {
-        display: block;
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        z-index: 10;
-    }
+    .dlq-table:not(.contacts-table) thead { display: none; }
+    .dlq-table:not(.contacts-table),
+    .dlq-table:not(.contacts-table) tbody,
+    .dlq-table:not(.contacts-table) tr,
+    .dlq-table:not(.contacts-table) td { display: block; width: 100%; }
 }
 
 /* DLQ section header actions bar (Refresh button container) */

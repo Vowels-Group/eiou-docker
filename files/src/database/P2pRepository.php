@@ -461,6 +461,39 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Get cancelled/expired originator P2P records that never produced a transaction.
+     *
+     * These are P2Ps where this node was the originator (destination_address set),
+     * the P2P was cancelled or expired, and no outgoing transaction was created
+     * (outgoing_txid is NULL). Used to surface failed P2P attempts in the
+     * Recent Transactions view so they don't silently disappear.
+     *
+     * @param int $limit Maximum number of records to return
+     * @return array Array of P2P records
+     */
+    public function getCancelledOriginatorP2ps(int $limit = 100): array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE destination_address IS NOT NULL
+                    AND status IN (:cancelled, :expired)
+                    AND outgoing_txid IS NULL
+                  ORDER BY created_at DESC
+                  LIMIT :limit";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':cancelled', Constants::STATUS_CANCELLED, PDO::PARAM_STR);
+        $stmt->bindValue(':expired', Constants::STATUS_EXPIRED, PDO::PARAM_STR);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve cancelled originator P2Ps", $e);
+            return [];
+        }
+    }
+
+    /**
      * Get P2P statistics
      *
      * @return array Statistics array with counts and totals
