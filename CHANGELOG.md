@@ -12,6 +12,10 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+---
+
+## v0.1.11-alpha (2026-04-12)
+
 ### Added
 - **Configurable amount color scheme**: new **Amount Color Scheme** setting in GUI Settings with three options and a live preview of each (+100 / −100 swatch that renders in the correct colors as you select it):
   - **Neutral** (default): black for both positive and negative amounts — no color coding
