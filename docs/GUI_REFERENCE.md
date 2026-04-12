@@ -480,12 +480,13 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 **In-Progress Section:**
 - Phase indicators (pending, route_search, route_found, sending, syncing)
-- P2P vs Direct badges
+- Direct badge shown for non-P2P transactions (P2P type is implied by route/fee info)
 - Held transaction notices
-- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` with route selection UI
-  - Fast mode: shows 1 route with fee breakdown, accept/reject buttons
-  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one
+- P2P approval gate: when `autoAcceptTransaction` is OFF, transactions pause at `awaiting_approval` (blue badge) with route selection UI. Send amount shown inline before candidates
+  - Fast mode: shows 1 route with fee breakdown, Accept/Reject buttons
+  - Best-fee mode: lists all returned routes ordered by fee (lowest first), user picks one. On mobile (≤576px) candidate rows stack vertically
   - Route count updates dynamically as late-arriving candidates are received
+  - Node fee hidden during awaiting_approval (route fee shown per-candidate instead)
 
 **Transaction Table Columns:**
 
