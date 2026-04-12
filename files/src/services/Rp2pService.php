@@ -332,7 +332,7 @@ class Rp2pService implements Rp2pServiceInterface {
             // Applies to fast mode and best-fee auto-selection (called from selectAndForwardBestRp2p).
             // Best-fee manual approval is handled earlier in selectAndForwardBestRp2p() and never reaches here.
             if (!$this->currentUser->getAutoAcceptTransaction()) {
-                $this->p2pRepository->setRp2pAmount($request['hash'], $request['amount']);
+                $this->p2pRepository->setRp2pAmount($request['hash'], SplitAmount::from($request['amount']));
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_AWAITING_APPROVAL);
                 Logger::getInstance()->info("P2P route awaiting user approval", [
                     'hash' => $request['hash'],
