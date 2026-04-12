@@ -4856,10 +4856,11 @@ function retryDlqItem(dlqId, btn) {
         return;
     }
 
-    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
-    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
-    if (retryBtn)  { retryBtn.disabled  = true; retryBtn.innerHTML  = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
-    if (abandonBtn) { abandonBtn.disabled = true; }
+    // Close the detail modal if open
+    var dlqModal = document.getElementById('dlq-detail-modal');
+    if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
+
+    showLoader('Retrying delivery...', 'Attempting to re-send the message to the recipient.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
@@ -4871,34 +4872,32 @@ function retryDlqItem(dlqId, btn) {
     xhr.timeout = 90000; // 90s — Tor connections can be slow
 
     xhr.ontimeout = function() {
+        hideLoader();
         showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
-        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-        if (abandonBtn) { abandonBtn.disabled = false; }
     };
 
     xhr.onerror = function() {
+        hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
-        if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-        if (abandonBtn) { abandonBtn.disabled = false; }
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Delivered', 'Message successfully re-sent', 'success');
                 setTimeout(function() { window.location.reload(); }, 1500);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 var errMsg = response.error || 'Retry failed — try again later';
                 showToast('Retry Failed', errMsg, 'error');
-                if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-                if (abandonBtn) { abandonBtn.disabled = false; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (retryBtn)  { retryBtn.disabled  = false; retryBtn.innerHTML  = '<i class="fas fa-redo"></i> Retry'; }
-            if (abandonBtn) { abandonBtn.disabled = false; }
         }
     };
 
@@ -4925,10 +4924,11 @@ function abandonDlqItem(dlqId, btn) {
         return;
     }
 
-    var retryBtn  = document.getElementById('dlq-retry-'   + dlqId);
-    var abandonBtn = document.getElementById('dlq-abandon-' + dlqId);
-    if (retryBtn)  { retryBtn.disabled  = true; }
-    if (abandonBtn) { abandonBtn.disabled = true; abandonBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Abandoning...'; }
+    // Close the detail modal if open
+    var dlqModal = document.getElementById('dlq-detail-modal');
+    if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
+
+    if (btn) { btn.disabled = true; }
 
     var formData = new FormData();
     formData.append('action',     'dlqAbandon');
@@ -4937,18 +4937,14 @@ function abandonDlqItem(dlqId, btn) {
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 30000; // 30s — enough for a simple DB update even over Tor
+    xhr.timeout = 30000;
 
     xhr.ontimeout = function() {
         showToast('Timeout', 'Request timed out — please try again', 'warning');
-        if (retryBtn)  { retryBtn.disabled  = false; }
-        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
     };
 
     xhr.onerror = function() {
         showToast('Error', 'Network error — please try again', 'error');
-        if (retryBtn)  { retryBtn.disabled  = false; }
-        if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
     };
 
     xhr.onreadystatechange = function() {
@@ -4957,16 +4953,15 @@ function abandonDlqItem(dlqId, btn) {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
                 showToast('Abandoned', 'Message marked as abandoned', 'info');
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 showToast('Error', response.error || 'Failed to abandon item', 'error');
-                if (retryBtn)  { retryBtn.disabled  = false; }
-                if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (retryBtn)  { retryBtn.disabled  = false; }
-            if (abandonBtn) { abandonBtn.disabled = false; abandonBtn.innerHTML = '<i class="fas fa-ban"></i> Abandon'; }
         }
     };
 
@@ -4985,7 +4980,7 @@ function retryAllDlqItems(btn) {
         return;
     }
 
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...'; }
+    showLoader('Retrying all failed messages...', 'Each message is being re-sent to its recipient.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetryAll');
@@ -4996,30 +4991,40 @@ function retryAllDlqItems(btn) {
     xhr.timeout = 120000; // 2 min — bulk retries can be slow over Tor
 
     xhr.ontimeout = function() {
-        showToast('Timeout', 'Bulk retry timed out — some messages may still be queued', 'warning');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
+        hideLoader();
+        showToast('Timeout', 'Bulk retry timed out — some messages may not have been retried', 'warning');
     };
 
     xhr.onerror = function() {
+        hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
             if (response.success) {
-                var count = response.queued || 0;
-                showToast('Retry All', count + ' message' + (count !== 1 ? 's' : '') + ' queued for retry', 'success');
-                setTimeout(function() { window.location.reload(); }, 1500);
+                var delivered = response.delivered || 0;
+                var failed = response.failed || 0;
+                var total = response.total || 0;
+                if (delivered > 0 && failed === 0) {
+                    showToast('All delivered', delivered + ' message' + (delivered !== 1 ? 's' : '') + ' successfully re-sent', 'success');
+                } else if (delivered > 0) {
+                    showToast('Partial success', delivered + ' delivered, ' + failed + ' failed', 'warning');
+                } else {
+                    showToast('All failed', total + ' message' + (total !== 1 ? 's' : '') + ' could not be delivered', 'error');
+                }
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 2000);
+            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+                showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
                 showToast('Error', response.error || 'Bulk retry failed', 'error');
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
             }
         } catch (e) {
             showToast('Error', 'Unexpected server response', 'error');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo"></i> Retry All'; }
         }
     };
 
@@ -5069,7 +5074,7 @@ function abandonAllDlqItems(btn) {
             if (response.success) {
                 var count = response.abandoned || 0;
                 showToast('Abandoned', count + ' message' + (count !== 1 ? 's' : '') + ' abandoned', 'info');
-                setTimeout(function() { window.location.reload(); }, 1000);
+                setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
             } else {
                 showToast('Error', response.error || 'Bulk abandon failed', 'error');
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Abandon All'; }

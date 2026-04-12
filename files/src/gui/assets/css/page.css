@@ -476,11 +476,11 @@ body {
 }
 
 .contact-status-indicator.status-online {
-    background-color: #28a745; /* Green */
+    background-color: var(--status-success-bg, #6c757d);
 }
 
 .contact-status-indicator.status-offline {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-failure-bg, #6c757d);
 }
 
 .contact-status-indicator.status-partial {
@@ -502,9 +502,9 @@ body {
 }
 
 .status-badge.status-online {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+    border: 1px solid var(--status-success-soft-bg, #dee2e6);
 }
 
 .status-badge.status-partial {
@@ -514,9 +514,9 @@ body {
 }
 
 .status-badge.status-offline {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background-color: var(--status-failure-soft-bg, #e9ecef);
+    color: var(--status-failure-soft-fg, #495057);
+    border: 1px solid var(--status-failure-soft-bg, #dee2e6);
 }
 
 .status-badge.status-unknown {
@@ -535,9 +535,9 @@ body {
 }
 
 .chain-badge.chain-valid {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--status-success-soft-bg, #e9ecef);
+    color: var(--status-success-soft-fg, #495057);
+    border: 1px solid var(--status-success-soft-bg, #dee2e6);
 }
 
 .chain-badge.chain-invalid {
@@ -735,11 +735,11 @@ body {
 .tx-table .tx-status-icon { font-size: 0.85rem; background: none; padding: 0; border-radius: 0; }
 .tx-status-icon.tx-status-pending   { color: #b8860b; }
 .tx-status-icon.tx-status-sending   { color: #fd7e14; }
-.tx-status-icon.tx-status-sent      { color: #6c757d; }
-.tx-status-icon.tx-status-accepted  { color: #6c757d; }
-.tx-status-icon.tx-status-completed { color: #6c757d; }
-.tx-status-icon.tx-status-rejected  { color: var(--status-failure-fg, #dc3545); }
-.tx-status-icon.tx-status-cancelled { color: #6c757d; }
+.tx-status-icon.tx-status-sent      { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-accepted  { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-completed { color: var(--status-success-bg, #6c757d); }
+.tx-status-icon.tx-status-rejected  { color: var(--status-failure-bg, #6c757d); }
+.tx-status-icon.tx-status-cancelled { color: var(--status-failure-bg, #6c757d); }
 
 /* Row hover for tx-table — matches contacts-table hover color */
 .tx-table .tx-row:hover {
@@ -967,9 +967,9 @@ body {
     border-radius: 50%;
     background: #adb5bd;
 }
-.contact-status-dot.status-online { background: #28a745; }
+.contact-status-dot.status-online { background: var(--status-success-bg, #6c757d); }
 .contact-status-dot.status-partial { background: #ffc107; }
-.contact-status-dot.status-offline { background: #dc3545; }
+.contact-status-dot.status-offline { background: var(--status-failure-bg, #6c757d); }
 .contact-status-dot.status-unknown { background: #adb5bd; }
 
 .contact-address {
@@ -1977,18 +1977,18 @@ tr.contact-card:hover .contact-name-cell {
 .tx-status-accepted,
 .tx-status-completed,
 .tx-status-found {
-    background: var(--status-success-bg, #e9ecef);
-    color: var(--status-success-fg, #495057);
+    background: var(--status-success-bg, #6c757d);
+    color: var(--status-success-fg, #fff);
 }
 
 .tx-status-rejected {
-    background: var(--status-failure-bg, #e9ecef);
-    color: var(--status-failure-fg, #495057);
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
 
 .tx-status-cancelled {
-    background: #6c757d;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
 
 /* P2P request statuses */
@@ -3043,8 +3043,8 @@ tr.tx-item-in-progress > td:first-child {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #dc3545;
-    color: white;
+    background: var(--status-failure-bg, #dc3545);
+    color: var(--status-failure-fg, #fff);
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 700;
@@ -3460,7 +3460,7 @@ tr.tx-item-in-progress > td:first-child {
 .text-muted { color: #6c757d; }
 .text-primary { color: #0d6efd; }
 .text-danger { color: #dc3545; }
-.text-success { color: #28a745; }
+.text-success { color: var(--status-success-bg, #6c757d); }
 .text-warning-dark { color: #664d03; }
 .text-error-dark { color: #842029; }
 .text-info-header { color: #0dcaf0; }
@@ -3543,7 +3543,7 @@ tr.tx-item-in-progress > td:first-child {
     border: 1px solid #ced4da;
 }
 
-.status-active { color: #198754; }
+.status-active { color: var(--status-success-bg, #6c757d); }
 
 /* --- Contacts --- */
 .search-icon-wrapper { position: relative; }
@@ -3875,8 +3875,8 @@ hr.currency-separator-double {
     padding-top: 0.25rem;
 }
 
-.chain-gap-valid { color: #28a745; }
-.chain-gap-missing { color: #dc3545; text-decoration: line-through; }
+.chain-gap-valid { color: var(--status-success-bg, #6c757d); }
+.chain-gap-missing { color: var(--status-failure-bg, #6c757d); text-decoration: line-through; }
 .chain-gap-arrow { color: #6c757d; font-size: 0.75rem; }
 
 /* --- Notifications --- */
@@ -4021,7 +4021,7 @@ hr.currency-separator-double {
 /* --- DLQ dynamic variants --- */
 .dlq-chip-pending { border-color: #ffc107; color: #ffc107; }
 .dlq-chip-retrying { border-color: #17a2b8; color: #17a2b8; }
-.dlq-chip-resolved { border-color: #28a745; color: #28a745; }
+.dlq-chip-resolved { border-color: var(--status-success-bg, #6c757d); color: var(--status-success-bg, #6c757d); }
 .dlq-chip-abandoned { border-color: #6c757d; color: #6c757d; }
 
 .dlq-badge-pending { background: #fff3cd; color: #856404; }
@@ -4393,8 +4393,8 @@ hr.currency-separator-double {
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: #dc3545;
-    color: #fff;
+    background: var(--status-failure-bg, #dc3545);
+    color: var(--status-failure-fg, #fff);
     font-size: 0.7rem;
     font-weight: 700;
     line-height: 1;
@@ -4471,8 +4471,8 @@ hr.currency-separator-double {
         height: 16px;
         padding: 0 4px;
         border-radius: 8px;
-        background: #dc3545;
-        color: #fff;
+        background: var(--status-failure-bg, #dc3545);
+        color: var(--status-failure-fg, #fff);
         font-size: 0.6rem;
         font-weight: 700;
         line-height: 1;
