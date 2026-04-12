@@ -735,9 +735,9 @@ body {
 .tx-table .tx-status-icon { font-size: 0.85rem; background: none; padding: 0; border-radius: 0; }
 .tx-status-icon.tx-status-pending   { color: #b8860b; }
 .tx-status-icon.tx-status-sending   { color: #fd7e14; }
-.tx-status-icon.tx-status-sent      { color: #17a2b8; }
-.tx-status-icon.tx-status-accepted  { color: var(--status-success-fg, #198754); }
-.tx-status-icon.tx-status-completed { color: var(--status-success-fg, #198754); }
+.tx-status-icon.tx-status-sent      { color: #6c757d; }
+.tx-status-icon.tx-status-accepted  { color: #6c757d; }
+.tx-status-icon.tx-status-completed { color: #6c757d; }
 .tx-status-icon.tx-status-rejected  { color: var(--status-failure-fg, #dc3545); }
 .tx-status-icon.tx-status-cancelled { color: #6c757d; }
 
