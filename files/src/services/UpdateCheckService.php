@@ -33,6 +33,16 @@ class UpdateCheckService
     private const CACHE_FILE = '/etc/eiou/config/update-check.json';
 
     /**
+     * Tracks which version's "What's New" the user has seen
+     */
+    private const WHATS_NEW_SEEN_FILE = '/etc/eiou/config/whats-new-seen.json';
+
+    /**
+     * Cached release notes from GitHub
+     */
+    private const RELEASE_NOTES_CACHE_FILE = '/etc/eiou/config/release-notes-cache.json';
+
+    /**
      * Default cache TTL in seconds (24 hours)
      */
     private const DEFAULT_TTL = 86400;
@@ -312,5 +322,287 @@ class UpdateCheckService
             'source' => null,
             'error' => null,
         ];
+    }
+
+    /**
+     * Check if the "What's New" notification should be shown.
+     *
+     * On fresh installs the seen-file doesn't exist yet — seed it silently
+     * with the current version so the user doesn't get a "what's new" popup
+     * on their very first visit. After an upgrade the file will still hold
+     * the old version, triggering the notification.
+     *
+     * @return bool True if the current version has unseen release notes
+     */
+    public static function shouldShowWhatsNew(): bool
+    {
+        if (!file_exists(self::WHATS_NEW_SEEN_FILE)) {
+            // Fresh install — seed and suppress
+            self::dismissWhatsNew();
+            return false;
+        }
+
+        $raw = file_get_contents(self::WHATS_NEW_SEEN_FILE);
+        if ($raw === false) {
+            return false;
+        }
+
+        $data = json_decode($raw, true);
+        return ($data['dismissed_version'] ?? '') !== Constants::APP_VERSION;
+    }
+
+    /**
+     * Mark the current version's "What's New" as dismissed.
+     */
+    public static function dismissWhatsNew(): void
+    {
+        $data = [
+            'dismissed_version' => Constants::APP_VERSION,
+            'dismissed_at' => date('c'),
+        ];
+
+        $dir = dirname(self::WHATS_NEW_SEEN_FILE);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
+
+        $oldUmask = umask(0027);
+        file_put_contents(self::WHATS_NEW_SEEN_FILE, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
+        umask($oldUmask);
+
+        @chmod(self::WHATS_NEW_SEEN_FILE, 0640);
+        if (function_exists('posix_getuid') && posix_getuid() === 0) {
+            @chgrp(self::WHATS_NEW_SEEN_FILE, 'www-data');
+        }
+    }
+
+    /**
+     * Fetch release notes for a version from GitHub Releases.
+     *
+     * Results are cached locally so repeated clicks don't hit the API.
+     *
+     * @param string $version Version string (without leading 'v')
+     * @return array|null ['version', 'name', 'body_html', 'published_at', 'html_url'] or null on failure
+     */
+    public static function getReleaseNotes(string $version): ?array
+    {
+        $version = ltrim($version, 'v');
+
+        // Check cache
+        if (file_exists(self::RELEASE_NOTES_CACHE_FILE)) {
+            $raw = file_get_contents(self::RELEASE_NOTES_CACHE_FILE);
+            if ($raw !== false) {
+                $cached = json_decode($raw, true);
+                if (is_array($cached) && ($cached['version'] ?? '') === $version && !empty($cached['body_html'])) {
+                    return $cached;
+                }
+            }
+        }
+
+        // Fetch from GitHub Releases API (try exact tag first)
+        $url = 'https://api.github.com/repos/Vowels-Group/eiou-docker/releases/tags/v' . $version;
+        $response = self::httpGet($url);
+
+        $release = null;
+        if ($response !== null) {
+            $data = json_decode($response, true);
+            if (is_array($data) && !empty($data['body'])) {
+                $release = $data;
+            }
+        }
+
+        // If exact tag not found, search through recent releases
+        if ($release === null) {
+            $response = self::httpGet(self::GITHUB_RELEASES_URL);
+            if ($response !== null) {
+                $releases = json_decode($response, true);
+                if (is_array($releases)) {
+                    foreach ($releases as $r) {
+                        $tagVersion = ltrim($r['tag_name'] ?? '', 'v');
+                        if ($tagVersion === $version && !empty($r['body'])) {
+                            $release = $r;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($release === null) {
+            return null;
+        }
+
+        $result = [
+            'version' => $version,
+            'name' => $release['name'] ?? ('v' . $version),
+            'body_html' => self::markdownToHtml($release['body']),
+            'published_at' => $release['published_at'] ?? null,
+            'html_url' => $release['html_url'] ?? null,
+        ];
+
+        // Cache the result
+        $oldUmask = umask(0027);
+        file_put_contents(self::RELEASE_NOTES_CACHE_FILE, json_encode($result, JSON_PRETTY_PRINT), LOCK_EX);
+        umask($oldUmask);
+
+        @chmod(self::RELEASE_NOTES_CACHE_FILE, 0640);
+        if (function_exists('posix_getuid') && posix_getuid() === 0) {
+            @chgrp(self::RELEASE_NOTES_CACHE_FILE, 'www-data');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Convert basic Markdown to HTML for release notes display.
+     *
+     * Handles: headings, bold, italic, inline code, code blocks, links,
+     * unordered/ordered lists, horizontal rules, and paragraphs.
+     * All text content is escaped for XSS safety.
+     *
+     * @param string $markdown Raw markdown text
+     * @return string Sanitized HTML
+     */
+    public static function markdownToHtml(string $markdown): string
+    {
+        $lines = explode("\n", str_replace("\r\n", "\n", $markdown));
+        $html = '';
+        $inList = false;
+        $listType = '';
+        $inCodeBlock = false;
+        $codeContent = '';
+
+        foreach ($lines as $line) {
+            // Fenced code blocks
+            if (preg_match('/^```/', $line)) {
+                if ($inCodeBlock) {
+                    $html .= '<pre><code>' . htmlspecialchars($codeContent) . '</code></pre>';
+                    $codeContent = '';
+                    $inCodeBlock = false;
+                } else {
+                    if ($inList) {
+                        $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                        $inList = false;
+                    }
+                    $inCodeBlock = true;
+                }
+                continue;
+            }
+
+            if ($inCodeBlock) {
+                $codeContent .= $line . "\n";
+                continue;
+            }
+
+            $trimmed = trim($line);
+
+            // Empty line — close list if open
+            if ($trimmed === '') {
+                if ($inList) {
+                    $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                    $inList = false;
+                }
+                continue;
+            }
+
+            // Horizontal rule
+            if (preg_match('/^[-*_]{3,}$/', $trimmed)) {
+                if ($inList) {
+                    $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                    $inList = false;
+                }
+                $html .= '<hr>';
+                continue;
+            }
+
+            // Headings
+            if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $m)) {
+                if ($inList) {
+                    $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                    $inList = false;
+                }
+                $level = strlen($m[1]);
+                $html .= '<h' . $level . '>' . self::inlineMarkdown(htmlspecialchars($m[2])) . '</h' . $level . '>';
+                continue;
+            }
+
+            // Unordered list item
+            if (preg_match('/^[-*+]\s+(.+)$/', $trimmed, $m)) {
+                if (!$inList || $listType !== 'ul') {
+                    if ($inList) {
+                        $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                    }
+                    $html .= '<ul>';
+                    $inList = true;
+                    $listType = 'ul';
+                }
+                $html .= '<li>' . self::inlineMarkdown(htmlspecialchars($m[1])) . '</li>';
+                continue;
+            }
+
+            // Ordered list item
+            if (preg_match('/^\d+\.\s+(.+)$/', $trimmed, $m)) {
+                if (!$inList || $listType !== 'ol') {
+                    if ($inList) {
+                        $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                    }
+                    $html .= '<ol>';
+                    $inList = true;
+                    $listType = 'ol';
+                }
+                $html .= '<li>' . self::inlineMarkdown(htmlspecialchars($m[1])) . '</li>';
+                continue;
+            }
+
+            // Paragraph
+            if ($inList) {
+                $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+                $inList = false;
+            }
+            $html .= '<p>' . self::inlineMarkdown(htmlspecialchars($trimmed)) . '</p>';
+        }
+
+        // Close any open list
+        if ($inList) {
+            $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
+        }
+
+        // Close unclosed code block
+        if ($inCodeBlock) {
+            $html .= '<pre><code>' . htmlspecialchars($codeContent) . '</code></pre>';
+        }
+
+        return $html;
+    }
+
+    /**
+     * Apply inline Markdown formatting to already-escaped HTML text.
+     *
+     * @param string $text HTML-escaped text
+     * @return string Text with inline formatting applied
+     */
+    private static function inlineMarkdown(string $text): string
+    {
+        // Inline code (before other patterns so backtick content is protected)
+        $text = preg_replace('/`([^`]+)`/', '<code>$1</code>', $text);
+        // Bold
+        $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
+        // Italic
+        $text = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $text);
+        // Links — [text](url) — the URL was escaped, so unescape &amp; for href
+        $text = preg_replace_callback(
+            '/\[([^\]]+)\]\(([^)]+)\)/',
+            function ($m) {
+                $linkText = $m[1];
+                $url = html_entity_decode($m[2], ENT_QUOTES, 'UTF-8');
+                // Only allow http/https URLs
+                if (!preg_match('#^https?://#', $url)) {
+                    return $linkText;
+                }
+                return '<a href="' . htmlspecialchars($url) . '" target="_blank" rel="noopener noreferrer">' . $linkText . '</a>';
+            },
+            $text
+        );
+        return $text;
     }
 }

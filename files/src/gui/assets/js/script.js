@@ -984,6 +984,7 @@ window.onclick = function(event) {
     var editModal = document.getElementById('editContactModal');
     var txModal = document.getElementById('transactionModal');
     var addContactModal = document.getElementById('add-contact-modal');
+    var whatsNewModal = document.getElementById('whatsNewModal');
 
     if (event.target === editModal) {
         closeEditContactModal();
@@ -993,6 +994,9 @@ window.onclick = function(event) {
     }
     if (event.target === addContactModal) {
         closeAddContactModal();
+    }
+    if (event.target === whatsNewModal) {
+        closeWhatsNewModal();
     }
 }
 
@@ -1004,6 +1008,7 @@ document.addEventListener('keydown', function(event) {
         closeTransactionModal();
         closeContactModal();
         closeAddContactModal();
+        closeWhatsNewModal();
     }
 });
 
@@ -5196,6 +5201,134 @@ function submitAnalyticsConsent(enable) {
 }
 
 // ============================================================================
+// "What's New" — release notes modal after version upgrade
+// ============================================================================
+
+/**
+ * Open the What's New modal and fetch release notes from the server.
+ * The server fetches from GitHub Releases (cached) and returns rendered HTML.
+ *
+ * @param {string} version - The version to fetch notes for
+ */
+function openWhatsNewModal(version) {
+    var modal = document.getElementById('whatsNewModal');
+    if (!modal) { return; }
+
+    var titleEl = document.getElementById('whats-new-modal-title');
+    var contentEl = document.getElementById('whats-new-modal-content');
+    var githubLink = document.getElementById('whats-new-github-link');
+
+    if (titleEl) { titleEl.textContent = "What's New in v" + escapeHtml(version); }
+    if (contentEl) {
+        contentEl.innerHTML = '<div class="d-flex align-center justify-center" style="padding: 2rem;">' +
+            '<i class="fas fa-spinner fa-spin"></i>&nbsp; Loading release notes&hellip;</div>';
+    }
+    if (githubLink) {
+        githubLink.href = 'https://github.com/Vowels-Group/eiou-docker/releases/tag/v' + encodeURIComponent(version);
+    }
+
+    modal.classList.remove('d-none');
+    modal.style.display = 'flex';
+
+    // Fetch release notes via AJAX
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var formData = new FormData();
+    formData.append('action', 'whatsNewNotes');
+    formData.append('version', version);
+    if (csrfToken && csrfToken.value) {
+        formData.append('csrf_token', csrfToken.value);
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 20000;
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) { return; }
+        if (!contentEl) { return; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success && response.data && response.data.body_html) {
+                var html = '';
+                if (response.data.published_at) {
+                    var d = new Date(response.data.published_at);
+                    html += '<p class="release-notes-date"><i class="fas fa-calendar-alt"></i> Released ' + d.toLocaleDateString() + '</p>';
+                }
+                html += '<div class="release-notes-body">' + response.data.body_html + '</div>';
+                contentEl.innerHTML = html;
+                if (githubLink && response.data.html_url) {
+                    githubLink.href = response.data.html_url;
+                }
+            } else {
+                var errorMsg = (response && response.error) ? response.error : 'Could not load release notes.';
+                contentEl.innerHTML = '<div class="release-notes-fallback">' +
+                    '<p><i class="fas fa-info-circle"></i> ' + escapeHtml(errorMsg) + '</p>' +
+                    '<p>View the full release notes on GitHub:</p>' +
+                    '<a href="https://github.com/Vowels-Group/eiou-docker/releases/tag/v' + encodeURIComponent(version) + '" target="_blank" rel="noopener noreferrer">' +
+                    '<i class="fab fa-github"></i> v' + escapeHtml(version) + ' Release Notes</a></div>';
+            }
+        } catch (e) {
+            contentEl.innerHTML = '<div class="release-notes-fallback">' +
+                '<p><i class="fas fa-exclamation-triangle"></i> Failed to load release notes.</p>' +
+                '<a href="https://github.com/Vowels-Group/eiou-docker/releases/tag/v' + encodeURIComponent(version) + '" target="_blank" rel="noopener noreferrer">' +
+                '<i class="fab fa-github"></i> View on GitHub</a></div>';
+        }
+    };
+
+    xhr.onerror = function() {
+        if (contentEl) {
+            contentEl.innerHTML = '<div class="release-notes-fallback">' +
+                '<p><i class="fas fa-exclamation-triangle"></i> Network error — could not reach the server.</p></div>';
+        }
+    };
+    xhr.ontimeout = function() {
+        if (contentEl) {
+            contentEl.innerHTML = '<div class="release-notes-fallback">' +
+                '<p><i class="fas fa-clock"></i> Request timed out. The node may not be able to reach GitHub.</p>' +
+                '<a href="https://github.com/Vowels-Group/eiou-docker/releases/tag/v' + encodeURIComponent(version) + '" target="_blank" rel="noopener noreferrer">' +
+                '<i class="fab fa-github"></i> View on GitHub</a></div>';
+        }
+    };
+    xhr.send(formData);
+}
+
+/**
+ * Close the What's New modal.
+ */
+function closeWhatsNewModal() {
+    var modal = document.getElementById('whatsNewModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('d-none');
+    }
+}
+
+/**
+ * Dismiss the What's New banner — marks the current version as seen
+ * so the banner won't reappear on next page load.
+ */
+function dismissWhatsNew() {
+    var banner = document.getElementById('whats-new-banner');
+    if (banner) {
+        banner.style.opacity = '0';
+        banner.style.transition = 'opacity 0.3s ease';
+        setTimeout(function() { banner.remove(); }, 300);
+    }
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var formData = new FormData();
+    formData.append('action', 'whatsNewDismiss');
+    if (csrfToken && csrfToken.value) {
+        formData.append('csrf_token', csrfToken.value);
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 10000;
+    xhr.send(formData);
+}
+
+// ============================================================================
 // Transaction history — auto-refresh and P2P approval
 //
 // The data bootstrap (transactionData, hasInProgressTx, autoRefreshEnabled,
@@ -5581,6 +5714,15 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // Analytics consent modal
         'analyticsConsentEnable': function() { submitAnalyticsConsent(true); },
         'analyticsConsentSkip': function() { submitAnalyticsConsent(false); },
+
+        // What's New modal (release notes after upgrade)
+        'openWhatsNewModal': function(el, event) {
+            event.preventDefault();
+            var version = el.getAttribute('data-version') || '';
+            openWhatsNewModal(version);
+        },
+        'closeWhatsNewModal': function() { closeWhatsNewModal(); },
+        'dismissWhatsNew': function() { dismissWhatsNew(); },
 
         // Add contact modal
         'openAddContactModal': function() { openAddContactModal(); },

@@ -78,6 +78,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // AJAX-only "What's New" actions (returns JSON, exits immediately)
+    if ($action === 'whatsNewDismiss') {
+        header('Content-Type: application/json');
+        try {
+            \Eiou\Services\UpdateCheckService::dismissWhatsNew();
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+    if ($action === 'whatsNewNotes') {
+        header('Content-Type: application/json');
+        try {
+            $version = $_POST['version'] ?? \Eiou\Core\Constants::APP_VERSION;
+            $notes = \Eiou\Services\UpdateCheckService::getReleaseNotes($version);
+            if ($notes !== null) {
+                echo json_encode(['success' => true, 'data' => $notes]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Release notes not available']);
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     // AJAX-only settings actions (returns JSON, exits immediately)
     if ($action === 'getDebugReportJson' || $action === 'submitDebugReport') {
         // Set JSON header early to ensure clean response
@@ -230,6 +257,9 @@ $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Update check status (reads cache only — never triggers a new check on page load)
 $updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
+
+// "What's New" notification (shown after version upgrade until dismissed)
+$showWhatsNew = \Eiou\Services\UpdateCheckService::shouldShowWhatsNew();
 
 // Analytics status (reads cache only — never triggers a new submission on page load)
 try {
