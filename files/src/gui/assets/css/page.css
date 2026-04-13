@@ -2770,6 +2770,11 @@ tr.tx-item-in-progress > td:first-child {
     padding: 1rem;
     color: #6c757d;
 }
+.alert-action-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+}
 .release-notes-fallback a {
     display: inline-block;
     margin-top: 0.5rem;
