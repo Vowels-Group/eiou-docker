@@ -348,6 +348,20 @@ class TransportUtilityService implements TransportServiceInterface
             unset($contactAddresses['http']);
         }
 
+        // TOR-only contact: no fallback addresses available after removing TOR.
+        // This is expected (not an error) — return null silently instead of
+        // logging the misleading "[Transaction] No viable transport address" message.
+        $hasNonTorAddress = false;
+        foreach (Constants::VALID_TRANSPORT_INDICES as $idx) {
+            if (!empty($contactAddresses[$idx])) {
+                $hasNonTorAddress = true;
+                break;
+            }
+        }
+        if (!$hasNonTorAddress) {
+            return null;
+        }
+
         $fallbackAddress = $this->fallbackTransportAddress($contactAddresses);
         if ($fallbackAddress === null) {
             return null;
