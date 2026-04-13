@@ -110,6 +110,7 @@ files/src/gui/
 │       ├── settingsSection.html     # Settings form and debug panel
 │       ├── floatingButtons.html     # Back-to-top and refresh buttons
 │       └── analyticsConsentModal.html # One-time analytics opt-in modal
+│   (wallet.html also contains inline modal definitions for Transaction Details and What's New)
 │
 └── assets/
     ├── css/
@@ -195,6 +196,13 @@ Handles settings and debug operations.
 | `handleGetDebugReportJson()` | `getDebugReportJson` | Download debug JSON (AJAX) | `description`, `report_mode` |
 | `handleSubmitDebugReport()` | `submitDebugReport` | Submit debug report to support via Tor (AJAX, non-blocking) | `description`, `report_mode` |
 | `handleAnalyticsConsent()` | `analyticsConsent` | Save one-time analytics consent choice (AJAX) | `consent` (0 or 1) |
+
+**What's New actions** (handled directly in `Functions.php`, not via a controller):
+
+| Action Value | Description | Parameters |
+|-------------|-------------|------------|
+| `whatsNewDismiss` | Mark current version's "What's New" as seen (AJAX) | None |
+| `whatsNewNotes` | Fetch release notes from GitHub for a version (AJAX, cached) | `version` |
 
 **Available Settings:**
 
@@ -331,6 +339,7 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 | Operation result toasts | Success/error messages from redirects |
 | Tor connectivity status | Warning when Tor is unreachable, success toast when restored |
 | Update available banner | Shows current vs available version with Docker pull command |
+| What's New banner | After upgrade, shows "See what's new in vX.X.X" link that opens a release notes modal; dismissible per-version |
 | In-progress banner | Shows pending transaction count |
 | Pending contacts banner | Shows pending contact request count |
 | Pending currency requests | Shows incoming currency requests from existing contacts |

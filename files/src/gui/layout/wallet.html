@@ -107,6 +107,32 @@
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/floatingButtons.html");?>
     <!-- Analytics Consent Modal -->
     <?php require_once("/app/eiou/src/gui/layout/walletSubParts/analyticsConsentModal.html");?>
+    <!-- What's New Modal (release notes after upgrade) -->
+    <div id="whatsNewModal" class="modal d-none">
+        <div class="modal-content modal-content-md">
+            <div class="modal-header">
+                <div class="modal-header-content">
+                    <h3><i class="fas fa-gift"></i> <span id="whats-new-modal-title">What's New</span></h3>
+                </div>
+                <span class="close" data-action="closeWhatsNewModal">&times;</span>
+            </div>
+            <div class="modal-body modal-body-padded">
+                <div id="whats-new-modal-content">
+                    <div class="d-flex align-center justify-center" style="padding: 2rem;">
+                        <i class="fas fa-spinner fa-spin"></i>&nbsp; Loading release notes&hellip;
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a id="whats-new-github-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-compact">
+                    <i class="fab fa-github"></i> View on GitHub
+                </a>
+                <button type="button" class="btn btn-primary btn-compact" data-action="closeWhatsNewModal">
+                    Got it
+                </button>
+            </div>
+        </div>
+    </div>
     <!-- Transaction Detail Modal (body-level so it works from any tab) -->
     <div id="transactionModal" class="modal d-none">
         <div class="modal-content modal-content-md">

@@ -172,6 +172,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
 | **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |
 | **TransactionProcessingServiceTest.php** | 20+ | Transaction processing, claiming, P2P handling |
+| **UpdateCheckServiceTest.php** | 32 | Version comparison (`isNewerVersion`), prerelease ordering, v-prefix handling, `getStatus` structure, cache-miss behavior, `markdownToHtml` (headings, lists, bold, italic, inline code, code blocks, links, XSS escaping, horizontal rules, paragraphs, mixed content, list type switching, unclosed code blocks), `shouldShowWhatsNew` (fresh install seeding, upgrade detection, post-dismissal), `dismissWhatsNew` (file structure), `getReleaseNotes` (graceful failure, v-prefix stripping, response structure). Note: filesystem-dependent tests (`shouldShowWhatsNew`, `dismissWhatsNew`) skip outside Docker when `/etc/eiou/config` is not writable; `getReleaseNotes` structure test skips when GitHub is unreachable. |
 
 ### Services Proxies Tests (`tests/Unit/Services/Proxies/`)
 

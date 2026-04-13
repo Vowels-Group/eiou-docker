@@ -102,6 +102,27 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif; ?>
 
+<!-- What's New After Upgrade Notification -->
+<?php if (!empty($showWhatsNew)): ?>
+<div id="whats-new-banner" class="alert alert-success fade-in-up mb-lg">
+    <div class="d-flex align-center gap-lg">
+        <i class="fas fa-gift alert-icon-success"></i>
+        <div class="flex-1">
+            <h4 class="alert-title-success">
+                <i class="fas fa-check-circle"></i> Updated to v<?php echo htmlspecialchars(\Eiou\Core\Constants::APP_VERSION); ?>
+            </h4>
+            <p class="alert-body-text">
+                Your node has been updated.
+                <a href="#" data-action="openWhatsNewModal" data-version="<?php echo htmlspecialchars(\Eiou\Core\Constants::APP_VERSION); ?>">See what's new in v<?php echo htmlspecialchars(\Eiou\Core\Constants::APP_VERSION); ?></a>
+            </p>
+        </div>
+        <button type="button" class="btn btn-success btn-compact btn-nowrap" data-action="dismissWhatsNew">
+            <i class="fas fa-check"></i> Dismiss
+        </button>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- In-Progress Transactions Notification -->
 <?php if (!empty($inProgressTransactions)): ?>
 <div id="in-progress-banner" class="alert alert-warning fade-in-up mb-lg">

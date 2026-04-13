@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- **"What's New" release notes popup after upgrade**: when a node is updated to a new version, a green "Updated to vX.X.X" banner appears in the notifications area with a "See what's new" link. Clicking it opens a modal that lazily fetches the release notes from the GitHub Releases API for the current version tag, converts the Markdown body to sanitized HTML server-side, and caches the result locally. The banner includes a Dismiss button that persists the seen version to `/etc/eiou/config/whats-new-seen.json` so it doesn't reappear. On fresh installs the file is auto-seeded (no popup). The modal supports Escape key, click-outside-to-close, and includes a "View on GitHub" link as fallback. New AJAX actions: `whatsNewDismiss` (marks current version as seen) and `whatsNewNotes` (fetches release notes). New `UpdateCheckService` methods: `shouldShowWhatsNew()`, `dismissWhatsNew()`, `getReleaseNotes()`, `markdownToHtml()`
+
 ### Fixed
 - **Payment Request badges still green on neutral Status Color Scheme**: the `var()` fallback values for `.pr-badge--approved` and `.pr-item--approved` were hardcoded to green (`#d4edda`, `#28a745`) instead of neutral gray (`#e9ecef`, `#6c757d`). When the neutral scheme sets the CSS custom properties to `initial`, the fallback kicks in — so approved badges and left borders showed green instead of gray. Aligned fallbacks with every other badge in the codebase
 
