@@ -243,6 +243,32 @@ function getChainDropProposalsTableSchema() {
     )";
 }
 
+/*
+ * remember_tokens — long-lived rotation tokens for the GUI "Remember me"
+ * login feature. One row per (user, device) pairing. The raw token value
+ * lives only in the user's EIOU_REMEMBER cookie; the server stores a
+ * SHA-256 hash so a DB leak does not hand out live sessions.
+ *
+ * On every successful use the row is revoked and replaced with a fresh
+ * row (rotation) — catches stolen-cookie replay because the thief's copy
+ * becomes invalid the moment the real owner next logs in.
+ */
+function getRememberTokensTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS remember_tokens (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        token_hash VARCHAR(64) NOT NULL UNIQUE,
+        pubkey_hash VARCHAR(64) NOT NULL,
+        user_agent_family VARCHAR(128) NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP(6) NOT NULL,
+        revoked TINYINT(1) DEFAULT 0,
+        INDEX idx_rt_pubkey_hash (pubkey_hash),
+        INDEX idx_rt_expires (expires_at),
+        INDEX idx_rt_pubkey_active_last_used (pubkey_hash, revoked, last_used_at)
+    )";
+}
+
 // ============================================================================
 // P2P ROUTING
 // Tables for peer-to-peer payment routing, responses, candidates, and relays

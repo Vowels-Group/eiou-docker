@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 7;
+    const SCHEMA_VERSION = 8;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -460,6 +460,15 @@ class Constants {
     // Session
     const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
     const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
+
+    // Remember-me login tokens (long-lived browser cookies that auto-authenticate)
+    const REMEMBER_ME_COOKIE_NAME = 'EIOU_REMEMBER';     // Cookie carrying the raw rotation token
+    const REMEMBER_ME_TOKEN_BYTES = 32;                  // Raw entropy per token (→ 64 hex chars)
+    const REMEMBER_ME_DEFAULT_MAX_DAYS = 30;             // Default cap on a token's lifetime
+    const REMEMBER_ME_MAX_DAYS_OPTIONS = [1, 7, 14, 30, 60, 90]; // User-selectable caps in days
+    const REMEMBER_ME_DEFAULT_MAX_DEVICES = 3;           // Default cap on simultaneous remembered devices
+    const REMEMBER_ME_MAX_DEVICES_OPTIONS = [1, 3, 5, 10]; // User-selectable device caps
+    const CLEANUP_REMEMBER_TOKEN_RETENTION_DAYS = 1;     // Days to keep revoked/expired rows before pruning
 
     // Contact avatar style — controls how contact avatars are rendered in the contacts list
     const CONTACT_AVATAR_STYLE = 'gradient';

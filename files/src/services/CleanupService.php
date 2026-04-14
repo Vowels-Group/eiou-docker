@@ -125,6 +125,11 @@ class CleanupService implements CleanupServiceInterface {
     private ?RouteCancellationRepository $routeCancellationRepository = null;
 
     /**
+     * @var \Eiou\Database\RememberTokenRepository|null GUI remember-me token repository
+     */
+    private ?\Eiou\Database\RememberTokenRepository $rememberTokenRepository = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -161,6 +166,7 @@ class CleanupService implements CleanupServiceInterface {
         $this->p2pRelayedContactRepository = $repositoryFactory->get(\Eiou\Database\P2pRelayedContactRepository::class);
         $this->capacityReservationRepository = $repositoryFactory->get(\Eiou\Database\CapacityReservationRepository::class);
         $this->routeCancellationRepository = $repositoryFactory->get(\Eiou\Database\RouteCancellationRepository::class);
+        $this->rememberTokenRepository = $repositoryFactory->get(\Eiou\Database\RememberTokenRepository::class);
     }
 
     /**
@@ -290,6 +296,17 @@ class CleanupService implements CleanupServiceInterface {
             }
         } catch (Exception $e) {
             Logger::getInstance()->error("Error cleaning up route cancellation records", ['error' => $e->getMessage()]);
+        }
+
+        // Prune expired/revoked GUI remember-me tokens. Safe even if the
+        // table doesn't exist yet (migrations may not have run on a very
+        // fresh node) — repository swallows the failure.
+        try {
+            if ($this->rememberTokenRepository !== null) {
+                $this->rememberTokenRepository->pruneExpired();
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error pruning remember-me tokens", ['error' => $e->getMessage()]);
         }
 
         // Originator fallback: select best route for expired originator P2Ps
