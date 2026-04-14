@@ -831,7 +831,7 @@ body {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    background: inherit;
+    background: #f8f9fa;
     white-space: nowrap;
     border-bottom: 1px solid #e9ecef;
     /* Stick to the top of the scrollable .contacts-table-wrapper so column
