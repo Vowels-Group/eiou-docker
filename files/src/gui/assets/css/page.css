@@ -4643,7 +4643,8 @@ hr.currency-separator-double {
 .pr-pending-table .contact-name-cell > div { overflow: hidden; }
 .pr-pending-table .contact-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pr-pending-table tbody tr { background: #fff; }
-.pr-pending-table .col-pr-dir     { width: 1%; padding: 0.4rem 0 0.4rem 0.6rem; white-space: nowrap; }
+.pr-pending-table .col-pr-dir     { width: 2.5%; padding: 0.4rem 0 0.4rem 0.6rem; }
+.pr-pending-table .col-pr-desc   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
 .pr-pending-table .col-pr-actions { white-space: nowrap; }
 
 .pr-pending-breakdown {

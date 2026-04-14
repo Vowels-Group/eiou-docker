@@ -145,7 +145,7 @@
             if (!empty($tc['name'])) {
                 $txContactsByName[strtolower($tc['name'])] = $tc;
             }
-            foreach (['http', 'https', 'tor'] as $addrField) {
+            foreach (validTransportIndices() as $addrField) {
                 if (!empty($tc[$addrField])) {
                     $txContactsByAddress[$tc[$addrField]] = $tc;
                 }

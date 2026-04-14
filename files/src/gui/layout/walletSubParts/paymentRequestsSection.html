@@ -166,6 +166,12 @@ $prStatusIcons = [
     <h3 class="pr-group-title" style="margin-top: 1.2rem;">
         <i class="fas fa-history"></i> History
     </h3>
+    <div class="contacts-search-bar mb-lg">
+        <div class="search-icon-wrapper">
+            <i class="fas fa-search search-icon-positioned"></i>
+            <input type="text" id="pr-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterPaymentRequests">
+        </div>
+    </div>
     <div class="contacts-filters mb-lg">
         <select id="pr-filter-status" class="contacts-filter-select" data-action-change="filterPaymentRequests" aria-label="Filter by status">
             <option value="">Any status</option>
@@ -217,8 +223,26 @@ $prStatusIcons = [
 
                     $statusIcon = $prStatusIcons[$status] ?? 'fa-circle';
                 ?>
-                <tr class="pr-row contact-row<?php echo $txid ? ' cursor-pointer' : ''; ?>"
-                    <?php if ($txid): ?>data-action="openTransactionModalByTxid" data-txid="<?php echo $txid; ?>" title="Click for transaction details"<?php endif; ?>
+                <tr class="pr-row contact-row cursor-pointer"
+                    data-action="<?php echo $txid ? 'openTransactionModalByTxid' : 'openPrHistoryModal'; ?>"
+                    <?php if ($txid): ?>data-txid="<?php echo $txid; ?>"<?php endif; ?>
+                    data-pr-name="<?php echo htmlspecialchars($cpName); ?>"
+                    data-pr-amount="<?php echo $amount . ' ' . $currency; ?>"
+                    data-pr-desc="<?php echo $desc; ?>"
+                    data-pr-date="<?php echo $date; ?>"
+                    data-pr-direction="<?php echo htmlspecialchars($dir); ?>"
+                    data-pr-status="<?php echo htmlspecialchars($status); ?>"
+                    title="Click for details"
+                    <?php
+                        $searchParts = strtolower($cpName . ' ' . $cpHash . ' ' . $desc);
+                        if (!empty($req['requester_address'])) $searchParts .= ' ' . strtolower($req['requester_address']);
+                        if ($cpContact) {
+                            foreach (validTransportIndices() as $_af) {
+                                if (!empty($cpContact[$_af])) $searchParts .= ' ' . strtolower($cpContact[$_af]);
+                            }
+                        }
+                    ?>
+                    data-pr-search="<?php echo htmlspecialchars($searchParts); ?>"
                     data-status="<?php echo htmlspecialchars($status); ?>"
                     data-direction="<?php echo htmlspecialchars($dir); ?>"
                     data-amount="<?php echo $amountRaw; ?>"

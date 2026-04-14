@@ -2313,8 +2313,10 @@ function updatePrSortIndicators() {
 }
 
 function filterPaymentRequests() {
+    var searchInput = document.getElementById('pr-search-input');
     var statusSelect = document.getElementById('pr-filter-status');
     var dirSelect = document.getElementById('pr-filter-direction');
+    var term = searchInput ? searchInput.value.toLowerCase().trim() : '';
     var statusFilter = statusSelect ? statusSelect.value : '';
     var dirFilter = dirSelect ? dirSelect.value : '';
     var rows = document.querySelectorAll('#pr-history-list .pr-row');
@@ -2322,8 +2324,9 @@ function filterPaymentRequests() {
     for (var i = 0; i < rows.length; i++) {
         var row = rows[i];
         var show = true;
-        if (statusFilter && (row.getAttribute('data-status') || '') !== statusFilter) show = false;
-        if (dirFilter && (row.getAttribute('data-direction') || '') !== dirFilter) show = false;
+        if (term && (row.getAttribute('data-pr-search') || '').indexOf(term) === -1) show = false;
+        if (show && statusFilter && (row.getAttribute('data-status') || '') !== statusFilter) show = false;
+        if (show && dirFilter && (row.getAttribute('data-direction') || '') !== dirFilter) show = false;
         row.style.display = show ? '' : 'none';
     }
 }
@@ -4847,6 +4850,76 @@ function openPrPendingModal(el) {
 }
 
 /**
+ * Open a detail modal for a resolved payment request history row.
+ */
+function openPrHistoryModal(el) {
+    var row = el.closest('tr');
+    if (!row) return;
+
+    var name = row.getAttribute('data-pr-name') || '—';
+    var amount = row.getAttribute('data-pr-amount') || '—';
+    var desc = row.getAttribute('data-pr-desc') || '';
+    var date = row.getAttribute('data-pr-date') || '—';
+    var direction = row.getAttribute('data-pr-direction') || '';
+    var status = row.getAttribute('data-pr-status') || '';
+
+    // Build a human-readable status summary
+    var summary = '';
+    if (status === 'cancelled' && direction === 'outgoing') {
+        summary = 'You cancelled this request';
+    } else if (status === 'cancelled' && direction === 'incoming') {
+        summary = 'Counterparty cancelled this request';
+    } else if (status === 'declined' && direction === 'incoming') {
+        summary = 'You declined this request';
+    } else if (status === 'declined' && direction === 'outgoing') {
+        summary = 'Counterparty declined this request';
+    } else if (status === 'approved') {
+        summary = direction === 'incoming' ? 'You approved and paid this request' : 'Counterparty approved and paid this request';
+    } else {
+        summary = ucfirst(status);
+    }
+
+    var statusColors = { approved: '#28a745', declined: '#dc3545', cancelled: '#6c757d' };
+    var statusColor = statusColors[status] || '#6c757d';
+
+    var html = '<div style="text-align:center;padding:0.5rem 0 0.75rem;font-weight:600;color:' + statusColor + '">' + summary + '</div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Counterparty</div><div class="tx-detail-value"><strong>' + escapeHtml(name) + '</strong></div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + (direction === 'incoming' ? 'Incoming — they requested' : 'Outgoing — you requested') + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
+    if (desc) {
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+    }
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value" style="color:' + statusColor + '">' + ucfirst(escapeHtml(status)) + '</div></div>';
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'pr-history-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:480px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-hand-holding-usd" style="color:#6c757d"></i> Payment Request Details</h3>' +
+                '<span class="close" id="pr-hist-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem">' + html + '</div>' +
+        '</div>';
+
+    function closeModal() {
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) { if (e.key === 'Escape' || e.keyCode === 27) closeModal(); }
+
+    overlay.querySelector('#pr-hist-modal-close').onclick = closeModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+}
+
+function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+/**
  * Open a detail modal for a DLQ item, showing all fields + action buttons.
  */
 function openDlqModal(el) {
@@ -5829,8 +5902,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'refreshWalletData': function() { refreshWalletData(); },
         'toggleP2pInfo': function() { toggleP2pInfo(); },
 
-        // Payment request pending detail modal
+        // Payment request modals
         'openPrPendingModal': function(el) { openPrPendingModal(el); },
+        'openPrHistoryModal': function(el) { openPrHistoryModal(el); },
         // DLQ
         'openDlqModal': function(el) { openDlqModal(el); },
         'retryDlqItem': function(el) {
