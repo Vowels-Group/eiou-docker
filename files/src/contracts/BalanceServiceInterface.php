@@ -2,6 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
+use Eiou\Core\Constants;
 use Eiou\Core\SplitAmount;
 
 /**
@@ -24,7 +25,7 @@ interface BalanceServiceInterface
      * @param int $transactionLimit Maximum number of transactions to fetch per contact
      * @return array Converted contact information with balances
      */
-    public function contactBalanceConversion(array $contacts, int $transactionLimit = 5): array;
+    public function contactBalanceConversion(array $contacts, int $transactionLimit = Constants::CONTACT_TRANSACTIONS_LIMIT): array;
 
     /**
      * Get user's total balance.

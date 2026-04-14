@@ -562,6 +562,28 @@ body {
     font-size: 0.85rem;
 }
 
+/* Chain column icons on the contact list — icon-only, colored via the status
+   color scheme custom properties (western/eastern/neutral). No background fill,
+   just the SVG stroke/fill itself, matching the style of the valid check and
+   the muted em-dash placeholder. */
+.chain-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+.chain-icon-action,
+.chain-icon-blocked,
+.chain-icon-warning {
+    color: var(--status-failure-bg, #6c757d);
+}
+.chain-icon-valid {
+    color: var(--status-success-bg, #6c757d);
+}
+.chain-icon-waiting {
+    /* Waiting isn't success or failure — keep it in the info-blue palette
+       regardless of the active status color scheme. */
+    color: #0d6efd;
+}
+
 /* Chain warning badge on contact card */
 .badge-warning {
     background-color: #fff3cd;

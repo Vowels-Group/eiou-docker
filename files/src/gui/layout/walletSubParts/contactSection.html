@@ -103,15 +103,15 @@
                     <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
                     <td class="col-chain text-center">
                         <?php if ($isIncoming): ?>
-                        <span class="badge badge-danger" title="Proposal to drop missing transaction(s) received — action required"><i class="fas fa-exclamation-triangle"></i> Action</span>
+                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-action" title="Proposal to drop missing transaction(s) received — action required" aria-label="Action required"></i>
                         <?php elseif ($isOutgoing): ?>
-                        <span class="badge badge-info-outline" title="Awaiting contact's response"><i class="fas fa-clock"></i> Waiting</span>
+                        <i class="fas fa-clock chain-icon chain-icon-waiting" title="Awaiting contact's response" aria-label="Waiting"></i>
                         <?php elseif ($isRejected): ?>
-                        <span class="badge badge-warning-strong" title="Chain gap unresolved — proposal rejected"><i class="fas fa-ban"></i> Blocked</span>
+                        <i class="fas fa-ban chain-icon chain-icon-blocked" title="Chain gap unresolved — proposal rejected" aria-label="Blocked"></i>
                         <?php elseif ($validChain === 0): ?>
-                        <span class="badge badge-warning" title="Transaction chain needs sync"><i class="fas fa-exclamation-triangle"></i></span>
+                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-warning" title="Transaction chain needs sync" aria-label="Chain needs sync"></i>
                         <?php elseif ($validChain === 1): ?>
-                        <span class="text-success" title="Chain valid"><i class="fas fa-check"></i></span>
+                        <i class="fas fa-check chain-icon chain-icon-valid" title="Chain valid" aria-label="Chain valid"></i>
                         <?php else: ?>
                         <span class="text-muted">—</span>
                         <?php endif; ?>
@@ -160,6 +160,13 @@
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'blocked');
                     $blkCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
                     $blkCurrency = $blkCur['currency'] ?? 'USD';
+                    // Blocked contacts retain the last known balance and available-credit
+                    // values in the DB even though they won't be refreshed from the peer.
+                    // Show them in the table so the row matches what the modal displays
+                    // (previously hardcoded to em-dashes, hiding the last state from the
+                    // sortable columns).
+                    $blkMyCredit = $blkCur['my_available_credit'] ?? $contact['my_available_credit'] ?? null;
+                    $blkTheirCredit = $blkCur['their_available_credit'] ?? $contact['their_available_credit'] ?? null;
                 ?>
                 <tr class="contact-card contact-row contact-row-blocked cursor-pointer"
                     data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
@@ -169,8 +176,8 @@
                     data-chain-state="none"
                     data-online="unknown"
                     data-balance="<?php echo (float) ($contact['balance'] ?? 0); ?>"
-                    data-your-credit=""
-                    data-their-credit=""
+                    data-your-credit="<?php echo $blkMyCredit !== null ? (float) $blkMyCredit : ''; ?>"
+                    data-their-credit="<?php echo $blkTheirCredit !== null ? (float) $blkTheirCredit : ''; ?>"
                     data-action="openContactModal"
                     data-contact="<?php echo $contactData; ?>">
                     <td class="col-name">
@@ -180,8 +187,8 @@
                         </div>
                     </td>
                     <td class="col-number text-right <?php echo ($contact['balance'] ?? 0) >= 0 ? 'balance-positive' : 'balance-negative'; ?>"><?php echo (($contact['balance'] ?? 0) >= 0 ? '+' : '') . number_format($contact['balance'] ?? 0, displayDecimals()); ?> <?php echo htmlspecialchars($blkCurrency); ?></td>
-                    <td class="col-number text-right text-muted">—</td>
-                    <td class="col-number text-right text-muted">—</td>
+                    <td class="col-number text-right"><?php echo $blkMyCredit !== null ? number_format($blkMyCredit, displayDecimals()) . ' ' . htmlspecialchars($blkCurrency) : '—'; ?></td>
+                    <td class="col-number text-right"><?php echo $blkTheirCredit !== null ? number_format($blkTheirCredit, displayDecimals()) . ' ' . htmlspecialchars($blkCurrency) : '—'; ?></td>
                     <td class="col-status text-center"><span class="badge badge-blocked">Blocked</span></td>
                     <td class="col-chain text-center text-muted">—</td>
                     <td class="col-online text-center text-muted">—</td>

@@ -454,7 +454,7 @@ class Constants {
         'U',               // Unix timestamp
     ];
     const DISPLAY_CURRENCY_DECIMALS = 8;
-    const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
+    const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 10;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
     // Session
@@ -512,7 +512,7 @@ class Constants {
     // Display/Query limits
     const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 100;  // Max recent transactions shown in Activity tab (default: 100)
     const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
-    const CONTACT_TRANSACTIONS_LIMIT = 5;          // Max transactions per contact in combined queries (default: 5)
+    const CONTACT_TRANSACTIONS_LIMIT = 10;         // Max transactions per contact in combined queries (default: 10)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
     const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
     const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected

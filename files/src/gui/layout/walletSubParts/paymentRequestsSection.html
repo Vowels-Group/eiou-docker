@@ -22,11 +22,15 @@ usort($resolvedAll, function($a, $b) {
 });
 
 // Contact lookup for avatars
+// Include blocked and user-pending contacts alongside accepted ones so the
+// payment request rows always render with an avatar — a historical request
+// with a contact who was subsequently blocked should still look the same in
+// the list. Accepted is indexed last to win on any key collision.
 $prContactsByHash = [];
 $prContactsByName = [];
 $prAvatarStyle = $user->getContactAvatarStyle();
-if (!empty($acceptedContacts)) {
-    foreach ($acceptedContacts as $c) {
+foreach ([$blockedContacts ?? [], $pendingUserContacts ?? [], $acceptedContacts ?? []] as $bucket) {
+    foreach ($bucket as $c) {
         if (!empty($c['pubkey_hash'])) {
             $prContactsByHash[$c['pubkey_hash']] = $c;
         }

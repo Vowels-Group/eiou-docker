@@ -38,6 +38,9 @@
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="contacts">
                 <i class="fas fa-address-book"></i> <span class="tab-label">Contacts</span>
+                <?php if (!empty($contactsNeedingChainActionCount) && $contactsNeedingChainActionCount > 0): ?>
+                <span class="tab-badge" title="Contacts with chain gaps requiring action"><?php echo (int)$contactsNeedingChainActionCount; ?></span>
+                <?php endif; ?>
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="activity">
                 <i class="fas fa-history"></i> <span class="tab-label">Activity</span>
@@ -95,6 +98,9 @@
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="contacts" title="Contacts">
             <i class="fas fa-address-book"></i>
             <span class="tab-label-mobile">Contacts</span>
+            <?php if (!empty($contactsNeedingChainActionCount) && $contactsNeedingChainActionCount > 0): ?>
+            <span class="tab-badge-mobile"><?php echo (int)$contactsNeedingChainActionCount; ?></span>
+            <?php endif; ?>
         </button>
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="activity" title="Activity">
             <i class="fas fa-history"></i>
