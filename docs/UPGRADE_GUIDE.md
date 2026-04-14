@@ -352,6 +352,25 @@ If the proactive check is bypassed (e.g., first boot with version tracking), a r
 
 If you enabled volume passphrase encryption (`EIOU_VOLUME_KEY_FILE`) and lost the passphrase, the encrypted master key cannot be decrypted. Recovery requires restoring from your 24-word seed phrase, which re-derives the master key from scratch. Old encrypted backups remain decryptable after seed restore.
 
+### Persistent "Chain Gap" on a contact after upgrading from a pre-fix version
+
+If a transaction you sent to a contact was cancelled while still pending (before
+being signed and delivered) on a version **before** the cancelled/rejected
+chain-link fix, any transaction you sent to that contact afterwards was signed
+with its `previous_txid` pointing at that unsigned cancelled row. The peer
+never received the cancelled row (sync excludes cancelled/rejected) so they
+can't verify the successor, and the contact's chain status gets stuck as
+**Action Required** / **Chain Gap**.
+
+New transactions created **after** the upgrade will chain correctly — the
+fixed `getPreviousTxid` skips cancelled/rejected rows when picking the
+predecessor. Pre-upgrade broken chains are not automatically migrated because
+re-signing a peer-received transaction requires the sender's private key;
+the receiver can't fix it locally. Resolve a pre-existing broken chain by
+accepting the chain-drop proposal the sender will auto-propose on the next
+sync, or manually from the contact's detail panel. This is exactly what the
+chain-drop flow was originally designed for.
+
 ### Permissions errors in logs
 
 The source sync may have set incorrect permissions. This is usually handled automatically, but if errors persist:
