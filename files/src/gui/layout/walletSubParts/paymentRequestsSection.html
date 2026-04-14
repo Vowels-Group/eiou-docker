@@ -37,7 +37,7 @@ if (!empty($acceptedContacts)) {
 }
 
 $prStatusIcons = [
-    'approved'  => 'fa-check-circle',
+    'approved'  => 'fa-check',
     'declined'  => 'fa-times-circle',
     'cancelled' => 'fa-ban',
     'pending'   => 'fa-clock',
@@ -46,7 +46,60 @@ $prStatusIcons = [
 
 <?php if (!empty($incomingRequests) || !empty($outgoingRequests)): ?>
 <div class="form-container fade-in-up" id="payment-requests-section">
-    <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
+    <div class="section-header">
+        <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
+        <?php if (!empty($pendingIncoming) || !empty($pendingOutgoing)): ?>
+        <!-- Desktop: inline buttons -->
+        <div class="dlq-section-header-actions dlq-desktop-actions">
+            <?php if (!empty($pendingIncoming)): ?>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="action" value="declineAllPaymentRequests">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Decline all <?php echo count($pendingIncoming); ?> incoming request<?php echo count($pendingIncoming) > 1 ? 's' : ''; ?>?')">
+                    <i class="fas fa-times"></i> Decline All
+                </button>
+            </form>
+            <?php endif; ?>
+            <?php if (!empty($pendingOutgoing)): ?>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="action" value="cancelAllPaymentRequests">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Cancel all <?php echo count($pendingOutgoing); ?> outgoing request<?php echo count($pendingOutgoing) > 1 ? 's' : ''; ?>?')">
+                    <i class="fas fa-ban"></i> Cancel All
+                </button>
+            </form>
+            <?php endif; ?>
+        </div>
+        <!-- Mobile: dropdown -->
+        <div class="dlq-section-header-actions dlq-mobile-actions">
+            <div class="dlq-dropdown">
+                <button type="button" class="btn btn-primary btn-sm dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="pr-bulk-dropdown">
+                    <i class="fas fa-ellipsis-v"></i> Actions
+                </button>
+                <div class="dlq-dropdown-menu" id="pr-bulk-dropdown">
+                    <?php if (!empty($pendingIncoming)): ?>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="declineAllPaymentRequests">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <button type="submit" class="dlq-dropdown-item" onclick="return confirm('Decline all <?php echo count($pendingIncoming); ?> incoming request<?php echo count($pendingIncoming) > 1 ? 's' : ''; ?>?')">
+                            <i class="fas fa-times"></i> Decline All Incoming
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                    <?php if (!empty($pendingOutgoing)): ?>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="cancelAllPaymentRequests">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <button type="submit" class="dlq-dropdown-item" onclick="return confirm('Cancel all <?php echo count($pendingOutgoing); ?> outgoing request<?php echo count($pendingOutgoing) > 1 ? 's' : ''; ?>?')">
+                            <i class="fas fa-ban"></i> Cancel All Outgoing
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
 
     <!-- ============================================================
          Pending Requests — single table, direction indicated by icon
@@ -129,7 +182,7 @@ $prStatusIcons = [
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
                                 <button type="submit" class="btn btn-success btn-sm" title="Approve &amp; Pay">
-                                    <i class="fas fa-check"></i><span class="pr-action-label"> Approve</span>
+                                    <i class="fas fa-check"></i><span class="pr-action-label"> Pay</span>
                                 </button>
                             </form>
                             <form method="POST" class="pr-action-form d-inline">

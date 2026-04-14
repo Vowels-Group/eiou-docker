@@ -746,13 +746,16 @@ body {
     background: #f0f7ff;
 }
 
-/* Compact DLQ icon next to the Status badge */
+/* Compact DLQ icon below the status icon */
+.tx-table .col-tx-status-icon { vertical-align: middle; }
 .tx-table .dlq-tx-icon {
-    margin-left: 0.35rem;
-    color: #c67100;
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--status-failure-bg, #6c757d);
     text-decoration: none;
+    font-size: 0.7rem;
 }
-.tx-table .dlq-tx-icon:hover { color: #a0570e; }
+.tx-table .dlq-tx-icon:hover { opacity: 0.7; }
 
 /* Mobile (≤600px): Status-icon (1) + Counterparty (2) + Amount (3).
    Generic rule hides cols 3+; re-show col 3 (Amount) for the tx-table. */
@@ -3295,8 +3298,8 @@ tr.tx-item-in-progress > td:first-child {
 
 /* DLQ indicator badge shown on transactions that are in the Dead Letter Queue */
 .dlq-tx-indicator {
-    background: #dc3545;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
     cursor: pointer;
 }
 
