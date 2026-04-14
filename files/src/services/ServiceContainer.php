@@ -619,6 +619,7 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRepositoryFactory()->get(TransactionRepository::class)
             );
             $service->setDeadLetterQueueRepository($this->getRepositoryFactory()->get(DeadLetterQueueRepository::class));
+            $service->setMessageDeliveryService($this->getMessageDeliveryService());
             $this->services['CliDlqService'] = $service;
         }
         return $this->services['CliDlqService'];
@@ -1155,6 +1156,19 @@ class ServiceContainer implements ContainerInterface {
         // PaymentRequestService -> MessageDeliveryService
         if (isset($this->services['PaymentRequestService']) && isset($this->services['MessageDeliveryService'])) {
             $this->services['PaymentRequestService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
+        }
+
+        // MessageDeliveryService -> TransactionRepository, TransactionChainRepository
+        // Needed for refreshing stale transaction DLQ payloads (previousTxid + time)
+        // before retry. Setter-injected late so MessageDeliveryService can be
+        // constructed before the repositories are resolved.
+        if (isset($this->services['MessageDeliveryService'])) {
+            $this->services['MessageDeliveryService']->setTransactionRepository(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)
+            );
+            $this->services['MessageDeliveryService']->setTransactionChainRepository(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class)
+            );
         }
 
         // ChainDropService -> BackupService

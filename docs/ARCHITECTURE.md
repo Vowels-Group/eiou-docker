@@ -1162,6 +1162,22 @@ Message send attempt
 (`claimForRetry()`) to prevent parallel workers from processing the same DLQ entry.
 Claimed entries are re-sent through the normal delivery pipeline.
 
+**Transaction DLQ payload refresh:** Messages can sit in the DLQ for hours
+or days. For `message_type='transaction'` entries, the chain may have
+advanced (new outbound txs) or had a chain drop re-wire the link past a
+missing transaction since the original send — replaying the stored payload
+verbatim would ship a stale `previousTxid`.
+`MessageDeliveryService::retryFromDlq` therefore runs a refresh step before
+the send callback: it looks up the current chain head via `getPreviousTxid`,
+rewrites the payload's `previousTxid` and `time` to current values, updates
+the `transactions` table and the DLQ row's stored payload, and lets the
+transport layer re-sign on the send. After a successful retry, the freshly
+captured signature and nonce are persisted back to the `transactions` table
+so later sync responses serve a signature that still verifies against the
+row's current fields. Both the GUI paths (`DlqController::handleRetry`,
+`handleRetryAll`) and the CLI path (`CliDlqService::retryDlqItem`) go through
+`retryFromDlq` so neither can drift from the other.
+
 ### Distributed Locking
 
 The `DatabaseLockingService` uses MariaDB advisory locks (`GET_LOCK`/`RELEASE_LOCK`)
@@ -2171,6 +2187,18 @@ Transactions form a chain linked by `prev_txid`:
 
 Both parties maintain their own view of the chain. The `ContactStatusProcessor`
 validates chain consistency and triggers sync if discrepancies are found.
+
+**Only completed/accepted/pending transactions participate in the chain.**
+`TransactionRepository::getPreviousTxid` and `getPreviousTxidsByCurrency`
+explicitly filter out `cancelled` and `rejected` rows when picking the
+`previous_txid` for a new outbound transaction. This mirrors the sync layer,
+which never ships cancelled/rejected rows to the peer — so both sides agree
+on "last transaction" and a new tx's signed `previous_txid` always points at
+something the peer has. Cancelled rows remain as purely local history entries
+with no successors pointing at them; they're visible in the local tx list but
+invisible to the chain walk, to sync, and to new-tx linking. This closes a
+class of permanent chain gap where a cancel-while-pending on the sender would
+leave the peer unable to verify any subsequent transaction.
 
 When a chain gap is detected during sync, the `SyncService` attempts backup
 recovery before falling through to a chain drop:

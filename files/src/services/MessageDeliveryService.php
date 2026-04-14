@@ -6,6 +6,8 @@ namespace Eiou\Services;
 use Eiou\Database\MessageDeliveryRepository;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\DeliveryMetricsRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionChainRepository;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
@@ -108,6 +110,19 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * @var int Start time for delivery time tracking (microtime as int)
      */
     private int $deliveryStartTime = 0;
+
+    /**
+     * @var TransactionRepository|null Setter-injected — optional, only needed for
+     *      DLQ retry of `message_type='transaction'` items. Late injection avoids
+     *      a circular dep with TransactionService.
+     */
+    private ?TransactionRepository $transactionRepository = null;
+
+    /**
+     * @var TransactionChainRepository|null Setter-injected — used when refreshing
+     *      a DLQ transaction's previousTxid to the current chain head.
+     */
+    private ?TransactionChainRepository $transactionChainRepository = null;
 
     // =========================================================================
     // CONSTRUCTOR
@@ -1429,6 +1444,91 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
      * @param int $alertThreshold Number of pending items to trigger alert
      * @return array Alert information
      */
+    /**
+     * Late-inject the transaction repository. Needed only when refreshing a
+     * stale transaction DLQ payload before retry.
+     */
+    public function setTransactionRepository(TransactionRepository $repo): void {
+        $this->transactionRepository = $repo;
+    }
+
+    /**
+     * Late-inject the transaction chain repository.
+     */
+    public function setTransactionChainRepository(TransactionChainRepository $repo): void {
+        $this->transactionChainRepository = $repo;
+    }
+
+    /**
+     * Refresh a stale transaction DLQ payload's previousTxid and time against
+     * current DB state. Updates the tx row (previous_txid + time), overwrites
+     * the DLQ row's payload, and returns the updated $dlqItem. Returns null if
+     * dependencies aren't wired or the payload isn't refreshable — caller then
+     * falls back to retrying the original payload unchanged.
+     *
+     * The peer's signature verification will use the refreshed previousTxid +
+     * time because the transport layer's send() re-signs every payload.
+     */
+    private function refreshTransactionDlqPayload(array $dlqItem): ?array {
+        if ($this->transactionRepository === null || $this->transactionChainRepository === null) {
+            return null;
+        }
+
+        // DeadLetterQueueRepository::getById auto-decodes the payload JSON
+        // column into an array. Fall back to decoding a string for robustness
+        // against upstream changes or callers that bypass getById.
+        $rawPayload = $dlqItem['payload'] ?? null;
+        $payload = is_array($rawPayload)
+            ? $rawPayload
+            : (is_string($rawPayload) ? json_decode($rawPayload, true) : null);
+        if (!is_array($payload) || empty($payload['txid']) || empty($payload['senderPublicKey']) || empty($payload['receiverPublicKey'])) {
+            return null;
+        }
+
+        $txid = $payload['txid'];
+        $currency = $payload['currency'] ?? null;
+        $storedPrevTxid = $payload['previousTxid'] ?? null;
+
+        // Ask the DB what the current chain head looks like from this sender's
+        // perspective, excluding this txid itself so we don't circularly point
+        // at ourselves.
+        $currentPrevTxid = $this->transactionRepository->getPreviousTxid(
+            $payload['senderPublicKey'],
+            $payload['receiverPublicKey'],
+            $txid,
+            $currency
+        );
+
+        $freshTime = $this->timeUtility->getCurrentMicrotime();
+        $prevChanged = ($currentPrevTxid !== $storedPrevTxid);
+
+        // Always refresh time on retry so peer freshness checks don't trip on
+        // a long-dwelling DLQ entry; only update DB prev_txid if it actually
+        // changed.
+        $payload['time'] = $freshTime;
+        if ($prevChanged) {
+            $payload['previousTxid'] = $currentPrevTxid;
+            $this->transactionChainRepository->updatePreviousTxid($txid, $currentPrevTxid);
+        }
+        $this->transactionRepository->updateTime($txid, $freshTime);
+
+        // DB column holds the JSON-encoded string; keep in-memory form as an
+        // array so it matches what getById returns to callers.
+        $newPayloadJson = json_encode($payload);
+        $this->dlqRepository->updatePayload((int) $dlqItem['id'], $newPayloadJson);
+
+        Logger::getInstance()->info("DLQ transaction payload refreshed before retry", [
+            'dlq_id' => $dlqItem['id'],
+            'txid' => substr($txid, 0, 16) . '...',
+            'prev_changed' => $prevChanged,
+            'old_prev_txid' => $storedPrevTxid ? substr($storedPrevTxid, 0, 16) . '...' : null,
+            'new_prev_txid' => $currentPrevTxid ? substr($currentPrevTxid, 0, 16) . '...' : null
+        ]);
+
+        $dlqItem['payload'] = $payload;
+        return $dlqItem;
+    }
+
     public function getDlqAlertStatus(int $alertThreshold = Constants::DLQ_ALERT_THRESHOLD): array {
         $pendingCount = $this->dlqRepository->getPendingCount();
         $stats = $this->dlqRepository->getStatistics();
@@ -1464,10 +1564,64 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
         $this->dlqRepository->markRetrying($dlqId);
 
         try {
-            // Call the resend callback with the payload
+            // Transaction DLQ entries may have gone stale while sitting in DLQ:
+            // the chain can have advanced (new outbound txs) or a chain drop
+            // may have re-wired the link past a missing transaction since the
+            // original send. Refresh previousTxid + time against current DB
+            // state so the retry signs and ships the correct chain link.
+            // Transport layer re-signs on every send(), so updating the inner
+            // payload is sufficient — no manual re-sign needed here.
+            //
+            // The refresh is best-effort; if it throws, log and fall through to
+            // sending the original payload rather than stranding the item in
+            // 'retrying'. This keeps the retry resilient to transient DB errors.
+            if (($item['message_type'] ?? null) === 'transaction') {
+                try {
+                    $refreshed = $this->refreshTransactionDlqPayload($item);
+                    if ($refreshed !== null) {
+                        $item = $refreshed;
+                    }
+                } catch (\Throwable $refreshError) {
+                    Logger::getInstance()->warning("DLQ transaction payload refresh failed — proceeding with original payload", [
+                        'dlq_id' => $dlqId,
+                        'message_id' => $item['message_id'] ?? 'unknown',
+                        'error' => $refreshError->getMessage()
+                    ]);
+                }
+            }
+
+            // Call the resend callback with the (possibly refreshed) payload
             $result = $resendCallback($item['payload'], $item['recipient_address']);
 
             if ($result['success'] ?? false) {
+                // Persist the freshly-signed envelope back to the transactions
+                // table. Transport's send() re-signs on every call, so the DB's
+                // sender_signature/nonce would otherwise drift out of sync with
+                // what we actually put on the wire — and future chain sync
+                // responses would serve a signature that doesn't verify against
+                // the current previous_txid + time values. Callers that want
+                // this sync should include 'signing_data' in their success
+                // return (keys: signature, nonce, signed_message).
+                if (($item['message_type'] ?? null) === 'transaction'
+                    && $this->transactionRepository !== null
+                    && !empty($result['signing_data']['signature'])
+                    && !empty($result['signing_data']['nonce'])) {
+                    // getById returns payload as an array (auto-decoded),
+                    // but fall back to decoding a string for robustness.
+                    $payloadData = is_array($item['payload'] ?? null)
+                        ? $item['payload']
+                        : (is_string($item['payload'] ?? null) ? json_decode($item['payload'], true) : null);
+                    $txid = is_array($payloadData) ? ($payloadData['txid'] ?? null) : null;
+                    if ($txid !== null) {
+                        $this->transactionRepository->updateSignatureData(
+                            $txid,
+                            $result['signing_data']['signature'],
+                            $result['signing_data']['nonce'],
+                            $result['signing_data']['signed_message'] ?? null
+                        );
+                    }
+                }
+
                 $this->dlqRepository->markResolved($dlqId);
                 $this->emitDebugEvent('outputDeadLetterQueueResolved', [$dlqId, $item['message_type'], $item['message_id']]);
 
@@ -1483,10 +1637,13 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
                     'error' => $result['error'] ?? 'Resend failed'
                 ];
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
+            // Widened to Throwable so PHP Errors (e.g. type errors, undefined
+            // methods introduced by stale opcache) also reset the row from
+            // 'retrying' back to 'pending' instead of stranding it.
             $this->dlqRepository->returnToPending($dlqId);
 
-            $this->logException($e, [
+            $this->logException($e instanceof Exception ? $e : new Exception($e->getMessage(), 0), [
                 'context' => 'dlq_retry',
                 'dlq_id' => $dlqId
             ]);

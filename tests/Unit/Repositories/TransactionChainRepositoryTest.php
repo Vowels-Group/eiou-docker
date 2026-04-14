@@ -214,6 +214,60 @@ class TransactionChainRepositoryTest extends TestCase
         $this->assertContains('tx2', $result['gaps']);
     }
 
+    public function testVerifyChainIntegrityTreatsCancelledTransactionAsValidChainLink(): void
+    {
+        $userPublicKey = 'user-pubkey';
+        $contactPublicKey = 'contact-pubkey';
+
+        // Regression: cancelled transactions are part of the chain and previous_txid
+        // can legitimately point to them. Excluding them from the lookup set caused
+        // false-positive gaps (see commit 04239bc6: "Preserve chain integrity via
+        // inclusion"). The chain tx1 → tx2(cancelled) → tx3 must be reported valid.
+        $transactions = [
+            ['txid' => 'tx1', 'previous_txid' => null, 'status' => 'completed'],
+            ['txid' => 'tx2', 'previous_txid' => 'tx1', 'status' => 'cancelled'],
+            ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'],
+        ];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->exactly(4))
+            ->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute');
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($transactions);
+
+        $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEquals(2, $result['transaction_count']); // settled only (tx1, tx3)
+        $this->assertEmpty($result['gaps']);
+        $this->assertEmpty($result['broken_txids']);
+    }
+
+    public function testVerifyChainIntegrityQueryIncludesCancelledAndRejected(): void
+    {
+        // Regression: the query must NOT filter out cancelled/rejected transactions.
+        // Asserting on the SQL shape locks in the intent of the fix so a future
+        // refactor can't reintroduce the status filter without this test failing.
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalNot($this->stringContains("status NOT IN")))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())->method('execute');
+        $this->stmt->expects($this->once())->method('fetchAll')->willReturn([]);
+
+        $this->repository->verifyChainIntegrity('user', 'contact');
+    }
+
     public function testVerifyChainIntegrityHandlesQueryFailure(): void
     {
         $userPublicKey = 'user-pubkey';

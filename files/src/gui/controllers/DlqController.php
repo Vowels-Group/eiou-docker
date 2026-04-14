@@ -98,9 +98,11 @@ class DlqController
                 try {
                     $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
                     $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
-                    // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry
-                    $tx = $this->transactionRepository->getByTxid($txid);
-                    if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                    // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry.
+                    // getByTxid returns a list of rows (fetchAll) — unwrap the first.
+                    $txRows = $this->transactionRepository->getByTxid($txid);
+                    $tx = ($txRows && isset($txRows[0])) ? $txRows[0] : null;
+                    if ($tx && ($tx['status'] ?? null) === Constants::STATUS_CANCELLED) {
                         $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
                     }
                 } catch (\Throwable $e) {
@@ -122,7 +124,22 @@ class DlqController
                     $status = $decoded['status'] ?? null;
 
                     if ($status && in_array($status, $successStatuses, true)) {
-                        return ['success' => true];
+                        // Surface the freshly-captured signing data so
+                        // MessageDeliveryService can persist it back to the
+                        // transactions table — keeping the DB's stored
+                        // signature consistent with what was actually sent.
+                        $return = ['success' => true];
+                        if (is_array($sendResult)) {
+                            $signingData = array_filter([
+                                'signature' => $sendResult['signature'] ?? null,
+                                'nonce' => $sendResult['nonce'] ?? null,
+                                'signed_message' => $sendResult['signed_message'] ?? null,
+                            ], static fn ($v) => $v !== null);
+                            if (!empty($signingData)) {
+                                $return['signing_data'] = $signingData;
+                            }
+                        }
+                        return $return;
                     }
 
                     // Surface the actual error from the response if available
@@ -217,8 +234,9 @@ class DlqController
                     try {
                         $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
                         $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
-                        $tx = $this->transactionRepository->getByTxid($txid);
-                        if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                        $txRows = $this->transactionRepository->getByTxid($txid);
+                        $tx = ($txRows && isset($txRows[0])) ? $txRows[0] : null;
+                        if ($tx && ($tx['status'] ?? null) === Constants::STATUS_CANCELLED) {
                             $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
                         }
                     } catch (\Throwable $e) {
@@ -236,7 +254,18 @@ class DlqController
                         $decoded = json_decode($response, true);
                         $status = $decoded['status'] ?? null;
                         if ($status && in_array($status, $successStatuses, true)) {
-                            return ['success' => true];
+                            $return = ['success' => true];
+                            if (is_array($sendResult)) {
+                                $signingData = array_filter([
+                                    'signature' => $sendResult['signature'] ?? null,
+                                    'nonce' => $sendResult['nonce'] ?? null,
+                                    'signed_message' => $sendResult['signed_message'] ?? null,
+                                ], static fn ($v) => $v !== null);
+                                if (!empty($signingData)) {
+                                    $return['signing_data'] = $signingData;
+                                }
+                            }
+                            return $return;
                         }
                         $errorDetail = $decoded['error'] ?? $decoded['message'] ?? $status ?? 'no response from recipient';
                         return ['success' => false, 'error' => 'Delivery failed: ' . $errorDetail];
