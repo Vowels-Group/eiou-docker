@@ -400,10 +400,38 @@ if (!empty($pendingContacts)) {
     }
 }
 
-$contactTxLimit = contactTransactionsLimit();
-$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $contactTxLimit);
-$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $contactTxLimit);
-$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $contactTxLimit);
+// Single knob: the user-editable "GUI/CLI Max Output Lines" setting drives
+// both how many recent-tx rows we pre-fetch per contact (server side) AND how
+// many the modal displays (via $maxDisplayLines). Keeps pre-fetch and display
+// in lockstep so the modal never shows fewer rows than the user asked for
+// because of a starved pre-load.
+//
+// Fetch all three status buckets in a single DB query (getContactsGroupedByStatus)
+// and batch-fetch recent transactions for every contact in one ranked query
+// (inside contactBalanceConversion). Prior pattern ran 3 × SELECT on contacts
+// plus N × SELECT on transactions where N = total contact count across buckets.
+$contactTxLimit = $user->getMaxOutput();
+$contactsByStatus = $contactService->getContactsGroupedByStatus();
+$pendingUserContacts = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'], $contactTxLimit);
+$acceptedContacts    = $transactionService->contactBalanceConversion($contactsByStatus['accepted'],     $contactTxLimit);
+$blockedContacts     = $transactionService->contactBalanceConversion($contactsByStatus['blocked'],      $contactTxLimit);
+
+// Count accepted contacts with a chain state that requires user attention, so
+// the Contacts tab can show a count badge (like Activity's DLQ badge). Includes
+// incoming chain drop proposals to accept/reject, rejected proposals still
+// blocking the chain, and raw chain gaps that need resolution. Waiting
+// (outgoing proposal not yet answered) is not counted — nothing for the user
+// to do on their side while the peer deliberates.
+$contactsNeedingChainActionCount = 0;
+foreach ($acceptedContacts as $c) {
+    $proposal = $c['chain_drop_proposal'] ?? null;
+    $isIncoming = $proposal && ($proposal['direction'] ?? '') === 'incoming' && ($proposal['status'] ?? '') === 'pending';
+    $isRejected = $proposal && ($proposal['status'] ?? '') === 'rejected';
+    $validChain = $c['valid_chain'] ?? null;
+    if ($isIncoming || $isRejected || $validChain === 0) {
+        $contactsNeedingChainActionCount++;
+    }
+}
 
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {

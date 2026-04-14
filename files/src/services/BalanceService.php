@@ -89,6 +89,15 @@ class BalanceService implements BalanceServiceInterface
             $pubkeys
         );
 
+        // Batch-fetch the last $transactionLimit transactions for every contact
+        // in one ranked query (ROW_NUMBER per counterparty pubkey_hash). This
+        // replaces the prior N+1 of one getTransactionsWithContact call per
+        // contact inside the loop below.
+        $contactHashes = array_values(array_filter(array_column($contacts, 'pubkey_hash')));
+        $txByContactHash = !empty($contactHashes)
+            ? $this->transactionContactRepository->getTransactionsWithContactsBatch($contactHashes, $transactionLimit)
+            : [];
+
         // Get all address types for building address arrays
         $addressTypes = $this->addressRepository->getAllAddressTypes();
 
@@ -111,20 +120,11 @@ class BalanceService implements BalanceServiceInterface
 
             // Build addresses associative array
             $addressesAssociative = [];
-            $contactAddresses = [];
             foreach ($addressTypes as $addressType) {
-                $addr = $contact[$addressType] ?? '';
-                $addressesAssociative[$addressType] = $addr;
-                if (!empty($addr)) {
-                    $contactAddresses[] = $addr;
-                }
+                $addressesAssociative[$addressType] = $contact[$addressType] ?? '';
             }
 
-            // Get recent transactions with this contact
-            $transactions = $this->transactionContactRepository->getTransactionsWithContact(
-                $contactAddresses,
-                $transactionLimit
-            );
+            $transactions = $txByContactHash[$contact['pubkey_hash'] ?? ''] ?? [];
 
             $contactsWithBalances[] = array_merge($addressesAssociative, [
                 'name' => $contact['name'],

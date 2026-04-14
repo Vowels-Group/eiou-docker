@@ -1547,6 +1547,19 @@ class ContactManagementService implements ContactManagementServiceInterface
     }
 
     /**
+     * Fetch accepted, user-pending, and blocked contacts in a single DB query
+     * and return them grouped by status. Replaces the pattern of calling
+     * getAcceptedContacts + getUserPendingContactRequests + getBlockedContacts
+     * separately on the same page render.
+     *
+     * @return array{accepted: array, user_pending: array, blocked: array}
+     */
+    public function getContactsGroupedByStatus(): array
+    {
+        return $this->contactRepository->getContactsGroupedByStatus();
+    }
+
+    /**
      * Get pending contact requests
      *
      * @return array Array of (non-user initiated) pending contacts

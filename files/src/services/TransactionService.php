@@ -333,7 +333,7 @@ class TransactionService implements TransactionServiceInterface {
         return $this->currencyUtility->convertMinorToMajor($total);
     }
 
-    public function contactBalanceConversion($contacts, int $transactionLimit = 5): array {
+    public function contactBalanceConversion($contacts, int $transactionLimit = Constants::CONTACT_TRANSACTIONS_LIMIT): array {
         if ($this->balanceService !== null) {
             return $this->balanceService->contactBalanceConversion($contacts, $transactionLimit);
         }

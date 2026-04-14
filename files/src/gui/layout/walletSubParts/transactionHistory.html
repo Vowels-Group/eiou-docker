@@ -138,10 +138,17 @@
     // identifiers — name (lowercased) AND each address field — because the
     // counterparty in $tx may match by name (formatter populates it) but the
     // address format isn't always identical to the contact's stored address.
+    //
+    // Include blocked and user-pending contacts in addition to accepted ones:
+    // historical transactions with a contact don't disappear when the contact
+    // is blocked, and their avatar should still render so the row is
+    // visually consistent with pre-block history. Accepted is indexed last
+    // so it wins on any key collision (e.g. a contact who was blocked and
+    // later re-accepted under the same address).
     $txContactsByAddress = [];
     $txContactsByName = [];
-    if (!empty($acceptedContacts)) {
-        foreach ($acceptedContacts as $tc) {
+    foreach ([$blockedContacts ?? [], $pendingUserContacts ?? [], $acceptedContacts ?? []] as $bucket) {
+        foreach ($bucket as $tc) {
             if (!empty($tc['name'])) {
                 $txContactsByName[strtolower($tc['name'])] = $tc;
             }

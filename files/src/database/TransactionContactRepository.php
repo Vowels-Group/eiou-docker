@@ -249,6 +249,85 @@ class TransactionContactRepository extends AbstractRepository {
     }
 
     /**
+     * Fetch the most recent N transactions for each of several contacts in a
+     * single DB round-trip. Replaces the N+1 pattern where
+     * contactBalanceConversion ran one SELECT per contact.
+     *
+     * Uses a ranked subquery (MariaDB 10.2+ / MySQL 8+ window functions) to
+     * pick the top $limitPerContact rows per contact. Contact identity is the
+     * pubkey_hash (stable across the user's multiple transport addresses).
+     *
+     * @param array<string> $contactPubkeyHashes Hashes of the contacts to fetch for
+     * @param int $limitPerContact Max transactions per contact (default: CONTACT_TRANSACTIONS_LIMIT)
+     * @return array<string, array> Map of contact pubkey_hash → array of formatted transactions (newest first)
+     */
+    public function getTransactionsWithContactsBatch(array $contactPubkeyHashes, int $limitPerContact = Constants::CONTACT_TRANSACTIONS_LIMIT): array
+    {
+        $result = array_fill_keys($contactPubkeyHashes, []);
+
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null || empty($contactPubkeyHashes)) {
+            return $result;
+        }
+
+        $myHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+        $contactPlaceholders = $this->createPlaceholders($contactPubkeyHashes);
+
+        // ROW_NUMBER() partitioned by the counterparty hash, ordered by
+        // timestamp DESC — one ranked pass per contact instead of a separate
+        // query per contact. Outer filter keeps only the top N per partition.
+        $query = "SELECT contact_hash, txid, tx_type, status, sender_address, receiver_address,
+                         amount_whole, amount_frac, currency, timestamp, memo, description
+                    FROM (
+                        SELECT
+                            CASE WHEN sender_public_key_hash = ? THEN receiver_public_key_hash
+                                 ELSE sender_public_key_hash END AS contact_hash,
+                            txid, tx_type, status, sender_address, receiver_address,
+                            amount_whole, amount_frac, currency, timestamp, memo, description,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY CASE WHEN sender_public_key_hash = ?
+                                                  THEN receiver_public_key_hash
+                                                  ELSE sender_public_key_hash END
+                                ORDER BY timestamp DESC
+                            ) AS rn
+                        FROM {$this->tableName}
+                        WHERE (sender_public_key_hash = ? AND receiver_public_key_hash IN ($contactPlaceholders))
+                           OR (sender_public_key_hash IN ($contactPlaceholders) AND receiver_public_key_hash = ?)
+                    ) ranked
+                    WHERE rn <= ?
+                    ORDER BY contact_hash, timestamp DESC";
+
+        $params = array_merge(
+            [$myHash, $myHash, $myHash],
+            $contactPubkeyHashes,
+            $contactPubkeyHashes,
+            [$myHash, $limitPerContact]
+        );
+
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to batch-fetch contact transactions: ' . $e->getMessage(), 'WARNING');
+            return $result;
+        }
+
+        $rowsByContact = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $hash = $row['contact_hash'];
+            // Drop the helper columns before formatting — keep the formatter's
+            // input shape identical to getTransactionsWithContact's.
+            unset($row['contact_hash']);
+            $rowsByContact[$hash][] = $row;
+        }
+
+        foreach ($rowsByContact as $hash => $rows) {
+            $result[$hash] = TransactionFormatter::formatContactMany($rows, $userAddresses);
+        }
+        return $result;
+    }
+
+    /**
      * Get the contact transaction between two specific parties
      *
      * Looks up the contact transaction where senderPubkey sent a contact request
