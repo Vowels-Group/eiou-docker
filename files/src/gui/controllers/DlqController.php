@@ -98,9 +98,11 @@ class DlqController
                 try {
                     $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
                     $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
-                    // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry
-                    $tx = $this->transactionRepository->getByTxid($txid);
-                    if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                    // Reset cancelled-due-to-expiry transactions so they show as in-progress during retry.
+                    // getByTxid returns a list of rows (fetchAll) — unwrap the first.
+                    $txRows = $this->transactionRepository->getByTxid($txid);
+                    $tx = ($txRows && isset($txRows[0])) ? $txRows[0] : null;
+                    if ($tx && ($tx['status'] ?? null) === Constants::STATUS_CANCELLED) {
                         $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
                     }
                 } catch (\Throwable $e) {
@@ -232,8 +234,9 @@ class DlqController
                     try {
                         $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
                         $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
-                        $tx = $this->transactionRepository->getByTxid($txid);
-                        if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                        $txRows = $this->transactionRepository->getByTxid($txid);
+                        $tx = ($txRows && isset($txRows[0])) ? $txRows[0] : null;
+                        if ($tx && ($tx['status'] ?? null) === Constants::STATUS_CANCELLED) {
                             $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
                         }
                     } catch (\Throwable $e) {
