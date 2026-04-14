@@ -29,14 +29,14 @@ class PayloadEncryptionTest extends TestCase
 
         // Generate two EC key pairs for testing
         $aliceKey = openssl_pkey_new([
-            'ec' => ['curve_name' => 'prime256v1'],
+            'ec' => ['curve_name' => 'secp256k1'],
             'private_key_type' => OPENSSL_KEYTYPE_EC,
         ]);
         openssl_pkey_export($aliceKey, $this->alicePrivateKey);
         $this->alicePublicKey = openssl_pkey_get_details($aliceKey)['key'];
 
         $bobKey = openssl_pkey_new([
-            'ec' => ['curve_name' => 'prime256v1'],
+            'ec' => ['curve_name' => 'secp256k1'],
             'private_key_type' => OPENSSL_KEYTYPE_EC,
         ]);
         openssl_pkey_export($bobKey, $this->bobPrivateKey);

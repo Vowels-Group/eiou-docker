@@ -220,14 +220,12 @@ class BIP39 {
         // Derive 32-byte EC private key deterministically from seed
         $privateKeyBytes = hash_hmac('sha256', $seed, self::HMAC_CONTEXT_EC_KEY, true);
 
-        // Get the preferred EC curve (secp256k1 if available, otherwise prime256v1)
+        // secp256k1 is the network-wide curve; throws if OpenSSL lacks it.
         $curveName = self::getPreferredCurve();
 
-        // For secp256k1, the private key must be less than the curve order
-        // The secp256k1 order is: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
-        // For prime256v1, the order is: FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-        // Our HMAC output is effectively random and very unlikely to exceed these,
-        // but we ensure validity by reducing modulo the order if needed
+        // The secp256k1 order is FFFFFFFF...BAAEDCE6AF48A03BBFD25E8CD0364141 — our
+        // HMAC output is effectively random and vanishingly unlikely to exceed it,
+        // but we defensively reject the all-zero scalar (not a valid private key).
         $privateKeyBytes = self::ensureValidPrivateKey($privateKeyBytes, $curveName);
 
         // Convert private key bytes to PEM format for OpenSSL
@@ -261,27 +259,35 @@ class BIP39 {
     }
 
     /**
-     * Get the preferred EC curve name
+     * Return the curve name used for all wallet EC keys.
      *
-     * Checks if secp256k1 is available, otherwise falls back to prime256v1
+     * The network standardises on **secp256k1** — peers exchange signed
+     * payloads and perform ECDH using keys on this curve, and OpenSSL
+     * refuses to load a PEM whose curve it was not compiled with. A node
+     * running on an OpenSSL build without secp256k1 therefore cannot parse
+     * any peer's public key, cannot verify their signatures, and cannot
+     * decrypt messages addressed to it. There is no partial-compatibility
+     * mode; either the curve is available or this node must not run.
      *
-     * @return string The curve name to use
-     * @throws RuntimeException If no supported EC curve is available
+     * A previous revision fell back to prime256v1 when secp256k1 was
+     * missing, but the resulting node was effectively isolated (no
+     * interop with any secp256k1 peer) while appearing to start cleanly.
+     * We now hard-fail at any call site that would depend on the curve.
+     *
+     * @return string Always "secp256k1"
+     * @throws RuntimeException If the running OpenSSL does not support secp256k1
      */
     public static function getPreferredCurve(): string {
-        $curves = openssl_get_curve_names();
-
-        if (in_array('secp256k1', $curves)) {
-            return 'secp256k1';
+        if (!in_array('secp256k1', openssl_get_curve_names(), true)) {
+            throw new RuntimeException(
+                'secp256k1 curve not available in OpenSSL — this eIOU node cannot run. '
+                . 'The network standardises on secp256k1; a node without it cannot parse '
+                . 'any peer\'s public key, verify signatures, or exchange encrypted payloads. '
+                . 'Rebuild PHP against an OpenSSL that includes secp256k1 (enabled by default '
+                . 'in mainstream distros, including the base image this node ships on).'
+            );
         }
-
-        if (in_array('prime256v1', $curves)) {
-            error_log('WARNING: secp256k1 curve not available in OpenSSL, falling back to prime256v1. '
-                . 'Wallet keys derived from seed phrases will differ from nodes using secp256k1.');
-            return 'prime256v1';
-        }
-
-        throw new RuntimeException('No supported EC curve available (need secp256k1 or prime256v1)');
+        return 'secp256k1';
     }
 
     /**
@@ -292,10 +298,10 @@ class BIP39 {
      * @return string Valid 32-byte private key
      */
     private static function ensureValidPrivateKey(string $privateKeyBytes, string $curveName): string {
-        // The private key must be non-zero and less than the curve order
-        // For both secp256k1 and prime256v1, we check if all bytes are zero
+        // A valid secp256k1 scalar is non-zero and less than the curve order.
+        // HMAC-SHA256 output above the order is astronomically unlikely, but the
+        // all-zero scalar is an explicit invalid value — rehash if we hit it.
         if ($privateKeyBytes === str_repeat("\x00", 32)) {
-            // Extremely unlikely, but hash again if we get all zeros
             $privateKeyBytes = hash_hmac('sha256', $privateKeyBytes, self::HMAC_CONTEXT_EC_KEY . '-retry', true);
         }
 
@@ -311,17 +317,13 @@ class BIP39 {
      * @throws RuntimeException If curve is unsupported or public key computation fails
      */
     private static function ecPrivateKeyToPem(string $privateKeyBytes, string $curveName): string {
-        // OID for the curve
-        $curveOids = [
-            'secp256k1' => "\x06\x05\x2b\x81\x04\x00\x0a",  // 1.3.132.0.10
-            'prime256v1' => "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07",  // 1.2.840.10045.3.1.7
-        ];
-
-        if (!isset($curveOids[$curveName])) {
-            throw new RuntimeException("Unsupported curve: $curveName");
+        // The network supports secp256k1 only. Reject anything else so a
+        // misrouted call never silently produces an incompatible key.
+        if ($curveName !== 'secp256k1') {
+            throw new RuntimeException("Unsupported curve: $curveName (only secp256k1 is supported)");
         }
-
-        $curveOid = $curveOids[$curveName];
+        // ANSI OID for secp256k1 = 1.3.132.0.10 (ASN.1 encoded)
+        $curveOid = "\x06\x05\x2b\x81\x04\x00\x0a";
 
         // Build the EC private key structure (RFC 5915)
         // ECPrivateKey ::= SEQUENCE {
@@ -373,12 +375,10 @@ class BIP39 {
         // This is a workaround since PHP doesn't expose EC point multiplication directly
 
         // Create a minimal EC private key PEM without public key to bootstrap
-        $curveOids = [
-            'secp256k1' => "\x06\x05\x2b\x81\x04\x00\x0a",
-            'prime256v1' => "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07",
-        ];
-
-        $curveOid = $curveOids[$curveName];
+        if ($curveName !== 'secp256k1') {
+            throw new RuntimeException("Unsupported curve: $curveName (only secp256k1 is supported)");
+        }
+        $curveOid = "\x06\x05\x2b\x81\x04\x00\x0a";
 
         // Minimal EC private key structure
         $version = "\x02\x01\x01";

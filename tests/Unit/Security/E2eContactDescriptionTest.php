@@ -43,14 +43,14 @@ class E2eContactDescriptionTest extends TestCase
         }
 
         $senderKey = openssl_pkey_new([
-            'ec' => ['curve_name' => 'prime256v1'],
+            'ec' => ['curve_name' => 'secp256k1'],
             'private_key_type' => OPENSSL_KEYTYPE_EC,
         ]);
         openssl_pkey_export($senderKey, $this->senderPrivateKey);
         $this->senderPublicKey = openssl_pkey_get_details($senderKey)['key'];
 
         $recipientKey = openssl_pkey_new([
-            'ec' => ['curve_name' => 'prime256v1'],
+            'ec' => ['curve_name' => 'secp256k1'],
             'private_key_type' => OPENSSL_KEYTYPE_EC,
         ]);
         openssl_pkey_export($recipientKey, $this->recipientPrivateKey);

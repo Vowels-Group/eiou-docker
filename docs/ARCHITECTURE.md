@@ -2970,7 +2970,7 @@ TorKeyDerivation          +---------------------+
 
 | Component | Path | Purpose |
 |-----------|------|---------|
-| `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation |
+| `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation. `getPreferredCurve()` hard-requires secp256k1; a node whose linked OpenSSL lacks it refuses to start (see `Application::__construct`). No prime256v1 fallback — such a node cannot parse any peer's public key and is effectively isolated |
 | `KeyEncryption` | `/src/security/KeyEncryption.php` | AES-256-GCM encryption/decryption for private keys and auth codes |
 | `MariaDbEncryption` | `/src/security/MariaDbEncryption.php` | Transparent Data Encryption (TDE) — derives TDE key from master key via HMAC-SHA256, writes key file to `/dev/shm`, enables `file_key_management` plugin, encrypts all InnoDB/Aria tables at rest |
 | `PayloadEncryption` | `/src/security/PayloadEncryption.php` | ECDH + AES-256-GCM end-to-end encryption for all contact message payloads |

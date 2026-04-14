@@ -160,9 +160,11 @@ class BIP39Test extends TestCase
      */
     public function testGetPreferredCurve(): void
     {
-        $curve = BIP39::getPreferredCurve();
-
-        $this->assertContains($curve, ['secp256k1', 'prime256v1']);
+        // Always secp256k1 — the fallback to prime256v1 was removed because a
+        // prime-only node is effectively isolated (cannot parse any peer's
+        // secp256k1 public key). BIP39::getPreferredCurve() now returns
+        // secp256k1 or throws.
+        $this->assertSame('secp256k1', BIP39::getPreferredCurve());
     }
 
     /**
