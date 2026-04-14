@@ -84,7 +84,17 @@ class PayloadEncryption
 
         $curveName = $recipientDetails['ec']['curve_name'];
 
-        // Generate ephemeral EC key pair on same curve
+        // The network standardises on secp256k1. Rejecting any other curve here
+        // prevents a misconfigured peer (or a malicious one) from tricking us
+        // into generating ephemeral keys on a curve the rest of the network
+        // cannot process. See BIP39::getPreferredCurve() for the full rationale.
+        if ($curveName !== 'secp256k1') {
+            throw new RuntimeException(
+                "Recipient key uses unsupported curve '$curveName' — this network requires secp256k1"
+            );
+        }
+
+        // Generate ephemeral EC key pair on the same (secp256k1) curve
         $ephemeralKey = openssl_pkey_new([
             'ec' => ['curve_name' => $curveName],
             'private_key_type' => OPENSSL_KEYTYPE_EC,

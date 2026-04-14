@@ -73,6 +73,13 @@ class Application {
         // Get logger wrapper
         $this->getLogger();
 
+        // Fail fast if the linked OpenSSL lacks secp256k1. The wallet keypair,
+        // every signature, and every encrypted payload depend on this curve —
+        // a node without it cannot parse any peer's public key and is
+        // effectively isolated. Rather than boot into a broken half-network
+        // mode, refuse to start and point operators at the fix.
+        \Eiou\Security\BIP39::getPreferredCurve();
+
         // Setup database
         if(!file_exists('/etc/eiou/config/dbconfig.json')){
             // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
