@@ -4295,6 +4295,17 @@ hr.currency-separator-double {
     margin-top: 0.5rem;
 }
 
+.tx-modal-dlq-warning {
+    background: var(--status-failure-soft-bg, #f8d7da);
+    color: var(--status-failure-soft-fg, #842029);
+    border: 1px solid var(--status-failure-bg, #6c757d);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+.tx-modal-dlq-warning a { color: inherit; font-weight: 600; text-decoration: underline; }
+
 .tx-modal-badges {
     display: -webkit-box; display: -ms-flexbox; display: flex;
     gap: 0.5rem;

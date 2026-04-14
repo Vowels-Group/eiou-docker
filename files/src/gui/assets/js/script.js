@@ -819,6 +819,14 @@ function renderTransactionModal(tx) {
     html += roleBadge;
     html += '</div>';
 
+    // DLQ delivery failure warning
+    if (tx.in_dlq) {
+        html += '<div class="tx-modal-dlq-warning">';
+        html += '<i class="fas fa-exclamation-triangle"></i> ';
+        html += 'Delivery failed — this transaction is in the <a href="#dlq" onclick="closeTransactionModal()">Failed Messages</a> queue for retry.';
+        html += '</div>';
+    }
+
     // Details section
     html += '<div class="tx-detail-section">';
 
@@ -4817,7 +4825,7 @@ function openPrPendingModal(el) {
     // Action buttons as real forms so they submit properly
     html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
     if (direction === 'incoming') {
-        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="approvePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Approve &amp; Pay</button></form>';
+        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="approvePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Pay</button></form>';
         html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="declinePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-times"></i> Decline</button></form>';
     } else {
         html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="cancelPaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-ban"></i> Cancel</button></form>';
@@ -5215,6 +5223,11 @@ function abandonDlqItem(dlqId, btn) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function retryAllDlqItems(btn) {
+    var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
+    if (!confirm('Retry all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '?')) {
+        return;
+    }
+
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -5278,7 +5291,8 @@ function retryAllDlqItems(btn) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function abandonAllDlqItems(btn) {
-    if (!confirm('Abandon all pending messages? This cannot be undone.')) {
+    var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
+    if (!confirm('Abandon all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '? This cannot be undone.')) {
         return;
     }
 

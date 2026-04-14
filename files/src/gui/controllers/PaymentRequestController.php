@@ -4,6 +4,7 @@
 namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
+use Eiou\Gui\Includes\SessionKeys;
 use Eiou\Services\PaymentRequestService;
 use Eiou\Utils\Security;
 use Eiou\Gui\Helpers\MessageHelper;
@@ -47,6 +48,12 @@ class PaymentRequestController
                 break;
             case 'cancelPaymentRequest':
                 $this->handleCancel();
+                break;
+            case 'declineAllPaymentRequests':
+                $this->handleDeclineAll();
+                break;
+            case 'cancelAllPaymentRequests':
+                $this->handleCancelAll();
                 break;
         }
     }
@@ -141,5 +148,43 @@ class PaymentRequestController
         } else {
             MessageHelper::redirectMessage($result['error'] ?? 'Failed to cancel request', 'error');
         }
+    }
+
+    private function handleDeclineAll(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pending = $this->paymentRequestService->getAllForDisplay(1000)['incoming'] ?? [];
+        $pending = array_filter($pending, fn($r) => ($r['status'] ?? '') === 'pending');
+
+        $declined = 0;
+        $failed = 0;
+        foreach ($pending as $req) {
+            $result = $this->paymentRequestService->decline($req['request_id']);
+            if ($result['success']) { $declined++; } else { $failed++; }
+        }
+
+        $msg = "Declined $declined incoming request" . ($declined !== 1 ? 's' : '');
+        if ($failed > 0) { $msg .= " ($failed failed)"; }
+        MessageHelper::redirectMessage($msg, $failed > 0 ? 'warning' : 'info');
+    }
+
+    private function handleCancelAll(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pending = $this->paymentRequestService->getAllForDisplay(1000)['outgoing'] ?? [];
+        $pending = array_filter($pending, fn($r) => ($r['status'] ?? '') === 'pending');
+
+        $cancelled = 0;
+        $failed = 0;
+        foreach ($pending as $req) {
+            $result = $this->paymentRequestService->cancel($req['request_id']);
+            if ($result['success']) { $cancelled++; } else { $failed++; }
+        }
+
+        $msg = "Cancelled $cancelled outgoing request" . ($cancelled !== 1 ? 's' : '');
+        if ($failed > 0) { $msg .= " ($failed failed)"; }
+        MessageHelper::redirectMessage($msg, $failed > 0 ? 'warning' : 'info');
     }
 }
