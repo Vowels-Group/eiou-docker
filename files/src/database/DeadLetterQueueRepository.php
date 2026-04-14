@@ -359,6 +359,26 @@ class DeadLetterQueueRepository extends AbstractRepository {
     }
 
     /**
+     * Overwrite a DLQ row's stored outbound payload. Used when refreshing a
+     * stale transaction DLQ entry before retry so the next attempt (and any
+     * subsequent ones) ship the updated previousTxid + time rather than the
+     * original stale values.
+     */
+    public function updatePayload(int $id, string $payloadJson): bool {
+        $query = "UPDATE {$this->tableName} SET payload = :payload WHERE id = :id";
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':payload', $payloadJson, PDO::PARAM_STR);
+            $stmt->bindValue(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+            return $stmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            $this->logError("Failed to update DLQ payload", $e);
+            return false;
+        }
+    }
+
+    /**
      * Delete old resolved/abandoned records
      *
      * @param int $days Number of days to keep

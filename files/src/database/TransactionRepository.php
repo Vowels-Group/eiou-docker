@@ -781,6 +781,20 @@ class TransactionRepository extends AbstractRepository {
      * @param string $txid Transaction ID
      * @return bool True if update was successful
      */
+    /**
+     * Update the signed-payload microtime (`time`) for a transaction.
+     * Used when refreshing a DLQ entry before retry so the payload carries a
+     * current timestamp instead of the stale one from the original send.
+     */
+    public function updateTime(string $txid, int $microtime): bool {
+        $affectedRows = $this->update(
+            ['time' => $microtime],
+            'txid',
+            $txid
+        );
+        return $affectedRows >= 0;
+    }
+
     public function updateTimestamp(string $txid): bool {
         $affectedRows = $this->update(
             ['timestamp' => date('Y-m-d H:i:s.u')],
