@@ -469,7 +469,7 @@ class Constants {
     //   neutral: black for both (default)
     //   western: green positive, red negative (Rest of the World)
     //   eastern: red positive, green negative (Asia)
-    const AMOUNT_COLOR_SCHEME = 'neutral';
+    const AMOUNT_COLOR_SCHEME = 'western';
     const AMOUNT_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
 
     // Status color scheme — controls accepted/completed/resolved (success)
@@ -478,7 +478,7 @@ class Constants {
     //   neutral: muted gray for both (default)
     //   western: green success, red failure
     //   eastern: red success, green failure
-    const STATUS_COLOR_SCHEME = 'neutral';
+    const STATUS_COLOR_SCHEME = 'western';
     const STATUS_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
 
 

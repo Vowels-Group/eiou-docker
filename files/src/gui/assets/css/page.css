@@ -2775,6 +2775,20 @@ tr.tx-item-in-progress > td:first-child {
     justify-content: flex-end;
     margin-top: 0.5rem;
 }
+/* Alert banners with inline action button — button sits to the right of the
+   text on wide screens and wraps below (right-aligned) on narrow screens. */
+.alert-banner-row {
+    flex-wrap: wrap;
+}
+.alert-banner-row > .flex-1 {
+    flex: 1 1 auto;
+    min-width: 200px;
+}
+.alert-banner-action {
+    flex-shrink: 0;
+    margin-left: auto;
+    align-self: center;
+}
 .release-notes-fallback a {
     display: inline-block;
     margin-top: 0.5rem;
@@ -3121,7 +3135,7 @@ tr.tx-item-in-progress > td:first-child {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--status-failure-bg, #dc3545);
+    background: var(--status-failure-bg, #6c757d);
     color: var(--status-failure-fg, #fff);
     border-radius: 12px;
     font-size: 0.75rem;
@@ -4473,7 +4487,7 @@ hr.currency-separator-double {
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: var(--status-failure-bg, #dc3545);
+    background: var(--status-failure-bg, #6c757d);
     color: var(--status-failure-fg, #fff);
     font-size: 0.7rem;
     font-weight: 700;
@@ -4577,8 +4591,48 @@ hr.currency-separator-double {
    Payment Requests Section
    ========================================================================= */
 
-.pr-group {
-    margin-top: 1.5rem;
+/* -- Pending sections (card-based, interactive) --------------------------- */
+
+.pr-pending-section {
+    border-radius: 8px;
+    padding: 0;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+.pr-pending-section--incoming {
+    background: linear-gradient(135deg, #cff4fc 0%, #e8fbff 100%);
+    border: 1px solid #b6effb;
+}
+.pr-pending-section--outgoing {
+    background: linear-gradient(135deg, #fff3cd 0%, #fffbeb 100%);
+    border: 1px solid #ffc107;
+}
+
+.pr-pending-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+}
+.pr-pending-section--incoming .pr-pending-header { color: #055160; border-bottom: 1px solid rgba(5, 81, 96, 0.15); }
+.pr-pending-section--outgoing .pr-pending-header { color: #664d03; border-bottom: 1px solid rgba(102, 77, 3, 0.2); }
+
+.pr-pending-count {
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+}
+.pr-pending-count--incoming { background: #055160; }
+.pr-pending-count--outgoing { background: #664d03; }
+
+.pr-pending-list {
+    padding: 0.5rem 0.75rem;
+    max-height: 320px;
+    overflow-y: auto;
 }
 
 .pr-group-title {
@@ -4593,12 +4647,10 @@ hr.currency-separator-double {
     gap: 0.4rem;
 }
 
-.pr-group-title--incoming {
-    color: var(--text-primary, #212529);
-}
+/* -- Pending item cards --------------------------------------------------- */
 
 .pr-item {
-    background: var(--card-bg, #f8f9fa);
+    background: rgba(255, 255, 255, 0.7);
     border: 1px solid var(--border-color, #dee2e6);
     border-radius: 8px;
     padding: 0.9rem 1rem;
@@ -4606,40 +4658,7 @@ hr.currency-separator-double {
 }
 
 .pr-item--pending {
-    border-left: 3px solid #fd7e14;
-}
-
-.pr-item--approved {
-    border-left: 3px solid var(--status-success-bg, #6c757d);
-    opacity: 0.85;
-}
-
-.pr-item[data-action] {
-    cursor: pointer;
-    transition: opacity 0.15s, box-shadow 0.15s;
-}
-.pr-item[data-action]:hover {
-    opacity: 1;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-}
-.pr-view-tx {
-    margin-left: auto;
-    color: #6c757d;
-    font-size: 0.75rem;
-    opacity: 0.6;
-}
-.pr-item[data-action]:hover .pr-view-tx {
-    opacity: 1;
-    color: #0d6efd;
-}
-
-.pr-item--declined {
-    border-left: 3px solid var(--status-failure-bg, #6c757d);
-    opacity: 0.7;
-}
-.pr-item--cancelled {
-    border-left: 3px solid #6c757d;
-    opacity: 0.7;
+    border-left: 3px solid #856404;
 }
 
 .pr-item-header {
@@ -4689,6 +4708,23 @@ hr.currency-separator-double {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+}
+
+/* -- History table -------------------------------------------------------- */
+
+.pr-table .col-pr-status { width: 2rem; }
+.pr-table .col-pr-txid   { width: 7rem; }
+
+.pr-status-icon { font-size: 0.85rem; }
+.pr-status-approved  { color: var(--status-success-bg, #6c757d); }
+.pr-status-declined  { color: var(--status-failure-bg, #6c757d); }
+.pr-status-cancelled { color: #6c757d; }
+
+.pr-direction-hint {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted, #6c757d);
+    line-height: 1.2;
 }
 
 /* ============================================================
