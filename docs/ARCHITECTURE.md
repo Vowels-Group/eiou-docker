@@ -1164,8 +1164,9 @@ Claimed entries are re-sent through the normal delivery pipeline.
 
 **Transaction DLQ payload refresh:** Messages can sit in the DLQ for hours
 or days. For `message_type='transaction'` entries, the chain may have
-advanced (new outbound txs) or been rebased (chain drop) since the original
-send — replaying the stored payload verbatim would ship a stale `previousTxid`.
+advanced (new outbound txs) or had a chain drop re-wire the link past a
+missing transaction since the original send — replaying the stored payload
+verbatim would ship a stale `previousTxid`.
 `MessageDeliveryService::retryFromDlq` therefore runs a refresh step before
 the send callback: it looks up the current chain head via `getPreviousTxid`,
 rewrites the payload's `previousTxid` and `time` to current values, updates

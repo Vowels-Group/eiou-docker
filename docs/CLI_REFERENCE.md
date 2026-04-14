@@ -721,7 +721,8 @@ eiou dlq --json
 
 **Transaction payload refresh on retry:** A transaction can sit in the DLQ for
 minutes to hours. In that window the local chain may have advanced (new
-outbound txs) or been rebased (chain drop). On every retry — whether from
+outbound txs) or had a chain drop re-wire the link past a missing
+transaction. On every retry — whether from
 `eiou dlq retry`, the GUI's Retry button, or the automatic retry queue — the
 payload's `previousTxid` and `time` are refreshed from current DB state before
 the send. The transport layer re-signs the envelope on that send, and after a
