@@ -32,6 +32,9 @@
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="send">
                 <i class="fas fa-paper-plane"></i> <span class="tab-label">Payment</span>
+                <?php if (!empty($pendingPaymentRequestCount) && $pendingPaymentRequestCount > 0): ?>
+                <span class="tab-badge"><?php echo (int)$pendingPaymentRequestCount; ?></span>
+                <?php endif; ?>
             </button>
             <button type="button" class="tab-btn" data-action="switchTab" data-tab="contacts">
                 <i class="fas fa-address-book"></i> <span class="tab-label">Contacts</span>
@@ -85,6 +88,9 @@
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Payment">
             <i class="fas fa-paper-plane"></i>
             <span class="tab-label-mobile">Payment</span>
+            <?php if (!empty($pendingPaymentRequestCount) && $pendingPaymentRequestCount > 0): ?>
+            <span class="tab-badge-mobile"><?php echo (int)$pendingPaymentRequestCount; ?></span>
+            <?php endif; ?>
         </button>
         <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="contacts" title="Contacts">
             <i class="fas fa-address-book"></i>

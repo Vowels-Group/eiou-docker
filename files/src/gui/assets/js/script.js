@@ -819,6 +819,14 @@ function renderTransactionModal(tx) {
     html += roleBadge;
     html += '</div>';
 
+    // DLQ delivery failure warning
+    if (tx.in_dlq) {
+        html += '<div class="tx-modal-dlq-warning">';
+        html += '<i class="fas fa-exclamation-triangle"></i> ';
+        html += 'Delivery failed — this transaction is in the <a href="#dlq" onclick="closeTransactionModal()">Failed Messages</a> queue for retry.';
+        html += '</div>';
+    }
+
     // Details section
     html += '<div class="tx-detail-section">';
 
@@ -2224,6 +2232,112 @@ function updateTransactionsSortIndicators() {
     }
 }
 
+
+// =========================================================================
+// Payment Requests — sort & filter
+// =========================================================================
+
+var prSortState = { column: null, direction: null, originalOrder: null };
+
+function sortPaymentRequests(column) {
+    var tbody = document.getElementById('pr-history-list');
+    if (!tbody) return;
+
+    if (!prSortState.originalOrder) {
+        prSortState.originalOrder = [];
+        var initial = tbody.querySelectorAll('.pr-row');
+        for (var k = 0; k < initial.length; k++) {
+            prSortState.originalOrder.push(initial[k]);
+        }
+    }
+
+    var newDirection;
+    if (prSortState.column !== column) {
+        newDirection = 'asc';
+    } else if (prSortState.direction === 'asc') {
+        newDirection = 'desc';
+    } else if (prSortState.direction === 'desc') {
+        newDirection = null;
+    } else {
+        newDirection = 'asc';
+    }
+
+    if (!newDirection) {
+        for (var i = 0; i < prSortState.originalOrder.length; i++) {
+            tbody.appendChild(prSortState.originalOrder[i]);
+        }
+        prSortState.column = null;
+        prSortState.direction = null;
+    } else {
+        var attr = 'data-' + column;
+        var rows = [];
+        var current = tbody.querySelectorAll('.pr-row');
+        for (var j = 0; j < current.length; j++) rows.push(current[j]);
+
+        rows.sort(function (a, b) {
+            var av = parseFloat(a.getAttribute(attr));
+            var bv = parseFloat(b.getAttribute(attr));
+            var aMissing = isNaN(av);
+            var bMissing = isNaN(bv);
+            if (aMissing && bMissing) return 0;
+            if (aMissing) return 1;
+            if (bMissing) return -1;
+            return newDirection === 'asc' ? av - bv : bv - av;
+        });
+
+        for (var m = 0; m < rows.length; m++) tbody.appendChild(rows[m]);
+        prSortState.column = column;
+        prSortState.direction = newDirection;
+    }
+
+    updatePrSortIndicators();
+}
+
+function updatePrSortIndicators() {
+    var headers = document.querySelectorAll('.pr-table thead th.sortable');
+    for (var i = 0; i < headers.length; i++) {
+        var th = headers[i];
+        var col = th.getAttribute('data-sort-column');
+        var icon = th.querySelector('.sort-indicator');
+        if (!icon) continue;
+
+        icon.className = 'fas sort-indicator';
+        th.classList.remove('sort-asc', 'sort-desc');
+
+        if (col === prSortState.column) {
+            if (prSortState.direction === 'asc') {
+                icon.classList.add('fa-sort-up');
+                th.classList.add('sort-asc');
+            } else if (prSortState.direction === 'desc') {
+                icon.classList.add('fa-sort-down');
+                th.classList.add('sort-desc');
+            } else {
+                icon.classList.add('fa-sort');
+            }
+        } else {
+            icon.classList.add('fa-sort');
+        }
+    }
+}
+
+function filterPaymentRequests() {
+    var searchInput = document.getElementById('pr-search-input');
+    var statusSelect = document.getElementById('pr-filter-status');
+    var dirSelect = document.getElementById('pr-filter-direction');
+    var term = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    var statusFilter = statusSelect ? statusSelect.value : '';
+    var dirFilter = dirSelect ? dirSelect.value : '';
+    var rows = document.querySelectorAll('#pr-history-list .pr-row');
+
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var show = true;
+        if (term && (row.getAttribute('data-pr-search') || '').indexOf(term) === -1) show = false;
+        if (show && statusFilter && (row.getAttribute('data-status') || '') !== statusFilter) show = false;
+        if (show && dirFilter && (row.getAttribute('data-direction') || '') !== dirFilter) show = false;
+        row.style.display = show ? '' : 'none';
+    }
+}
 
 /**
  * Shows a small info modal with the text from an info icon's title attribute.
@@ -4684,6 +4798,136 @@ function showDlqToasts() {
  * @param {string} filter
  */
 /**
+ * Open a detail modal for a pending payment request row.
+ */
+function openPrPendingModal(el) {
+    var row = el.closest('tr');
+    if (!row) return;
+
+    var name = row.getAttribute('data-pr-name') || '—';
+    var amount = row.getAttribute('data-pr-amount') || '—';
+    var desc = row.getAttribute('data-pr-desc') || '';
+    var date = row.getAttribute('data-pr-date') || '—';
+    var direction = row.getAttribute('data-pr-direction') || '';
+    var requestId = row.getAttribute('data-pr-request-id') || '';
+    var csrf = row.getAttribute('data-pr-csrf') || '';
+
+    var dirLabel = direction === 'incoming' ? 'Incoming — they requested' : 'Outgoing — you requested';
+
+    var html = '<div class="tx-detail-row"><div class="tx-detail-label">Counterparty</div><div class="tx-detail-value"><strong>' + escapeHtml(name) + '</strong></div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + escapeHtml(dirLabel) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
+    if (desc) {
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+    }
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
+
+    // Action buttons as real forms so they submit properly
+    html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
+    if (direction === 'incoming') {
+        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="approvePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Pay</button></form>';
+        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="declinePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-times"></i> Decline</button></form>';
+    } else {
+        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="cancelPaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-ban"></i> Cancel</button></form>';
+    }
+    html += '</div>';
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'pr-pending-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:480px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-hand-holding-usd" style="color:#6c757d"></i> Payment Request Details</h3>' +
+                '<span class="close" id="pr-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem">' + html + '</div>' +
+        '</div>';
+
+    function closePrModal() {
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) { if (e.key === 'Escape' || e.keyCode === 27) closePrModal(); }
+
+    overlay.querySelector('#pr-modal-close').onclick = closePrModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closePrModal(); });
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+}
+
+/**
+ * Open a detail modal for a resolved payment request history row.
+ */
+function openPrHistoryModal(el) {
+    var row = el.closest('tr');
+    if (!row) return;
+
+    var name = row.getAttribute('data-pr-name') || '—';
+    var amount = row.getAttribute('data-pr-amount') || '—';
+    var desc = row.getAttribute('data-pr-desc') || '';
+    var date = row.getAttribute('data-pr-date') || '—';
+    var direction = row.getAttribute('data-pr-direction') || '';
+    var status = row.getAttribute('data-pr-status') || '';
+
+    // Build a human-readable status summary
+    var summary = '';
+    if (status === 'cancelled' && direction === 'outgoing') {
+        summary = 'You cancelled this request';
+    } else if (status === 'cancelled' && direction === 'incoming') {
+        summary = 'Counterparty cancelled this request';
+    } else if (status === 'declined' && direction === 'incoming') {
+        summary = 'You declined this request';
+    } else if (status === 'declined' && direction === 'outgoing') {
+        summary = 'Counterparty declined this request';
+    } else if (status === 'approved') {
+        summary = direction === 'incoming' ? 'You approved and paid this request' : 'Counterparty approved and paid this request';
+    } else {
+        summary = ucfirst(status);
+    }
+
+    var statusColors = { approved: '#28a745', declined: '#dc3545', cancelled: '#6c757d' };
+    var statusColor = statusColors[status] || '#6c757d';
+
+    var html = '<div style="text-align:center;padding:0.5rem 0 0.75rem;font-weight:600;color:' + statusColor + '">' + summary + '</div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Counterparty</div><div class="tx-detail-value"><strong>' + escapeHtml(name) + '</strong></div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + (direction === 'incoming' ? 'Incoming — they requested' : 'Outgoing — you requested') + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
+    if (desc) {
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+    }
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
+    html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value" style="color:' + statusColor + '">' + ucfirst(escapeHtml(status)) + '</div></div>';
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.id = 'pr-history-modal';
+    overlay.innerHTML =
+        '<div class="modal-content" style="max-width:480px">' +
+            '<div class="modal-header">' +
+                '<h3 style="font-size:1rem"><i class="fas fa-hand-holding-usd" style="color:#6c757d"></i> Payment Request Details</h3>' +
+                '<span class="close" id="pr-hist-modal-close" title="Close">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:1.25rem">' + html + '</div>' +
+        '</div>';
+
+    function closeModal() {
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) { if (e.key === 'Escape' || e.keyCode === 27) closeModal(); }
+
+    overlay.querySelector('#pr-hist-modal-close').onclick = closeModal;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', escHandler);
+    document.body.appendChild(overlay);
+    overlay.style.display = 'flex';
+}
+
+function ucfirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+/**
  * Open a detail modal for a DLQ item, showing all fields + action buttons.
  */
 function openDlqModal(el) {
@@ -4979,6 +5223,11 @@ function abandonDlqItem(dlqId, btn) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function retryAllDlqItems(btn) {
+    var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
+    if (!confirm('Retry all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '?')) {
+        return;
+    }
+
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -5042,7 +5291,8 @@ function retryAllDlqItems(btn) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function abandonAllDlqItems(btn) {
-    if (!confirm('Abandon all pending messages? This cannot be undone.')) {
+    var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
+    if (!confirm('Abandon all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '? This cannot be undone.')) {
         return;
     }
 
@@ -5567,6 +5817,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var col = el.getAttribute('data-sort-column');
             if (col) sortTransactions(col);
         },
+        // Payment requests table — sort
+        'sortPaymentRequests': function(el) {
+            var col = el.getAttribute('data-sort-column');
+            if (col) sortPaymentRequests(col);
+        },
 
         // Transaction history
         'openTransactionModal': function(el) {
@@ -5661,6 +5916,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'refreshWalletData': function() { refreshWalletData(); },
         'toggleP2pInfo': function() { toggleP2pInfo(); },
 
+        // Payment request modals
+        'openPrPendingModal': function(el) { openPrPendingModal(el); },
+        'openPrHistoryModal': function(el) { openPrHistoryModal(el); },
         // DLQ
         'openDlqModal': function(el) { openDlqModal(el); },
         'retryDlqItem': function(el) {
@@ -5798,6 +6056,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
         else if (action === 'filterTransactions') { filterTransactions(); }
+        else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
@@ -5834,5 +6093,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         if (action === 'filterContacts') { filterContacts(); }
         if (action === 'filterTransactions') { filterTransactions(); }
+        if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
     }, false);
 })();

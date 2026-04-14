@@ -192,12 +192,14 @@ class DlqController
             exit;
         }
 
-        // Only retry transaction and contact types — p2p/rp2p are time-sensitive and should not be bulk-retried
+        // Only retry transaction, contact, and payment_request types — p2p/rp2p are time-sensitive and should not be bulk-retried
         $retryable = array_merge(
-            $this->dlqRepository->getByMessageType('transaction', 'pending'),
-            $this->dlqRepository->getByMessageType('transaction', 'retrying'),
-            $this->dlqRepository->getByMessageType('contact',     'pending'),
-            $this->dlqRepository->getByMessageType('contact',     'retrying')
+            $this->dlqRepository->getByMessageType('transaction',      'pending'),
+            $this->dlqRepository->getByMessageType('transaction',      'retrying'),
+            $this->dlqRepository->getByMessageType('contact',          'pending'),
+            $this->dlqRepository->getByMessageType('contact',          'retrying'),
+            $this->dlqRepository->getByMessageType('payment_request',  'pending'),
+            $this->dlqRepository->getByMessageType('payment_request',  'retrying')
         );
 
         $delivered = 0;

@@ -746,13 +746,16 @@ body {
     background: #f0f7ff;
 }
 
-/* Compact DLQ icon next to the Status badge */
+/* Compact DLQ icon below the status icon */
+.tx-table .col-tx-status-icon { vertical-align: middle; }
 .tx-table .dlq-tx-icon {
-    margin-left: 0.35rem;
-    color: #c67100;
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--status-failure-bg, #6c757d);
     text-decoration: none;
+    font-size: 0.7rem;
 }
-.tx-table .dlq-tx-icon:hover { color: #a0570e; }
+.tx-table .dlq-tx-icon:hover { opacity: 0.7; }
 
 /* Mobile (≤600px): Status-icon (1) + Counterparty (2) + Amount (3).
    Generic rule hides cols 3+; re-show col 3 (Amount) for the tx-table. */
@@ -2775,6 +2778,24 @@ tr.tx-item-in-progress > td:first-child {
     justify-content: flex-end;
     margin-top: 0.5rem;
 }
+/* Alert banners with inline action button — button sits to the right of the
+   text on wide screens and wraps below (right-aligned) on narrow screens.
+   Icon + text stay together; only the button wraps. */
+.alert-banner-row {
+    flex-wrap: wrap;
+}
+.alert-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.alert-banner-action {
+    flex-shrink: 0;
+    margin-left: auto;
+    align-self: center;
+}
 .release-notes-fallback a {
     display: inline-block;
     margin-top: 0.5rem;
@@ -3121,7 +3142,7 @@ tr.tx-item-in-progress > td:first-child {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--status-failure-bg, #dc3545);
+    background: var(--status-failure-bg, #6c757d);
     color: var(--status-failure-fg, #fff);
     border-radius: 12px;
     font-size: 0.75rem;
@@ -3277,8 +3298,8 @@ tr.tx-item-in-progress > td:first-child {
 
 /* DLQ indicator badge shown on transactions that are in the Dead Letter Queue */
 .dlq-tx-indicator {
-    background: #dc3545;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
     cursor: pointer;
 }
 
@@ -4274,6 +4295,17 @@ hr.currency-separator-double {
     margin-top: 0.5rem;
 }
 
+.tx-modal-dlq-warning {
+    background: var(--status-failure-soft-bg, #f8d7da);
+    color: var(--status-failure-soft-fg, #842029);
+    border: 1px solid var(--status-failure-bg, #6c757d);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+.tx-modal-dlq-warning a { color: inherit; font-weight: 600; text-decoration: underline; }
+
 .tx-modal-badges {
     display: -webkit-box; display: -ms-flexbox; display: flex;
     gap: 0.5rem;
@@ -4473,7 +4505,7 @@ hr.currency-separator-double {
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: var(--status-failure-bg, #dc3545);
+    background: var(--status-failure-bg, #6c757d);
     color: var(--status-failure-fg, #fff);
     font-size: 0.7rem;
     font-weight: 700;
@@ -4577,9 +4609,67 @@ hr.currency-separator-double {
    Payment Requests Section
    ========================================================================= */
 
-.pr-group {
-    margin-top: 1.5rem;
+/* -- Pending sections (card-based, interactive) --------------------------- */
+
+.pr-pending-section {
+    border-radius: 8px;
+    padding: 0;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    background: linear-gradient(135deg, #fff3cd 0%, #fffbeb 100%);
+    border: 1px solid #ffc107;
 }
+
+.pr-pending-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+    color: #664d03;
+    border-bottom: 1px solid rgba(102, 77, 3, 0.2);
+}
+
+.pr-pending-count {
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
+}
+
+/* Narrow screens: collapse pending action buttons to icon-only */
+@media (max-width: 900px) {
+    .pr-action-label { display: none; }
+}
+
+.pr-pending-table-wrap {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+    max-height: none;
+}
+.pr-pending-table thead th { background: transparent; position: static; }
+.pr-pending-table .contact-name-cell { overflow: hidden; }
+.pr-pending-table .contact-name-cell > div { overflow: hidden; }
+.pr-pending-table .contact-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-pending-table tbody tr { background: #fff; }
+.pr-pending-table .col-pr-dir     { width: 2.5%; padding: 0.4rem 0 0.4rem 0.6rem; }
+.pr-pending-table .col-pr-desc   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
+.pr-pending-table .col-pr-actions { white-space: nowrap; }
+
+.pr-pending-breakdown {
+    font-weight: 400;
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.pr-dir-icon { font-size: 0.85rem; }
+.pr-dir-incoming { color: #0d6efd; }
+.pr-dir-outgoing { color: #fd7e14; }
 
 .pr-group-title {
     font-size: 0.85rem;
@@ -4593,102 +4683,52 @@ hr.currency-separator-double {
     gap: 0.4rem;
 }
 
-.pr-group-title--incoming {
-    color: var(--text-primary, #212529);
-}
-
-.pr-item {
-    background: var(--card-bg, #f8f9fa);
-    border: 1px solid var(--border-color, #dee2e6);
-    border-radius: 8px;
-    padding: 0.9rem 1rem;
-    margin-bottom: 0.6rem;
-}
-
-.pr-item--pending {
-    border-left: 3px solid #fd7e14;
-}
-
-.pr-item--approved {
-    border-left: 3px solid var(--status-success-bg, #6c757d);
-    opacity: 0.85;
-}
-
-.pr-item[data-action] {
-    cursor: pointer;
-    transition: opacity 0.15s, box-shadow 0.15s;
-}
-.pr-item[data-action]:hover {
-    opacity: 1;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-}
-.pr-view-tx {
-    margin-left: auto;
-    color: #6c757d;
-    font-size: 0.75rem;
-    opacity: 0.6;
-}
-.pr-item[data-action]:hover .pr-view-tx {
-    opacity: 1;
-    color: #0d6efd;
-}
-
-.pr-item--declined {
-    border-left: 3px solid var(--status-failure-bg, #6c757d);
-    opacity: 0.7;
-}
-.pr-item--cancelled {
-    border-left: 3px solid #6c757d;
-    opacity: 0.7;
-}
-
-.pr-item-header {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-}
-
-.pr-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    background: #e9ecef;
-    color: #495057;
-}
-
-.pr-badge--incoming  { background: #fff3cd; color: #856404; }
-.pr-badge--pending   { background: #fff3cd; color: #856404; }
 .pr-badge--approved  { background: var(--status-success-soft-bg, #e9ecef); color: var(--status-success-soft-fg, #495057); }
 .pr-badge--declined  { background: var(--status-failure-soft-bg, #e9ecef); color: var(--status-failure-soft-fg, #495057); }
 .pr-badge--cancelled { background: #e9ecef; color: #495057; }
 
-.pr-from   { flex: 1; min-width: 0; }
-.pr-amount { font-weight: 700; white-space: nowrap; }
+/* -- History table -------------------------------------------------------- */
 
-.pr-description {
-    font-size: 0.8rem;
+.pr-table .col-pr-status { width: 2.5%; padding: 0.4rem 0 0.4rem 0.6rem; }
+.pr-table .col-pr-amount { width: 16%; }
+.pr-table .col-pr-desc   { width: 22%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
+.pr-table .col-pr-txid   { width: 9%; }
+.pr-table .col-pr-date   { width: 13%; white-space: nowrap; }
+
+.pr-status-icon { font-size: 0.85rem; }
+.pr-status-approved  { color: var(--status-success-bg, #6c757d); }
+.pr-status-declined  { color: var(--status-failure-bg, #6c757d); }
+.pr-status-cancelled { color: #6c757d; }
+
+.pr-direction-hint {
+    display: block;
+    font-size: 0.7rem;
     color: var(--text-muted, #6c757d);
-    margin-top: 0.35rem;
+    line-height: 1.2;
 }
+.pr-table .contact-name-cell { overflow: hidden; }
+.pr-table .contact-name-cell > div { overflow: hidden; }
+.pr-table .contact-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.pr-meta {
-    font-size: 0.75rem;
-    color: var(--text-muted, #6c757d);
-    margin-top: 0.3rem;
-}
+/* Mobile (≤600px): PR history table — show status icon + counterparty + amount.
+   Generic contacts-table rule hides cols 3+; re-show col 3 (Amount). */
+@media (max-width: 600px) {
+    .contacts-table.pr-table thead th:nth-child(3),
+    .contacts-table.pr-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.pr-table .col-pr-status { width: 28px; padding-left: 0.25rem; padding-right: 0; }
+    .contacts-table.pr-table .col-name   { width: auto; }
+    .contacts-table.pr-table .col-pr-amount { width: auto; }
 
-.pr-actions {
-    margin-top: 0.65rem;
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    /* Pending table: show dir icon + counterparty + amount. Actions hidden —
+       use row-click modal instead (same pattern as Failed Messages). */
+    .contacts-table.pr-pending-table thead th:nth-child(3),
+    .contacts-table.pr-pending-table tbody td:nth-child(3) { display: table-cell; }
+    .contacts-table.pr-pending-table .col-pr-dir { width: 28px; padding-left: 0.25rem; padding-right: 0; }
+    .contacts-table.pr-pending-table .col-name { width: auto; }
+    .contacts-table.pr-pending-table .col-pr-amount { width: auto; }
+    .pr-action-label { display: none; }
 }
 
 /* ============================================================
