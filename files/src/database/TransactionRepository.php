@@ -129,11 +129,15 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Get previous transaction ID between two parties
+     * Get previous transaction ID between two parties.
      *
-     * Excludes expired and cancelled transactions from the chain.
-     * When finding the previous txid for a new transaction, we only
-     * consider active transactions to maintain chain integrity.
+     * Skips cancelled and rejected transactions so the resulting previous_txid
+     * only points at rows that sync between nodes. Cancelled rows are sender-
+     * local (never signed / never delivered when cancelled while pending) and
+     * rejected rows are filtered out of sync responses (see
+     * TransactionChainRepository::getTransactionChain). Linking through them
+     * would cause asymmetric chain state: the signing node chains past the
+     * cancelled row but the peer never sees it, producing a permanent gap.
      *
      * @param string $senderPublicKey Sender's public key
      * @param string $receiverPublicKey Receiver's public key
@@ -144,12 +148,10 @@ class TransactionRepository extends AbstractRepository {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
-        // NOTE: Do NOT filter by status here - chain integrity requires ALL transactions
-        // to be included, even cancelled/rejected ones. The previous_txid must point to
-        // the actual last transaction in the chain for proper linking and sync.
         $query = "SELECT txid FROM {$this->tableName}
                 WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
-                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))";
+                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
+                AND status NOT IN ('cancelled', 'rejected')";
 
         $params = [
             ':sender_public_key_hash' => $senderPublicKeyHash,
@@ -199,6 +201,7 @@ class TransactionRepository extends AbstractRepository {
                 WHERE ((sender_public_key_hash = :s1 AND receiver_public_key_hash = :r1)
                     OR (sender_public_key_hash = :r2 AND receiver_public_key_hash = :s2))
                 AND currency IS NOT NULL
+                AND status NOT IN ('cancelled', 'rejected')
                 ORDER BY timestamp DESC";
 
         $stmt = $this->execute($query, [
