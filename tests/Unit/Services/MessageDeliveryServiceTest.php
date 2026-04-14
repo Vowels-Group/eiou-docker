@@ -1090,10 +1090,10 @@ class MessageDeliveryServiceTest extends TestCase
         $this->dlqRepository->method('markRetrying');
         $this->dlqRepository->method('markResolved');
 
-        // Callback sees the refreshed payload (not the stale original)
+        // Callback sees the refreshed payload as an array (getById auto-decodes)
         $callbackSawPayload = null;
         $this->service->retryFromDlq(9, function ($payload) use (&$callbackSawPayload) {
-            $callbackSawPayload = json_decode($payload, true);
+            $callbackSawPayload = is_array($payload) ? $payload : json_decode($payload, true);
             return ['success' => true];
         });
 

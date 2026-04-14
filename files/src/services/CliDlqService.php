@@ -207,7 +207,7 @@ class CliDlqService
 
         $result = $this->messageDeliveryService->retryFromDlq(
             $id,
-            function (string $payload, string $recipientAddr) use ($transportUtility, $successStatuses): array {
+            function (array $payload, string $recipientAddr) use ($transportUtility, $successStatuses): array {
                 try {
                     $sendResult = $transportUtility->send($recipientAddr, $payload, true);
                     $response   = is_array($sendResult) ? ($sendResult['response'] ?? '') : $sendResult;

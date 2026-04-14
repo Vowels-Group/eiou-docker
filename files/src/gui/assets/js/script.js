@@ -5142,7 +5142,10 @@ function retryDlqItem(dlqId, btn) {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
-                var errMsg = response.error || 'Retry failed — try again later';
+                // Prefer the human-readable message over the generic error tag
+                // ('server_error', 'delivery_failed' etc). Falls back to error
+                // tag, then a generic notice if neither is populated.
+                var errMsg = response.message || response.error || 'Retry failed — try again later';
                 showToast('Retry Failed', errMsg, 'error');
             }
         } catch (e) {

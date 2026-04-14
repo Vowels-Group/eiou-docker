@@ -156,6 +156,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         try {
             $dlqController->routeAction();
         } catch (\Throwable $e) {
+            // Log the full trace so we can diagnose server-side. The JSON
+            // response only carries the message so the client doesn't see
+            // internals, but ops still needs a stack to investigate.
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'dlq_action_handler',
+                'action' => $action
+            ]);
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
         }
