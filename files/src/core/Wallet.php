@@ -317,6 +317,17 @@ class Wallet{
         chown('/etc/eiou/config/userconfig.json', 'www-data');
         chmod('/etc/eiou/config/userconfig.json', 0600);
 
+        // Revoke any pre-restore remember-me tokens. They are technically
+        // still valid (same pubkey, same authcode) but the "fresh start
+        // from seed" mental model demands logged-in devices be forgotten.
+        try {
+            $pubkeyHashForRevoke = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $publicKey);
+            $rememberRepo = new \Eiou\Database\RememberTokenRepository();
+            $rememberRepo->revokeAllForUser($pubkeyHashForRevoke);
+        } catch (\Throwable $e) {
+            // Non-fatal — the table may not exist yet on a truly fresh DB.
+        }
+
         $walletData = [
             'tor_address' => $torAddress,
             'public_key_generated' => true,

@@ -2756,7 +2756,7 @@ API (8080). It uses an MVC-like structure with controllers, helpers, and HTML te
 ├── functions/
 │   └── Functions             # Shared template functions
 ├── includes/
-│   └── Session               # Secure session management (auth code-based)
+│   └── Session               # Secure session management (auth code-based + remember-me rotation tokens)
 ├── layout/
 │   ├── authenticationForm    # Login page (auth code entry)
 │   ├── wallet.html           # Main wallet layout (authenticated)
@@ -2786,6 +2786,40 @@ class implements secure session handling:
 - Session cookies: `httponly`, `samesite=Strict`, `secure` (when HTTPS)
 - Auth code comparison with timing-safe equality check
 - Session regeneration on login to prevent fixation attacks
+
+### Remember-Me Login (Rotation Tokens)
+
+The GUI login form offers a "Remember this browser for N days" checkbox. When ticked,
+on successful auth the node mints a random 32-byte token, stores only its SHA-256 hash
+in the `remember_tokens` table, and writes the raw token into an `EIOU_REMEMBER`
+cookie (HttpOnly, SameSite=Strict, Secure when HTTPS).
+
+On every subsequent page load where no session is authenticated but the cookie is
+present, `gui/index.html` asks `RememberTokenService::rotateToken(raw, ua)` to
+consume the cookie. Rotation is **single-use**: the matching row is revoked and a
+fresh token is issued in its place, inheriting the old row's remaining lifetime —
+this catches stolen-cookie replay because the thief's copy is invalidated the moment
+the real owner next logs in.
+
+Two user-editable caps govern the feature:
+
+| Setting | Default | Options |
+|---|---|---|
+| `rememberMeMaxDays` | 30 | 1, 7, 14, 30, 60, 90 |
+| `rememberMeMaxDevices` | 3 | 1, 3, 5, 10 |
+
+When the device cap is exceeded, the row with the oldest `last_used_at` is revoked
+(LRU eviction) before the new one is inserted, so the cap is never breached.
+
+The Active Sessions panel in Settings lists remembered browsers by a truncated
+User-Agent family (`Firefox 128 · Linux` rather than the raw UA) — no IPs or
+fingerprinting data are persisted. The user can sign out any remembered browser
+individually, or all at once.
+
+Logout revokes the current token and clears the cookie. Restoring a wallet from
+seed revokes every remembered session for that pubkey so the restored wallet
+starts with a clean device list. `CleanupService` prunes expired and revoked rows
+on its regular sweep.
 
 ### Tor Compatibility
 

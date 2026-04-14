@@ -71,9 +71,48 @@ $dlqController = new DlqController(
 
 // Handle logout request
 if (isset($_GET['logout'])) {
+    // Revoke the remember-me token (if any) so a leaked cookie from this
+    // device can't log anyone back in.
+    $rawRemember = $secureSession->getRememberCookie();
+    if ($rawRemember !== null) {
+        try {
+            $serviceContainer->getRememberTokenService()->revokeToken($rawRemember);
+        } catch (\Throwable $e) {
+            // non-fatal; logout proceeds
+        }
+        $secureSession->clearRememberCookie();
+    }
     $secureSession->logout();
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
+}
+
+// Remember-me auto-authentication: if the session isn't authed but a valid
+// EIOU_REMEMBER cookie is presented, consume (rotate) it and grant access.
+// Runs BEFORE the authcode POST handler so users with a valid token never
+// see the login form. A stale/revoked/expired cookie falls through silently
+// to the normal login path and the cookie is cleared so the form isn't
+// visited repeatedly with the same bad value.
+if (!$secureSession->isAuthenticated() && $user->has('authcode_encrypted')) {
+    $rawRemember = $secureSession->getRememberCookie();
+    if ($rawRemember !== null) {
+        try {
+            $result = $serviceContainer->getRememberTokenService()->rotateToken(
+                $rawRemember,
+                $_SERVER['HTTP_USER_AGENT'] ?? null
+            );
+            if ($result !== null) {
+                $secureSession->markAuthenticatedFromRememberToken();
+                $secureSession->setRememberCookie($result['new_token'], $result['expires_at_unix']);
+                header('Location: ' . $_SERVER['PHP_SELF']);
+                exit;
+            }
+            // Rotation failed — cookie was invalid. Clear it.
+            $secureSession->clearRememberCookie();
+        } catch (\Throwable $e) {
+            $secureSession->clearRememberCookie();
+        }
+    }
 }
 
 // Handle authentication POST request
@@ -95,6 +134,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
             $submittedAuthCode = $_POST['authcode'];
 
             if ($user->has('authcode_encrypted') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
+                // Optional: issue a remember-me token if the checkbox was
+                // ticked. Uses this user's configured lifetime and device-cap
+                // limits. A failed mint is non-fatal — user just doesn't get
+                // the convenience cookie.
+                if (!empty($_POST['remember_me'])) {
+                    try {
+                        $rememberService = $serviceContainer->getRememberTokenService();
+                        $pubkeyHash = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+                        $rawToken = $rememberService->issueToken(
+                            $pubkeyHash,
+                            $_SERVER['HTTP_USER_AGENT'] ?? null,
+                            $user->getRememberMeMaxDays(),
+                            $user->getRememberMeMaxDevices()
+                        );
+                        if ($rawToken !== null) {
+                            $secureSession->setRememberCookie(
+                                $rawToken,
+                                time() + $user->getRememberMeMaxDays() * 86400
+                            );
+                        }
+                    } catch (\Throwable $e) {
+                        // non-fatal; proceed without remember cookie
+                    }
+                }
+
                 // Authentication successful, redirect to clean URL
                 header('Location: ' . $_SERVER['PHP_SELF']);
                 exit;

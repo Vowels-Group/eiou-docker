@@ -151,6 +151,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // AJAX-only remember-me session management (returns JSON, exits immediately)
+    if (in_array($action, ['revokeRememberSession', 'revokeAllRememberSessions'], true)) {
+        header('Content-Type: application/json');
+        try {
+            // CSRF is required — this is a state-changing action.
+            if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
+                echo json_encode(['success' => false, 'error' => 'csrf_error', 'message' => 'Invalid CSRF token']);
+                exit;
+            }
+
+            $pubkeyHashForAction = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+            $rememberService = $serviceContainer->getRememberTokenService();
+
+            if ($action === 'revokeRememberSession') {
+                $id = (int) ($_POST['session_id'] ?? 0);
+                if ($id <= 0) {
+                    echo json_encode(['success' => false, 'error' => 'invalid_id']);
+                    exit;
+                }
+
+                // Detect "am I revoking my OWN row?" BEFORE the revoke so the
+                // is_current flag still reads true. If so, we also need to
+                // tear down the PHP session — revoking the remember-me row
+                // alone only invalidates future cookie-based auto-logins; the
+                // already-authenticated session would persist otherwise.
+                $currentRaw = $secureSession->getRememberCookie();
+                $revokingCurrentDevice = false;
+                if ($currentRaw !== null) {
+                    foreach ($rememberService->listForUser($pubkeyHashForAction, $currentRaw) as $row) {
+                        if ($row['id'] === (int)$id && !empty($row['is_current'])) {
+                            $revokingCurrentDevice = true;
+                            break;
+                        }
+                    }
+                }
+
+                $ok = $rememberService->revokeTokenById($id, $pubkeyHashForAction);
+
+                if ($revokingCurrentDevice) {
+                    $secureSession->clearRememberCookie();
+                    $secureSession->logout();
+                    echo json_encode(['success' => $ok, 'logged_out' => true]);
+                    exit;
+                }
+
+                echo json_encode(['success' => $ok]);
+                exit;
+            }
+
+            if ($action === 'revokeAllRememberSessions') {
+                // "Sign out everywhere" includes THIS browser by definition,
+                // so always tear down the session + cookie.
+                $count = $rememberService->revokeAllForUser($pubkeyHashForAction);
+                $secureSession->clearRememberCookie();
+                $secureSession->logout();
+                echo json_encode(['success' => true, 'revoked' => $count, 'logged_out' => true]);
+                exit;
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'remember_session_action',
+                'action' => $action
+            ]);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            exit;
+        }
+    }
+
     // AJAX-only DLQ actions (returns JSON, exits immediately)
     if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {

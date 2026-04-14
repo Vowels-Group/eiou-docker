@@ -83,6 +83,14 @@ function cleanupDlqRetentionDays(): int {
     return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
 }
 
+function rememberMeMaxDaysOptions(): array {
+    return \Eiou\Core\Constants::REMEMBER_ME_MAX_DAYS_OPTIONS;
+}
+
+function rememberMeMaxDevicesOptions(): array {
+    return \Eiou\Core\Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS;
+}
+
 function sessionTimeoutOptions(): array {
     return \Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS;
 }

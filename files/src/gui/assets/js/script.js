@@ -5157,6 +5157,79 @@ function retryDlqItem(dlqId, btn) {
 }
 
 /**
+ * Revoke a single remember-me session (one device) by row id.
+ * On success, reloads so the Active Sessions list + any "This device"
+ * badge get re-rendered.
+ */
+function revokeRememberSession(sessionId, btn) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+    if (btn) { btn.disabled = true; }
+    var formData = new FormData();
+    formData.append('action', 'revokeRememberSession');
+    formData.append('session_id', sessionId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        if (btn) { btn.disabled = false; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                showToast('Signed out', 'Remembered device removed', 'success');
+                setTimeout(function() { window.location.reload(); }, 500);
+            } else {
+                showToast('Error', response.message || response.error || 'Could not sign out', 'error');
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+        }
+    };
+    xhr.send(formData);
+}
+
+/**
+ * Revoke every remember-me session, including the current one. Always
+ * reloads: if the current session was included, the user ends up on the
+ * login page.
+ */
+function revokeAllRememberSessions(btn) {
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        showToast('Error', 'CSRF token not found', 'error');
+        return;
+    }
+    if (btn) { btn.disabled = true; }
+    var formData = new FormData();
+    formData.append('action', 'revokeAllRememberSessions');
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        if (btn) { btn.disabled = false; }
+        try {
+            var response = JSON.parse(xhr.responseText);
+            if (response.success) {
+                showToast('Signed out everywhere', (response.revoked || 0) + ' device(s) signed out', 'success');
+                setTimeout(function() { window.location.reload(); }, 600);
+            } else {
+                showToast('Error', response.message || response.error || 'Could not sign out', 'error');
+            }
+        } catch (e) {
+            showToast('Error', 'Unexpected server response', 'error');
+        }
+    };
+    xhr.send(formData);
+}
+
+/**
  * Abandon a DLQ item by ID (marks it as abandoned — cannot be undone).
  *
  * Prompts for confirmation before sending the AJAX request.
@@ -5934,6 +6007,18 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         },
         'retryAllDlqItems': function(el) { closeDlqDropdowns(); retryAllDlqItems(el); },
         'abandonAllDlqItems': function(el) { closeDlqDropdowns(); abandonAllDlqItems(el); },
+
+        // Remember-me session management
+        'revokeRememberSession': function(el) {
+            var id = parseInt(el.getAttribute('data-session-id'), 10);
+            if (!id) return;
+            if (!confirm('Sign out this browser? It will need to enter the auth code again.')) return;
+            revokeRememberSession(id, el);
+        },
+        'revokeAllRememberSessions': function(el) {
+            if (!confirm('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.')) return;
+            revokeAllRememberSessions(el);
+        },
         'toggleDlqDropdown': function(el) {
             var targetId = el.getAttribute('data-target');
             var menu = document.getElementById(targetId);

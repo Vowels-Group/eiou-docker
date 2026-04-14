@@ -83,6 +83,7 @@ function freshInstall(){
                 $dbConn->exec(getTransactionsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
                 $dbConn->exec(getChainDropProposalsTableSchema());
+                $dbConn->exec(getRememberTokensTableSchema());
 
                 // P2P Routing
                 $dbConn->exec(getP2pTableSchema());
@@ -191,6 +192,7 @@ function runMigrations(PDO $pdo): array {
     // Use fully-qualified names since dynamic calls don't use namespace resolution
     $migrations = [
         'payment_requests' => 'Eiou\Database\getPaymentRequestsTableSchema',
+        'remember_tokens'  => 'Eiou\Database\getRememberTokensTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

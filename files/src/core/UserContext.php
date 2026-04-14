@@ -1047,6 +1047,28 @@ class UserContext {
     }
 
     /**
+     * Maximum lifetime (days) for a GUI "Remember me" browser token.
+     * Issued tokens expire at now + this many days and do not slide.
+     */
+    public function getRememberMeMaxDays(): int {
+        $val = (int) ($this->get('rememberMeMaxDays') ?? Constants::REMEMBER_ME_DEFAULT_MAX_DAYS);
+        return in_array($val, Constants::REMEMBER_ME_MAX_DAYS_OPTIONS)
+            ? $val
+            : Constants::REMEMBER_ME_DEFAULT_MAX_DAYS;
+    }
+
+    /**
+     * Maximum simultaneous remembered devices for a user. Excess devices
+     * are evicted in LRU order (oldest `last_used_at` goes first).
+     */
+    public function getRememberMeMaxDevices(): int {
+        $val = (int) ($this->get('rememberMeMaxDevices') ?? Constants::REMEMBER_ME_DEFAULT_MAX_DEVICES);
+        return in_array($val, Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS)
+            ? $val
+            : Constants::REMEMBER_ME_DEFAULT_MAX_DEVICES;
+    }
+
+    /**
      * Get the contact avatar style for the contacts list
      *
      * @return string  One of: gradient, tile, pixel
@@ -1162,6 +1184,8 @@ class UserContext {
 
             // Session
             'sessionTimeoutMinutes' => Constants::SESSION_TIMEOUT_MINUTES,
+            'rememberMeMaxDays' => Constants::REMEMBER_ME_DEFAULT_MAX_DAYS,
+            'rememberMeMaxDevices' => Constants::REMEMBER_ME_DEFAULT_MAX_DEVICES,
 
             // Contact list
             'contactAvatarStyle' => Constants::CONTACT_AVATAR_STYLE,

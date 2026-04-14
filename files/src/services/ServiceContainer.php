@@ -670,6 +670,19 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get RememberTokenService — issues, rotates, revokes GUI "Remember me"
+     * login tokens backed by the `remember_tokens` table.
+     */
+    public function getRememberTokenService(): \Eiou\Services\RememberTokenService {
+        if (!isset($this->services['RememberTokenService'])) {
+            $this->services['RememberTokenService'] = new \Eiou\Services\RememberTokenService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\RememberTokenRepository::class)
+            );
+        }
+        return $this->services['RememberTokenService'];
+    }
+
+    /**
      * Get LockingService instance
      *
      * Provides database-backed distributed locking for concurrent operations.

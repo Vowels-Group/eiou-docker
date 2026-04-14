@@ -381,6 +381,26 @@ class SettingsController
             }
         }
 
+        // Remember-me cookie lifetime (days)
+        if (isset($_POST['rememberMeMaxDays'])) {
+            $val = (int) $_POST['rememberMeMaxDays'];
+            if (in_array($val, Constants::REMEMBER_ME_MAX_DAYS_OPTIONS, true)) {
+                $settings['rememberMeMaxDays'] = $val;
+            } else {
+                $errors[] = 'Invalid remember-me duration: must be one of ' . implode(', ', Constants::REMEMBER_ME_MAX_DAYS_OPTIONS) . ' days';
+            }
+        }
+
+        // Remember-me device cap
+        if (isset($_POST['rememberMeMaxDevices'])) {
+            $val = (int) $_POST['rememberMeMaxDevices'];
+            if (in_array($val, Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS, true)) {
+                $settings['rememberMeMaxDevices'] = $val;
+            } else {
+                $errors[] = 'Invalid remember-me device cap: must be one of ' . implode(', ', Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS);
+            }
+        }
+
         // Contact avatar style
         if (isset($_POST['contactAvatarStyle'])) {
             $val = trim((string) $_POST['contactAvatarStyle']);
