@@ -732,7 +732,8 @@ unset($contacts);
 $paymentRequests = ['incoming' => [], 'outgoing' => []];
 $pendingPaymentRequestCount = 0;
 try {
-    $paymentRequests = $serviceContainer->getPaymentRequestService()->getAllForDisplay(50);
+    $paymentRequestLimit = $recentTransactionsLimit;
+    $paymentRequests = $serviceContainer->getPaymentRequestService()->getAllForDisplay($paymentRequestLimit);
     $pendingPaymentRequestCount = $serviceContainer->getPaymentRequestService()->countPendingIncoming();
 } catch (Exception $e) {
     // Non-critical — payment requests section will be empty

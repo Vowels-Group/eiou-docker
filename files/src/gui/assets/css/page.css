@@ -2776,13 +2776,17 @@ tr.tx-item-in-progress > td:first-child {
     margin-top: 0.5rem;
 }
 /* Alert banners with inline action button — button sits to the right of the
-   text on wide screens and wraps below (right-aligned) on narrow screens. */
+   text on wide screens and wraps below (right-aligned) on narrow screens.
+   Icon + text stay together; only the button wraps. */
 .alert-banner-row {
     flex-wrap: wrap;
 }
-.alert-banner-row > .flex-1 {
+.alert-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
     flex: 1 1 auto;
-    min-width: 200px;
+    min-width: 0;
 }
 .alert-banner-action {
     flex-shrink: 0;
@@ -4598,12 +4602,6 @@ hr.currency-separator-double {
     padding: 0;
     margin-bottom: 1rem;
     overflow: hidden;
-}
-.pr-pending-section--incoming {
-    background: linear-gradient(135deg, #cff4fc 0%, #e8fbff 100%);
-    border: 1px solid #b6effb;
-}
-.pr-pending-section--outgoing {
     background: linear-gradient(135deg, #fff3cd 0%, #fffbeb 100%);
     border: 1px solid #ffc107;
 }
@@ -4615,25 +4613,48 @@ hr.currency-separator-double {
     font-weight: 700;
     font-size: 0.85rem;
     padding: 0.6rem 1rem;
+    color: #664d03;
+    border-bottom: 1px solid rgba(102, 77, 3, 0.2);
 }
-.pr-pending-section--incoming .pr-pending-header { color: #055160; border-bottom: 1px solid rgba(5, 81, 96, 0.15); }
-.pr-pending-section--outgoing .pr-pending-header { color: #664d03; border-bottom: 1px solid rgba(102, 77, 3, 0.2); }
 
 .pr-pending-count {
     padding: 0.1rem 0.45rem;
     border-radius: 10px;
     font-size: 0.7rem;
     font-weight: 700;
-    color: #fff;
+    background: var(--status-failure-bg, #6c757d);
+    color: var(--status-failure-fg, #fff);
 }
-.pr-pending-count--incoming { background: #055160; }
-.pr-pending-count--outgoing { background: #664d03; }
 
-.pr-pending-list {
-    padding: 0.5rem 0.75rem;
-    max-height: 320px;
-    overflow-y: auto;
+/* Narrow screens: collapse pending action buttons to icon-only */
+@media (max-width: 900px) {
+    .pr-action-label { display: none; }
 }
+
+.pr-pending-table-wrap {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+    max-height: none;
+}
+.pr-pending-table thead th { background: transparent; position: static; }
+.pr-pending-table .contact-name-cell { overflow: hidden; }
+.pr-pending-table .contact-name-cell > div { overflow: hidden; }
+.pr-pending-table .contact-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-pending-table tbody tr { background: #fff; }
+.pr-pending-table .col-pr-dir     { width: 1%; padding: 0.4rem 0 0.4rem 0.6rem; white-space: nowrap; }
+.pr-pending-table .col-pr-actions { white-space: nowrap; }
+
+.pr-pending-breakdown {
+    font-weight: 400;
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.pr-dir-icon { font-size: 0.85rem; }
+.pr-dir-incoming { color: #0d6efd; }
+.pr-dir-outgoing { color: #fd7e14; }
 
 .pr-group-title {
     font-size: 0.85rem;
@@ -4647,73 +4668,17 @@ hr.currency-separator-double {
     gap: 0.4rem;
 }
 
-/* -- Pending item cards --------------------------------------------------- */
-
-.pr-item {
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid var(--border-color, #dee2e6);
-    border-radius: 8px;
-    padding: 0.9rem 1rem;
-    margin-bottom: 0.6rem;
-}
-
-.pr-item--pending {
-    border-left: 3px solid #856404;
-}
-
-.pr-item-header {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-}
-
-.pr-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    background: #e9ecef;
-    color: #495057;
-}
-
-.pr-badge--incoming  { background: #fff3cd; color: #856404; }
-.pr-badge--pending   { background: #fff3cd; color: #856404; }
 .pr-badge--approved  { background: var(--status-success-soft-bg, #e9ecef); color: var(--status-success-soft-fg, #495057); }
 .pr-badge--declined  { background: var(--status-failure-soft-bg, #e9ecef); color: var(--status-failure-soft-fg, #495057); }
 .pr-badge--cancelled { background: #e9ecef; color: #495057; }
 
-.pr-from   { flex: 1; min-width: 0; }
-.pr-amount { font-weight: 700; white-space: nowrap; }
-
-.pr-description {
-    font-size: 0.8rem;
-    color: var(--text-muted, #6c757d);
-    margin-top: 0.35rem;
-}
-
-.pr-meta {
-    font-size: 0.75rem;
-    color: var(--text-muted, #6c757d);
-    margin-top: 0.3rem;
-}
-
-.pr-actions {
-    margin-top: 0.65rem;
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
 /* -- History table -------------------------------------------------------- */
 
-.pr-table .col-pr-status { width: 2rem; }
-.pr-table .col-pr-txid   { width: 7rem; }
+.pr-table .col-pr-status { width: 2.5%; padding: 0.4rem 0 0.4rem 0.6rem; }
+.pr-table .col-pr-amount { width: 16%; }
+.pr-table .col-pr-desc   { width: 22%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
+.pr-table .col-pr-txid   { width: 9%; }
+.pr-table .col-pr-date   { width: 13%; white-space: nowrap; }
 
 .pr-status-icon { font-size: 0.85rem; }
 .pr-status-approved  { color: var(--status-success-bg, #6c757d); }
@@ -4725,6 +4690,30 @@ hr.currency-separator-double {
     font-size: 0.7rem;
     color: var(--text-muted, #6c757d);
     line-height: 1.2;
+}
+.pr-table .contact-name-cell { overflow: hidden; }
+.pr-table .contact-name-cell > div { overflow: hidden; }
+.pr-table .contact-name-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Mobile (≤600px): PR history table — show status icon + counterparty + amount.
+   Generic contacts-table rule hides cols 3+; re-show col 3 (Amount). */
+@media (max-width: 600px) {
+    .contacts-table.pr-table thead th:nth-child(3),
+    .contacts-table.pr-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.pr-table .col-pr-status { width: 28px; padding-left: 0.25rem; padding-right: 0; }
+    .contacts-table.pr-table .col-name   { width: auto; }
+    .contacts-table.pr-table .col-pr-amount { width: auto; }
+
+    /* Pending table: show dir icon + counterparty + amount. Actions hidden —
+       use row-click modal instead (same pattern as Failed Messages). */
+    .contacts-table.pr-pending-table thead th:nth-child(3),
+    .contacts-table.pr-pending-table tbody td:nth-child(3) { display: table-cell; }
+    .contacts-table.pr-pending-table .col-pr-dir { width: 28px; padding-left: 0.25rem; padding-right: 0; }
+    .contacts-table.pr-pending-table .col-name { width: auto; }
+    .contacts-table.pr-pending-table .col-pr-amount { width: auto; }
+    .pr-action-label { display: none; }
 }
 
 /* ============================================================
