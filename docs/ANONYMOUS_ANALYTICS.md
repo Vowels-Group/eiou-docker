@@ -182,7 +182,8 @@ The `GET /api/v1/system/status` endpoint includes an `analytics` object so API c
     "analytics": {
       "enabled": false,
       "consent_pending": true,
-      "last_submitted": null
+      "last_submitted": null,
+      "opt_in_at": null
     }
   }
 }
@@ -193,6 +194,7 @@ The `GET /api/v1/system/status` endpoint includes an `analytics` object so API c
 | `enabled` | Whether analytics are currently enabled |
 | `consent_pending` | `true` if the user has not yet made a choice (enable or skip) |
 | `last_submitted` | ISO 8601 timestamp of the last successful submission, or `null` |
+| `opt_in_at` | ISO 8601 timestamp of the most recent off→on transition of `analyticsEnabled`, or `null` if analytics have never been enabled. Legacy nodes whose opt-in predates this field are backfilled on the first cron run after upgrade (stamped "now", not a fabricated past date). Bounds the heartbeat rollup window so no data from before consent is ever reported |
 
 When `consent_pending` is `true`, the caller can prompt the user or enable analytics via `PUT /api/v1/system/settings`.
 

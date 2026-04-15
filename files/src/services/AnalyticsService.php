@@ -77,6 +77,44 @@ class AnalyticsService
      * @return int 1..MAX_PERIOD_DAYS
      */
     /**
+     * Apply the analyticsOptInAt stamp for an off→on transition of
+     * analyticsEnabled on a config array in memory.
+     *
+     * Shared helper for the four sites that handle toggling analytics
+     * (GUI settings form, consent modal, CLI, API). Returns the
+     * (possibly modified) config array — does not touch the filesystem.
+     * The caller persists the resulting array.
+     *
+     * Semantics:
+     *   - Off → on transition: stamps now, overwriting any existing
+     *     value (re-enabling after opting out is a fresh consent)
+     *   - No transition (still off, still on, or on → off): unchanged
+     *   - Strictly boolean comparison: the caller must pass the
+     *     prior/current enabled state as real booleans
+     *
+     * @param array $config Config dictionary
+     * @param bool $wasEnabled The value of analyticsEnabled before
+     *   this change (read from the file prior to merging)
+     * @param bool $isNowEnabled The value of analyticsEnabled after
+     *   this change (what will end up on disk)
+     * @param int|null $now Unix timestamp (defaults to time()) —
+     *   tests pin the clock via this parameter
+     * @return array The config, with analyticsOptInAt added on
+     *   off→on, unchanged otherwise
+     */
+    public static function applyOptInAtTransition(
+        array $config,
+        bool $wasEnabled,
+        bool $isNowEnabled,
+        ?int $now = null
+    ): array {
+        if (!$wasEnabled && $isNowEnabled) {
+            $config['analyticsOptInAt'] = gmdate('c', $now ?? time());
+        }
+        return $config;
+    }
+
+    /**
      * Backfill analyticsOptInAt into a user-config file if it's missing.
      *
      * For nodes that opted in before analyticsOptInAt tracking existed

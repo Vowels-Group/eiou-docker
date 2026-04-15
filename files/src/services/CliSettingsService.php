@@ -8,6 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Utils\InputValidator;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
+use Eiou\Services\AnalyticsService;
 
 /**
  * CliSettingsService
@@ -1067,10 +1068,14 @@ class CliSettingsService
             $config_content['hostname_secure'] = $hostnameSecure;
         }
 
-        // Stamp opt-in timestamp on off->on transition (see SettingsController
-        // for rationale — bounds the analytics rollup window to post-consent)
-        if ($key === 'analyticsEnabled' && $value === true && !$wasAnalyticsEnabled) {
-            $config_content['analyticsOptInAt'] = gmdate('c');
+        // Stamp opt-in timestamp on off->on transition (bounds the analytics
+        // rollup window to post-consent)
+        if ($key === 'analyticsEnabled') {
+            $config_content = AnalyticsService::applyOptInAtTransition(
+                $config_content,
+                $wasAnalyticsEnabled,
+                (bool) $value
+            );
         }
 
         file_put_contents('/etc/eiou/config/'. $configFile, json_encode($config_content,true), LOCK_EX);
