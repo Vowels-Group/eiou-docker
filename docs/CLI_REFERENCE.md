@@ -961,7 +961,7 @@ eiou changesettings [setting] [value]
 | `defaultFee` | Default fee percentage | `0.01` |
 | `defaultCreditLimit` | Default credit limit for new contacts | `100` |
 | `defaultCurrency` | Default currency code | `USD` |
-| `minFee` | Minimum fee amount (0 = free relaying) | `0.01` |
+| `minFee` | Minimum fee amount (0 = free relaying) | `0.00000001` |
 | `maxFee` | Maximum fee percentage | `5.0` |
 | `maxP2pLevel` | Maximum P2P routing hops | `3` |
 | `p2pExpiration` | P2P routing request timeout (seconds); P2P transactions get an extra 120s delivery window after this expires | `300` |

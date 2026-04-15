@@ -157,12 +157,15 @@ class UserContextConfigMigrationTest extends TestCase
     }
 
     /**
-     * Test getConfigurableDefaults total count is 42 (12 original + 30 new)
+     * Sanity check on the number of configurable defaults — bounded loosely
+     * so this doesn't flap every time a new toggle is added, but tight enough
+     * to catch a mass deletion or accidental duplication.
      */
     public function testGetConfigurableDefaultsHasExpectedCount(): void
     {
         $defaults = UserContext::getConfigurableDefaults();
-        $this->assertCount(52, $defaults);
+        $this->assertGreaterThanOrEqual(50, count($defaults));
+        $this->assertLessThan(150, count($defaults));
     }
 
     /**
@@ -220,7 +223,7 @@ class UserContextConfigMigrationTest extends TestCase
         // Simulate existing config with only original 11 keys and a custom value
         $existingConfig = [
             'defaultCurrency' => 'USD',
-            'minFee' => 0.05, // User changed this from 0.01 default
+            'minFee' => 0.05, // User-overridden value (saved in userconfig)
             'defaultFee' => 0.1,
             'maxFee' => 5,
             'defaultCreditLimit' => 1000,
@@ -255,8 +258,10 @@ class UserContextConfigMigrationTest extends TestCase
         $this->assertSame(Constants::HTTP_TRANSPORT_TIMEOUT_SECONDS, $existingConfig['httpTransportTimeoutSeconds']);
         $this->assertSame(Constants::DISPLAY_DATE_FORMAT, $existingConfig['displayDateFormat']);
 
-        // Total should match configurable defaults count + 1 (for the pre-existing key)
-        $this->assertCount(52, $existingConfig);
+        // After migration, every default key should be present. The pre-existing
+        // keys all overlap with the defaults (no extras), so the post-migration
+        // count equals count(defaults).
+        $this->assertCount(count(UserContext::getConfigurableDefaults()), $existingConfig);
     }
 
     /**

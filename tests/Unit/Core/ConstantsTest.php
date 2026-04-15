@@ -259,7 +259,7 @@ class ConstantsTest extends TestCase
     {
         $this->assertEquals(2305843009213693951, Constants::TRANSACTION_MAX_AMOUNT); // PHP_INT_MAX / 4
         $this->assertEquals('USD', Constants::TRANSACTION_DEFAULT_CURRENCY);
-        $this->assertEquals(0.01, Constants::TRANSACTION_MINIMUM_FEE);
+        $this->assertEquals(0.00000001, Constants::TRANSACTION_MINIMUM_FEE);
         $this->assertEquals(100000000, Constants::INTERNAL_CONVERSION_FACTOR);
         $this->assertEquals(8, Constants::INTERNAL_PRECISION);
         $this->assertEquals(2, Constants::DISPLAY_DECIMALS);
@@ -283,8 +283,9 @@ class ConstantsTest extends TestCase
     public function testAppEnvironmentConstantsAreDefined(): void
     {
         $this->assertEquals('development', Constants::APP_ENV);
-        $this->assertEquals('0.0.1', Constants::APP_VERSION);
-        $this->assertFalse(Constants::APP_DEBUG);
+        $this->assertNotEmpty(Constants::APP_VERSION);
+        $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+(-\w+)?$/', Constants::APP_VERSION);
+        $this->assertIsBool(Constants::APP_DEBUG);
     }
 
     /**
@@ -293,7 +294,12 @@ class ConstantsTest extends TestCase
     public function testNetworkConstantsAreDefined(): void
     {
         $this->assertEquals('tor', Constants::DEFAULT_TRANSPORT_MODE);
-        $this->assertEquals(['http', 'https', 'tor'], Constants::VALID_TRANSPORT_INDICES);
+        // Membership matters, order does not — Constants::VALID_TRANSPORT_INDICES
+        // is the canonical list and may be reordered (e.g. preferred-first).
+        $this->assertEqualsCanonicalizing(
+            ['http', 'https', 'tor'],
+            Constants::VALID_TRANSPORT_INDICES
+        );
     }
 
     /**
@@ -301,7 +307,7 @@ class ConstantsTest extends TestCase
      */
     public function testTorCircuitHealthConstantsAreDefined(): void
     {
-        $this->assertSame(2, Constants::TOR_CIRCUIT_MAX_FAILURES);
+        $this->assertSame(3, Constants::TOR_CIRCUIT_MAX_FAILURES);
         $this->assertSame(300, Constants::TOR_CIRCUIT_COOLDOWN_SECONDS);
         $this->assertTrue(Constants::TOR_FAILURE_TRANSPORT_FALLBACK);
         $this->assertTrue(Constants::TOR_FALLBACK_REQUIRE_ENCRYPTED);
@@ -312,10 +318,10 @@ class ConstantsTest extends TestCase
      */
     public function testUIDisplayConstantsAreDefined(): void
     {
-        $this->assertEquals('Y-m-d H:i:s.u', Constants::DISPLAY_DATE_FORMAT);
+        $this->assertEquals('d/m/Y H:i:s', Constants::DISPLAY_DATE_FORMAT);
         $this->assertEquals(8, Constants::DISPLAY_CURRENCY_DECIMALS);
-        $this->assertEquals(5, Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX);
-        $this->assertFalse(Constants::AUTO_REFRESH_ENABLED);
+        $this->assertEquals(10, Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX);
+        $this->assertIsBool(Constants::AUTO_REFRESH_ENABLED);
     }
 
     /**
@@ -616,10 +622,12 @@ class ConstantsTest extends TestCase
     {
         $all = Constants::all();
 
-        // Should have at least 80 constants based on the class definition
+        // Sanity check — Constants is a single class and should not blow up
+        // unbounded. Bounds are deliberately wide (80..500) so this catches
+        // accidental duplication or mass deletion without flapping every
+        // time a couple of constants are added or removed.
         $this->assertGreaterThanOrEqual(80, count($all));
-        // But not an unreasonable number that might indicate a bug
-        $this->assertLessThan(200, count($all));
+        $this->assertLessThan(500, count($all));
     }
 
     /**

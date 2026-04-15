@@ -1264,7 +1264,7 @@ Get system settings.
         "settings": {
             "name": "Alice",
             "default_currency": "USD",
-            "minimum_fee_amount": 0.01,
+            "minimum_fee_amount": 0.00000001,
             "default_fee_percent": 0.01,
             "maximum_fee_percent": 5.0,
             "default_credit_limit": 100.00,

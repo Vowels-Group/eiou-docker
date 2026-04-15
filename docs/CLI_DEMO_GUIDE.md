@@ -437,7 +437,7 @@ docker exec alice eiou viewsettings
 
 Currency & Fees:
   Default Currency:      USD
-  Minimum Fee:           0.01
+  Minimum Fee:           0.00000001
   Default Fee:           1.0%
   Maximum Fee:           5.0%
 
@@ -480,7 +480,7 @@ docker exec alice eiou changesettings hostname http://alice
 | `defaultFee` | Default fee percentage for transactions | Decimal (e.g., `0.01`) |
 | `defaultCreditLimit` | Default credit limit for new contacts | Integer (e.g., `100`) |
 | `defaultCurrency` | Default currency code | `USD` (only USD currently supported) |
-| `minFee` | Minimum fee amount | Decimal (e.g., `0.01`) |
+| `minFee` | Minimum fee amount (0 = free relaying) | Decimal (e.g., `0.00000001` for 1 satoshi) |
 | `maxFee` | Maximum fee percentage | Decimal (e.g., `5.0`) |
 | `maxP2pLevel` | Maximum P2P routing hops | Integer 1-10 |
 | `p2pExpiration` | P2P request expiration time (seconds) | Integer (e.g., `300`) |
@@ -1004,7 +1004,7 @@ With 0.01% fee per hop, when Alice sends 100 USD to Daniel:
 **Alice sends: 100.02 USD** (100 + relay fees)
 **Daniel receives: 100.00 USD**
 
-> **Note:** With the default 0.01% fee on small amounts (under ~$10), the calculated fee rounds to zero and the minimum fee floor ($0.01) is applied instead.
+> **Note:** With the default 0.01% fee on tiny amounts, the calculated fee can fall below the internal 8-decimal precision (10⁻⁸) and round to zero; the minimum fee floor (`0.00000001`) is applied instead. Operators that want truly free relaying for friends and family can set `minFee` to `0`.
 
 Only relay nodes charge fees. The sender's direct contact (Bob) and the recipient (Daniel) do not add relay fees.
 
