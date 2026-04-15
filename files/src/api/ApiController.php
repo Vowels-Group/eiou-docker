@@ -1818,7 +1818,7 @@ class ApiController {
                 if (file_exists($script)) {
                     $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
                     if (posix_getuid() === 0) {
-                        $cmd = 'runuser -u www-data -- ' . $cmd;
+                        $cmd = Constants::BIN_RUNUSER . ' -u www-data -- ' . $cmd;
                     }
                     @exec($cmd);
                 }

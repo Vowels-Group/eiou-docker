@@ -494,6 +494,12 @@ class Constants {
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';
 
+    // System binaries — use absolute paths to avoid silent PATH drift
+    // across exec contexts (php-fpm, cron, CLI). The original analytics
+    // outage was caused by a bare `runuser` failing to resolve on Debian
+    // because /usr/sbin wasn't on the exec'd shell's PATH
+    const BIN_RUNUSER = '/usr/sbin/runuser';
+
     const LOG_FILE_APP = '/var/log/eiou/app.log';
     const LOG_LEVEL = 'INFO';
     const LOG_MAX_ENTRIES = 100;
