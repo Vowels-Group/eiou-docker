@@ -5,161 +5,343 @@
 $incomingRequests = $paymentRequests['incoming'] ?? [];
 $outgoingRequests = $paymentRequests['outgoing'] ?? [];
 $pendingIncoming  = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '') === 'pending');
+$pendingOutgoing  = array_filter($outgoingRequests, fn($r) => ($r['status'] ?? '') === 'pending');
+
+// Merge resolved requests from both directions into a single history list
+$resolvedAll = [];
+foreach ($incomingRequests as $r) {
+    if (($r['status'] ?? '') !== 'pending') { $r['_direction'] = 'incoming'; $resolvedAll[] = $r; }
+}
+foreach ($outgoingRequests as $r) {
+    if (($r['status'] ?? '') !== 'pending') { $r['_direction'] = 'outgoing'; $resolvedAll[] = $r; }
+}
+usort($resolvedAll, function($a, $b) {
+    $dateA = $a['responded_at'] ?? $a['created_at'] ?? '';
+    $dateB = $b['responded_at'] ?? $b['created_at'] ?? '';
+    return strcmp($dateB, $dateA);
+});
+
+// Contact lookup for avatars
+// Include blocked and user-pending contacts alongside accepted ones so the
+// payment request rows always render with an avatar — a historical request
+// with a contact who was subsequently blocked should still look the same in
+// the list. Accepted is indexed last to win on any key collision.
+$prContactsByHash = [];
+$prContactsByName = [];
+$prAvatarStyle = $user->getContactAvatarStyle();
+foreach ([$blockedContacts ?? [], $pendingUserContacts ?? [], $acceptedContacts ?? []] as $bucket) {
+    foreach ($bucket as $c) {
+        if (!empty($c['pubkey_hash'])) {
+            $prContactsByHash[$c['pubkey_hash']] = $c;
+        }
+        if (!empty($c['name'])) {
+            $prContactsByName[strtolower($c['name'])] = $c;
+        }
+    }
+}
+
+$prStatusIcons = [
+    'approved'  => 'fa-check',
+    'declined'  => 'fa-times-circle',
+    'cancelled' => 'fa-ban',
+    'pending'   => 'fa-clock',
+];
 ?>
 
 <?php if (!empty($incomingRequests) || !empty($outgoingRequests)): ?>
 <div class="form-container fade-in-up" id="payment-requests-section">
-    <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
-
-    <?php if (!empty($pendingIncoming)): ?>
-    <!-- Incoming pending requests — action required -->
-    <div class="pr-group">
-        <h3 class="pr-group-title pr-group-title--incoming">
-            <i class="fas fa-inbox"></i>
-            Incoming Requests
-            <span class="tab-badge tab-badge-inline"><?php echo count($pendingIncoming); ?></span>
-        </h3>
-        <?php foreach ($incomingRequests as $req): ?>
-            <?php if (($req['status'] ?? '') !== 'pending') continue; ?>
-            <?php
-                $amount = isSplitAmount($req['amount'])
-                    ? number_format($req['amount']->toMajorUnits(), displayDecimals())
-                    : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
-                $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
-                $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
-                $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
-            ?>
-            <div class="pr-item pr-item--pending">
-                <div class="pr-item-header">
-                    <span class="pr-badge pr-badge--incoming">Incoming</span>
-                    <span class="pr-from"><strong><?php echo $fromName; ?></strong> is requesting</span>
-                    <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
-                </div>
-                <?php if ($desc): ?>
-                <div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div>
-                <?php endif; ?>
-                <div class="pr-meta">Received: <?php echo $createdAt; ?></div>
-                <div class="pr-actions">
-                    <form method="POST" class="pr-action-form d-inline">
-                        <input type="hidden" name="action" value="approvePaymentRequest">
+    <div class="section-header">
+        <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
+        <?php if (!empty($pendingIncoming) || !empty($pendingOutgoing)): ?>
+        <!-- Desktop: inline buttons -->
+        <div class="dlq-section-header-actions dlq-desktop-actions">
+            <?php if (!empty($pendingIncoming)): ?>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="action" value="declineAllPaymentRequests">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Decline all <?php echo count($pendingIncoming); ?> incoming request<?php echo count($pendingIncoming) > 1 ? 's' : ''; ?>?')">
+                    <i class="fas fa-times"></i> Decline All
+                </button>
+            </form>
+            <?php endif; ?>
+            <?php if (!empty($pendingOutgoing)): ?>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="action" value="cancelAllPaymentRequests">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Cancel all <?php echo count($pendingOutgoing); ?> outgoing request<?php echo count($pendingOutgoing) > 1 ? 's' : ''; ?>?')">
+                    <i class="fas fa-ban"></i> Cancel All
+                </button>
+            </form>
+            <?php endif; ?>
+        </div>
+        <!-- Mobile: dropdown -->
+        <div class="dlq-section-header-actions dlq-mobile-actions">
+            <div class="dlq-dropdown">
+                <button type="button" class="btn btn-primary btn-sm dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="pr-bulk-dropdown">
+                    <i class="fas fa-ellipsis-v"></i> Actions
+                </button>
+                <div class="dlq-dropdown-menu" id="pr-bulk-dropdown">
+                    <?php if (!empty($pendingIncoming)): ?>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="declineAllPaymentRequests">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
-                        <button type="submit" class="btn btn-success btn-sm">
-                            <i class="fas fa-check"></i> Approve &amp; Pay
+                        <button type="submit" class="dlq-dropdown-item" onclick="return confirm('Decline all <?php echo count($pendingIncoming); ?> incoming request<?php echo count($pendingIncoming) > 1 ? 's' : ''; ?>?')">
+                            <i class="fas fa-times"></i> Decline All Incoming
                         </button>
                     </form>
-                    <form method="POST" class="pr-action-form d-inline">
-                        <input type="hidden" name="action" value="declinePaymentRequest">
+                    <?php endif; ?>
+                    <?php if (!empty($pendingOutgoing)): ?>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="cancelAllPaymentRequests">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
-                        <button type="submit" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-times"></i> Decline
+                        <button type="submit" class="dlq-dropdown-item" onclick="return confirm('Cancel all <?php echo count($pendingOutgoing); ?> outgoing request<?php echo count($pendingOutgoing) > 1 ? 's' : ''; ?>?')">
+                            <i class="fas fa-ban"></i> Cancel All Outgoing
                         </button>
                     </form>
+                    <?php endif; ?>
                 </div>
             </div>
-        <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 
+    <!-- ============================================================
+         Pending Requests — single table, direction indicated by icon
+         ============================================================ -->
     <?php
-    // Resolved incoming (approved/declined) — show history
-    $resolvedIncoming = array_filter($incomingRequests, fn($r) => ($r['status'] ?? '') !== 'pending');
+    // Merge pending incoming + outgoing into one list, tagged with direction
+    $allPending = [];
+    foreach ($pendingIncoming as $r) { $r['_direction'] = 'incoming'; $allPending[] = $r; }
+    foreach ($pendingOutgoing as $r) { $r['_direction'] = 'outgoing'; $allPending[] = $r; }
     ?>
-    <?php if (!empty($resolvedIncoming)): ?>
-    <div class="pr-group">
-        <h3 class="pr-group-title">
-            <i class="fas fa-history"></i> Received — History
-        </h3>
-        <?php foreach ($resolvedIncoming as $req): ?>
-            <?php
-                $amount = isSplitAmount($req['amount'])
-                    ? number_format($req['amount']->toMajorUnits(), displayDecimals())
-                    : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
-                $fromName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['requester_pubkey_hash'] ?? ''), 0, 12) . '…';
-                $status = $req['status'] ?? '';
-                $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
-                $txid = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
-                $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
-            ?>
-            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>"<?php if ($txid): ?> data-action="openTransactionModalByTxid" data-txid="<?php echo $txid; ?>"<?php endif; ?>>
-                <div class="pr-item-header">
-                    <?php if ($status === 'approved'): ?>
-                        <span class="pr-badge pr-badge--approved"><i class="fas fa-check-circle"></i> Paid</span>
-                    <?php elseif ($status === 'declined'): ?>
-                        <span class="pr-badge pr-badge--declined"><i class="fas fa-times-circle"></i> Declined</span>
-                    <?php else: ?>
-                        <span class="pr-badge"><?php echo htmlspecialchars(ucfirst($status)); ?></span>
-                    <?php endif; ?>
-                    <span class="pr-from"><?php echo $fromName; ?> requested</span>
-                    <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
-                    <?php if ($txid): ?><span class="pr-view-tx"><i class="fas fa-external-link-alt"></i></span><?php endif; ?>
-                </div>
-                <?php if ($desc): ?><div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div><?php endif; ?>
-                <div class="pr-meta">
-                    <?php if ($respondedAt): ?><?php echo ($status === 'approved') ? 'Paid' : 'Responded'; ?>: <?php echo $respondedAt; ?><?php endif; ?>
-                    <?php if ($txid): ?> &nbsp;·&nbsp; <span title="<?php echo $txid; ?>">txid: <?php echo substr($txid, 0, 12); ?>…</span><?php endif; ?>
-                </div>
-            </div>
-        <?php endforeach; ?>
+    <?php if (!empty($allPending)): ?>
+    <div class="pr-pending-section">
+        <div class="pr-pending-header">
+            <i class="fas fa-clock"></i> Pending Requests
+            <span class="pr-pending-count"><?php echo count($allPending); ?></span>
+            <span class="pr-pending-breakdown">(<?php echo count($pendingIncoming); ?> incoming, <?php echo count($pendingOutgoing); ?> requested)</span>
+        </div>
+        <div class="contacts-table-wrapper pr-pending-table-wrap">
+            <table class="contacts-table pr-pending-table">
+                <thead>
+                    <tr>
+                        <th class="col-pr-dir"></th>
+                        <th class="col-name">Counterparty</th>
+                        <th class="col-number col-pr-amount text-right">Amount</th>
+                        <th class="col-tx-desc col-pr-desc">Description</th>
+                        <th class="col-tx-date col-pr-date text-right">Date</th>
+                        <th class="col-pr-actions text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($allPending as $req): ?>
+                    <?php
+                        $dir = $req['_direction'];
+                        $amount = isSplitAmount($req['amount'])
+                            ? number_format($req['amount']->toMajorUnits(), displayDecimals())
+                            : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
+                        if ($dir === 'incoming') {
+                            $cpHash = $req['requester_pubkey_hash'] ?? '';
+                        } else {
+                            $cpHash = $req['recipient_pubkey_hash'] ?? '';
+                        }
+                        $cpContact = $prContactsByHash[$cpHash] ?? null;
+                        $cpName = htmlspecialchars($cpContact['name'] ?? $req['contact_name'] ?? substr($cpHash, 0, 12) . '…');
+                        $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+                        $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
+                        $dirHint = $dir === 'incoming' ? 'requested' : 'you requested';
+                    ?>
+                    <tr class="contact-row cursor-pointer" data-action="openPrPendingModal"
+                        data-pr-name="<?php echo $cpName; ?>"
+                        data-pr-amount="<?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?>"
+                        data-pr-desc="<?php echo $desc; ?>"
+                        data-pr-date="<?php echo $createdAt; ?>"
+                        data-pr-direction="<?php echo $dir; ?>"
+                        data-pr-request-id="<?php echo htmlspecialchars($req['request_id']); ?>"
+                        data-pr-csrf="<?php echo htmlspecialchars($csrfToken); ?>"
+                        title="Click for details">
+                        <td class="col-pr-dir text-center">
+                            <?php if ($dir === 'incoming'): ?>
+                                <span class="pr-dir-icon pr-dir-incoming" title="Incoming — they requested"><i class="fas fa-arrow-down"></i></span>
+                            <?php else: ?>
+                                <span class="pr-dir-icon pr-dir-outgoing" title="Outgoing — you requested"><i class="fas fa-arrow-up"></i></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="col-name">
+                            <div class="contact-name-cell">
+                                <?php if ($cpContact): ?><?php echo renderContactAvatar($cpHash, $cpName, $prAvatarStyle); ?><?php endif; ?>
+                                <div>
+                                    <span class="contact-name-text"><?php echo $cpName; ?></span>
+                                    <span class="pr-direction-hint"><?php echo $dirHint; ?></span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="col-number col-pr-amount text-right"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></td>
+                        <td class="col-tx-desc col-pr-desc" title="<?php echo $desc ?: 'No description'; ?>"><?php echo $desc ?: '—'; ?></td>
+                        <td class="col-tx-date col-pr-date text-right"><?php echo $createdAt; ?></td>
+                        <td class="col-pr-actions text-center" style="white-space:nowrap" data-stop-propagation="true">
+                            <?php if ($dir === 'incoming'): ?>
+                            <form method="POST" class="pr-action-form d-inline">
+                                <input type="hidden" name="action" value="approvePaymentRequest">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                                <button type="submit" class="btn btn-success btn-sm" title="Approve &amp; Pay">
+                                    <i class="fas fa-check"></i><span class="pr-action-label"> Pay</span>
+                                </button>
+                            </form>
+                            <form method="POST" class="pr-action-form d-inline">
+                                <input type="hidden" name="action" value="declinePaymentRequest">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                                <button type="submit" class="btn btn-secondary btn-sm" title="Decline">
+                                    <i class="fas fa-times"></i><span class="pr-action-label"> Decline</span>
+                                </button>
+                            </form>
+                            <?php else: ?>
+                            <form method="POST" class="pr-action-form d-inline">
+                                <input type="hidden" name="action" value="cancelPaymentRequest">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                                <button type="submit" class="btn btn-secondary btn-sm" title="Cancel request">
+                                    <i class="fas fa-ban"></i><span class="pr-action-label"> Cancel</span>
+                                </button>
+                            </form>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
     <?php endif; ?>
 
-    <?php if (!empty($outgoingRequests)): ?>
-    <!-- Outgoing requests you have sent -->
-    <div class="pr-group">
-        <h3 class="pr-group-title">
-            <i class="fas fa-paper-plane"></i> Your Outgoing Requests
-        </h3>
-        <?php foreach ($outgoingRequests as $req): ?>
-            <?php
-                $amount = isSplitAmount($req['amount'])
-                    ? number_format($req['amount']->toMajorUnits(), displayDecimals())
-                    : number_format((float)($req['amount_whole'] ?? 0), displayDecimals());
-                $toName = !empty($req['contact_name']) ? htmlspecialchars($req['contact_name']) : substr(htmlspecialchars($req['recipient_pubkey_hash'] ?? ''), 0, 12) . '…';
-                $status = $req['status'] ?? '';
-                $desc = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
-                $txid = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
-                $createdAt = !empty($req['created_at']) ? formatTimestamp($req['created_at']) : '';
-                $respondedAt = !empty($req['responded_at']) ? formatTimestamp($req['responded_at']) : '';
-            ?>
-            <div class="pr-item pr-item--<?php echo htmlspecialchars($status); ?>"<?php if ($txid): ?> data-action="openTransactionModalByTxid" data-txid="<?php echo $txid; ?>"<?php endif; ?>>
-                <div class="pr-item-header">
-                    <?php if ($status === 'pending'): ?>
-                        <span class="pr-badge pr-badge--pending"><i class="fas fa-clock"></i> Pending</span>
-                    <?php elseif ($status === 'approved'): ?>
-                        <span class="pr-badge pr-badge--approved"><i class="fas fa-check-circle"></i> Paid</span>
-                    <?php elseif ($status === 'declined'): ?>
-                        <span class="pr-badge pr-badge--declined"><i class="fas fa-times-circle"></i> Declined</span>
-                    <?php elseif ($status === 'cancelled'): ?>
-                        <span class="pr-badge pr-badge--cancelled"><i class="fas fa-ban"></i> Cancelled</span>
-                    <?php else: ?>
-                        <span class="pr-badge"><?php echo htmlspecialchars(ucfirst($status)); ?></span>
-                    <?php endif; ?>
-                    <span class="pr-from">Requested from <strong><?php echo $toName; ?></strong></span>
-                    <span class="pr-amount"><?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?></span>
-                    <?php if ($txid): ?><span class="pr-view-tx"><i class="fas fa-external-link-alt"></i></span><?php endif; ?>
-                </div>
-                <?php if ($desc): ?><div class="pr-description"><i class="fas fa-comment-alt"></i> <?php echo $desc; ?></div><?php endif; ?>
-                <div class="pr-meta">
-                    Sent: <?php echo $createdAt; ?>
-                    <?php if ($respondedAt): ?> &nbsp;·&nbsp; Responded: <?php echo $respondedAt; ?><?php endif; ?>
-                    <?php if ($txid): ?> &nbsp;·&nbsp; <span title="<?php echo $txid; ?>">txid: <?php echo substr($txid, 0, 12); ?>…</span><?php endif; ?>
-                </div>
-                <?php if ($status === 'pending'): ?>
-                <div class="pr-actions">
-                    <form method="POST" class="pr-action-form d-inline">
-                        <input type="hidden" name="action" value="cancelPaymentRequest">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
-                        <button type="submit" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-ban"></i> Cancel
-                        </button>
-                    </form>
-                </div>
-                <?php endif; ?>
-            </div>
-        <?php endforeach; ?>
+    <!-- ============================================================
+         History — resolved requests (approved / declined / cancelled)
+         ============================================================ -->
+    <?php if (!empty($resolvedAll)): ?>
+    <h3 class="pr-group-title" style="margin-top: 1.2rem;">
+        <i class="fas fa-history"></i> History
+    </h3>
+    <div class="contacts-search-bar mb-lg">
+        <div class="search-icon-wrapper">
+            <i class="fas fa-search search-icon-positioned"></i>
+            <input type="text" id="pr-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterPaymentRequests">
+        </div>
+    </div>
+    <div class="contacts-filters mb-lg">
+        <select id="pr-filter-status" class="contacts-filter-select" data-action-change="filterPaymentRequests" aria-label="Filter by status">
+            <option value="">Any status</option>
+            <option value="approved">Paid</option>
+            <option value="declined">Declined</option>
+            <option value="cancelled">Cancelled</option>
+        </select>
+        <select id="pr-filter-direction" class="contacts-filter-select" data-action-change="filterPaymentRequests" aria-label="Filter by direction">
+            <option value="">Any direction</option>
+            <option value="incoming">Incoming</option>
+            <option value="outgoing">Outgoing</option>
+        </select>
+    </div>
+    <div class="d-flex justify-between align-center mb-lg">
+        <p class="tx-meta-info">
+            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $paymentRequestLimit; ?> requests</strong>
+        </p>
+    </div>
+    <div class="contacts-table-wrapper">
+        <table class="contacts-table pr-table">
+            <thead>
+                <tr>
+                    <th class="col-pr-status"></th>
+                    <th class="col-name">Counterparty</th>
+                    <th class="col-number col-pr-amount text-right sortable" data-action="sortPaymentRequests" data-sort-column="amount" role="button" aria-label="Sort by amount"><span class="sort-label">Amount</span><i class="fas fa-sort sort-indicator"></i></th>
+                    <th class="col-tx-desc col-pr-desc">Description</th>
+                    <th class="col-pr-txid">Txid</th>
+                    <th class="col-tx-date col-pr-date text-right sortable" data-action="sortPaymentRequests" data-sort-column="date" role="button" aria-label="Sort by date"><span class="sort-label">Date</span><i class="fas fa-sort sort-indicator"></i></th>
+                </tr>
+            </thead>
+            <tbody id="pr-history-list">
+            <?php foreach ($resolvedAll as $req): ?>
+                <?php
+                    $status   = $req['status'] ?? '';
+                    $dir      = $req['_direction'] ?? '';
+                    $txid     = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
+                    $amountRaw = isSplitAmount($req['amount']) ? $req['amount']->toMajorUnits() : (float)($req['amount_whole'] ?? 0);
+                    $amount   = number_format($amountRaw, displayDecimals());
+                    $currency = htmlspecialchars($req['currency'] ?? '');
+                    $desc     = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+                    $dateRaw  = $req['responded_at'] ?? $req['created_at'] ?? '';
+                    $date     = !empty($dateRaw) ? formatTimestamp($dateRaw) : '';
+                    $dateTs   = !empty($dateRaw) ? (int) strtotime($dateRaw) : 0;
+
+                    // Counterparty name + lookup for avatar (prefer live name over stored snapshot)
+                    $cpHash = $dir === 'incoming' ? ($req['requester_pubkey_hash'] ?? '') : ($req['recipient_pubkey_hash'] ?? '');
+                    $cpContact = $prContactsByHash[$cpHash] ?? null;
+                    $cpName = $cpContact['name'] ?? $req['contact_name'] ?? substr($cpHash, 0, 12) . '…';
+
+                    $statusIcon = $prStatusIcons[$status] ?? 'fa-circle';
+                ?>
+                <tr class="pr-row contact-row cursor-pointer"
+                    data-action="<?php echo $txid ? 'openTransactionModalByTxid' : 'openPrHistoryModal'; ?>"
+                    <?php if ($txid): ?>data-txid="<?php echo $txid; ?>"<?php endif; ?>
+                    data-pr-name="<?php echo htmlspecialchars($cpName); ?>"
+                    data-pr-amount="<?php echo $amount . ' ' . $currency; ?>"
+                    data-pr-desc="<?php echo $desc; ?>"
+                    data-pr-date="<?php echo $date; ?>"
+                    data-pr-direction="<?php echo htmlspecialchars($dir); ?>"
+                    data-pr-status="<?php echo htmlspecialchars($status); ?>"
+                    title="Click for details"
+                    <?php
+                        $searchParts = strtolower($cpName . ' ' . $cpHash . ' ' . $desc);
+                        if (!empty($req['requester_address'])) $searchParts .= ' ' . strtolower($req['requester_address']);
+                        if ($cpContact) {
+                            foreach (validTransportIndices() as $_af) {
+                                if (!empty($cpContact[$_af])) $searchParts .= ' ' . strtolower($cpContact[$_af]);
+                            }
+                        }
+                    ?>
+                    data-pr-search="<?php echo htmlspecialchars($searchParts); ?>"
+                    data-status="<?php echo htmlspecialchars($status); ?>"
+                    data-direction="<?php echo htmlspecialchars($dir); ?>"
+                    data-amount="<?php echo $amountRaw; ?>"
+                    data-date="<?php echo $dateTs; ?>">
+                    <td class="col-pr-status text-center">
+                        <span class="pr-status-icon pr-status-<?php echo htmlspecialchars($status); ?>" title="<?php echo htmlspecialchars(ucfirst($status)); ?>">
+                            <i class="fas <?php echo $statusIcon; ?>"></i>
+                        </span>
+                    </td>
+                    <td class="col-name">
+                        <div class="contact-name-cell">
+                            <?php if ($cpContact): ?>
+                                <?php echo renderContactAvatar($cpHash, $cpName, $prAvatarStyle); ?>
+                            <?php endif; ?>
+                            <div>
+                                <span class="contact-name-text"><?php echo htmlspecialchars($cpName); ?></span>
+                                <span class="pr-direction-hint"><?php echo $dir === 'incoming' ? 'requested' : 'you requested'; ?></span>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="col-number col-pr-amount text-right"><?php echo $amount . ' ' . $currency; ?></td>
+                    <td class="col-tx-desc col-pr-desc" title="<?php echo $desc ?: 'No description'; ?>"><?php echo $desc ?: '—'; ?></td>
+                    <td class="col-pr-txid" title="<?php echo $txid; ?>">
+                        <?php if ($txid): ?>
+                            <span class="monospace"><?php echo substr($txid, 0, 10); ?>…</span>
+                        <?php else: ?>
+                            <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="col-tx-date col-pr-date text-right"><?php echo $date; ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+
+    <?php if (empty($pendingIncoming) && empty($pendingOutgoing) && empty($resolvedAll)): ?>
+    <div class="empty-state">
+        <i class="fas fa-hand-holding-usd"></i>
+        <h3>No Payment Requests</h3>
+        <p>Payment requests you send or receive will appear here</p>
     </div>
     <?php endif; ?>
 

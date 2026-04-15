@@ -21,6 +21,8 @@ use Eiou\Services\MessageDeliveryService;
 use Eiou\Database\MessageDeliveryRepository;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\DeliveryMetricsRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
@@ -1023,6 +1025,266 @@ class MessageDeliveryServiceTest extends TestCase
 
         $this->assertFalse($result['success']);
         $this->assertEquals('Callback error', $result['error']);
+    }
+
+    // =========================================================================
+    // DLQ retry — payload refresh + signing persistence
+    //
+    // When a transaction DLQ entry retries, the chain may have advanced or
+    // been rebased while the tx sat in DLQ. The refresh machinery updates the
+    // stored payload's previousTxid + time against current DB state, and the
+    // fresh signature from transport.send() is persisted back to the
+    // transactions table so later sync responses don't serve a stale sig.
+    // =========================================================================
+
+    public function testRetryFromDlqRefreshesStaleTransactionPayload(): void
+    {
+        $txRepo = $this->createMock(TransactionRepository::class);
+        $chainRepo = $this->createMock(TransactionChainRepository::class);
+        $this->service->setTransactionRepository($txRepo);
+        $this->service->setTransactionChainRepository($chainRepo);
+
+        $originalPayload = json_encode([
+            'type' => 'send',
+            'time' => 111,
+            'txid' => 'tx-new',
+            'previousTxid' => 'tx-OLD-prev',
+            'senderPublicKey' => 'sender-pub',
+            'receiverPublicKey' => 'receiver-pub',
+            'currency' => 'USD',
+        ]);
+
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 9,
+            'message_type' => 'transaction',
+            'message_id' => 'send-tx-new-123',
+            'payload' => $originalPayload,
+            'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        // Current chain head says prev_txid has advanced to 'tx-NEW-prev'
+        $txRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->with('sender-pub', 'receiver-pub', 'tx-new', 'USD')
+            ->willReturn('tx-NEW-prev');
+
+        // DB gets the refreshed prev_txid + time
+        $chainRepo->expects($this->once())
+            ->method('updatePreviousTxid')
+            ->with('tx-new', 'tx-NEW-prev');
+        $txRepo->expects($this->once())
+            ->method('updateTime')
+            ->with('tx-new', self::TEST_MICROTIME);
+
+        // DLQ payload gets rewritten with the fresh values
+        $capturedPayload = null;
+        $this->dlqRepository->expects($this->once())
+            ->method('updatePayload')
+            ->with(9, $this->callback(function ($json) use (&$capturedPayload) {
+                $capturedPayload = json_decode($json, true);
+                return $capturedPayload['previousTxid'] === 'tx-NEW-prev'
+                    && $capturedPayload['time'] === self::TEST_MICROTIME
+                    && $capturedPayload['txid'] === 'tx-new';
+            }));
+
+        $this->dlqRepository->method('markRetrying');
+        $this->dlqRepository->method('markResolved');
+
+        // Callback sees the refreshed payload as an array (getById auto-decodes)
+        $callbackSawPayload = null;
+        $this->service->retryFromDlq(9, function ($payload) use (&$callbackSawPayload) {
+            $callbackSawPayload = is_array($payload) ? $payload : json_decode($payload, true);
+            return ['success' => true];
+        });
+
+        $this->assertEquals('tx-NEW-prev', $callbackSawPayload['previousTxid']);
+        $this->assertEquals(self::TEST_MICROTIME, $callbackSawPayload['time']);
+    }
+
+    public function testRetryFromDlqSkipsDbPrevUpdateWhenChainUnchanged(): void
+    {
+        $txRepo = $this->createMock(TransactionRepository::class);
+        $chainRepo = $this->createMock(TransactionChainRepository::class);
+        $this->service->setTransactionRepository($txRepo);
+        $this->service->setTransactionChainRepository($chainRepo);
+
+        $payload = json_encode([
+            'type' => 'send', 'time' => 111, 'txid' => 'tx-x',
+            'previousTxid' => 'tx-same',
+            'senderPublicKey' => 's', 'receiverPublicKey' => 'r', 'currency' => 'USD',
+        ]);
+
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 3, 'message_type' => 'transaction', 'message_id' => 'send-tx-x-1',
+            'payload' => $payload, 'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        // Chain head matches what's already in the payload — no DB prev update
+        $txRepo->method('getPreviousTxid')->willReturn('tx-same');
+        $chainRepo->expects($this->never())->method('updatePreviousTxid');
+
+        // Time still gets refreshed though — freshness alone is reason to update
+        $txRepo->expects($this->once())->method('updateTime');
+        $this->dlqRepository->expects($this->once())->method('updatePayload');
+
+        $this->service->retryFromDlq(3, fn() => ['success' => true]);
+    }
+
+    public function testRetryFromDlqPersistsFreshSigningDataOnSuccess(): void
+    {
+        $txRepo = $this->createMock(TransactionRepository::class);
+        $this->service->setTransactionRepository($txRepo);
+
+        $payload = json_encode(['type' => 'send', 'txid' => 'tx-sig', 'senderPublicKey' => 's', 'receiverPublicKey' => 'r']);
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 7, 'message_type' => 'transaction', 'message_id' => 'send-tx-sig-1',
+            'payload' => $payload, 'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        // chainRepo not injected → refresh bails out, but signing-data persistence
+        // still runs after callback success (the two paths are independent).
+        $txRepo->expects($this->once())
+            ->method('updateSignatureData')
+            ->with('tx-sig', 'fresh-sig', '9999', null);
+
+        $this->dlqRepository->method('markResolved');
+
+        $this->service->retryFromDlq(7, fn() => [
+            'success' => true,
+            'signing_data' => [
+                'signature' => 'fresh-sig',
+                'nonce' => '9999',
+            ],
+        ]);
+    }
+
+    public function testRetryFromDlqSkipsSigningPersistForNonTransactionTypes(): void
+    {
+        $txRepo = $this->createMock(TransactionRepository::class);
+        $this->service->setTransactionRepository($txRepo);
+
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 2, 'message_type' => 'contact', 'message_id' => 'create-xyz',
+            'payload' => json_encode(['type' => 'create']), 'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        $txRepo->expects($this->never())->method('updateSignatureData');
+        $this->dlqRepository->method('markResolved');
+
+        $this->service->retryFromDlq(2, fn() => [
+            'success' => true,
+            'signing_data' => ['signature' => 'x', 'nonce' => '1'],
+        ]);
+    }
+
+    /**
+     * Regression: DeadLetterQueueRepository::getById auto-decodes the payload
+     * JSON column into an array. The refresh path must handle that form (not
+     * only the JSON-string form) without tripping on json_decode returning null.
+     * If this silently fails the refresh becomes a no-op and stale previousTxid
+     * gets replayed — which is exactly the bug that stranded 9feb8e82 for 1.5h.
+     */
+    public function testRetryFromDlqHandlesAutoDecodedArrayPayload(): void
+    {
+        $txRepo = $this->createMock(TransactionRepository::class);
+        $chainRepo = $this->createMock(TransactionChainRepository::class);
+        $this->service->setTransactionRepository($txRepo);
+        $this->service->setTransactionChainRepository($chainRepo);
+
+        // Payload as array — the real getById return shape post-decodeJsonFields
+        $payloadArray = [
+            'type' => 'send', 'time' => 100, 'txid' => 'tx-a',
+            'previousTxid' => 'tx-stale',
+            'senderPublicKey' => 's', 'receiverPublicKey' => 'r', 'currency' => 'USD',
+        ];
+
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 11, 'message_type' => 'transaction', 'message_id' => 'send-tx-a-1',
+            'payload' => $payloadArray,
+            'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        $txRepo->method('getPreviousTxid')->willReturn('tx-fresh');
+        $chainRepo->expects($this->once())
+            ->method('updatePreviousTxid')
+            ->with('tx-a', 'tx-fresh');
+        $txRepo->expects($this->once())->method('updateTime');
+        $this->dlqRepository->expects($this->once())->method('updatePayload');
+        $this->dlqRepository->method('markResolved');
+
+        // Callback receives the refreshed array (getById returns array so
+        // DlqController/CliDlqService callbacks are array-typed)
+        $seen = null;
+        $this->service->retryFromDlq(11, function ($payload) use (&$seen) {
+            $seen = $payload;
+            return ['success' => true];
+        });
+
+        $this->assertIsArray($seen);
+        $this->assertEquals('tx-fresh', $seen['previousTxid']);
+    }
+
+    /**
+     * Regression: if the refresh step throws (DB hiccup, unexpected payload
+     * shape), the retry must still proceed with the original payload rather
+     * than stranding the row in 'retrying'. The original bug stranded the row
+     * because the refresh threw before the try/catch block even started.
+     */
+    public function testRetryFromDlqRecoversFromRefreshException(): void
+    {
+        $txRepo = $this->createMock(TransactionRepository::class);
+        $chainRepo = $this->createMock(TransactionChainRepository::class);
+        $this->service->setTransactionRepository($txRepo);
+        $this->service->setTransactionChainRepository($chainRepo);
+
+        $payload = ['type' => 'send', 'txid' => 'tx-b', 'previousTxid' => 'p',
+                    'senderPublicKey' => 's', 'receiverPublicKey' => 'r', 'currency' => 'USD'];
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 12, 'message_type' => 'transaction', 'message_id' => 'send-tx-b-1',
+            'payload' => $payload, 'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        // Refresh will blow up on the DB call
+        $txRepo->method('getPreviousTxid')->willThrowException(new \RuntimeException('db down'));
+
+        // Callback still runs with the unrefreshed payload; success path resolves the row
+        $this->dlqRepository->expects($this->once())->method('markResolved');
+        $this->dlqRepository->expects($this->never())->method('returnToPending');
+
+        $seenPayload = null;
+        $result = $this->service->retryFromDlq(12, function ($p) use (&$seenPayload) {
+            $seenPayload = $p;
+            return ['success' => true];
+        });
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('p', $seenPayload['previousTxid']); // unchanged from original
+    }
+
+    /**
+     * Regression: the outer catch was narrowed to Exception, so PHP Error
+     * types (TypeError from callback signature mismatch, undefined methods
+     * from stale opcache) escaped and left the row stranded in 'retrying'.
+     * Verify that any Throwable now returns the row to pending.
+     */
+    public function testRetryFromDlqReturnsToPendingOnPhpError(): void
+    {
+        $this->dlqRepository->method('getById')->willReturn([
+            'id' => 13, 'message_type' => 'contact', 'message_id' => 'create-xyz',
+            'payload' => ['type' => 'create'], 'recipient_address' => self::TEST_RECIPIENT,
+        ]);
+
+        $this->dlqRepository->expects($this->once())->method('markRetrying');
+        $this->dlqRepository->expects($this->once())->method('returnToPending')->with(13);
+
+        $result = $this->service->retryFromDlq(13, function () {
+            // Simulate the PHP Error that would come from a callback type
+            // mismatch or a missing method in stale opcache
+            throw new \TypeError('simulated callback type mismatch');
+        });
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('simulated callback type mismatch', $result['error']);
     }
 
     // =========================================================================

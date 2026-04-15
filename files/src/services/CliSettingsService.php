@@ -8,6 +8,7 @@ use Eiou\Core\Constants;
 use Eiou\Utils\InputValidator;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
+use Eiou\Services\AnalyticsService;
 
 /**
  * CliSettingsService
@@ -1067,6 +1068,16 @@ class CliSettingsService
             $config_content['hostname_secure'] = $hostnameSecure;
         }
 
+        // Stamp opt-in timestamp on off->on transition (bounds the analytics
+        // rollup window to post-consent)
+        if ($key === 'analyticsEnabled') {
+            $config_content = AnalyticsService::applyOptInAtTransition(
+                $config_content,
+                $wasAnalyticsEnabled,
+                (bool) $value
+            );
+        }
+
         file_put_contents('/etc/eiou/config/'. $configFile, json_encode($config_content,true), LOCK_EX);
 
         // Regenerate SSL certificate when hostname changes
@@ -1081,7 +1092,7 @@ class CliSettingsService
             if (file_exists($script)) {
                 $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
                 if (posix_getuid() === 0) {
-                    $cmd = 'runuser -u www-data -- ' . $cmd;
+                    $cmd = Constants::BIN_RUNUSER . ' -u www-data -- ' . $cmd;
                 }
                 @exec($cmd);
                 $output->info('Sending initial analytics event in the background...');

@@ -78,6 +78,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // AJAX-only "What's New" actions (returns JSON, exits immediately)
+    if ($action === 'whatsNewDismiss') {
+        header('Content-Type: application/json');
+        try {
+            \Eiou\Services\UpdateCheckService::dismissWhatsNew();
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+    if ($action === 'whatsNewNotes') {
+        header('Content-Type: application/json');
+        try {
+            $version = $_POST['version'] ?? \Eiou\Core\Constants::APP_VERSION;
+            $notes = \Eiou\Services\UpdateCheckService::getReleaseNotes($version);
+            if ($notes !== null) {
+                echo json_encode(['success' => true, 'data' => $notes]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Release notes not available']);
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     // AJAX-only settings actions (returns JSON, exits immediately)
     if ($action === 'getDebugReportJson' || $action === 'submitDebugReport') {
         // Set JSON header early to ensure clean response
@@ -124,11 +151,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // AJAX-only remember-me session management (returns JSON, exits immediately)
+    if (in_array($action, ['revokeRememberSession', 'revokeAllRememberSessions'], true)) {
+        header('Content-Type: application/json');
+        try {
+            // CSRF is required — this is a state-changing action.
+            if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
+                echo json_encode(['success' => false, 'error' => 'csrf_error', 'message' => 'Invalid CSRF token']);
+                exit;
+            }
+
+            $pubkeyHashForAction = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+            $rememberService = $serviceContainer->getRememberTokenService();
+
+            if ($action === 'revokeRememberSession') {
+                $id = (int) ($_POST['session_id'] ?? 0);
+                if ($id <= 0) {
+                    echo json_encode(['success' => false, 'error' => 'invalid_id']);
+                    exit;
+                }
+
+                // Detect "am I revoking my OWN row?" BEFORE the revoke so the
+                // is_current flag still reads true. If so, we also need to
+                // tear down the PHP session — revoking the remember-me row
+                // alone only invalidates future cookie-based auto-logins; the
+                // already-authenticated session would persist otherwise.
+                $currentRaw = $secureSession->getRememberCookie();
+                $revokingCurrentDevice = false;
+                if ($currentRaw !== null) {
+                    foreach ($rememberService->listForUser($pubkeyHashForAction, $currentRaw) as $row) {
+                        if ($row['id'] === (int)$id && !empty($row['is_current'])) {
+                            $revokingCurrentDevice = true;
+                            break;
+                        }
+                    }
+                }
+
+                $ok = $rememberService->revokeTokenById($id, $pubkeyHashForAction);
+
+                if ($revokingCurrentDevice) {
+                    $secureSession->clearRememberCookie();
+                    $secureSession->logout();
+                    echo json_encode(['success' => $ok, 'logged_out' => true]);
+                    exit;
+                }
+
+                echo json_encode(['success' => $ok]);
+                exit;
+            }
+
+            if ($action === 'revokeAllRememberSessions') {
+                // "Sign out everywhere" includes THIS browser by definition,
+                // so always tear down the session + cookie.
+                $count = $rememberService->revokeAllForUser($pubkeyHashForAction);
+                $secureSession->clearRememberCookie();
+                $secureSession->logout();
+                echo json_encode(['success' => true, 'revoked' => $count, 'logged_out' => true]);
+                exit;
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'remember_session_action',
+                'action' => $action
+            ]);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            exit;
+        }
+    }
+
     // AJAX-only DLQ actions (returns JSON, exits immediately)
     if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {
             $dlqController->routeAction();
         } catch (\Throwable $e) {
+            // Log the full trace so we can diagnose server-side. The JSON
+            // response only carries the message so the client doesn't see
+            // internals, but ops still needs a stack to investigate.
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'dlq_action_handler',
+                'action' => $action
+            ]);
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
         }
@@ -230,6 +332,9 @@ $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Update check status (reads cache only — never triggers a new check on page load)
 $updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
+
+// "What's New" notification (shown after version upgrade until dismissed)
+$showWhatsNew = \Eiou\Services\UpdateCheckService::shouldShowWhatsNew();
 
 // Analytics status (reads cache only — never triggers a new submission on page load)
 try {
@@ -363,10 +468,38 @@ if (!empty($pendingContacts)) {
     }
 }
 
-$contactTxLimit = contactTransactionsLimit();
-$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $contactTxLimit);
-$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $contactTxLimit);
-$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $contactTxLimit);
+// Single knob: the user-editable "GUI/CLI Max Output Lines" setting drives
+// both how many recent-tx rows we pre-fetch per contact (server side) AND how
+// many the modal displays (via $maxDisplayLines). Keeps pre-fetch and display
+// in lockstep so the modal never shows fewer rows than the user asked for
+// because of a starved pre-load.
+//
+// Fetch all three status buckets in a single DB query (getContactsGroupedByStatus)
+// and batch-fetch recent transactions for every contact in one ranked query
+// (inside contactBalanceConversion). Prior pattern ran 3 × SELECT on contacts
+// plus N × SELECT on transactions where N = total contact count across buckets.
+$contactTxLimit = $user->getMaxOutput();
+$contactsByStatus = $contactService->getContactsGroupedByStatus();
+$pendingUserContacts = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'], $contactTxLimit);
+$acceptedContacts    = $transactionService->contactBalanceConversion($contactsByStatus['accepted'],     $contactTxLimit);
+$blockedContacts     = $transactionService->contactBalanceConversion($contactsByStatus['blocked'],      $contactTxLimit);
+
+// Count accepted contacts with a chain state that requires user attention, so
+// the Contacts tab can show a count badge (like Activity's DLQ badge). Includes
+// incoming chain drop proposals to accept/reject, rejected proposals still
+// blocking the chain, and raw chain gaps that need resolution. Waiting
+// (outgoing proposal not yet answered) is not counted — nothing for the user
+// to do on their side while the peer deliberates.
+$contactsNeedingChainActionCount = 0;
+foreach ($acceptedContacts as $c) {
+    $proposal = $c['chain_drop_proposal'] ?? null;
+    $isIncoming = $proposal && ($proposal['direction'] ?? '') === 'incoming' && ($proposal['status'] ?? '') === 'pending';
+    $isRejected = $proposal && ($proposal['status'] ?? '') === 'rejected';
+    $validChain = $c['valid_chain'] ?? null;
+    if ($isIncoming || $isRejected || $validChain === 0) {
+        $contactsNeedingChainActionCount++;
+    }
+}
 
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {
@@ -702,7 +835,8 @@ unset($contacts);
 $paymentRequests = ['incoming' => [], 'outgoing' => []];
 $pendingPaymentRequestCount = 0;
 try {
-    $paymentRequests = $serviceContainer->getPaymentRequestService()->getAllForDisplay(50);
+    $paymentRequestLimit = $recentTransactionsLimit;
+    $paymentRequests = $serviceContainer->getPaymentRequestService()->getAllForDisplay($paymentRequestLimit);
     $pendingPaymentRequestCount = $serviceContainer->getPaymentRequestService()->countPendingIncoming();
 } catch (Exception $e) {
     // Non-critical — payment requests section will be empty

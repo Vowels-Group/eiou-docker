@@ -12,10 +12,82 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Database\TransactionRepository;
 use Eiou\Core\Constants;
+use PDO;
+use PDOStatement;
 
 #[CoversClass(TransactionRepository::class)]
 class TransactionRepositoryTest extends TestCase
 {
+    // =========================================================================
+    // getPreviousTxid() / getPreviousTxidsByCurrency() — cancelled/rejected filter
+    //
+    // Cancelled-while-pending rows are sender-local (never signed / never
+    // delivered). Rejected rows are also excluded from sync responses. New
+    // transactions must NOT use either as their previous_txid or the peer
+    // never sees the link target, producing a permanent chain gap.
+    // =========================================================================
+
+    public function testGetPreviousTxidFiltersCancelledAndRejected(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains("status NOT IN ('cancelled', 'rejected')"))
+            ->willReturn($stmt);
+
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetch')->willReturn(['txid' => 'tx-prev']);
+
+        $repo = new TransactionRepository($pdo);
+        $result = $repo->getPreviousTxid('sender-pub', 'receiver-pub');
+
+        $this->assertEquals('tx-prev', $result);
+    }
+
+    public function testGetPreviousTxidOrdersByTimestampDesc(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains('ORDER BY timestamp DESC LIMIT 1'))
+            ->willReturn($stmt);
+
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetch')->willReturn(false);
+
+        $repo = new TransactionRepository($pdo);
+        $repo->getPreviousTxid('sender-pub', 'receiver-pub');
+    }
+
+    public function testGetPreviousTxidsByCurrencyFiltersCancelledAndRejected(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains("status NOT IN ('cancelled', 'rejected')"))
+            ->willReturn($stmt);
+
+        $stmt->method('execute')->willReturn(true);
+        // Return USD row then end-of-results
+        $stmt->method('fetch')
+            ->willReturnOnConsecutiveCalls(
+                ['currency' => 'USD', 'txid' => 'tx-usd'],
+                false
+            );
+
+        $repo = new TransactionRepository($pdo);
+        $result = $repo->getPreviousTxidsByCurrency('sender-pub', 'receiver-pub');
+
+        $this->assertArrayHasKey('USD', $result);
+        $this->assertEquals('tx-usd', $result['USD']);
+    }
+
     /**
      * Test transaction status constants are defined
      */

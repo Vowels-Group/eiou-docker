@@ -381,6 +381,26 @@ class SettingsController
             }
         }
 
+        // Remember-me cookie lifetime (days)
+        if (isset($_POST['rememberMeMaxDays'])) {
+            $val = (int) $_POST['rememberMeMaxDays'];
+            if (in_array($val, Constants::REMEMBER_ME_MAX_DAYS_OPTIONS, true)) {
+                $settings['rememberMeMaxDays'] = $val;
+            } else {
+                $errors[] = 'Invalid remember-me duration: must be one of ' . implode(', ', Constants::REMEMBER_ME_MAX_DAYS_OPTIONS) . ' days';
+            }
+        }
+
+        // Remember-me device cap
+        if (isset($_POST['rememberMeMaxDevices'])) {
+            $val = (int) $_POST['rememberMeMaxDevices'];
+            if (in_array($val, Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS, true)) {
+                $settings['rememberMeMaxDevices'] = $val;
+            } else {
+                $errors[] = 'Invalid remember-me device cap: must be one of ' . implode(', ', Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS);
+            }
+        }
+
         // Contact avatar style
         if (isset($_POST['contactAvatarStyle'])) {
             $val = trim((string) $_POST['contactAvatarStyle']);
@@ -453,6 +473,14 @@ class SettingsController
 
             // Merge new settings
             $config = array_merge($config, $settings);
+
+            // Stamp the opt-in timestamp on every off->on transition so the
+            // analytics cron can bound its rollup window and never pull
+            // pre-consent data. Overwrites any prior value — re-enabling
+            // after opting out is a fresh consent event.
+            if (!$wasAnalyticsEnabled && !empty($config['analyticsEnabled'])) {
+                $config['analyticsOptInAt'] = gmdate('c');
+            }
 
             // Write back to file
             if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
@@ -659,9 +687,13 @@ class SettingsController
             $config = json_decode(file_get_contents($configFile), true) ?? [];
         }
 
+        $wasAnalyticsEnabled = (bool) ($config['analyticsEnabled'] ?? false);
         $config['analyticsConsentAsked'] = true;
         if ($enable) {
             $config['analyticsEnabled'] = true;
+            if (!$wasAnalyticsEnabled) {
+                $config['analyticsOptInAt'] = gmdate('c');
+            }
         }
 
         header('Content-Type: application/json');
@@ -697,7 +729,7 @@ class SettingsController
         // already run as www-data so runuser would fail with permission error.
         $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
         if (posix_getuid() === 0) {
-            $cmd = 'runuser -u www-data -- ' . $cmd;
+            $cmd = Constants::BIN_RUNUSER . ' -u www-data -- ' . $cmd;
         }
         @exec($cmd);
     }

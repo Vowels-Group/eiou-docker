@@ -30,6 +30,8 @@ class CliDlqServiceTest extends TestCase
     private MockObject|TransactionRepository $transactionRepository;
     private MockObject|DeadLetterQueueRepository $dlqRepository;
     private MockObject|CliOutputManager $outputManager;
+    /** @var MockObject&\Eiou\Services\MessageDeliveryService */
+    private $messageDeliveryService;
     private CliDlqService $service;
 
     protected function setUp(): void
@@ -40,6 +42,7 @@ class CliDlqServiceTest extends TestCase
         $this->transactionRepository = $this->createMock(TransactionRepository::class);
         $this->dlqRepository = $this->createMock(DeadLetterQueueRepository::class);
         $this->outputManager = $this->createMock(CliOutputManager::class);
+        $this->messageDeliveryService = $this->createMock(\Eiou\Services\MessageDeliveryService::class);
 
         $this->service = new CliDlqService(
             $this->transportUtility,
@@ -47,6 +50,7 @@ class CliDlqServiceTest extends TestCase
         );
 
         $this->service->setDeadLetterQueueRepository($this->dlqRepository);
+        $this->service->setMessageDeliveryService($this->messageDeliveryService);
     }
 
     // =========================================================================
@@ -186,23 +190,26 @@ class CliDlqServiceTest extends TestCase
                 'payload' => ['type' => 'transaction', 'data' => 'test'],
             ]);
 
+        // getByTxid returns a list of rows (fetchAll) — the unwrap in
+        // retryDlqItem should pick up $rows[0]['status']
         $this->transactionRepository->method('getByTxid')
             ->with('txid123')
-            ->willReturn(['txid' => 'txid123', 'status' => Constants::STATUS_CANCELLED]);
+            ->willReturn([['txid' => 'txid123', 'status' => Constants::STATUS_CANCELLED]]);
 
         $this->transactionRepository->expects($this->once())
             ->method('setExpiresAt');
 
+        // Cancelled status is recognised through the list unwrap, so
+        // status flip to SENDING still fires
         $this->transactionRepository->expects($this->once())
             ->method('updateStatus')
             ->with('txid123', Constants::STATUS_SENDING, true);
 
-        $this->dlqRepository->expects($this->once())->method('markRetrying')->with(42);
-
-        $this->transportUtility->method('send')
-            ->willReturn(['response' => json_encode(['status' => 'received'])]);
-
-        $this->dlqRepository->expects($this->once())->method('markResolved')->with(42);
+        // CLI now delegates to MessageDeliveryService::retryFromDlq
+        $this->messageDeliveryService->expects($this->once())
+            ->method('retryFromDlq')
+            ->with(42, $this->isType('callable'))
+            ->willReturn(['success' => true, 'message' => 'Message successfully resent from DLQ']);
 
         $this->outputManager->expects($this->once())
             ->method('success')
@@ -243,6 +250,40 @@ class CliDlqServiceTest extends TestCase
     /**
      * Test retryDlqItem returns to pending on send failure
      */
+    /**
+     * Regression: TransactionRepository::getByTxid returns a list of rows
+     * (fetchAll). Earlier code accessed $tx['status'] directly on that list
+     * and triggered "Undefined array key status" on every retry. Verify the
+     * unwrap path picks up the first row's status correctly.
+     */
+    public function testRetryDlqItemUnwrapsGetByTxidListForCancelledCheck(): void
+    {
+        $this->dlqRepository->method('getById')
+            ->with(42)
+            ->willReturn([
+                'id' => 42,
+                'message_type' => 'transaction',
+                'message_id' => 'send-txid456-1678901234',
+                'status' => 'pending',
+                'recipient_address' => 'http://bob:8080',
+                'payload' => ['type' => 'transaction'],
+            ]);
+
+        // Return shape matches real fetchAll — a list, not a flat row
+        $this->transactionRepository->method('getByTxid')
+            ->with('txid456')
+            ->willReturn([['txid' => 'txid456', 'status' => Constants::STATUS_COMPLETED]]);
+
+        $this->transactionRepository->expects($this->once())->method('setExpiresAt');
+        // Status is 'completed', not 'cancelled', so updateStatus must NOT fire
+        $this->transactionRepository->expects($this->never())->method('updateStatus');
+
+        $this->messageDeliveryService->method('retryFromDlq')
+            ->willReturn(['success' => true]);
+
+        $this->service->retryDlqItem(['eiou', 'dlq', 'retry', '42'], $this->outputManager);
+    }
+
     public function testRetryDlqItemSendFailure(): void
     {
         $this->dlqRepository->method('getById')
@@ -256,12 +297,11 @@ class CliDlqServiceTest extends TestCase
                 'payload' => ['type' => 'sync'],
             ]);
 
-        $this->dlqRepository->expects($this->once())->method('markRetrying');
-
-        $this->transportUtility->method('send')
-            ->willThrowException(new \RuntimeException('Connection refused'));
-
-        $this->dlqRepository->expects($this->once())->method('returnToPending')->with(42);
+        // Delegated path: MessageDeliveryService owns markRetrying / returnToPending.
+        // The CLI surface just reports the failure returned from retryFromDlq.
+        $this->messageDeliveryService->expects($this->once())
+            ->method('retryFromDlq')
+            ->willReturn(['success' => false, 'error' => 'Delivery failed: Connection refused']);
 
         $this->outputManager->expects($this->once())
             ->method('error')

@@ -163,10 +163,10 @@
             <!-- Minimum Fee -->
             <div class="form-group">
                 <label for="minFee">Minimum Fee Amount:</label>
-                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="0" class="default-value">
+                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.00000001" min="0" class="default-value">
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
-                    Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo transactionMinimumFee(); ?>
+                    Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo number_format(transactionMinimumFee(), internalPrecision()); ?>
                 </small>
             </div>
 
@@ -232,6 +232,7 @@
                         <option value="sync">Sync</option>
                         <option value="network">Network</option>
                         <option value="rate-limiting">Rate Limiting</option>
+                        <option value="gui-security">GUI Security</option>
                     </select>
                 </div>
 
@@ -623,6 +624,105 @@
                                 <i class="fas fa-info-circle"></i> How long an IP is blocked after exceeding max attempts
                             </small>
                         </div>
+                    </div>
+                </div>
+
+                <!-- GUI Security (hidden by default) -->
+                <div id="adv-section-gui-security" class="adv-section d-none">
+                    <h4 class="settings-subsection-title">
+                        <i class="fas fa-user-shield"></i> GUI Security
+                    </h4>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-info-circle"></i> Controls for the browser login flow — how long "Remember this browser" cookies last, how many devices can stay remembered, and a list of currently remembered browsers so you can sign any (or all) of them out.
+                    </p>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-user-secret"></i> <strong>Browser cookie-retention note:</strong> If your browser is configured to clear cookies on close, the duration set below is ignored by the browser — every restart looks like a fresh device. This is always the case with Tor Browser, and also applies to regular browsers with settings such as Firefox's "Delete cookies and site data when Firefox is closed", "Never remember history", strict Enhanced Tracking Protection, or any Private Browsing / Incognito window. In those cases each reopt into Remember Me adds a fresh entry to the Active Sessions list below (previous ones are already effectively dead because the cookie is gone). Use "Sign out everywhere" to clean up.
+                    </p>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="rememberMeMaxDays">Remember Me Duration:</label>
+                            <select id="rememberMeMaxDays" name="rememberMeMaxDays" class="default-value">
+                                <?php
+                                $currentRmDays = $user->getRememberMeMaxDays();
+                                foreach (rememberMeMaxDaysOptions() as $days): ?>
+                                    <option value="<?php echo $days; ?>" <?php echo ($days === $currentRmDays) ? 'selected' : ''; ?>>
+                                        <?php echo $days; ?> day<?php echo $days > 1 ? 's' : ''; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i>
+                                How long the "Remember this browser" cookie keeps you logged in before it expires
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="rememberMeMaxDevices">Max Remembered Devices:</label>
+                            <select id="rememberMeMaxDevices" name="rememberMeMaxDevices" class="default-value">
+                                <?php
+                                $currentRmDevices = $user->getRememberMeMaxDevices();
+                                foreach (rememberMeMaxDevicesOptions() as $n): ?>
+                                    <option value="<?php echo $n; ?>" <?php echo ($n === $currentRmDevices) ? 'selected' : ''; ?>>
+                                        <?php echo $n; ?> device<?php echo $n > 1 ? 's' : ''; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i>
+                                Maximum simultaneous remembered browsers. When exceeded, the least-recently-used one is signed out automatically
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Active Remembered Sessions — full-width list below the grid -->
+                    <?php
+                    try {
+                        $rememberService = $serviceContainer->getRememberTokenService();
+                        $pubkeyHashForList = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+                        $currentRawToken = $secureSession->getRememberCookie();
+                        $activeSessions = $rememberService->listForUser($pubkeyHashForList, $currentRawToken);
+                    } catch (\Throwable $e) {
+                        $activeSessions = [];
+                    }
+                    ?>
+                    <div class="active-sessions-container">
+                        <h5 class="active-sessions-heading">
+                            <i class="fas fa-desktop"></i> Active Remembered Sessions
+                        </h5>
+                        <?php if (empty($activeSessions)): ?>
+                            <p class="form-hint"><i class="fas fa-info-circle"></i> No remembered browsers yet. Tick "Remember this browser" at login to add this device to the list.</p>
+                        <?php else: ?>
+                            <div class="active-sessions-list">
+                                <?php foreach ($activeSessions as $s): ?>
+                                    <div class="active-session-row">
+                                        <div class="active-session-info">
+                                            <strong><?php echo htmlspecialchars($s['user_agent_family'] ?? 'Unknown device'); ?></strong>
+                                            <?php if (!empty($s['is_current'])): ?>
+                                                <span class="badge badge-accepted">This device</span>
+                                            <?php endif; ?>
+                                            <div class="active-session-meta">
+                                                Last used <?php echo htmlspecialchars($s['last_used_at']); ?>
+                                                · Expires <?php echo htmlspecialchars($s['expires_at']); ?>
+                                            </div>
+                                        </div>
+                                        <button type="button"
+                                                class="btn btn-sm btn-danger"
+                                                data-action="revokeRememberSession"
+                                                data-session-id="<?php echo (int)$s['id']; ?>"
+                                                data-stop-propagation="true"
+                                                title="Sign out this browser">
+                                            <i class="fas fa-sign-out-alt"></i> Sign out
+                                        </button>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <button type="button"
+                                    class="btn btn-sm btn-danger mt-sm"
+                                    data-action="revokeAllRememberSessions"
+                                    data-stop-propagation="true">
+                                <i class="fas fa-sign-out-alt"></i> Sign out everywhere
+                            </button>
+                        <?php endif; ?>
                     </div>
                 </div>
 

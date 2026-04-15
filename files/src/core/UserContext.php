@@ -620,6 +620,19 @@ class UserContext {
     }
 
     /**
+     * ISO 8601 timestamp of the most recent off->on transition of
+     * analyticsEnabled. Used by analytics-cron.php as the floor for the
+     * heartbeat rollup window so a catch-up submission after an outage
+     * never reports data from before the user consented.
+     *
+     * @return string|null
+     */
+    public function getAnalyticsOptInAt(): ?string {
+        $value = $this->get('analyticsOptInAt') ?? Constants::ANALYTICS_OPT_IN_AT;
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string
@@ -1047,6 +1060,28 @@ class UserContext {
     }
 
     /**
+     * Maximum lifetime (days) for a GUI "Remember me" browser token.
+     * Issued tokens expire at now + this many days and do not slide.
+     */
+    public function getRememberMeMaxDays(): int {
+        $val = (int) ($this->get('rememberMeMaxDays') ?? Constants::REMEMBER_ME_DEFAULT_MAX_DAYS);
+        return in_array($val, Constants::REMEMBER_ME_MAX_DAYS_OPTIONS)
+            ? $val
+            : Constants::REMEMBER_ME_DEFAULT_MAX_DAYS;
+    }
+
+    /**
+     * Maximum simultaneous remembered devices for a user. Excess devices
+     * are evicted in LRU order (oldest `last_used_at` goes first).
+     */
+    public function getRememberMeMaxDevices(): int {
+        $val = (int) ($this->get('rememberMeMaxDevices') ?? Constants::REMEMBER_ME_DEFAULT_MAX_DEVICES);
+        return in_array($val, Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS)
+            ? $val
+            : Constants::REMEMBER_ME_DEFAULT_MAX_DEVICES;
+    }
+
+    /**
      * Get the contact avatar style for the contacts list
      *
      * @return string  One of: gradient, tile, pixel
@@ -1110,6 +1145,7 @@ class UserContext {
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
             'updateCheckEnabled' => Constants::UPDATE_CHECK_ENABLED,
             'analyticsEnabled' => Constants::ANALYTICS_ENABLED,
+            'analyticsOptInAt' => Constants::ANALYTICS_OPT_IN_AT,
 
             // Feature toggles
             'hopBudgetRandomized' => Constants::HOP_BUDGET_RANDOMIZED,
@@ -1162,6 +1198,8 @@ class UserContext {
 
             // Session
             'sessionTimeoutMinutes' => Constants::SESSION_TIMEOUT_MINUTES,
+            'rememberMeMaxDays' => Constants::REMEMBER_ME_DEFAULT_MAX_DAYS,
+            'rememberMeMaxDevices' => Constants::REMEMBER_ME_DEFAULT_MAX_DEVICES,
 
             // Contact list
             'contactAvatarStyle' => Constants::CONTACT_AVATAR_STYLE,

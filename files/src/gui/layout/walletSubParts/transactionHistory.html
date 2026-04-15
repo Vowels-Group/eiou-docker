@@ -138,14 +138,21 @@
     // identifiers — name (lowercased) AND each address field — because the
     // counterparty in $tx may match by name (formatter populates it) but the
     // address format isn't always identical to the contact's stored address.
+    //
+    // Include blocked and user-pending contacts in addition to accepted ones:
+    // historical transactions with a contact don't disappear when the contact
+    // is blocked, and their avatar should still render so the row is
+    // visually consistent with pre-block history. Accepted is indexed last
+    // so it wins on any key collision (e.g. a contact who was blocked and
+    // later re-accepted under the same address).
     $txContactsByAddress = [];
     $txContactsByName = [];
-    if (!empty($acceptedContacts)) {
-        foreach ($acceptedContacts as $tc) {
+    foreach ([$blockedContacts ?? [], $pendingUserContacts ?? [], $acceptedContacts ?? []] as $bucket) {
+        foreach ($bucket as $tc) {
             if (!empty($tc['name'])) {
                 $txContactsByName[strtolower($tc['name'])] = $tc;
             }
-            foreach (['http', 'https', 'tor'] as $addrField) {
+            foreach (validTransportIndices() as $addrField) {
                 if (!empty($tc[$addrField])) {
                     $txContactsByAddress[$tc[$addrField]] = $tc;
                 }
@@ -287,11 +294,12 @@
                     data-amount="<?php echo (float) ($tx['amount'] ?? 0); ?>"
                     data-date="<?php echo !empty($tx['date']) ? (int) strtotime($tx['date']) : 0; ?>">
                     <td class="col-tx-status-icon text-center">
-                        <span class="tx-status-icon tx-status-<?php echo htmlspecialchars($statusLower); ?>" title="<?php echo ucfirst(htmlspecialchars($statusLower)); ?>">
-                            <i class="fas <?php echo $statusIcon; ?>"></i>
-                        </span>
                         <?php if ($txidInDlq): ?>
                             <a href="#dlq" class="dlq-tx-icon" title="Delivery failed — see Failed Messages to retry or abandon" data-stop-propagation="true"><i class="fas fa-inbox"></i></a>
+                        <?php else: ?>
+                            <span class="tx-status-icon tx-status-<?php echo htmlspecialchars($statusLower); ?>" title="<?php echo ucfirst(htmlspecialchars($statusLower)); ?>">
+                                <i class="fas <?php echo $statusIcon; ?>"></i>
+                            </span>
                         <?php endif; ?>
                     </td>
                     <td class="col-name">
@@ -347,7 +355,13 @@
         echo $syncingCount;
     ?>;
 
-    var transactionData = <?php echo json_encode(array_map(function($tx) {
+    var transactionData = <?php echo json_encode(array_map(function($tx) use ($dlqActiveTxMessageIds) {
+        $inDlq = false;
+        if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+            foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                if (strpos($dlqMsgId, $tx['txid']) !== false) { $inDlq = true; break; }
+            }
+        }
         return [
             'txid' => $tx['txid'] ?? '',
             'tx_type' => $tx['tx_type'] ?? 'standard',
@@ -369,7 +383,8 @@
             'end_recipient_address' => $tx['end_recipient_address'] ?? null,
             'p2p_destination' => $tx['p2p_destination'] ?? null,
             'p2p_amount' => $tx['p2p_amount'] ?? null,
-            'p2p_fee' => $tx['p2p_fee'] ?? null
+            'p2p_fee' => $tx['p2p_fee'] ?? null,
+            'in_dlq' => $inDlq
         ];
     }, $transactions ?? []), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 

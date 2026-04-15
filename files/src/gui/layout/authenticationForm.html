@@ -39,6 +39,27 @@
         <form class="auth-form" method="POST">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($secureSession->getCSRFToken()); ?>">
             <input type="password" name="authcode" class="auth-input" placeholder="Enter auth code" required autocomplete="off">
+            <label class="auth-remember-me">
+                <input type="checkbox" name="remember_me" value="1">
+                <span>Remember this browser for <?php echo (int) $user->getRememberMeMaxDays(); ?> days</span>
+                <details class="auth-remember-info" onclick="event.preventDefault(); this.open = !this.open;">
+                    <summary class="auth-remember-info-icon" aria-label="What does Remember this browser do?">
+                        <i class="fas fa-info-circle"></i>
+                    </summary>
+                    <div class="auth-remember-info-body">
+                        A long-lived cookie is stored in this browser so you don't have to re-enter the auth code every visit.
+                        The cookie is single-use and rotated on every sign-in — a stolen copy is invalidated the moment the real
+                        owner next logs in. You can see and revoke remembered browsers in Settings → Advanced Settings → GUI Security.
+                        <br><br>
+                        <strong>Browser cookie-retention note:</strong> If your browser is configured to clear cookies on close,
+                        the duration set here is ignored by the browser — every restart looks like a fresh device. This affects
+                        Tor Browser (always), and any regular browser with settings such as Firefox's "Delete cookies and site
+                        data when Firefox is closed", "Never remember history", or Private Browsing / Incognito windows. In those
+                        cases you'll need to enter the auth code on each restart, and orphaned entries can be cleaned up with
+                        "Sign out everywhere" in Settings.
+                    </div>
+                </details>
+            </label>
             <button type="submit" class="auth-button">
                 <i class="fas fa-unlock"></i> Access Wallet
             </button>

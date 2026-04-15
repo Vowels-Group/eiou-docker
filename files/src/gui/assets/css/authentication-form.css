@@ -89,6 +89,66 @@ body {
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
+.auth-remember-me {
+    /* Auth card body is white — label needs to match the input/body text color,
+       not the dark banner color. Centered horizontally within the form column so
+       it sits visually between the auth-code input and the Access Wallet button. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #212529;
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+    align-self: center;
+}
+.auth-remember-me input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: #0d6efd;
+}
+
+/* Info icon + expandable explanation beside the Remember-me label. Uses
+   native <details>/<summary> so it works without JS — relevant for Tor
+   Browser users running the auth page with scripts disabled. */
+.auth-remember-info {
+    display: inline-block;
+    position: relative;
+}
+.auth-remember-info > summary {
+    list-style: none;
+    cursor: pointer;
+    color: #6c757d;
+    font-size: 0.95rem;
+    line-height: 1;
+}
+.auth-remember-info > summary::-webkit-details-marker { display: none; }
+.auth-remember-info > summary:hover { color: #0d6efd; }
+.auth-remember-info[open] > summary { color: #0d6efd; }
+.auth-remember-info-body {
+    /* Anchor the popover's bottom-right to the icon so it opens up-and-left.
+       On mobile the bottom-right placement stops the panel spilling off the
+       right edge of the viewport, and it's always above the fold of whatever
+       the icon sits on. */
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    right: 0;
+    width: min(22rem, calc(100vw - 2rem));
+    padding: 0.75rem 0.9rem;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+    color: #212529;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    text-align: left;
+    white-space: normal;
+    z-index: 10;
+}
+
 .auth-button {
     padding: 1rem;
     background: #0d6efd;

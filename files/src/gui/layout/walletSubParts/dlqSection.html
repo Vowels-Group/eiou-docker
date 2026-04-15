@@ -135,10 +135,11 @@
                 $dlqId     = (int)$item['id'];
 
                 $typeIcons = [
-                    'transaction' => ['icon' => 'fa-exchange-alt',   'label' => 'Transaction', 'class' => 'tx-type-direct'],
-                    'p2p'         => ['icon' => 'fa-network-wired',  'label' => 'P2P',         'class' => 'tx-type-p2p'],
-                    'rp2p'        => ['icon' => 'fa-random',         'label' => 'Relay P2P',   'class' => 'tx-type-p2p'],
-                    'contact'     => ['icon' => 'fa-user-plus',      'label' => 'Contact',     'class' => 'tx-type-contact'],
+                    'transaction'      => ['icon' => 'fa-exchange-alt',       'label' => 'Transaction',      'class' => 'tx-type-direct'],
+                    'p2p'              => ['icon' => 'fa-network-wired',      'label' => 'P2P',              'class' => 'tx-type-p2p'],
+                    'rp2p'             => ['icon' => 'fa-random',             'label' => 'Relay P2P',        'class' => 'tx-type-p2p'],
+                    'contact'          => ['icon' => 'fa-user-plus',          'label' => 'Contact',          'class' => 'tx-type-contact'],
+                    'payment_request'  => ['icon' => 'fa-hand-holding-usd',   'label' => 'Payment Request',  'class' => 'tx-type-direct'],
                 ];
                 $typeInfo = $typeIcons[$msgType] ?? ['icon' => 'fa-envelope', 'label' => ucfirst($msgType), 'class' => ''];
 
@@ -151,7 +152,7 @@
                 $statusIcon = $statusIcons[$status] ?? 'fa-circle';
 
                 $canAct      = in_array($status, ['pending', 'retrying'], true);
-                $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact'], true);
+                $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact', 'payment_request'], true);
 
                 $dateDisplay = '';
                 if ($createdAt) {

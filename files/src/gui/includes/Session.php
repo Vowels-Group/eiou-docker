@@ -138,6 +138,69 @@ class Session
     }
 
     /**
+     * Mark the current session as authenticated without requiring an authcode
+     * POST — used by the remember-me flow when a valid EIOU_REMEMBER cookie
+     * is presented. Still regenerates the session id to prevent fixation.
+     */
+    public function markAuthenticatedFromRememberToken(): void
+    {
+        $_SESSION[SessionKeys::AUTHENTICATED] = true;
+        $_SESSION[SessionKeys::AUTH_TIME] = time();
+        $_SESSION[SessionKeys::LAST_ACTIVITY] = time();
+        session_regenerate_id(true);
+    }
+
+    /**
+     * Issue the remember-me cookie (carries the raw token). HttpOnly +
+     * SameSite=Strict + Secure (when HTTPS is available). Written after
+     * successful mint or rotate.
+     */
+    public function setRememberCookie(string $rawToken, int $expiresAtUnix): void
+    {
+        setcookie(
+            \Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME,
+            $rawToken,
+            [
+                'expires'  => $expiresAtUnix,
+                'path'     => '/',
+                'domain'   => '',
+                'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]
+        );
+    }
+
+    /**
+     * Clear the remember-me cookie on the client. Called on logout and
+     * when a presented token fails validation (revoked / expired).
+     */
+    public function clearRememberCookie(): void
+    {
+        setcookie(
+            \Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME,
+            '',
+            [
+                'expires'  => time() - 42000,
+                'path'     => '/',
+                'domain'   => '',
+                'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ]
+        );
+    }
+
+    /**
+     * Return the raw remember-me token from the request cookies, or null.
+     */
+    public function getRememberCookie(): ?string
+    {
+        $raw = $_COOKIE[\Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME] ?? null;
+        return (is_string($raw) && $raw !== '') ? $raw : null;
+    }
+
+    /**
      * Logout user
      *
      * @return void

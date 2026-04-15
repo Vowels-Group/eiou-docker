@@ -1180,7 +1180,8 @@ Get system health status.
         "analytics": {
             "enabled": false,
             "consent_pending": true,
-            "last_submitted": null
+            "last_submitted": null,
+            "opt_in_at": null
         },
         "timestamp": "2026-03-31T12:00:00+00:00"
     },
@@ -1201,6 +1202,7 @@ Get system health status.
 - `analytics.enabled`: Whether anonymous usage analytics are enabled
 - `analytics.consent_pending`: Whether the user has not yet been asked for analytics consent
 - `analytics.last_submitted`: ISO 8601 timestamp of last analytics submission (null if never submitted)
+- `analytics.opt_in_at`: ISO 8601 timestamp of the most recent off→on transition of `analytics_enabled` (null if analytics have never been enabled). Legacy nodes whose opt-in predates this field are backfilled to "now" on the first cron run after upgrade. Bounds the heartbeat rollup window so no data from before consent is ever reported
 
 ---
 
@@ -1262,7 +1264,7 @@ Get system settings.
         "settings": {
             "name": "Alice",
             "default_currency": "USD",
-            "minimum_fee_amount": 0.01,
+            "minimum_fee_amount": 0.00000001,
             "default_fee_percent": 0.01,
             "maximum_fee_percent": 5.0,
             "default_credit_limit": 100.00,

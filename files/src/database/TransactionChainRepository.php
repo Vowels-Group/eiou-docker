@@ -71,12 +71,14 @@ class TransactionChainRepository extends AbstractRepository
             'gap_context' => []
         ];
 
-        // Get all active transactions between the two parties (excluding cancelled/rejected).
-        // When currency is specified, only check that currency's chain.
+        // Get ALL transactions between the two parties (including cancelled/rejected).
+        // Cancelled transactions are part of the chain — previous_txid can point to them
+        // (see commit 04239bc6: "Preserve transaction chain integrity via inclusion").
+        // Excluding them creates false-positive gaps when a cancelled transaction is the
+        // link between two active transactions.
         $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                  AND status NOT IN ('cancelled', 'rejected')";
+                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
 
         $params = [
             ':user_hash' => $userPubkeyHash,

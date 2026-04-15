@@ -372,6 +372,18 @@ class ContactService implements ContactServiceInterface
     }
 
     /**
+     * Fetch accepted, user-pending, and blocked contacts in one DB round-trip,
+     * partitioned by status. Prefer this over three separate get*Contacts
+     * calls when you need multiple buckets on the same render.
+     *
+     * @return array{accepted: array, user_pending: array, blocked: array}
+     */
+    public function getContactsGroupedByStatus(): array
+    {
+        return $this->managementService->getContactsGroupedByStatus();
+    }
+
+    /**
      * Get all pending contact requests.
      *
      * @return array List of pending contact requests

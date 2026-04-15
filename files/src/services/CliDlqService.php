@@ -25,6 +25,7 @@ class CliDlqService
     private TransportUtilityService $transportUtility;
     private TransactionRepository $transactionRepository;
     private ?DeadLetterQueueRepository $dlqRepository = null;
+    private ?MessageDeliveryService $messageDeliveryService = null;
 
     public function __construct(
         TransportUtilityService $transportUtility,
@@ -40,6 +41,15 @@ class CliDlqService
     public function setDeadLetterQueueRepository(DeadLetterQueueRepository $dlqRepository): void
     {
         $this->dlqRepository = $dlqRepository;
+    }
+
+    /**
+     * Set the MessageDeliveryService so CLI DLQ retries go through the same
+     * refresh-payload + persist-signing-data path as the GUI.
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void
+    {
+        $this->messageDeliveryService = $service;
     }
 
     /**
@@ -179,41 +189,63 @@ class CliDlqService
             if ($txid !== null) {
                 $newExpiresAt = date('Y-m-d H:i:s', time() + Constants::DIRECT_TX_DELIVERY_EXPIRATION_SECONDS);
                 $this->transactionRepository->setExpiresAt($txid, $newExpiresAt);
-                $tx = $this->transactionRepository->getByTxid($txid);
-                if ($tx && $tx['status'] === Constants::STATUS_CANCELLED) {
+                // getByTxid returns a list of rows — unwrap the first
+                $txRows = $this->transactionRepository->getByTxid($txid);
+                $tx = ($txRows && isset($txRows[0])) ? $txRows[0] : null;
+                if ($tx && ($tx['status'] ?? null) === Constants::STATUS_CANCELLED) {
                     $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENDING, true);
                 }
             }
         }
 
-        $this->dlqRepository->markRetrying($id);
-
+        // Delegate to MessageDeliveryService::retryFromDlq so the CLI path shares
+        // the same refresh-payload + persist-signing-data machinery as the GUI.
+        // The CLI's only special behaviour is structured error/success output.
         $successStatuses = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed', 'warning', 'updated', 'already_relayed'];
+        $transportUtility = $this->transportUtility;
         $recipient = $item['recipient_address'];
-        $payload   = $item['payload'];
 
-        try {
-            $sendResult = $this->transportUtility->send($recipient, $payload, true);
-            $response   = is_array($sendResult) ? ($sendResult['response'] ?? '') : $sendResult;
-            $decoded    = json_decode($response, true);
-            $status     = $decoded['status'] ?? null;
+        $result = $this->messageDeliveryService->retryFromDlq(
+            $id,
+            function (array $payload, string $recipientAddr) use ($transportUtility, $successStatuses): array {
+                try {
+                    $sendResult = $transportUtility->send($recipientAddr, $payload, true);
+                    $response   = is_array($sendResult) ? ($sendResult['response'] ?? '') : $sendResult;
+                    $decoded    = json_decode($response, true);
+                    $status     = $decoded['status'] ?? null;
 
-            if ($status && in_array($status, $successStatuses, true)) {
-                $this->dlqRepository->markResolved($id);
-                $output->success("DLQ item #{$id} successfully re-sent", [
-                    'id'             => $id,
-                    'message_type'   => $item['message_type'],
-                    'recipient'      => $recipient,
-                    'response_status' => $status,
-                ], "Message delivered to {$recipient}");
-            } else {
-                $this->dlqRepository->returnToPending($id);
-                $errDetail = $status ? "Recipient returned: {$status}" : 'No response from recipient';
-                $output->error("Retry failed — item returned to pending. {$errDetail}", ErrorCodes::GENERAL_ERROR);
+                    if ($status && in_array($status, $successStatuses, true)) {
+                        $return = ['success' => true, 'response_status' => $status];
+                        if (is_array($sendResult)) {
+                            $signingData = array_filter([
+                                'signature' => $sendResult['signature'] ?? null,
+                                'nonce' => $sendResult['nonce'] ?? null,
+                                'signed_message' => $sendResult['signed_message'] ?? null,
+                            ], static fn ($v) => $v !== null);
+                            if (!empty($signingData)) {
+                                $return['signing_data'] = $signingData;
+                            }
+                        }
+                        return $return;
+                    }
+
+                    $errDetail = $status ? "Recipient returned: {$status}" : 'No response from recipient';
+                    return ['success' => false, 'error' => $errDetail];
+                } catch (\Throwable $e) {
+                    return ['success' => false, 'error' => $e->getMessage()];
+                }
             }
-        } catch (\Throwable $e) {
-            $this->dlqRepository->returnToPending($id);
-            $output->error('Retry failed: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
+        );
+
+        if ($result['success'] ?? false) {
+            $output->success("DLQ item #{$id} successfully re-sent", [
+                'id'             => $id,
+                'message_type'   => $item['message_type'],
+                'recipient'      => $recipient,
+            ], "Message delivered to {$recipient}");
+        } else {
+            $errDetail = $result['error'] ?? 'Unknown error';
+            $output->error("Retry failed — item returned to pending. {$errDetail}", ErrorCodes::GENERAL_ERROR);
         }
     }
 

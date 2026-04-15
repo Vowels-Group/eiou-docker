@@ -619,6 +619,7 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRepositoryFactory()->get(TransactionRepository::class)
             );
             $service->setDeadLetterQueueRepository($this->getRepositoryFactory()->get(DeadLetterQueueRepository::class));
+            $service->setMessageDeliveryService($this->getMessageDeliveryService());
             $this->services['CliDlqService'] = $service;
         }
         return $this->services['CliDlqService'];
@@ -666,6 +667,19 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['RateLimiterService'];
+    }
+
+    /**
+     * Get RememberTokenService — issues, rotates, revokes GUI "Remember me"
+     * login tokens backed by the `remember_tokens` table.
+     */
+    public function getRememberTokenService(): \Eiou\Services\RememberTokenService {
+        if (!isset($this->services['RememberTokenService'])) {
+            $this->services['RememberTokenService'] = new \Eiou\Services\RememberTokenService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\RememberTokenRepository::class)
+            );
+        }
+        return $this->services['RememberTokenService'];
     }
 
     /**
@@ -1155,6 +1169,19 @@ class ServiceContainer implements ContainerInterface {
         // PaymentRequestService -> MessageDeliveryService
         if (isset($this->services['PaymentRequestService']) && isset($this->services['MessageDeliveryService'])) {
             $this->services['PaymentRequestService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
+        }
+
+        // MessageDeliveryService -> TransactionRepository, TransactionChainRepository
+        // Needed for refreshing stale transaction DLQ payloads (previousTxid + time)
+        // before retry. Setter-injected late so MessageDeliveryService can be
+        // constructed before the repositories are resolved.
+        if (isset($this->services['MessageDeliveryService'])) {
+            $this->services['MessageDeliveryService']->setTransactionRepository(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class)
+            );
+            $this->services['MessageDeliveryService']->setTransactionChainRepository(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class)
+            );
         }
 
         // ChainDropService -> BackupService

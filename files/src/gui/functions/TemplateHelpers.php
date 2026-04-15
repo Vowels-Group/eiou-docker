@@ -75,16 +75,20 @@ function deliveryMaxRetries(): int {
     return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
 }
 
-function contactTransactionsLimit(): int {
-    return \Eiou\Core\Constants::CONTACT_TRANSACTIONS_LIMIT;
-}
-
 function p2pDefaultExpirationSeconds(): int {
     return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
 }
 
 function cleanupDlqRetentionDays(): int {
     return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
+}
+
+function rememberMeMaxDaysOptions(): array {
+    return \Eiou\Core\Constants::REMEMBER_ME_MAX_DAYS_OPTIONS;
+}
+
+function rememberMeMaxDevicesOptions(): array {
+    return \Eiou\Core\Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS;
 }
 
 function sessionTimeoutOptions(): array {

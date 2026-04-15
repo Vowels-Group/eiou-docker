@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.11-alpha';
+    const APP_VERSION = '0.1.12-alpha';
     const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 7;
+    const SCHEMA_VERSION = 8;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -78,7 +78,7 @@ class Constants {
     // PHP_INT_MAX / 4 ≈ 2.3 quintillion — leaves headroom for multi-hop fee accumulation.
     const TRANSACTION_MAX_AMOUNT = 2305843009213693951; // PHP_INT_MAX / 4, ~2.3 quintillion
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
-    const TRANSACTION_MINIMUM_FEE = 0.01;
+    const TRANSACTION_MINIMUM_FEE = 0.00000001;
 
     // PROTOCOL CONSTANT — DO NOT CHANGE. All currencies use 8 decimal places
     // internally. The fractional part is stored as a separate BIGINT multiplied
@@ -454,12 +454,21 @@ class Constants {
         'U',               // Unix timestamp
     ];
     const DISPLAY_CURRENCY_DECIMALS = 8;
-    const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
+    const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 10;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
     // Session
     const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
     const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
+
+    // Remember-me login tokens (long-lived browser cookies that auto-authenticate)
+    const REMEMBER_ME_COOKIE_NAME = 'EIOU_REMEMBER';     // Cookie carrying the raw rotation token
+    const REMEMBER_ME_TOKEN_BYTES = 32;                  // Raw entropy per token (→ 64 hex chars)
+    const REMEMBER_ME_DEFAULT_MAX_DAYS = 30;             // Default cap on a token's lifetime
+    const REMEMBER_ME_MAX_DAYS_OPTIONS = [1, 7, 14, 30, 60, 90]; // User-selectable caps in days
+    const REMEMBER_ME_DEFAULT_MAX_DEVICES = 3;           // Default cap on simultaneous remembered devices
+    const REMEMBER_ME_MAX_DEVICES_OPTIONS = [1, 3, 5, 10]; // User-selectable device caps
+    const CLEANUP_REMEMBER_TOKEN_RETENTION_DAYS = 1;     // Days to keep revoked/expired rows before pruning
 
     // Contact avatar style — controls how contact avatars are rendered in the contacts list
     const CONTACT_AVATAR_STYLE = 'gradient';
@@ -469,7 +478,7 @@ class Constants {
     //   neutral: black for both (default)
     //   western: green positive, red negative (Rest of the World)
     //   eastern: red positive, green negative (Asia)
-    const AMOUNT_COLOR_SCHEME = 'neutral';
+    const AMOUNT_COLOR_SCHEME = 'western';
     const AMOUNT_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
 
     // Status color scheme — controls accepted/completed/resolved (success)
@@ -478,12 +487,18 @@ class Constants {
     //   neutral: muted gray for both (default)
     //   western: green success, red failure
     //   eastern: red success, green failure
-    const STATUS_COLOR_SCHEME = 'neutral';
+    const STATUS_COLOR_SCHEME = 'western';
     const STATUS_COLOR_SCHEME_OPTIONS = ['neutral', 'western', 'eastern'];
 
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';
+
+    // System binaries — use absolute paths to avoid silent PATH drift
+    // across exec contexts (php-fpm, cron, CLI). The original analytics
+    // outage was caused by a bare `runuser` failing to resolve on Debian
+    // because /usr/sbin wasn't on the exec'd shell's PATH
+    const BIN_RUNUSER = '/usr/sbin/runuser';
 
     const LOG_FILE_APP = '/var/log/eiou/app.log';
     const LOG_LEVEL = 'INFO';
@@ -512,7 +527,7 @@ class Constants {
     // Display/Query limits
     const DISPLAY_RECENT_TRANSACTIONS_LIMIT = 100;  // Max recent transactions shown in Activity tab (default: 100)
     const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
-    const CONTACT_TRANSACTIONS_LIMIT = 5;          // Max transactions per contact in combined queries (default: 5)
+    const CONTACT_TRANSACTIONS_LIMIT = 10;         // Max transactions per contact in combined queries (default: 10)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
     const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
     const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
@@ -523,6 +538,7 @@ class Constants {
     const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
     const UPDATE_CHECK_ENABLED = true;            // Check Docker Hub for newer image versions daily - default ON; when OFF, no external API calls are made
     const ANALYTICS_ENABLED = false;              // Share anonymous usage statistics - default OFF (opt-in only); when ON, sends aggregate counts to analytics.eiou.org daily
+    const ANALYTICS_OPT_IN_AT = null;             // ISO 8601 timestamp written when the user flips analyticsEnabled from off to on. Bounds the heartbeat rollup window so catch-up submissions after an outage never pull pre-consent data. Null = never opted in (legacy or currently OFF)
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)

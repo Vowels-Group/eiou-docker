@@ -714,10 +714,21 @@ eiou dlq --json
 
 | Type | Description | Can Retry? | Reason |
 |------|-------------|:----------:|--------|
-| `transaction` | Direct eIOU payment to a contact | ✅ Yes | User-initiated; signed payload remains valid |
+| `transaction` | Direct eIOU payment to a contact | ✅ Yes | User-initiated; payload is refreshed against the current chain head before each retry (see below) |
 | `contact` | Contact request sent to a peer | ✅ Yes | User-initiated; contact request remains valid |
 | `p2p` | P2P routing request forwarded to a peer | ❌ No | Time-sensitive; expires in ≤300s — stale by the time retries are exhausted |
 | `rp2p` | Relay response/cancel forwarded through this node | ❌ No | Relay message on behalf of others; underlying P2P transaction has expired or been resolved elsewhere |
+
+**Transaction payload refresh on retry:** A transaction can sit in the DLQ for
+minutes to hours. In that window the local chain may have advanced (new
+outbound txs) or had a chain drop re-wire the link past a missing
+transaction. On every retry — whether from
+`eiou dlq retry`, the GUI's Retry button, or the automatic retry queue — the
+payload's `previousTxid` and `time` are refreshed from current DB state before
+the send. The transport layer re-signs the envelope on that send, and after a
+successful delivery the fresh signature and nonce are persisted back to the
+`transactions` table so later chain sync responses serve a signature that
+still verifies.
 
 **Why `p2p` and `rp2p` cannot be retried:**
 
@@ -950,7 +961,7 @@ eiou changesettings [setting] [value]
 | `defaultFee` | Default fee percentage | `0.01` |
 | `defaultCreditLimit` | Default credit limit for new contacts | `100` |
 | `defaultCurrency` | Default currency code | `USD` |
-| `minFee` | Minimum fee amount (0 = free relaying) | `0.01` |
+| `minFee` | Minimum fee amount (0 = free relaying) | `0.00000001` |
 | `maxFee` | Maximum fee percentage | `5.0` |
 | `maxP2pLevel` | Maximum P2P routing hops | `3` |
 | `p2pExpiration` | P2P routing request timeout (seconds); P2P transactions get an extra 120s delivery window after this expires | `300` |

@@ -500,6 +500,48 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Fetch accepted + user-pending + blocked contacts in a single DB round-trip,
+     * partitioning by status in PHP instead of running three separate queries.
+     * Replaces the N×SELECT pattern used on every contacts page render.
+     *
+     * Returns a map with three keys:
+     *   - 'accepted'       — status = 'accepted'
+     *   - 'user_pending'   — status = 'pending' AND name IS NOT NULL (user-initiated)
+     *   - 'blocked'        — status = 'blocked'
+     *
+     * Each bucket is sorted by name ASC, matching the behaviour of the
+     * per-status methods this replaces.
+     *
+     * @return array{accepted: array, user_pending: array, blocked: array}
+     */
+    public function getContactsGroupedByStatus(): array
+    {
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE c.status IN ('accepted', 'pending', 'blocked')
+                    ORDER BY c.name ASC";
+        $stmt = $this->execute($query);
+
+        $groups = ['accepted' => [], 'user_pending' => [], 'blocked' => []];
+        if (!$stmt) {
+            return $groups;
+        }
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $status = $row['status'] ?? '';
+            if ($status === 'accepted') {
+                $groups['accepted'][] = $row;
+            } elseif ($status === 'pending' && !empty($row['name'])) {
+                $groups['user_pending'][] = $row;
+            } elseif ($status === 'blocked') {
+                $groups['blocked'][] = $row;
+            }
+        }
+        return $groups;
+    }
+
+    /**
      * Get all pending contact requests (non-user initiated) and display information
      */
     public function getPendingContactRequestsInfo(){

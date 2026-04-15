@@ -377,7 +377,7 @@ eIOU Docker implements security at multiple layers. This section provides a brie
 | Component | Algorithm | Purpose |
 |-----------|-----------|---------|
 | Wallet seed | BIP39 (24 words) | Deterministic key derivation — all keys, Tor identity, and master encryption key derived from seed |
-| Signing keys | secp256k1 (ECDSA) | Message signing and identity verification |
+| Signing keys | secp256k1 (ECDSA) | Message signing and identity verification. The network standardises on this curve — a node without secp256k1 support in its linked OpenSSL refuses to start (no silent fallback; see [Curve Requirement](#curve-requirement)) |
 | Tor identity | Ed25519 | Hidden service authentication (derived from secp256k1 keys) |
 | Master encryption key | HKDF-SHA256 from BIP39 seed | Deterministic master key for at-rest encryption. Recoverable via seed phrase restore |
 | Database TDE | MariaDB `file_key_management` (HMAC-SHA256 derived key) | Transparent encryption of all database files at rest. Key in RAM only |
@@ -387,6 +387,24 @@ eIOU Docker implements security at multiple layers. This section provides a brie
 | Backup encryption | AES-256-GCM | Encrypted MariaDB database backups |
 | Payload E2E encryption | ECDH + AES-256-GCM | End-to-end encryption for **all** contact message payloads. Uses ephemeral key pairs for forward secrecy. Encrypt-then-sign design allows signature verification without decryption |
 | API authentication | HMAC-SHA256 | Request signing with 5-minute timestamp window |
+
+### Curve Requirement
+
+The eIOU network standardises on the **secp256k1** elliptic curve for all wallet signing, signature verification, and ECDH payload encryption. There is no curve negotiation protocol — peers assume every participant has secp256k1 available.
+
+A node whose linked OpenSSL build lacks secp256k1:
+
+- cannot parse any peer's public key (`openssl_pkey_get_public` returns `false` for an unknown curve's PEM)
+- cannot verify signatures made with secp256k1 keys
+- cannot perform ECDH against peers who sent an ephemeral key on secp256k1
+
+A previous revision of this codebase silently fell back to `prime256v1` (NIST P-256) when secp256k1 was missing. The resulting node booted cleanly but was effectively isolated — it could only ever form a closed network with other prime256v1-only nodes, and since every mainstream Linux distro ships OpenSSL with secp256k1 enabled, that isolated network was empty in practice. **The fallback is gone.**
+
+`BIP39::getPreferredCurve()` now returns `secp256k1` unconditionally or throws a `RuntimeException`. The check is also invoked at application boot (`Application::__construct`) so a misconfigured environment fails fast with an actionable error instead of running half-broken.
+
+`PayloadEncryption::encrypt()` additionally rejects recipient keys on any curve other than secp256k1, so a malformed or malicious peer can't coerce ephemeral key generation onto an unsupported curve.
+
+Operators hitting the boot error should rebuild PHP against an OpenSSL that includes secp256k1 (the Debian/Ubuntu/Alpine defaults and the base image this node ships on all do).
 
 ### End-to-End Encryption
 

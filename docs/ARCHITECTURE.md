@@ -1162,6 +1162,22 @@ Message send attempt
 (`claimForRetry()`) to prevent parallel workers from processing the same DLQ entry.
 Claimed entries are re-sent through the normal delivery pipeline.
 
+**Transaction DLQ payload refresh:** Messages can sit in the DLQ for hours
+or days. For `message_type='transaction'` entries, the chain may have
+advanced (new outbound txs) or had a chain drop re-wire the link past a
+missing transaction since the original send — replaying the stored payload
+verbatim would ship a stale `previousTxid`.
+`MessageDeliveryService::retryFromDlq` therefore runs a refresh step before
+the send callback: it looks up the current chain head via `getPreviousTxid`,
+rewrites the payload's `previousTxid` and `time` to current values, updates
+the `transactions` table and the DLQ row's stored payload, and lets the
+transport layer re-sign on the send. After a successful retry, the freshly
+captured signature and nonce are persisted back to the `transactions` table
+so later sync responses serve a signature that still verifies against the
+row's current fields. Both the GUI paths (`DlqController::handleRetry`,
+`handleRetryAll`) and the CLI path (`CliDlqService::retryDlqItem`) go through
+`retryFromDlq` so neither can drift from the other.
+
 ### Distributed Locking
 
 The `DatabaseLockingService` uses MariaDB advisory locks (`GET_LOCK`/`RELEASE_LOCK`)
@@ -2172,6 +2188,18 @@ Transactions form a chain linked by `prev_txid`:
 Both parties maintain their own view of the chain. The `ContactStatusProcessor`
 validates chain consistency and triggers sync if discrepancies are found.
 
+**Only completed/accepted/pending transactions participate in the chain.**
+`TransactionRepository::getPreviousTxid` and `getPreviousTxidsByCurrency`
+explicitly filter out `cancelled` and `rejected` rows when picking the
+`previous_txid` for a new outbound transaction. This mirrors the sync layer,
+which never ships cancelled/rejected rows to the peer — so both sides agree
+on "last transaction" and a new tx's signed `previous_txid` always points at
+something the peer has. Cancelled rows remain as purely local history entries
+with no successors pointing at them; they're visible in the local tx list but
+invisible to the chain walk, to sync, and to new-tx linking. This closes a
+class of permanent chain gap where a cancel-while-pending on the sender would
+leave the peer unable to verify any subsequent transaction.
+
 When a chain gap is detected during sync, the `SyncService` attempts backup
 recovery before falling through to a chain drop:
 1. **Local self-repair** — checks local database backups for missing transactions
@@ -2728,7 +2756,7 @@ API (8080). It uses an MVC-like structure with controllers, helpers, and HTML te
 ├── functions/
 │   └── Functions             # Shared template functions
 ├── includes/
-│   └── Session               # Secure session management (auth code-based)
+│   └── Session               # Secure session management (auth code-based + remember-me rotation tokens)
 ├── layout/
 │   ├── authenticationForm    # Login page (auth code entry)
 │   ├── wallet.html           # Main wallet layout (authenticated)
@@ -2758,6 +2786,40 @@ class implements secure session handling:
 - Session cookies: `httponly`, `samesite=Strict`, `secure` (when HTTPS)
 - Auth code comparison with timing-safe equality check
 - Session regeneration on login to prevent fixation attacks
+
+### Remember-Me Login (Rotation Tokens)
+
+The GUI login form offers a "Remember this browser for N days" checkbox. When ticked,
+on successful auth the node mints a random 32-byte token, stores only its SHA-256 hash
+in the `remember_tokens` table, and writes the raw token into an `EIOU_REMEMBER`
+cookie (HttpOnly, SameSite=Strict, Secure when HTTPS).
+
+On every subsequent page load where no session is authenticated but the cookie is
+present, `gui/index.html` asks `RememberTokenService::rotateToken(raw, ua)` to
+consume the cookie. Rotation is **single-use**: the matching row is revoked and a
+fresh token is issued in its place, inheriting the old row's remaining lifetime —
+this catches stolen-cookie replay because the thief's copy is invalidated the moment
+the real owner next logs in.
+
+Two user-editable caps govern the feature:
+
+| Setting | Default | Options |
+|---|---|---|
+| `rememberMeMaxDays` | 30 | 1, 7, 14, 30, 60, 90 |
+| `rememberMeMaxDevices` | 3 | 1, 3, 5, 10 |
+
+When the device cap is exceeded, the row with the oldest `last_used_at` is revoked
+(LRU eviction) before the new one is inserted, so the cap is never breached.
+
+The Active Sessions panel in Settings lists remembered browsers by a truncated
+User-Agent family (`Firefox 128 · Linux` rather than the raw UA) — no IPs or
+fingerprinting data are persisted. The user can sign out any remembered browser
+individually, or all at once.
+
+Logout revokes the current token and clears the cookie. Restoring a wallet from
+seed revokes every remembered session for that pubkey so the restored wallet
+starts with a clean device list. `CleanupService` prunes expired and revoked rows
+on its regular sweep.
 
 ### Tor Compatibility
 
@@ -2908,7 +2970,7 @@ TorKeyDerivation          +---------------------+
 
 | Component | Path | Purpose |
 |-----------|------|---------|
-| `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation |
+| `BIP39` | `/src/security/BIP39.php` | Mnemonic generation, seed derivation, secp256k1 keypair creation. `getPreferredCurve()` hard-requires secp256k1; a node whose linked OpenSSL lacks it refuses to start (see `Application::__construct`). No prime256v1 fallback — such a node cannot parse any peer's public key and is effectively isolated |
 | `KeyEncryption` | `/src/security/KeyEncryption.php` | AES-256-GCM encryption/decryption for private keys and auth codes |
 | `MariaDbEncryption` | `/src/security/MariaDbEncryption.php` | Transparent Data Encryption (TDE) — derives TDE key from master key via HMAC-SHA256, writes key file to `/dev/shm`, enables `file_key_management` plugin, encrypts all InnoDB/Aria tables at rest |
 | `PayloadEncryption` | `/src/security/PayloadEncryption.php` | ECDH + AES-256-GCM end-to-end encryption for all contact message payloads |

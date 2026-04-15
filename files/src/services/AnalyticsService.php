@@ -54,6 +54,141 @@ class AnalyticsService
     private const CACHE_FILE = '/etc/eiou/config/analytics-cache.json';
 
     /**
+     * Maximum rollup window the worker accepts (keeps parity with
+     * worker.js clamp).
+     */
+    public const MAX_PERIOD_DAYS = 365;
+
+    /**
+     * Compute the rollup window (in days) for the next heartbeat.
+     *
+     * The floor is max(last_submitted, opt_in_at). Returns the integer
+     * number of whole days since that floor, clamped to [1, MAX_PERIOD_DAYS].
+     * When both inputs are null (legacy users who opted in before we
+     * tracked opt-in date, and who've never submitted), returns 1 — the
+     * pre-existing behavior.
+     *
+     * This is pure and unit-testable; callers inject $now so tests can
+     * pin the clock.
+     *
+     * @param string|null $lastSubmitted ISO 8601 or null
+     * @param string|null $optInAt ISO 8601 or null
+     * @param int|null $now Unix timestamp (defaults to time())
+     * @return int 1..MAX_PERIOD_DAYS
+     */
+    /**
+     * Apply the analyticsOptInAt stamp for an off→on transition of
+     * analyticsEnabled on a config array in memory.
+     *
+     * Shared helper for the four sites that handle toggling analytics
+     * (GUI settings form, consent modal, CLI, API). Returns the
+     * (possibly modified) config array — does not touch the filesystem.
+     * The caller persists the resulting array.
+     *
+     * Semantics:
+     *   - Off → on transition: stamps now, overwriting any existing
+     *     value (re-enabling after opting out is a fresh consent)
+     *   - No transition (still off, still on, or on → off): unchanged
+     *   - Strictly boolean comparison: the caller must pass the
+     *     prior/current enabled state as real booleans
+     *
+     * @param array $config Config dictionary
+     * @param bool $wasEnabled The value of analyticsEnabled before
+     *   this change (read from the file prior to merging)
+     * @param bool $isNowEnabled The value of analyticsEnabled after
+     *   this change (what will end up on disk)
+     * @param int|null $now Unix timestamp (defaults to time()) —
+     *   tests pin the clock via this parameter
+     * @return array The config, with analyticsOptInAt added on
+     *   off→on, unchanged otherwise
+     */
+    public static function applyOptInAtTransition(
+        array $config,
+        bool $wasEnabled,
+        bool $isNowEnabled,
+        ?int $now = null
+    ): array {
+        if (!$wasEnabled && $isNowEnabled) {
+            $config['analyticsOptInAt'] = gmdate('c', $now ?? time());
+        }
+        return $config;
+    }
+
+    /**
+     * Backfill analyticsOptInAt into a user-config file if it's missing.
+     *
+     * For nodes that opted in before analyticsOptInAt tracking existed
+     * (pre-this-feature userconfig.json files where analyticsEnabled is
+     * true but analyticsOptInAt has never been written). Stamps "now"
+     * rather than a fabricated past date — we don't claim consent for
+     * any period we can't actually verify, so any outage window prior
+     * to this backfill is honestly reported as lost.
+     *
+     * Idempotent: no-op if the key is already populated, or if
+     * analytics is not actually enabled, or if the file can't be
+     * parsed. Write uses LOCK_EX to match the other writers.
+     *
+     * @param string $configFile Path to the JSON config file to update
+     * @param int|null $now Unix timestamp (defaults to time()) — pass
+     *   a fixed value from tests to pin the clock
+     * @return string|null New timestamp if written, null if no change
+     */
+    public static function backfillOptInAtIfMissing(
+        string $configFile,
+        ?int $now = null
+    ): ?string {
+        if (!file_exists($configFile)) {
+            return null;
+        }
+        $raw = @file_get_contents($configFile);
+        if ($raw === false) {
+            return null;
+        }
+        $config = json_decode($raw, true);
+        if (!is_array($config)) {
+            return null;
+        }
+        // Already stamped — preserve the original opt-in moment
+        if (!empty($config['analyticsOptInAt'])) {
+            return null;
+        }
+        // Don't stamp a consent timestamp on a node that hasn't opted in
+        if (empty($config['analyticsEnabled'])) {
+            return null;
+        }
+        $now = $now ?? time();
+        $timestamp = gmdate('c', $now);
+        $config['analyticsOptInAt'] = $timestamp;
+        $written = @file_put_contents(
+            $configFile,
+            json_encode($config, JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+        return $written !== false ? $timestamp : null;
+    }
+
+    public static function computePeriodDays(
+        ?string $lastSubmitted,
+        ?string $optInAt,
+        ?int $now = null
+    ): int {
+        $now = $now ?? time();
+        $lastTs = ($lastSubmitted !== null && $lastSubmitted !== '')
+            ? (int) strtotime($lastSubmitted) : 0;
+        $optInTs = ($optInAt !== null && $optInAt !== '')
+            ? (int) strtotime($optInAt) : 0;
+        // strtotime returns false on bad input which casts to 0 — treat as absent
+        $floor = max($lastTs, $optInTs);
+
+        if ($floor <= 0 || $floor >= $now) {
+            return 1;
+        }
+
+        $gapDays = (int) floor(($now - $floor) / 86400);
+        return max(1, min(self::MAX_PERIOD_DAYS, $gapDays));
+    }
+
+    /**
      * Generate the anonymous analytics ID for this node.
      *
      * Uses HMAC-SHA256 with an analytics-specific salt so the ID:
