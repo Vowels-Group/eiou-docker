@@ -1434,4 +1434,50 @@ class UserContextTest extends TestCase
         $this->assertArrayHasKey('sessionTimeoutMinutes', $defaults);
         $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $defaults['sessionTimeoutMinutes']);
     }
+
+    // =========================================================================
+    // analyticsOptInAt — consent-boundary timestamp consumed by the
+    // analytics cron to bound the heartbeat rollup window
+    // =========================================================================
+
+    public function testGetAnalyticsOptInAtDefaultsToNull(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertNull($instance->getAnalyticsOptInAt());
+    }
+
+    public function testGetAnalyticsOptInAtReturnsStoredTimestamp(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['analyticsOptInAt' => '2026-04-15T12:00:00+00:00']);
+        $this->assertSame('2026-04-15T12:00:00+00:00', $instance->getAnalyticsOptInAt());
+    }
+
+    public function testGetAnalyticsOptInAtTreatsEmptyStringAsNull(): void
+    {
+        // An empty string would round-trip through strtotime() as false
+        // and silently break the floor calculation — the getter
+        // normalizes it to null so callers get a clean contract.
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['analyticsOptInAt' => '']);
+        $this->assertNull($instance->getAnalyticsOptInAt());
+    }
+
+    public function testGetAnalyticsOptInAtTreatsNonStringAsNull(): void
+    {
+        // Defensive: if something accidentally wrote an int or bool
+        // into the config, the getter shouldn't propagate that to the
+        // cron (which expects a string or null).
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['analyticsOptInAt' => 1776427200]);
+        $this->assertNull($instance->getAnalyticsOptInAt());
+    }
+
+    public function testConfigurableDefaultsIncludesAnalyticsOptInAt(): void
+    {
+        $defaults = UserContext::getConfigurableDefaults();
+        $this->assertArrayHasKey('analyticsOptInAt', $defaults);
+        $this->assertNull($defaults['analyticsOptInAt']);
+    }
 }

@@ -87,7 +87,20 @@ try {
         ]);
         echo "[analytics] PDO connection established\n";
 
-        $payload = AnalyticsService::buildHeartbeatPayload($pdo, 1);
+        // Widen the heartbeat rollup window to cover any gap since the
+        // node last submitted successfully (or since it opted in, if no
+        // submission ever succeeded — the runuser-on-debian 2026-04-06..
+        // 04-12 scenario). See AnalyticsService::computePeriodDays().
+        $status = AnalyticsService::getStatus();
+        $periodDays = AnalyticsService::computePeriodDays(
+            $status['last_submitted'] ?? null,
+            $user->getAnalyticsOptInAt()
+        );
+        echo "[analytics] periodDays={$periodDays} "
+            . "(last_submitted=" . ($status['last_submitted'] ?? 'never')
+            . ", opt_in_at=" . ($user->getAnalyticsOptInAt() ?? 'unknown') . ")\n";
+
+        $payload = AnalyticsService::buildHeartbeatPayload($pdo, $periodDays);
         echo "[analytics] Built heartbeat payload\n";
     }
 

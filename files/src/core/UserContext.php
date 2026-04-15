@@ -620,6 +620,19 @@ class UserContext {
     }
 
     /**
+     * ISO 8601 timestamp of the most recent off->on transition of
+     * analyticsEnabled. Used by analytics-cron.php as the floor for the
+     * heartbeat rollup window so a catch-up submission after an outage
+     * never reports data from before the user consented.
+     *
+     * @return string|null
+     */
+    public function getAnalyticsOptInAt(): ?string {
+        $value = $this->get('analyticsOptInAt') ?? Constants::ANALYTICS_OPT_IN_AT;
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
      * Get trusted proxy IPs (comma-separated)
      *
      * @return string
@@ -1132,6 +1145,7 @@ class UserContext {
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
             'updateCheckEnabled' => Constants::UPDATE_CHECK_ENABLED,
             'analyticsEnabled' => Constants::ANALYTICS_ENABLED,
+            'analyticsOptInAt' => Constants::ANALYTICS_OPT_IN_AT,
 
             // Feature toggles
             'hopBudgetRandomized' => Constants::HOP_BUDGET_RANDOMIZED,

@@ -54,6 +54,50 @@ class AnalyticsService
     private const CACHE_FILE = '/etc/eiou/config/analytics-cache.json';
 
     /**
+     * Maximum rollup window the worker accepts (keeps parity with
+     * worker.js clamp).
+     */
+    public const MAX_PERIOD_DAYS = 365;
+
+    /**
+     * Compute the rollup window (in days) for the next heartbeat.
+     *
+     * The floor is max(last_submitted, opt_in_at). Returns the integer
+     * number of whole days since that floor, clamped to [1, MAX_PERIOD_DAYS].
+     * When both inputs are null (legacy users who opted in before we
+     * tracked opt-in date, and who've never submitted), returns 1 — the
+     * pre-existing behavior.
+     *
+     * This is pure and unit-testable; callers inject $now so tests can
+     * pin the clock.
+     *
+     * @param string|null $lastSubmitted ISO 8601 or null
+     * @param string|null $optInAt ISO 8601 or null
+     * @param int|null $now Unix timestamp (defaults to time())
+     * @return int 1..MAX_PERIOD_DAYS
+     */
+    public static function computePeriodDays(
+        ?string $lastSubmitted,
+        ?string $optInAt,
+        ?int $now = null
+    ): int {
+        $now = $now ?? time();
+        $lastTs = ($lastSubmitted !== null && $lastSubmitted !== '')
+            ? (int) strtotime($lastSubmitted) : 0;
+        $optInTs = ($optInAt !== null && $optInAt !== '')
+            ? (int) strtotime($optInAt) : 0;
+        // strtotime returns false on bad input which casts to 0 — treat as absent
+        $floor = max($lastTs, $optInTs);
+
+        if ($floor <= 0 || $floor >= $now) {
+            return 1;
+        }
+
+        $gapDays = (int) floor(($now - $floor) / 86400);
+        return max(1, min(self::MAX_PERIOD_DAYS, $gapDays));
+    }
+
+    /**
      * Generate the anonymous analytics ID for this node.
      *
      * Uses HMAC-SHA256 with an analytics-specific salt so the ID:
