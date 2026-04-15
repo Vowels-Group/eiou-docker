@@ -76,6 +76,59 @@ class AnalyticsService
      * @param int|null $now Unix timestamp (defaults to time())
      * @return int 1..MAX_PERIOD_DAYS
      */
+    /**
+     * Backfill analyticsOptInAt into a user-config file if it's missing.
+     *
+     * For nodes that opted in before analyticsOptInAt tracking existed
+     * (pre-this-feature userconfig.json files where analyticsEnabled is
+     * true but analyticsOptInAt has never been written). Stamps "now"
+     * rather than a fabricated past date — we don't claim consent for
+     * any period we can't actually verify, so any outage window prior
+     * to this backfill is honestly reported as lost.
+     *
+     * Idempotent: no-op if the key is already populated, or if
+     * analytics is not actually enabled, or if the file can't be
+     * parsed. Write uses LOCK_EX to match the other writers.
+     *
+     * @param string $configFile Path to the JSON config file to update
+     * @param int|null $now Unix timestamp (defaults to time()) — pass
+     *   a fixed value from tests to pin the clock
+     * @return string|null New timestamp if written, null if no change
+     */
+    public static function backfillOptInAtIfMissing(
+        string $configFile,
+        ?int $now = null
+    ): ?string {
+        if (!file_exists($configFile)) {
+            return null;
+        }
+        $raw = @file_get_contents($configFile);
+        if ($raw === false) {
+            return null;
+        }
+        $config = json_decode($raw, true);
+        if (!is_array($config)) {
+            return null;
+        }
+        // Already stamped — preserve the original opt-in moment
+        if (!empty($config['analyticsOptInAt'])) {
+            return null;
+        }
+        // Don't stamp a consent timestamp on a node that hasn't opted in
+        if (empty($config['analyticsEnabled'])) {
+            return null;
+        }
+        $now = $now ?? time();
+        $timestamp = gmdate('c', $now);
+        $config['analyticsOptInAt'] = $timestamp;
+        $written = @file_put_contents(
+            $configFile,
+            json_encode($config, JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+        return $written !== false ? $timestamp : null;
+    }
+
     public static function computePeriodDays(
         ?string $lastSubmitted,
         ?string $optInAt,

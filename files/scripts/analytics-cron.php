@@ -47,6 +47,18 @@ try {
     }
     echo "[analytics] Analytics enabled\n";
 
+    // Backfill analyticsOptInAt for nodes that opted in before this
+    // field existed. Stamps "now" — we don't fabricate a consent
+    // timestamp we can't verify, so any outage window prior to this
+    // first post-upgrade run is honestly reported as lost.
+    $backfilled = AnalyticsService::backfillOptInAtIfMissing(
+        '/etc/eiou/config/defaultconfig.json'
+    );
+    if ($backfilled !== null) {
+        $user->set('analyticsOptInAt', $backfilled);
+        echo "[analytics] Backfilled analyticsOptInAt={$backfilled}\n";
+    }
+
     // Random jitter (0–3600s) to spread submissions across a 1-hour window
     // and avoid thundering herd through Tor exit nodes.
     // Skip jitter for node_setup (triggered on first enable, user expects prompt send).
