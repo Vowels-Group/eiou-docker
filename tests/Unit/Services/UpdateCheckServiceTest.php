@@ -281,28 +281,76 @@ class UpdateCheckServiceTest extends TestCase
     // ==================== shouldShowWhatsNew / dismissWhatsNew tests ====================
 
     /**
-     * Test shouldShowWhatsNew returns false and seeds the file on fresh install
+     * Test shouldShowWhatsNew returns true on first run for a set-up node
+     * whose seen-file doesn't exist yet (upgraded from a pre-feature
+     * version, or freshly set up).
      */
-    public function testShouldShowWhatsNewReturnsFalseAndSeedsOnFreshInstall(): void
+    public function testShouldShowWhatsNewReturnsTrueWhenSeenFileMissingButNodeSetUp(): void
     {
         $seenFile = '/etc/eiou/config/whats-new-seen.json';
-        if (file_exists($seenFile)) {
-            $this->markTestSkipped('Seen file already exists (running in Docker with prior state)');
-        }
+        $userConfig = '/etc/eiou/config/userconfig.json';
         if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
             $this->markTestSkipped('Config directory not writable (not running in Docker)');
         }
+        if (!file_exists($userConfig)) {
+            $this->markTestSkipped('userconfig.json not present (node not set up in this test environment)');
+        }
 
-        // Fresh install — file doesn't exist
-        $this->assertFalse(UpdateCheckService::shouldShowWhatsNew());
-        // File should now be created (seeded)
-        $this->assertFileExists($seenFile);
-
-        $data = json_decode(file_get_contents($seenFile), true);
-        $this->assertSame(Constants::APP_VERSION, $data['dismissed_version']);
-
-        // Clean up
+        $hadSeen = file_exists($seenFile);
+        $backup = $hadSeen ? file_get_contents($seenFile) : null;
         @unlink($seenFile);
+
+        try {
+            $this->assertTrue(UpdateCheckService::shouldShowWhatsNew());
+            // Must not auto-seed — that would hide the banner immediately
+            $this->assertFileDoesNotExist($seenFile);
+        } finally {
+            if ($hadSeen && $backup !== null) {
+                file_put_contents($seenFile, $backup);
+            } else {
+                @unlink($seenFile);
+            }
+        }
+    }
+
+    /**
+     * Test shouldShowWhatsNew returns false for a pre-setup container
+     * (neither the seen-file nor userconfig.json exist).
+     */
+    public function testShouldShowWhatsNewReturnsFalseWhenPreSetup(): void
+    {
+        $seenFile = '/etc/eiou/config/whats-new-seen.json';
+        $userConfig = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        if (file_exists($userConfig) && !is_writable($userConfig)) {
+            $this->markTestSkipped('userconfig.json not writable');
+        }
+
+        $hadSeen = file_exists($seenFile);
+        $seenBackup = $hadSeen ? file_get_contents($seenFile) : null;
+        $hadUserConfig = file_exists($userConfig);
+        $userConfigBackup = $hadUserConfig ? file_get_contents($userConfig) : null;
+
+        @unlink($seenFile);
+        if ($hadUserConfig) {
+            @unlink($userConfig);
+        }
+
+        try {
+            $this->assertFalse(UpdateCheckService::shouldShowWhatsNew());
+            // Must not silently seed the seen-file either
+            $this->assertFileDoesNotExist($seenFile);
+        } finally {
+            @unlink($seenFile);
+            if ($hadSeen && $seenBackup !== null) {
+                file_put_contents($seenFile, $seenBackup);
+            }
+            if ($hadUserConfig && $userConfigBackup !== null) {
+                file_put_contents($userConfig, $userConfigBackup);
+            }
+        }
     }
 
     /**

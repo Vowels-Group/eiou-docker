@@ -38,6 +38,13 @@ class UpdateCheckService
     private const WHATS_NEW_SEEN_FILE = '/etc/eiou/config/whats-new-seen.json';
 
     /**
+     * Marker that the node has completed initial setup. Used to tell a
+     * brand-new/pre-setup container apart from a set-up node that just
+     * upgraded (the latter should see the banner).
+     */
+    private const USER_CONFIG_FILE = '/etc/eiou/config/userconfig.json';
+
+    /**
      * Cached release notes from GitHub
      */
     private const RELEASE_NOTES_CACHE_FILE = '/etc/eiou/config/release-notes-cache.json';
@@ -327,19 +334,20 @@ class UpdateCheckService
     /**
      * Check if the "What's New" notification should be shown.
      *
-     * On fresh installs the seen-file doesn't exist yet — seed it silently
-     * with the current version so the user doesn't get a "what's new" popup
-     * on their very first visit. After an upgrade the file will still hold
-     * the old version, triggering the notification.
+     * The seen-file didn't exist in versions prior to the one that
+     * introduced this feature, so its absence alone can't be treated as
+     * "fresh install". Gate on userconfig.json — if the node has completed
+     * setup, show the banner (this covers both first upgrade to a feature-
+     * bearing version, and freshly set-up nodes who also benefit from
+     * seeing what's in their version). Suppress only for pre-setup
+     * containers where userconfig.json doesn't yet exist.
      *
      * @return bool True if the current version has unseen release notes
      */
     public static function shouldShowWhatsNew(): bool
     {
         if (!file_exists(self::WHATS_NEW_SEEN_FILE)) {
-            // Fresh install — seed and suppress
-            self::dismissWhatsNew();
-            return false;
+            return file_exists(self::USER_CONFIG_FILE);
         }
 
         $raw = file_get_contents(self::WHATS_NEW_SEEN_FILE);
