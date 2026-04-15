@@ -10,6 +10,13 @@ The project is currently in **ALPHA** status.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **"What's New" banner never appeared after the upgrade that introduced it**: `UpdateCheckService::shouldShowWhatsNew()` treated a missing `/etc/eiou/config/whats-new-seen.json` as a fresh install and silently seeded the file with the current version, suppressing the banner. Because the file didn't exist in any pre-v0.1.12 version, every node upgrading *into* v0.1.12 hit this path on first page load and never saw the release-notes banner. Now gated on `/etc/eiou/config/userconfig.json`: if the node has completed setup (userconfig present) the banner shows whether or not the seen-file exists — covers both first-upgrade-to-feature-bearing-version and freshly set-up nodes. Only pre-setup containers (no userconfig yet) suppress. Tests updated to match
+
+---
+
 ## v0.1.12-alpha (2026-04-15)
 
 ### Added
