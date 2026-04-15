@@ -85,7 +85,7 @@ class CleanupService implements CleanupServiceInterface {
     private MessageDeliveryServiceInterface $messageDeliveryService;
 
     /**
-     * @var ChainDropServiceInterface|null Chain drop service for proposal expiration
+     * @var ChainDropServiceInterface|null Tx drop service for proposal expiration
      */
     private ?ChainDropServiceInterface $chainDropService = null;
 
@@ -252,7 +252,7 @@ class CleanupService implements CleanupServiceInterface {
             Logger::getInstance()->error("Error expiring stale transactions", ['error' => $e->getMessage()]);
         }
 
-        // Expire stale chain drop proposals (7-day timeout)
+        // Expire stale tx drop proposals (7-day timeout)
         try {
             if ($this->chainDropService !== null) {
                 $expiredCount = $this->chainDropService->expireStaleProposals();

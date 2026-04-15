@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit; // Ensure we don't continue to render HTML
     }
 
-    // AJAX-only chain drop actions (returns JSON, exits immediately)
+    // AJAX-only tx drop actions (returns JSON, exits immediately)
     if (in_array($action, ['proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop'])) {
         try {
             $contactController->routeAction();
@@ -486,7 +486,7 @@ $blockedContacts     = $transactionService->contactBalanceConversion($contactsBy
 
 // Count accepted contacts with a chain state that requires user attention, so
 // the Contacts tab can show a count badge (like Activity's DLQ badge). Includes
-// incoming chain drop proposals to accept/reject, rejected proposals still
+// incoming tx drop proposals to accept/reject, rejected proposals still
 // blocking the chain, and raw chain gaps that need resolution. Waiting
 // (outgoing proposal not yet answered) is not counted — nothing for the user
 // to do on their side while the peer deliberates.
@@ -584,7 +584,7 @@ $pendingCurrencyContacts = [];
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
 
-// Chain drop proposals - fetch both directions, index by contact hash
+// Tx drop proposals - fetch both directions, index by contact hash
 $chainDropProposalsByContact = [];
 try {
     $chainDropService = $serviceContainer->getChainDropService();
@@ -617,7 +617,7 @@ try {
     $chainDropProposalsByContact = [];
 }
 
-// Merge chain drop proposals into contact arrays by pubkey_hash
+// Merge tx drop proposals into contact arrays by pubkey_hash
 $contactArrays = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
 foreach ($contactArrays as &$contacts) {
     foreach ($contacts as &$contact) {
@@ -642,7 +642,7 @@ if ($tcRepo && $user->has('public')) {
     $myPubkey = $user->getPublicKey();
     foreach ($acceptedContacts as &$contact) {
         // Compute gap details when the chain is known-invalid OR when there is an
-        // active chain-drop proposal (covers the window between proposal creation and
+        // active tx-drop proposal (covers the window between proposal creation and
         // the first "Check Status" ping that would set valid_chain = 0 in the DB).
         $hasInvalidChain = (int)($contact['valid_chain'] ?? -1) === 0;
         $hasActiveProposal = !empty($contact['chain_drop_proposal'])

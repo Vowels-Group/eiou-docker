@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.12-alpha';
+    const APP_VERSION = '0.1.13-alpha';
     const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
@@ -529,9 +529,9 @@ class Constants {
     const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
     const CONTACT_TRANSACTIONS_LIMIT = 10;         // Max transactions per contact in combined queries (default: 10)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
-    const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
-    const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
-    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals - default OFF for safety
+    const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max tx drop proposals per contact query (default: 20)
+    const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose tx drops when mutual gaps detected
+    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming tx drop proposals - default OFF for safety
     const AUTO_CHAIN_DROP_ACCEPT_GUARD = true;     // Balance guard for auto-accept: compares stored vs calculated balances to block acceptance when missing transactions would erase debt owed to us. Disable to accept unconditionally.
     const AUTO_ACCEPT_RESTORED_CONTACT = true;     // Auto-accept contacts on wallet restore when transaction history proves prior relationship - default ON; when OFF, restored contacts stay pending for manual review
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
@@ -590,11 +590,11 @@ class Constants {
     }
 
     /**
-     * Check if automatic chain drop proposals are enabled
+     * Check if automatic tx drop proposals are enabled
      * Supports runtime override via EIOU_AUTO_CHAIN_DROP_PROPOSE env variable
      *
      * @deprecated Use UserContext::getAutoChainDropPropose() instead
-     * @return bool Whether automatic chain drop proposals are enabled
+     * @return bool Whether automatic tx drop proposals are enabled
      */
     public static function isAutoChainDropProposeEnabled(): bool {
         $envValue = getenv('EIOU_AUTO_CHAIN_DROP_PROPOSE');
@@ -605,11 +605,11 @@ class Constants {
     }
 
     /**
-     * Check if automatic chain drop acceptance is enabled
+     * Check if automatic tx drop acceptance is enabled
      * Supports runtime override via EIOU_AUTO_CHAIN_DROP_ACCEPT env variable
      *
      * @deprecated Use UserContext::getAutoChainDropAccept() instead
-     * @return bool Whether automatic chain drop acceptance is enabled
+     * @return bool Whether automatic tx drop acceptance is enabled
      */
     public static function isAutoChainDropAcceptEnabled(): bool {
         $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');

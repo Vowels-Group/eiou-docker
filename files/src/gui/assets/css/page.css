@@ -592,7 +592,7 @@ body {
     padding: 0.15rem 0.4rem;
 }
 
-/* Chain drop proposal badges on contact card — same soft failure
+/* Tx drop proposal badges on contact card — same soft failure
    palette as .badge-blocked above, driven by the status color scheme. */
 .badge-danger {
     background-color: var(--status-failure-soft-bg, #e9ecef);
@@ -1552,7 +1552,7 @@ body {
    free for the amount and status color schemes without overloading meaning.
    `.btn-danger` and `.btn-warning` are deliberately left red / yellow so
    truly destructive or cautionary actions (Delete, Reject, Logout, Block,
-   Propose chain drop) stay visually distinct. */
+   Propose tx drop) stay visually distinct. */
 .btn-success {
     background: #0d6efd;
     color: white;

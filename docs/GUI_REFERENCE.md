@@ -68,7 +68,7 @@ Browser Request
 | State Management | Session-based with CSRF protection |
 | Styling | Inline CSS via `page.css` include |
 | Forms | Traditional POST form submissions with redirect |
-| AJAX | Limited use for specific features (ping, chain drop, debug report) |
+| AJAX | Limited use for specific features (ping, tx drop, debug report) |
 
 ---
 
@@ -145,8 +145,8 @@ Handles all contact-related operations.
 | `handleEditContact()` | `editContact` | Update contact settings | `contact_address`, `contact_name`, `contact_fee`, `contact_credit`, `contact_currency` |
 | `handlePingContact()` | `pingContact` | Check contact status (AJAX) | `contact_address` |
 | `handleProposeChainDrop()` | `proposeChainDrop` | Propose dropping missing tx (AJAX) | `contact_pubkey_hash` |
-| `handleAcceptChainDrop()` | `acceptChainDrop` | Accept chain drop proposal (AJAX) | `proposal_id` |
-| `handleRejectChainDrop()` | `rejectChainDrop` | Reject chain drop proposal (AJAX) | `proposal_id` |
+| `handleAcceptChainDrop()` | `acceptChainDrop` | Accept tx drop proposal (AJAX) | `proposal_id` |
+| `handleRejectChainDrop()` | `rejectChainDrop` | Reject tx drop proposal (AJAX) | `proposal_id` |
 | `handleAcceptCurrency()` | `acceptCurrency` | Accept pending incoming currency | `pubkey_hash`, `currency`, `fee`, `credit` |
 | `handleAddCurrency()` | `addCurrency` | Add a new currency to an existing contact (AJAX) | `pubkey`, `currency`, `fee`, `credit` |
 | `handleAcceptAllCurrencies()` | `acceptAllCurrencies` | Accept all pending currencies for a contact (AJAX) | `pubkey_hash`, `currencies` (JSON array), `is_new_contact`, `contact_address`, `contact_name` |
@@ -343,7 +343,7 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 | In-progress banner | Shows pending transaction count |
 | Pending contacts banner | Shows pending contact request count |
 | Pending currency requests | Shows incoming currency requests from existing contacts |
-| Chain drop proposal banner | Incoming proposals requiring action (red alert) |
+| Tx drop proposal banner | Incoming proposals requiring action (red alert) |
 | Completed transaction toasts | Notifications for finished transactions |
 | Received transaction toasts | Notifications for incoming payments |
 | DLQ notifications | Dead letter queue failure alerts |
@@ -458,7 +458,7 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 - Blocked contacts
 - Search/filter functionality
 - Show more toggle (>16 contacts)
-- Chain drop proposal badges on contact cards:
+- Tx drop proposal badges on contact cards:
   - Red "Action Required" — incoming proposal needs acceptance
   - Blue "Awaiting Response" — outgoing proposal pending
   - Orange "Blocked" — rejected proposal, transactions blocked
@@ -470,10 +470,10 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 |-----|----------|
 | Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), addresses (with Copy and QR code buttons; QR regenerates when switching address types), public key (single-line display with Copy button), contact ID |
 | Transactions | Recent transactions with this contact |
-| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, chain drop resolution section (propose/accept/reject) |
+| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, tx drop resolution section (propose/accept/reject) |
 | Settings | Edit form, block/unblock/delete buttons |
 
-**Chain Drop Resolution Section (in Info tab):**
+**Tx Drop Resolution Section (in Info tab):**
 - Shown when chain has a gap or active proposal
 - Sub-sections: propose, awaiting acceptance, incoming (accept/reject), rejected (repropose)
 - Funds warning: dropping a transaction removes its funds from both balances

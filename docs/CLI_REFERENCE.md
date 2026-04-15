@@ -14,7 +14,7 @@ Complete command-line interface documentation for the eIOU Docker node.
 8. [System Commands](#system-commands)
 9. [API Key Management](#api-key-management)
 10. [Payment Request Commands](#payment-request-commands)
-11. [Chain Drop Commands](#chain-drop-commands)
+11. [Tx Drop Commands](#tx-drop-commands)
 11. [Backup Commands](#backup-commands)
 12. [Report Commands](#report-commands)
 13. [Test Mode Commands](#test-mode-commands)
@@ -440,7 +440,7 @@ eiou ping --json Alice
 The pong response includes per-currency available credit (`availableCreditByCurrency`). For each currency, the available credit is calculated as: what they sent you − what you sent them + their credit limit for you in that currency. These values are stored per-currency in the `contact_credit` table and visible via `viewcontact`, `search`, and `info`. The automatic ContactStatusProcessor also performs this exchange every ~5 minutes.
 
 **Chain mismatch behavior:**
-If any currency's local and remote chain heads don't match, or if internal gaps are detected, ping automatically triggers a sync (including backup recovery on both sides). If the sync fails to resolve the gap, a chain drop is auto-proposed. See [Chain Drop Commands](#chain-drop-commands) for details.
+If any currency's local and remote chain heads don't match, or if internal gaps are detected, ping automatically triggers a sync (including backup recovery on both sides). If the sync fails to resolve the gap, a tx drop is auto-proposed. See [Tx Drop Commands](#tx-drop-commands) for details.
 
 **Wallet restore behavior:**
 When a ping is received by a node that was restored from a seed phrase, the ContactStatusService detects the incoming ping from a previously unknown address, auto-creates a pending contact, and triggers a sync to restore the shared transaction chain. The prior contact then appears as a pending request that the restored wallet owner can review via `eiou pending` and re-accept via `eiou add`. This allows prior contacts to re-establish their relationship with a restored wallet simply by pinging it.
@@ -721,7 +721,7 @@ eiou dlq --json
 
 **Transaction payload refresh on retry:** A transaction can sit in the DLQ for
 minutes to hours. In that window the local chain may have advanced (new
-outbound txs) or had a chain drop re-wire the link past a missing
+outbound txs) or had a tx drop re-wire the link past a missing
 transaction. On every retry — whether from
 `eiou dlq retry`, the GUI's Retry button, or the automatic retry queue — the
 payload's `previousTxid` and `time` are refreshed from current DB state before
@@ -798,7 +798,7 @@ eiou send Alice 25.50 USD --json
 - Transaction may be direct or routed through intermediaries (P2P relay)
 - Default routing uses fast mode: the first RP2P response wins (lowest latency)
 - With `--best`, all RP2P responses are collected and the lowest-fee route is selected (higher latency, lower cost)
-- Chain integrity is verified locally before every send; if a gap is detected, sync is attempted and then a chain drop is auto-proposed if the gap persists
+- Chain integrity is verified locally before every send; if a gap is detected, sync is attempted and then a tx drop is auto-proposed if the gap persists
 - Rate limited: 30 transactions per minute
 
 **Transport selection:**
@@ -929,7 +929,7 @@ eiou viewsettings --json
 **Settings displayed (grouped by category):**
 - **Transaction Settings:** Default currency, minimum/default/maximum fee percentages, default credit limit
 - **P2P & Network:** Max P2P level, P2P expiration, direct TX delivery expiration, default transport mode, HTTP/Tor transport timeouts, hostname (HTTP and HTTPS), trusted proxies, auto-accept P2P transactions
-- **Feature Toggles:** Display name, auto-refresh, contact status pinging, contact status sync on ping, auto chain drop propose/accept, API enabled, API CORS origins, rate limiting
+- **Feature Toggles:** Display name, auto-refresh, contact status pinging, contact status sync on ping, auto tx drop propose/accept, API enabled, API CORS origins, rate limiting
 - **Backup & Logging:** Auto-backup, backup retention count, backup schedule, log level, log max entries
 - **Data Retention:** Delivery, DLQ, held TX, RP2P, metrics retention days
 - **Rate Limiting:** P2P rate limit per minute, max attempts, window, block duration
@@ -984,9 +984,9 @@ eiou changesettings [setting] [value]
 | `hopBudgetRandomized` | Randomize P2P hop depth for privacy (disable for max reachability in sparse networks) | `true`, `false` |
 | `contactStatusEnabled` | Enable contact status tracking | `true`, `false` |
 | `contactStatusSyncOnPing` | Sync status during ping operations | `true`, `false` |
-| `autoChainDropPropose` | Auto-propose chain-drop operations | `true`, `false` |
-| `autoChainDropAccept` | Auto-accept chain-drop proposals | `true`, `false` |
-| `autoChainDropAcceptGuard` | Balance guard for auto-accept chain drops | `true`, `false` |
+| `autoChainDropPropose` | Auto-propose tx-drop operations | `true`, `false` |
+| `autoChainDropAccept` | Auto-accept tx-drop proposals | `true`, `false` |
+| `autoChainDropAcceptGuard` | Balance guard for auto-accept tx drops | `true`, `false` |
 | `autoAcceptRestoredContact` | Auto-accept restored contacts on wallet restore | `true`, `false` |
 | `apiEnabled` | Enable REST API endpoint | `true`, `false` |
 | `apiCorsAllowedOrigins` | Allowed CORS origins for API | `https://example.com` |
@@ -1318,15 +1318,15 @@ eiou request cancel req_abc123def456
 
 ---
 
-## Chain Drop Commands
+## Tx Drop Commands
 
 ### chaindrop
 
-Manage chain drop agreements for resolving transaction chain gaps.
+Manage tx drop agreements for resolving transaction chain gaps.
 
-When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Chain drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
+When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Tx drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
 
-**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. Before resorting to a chain drop, the sync flow attempts **backup recovery**: the local node checks its own backups first (self-repair), then tells the remote node which txids are still missing so it can check its backups too. If either side has the transaction in a backup, the chain is repaired without a chain drop. Only when neither side has a backup does the `send` command auto-propose a chain drop. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
+**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. Before resorting to a tx drop, the sync flow attempts **backup recovery**: the local node checks its own backups first (self-repair), then tells the remote node which txids are still missing so it can check its backups too. If either side has the transaction in a backup, the chain is repaired without a tx drop. Only when neither side has a backup does the `send` command auto-propose a tx drop. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
 
 **Syntax:**
 ```bash
@@ -1341,7 +1341,7 @@ eiou chaindrop <action> [args...]
 | `accept` | `chaindrop accept <proposal_id>` | Accept an incoming proposal |
 | `reject` | `chaindrop reject <proposal_id>` | Reject an incoming proposal |
 | `list` | `chaindrop list [contact_address]` | List pending proposals |
-| `help` | `chaindrop help` | Show chain drop help |
+| `help` | `chaindrop help` | Show tx drop help |
 
 **Arguments:**
 
@@ -1377,21 +1377,21 @@ eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
 **Gap Detection and Recovery:**
 
 Chain gaps are detected locally by three commands:
-- **`send`** — verifies chain integrity before every transaction; triggers sync to repair (which includes backup recovery on both sides); auto-proposes a chain drop only if sync fails to repair the gap
+- **`send`** — verifies chain integrity before every transaction; triggers sync to repair (which includes backup recovery on both sides); auto-proposes a tx drop only if sync fails to repair the gap
 - **`sync`** — verifies chain integrity, attempts local backup recovery before contacting the remote node, and asks the remote to check its backups for any remaining gaps
-- **`ping`** — verifies local chain integrity (not just chain head comparison); triggers sync if chains don't match; auto-proposes a chain drop if sync detects mutual gaps (both sides missing same transaction)
+- **`ping`** — verifies local chain integrity (not just chain head comparison); triggers sync if chains don't match; auto-proposes a tx drop if sync detects mutual gaps (both sides missing same transaction)
 
 All detection is local — no transaction lists are sent over the wire.
 
 **Recovery priority:**
 1. **Local backup recovery** — during sync, the node checks its own database backups for missing transactions
 2. **Remote backup recovery** — remaining missing txids are sent to the contact, who checks its DB and backups
-3. **Chain drop** — only if neither side has the transaction in any backup
+3. **Tx drop** — only if neither side has the transaction in any backup
 
 **Flow (when backup recovery fails):**
 1. Contact A detects chain gap (`send` or `ping` auto-proposes, or `sync` reveals the gap)
 2. Sync attempts backup recovery on both sides (automatic, no user action needed)
-3. If recovery fails and auto-propose is enabled (`EIOU_AUTO_CHAIN_DROP_PROPOSE=true`, default), a chain drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
+3. If recovery fails and auto-propose is enabled (`EIOU_AUTO_CHAIN_DROP_PROPOSE=true`, default), a tx drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
 4. If auto-accept is enabled (`EIOU_AUTO_CHAIN_DROP_ACCEPT=true`, default OFF), Contact B's node auto-accepts the proposal. If the balance guard is enabled (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=true`, default), it first checks that missing transactions don't include net payments owed to us. If the guard blocks or auto-accept is disabled, the proposal requires manual review.
 5. Contact B checks incoming proposals: `eiou chaindrop list` (or sees GUI notification banner)
 6. Contact B runs: `eiou chaindrop accept <proposal_id>` (or accepts via GUI)
@@ -1471,10 +1471,10 @@ Reject (success):
 
 **Notes:**
 - `propose` auto-detects the chain gap by verifying chain integrity with the specified contact
-- `accept` executes the chain drop locally, re-signs affected transactions, and exchanges re-signed copies with the proposer
+- `accept` executes the tx drop locally, re-signs affected transactions, and exchanges re-signed copies with the proposer
 - `reject` leaves the chain gap unresolved — transactions remain blocked until a new proposal is accepted
 - Proposals expire automatically after their configured timeout
-- Rate limited: 10 chain drop operations per minute
+- Rate limited: 10 tx drop operations per minute
 - Auto-propose controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` env var (default: `true`)
 - Auto-accept controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` env var (default: `false` — requires manual accept)
 - Balance guard controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` env var (default: `true`). When enabled, blocks auto-accept if missing transactions include net payments owed to us. Set to `false` for unconditional auto-accept.

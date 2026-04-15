@@ -62,10 +62,10 @@ use Eiou\Services\ApiKeyService;
  * - GET  /api/v1/system/debug-report        - Download debug report (JSON)
  * - POST /api/v1/system/debug-report        - Submit debug report to support
  *
- * - POST /api/v1/chaindrop/propose           - Propose chain drop
- * - POST /api/v1/chaindrop/accept            - Accept chain drop proposal
- * - POST /api/v1/chaindrop/reject            - Reject chain drop proposal
- * - GET  /api/v1/chaindrop                   - List chain drop proposals
+ * - POST /api/v1/chaindrop/propose           - Propose tx drop
+ * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
+ * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal
+ * - GET  /api/v1/chaindrop                   - List tx drop proposals
  *
  * - GET  /api/v1/p2p                         - List P2P transactions awaiting approval
  * - GET  /api/v1/p2p/candidates/:hash       - Get route candidates for a P2P transaction
@@ -2378,16 +2378,16 @@ class ApiController {
         return $this->successResponse(['message' => 'API key disabled successfully', 'key_id' => $keyId]);
     }
 
-    // ==================== Chain Drop Endpoints ====================
+    // ==================== Tx Drop Endpoints ====================
 
     /**
-     * Handle chain drop endpoints
+     * Handle tx drop endpoints
      *
      * Routes:
-     * - POST /api/v1/chaindrop/propose  - Propose chain drop
-     * - POST /api/v1/chaindrop/accept   - Accept chain drop proposal
-     * - POST /api/v1/chaindrop/reject   - Reject chain drop proposal
-     * - GET  /api/v1/chaindrop          - List chain drop proposals
+     * - POST /api/v1/chaindrop/propose  - Propose tx drop
+     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal
+     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal
+     * - GET  /api/v1/chaindrop          - List tx drop proposals
      */
     private function handleChainDrop(string $method, ?string $action, array $params, string $body): array {
         return match (true) {

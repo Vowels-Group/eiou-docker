@@ -686,7 +686,7 @@ class UserContext {
     }
 
     /**
-     * Get auto chain drop propose setting
+     * Get auto tx drop propose setting
      *
      * @return bool
      */
@@ -716,7 +716,7 @@ class UserContext {
     }
 
     /**
-     * Get auto chain drop accept setting
+     * Get auto tx drop accept setting
      *
      * @return bool
      */
@@ -729,7 +729,7 @@ class UserContext {
     }
 
     /**
-     * Get auto chain drop accept guard setting
+     * Get auto tx drop accept guard setting
      *
      * When true, auto-accept checks balances before accepting (blocks debt erasure).
      * When false, auto-accept proceeds unconditionally.

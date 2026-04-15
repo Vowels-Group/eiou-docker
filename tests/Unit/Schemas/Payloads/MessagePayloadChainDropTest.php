@@ -1,8 +1,8 @@
 <?php
 /**
- * Unit Tests for MessagePayload Chain Drop Methods
+ * Unit Tests for MessagePayload Tx Drop Methods
  *
- * Tests the chain drop payload builder methods:
+ * Tests the tx drop payload builder methods:
  * - buildChainDropProposal
  * - buildChainDropAcceptance
  * - buildChainDropRejection

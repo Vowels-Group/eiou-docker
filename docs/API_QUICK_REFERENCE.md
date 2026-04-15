@@ -82,14 +82,14 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 | `POST` | `/api/v1/p2p/approve` | `wallet:send` | Approve a P2P transaction |
 | `POST` | `/api/v1/p2p/reject` | `wallet:send` | Reject a P2P transaction |
 
-### Chain Drop Endpoints
+### Tx Drop Endpoints
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|------------|-------------|
-| `GET` | `/api/v1/chaindrop` | `wallet:read` | List chain drop proposals |
-| `POST` | `/api/v1/chaindrop/propose` | `wallet:send` | Propose chain drop with contact |
-| `POST` | `/api/v1/chaindrop/accept` | `wallet:send` | Accept chain drop proposal |
-| `POST` | `/api/v1/chaindrop/reject` | `wallet:send` | Reject chain drop proposal |
+| `GET` | `/api/v1/chaindrop` | `wallet:read` | List tx drop proposals |
+| `POST` | `/api/v1/chaindrop/propose` | `wallet:send` | Propose tx drop with contact |
+| `POST` | `/api/v1/chaindrop/accept` | `wallet:send` | Accept tx drop proposal |
+| `POST` | `/api/v1/chaindrop/reject` | `wallet:send` | Reject tx drop proposal |
 
 ### Backup Endpoints
 

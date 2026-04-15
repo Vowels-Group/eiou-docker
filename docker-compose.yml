@@ -212,13 +212,13 @@ services:
       # - EIOU_BACKUP_AUTO_ENABLED=true
 
       # EIOU_AUTO_CHAIN_DROP_PROPOSE (optional)
-      # Auto-propose chain drops when send/ping detects a mutual gap that
+      # Auto-propose tx drops when send/ping detects a mutual gap that
       # sync and backup recovery cannot repair.
       # Default: true
       # - EIOU_AUTO_CHAIN_DROP_PROPOSE=true
 
       # EIOU_AUTO_CHAIN_DROP_ACCEPT (optional)
-      # Auto-accept incoming chain drop proposals (with balance guard).
+      # Auto-accept incoming tx drop proposals (with balance guard).
       # The balance guard blocks auto-accept if missing transactions include
       # net payments owed to this node.
       # Default: false (all proposals require manual review)

@@ -28,14 +28,14 @@ use PDOException;
 use Exception;
 
 /**
- * Chain Drop Service
+ * Tx Drop Service
  *
  * Manages the mutual agreement protocol for dropping missing transactions
  * from the chain between two contacts.
  *
  * When both contacts are missing the same transaction, the chain cannot be
  * repaired via sync. This service coordinates:
- * 1. Proposing a chain drop to the contact
+ * 1. Proposing a tx drop to the contact
  * 2. Handling incoming proposals
  * 3. Accepting/rejecting proposals
  * 4. Executing the chain modification (updating previous_txid, re-signing)
@@ -468,7 +468,7 @@ class ChainDropService implements ChainDropServiceInterface
                 return $result;
             }
 
-            // Execute the chain drop locally
+            // Execute the tx drop locally
             $dropResult = $this->executeChainDrop($proposal);
             if (!$dropResult['success']) {
                 $result['error'] = 'Failed to execute chain drop: ' . ($dropResult['error'] ?? 'unknown');
@@ -541,7 +541,7 @@ class ChainDropService implements ChainDropServiceInterface
                 return;
             }
 
-            // Execute the chain drop locally
+            // Execute the tx drop locally
             $dropResult = $this->executeChainDrop($proposal);
             if (!$dropResult['success']) {
                 Logger::getInstance()->error("Failed to execute chain drop on acceptance", [
@@ -764,7 +764,7 @@ class ChainDropService implements ChainDropServiceInterface
     // =========================================================================
 
     /**
-     * Check if auto-accepting a chain drop proposal is safe by comparing
+     * Check if auto-accepting a tx drop proposal is safe by comparing
      * stored balances against transaction-calculated balances.
      *
      * If missing transactions include net payments TO us (i.e. the proposer
@@ -836,7 +836,7 @@ class ChainDropService implements ChainDropServiceInterface
     // =========================================================================
 
     /**
-     * Handle CLI chain drop subcommands
+     * Handle CLI tx drop subcommands
      *
      * @param array $argv Command line arguments
      * @param CliOutputManager $output CLI output manager
@@ -967,7 +967,7 @@ class ChainDropService implements ChainDropServiceInterface
     }
 
     /**
-     * Show chain drop help for CLI
+     * Show tx drop help for CLI
      */
     private function showHelp(CliOutputManager $output): void
     {
@@ -1062,11 +1062,11 @@ class ChainDropService implements ChainDropServiceInterface
     }
 
     // =========================================================================
-    // CHAIN DROP EXECUTION
+    // TX DROP EXECUTION
     // =========================================================================
 
     /**
-     * Execute the chain drop: update previous_txid and re-sign affected transactions
+     * Execute the tx drop: update previous_txid and re-sign affected transactions
      *
      * @param array $proposal The proposal data
      * @return array Result with keys: success (bool), resigned_transactions (array), error (string|null)
@@ -1136,7 +1136,7 @@ class ChainDropService implements ChainDropServiceInterface
     /**
      * Verify chain integrity after a drop and update the contact's valid_chain flag
      *
-     * After a chain drop, the chain should be valid (the gap has been bridged).
+     * After a tx drop, the chain should be valid (the gap has been bridged).
      * This method verifies and updates the contact record so the GUI shows
      * the correct chain status.
      *
@@ -1172,7 +1172,7 @@ class ChainDropService implements ChainDropServiceInterface
     }
 
     /**
-     * Recalculate the contact balance after a chain drop
+     * Recalculate the contact balance after a tx drop
      *
      * The dropped transaction no longer exists in the transactions table, so
      * syncContactBalance will recompute the balance from the remaining

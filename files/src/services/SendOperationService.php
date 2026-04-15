@@ -312,7 +312,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
                 $txCurrency = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey'], $txCurrency);
                 if (!$chainVerification['success']) {
-                    // Auto-propose chain drop if sync couldn't repair the gap
+                    // Auto-propose tx drop if sync couldn't repair the gap
                     if ($chainVerification['synced'] && $this->chainDropService !== null && $this->currentUser->getAutoChainDropPropose()) {
                         $proposalResult = $this->chainDropService->proposeChainDrop($contactPubkeyHash);
                         if ($proposalResult['success']) {
@@ -336,7 +336,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
                             return;
                         }
                     }
-                    // Fallback: no chain drop service or proposal failed
+                    // Fallback: no tx drop service or proposal failed
                     $output->error("Cannot send transaction: " . ($chainVerification['error'] ?? 'Chain verification failed'),
                         ErrorCodes::CHAIN_INTEGRITY_FAILED, 500, ['recipient' => $request[2] ?? null, 'synced' => $chainVerification['synced']]);
                     return;

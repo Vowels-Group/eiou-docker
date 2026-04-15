@@ -3,16 +3,16 @@
 namespace Eiou\Contracts;
 
 /**
- * Chain Drop Service Interface
+ * Tx Drop Service Interface
  *
- * Defines the contract for managing chain drop agreements between contacts.
+ * Defines the contract for managing tx drop agreements between contacts.
  *
  * When both contacts are missing the same transaction in their shared chain,
  * this service coordinates the mutual agreement to drop the missing transaction
  * and relink the chain, including exchange of re-signed transaction copies.
  *
  * Gap Detection (all local — no transaction lists sent over the wire):
- * - send: verifies chain integrity before every send; auto-proposes chain drop if sync fails
+ * - send: verifies chain integrity before every send; auto-proposes tx drop if sync fails
  * - sync: verifies chain integrity after syncing transactions; reports gaps in output
  * - ping: verifies local chain integrity (not just chain head comparison); reports chain_valid
  *
@@ -44,7 +44,7 @@ interface ChainDropServiceInterface
     public function proposeChainDrop(string $contactPubkeyHash): array;
 
     /**
-     * Handle an incoming chain drop proposal from a contact
+     * Handle an incoming tx drop proposal from a contact
      *
      * @param array $request The incoming proposal message data
      * @return void
@@ -52,7 +52,7 @@ interface ChainDropServiceInterface
     public function handleIncomingProposal(array $request): void;
 
     /**
-     * Accept an incoming chain drop proposal
+     * Accept an incoming tx drop proposal
      *
      * @param string $proposalId The proposal ID to accept
      * @return array Result with keys: success (bool), error (string|null)
@@ -60,7 +60,7 @@ interface ChainDropServiceInterface
     public function acceptProposal(string $proposalId): array;
 
     /**
-     * Reject an incoming chain drop proposal
+     * Reject an incoming tx drop proposal
      *
      * Warning: Rejecting leaves the chain gap unresolved. While the gap exists,
      * transactions between these contacts are blocked (SendOperationService
