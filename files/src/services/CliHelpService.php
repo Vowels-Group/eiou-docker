@@ -283,7 +283,7 @@ class CliHelpService
                 'available_settings' => [
                     // Transaction Settings
                     'defaultCurrency' => 'Default currency code (e.g., USD)',
-                    'minFee' => 'Minimum fee amount (e.g., 0.01)',
+                    'minFee' => 'Minimum fee amount (e.g., 0.00000001 for 1 satoshi)',
                     'defaultFee' => 'Default fee percentage for transactions (e.g., 1.0)',
                     'maxFee' => 'Maximum fee percentage (e.g., 5.0)',
                     'defaultCreditLimit' => 'Default credit limit for new contacts (e.g., 100)',

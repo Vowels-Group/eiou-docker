@@ -78,7 +78,7 @@ class Constants {
     // PHP_INT_MAX / 4 ≈ 2.3 quintillion — leaves headroom for multi-hop fee accumulation.
     const TRANSACTION_MAX_AMOUNT = 2305843009213693951; // PHP_INT_MAX / 4, ~2.3 quintillion
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
-    const TRANSACTION_MINIMUM_FEE = 0.01;
+    const TRANSACTION_MINIMUM_FEE = 0.00000001;
 
     // PROTOCOL CONSTANT — DO NOT CHANGE. All currencies use 8 decimal places
     // internally. The fractional part is stored as a separate BIGINT multiplied
