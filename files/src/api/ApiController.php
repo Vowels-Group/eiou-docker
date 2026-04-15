@@ -7,6 +7,7 @@ use Exception;
 use Eiou\Core\Constants;
 use Eiou\Core\SplitAmount;
 use Eiou\Cli\CliOutputManager;
+use Eiou\Services\AnalyticsService;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
 use Eiou\Services\Utilities\CurrencyUtilityService;
@@ -1464,6 +1465,7 @@ class ApiController {
                 'enabled' => $analyticsStatus['enabled'],
                 'consent_pending' => !$user->getAnalyticsConsentAsked(),
                 'last_submitted' => $analyticsStatus['last_submitted'],
+                'opt_in_at' => $user->getAnalyticsOptInAt(),
             ],
             'timestamp' => date('c')
         ]);
@@ -1794,6 +1796,15 @@ class ApiController {
             if ($hostnameSecure !== null) {
                 $configContent['hostname_secure'] = $hostnameSecure;
             }
+            // Stamp opt-in timestamp on off->on transition (bounds the analytics
+            // rollup window to post-consent)
+            if ($configKey === 'analyticsEnabled') {
+                $configContent = AnalyticsService::applyOptInAtTransition(
+                    $configContent,
+                    $wasAnalyticsEnabled,
+                    (bool) $value
+                );
+            }
             file_put_contents($configPath, json_encode($configContent, true), LOCK_EX);
 
             // Regenerate SSL certificate when hostname changes
@@ -1807,7 +1818,7 @@ class ApiController {
                 if (file_exists($script)) {
                     $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
                     if (posix_getuid() === 0) {
-                        $cmd = 'runuser -u www-data -- ' . $cmd;
+                        $cmd = Constants::BIN_RUNUSER . ' -u www-data -- ' . $cmd;
                     }
                     @exec($cmd);
                 }

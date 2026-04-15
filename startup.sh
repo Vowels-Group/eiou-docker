@@ -74,6 +74,12 @@ fi
 # Detect PHP-FPM service name (version-independent, e.g., php8.2-fpm)
 PHP_FPM_SERVICE=$(basename /etc/init.d/php*-fpm 2>/dev/null || echo "php-fpm")
 
+# Absolute path to runuser. On Debian it lives in /usr/sbin which is not on
+# cron's minimal PATH, so every runuser invocation from crontab or anywhere
+# else without a clean PATH must use the absolute path. Centralized here so
+# a future base-image change (different distro, Alpine, etc.) is one edit.
+RUNUSER_BIN="/usr/sbin/runuser"
+
 # Graceful shutdown configuration
 SHUTDOWN_TIMEOUT="${EIOU_SHUTDOWN_TIMEOUT:-30}"  # Configurable via env, default 30s
 SHUTDOWN_IN_PROGRESS=false
@@ -128,7 +134,7 @@ graceful_shutdown() {
     # Cleanup runs after to maintain the max backup count.
     if mysqladmin ping -h localhost --silent 2>/dev/null; then
         echo "[Shutdown] Creating automatic pre-shutdown backup..."
-        if timeout 20 runuser -u www-data -- php -r '
+        if timeout 20 $RUNUSER_BIN -u www-data -- php -r '
             chdir("/app/eiou");
             require_once "/app/eiou/src/bootstrap.php";
             $app = \Eiou\Core\Application::getInstance();
@@ -1764,7 +1770,7 @@ if [ "${EIOU_BACKUP_AUTO_ENABLED:-true}" = "true" ]; then
     service cron start 2>/dev/null || true
 
     # Install backup cron job (daily at midnight)
-    CRON_JOB="0 0 * * * /usr/sbin/runuser -u www-data -- /usr/bin/php /app/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
+    CRON_JOB="0 0 * * * $RUNUSER_BIN -u www-data -- /usr/bin/php /app/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
 
     # Remove existing backup cron entry and add new one
     (crontab -l 2>/dev/null | grep -v "backup-cron.php"; echo "$CRON_JOB") | crontab -
@@ -1776,12 +1782,12 @@ fi
 
 # Set up cron for daily update check (2 AM UTC, avoids overlap with midnight backup)
 if [ "${EIOU_UPDATE_CHECK_ENABLED:-true}" = "true" ]; then
-    UPDATE_CRON_JOB="0 2 * * * /usr/sbin/runuser -u www-data -- /usr/bin/php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1"
+    UPDATE_CRON_JOB="0 2 * * * $RUNUSER_BIN -u www-data -- /usr/bin/php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1"
     (crontab -l 2>/dev/null | grep -v "update-check-cron.php"; echo "$UPDATE_CRON_JOB") | crontab -
     echo "Update check cron job installed (daily at 2 AM UTC)"
 
     # Run initial check in background (non-blocking — don't delay startup)
-    runuser -u www-data -- php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1 &
+    $RUNUSER_BIN -u www-data -- php /app/eiou/scripts/update-check-cron.php >> /var/log/eiou/update-check.log 2>&1 &
 else
     # Remove any existing update check cron entry
     (crontab -l 2>/dev/null | grep -v "update-check-cron.php") | crontab -
@@ -1792,7 +1798,7 @@ fi
 # Always installed — the PHP script checks analyticsEnabled and exits
 # gracefully if disabled, so users can enable via GUI/CLI/API at any time
 # without needing a container restart.
-ANALYTICS_CRON_JOB="0 3 * * * /usr/sbin/runuser -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
+ANALYTICS_CRON_JOB="0 3 * * * $RUNUSER_BIN -u www-data -- /usr/bin/php /app/eiou/scripts/analytics-cron.php >> /var/log/eiou/analytics.log 2>&1"
 (crontab -l 2>/dev/null | grep -v "analytics-cron.php"; echo "$ANALYTICS_CRON_JOB") | crontab -
 echo "Analytics cron job installed (daily, 3 AM UTC)"
 
@@ -1814,17 +1820,17 @@ fi
 chown -R www-data:www-data /etc/eiou/config
 
 # Start p2p message processing in background (as www-data)
-nohup runuser -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
+nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
 P2P_PID=$!
 echo "P2p message processing started successfully (PID: $P2P_PID)"
 
 # Start transaction message processing in background (as www-data)
-nohup runuser -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
+nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
 TRANSACTION_PID=$!
 echo "Transaction message processing started successfully (PID: $TRANSACTION_PID)"
 
 # Start cleanup message processing in background (as www-data)
-nohup runuser -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
+nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
 CLEANUP_PID=$!
 echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
@@ -1832,7 +1838,7 @@ echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 # Check if contact status is enabled before starting (default: true if not set)
 CONTACT_STATUS_ENABLED="${EIOU_CONTACT_STATUS_ENABLED:-true}"
 if [ "$CONTACT_STATUS_ENABLED" = "true" ] || [ "$CONTACT_STATUS_ENABLED" = "1" ]; then
-    nohup runuser -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
+    nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
     CONTACT_STATUS_PID=$!
     echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
 else
@@ -1932,7 +1938,7 @@ watchdog() {
                 P2P_RESTARTS=$((P2P_RESTARTS + 1))
                 P2P_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
-                nohup runuser -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
+                nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
                 P2P_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
             elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -1947,7 +1953,7 @@ watchdog() {
                 TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
                 TRANSACTION_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
-                nohup runuser -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
+                nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
                 TRANSACTION_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
             elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -1962,7 +1968,7 @@ watchdog() {
                 CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
                 CLEANUP_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
-                nohup runuser -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
+                nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
                 CLEANUP_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
             elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -1978,7 +1984,7 @@ watchdog() {
                     CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
                     CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
-                    nohup runuser -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
+                    nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
                     CONTACT_STATUS_PID=$!
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
                 elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then

@@ -1,6 +1,6 @@
 # Anonymous Analytics
 
-eIOU includes an optional, opt-in anonymous analytics system that sends aggregate usage statistics once per week. It is **disabled by default** and requires explicit user consent before any data is sent.
+eIOU includes an optional, opt-in anonymous analytics system that sends aggregate usage statistics once per day. It is **disabled by default** and requires explicit user consent before any data is sent.
 
 ## Table of Contents
 
@@ -24,9 +24,10 @@ eIOU includes an optional, opt-in anonymous analytics system that sends aggregat
 | **Tor-routed** | All submissions are sent through the local Tor SOCKS5 proxy — your IP address is never exposed to the analytics server |
 | **Anonymous ID** | The node identifier is an HMAC-SHA256 hash that **cannot be reversed** to your public key, network address, or any other identity |
 | **No personal data** | No individual transaction details, contacts, addresses, amounts, or counterparties are ever included |
-| **Once per week** | A single heartbeat is submitted every Sunday at 3:00 AM UTC — there is no continuous tracking or real-time reporting |
+| **Once per day** | A single heartbeat is submitted every day at 3:00 AM UTC — there is no continuous tracking or real-time reporting |
 | **Random jitter** | Each submission is delayed by a random 0–60 minute window to prevent timing correlation across nodes |
 | **Opt-in only** | Analytics are disabled by default. No data is ever sent unless you explicitly enable it |
+| **Consent boundary** | On opt-in, the current timestamp is recorded as `analyticsOptInAt`. No data from before that timestamp is ever included in a submission, even after an outage recovery |
 | **Revocable** | You can disable analytics at any time via GUI, CLI, or API. Disabling takes effect immediately |
 
 ---
@@ -46,7 +47,7 @@ There are two event types:
 }
 ```
 
-### `usage_heartbeat` (sent weekly)
+### `usage_heartbeat` (sent daily)
 
 ```json
 {
@@ -54,13 +55,13 @@ There are two event types:
   "analytics_id": "a1b2c3d4...",
   "version": "0.1.4-alpha",
   "timestamp": "2026-04-01T03:14:22Z",
-  "period_days": 7,
+  "period_days": 1,
   "metrics": {
-    "tx_sent_count": 12,
-    "tx_received_count": 8,
-    "tx_p2p_count": 3,
+    "tx_sent_count": 2,
+    "tx_received_count": 1,
+    "tx_p2p_count": 0,
     "contact_count": 5,
-    "days_active": 4,
+    "days_active": 1,
     "volume_by_currency": [
       {
         "currency": "USD",
@@ -79,7 +80,7 @@ There are two event types:
 }
 ```
 
-All counts are scoped to the 7-day period to prevent double-counting across weekly submissions.
+All counts are scoped to the `period_days` window so heartbeats never double-count across submissions. The normal daily heartbeat uses `period_days: 1`. After a multi-day submission gap (e.g. an outage, or a node that was offline), the next heartbeat widens its window to cover the whole gap since the last successful submission (or since `analyticsOptInAt`, whichever is later), so counts aren't lost. The window is clamped to a maximum of 365 days and is never allowed to reach back before the user's opt-in timestamp.
 
 ---
 
@@ -96,12 +97,13 @@ All counts are scoped to the 7-day period to prevent double-counting across week
 
 ## How It Works
 
-1. A cron job runs every Sunday at 3:00 AM UTC
+1. A cron job runs every day at 3:00 AM UTC
 2. The script checks whether analytics are enabled — if not, it exits immediately
-3. A random jitter (0–60 minutes) prevents timing correlation
-4. Aggregate metrics are computed from the local database for the past 7 days
-5. The payload is sent via HTTPS through the Tor SOCKS5 proxy to `analytics.eiou.org`
-6. The analytics server is a Cloudflare Worker + D1 database (source: `Vowels-Group/eiou-analytics`, private)
+3. On the first run after an upgrade, if `analyticsEnabled` is true but `analyticsOptInAt` is missing (legacy opt-ins from before the consent-boundary feature existed), the current timestamp is stamped as `analyticsOptInAt` — no data is ever reported from before this stamp
+4. A random jitter (0–60 minutes) prevents timing correlation
+5. The heartbeat period is computed as the number of days since the later of `last_submitted` and `analyticsOptInAt`, clamped to `[1, 365]`. Normal daily cron → `period_days = 1`. After an outage or submission gap → `period_days` widens automatically to cover the gap
+6. Aggregate metrics are computed from the local database for the `period_days` window
+7. The payload is sent via HTTPS through the Tor SOCKS5 proxy to `analytics.eiou.org`
 
 ---
 
@@ -180,7 +182,8 @@ The `GET /api/v1/system/status` endpoint includes an `analytics` object so API c
     "analytics": {
       "enabled": false,
       "consent_pending": true,
-      "last_submitted": null
+      "last_submitted": null,
+      "opt_in_at": null
     }
   }
 }
@@ -191,6 +194,7 @@ The `GET /api/v1/system/status` endpoint includes an `analytics` object so API c
 | `enabled` | Whether analytics are currently enabled |
 | `consent_pending` | `true` if the user has not yet made a choice (enable or skip) |
 | `last_submitted` | ISO 8601 timestamp of the last successful submission, or `null` |
+| `opt_in_at` | ISO 8601 timestamp of the most recent off→on transition of `analyticsEnabled`, or `null` if analytics have never been enabled. Legacy nodes whose opt-in predates this field are backfilled on the first cron run after upgrade (stamped "now", not a fabricated past date). Bounds the heartbeat rollup window so no data from before consent is ever reported |
 
 When `consent_pending` is `true`, the caller can prompt the user or enable analytics via `PUT /api/v1/system/settings`.
 
@@ -207,7 +211,7 @@ environment:
 
 When set, this takes precedence over the GUI/CLI/API setting. Remove it to return control to the user-configurable setting.
 
-Note: This environment variable also controls whether the weekly cron job is installed at container startup. If set to `false` (or unset, which defaults to `false`), the cron entry is removed entirely.
+Note: This environment variable also controls whether the daily cron job is installed at container startup. If set to `false` (or unset, which defaults to `false`), the cron entry is removed entirely.
 
 ---
 
@@ -217,13 +221,13 @@ Note: This environment variable also controls whether the weekly cron job is ins
 |-----------|--------|
 | Service | `AnalyticsService` (`files/src/services/AnalyticsService.php`) |
 | Cron script | `files/scripts/analytics-cron.php` |
-| Cron schedule | `0 3 * * 0` (Sundays at 3:00 AM UTC) |
+| Cron schedule | `0 3 * * *` (daily at 3:00 AM UTC) |
 | Endpoint | `https://analytics.eiou.org/v1/report` |
 | Proxy | `127.0.0.1:9050` (Tor SOCKS5, DNS resolved through Tor) |
 | Anonymous ID | HMAC-SHA256 of public key hash, truncated to 32 hex chars |
-| Config key | `analyticsEnabled` in `/etc/eiou/config/defaultconfig.json` |
-| Consent flag | `analyticsConsentAsked` in `/etc/eiou/config/defaultconfig.json` |
+| Config keys | `analyticsEnabled`, `analyticsConsentAsked`, `analyticsOptInAt` in `/etc/eiou/config/defaultconfig.json` |
 | Cache file | `/etc/eiou/config/analytics-cache.json` (last submission timestamp) |
+| Period computation | `clamp(days_since(max(last_submitted, analyticsOptInAt)), 1, 365)` — see `AnalyticsService::computePeriodDays()` |
 | Connect timeout | 30 seconds |
 | Request timeout | 60 seconds |
 | Submission jitter | 0–3600 seconds (random) |

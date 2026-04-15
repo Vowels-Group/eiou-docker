@@ -474,6 +474,14 @@ class SettingsController
             // Merge new settings
             $config = array_merge($config, $settings);
 
+            // Stamp the opt-in timestamp on every off->on transition so the
+            // analytics cron can bound its rollup window and never pull
+            // pre-consent data. Overwrites any prior value — re-enabling
+            // after opting out is a fresh consent event.
+            if (!$wasAnalyticsEnabled && !empty($config['analyticsEnabled'])) {
+                $config['analyticsOptInAt'] = gmdate('c');
+            }
+
             // Write back to file
             if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
@@ -679,9 +687,13 @@ class SettingsController
             $config = json_decode(file_get_contents($configFile), true) ?? [];
         }
 
+        $wasAnalyticsEnabled = (bool) ($config['analyticsEnabled'] ?? false);
         $config['analyticsConsentAsked'] = true;
         if ($enable) {
             $config['analyticsEnabled'] = true;
+            if (!$wasAnalyticsEnabled) {
+                $config['analyticsOptInAt'] = gmdate('c');
+            }
         }
 
         header('Content-Type: application/json');
@@ -717,7 +729,7 @@ class SettingsController
         // already run as www-data so runuser would fail with permission error.
         $cmd = '/usr/bin/php ' . escapeshellarg($script) . ' --event=node_setup >> /var/log/eiou/analytics.log 2>&1 &';
         if (posix_getuid() === 0) {
-            $cmd = 'runuser -u www-data -- ' . $cmd;
+            $cmd = Constants::BIN_RUNUSER . ' -u www-data -- ' . $cmd;
         }
         @exec($cmd);
     }

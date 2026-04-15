@@ -494,6 +494,12 @@ class Constants {
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/config/';
 
+    // System binaries — use absolute paths to avoid silent PATH drift
+    // across exec contexts (php-fpm, cron, CLI). The original analytics
+    // outage was caused by a bare `runuser` failing to resolve on Debian
+    // because /usr/sbin wasn't on the exec'd shell's PATH
+    const BIN_RUNUSER = '/usr/sbin/runuser';
+
     const LOG_FILE_APP = '/var/log/eiou/app.log';
     const LOG_LEVEL = 'INFO';
     const LOG_MAX_ENTRIES = 100;
@@ -532,6 +538,7 @@ class Constants {
     const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
     const UPDATE_CHECK_ENABLED = true;            // Check Docker Hub for newer image versions daily - default ON; when OFF, no external API calls are made
     const ANALYTICS_ENABLED = false;              // Share anonymous usage statistics - default OFF (opt-in only); when ON, sends aggregate counts to analytics.eiou.org daily
+    const ANALYTICS_OPT_IN_AT = null;             // ISO 8601 timestamp written when the user flips analyticsEnabled from off to on. Bounds the heartbeat rollup window so catch-up submissions after an outage never pull pre-consent data. Null = never opted in (legacy or currently OFF)
 
     // Debug logging limits
     const DEBUG_RECENT_ENTRIES_LIMIT = 100;        // Max recent debug entries per query (default: 100)
