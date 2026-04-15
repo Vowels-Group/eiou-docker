@@ -40,8 +40,8 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_TEST_MODE` | `false` | No | Enable manual message processing |
 | `EIOU_CONTACT_STATUS_ENABLED` | `true` | No | Enable contact status pinging |
 | `EIOU_BACKUP_AUTO_ENABLED` | `true` | No | Enable/disable automatic daily backups |
-| `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | No | Auto-propose chain drops when mutual gaps detected |
-| `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming chain drop proposals (with balance guard) |
+| `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | No | Auto-propose tx drops when mutual gaps detected |
+| `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | No | Auto-accept incoming tx drop proposals (with balance guard) |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | No | Balance guard for auto-accept: blocks if missing txs erase debt owed to us |
 | `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | No | Auto-accept restored contacts on wallet restore when transaction history proves prior relationship |
 | `APP_DEBUG` | `true` | No | Enable debug logging to database (visible in GUI Debug panel). Set to `false` for production |
@@ -281,7 +281,7 @@ environment:
 
 #### EIOU_AUTO_CHAIN_DROP_PROPOSE
 
-Controls whether chain drops are automatically proposed when `send` or `ping` detects a mutual gap that sync and backup recovery cannot repair.
+Controls whether tx drops are automatically proposed when `send` or `ping` detects a mutual gap that sync and backup recovery cannot repair.
 
 ```yaml
 environment:
@@ -296,7 +296,7 @@ environment:
 
 #### EIOU_AUTO_CHAIN_DROP_ACCEPT
 
-Controls whether incoming chain drop proposals are automatically accepted. A **balance guard** compares stored balances against transaction-calculated balances to block proposals where missing transactions would erase debt owed to us.
+Controls whether incoming tx drop proposals are automatically accepted. A **balance guard** compares stored balances against transaction-calculated balances to block proposals where missing transactions would erase debt owed to us.
 
 ```yaml
 environment:
@@ -312,7 +312,7 @@ environment:
 
 #### EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD
 
-Controls whether the balance guard runs before auto-accepting chain drop proposals. When disabled, auto-accept proceeds unconditionally (no balance comparison).
+Controls whether the balance guard runs before auto-accepting tx drop proposals. When disabled, auto-accept proceeds unconditionally (no balance comparison).
 
 ```yaml
 environment:

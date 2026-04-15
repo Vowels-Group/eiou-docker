@@ -11,7 +11,7 @@ Complete API documentation for the eIOU Docker node REST API.
 5. [Contact Endpoints](#contact-endpoints)
 6. [Payment Request Endpoints](#payment-request-endpoints)
 7. [System Endpoints](#system-endpoints)
-8. [Chain Drop Endpoints](#chain-drop-endpoints)
+8. [Tx Drop Endpoints](#tx-drop-endpoints)
 9. [Backup Endpoints](#backup-endpoints)
 10. [API Key Management](#api-key-management)
 
@@ -278,8 +278,8 @@ print(response.json())
 | `unblock_failed` | Contact unblock operation failed |
 | `unblock_error` | Error during unblock operation |
 | `contact_add_failed` | Failed to add contact |
-| `chaindrop_failed` | Chain drop operation failed |
-| `chaindrop_error` | Error during chain drop operation |
+| `chaindrop_failed` | Tx drop operation failed |
+| `chaindrop_error` | Error during tx drop operation |
 | `p2p_error` | P2P approval operation failed |
 | `candidate_not_found` | Selected route candidate not found |
 | `candidate_mismatch` | Candidate does not belong to this transaction |
@@ -1335,8 +1335,8 @@ Get system settings.
 - `hop_budget_randomized`: Whether P2P hop budget is randomized via geometric distribution (disable for maximum routing depth in sparse networks)
 - `contact_status_enabled`: Whether contact status tracking is enabled
 - `contact_status_sync_on_ping`: Whether to sync contact status during ping
-- `auto_chain_drop_propose`: Whether to auto-propose chain-drop operations
-- `auto_chain_drop_accept`: Whether to auto-accept chain-drop proposals
+- `auto_chain_drop_propose`: Whether to auto-propose tx-drop operations
+- `auto_chain_drop_accept`: Whether to auto-accept tx-drop proposals
 - `auto_chain_drop_accept_guard`: Whether to run balance guard before auto-accepting
 - `auto_accept_restored_contact`: Whether to auto-accept restored contacts on wallet restore when transaction history proves prior relationship
 - `api_enabled`: Whether the REST API endpoint is enabled
@@ -1404,8 +1404,8 @@ Update system settings.
 | `hop_budget_randomized` | boolean | Randomize P2P hop depth (disable for max reachability) |
 | `contact_status_enabled` | boolean | Enable/disable contact status tracking |
 | `contact_status_sync_on_ping` | boolean | Sync status during ping operations |
-| `auto_chain_drop_propose` | boolean | Auto-propose chain-drop operations |
-| `auto_chain_drop_accept` | boolean | Auto-accept chain-drop proposals |
+| `auto_chain_drop_propose` | boolean | Auto-propose tx-drop operations |
+| `auto_chain_drop_accept` | boolean | Auto-accept tx-drop proposals |
 | `auto_chain_drop_accept_guard` | boolean | Balance guard for auto-accept |
 | `auto_accept_restored_contact` | boolean | Auto-accept restored contacts on wallet restore |
 | `analytics_enabled` | boolean | Enable/disable anonymous usage analytics (opt-in, default off) |
@@ -1694,13 +1694,13 @@ Generate a debug report, scrub sensitive data (addresses, keys, IPs), and submit
 
 ---
 
-## Chain Drop Endpoints
+## Tx Drop Endpoints
 
-Chain drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions). Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`). The balance guard (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`) can be disabled for unconditional auto-accept.
+Tx drops allow mutually dropping one or more missing transactions from the shared chain with a contact and re-wiring the chain around the drop, when both sides have a mutual gap that sync and backup recovery cannot repair. A single tx drop spans one or more *consecutive* missing transactions; non-consecutive gaps require a separate proposal per run. Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`). The balance guard (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`) can be disabled for unconditional auto-accept.
 
 ### GET /api/v1/chaindrop
 
-List chain drop proposals.
+List tx drop proposals.
 
 **Permission:** `wallet:read`
 
@@ -1737,7 +1737,7 @@ List chain drop proposals.
 
 ### POST /api/v1/chaindrop/propose
 
-Propose a chain drop with a contact. This initiates the process of resetting the transaction chain.
+Propose a tx drop with a contact. This initiates the process of mutually dropping one or more missing transactions and re-wiring the chain around the drop.
 
 **Permission:** `wallet:send`
 
@@ -1776,7 +1776,7 @@ Propose a chain drop with a contact. This initiates the process of resetting the
 
 ### POST /api/v1/chaindrop/accept
 
-Accept a pending chain drop proposal.
+Accept a pending tx drop proposal.
 
 **Permission:** `wallet:send`
 
@@ -1808,7 +1808,7 @@ Accept a pending chain drop proposal.
 
 ### POST /api/v1/chaindrop/reject
 
-Reject a pending chain drop proposal.
+Reject a pending tx drop proposal.
 
 **Permission:** `wallet:send`
 

@@ -1035,7 +1035,7 @@ class ContactController
     }
 
     /**
-     * Handle propose chain drop request (AJAX - returns JSON)
+     * Handle propose tx drop request (AJAX - returns JSON)
      *
      * @return void
      */
@@ -1064,7 +1064,7 @@ class ContactController
     }
 
     /**
-     * Handle accept chain drop request (AJAX - returns JSON)
+     * Handle accept tx drop request (AJAX - returns JSON)
      *
      * @return void
      */
@@ -1093,7 +1093,7 @@ class ContactController
     }
 
     /**
-     * Handle reject chain drop request (AJAX - returns JSON)
+     * Handle reject tx drop request (AJAX - returns JSON)
      *
      * @return void
      */

@@ -211,7 +211,7 @@ function getHeldTransactionsTableSchema() {
     )";
 }
 
-// Chain Drop Proposals table - tracks mutual agreements to drop missing transactions
+// Tx Drop Proposals table - tracks mutual agreements to drop missing transactions
 function getChainDropProposalsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS chain_drop_proposals (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,

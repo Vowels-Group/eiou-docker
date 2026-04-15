@@ -322,7 +322,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactStatusService` | Contact ping/status checking; auto-creates pending contacts for unknown pings (wallet restore scenario) | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService, ChainDropService |
 | `SyncService` | Transaction chain synchronization | ContactRepo, AddressRepo, P2pRepo, Rp2pRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, BalanceRepo, UtilityContainer, HeldTransactionService, BackupService |
-| `ChainDropService` | Chain drop agreement protocol with auto-accept balance guard | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy, BalanceRepo |
+| `ChainDropService` | Tx drop agreement protocol with auto-accept balance guard | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy, BalanceRepo |
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
 | `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
@@ -379,7 +379,7 @@ $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServicePro
 $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
 
-// MessageService handles sync requests and chain drop messages
+// MessageService handles sync requests and tx drop messages
 $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
 $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
 
@@ -486,11 +486,11 @@ events instead of direct dependencies.
 
 | Event | When Dispatched |
 |-------|-----------------|
-| `CHAIN_DROP_PROPOSED` | When a chain drop is proposed to a contact |
-| `CHAIN_DROP_ACCEPTED` | When a chain drop proposal is accepted |
-| `CHAIN_DROP_REJECTED` | When a chain drop proposal is rejected |
-| `CHAIN_DROP_EXECUTED` | When a chain drop has been fully executed locally |
-| `TRANSACTION_RECOVERED_FROM_BACKUP` | When a missing transaction is recovered from a database backup instead of requiring a chain drop |
+| `CHAIN_DROP_PROPOSED` | When a tx drop is proposed to a contact |
+| `CHAIN_DROP_ACCEPTED` | When a tx drop proposal is accepted |
+| `CHAIN_DROP_REJECTED` | When a tx drop proposal is rejected |
+| `CHAIN_DROP_EXECUTED` | When a tx drop has been fully executed locally |
+| `TRANSACTION_RECOVERED_FROM_BACKUP` | When a missing transaction is recovered from a database backup instead of requiring a tx drop |
 
 **DeliveryEvents Constants:**
 
@@ -692,7 +692,7 @@ public function wireCircularDependencies(): void {
     $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['ContactStatusService']->setChainDropService($this->services['ChainDropService']);
 
-    // Message service handles sync and chain drop routing
+    // Message service handles sync and tx drop routing
     $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
 
@@ -977,7 +977,7 @@ chains. Operates in 5-minute cycles.
 - Updates contact online status (online/partial/offline/unknown)
 - Validates per-currency transaction chain integrity (`prevTxidsByCurrency` maps)
 - Triggers sync if any currency's chain heads don't match
-- Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
+- Auto-proposes tx drop if sync detects mutual gaps (both sides missing the same transaction(s))
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
 
@@ -1164,7 +1164,7 @@ Claimed entries are re-sent through the normal delivery pipeline.
 
 **Transaction DLQ payload refresh:** Messages can sit in the DLQ for hours
 or days. For `message_type='transaction'` entries, the chain may have
-advanced (new outbound txs) or had a chain drop re-wire the link past a
+advanced (new outbound txs) or had a tx drop re-wire the link past a
 missing transaction since the original send — replaying the stored payload
 verbatim would ship a stale `previousTxid`.
 `MessageDeliveryService::retryFromDlq` therefore runs a refresh step before
@@ -1234,7 +1234,7 @@ Each node maintains a MariaDB database with these primary tables:
 | `api_keys` | API authentication keys |
 | `api_request_log` | API request audit trail |
 | `rate_limits` | Rate limiting state |
-| `chain_drop_proposals` | Mutual chain drop agreement tracking |
+| `chain_drop_proposals` | Mutual tx drop agreement tracking |
 | `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
 | `p2p_relayed_contacts` | Contacts that returned `already_relayed` during P2P broadcast (used by two-phase relay selection in best-fee mode) |
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
@@ -2201,13 +2201,14 @@ class of permanent chain gap where a cancel-while-pending on the sender would
 leave the peer unable to verify any subsequent transaction.
 
 When a chain gap is detected during sync, the `SyncService` attempts backup
-recovery before falling through to a chain drop:
+recovery before falling through to a tx drop:
 1. **Local self-repair** — checks local database backups for missing transactions
 2. **Remote backup request** — sends remaining missing txids to the contact via the
    `missingTxids` field in the sync request; the contact checks its DB and backups
-3. **Chain drop fallback** — only if neither side has the transaction in any backup,
-   the `ChainDropService` coordinates mutual agreement to drop the missing transaction
-   and relink the chain
+3. **Tx drop fallback** — only if neither side has the missing transactions in any backup,
+   the `ChainDropService` coordinates mutual agreement to drop the missing transaction(s)
+   and re-wire the chain around the drop. A single tx drop spans one or more *consecutive*
+   missing transactions; non-consecutive gaps require a separate tx drop per run
 
 ### Send Flow (SendOperationService)
 
@@ -2228,7 +2229,7 @@ sendEiou()
   |     +-- Return success if chain repaired, failure if gaps remain
   |
   +-- If chain verification failed:
-  |     +-- Auto-propose chain drop (if sync completed but gaps remain)
+  |     +-- Auto-propose tx drop (if sync completed but gaps remain)
   |     +-- Return error to user (transaction NOT created)
   |
   +-- If chain valid -> prepareStandardTransactionData() (tx created here)
@@ -2313,7 +2314,7 @@ HTTP Request (from sender)
 
 The proactive sync in the `checkPreviousTxid` step uses the same backup recovery
 mechanism described in the [Chain Integrity](#chain-integrity) section: local backup
-check, then remote backup request via `missingTxids`, then chain drop as last resort.
+check, then remote backup request via `missingTxids`, then tx drop as last resort.
 
 ### Sync Flow (SyncService)
 
@@ -2369,10 +2370,13 @@ handleTransactionSyncRequest(request)  [Contact's side]
   +-- 5. Return filtered transactions (oldest first)
 ```
 
-### Chain Drop Agreement Flow
+### Tx Drop Agreement Flow
 
-When neither side has a missing transaction in their database or backups, the chain
-drop protocol coordinates mutual agreement to remove the gap and relink the chain:
+When neither side has the missing transactions in their database or backups, the
+tx drop protocol coordinates mutual agreement to drop the missing transaction(s)
+and re-wire the chain around the drop. A single tx drop handles one or more
+*consecutive* missing transactions in a single run; non-consecutive gaps require
+a separate proposal per run of consecutive missing txs:
 
 ```
       PROPOSER (A)                                     RECEIVER (B)
@@ -2432,7 +2436,7 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
          (done -- gap remains unresolved)
 ```
 
-**Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a chain drop
+**Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a tx drop
 when sync detects mutual gaps. The `ContactStatusService` calls `proposeChainDrop()` after
 `syncTransactionChain()` returns with unresolved `chain_gaps`. Controlled by
 `Constants::isAutoChainDropProposeEnabled()` (env: `EIOU_AUTO_CHAIN_DROP_PROPOSE`, default: `true`).
@@ -2444,7 +2448,7 @@ optionally run before auto-accepting, controlled by `Constants::isAutoChainDropA
 stored balances (from `BalanceRepository`) against balances calculated from existing transactions.
 If the missing transactions include net payments TO us (`net_missing > 0`), auto-accept is blocked
 and the proposal requires manual review. This prevents a malicious proposer from erasing debt by
-forcing a chain drop on transactions where they owed us money. When the guard is disabled
+forcing a tx drop on transactions where they owed us money. When the guard is disabled
 (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=false`), auto-accept proceeds unconditionally.
 
 **Post-Drop Actions:** After successful execution, `ChainDropService` recalculates the contact
@@ -2902,7 +2906,7 @@ BasePayload (abstract)
     +-- ContactStatusPayload  # Ping/pong status messages (per-currency chain validation and credit exchange)
     +-- P2pPayload            # P2P routing request messages
     +-- Rp2pPayload           # Return P2P response messages
-    +-- MessagePayload        # General inter-node messages (sync, chain drop)
+    +-- MessagePayload        # General inter-node messages (sync, tx drop)
     +-- UtilPayload           # Utility messages (debug, test)
 ```
 

@@ -557,7 +557,7 @@ class MessagePayload extends BasePayload
     }
 
     /**
-     * Build chain drop proposal payload
+     * Build tx drop proposal payload
      *
      * @param string $address Contact's address
      * @param string $proposalId Unique proposal identifier
@@ -565,7 +565,7 @@ class MessagePayload extends BasePayload
      * @param string $brokenTxid The transaction with the broken chain link
      * @param string|null $previousTxidBeforeGap The txid before the gap
      * @param array $gapContext Additional gap context
-     * @return array The chain drop proposal payload
+     * @return array The tx drop proposal payload
      */
     public function buildChainDropProposal(
         string $address,
@@ -592,12 +592,12 @@ class MessagePayload extends BasePayload
     }
 
     /**
-     * Build chain drop acceptance payload
+     * Build tx drop acceptance payload
      *
      * @param string $address Contact's address
      * @param string $proposalId The proposal being accepted
      * @param array $resignedTransactions Re-signed transaction data to exchange
-     * @return array The chain drop acceptance payload
+     * @return array The tx drop acceptance payload
      */
     public function buildChainDropAcceptance(string $address, string $proposalId, array $resignedTransactions): array
     {
@@ -615,12 +615,12 @@ class MessagePayload extends BasePayload
     }
 
     /**
-     * Build chain drop rejection payload
+     * Build tx drop rejection payload
      *
      * @param string $address Contact's address
      * @param string $proposalId The proposal being rejected
      * @param string $reason Rejection reason
-     * @return array The chain drop rejection payload
+     * @return array The tx drop rejection payload
      */
     public function buildChainDropRejection(string $address, string $proposalId, string $reason): array
     {
@@ -638,12 +638,12 @@ class MessagePayload extends BasePayload
     }
 
     /**
-     * Build chain drop acknowledgment payload
+     * Build tx drop acknowledgment payload
      *
      * @param string $address Contact's address
      * @param string $proposalId The proposal being acknowledged
      * @param array $resignedTransactions Re-signed transaction data to exchange
-     * @return array The chain drop acknowledgment payload
+     * @return array The tx drop acknowledgment payload
      */
     public function buildChainDropAcknowledgment(string $address, string $proposalId, array $resignedTransactions): array
     {

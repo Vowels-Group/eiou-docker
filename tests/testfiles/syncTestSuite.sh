@@ -1955,13 +1955,13 @@ fi
 cleanup_test_transactions "$timestamp3b"
 
 ################################################################################
-# Test 3c: Mutual gap resolved via chain drop - verify previous_txid correction
-# Extends the mutual gap scenario: after sync fails, use chain drop to resolve
+# Test 3c: Mutual gap resolved via tx drop - verify previous_txid correction
+# Extends the mutual gap scenario: after sync fails, use tx drop to resolve
 # the gap, then verify the chain is relinked correctly on BOTH sides.
 #
 # Chain before: AB0(contact) -> AB1 -> AB2 -> AB3
 # After delete AB1+AB3 from both: AB0 -> [AB1 missing] -> AB2 (gap)
-# After chain drop: AB0 -> AB2 (AB2.previous_txid relinked to AB0)
+# After tx drop: AB0 -> AB2 (AB2.previous_txid relinked to AB0)
 ################################################################################
 echo -e "\n[10.1.5 Test 3c: Mutual gap resolved via chain drop - verify chain correction]"
 totaltests=$(( totaltests + 1 ))
@@ -2018,7 +2018,7 @@ ab2_prev_A=$(docker exec ${contactA} php -r "
 " 2>/dev/null)
 echo -e "\t   Broken chain: AB2.previous_txid = ${ab2_prev_A}... (points to missing AB1)"
 
-# Propose chain drop from A
+# Propose tx drop from A
 echo -e "\t   A proposing chain drop..."
 proposeResult=$(docker exec ${contactA} eiou chaindrop propose ${addressB} 2>&1)
 echo -e "\t   Propose result: ${proposeResult:0:60}..."
@@ -2273,7 +2273,7 @@ echo -e "\t   Note: Send triggers chain integrity check -> sync recovery -> then
 # B has a chain gap, so chain integrity check before send detects it.
 # Sync within send attempts recovery but can't fill mid-chain gaps (sync only
 # provides txs newer than lastKnownTxid). This is correct behavior: sends are
-# blocked until the gap is resolved via chain drop agreement protocol.
+# blocked until the gap is resolved via tx drop agreement protocol.
 if [[ "$countA_ba" -ge 1 ]]; then
     printf "\t   Test 6 (B has gap, sends BA1-3) ${GREEN}PASSED${NC} - sync recovered gap, A received ${countA_ba} BA txs\n"
     passed=$(( passed + 1 ))
@@ -2379,7 +2379,7 @@ echo -e "\t   After sync:      A received ${countA_ba} BA txs, B has ${countB_ab
 
 # B has a gap so chain integrity check blocks B's sends. A's sends to B may
 # also be affected since B's gap breaks the shared chain. This is correct
-# behavior: sends are blocked until the gap is resolved via chain drop.
+# behavior: sends are blocked until the gap is resolved via tx drop.
 if [[ "$countA_ba" -ge 1 ]] && [[ "$countB_ab" -ge 4 ]]; then
     printf "\t   Test 8 (simultaneous, B missing AB3) ${GREEN}PASSED${NC} - sync recovered gap, both sides sent\n"
     passed=$(( passed + 1 ))
@@ -2435,7 +2435,7 @@ echo -e "\t   After sync:      A received ${countA_ba} BA txs, B has ${countB_ab
 
 # B has a broken chain (2 gaps), so chain integrity check blocks B's sends.
 # This is correct behavior: sends are blocked until gaps are resolved via
-# chain drop. With 2 non-consecutive gaps, 2 chain drop rounds are needed.
+# tx drop. With 2 non-consecutive gaps, 2 tx drop rounds are needed.
 if [[ "$countA_ba" -ge 1 ]] && [[ "$countB_ab" -ge 3 ]]; then
     printf "\t   Test 9 (simultaneous, broken chain) ${GREEN}PASSED${NC} - sync recovered gaps, both sides sent\n"
     passed=$(( passed + 1 ))

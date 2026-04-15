@@ -104,7 +104,7 @@ class MessageService implements MessageServiceInterface {
     private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
-     * @var ChainDropServiceInterface|null Chain drop service (setter injected)
+     * @var ChainDropServiceInterface|null Tx drop service (setter injected)
      */
     private ?ChainDropServiceInterface $chainDropService = null;
 
@@ -199,9 +199,9 @@ class MessageService implements MessageServiceInterface {
     }
 
     /**
-     * Set the chain drop service (setter injection to avoid circular dependency)
+     * Set the tx drop service (setter injection to avoid circular dependency)
      *
-     * @param ChainDropServiceInterface $service The chain drop service
+     * @param ChainDropServiceInterface $service The tx drop service
      * @return void
      */
     public function setChainDropService(ChainDropServiceInterface $service): void {
@@ -374,7 +374,7 @@ class MessageService implements MessageServiceInterface {
         elseif($request['typeMessage'] === "sync"){
             $this->handleSyncMessageRequest($request);
         }
-        // Handle Chain Drop messages
+        // Handle Tx Drop messages
         elseif($request['typeMessage'] === "chain_drop"){
             $this->handleChainDropMessageRequest($request);
         }
@@ -416,9 +416,9 @@ class MessageService implements MessageServiceInterface {
     }
 
     /**
-     * Handle chain drop message requests
+     * Handle tx drop message requests
      *
-     * Routes chain drop actions (propose, accept, reject, acknowledge) to
+     * Routes tx drop actions (propose, accept, reject, acknowledge) to
      * the ChainDropService.
      *
      * @param array $request The decoded message data

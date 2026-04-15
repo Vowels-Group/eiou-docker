@@ -367,9 +367,9 @@ fixed `getPreviousTxid` skips cancelled/rejected rows when picking the
 predecessor. Pre-upgrade broken chains are not automatically migrated because
 re-signing a peer-received transaction requires the sender's private key;
 the receiver can't fix it locally. Resolve a pre-existing broken chain by
-accepting the chain-drop proposal the sender will auto-propose on the next
+accepting the tx-drop proposal the sender will auto-propose on the next
 sync, or manually from the contact's detail panel. This is exactly what the
-chain-drop flow was originally designed for.
+tx-drop flow was originally designed for.
 
 ### Permissions errors in logs
 

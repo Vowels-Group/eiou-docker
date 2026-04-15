@@ -4,15 +4,15 @@
 namespace Eiou\Events;
 
 /**
- * Chain Drop Events
+ * Tx Drop Events
  *
- * Event constants for chain drop agreement operations.
- * These events enable loose coupling between chain-drop-related services.
+ * Event constants for tx drop agreement operations.
+ * These events enable loose coupling between tx-drop-related services.
  */
 class ChainDropEvents
 {
     /**
-     * Dispatched when a chain drop is proposed to a contact
+     * Dispatched when a tx drop is proposed to a contact
      *
      * Event data:
      *   - proposal_id: string - The proposal identifier
@@ -23,7 +23,7 @@ class ChainDropEvents
     public const CHAIN_DROP_PROPOSED = 'chain_drop.proposed';
 
     /**
-     * Dispatched when a chain drop proposal is accepted
+     * Dispatched when a tx drop proposal is accepted
      *
      * Event data:
      *   - proposal_id: string - The proposal identifier
@@ -33,7 +33,7 @@ class ChainDropEvents
     public const CHAIN_DROP_ACCEPTED = 'chain_drop.accepted';
 
     /**
-     * Dispatched when a chain drop proposal is rejected
+     * Dispatched when a tx drop proposal is rejected
      *
      * Event data:
      *   - proposal_id: string - The proposal identifier
@@ -43,7 +43,7 @@ class ChainDropEvents
     public const CHAIN_DROP_REJECTED = 'chain_drop.rejected';
 
     /**
-     * Dispatched when a chain drop has been fully executed on the local node
+     * Dispatched when a tx drop has been fully executed on the local node
      *
      * Event data:
      *   - proposal_id: string - The proposal identifier
@@ -56,7 +56,7 @@ class ChainDropEvents
 
     /**
      * Dispatched when a missing transaction is recovered from a database backup
-     * instead of requiring a chain drop
+     * instead of requiring a tx drop
      *
      * Event data:
      *   - missing_txid: string - The recovered transaction ID

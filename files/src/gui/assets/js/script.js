@@ -2620,7 +2620,7 @@ function openContactModal(contact, openTab) {
         chainStatusEl.textContent = chainText;
         chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');
 
-        // Make clickable to scroll to chain drop section
+        // Make clickable to scroll to tx drop section
         if (isClickable) {
             chainStatusEl.onclick = function() {
                 showModalTab('status-tab', null);
@@ -2636,7 +2636,7 @@ function openContactModal(contact, openTab) {
         }
     }
 
-    // Show chain drop section if chain is invalid
+    // Show tx drop section if chain is invalid
     var chainDropSection = document.getElementById('chain_drop_section');
     var chainDropPropose = document.getElementById('chain_drop_propose');
     var chainDropAwaiting = document.getElementById('chain_drop_awaiting');
@@ -2747,7 +2747,7 @@ function openContactModal(contact, openTab) {
     // Store current contact address for ping function
     currentContactAddress = contact.address;
 
-    // Store current contact pubkey hash for chain drop
+    // Store current contact pubkey hash for tx drop
     currentContactPubkeyHash = contact.pubkey_hash || null;
 
     // Reset ping button state and result message
@@ -3496,11 +3496,11 @@ window.addEventListener('DOMContentLoaded', function() {
     checkReopenContactModal();
 });
 
-// Chain Drop Resolution state
+// Tx Drop Resolution state
 var currentChainDropProposalId = null;
 
 /**
- * Proposes a chain drop to the current contact.
+ * Proposes a tx drop to the current contact.
  * Sends AJAX POST with the contact's pubkey hash.
  * @returns {void}
  */
@@ -3601,7 +3601,7 @@ function resetChainDropProposeButton() {
 }
 
 /**
- * Accepts an incoming chain drop proposal.
+ * Accepts an incoming tx drop proposal.
  * @returns {void}
  */
 function acceptChainDrop() {
@@ -3686,7 +3686,7 @@ function acceptChainDrop() {
 }
 
 /**
- * Rejects an incoming chain drop proposal.
+ * Rejects an incoming tx drop proposal.
  * @returns {void}
  */
 function rejectChainDrop() {
@@ -3788,7 +3788,7 @@ function resetChainDropActionButtons() {
 
 /**
  * Reloads the page and reopens the current contact modal on the info tab.
- * Used after chain drop propose/accept/reject so all statuses refresh from
+ * Used after tx drop propose/accept/reject so all statuses refresh from
  * server data (badges, chain status, notification banner).
  * @returns {void}
  */

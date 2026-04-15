@@ -2,7 +2,7 @@
 /**
  * Unit Tests for ChainDropProposalRepository
  *
- * Tests chain drop proposal repository database operations with mocked PDO.
+ * Tests tx drop proposal repository database operations with mocked PDO.
  */
 
 namespace Eiou\Tests\Repositories;

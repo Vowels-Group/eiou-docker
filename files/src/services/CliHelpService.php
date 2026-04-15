@@ -952,7 +952,7 @@ HELP;
     }
 
     /**
-     * Display detailed help for chain drop agreement commands
+     * Display detailed help for tx drop agreement commands
      */
     private function showChainDropDetailedHelp(): void {
         $help = <<<HELP
