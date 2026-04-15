@@ -1,0 +1,219 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!-- API Keys Section -->
+<div id="api-keys-section" class="form-container fade-in-up">
+    <h2><i class="fas fa-key"></i> API Keys</h2>
+    <p class="text-muted mb-lg">
+        Grant external applications programmatic access to this wallet. Keys
+        authenticate via HMAC-SHA256; the shared secret is shown once at
+        creation and cannot be retrieved again. Re-enter your auth code to
+        create, disable, or delete keys — a short-lived grant covers a few
+        minutes of edits before prompting again, independent of
+        &ldquo;Remember me&rdquo;.
+    </p>
+
+    <div class="api-keys-toolbar">
+        <button type="button" class="btn btn-primary btn-compact" data-action="openApiKeyCreateModal">
+            <i class="fas fa-plus"></i> Create API Key
+        </button>
+        <button type="button" class="btn btn-secondary btn-compact" data-action="refreshApiKeys">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+        <span id="api-keys-access-state" class="api-keys-access-state text-muted"></span>
+    </div>
+
+    <div id="api-keys-list" class="api-keys-list">
+        <div class="api-keys-empty text-muted">
+            <i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;
+        </div>
+    </div>
+</div>
+
+<!-- Re-auth modal -->
+<div id="apiKeysVerifyModal" class="modal d-none">
+    <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-lock"></i> Confirm it&rsquo;s you</h3>
+            <span class="close" data-action="closeApiKeysVerifyModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p class="text-muted">
+                API key operations need a fresh confirmation. Remembered
+                devices stay logged in, but creating or revoking keys always
+                requires your auth code.
+            </p>
+            <form id="apiKeysVerifyForm">
+                <input type="hidden" name="action" value="apiKeysVerify">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <div class="form-group">
+                    <label for="apiKeysVerifyAuthcode">Auth Code</label>
+                    <input type="password" id="apiKeysVerifyAuthcode" name="authcode"
+                           autocomplete="current-password" required>
+                </div>
+                <div id="apiKeysVerifyError" class="form-error d-none"></div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysVerifyModal">
+                Cancel
+            </button>
+            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeysVerify">
+                Unlock
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Create API key modal -->
+<div id="apiKeysCreateModal" class="modal d-none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus"></i> Create API Key</h3>
+            <span class="close" data-action="closeApiKeyCreateModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <form id="apiKeysCreateForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                <div class="form-group">
+                    <label for="apiKeyName">Label</label>
+                    <input type="text" id="apiKeyName" name="name" maxlength="64" required
+                           placeholder="e.g. Accounting import script">
+                    <small class="form-hint">
+                        Something that will help you recognise this key later. Shown in the list.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Preset</label>
+                    <div class="api-keys-preset-row">
+                        <button type="button" class="btn btn-secondary btn-compact" data-action="applyApiKeyPreset" data-preset="read_only">
+                            Read-only
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-compact" data-action="applyApiKeyPreset" data-preset="full_access">
+                            Full access
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-compact" data-action="applyApiKeyPreset" data-preset="clear">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Permissions</label>
+                    <div class="api-keys-permissions">
+                        <?php foreach (\Eiou\Gui\Controllers\ApiKeysController::PERMISSION_GROUPS as $groupLabel => $perms): ?>
+                            <fieldset class="api-keys-permission-group">
+                                <legend><?php echo htmlspecialchars($groupLabel); ?></legend>
+                                <?php foreach ($perms as $permKey => $permDesc): ?>
+                                    <label class="api-keys-permission">
+                                        <input type="checkbox" name="permissions[]" value="<?php echo htmlspecialchars($permKey); ?>">
+                                        <span class="api-keys-permission-key"><?php echo htmlspecialchars($permKey); ?></span>
+                                        <small class="api-keys-permission-desc"><?php echo htmlspecialchars($permDesc); ?></small>
+                                    </label>
+                                <?php endforeach; ?>
+                            </fieldset>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="apiKeyRateLimit">Rate limit (requests / minute)</label>
+                        <input type="number" id="apiKeyRateLimit" name="rate_limit_per_minute"
+                               min="1" max="<?php echo \Eiou\Services\ApiKeyService::MAX_RATE_LIMIT; ?>" value="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="apiKeyExpires">Expires</label>
+                        <select id="apiKeyExpires" name="expires_in_days">
+                            <option value="0">Never</option>
+                            <option value="30">30 days</option>
+                            <option value="90" selected>90 days</option>
+                            <option value="365">1 year</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="apiKeysCreateError" class="form-error d-none"></div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeyCreateModal">
+                Cancel
+            </button>
+            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeyCreate">
+                <i class="fas fa-plus"></i> Create Key
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- One-time reveal modal -->
+<div id="apiKeysRevealModal" class="modal d-none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <h3><i class="fas fa-unlock"></i> Save this secret now</h3>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p class="form-error">
+                This is the only time the secret will ever be shown. If you lose it
+                you&rsquo;ll have to create a new key.
+            </p>
+            <div class="form-group">
+                <label>Key ID</label>
+                <div class="api-keys-reveal-row">
+                    <code id="apiKeysRevealKeyId" class="api-keys-reveal-value"></code>
+                    <button type="button" class="btn btn-secondary btn-compact" data-action="copyApiKeyReveal" data-target="apiKeysRevealKeyId">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Secret</label>
+                <div class="api-keys-reveal-row">
+                    <code id="apiKeysRevealSecret" class="api-keys-reveal-value"></code>
+                    <button type="button" class="btn btn-secondary btn-compact" data-action="copyApiKeyReveal" data-target="apiKeysRevealSecret">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+            <label class="api-keys-ack">
+                <input type="checkbox" id="apiKeysRevealAck">
+                I&rsquo;ve saved the key ID and secret somewhere safe.
+            </label>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary btn-compact" id="apiKeysRevealDone" disabled data-action="closeApiKeyRevealModal">
+                Done
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div id="apiKeysDeleteModal" class="modal d-none">
+    <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-trash"></i> Delete API key</h3>
+            <span class="close" data-action="closeApiKeyDeleteModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p>
+                Deleting <strong id="apiKeysDeleteLabel"></strong> is permanent. Any
+                clients using it will stop working immediately. To confirm, type the
+                key&rsquo;s label below.
+            </p>
+            <div class="form-group">
+                <input type="text" id="apiKeysDeleteConfirm" autocomplete="off">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeyDeleteModal">
+                Cancel
+            </button>
+            <button type="button" class="btn btn-danger btn-compact" id="apiKeysDeleteSubmit" disabled data-action="submitApiKeyDelete">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+</div>

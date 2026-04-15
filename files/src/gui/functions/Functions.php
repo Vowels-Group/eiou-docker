@@ -219,6 +219,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
+    // AJAX-only API keys actions (returns JSON, exits immediately)
+    if (in_array($action, [
+        'apiKeysStatus',
+        'apiKeysVerify',
+        'apiKeysClearAccess',
+        'apiKeysList',
+        'apiKeysCreate',
+        'apiKeysToggle',
+        'apiKeysDelete',
+    ], true)) {
+        try {
+            $apiKeysController->routeAction();
+        } catch (\Eiou\Gui\Controllers\ApiKeysControllerResponseSent $e) {
+            // Response body + status were already written; unwind to here
+            // and exit cleanly so the wallet.html template does not render.
+        }
+        exit;
+    }
+
     // AJAX-only DLQ actions (returns JSON, exits immediately)
     if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {

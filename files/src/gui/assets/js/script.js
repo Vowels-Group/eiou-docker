@@ -6084,7 +6084,24 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             showLoader('Sending payment request...', 'Connecting to contact server. The message processor will continue retrying in the background.');
             startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
             form.submit();
-        }
+        },
+
+        // API Keys
+        'openApiKeyCreateModal': function() { window.apiKeys.openCreateModal(); },
+        'closeApiKeyCreateModal': function() { window.apiKeys.closeCreateModal(); },
+        'submitApiKeyCreate': function() { window.apiKeys.submitCreate(); },
+        'applyApiKeyPreset': function(el) { window.apiKeys.applyPreset(el.getAttribute('data-preset')); },
+        'refreshApiKeys': function() { window.apiKeys.refresh(); },
+        'toggleApiKey': function(el) { window.apiKeys.toggle(el.getAttribute('data-key-id'), el.getAttribute('data-enable') === '1'); },
+        'deleteApiKeyPrompt': function(el) {
+            window.apiKeys.openDeleteModal(el.getAttribute('data-key-id'), el.getAttribute('data-label') || '');
+        },
+        'closeApiKeyDeleteModal': function() { window.apiKeys.closeDeleteModal(); },
+        'submitApiKeyDelete': function() { window.apiKeys.submitDelete(); },
+        'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
+        'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
+        'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
+        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -6183,4 +6200,399 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         if (action === 'filterTransactions') { filterTransactions(); }
         if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
     }, false);
+
+    // ========================================================================
+    // API Keys GUI module
+    //
+    // Backs the "API Keys" section in the Settings tab. All mutating calls
+    // (create / enable / disable / delete) round-trip through an additional
+    // sensitive-action gate: the server answers 401 sensitive_access_required
+    // when the grant is missing or expired, and the module re-prompts for the
+    // auth code before retrying the original action. This is independent of
+    // "Remember me" — a remembered session is still prompted here.
+    // ========================================================================
+    window.apiKeys = (function() {
+        var pendingAction = null;   // { fn: Function, label: string } to retry after verify
+        var pendingDelete = null;   // { keyId, label }
+        var lastCreated = null;     // { keyId, secret } for copy-to-clipboard
+        var loaded = false;
+
+        function csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return (el && el.value) ? el.value : '';
+        }
+
+        function post(payload) {
+            var body = new FormData();
+            Object.keys(payload).forEach(function(k) {
+                var v = payload[k];
+                if (Array.isArray(v)) {
+                    v.forEach(function(item) { body.append(k + '[]', item); });
+                } else if (v !== null && v !== undefined) {
+                    body.append(k, v);
+                }
+            });
+            if (!body.has('csrf_token')) { body.append('csrf_token', csrfToken()); }
+            return fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) {
+                    return { status: res.status, data: data };
+                });
+            });
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatWhen(ts) {
+            if (!ts) return 'Never';
+            // Backend returns SQL datetime strings. Parse as UTC then show local.
+            var d = new Date(ts.replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return escapeHtml(ts);
+            return d.toLocaleString();
+        }
+
+        function renderAccessState(secondsRemaining) {
+            var el = document.getElementById('api-keys-access-state');
+            if (!el) return;
+            if (secondsRemaining > 0) {
+                el.textContent = 'Edits unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min';
+            } else {
+                el.textContent = '';
+            }
+        }
+
+        function renderList(keys) {
+            var container = document.getElementById('api-keys-list');
+            if (!container) return;
+            if (!keys || keys.length === 0) {
+                container.innerHTML = '<div class="api-keys-empty text-muted">' +
+                    'No API keys yet. Create one to let an external application connect to this wallet.' +
+                    '</div>';
+                return;
+            }
+            var rows = keys.map(function(k) {
+                var permSummary = (k.permissions || []).join(', ') || '—';
+                var status = k.enabled
+                    ? '<span class="tx-status-badge tx-status-completed">Active</span>'
+                    : '<span class="tx-status-badge tx-status-rejected">Disabled</span>';
+                var toggleLabel = k.enabled ? 'Disable' : 'Enable';
+                var toggleClass = k.enabled ? 'btn-secondary' : 'btn-primary';
+                var enableFlag = k.enabled ? '0' : '1';
+                return '' +
+                    '<div class="api-keys-row">' +
+                        '<div class="api-keys-row-main">' +
+                            '<div class="api-keys-row-title">' +
+                                '<strong>' + escapeHtml(k.name) + '</strong> ' + status +
+                            '</div>' +
+                            '<div class="api-keys-row-id"><code>' + escapeHtml(k.key_id) + '</code></div>' +
+                            '<div class="api-keys-row-meta text-muted">' +
+                                'Permissions: ' + escapeHtml(permSummary) + '<br>' +
+                                'Rate limit: ' + (k.rate_limit_per_minute || 0) + '/min &middot; ' +
+                                'Created: ' + formatWhen(k.created_at) + ' &middot; ' +
+                                'Last used: ' + formatWhen(k.last_used_at) +
+                                (k.expires_at ? ' &middot; Expires: ' + formatWhen(k.expires_at) : '') +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="api-keys-row-actions">' +
+                            '<button type="button" class="btn ' + toggleClass + ' btn-compact" ' +
+                                'data-action="toggleApiKey" data-key-id="' + escapeHtml(k.key_id) + '" ' +
+                                'data-enable="' + enableFlag + '">' + toggleLabel + '</button>' +
+                            '<button type="button" class="btn btn-danger btn-compact" ' +
+                                'data-action="deleteApiKeyPrompt" data-key-id="' + escapeHtml(k.key_id) + '" ' +
+                                'data-label="' + escapeHtml(k.name) + '">Delete</button>' +
+                        '</div>' +
+                    '</div>';
+            }).join('');
+            container.innerHTML = rows;
+        }
+
+        function refresh() {
+            return post({ action: 'apiKeysList' }).then(function(r) {
+                if (r.data && r.data.success) {
+                    renderList(r.data.keys || []);
+                    renderAccessState(r.data.seconds_remaining || 0);
+                    loaded = true;
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
+                }
+            }).catch(function() {
+                showToast('Error', 'Network error while loading API keys', 'error');
+            });
+        }
+
+        function ensureLoadedOnTab() {
+            // Lazy-load the list the first time the user switches to the
+            // Settings tab, so we don't fire an AJAX call on every page load
+            // for users who never open this section.
+            var settingsPanel = document.getElementById('tab-panel-settings');
+            if (!settingsPanel) return;
+            var observer = new MutationObserver(function() {
+                if (settingsPanel.style.display !== 'none' && !loaded) {
+                    refresh();
+                }
+            });
+            observer.observe(settingsPanel, { attributes: true, attributeFilter: ['style'] });
+            // Handle initial render (tab already visible, e.g. deep link)
+            if (settingsPanel.style.display !== 'none' && !loaded) {
+                refresh();
+            }
+        }
+
+        function showModal(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.remove('d-none');
+        }
+        function hideModal(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.add('d-none');
+        }
+
+        // --- Create -------------------------------------------------------
+        function openCreateModal() {
+            var form = document.getElementById('apiKeysCreateForm');
+            if (form) form.reset();
+            var err = document.getElementById('apiKeysCreateError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysCreateModal');
+        }
+
+        function closeCreateModal() { hideModal('apiKeysCreateModal'); }
+
+        function applyPreset(preset) {
+            var boxes = document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]');
+            if (preset === 'clear') {
+                boxes.forEach(function(b) { b.checked = false; });
+                return;
+            }
+            var presets = {
+                'read_only': ['wallet:read', 'contacts:read', 'system:read', 'backup:read'],
+                'full_access': ['admin']
+            };
+            var target = presets[preset] || [];
+            boxes.forEach(function(b) { b.checked = target.indexOf(b.value) !== -1; });
+        }
+
+        function collectPermissions() {
+            var out = [];
+            document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]:checked').forEach(function(b) {
+                out.push(b.value);
+            });
+            return out;
+        }
+
+        function submitCreate() {
+            var name = document.getElementById('apiKeyName').value.trim();
+            var permissions = collectPermissions();
+            var rate = document.getElementById('apiKeyRateLimit').value;
+            var expires = document.getElementById('apiKeyExpires').value;
+            var err = document.getElementById('apiKeysCreateError');
+
+            if (!name) { showCreateError('Please give the key a label.'); return; }
+            if (permissions.length === 0) { showCreateError('Select at least one permission.'); return; }
+
+            withSensitiveAccess(function() {
+                return post({
+                    action: 'apiKeysCreate',
+                    name: name,
+                    permissions: permissions,
+                    rate_limit_per_minute: rate,
+                    expires_in_days: expires
+                }).then(function(r) {
+                    if (r.data && r.data.success) {
+                        closeCreateModal();
+                        showRevealModal(r.data.key);
+                        refresh();
+                    } else {
+                        showCreateError((r.data && (r.data.message || r.data.error)) || 'Could not create key');
+                    }
+                });
+            }, 'Create API key');
+        }
+
+        function showCreateError(msg) {
+            var err = document.getElementById('apiKeysCreateError');
+            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+        }
+
+        // --- Reveal (one-time) -------------------------------------------
+        function showRevealModal(key) {
+            lastCreated = { keyId: key.key_id, secret: key.secret };
+            document.getElementById('apiKeysRevealKeyId').textContent = key.key_id;
+            document.getElementById('apiKeysRevealSecret').textContent = key.secret;
+            var ack = document.getElementById('apiKeysRevealAck');
+            var done = document.getElementById('apiKeysRevealDone');
+            ack.checked = false;
+            done.disabled = true;
+            ack.onchange = function() { done.disabled = !ack.checked; };
+            showModal('apiKeysRevealModal');
+        }
+
+        function closeRevealModal() {
+            // Clear the secret from memory and from the DOM the moment the
+            // user closes. The server has no way to re-show this.
+            document.getElementById('apiKeysRevealSecret').textContent = '';
+            document.getElementById('apiKeysRevealKeyId').textContent = '';
+            lastCreated = null;
+            hideModal('apiKeysRevealModal');
+        }
+
+        function copyToClipboard(targetId) {
+            var el = document.getElementById(targetId);
+            if (!el) return;
+            var text = el.textContent || '';
+            if (!text) return;
+            var ok = function() { showToast('Copied', 'Copied to clipboard', 'success'); };
+            var fail = function() { showToast('Copy failed', 'Select and copy manually', 'error'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(ok, fail);
+            } else {
+                // Fallback — works over non-HTTPS and older browsers.
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); ok(); } catch (e) { fail(); }
+                document.body.removeChild(ta);
+            }
+        }
+
+        // --- Toggle / delete ---------------------------------------------
+        function toggle(keyId, enable) {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysToggle', key_id: keyId, enable: enable ? '1' : '0' })
+                    .then(function(r) {
+                        if (r.data && r.data.success) {
+                            showToast('Saved', enable ? 'API key enabled' : 'API key disabled', 'success');
+                            refresh();
+                        } else {
+                            showToast('Error', (r.data && r.data.message) || 'Could not update key', 'error');
+                        }
+                    });
+            }, enable ? 'Enable API key' : 'Disable API key');
+        }
+
+        function openDeleteModal(keyId, label) {
+            pendingDelete = { keyId: keyId, label: label };
+            document.getElementById('apiKeysDeleteLabel').textContent = label;
+            var confirmInput = document.getElementById('apiKeysDeleteConfirm');
+            var submitBtn = document.getElementById('apiKeysDeleteSubmit');
+            confirmInput.value = '';
+            submitBtn.disabled = true;
+            confirmInput.oninput = function() {
+                submitBtn.disabled = confirmInput.value.trim() !== label;
+            };
+            showModal('apiKeysDeleteModal');
+        }
+
+        function closeDeleteModal() {
+            pendingDelete = null;
+            hideModal('apiKeysDeleteModal');
+        }
+
+        function submitDelete() {
+            if (!pendingDelete) return;
+            var keyId = pendingDelete.keyId;
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDelete', key_id: keyId }).then(function(r) {
+                    if (r.data && r.data.success) {
+                        showToast('Deleted', 'API key deleted', 'success');
+                        closeDeleteModal();
+                        refresh();
+                    } else {
+                        showToast('Error', (r.data && r.data.message) || 'Could not delete key', 'error');
+                    }
+                });
+            }, 'Delete API key');
+        }
+
+        // --- Sensitive-access gate ---------------------------------------
+        function withSensitiveAccess(fn, label) {
+            return fn().then(function(r) {
+                if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
+                    pendingAction = { fn: fn, label: label };
+                    openVerifyModal(r.data.message);
+                    return;
+                }
+                return r;
+            });
+        }
+
+        function openVerifyModal(message) {
+            var input = document.getElementById('apiKeysVerifyAuthcode');
+            var err = document.getElementById('apiKeysVerifyError');
+            input.value = '';
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysVerifyModal');
+            setTimeout(function() { input.focus(); }, 50);
+        }
+
+        function closeVerifyModal() {
+            pendingAction = null;
+            hideModal('apiKeysVerifyModal');
+        }
+
+        function submitVerify() {
+            var input = document.getElementById('apiKeysVerifyAuthcode');
+            var err = document.getElementById('apiKeysVerifyError');
+            var code = input.value;
+            if (!code) { return; }
+
+            post({ action: 'apiKeysVerify', authcode: code }).then(function(r) {
+                if (r.data && r.data.success) {
+                    hideModal('apiKeysVerifyModal');
+                    input.value = '';
+                    renderAccessState(r.data.seconds_remaining || 0);
+                    if (pendingAction) {
+                        var fn = pendingAction.fn;
+                        pendingAction = null;
+                        fn();
+                    }
+                } else {
+                    if (err) {
+                        err.textContent = (r.data && r.data.error === 'invalid_authcode')
+                            ? 'Invalid auth code. Please try again.'
+                            : 'Could not verify. Please try again.';
+                        err.classList.remove('d-none');
+                    }
+                }
+            }).catch(function() {
+                if (err) {
+                    err.textContent = 'Network error. Please try again.';
+                    err.classList.remove('d-none');
+                }
+            });
+        }
+
+        // --- Init ---------------------------------------------------------
+        document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
+
+        return {
+            refresh: refresh,
+            openCreateModal: openCreateModal,
+            closeCreateModal: closeCreateModal,
+            submitCreate: submitCreate,
+            applyPreset: applyPreset,
+            toggle: toggle,
+            openDeleteModal: openDeleteModal,
+            closeDeleteModal: closeDeleteModal,
+            submitDelete: submitDelete,
+            closeRevealModal: closeRevealModal,
+            copyToClipboard: copyToClipboard,
+            closeVerifyModal: closeVerifyModal,
+            submitVerify: submitVerify
+        };
+    })();
+
 })();

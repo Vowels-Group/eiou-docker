@@ -19,6 +19,10 @@ class SessionKeys
     const LAST_ACTIVITY = 'last_activity';
     const LAST_REGENERATION = 'last_regeneration';
 
+    // Sensitive-action re-auth (independent of remember-me)
+    const SENSITIVE_ACCESS_UNTIL = 'sensitive_access_until';
+    const SENSITIVE_ACCESS_AUTH_TIME = 'sensitive_access_auth_time';
+
     // CSRF protection
     const CSRF_TOKEN = 'csrf_token';
     const CSRF_TOKEN_TIME = 'csrf_token_time';

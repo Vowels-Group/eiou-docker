@@ -21,6 +21,7 @@ use Eiou\Gui\Controllers\DlqController;
 use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
+use Eiou\Gui\Controllers\ApiKeysController;
 
 if (!file_exists("/etc/eiou/config/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
@@ -57,6 +58,10 @@ $transactionController->setP2pApprovalDependencies(
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
 $settingsController = new SettingsController($secureSession);
+$apiKeysController = new ApiKeysController(
+    $secureSession,
+    $repoFactory->get(Eiou\Database\ApiKeyRepository::class)
+);
 $paymentRequestController = new PaymentRequestController(
     $secureSession,
     $serviceContainer->getPaymentRequestService()
