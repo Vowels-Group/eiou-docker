@@ -30,15 +30,19 @@ use Exception;
 /**
  * Tx Drop Service
  *
- * Manages the mutual agreement protocol for dropping missing transactions
- * from the chain between two contacts.
+ * Manages the mutual agreement protocol for dropping one or more missing
+ * transactions from the shared chain between two contacts and re-wiring
+ * the chain around the drop.
  *
- * When both contacts are missing the same transaction, the chain cannot be
- * repaired via sync. This service coordinates:
+ * When both contacts are missing the same transaction(s), the chain cannot
+ * be repaired via sync. A single tx drop spans one or more *consecutive*
+ * missing transactions; non-consecutive gaps require a separate proposal
+ * per run. This service coordinates:
  * 1. Proposing a tx drop to the contact
  * 2. Handling incoming proposals
  * 3. Accepting/rejecting proposals
- * 4. Executing the chain modification (updating previous_txid, re-signing)
+ * 4. Executing the chain modification (updating previous_txid to skip the
+ *    dropped run, re-signing affected transactions)
  * 5. Exchanging re-signed transaction copies between both parties
  */
 class ChainDropService implements ChainDropServiceInterface

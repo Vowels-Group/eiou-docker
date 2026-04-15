@@ -977,7 +977,7 @@ chains. Operates in 5-minute cycles.
 - Updates contact online status (online/partial/offline/unknown)
 - Validates per-currency transaction chain integrity (`prevTxidsByCurrency` maps)
 - Triggers sync if any currency's chain heads don't match
-- Auto-proposes tx drop if sync detects mutual gaps (both sides missing same transaction)
+- Auto-proposes tx drop if sync detects mutual gaps (both sides missing the same transaction(s))
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
 
@@ -2205,9 +2205,10 @@ recovery before falling through to a tx drop:
 1. **Local self-repair** — checks local database backups for missing transactions
 2. **Remote backup request** — sends remaining missing txids to the contact via the
    `missingTxids` field in the sync request; the contact checks its DB and backups
-3. **Tx drop fallback** — only if neither side has the transaction in any backup,
-   the `ChainDropService` coordinates mutual agreement to drop the missing transaction
-   and relink the chain
+3. **Tx drop fallback** — only if neither side has the missing transactions in any backup,
+   the `ChainDropService` coordinates mutual agreement to drop the missing transaction(s)
+   and re-wire the chain around the drop. A single tx drop spans one or more *consecutive*
+   missing transactions; non-consecutive gaps require a separate tx drop per run
 
 ### Send Flow (SendOperationService)
 
@@ -2371,8 +2372,11 @@ handleTransactionSyncRequest(request)  [Contact's side]
 
 ### Tx Drop Agreement Flow
 
-When neither side has a missing transaction in their database or backups, the tx
-drop protocol coordinates mutual agreement to remove the gap and relink the chain:
+When neither side has the missing transactions in their database or backups, the
+tx drop protocol coordinates mutual agreement to drop the missing transaction(s)
+and re-wire the chain around the drop. A single tx drop handles one or more
+*consecutive* missing transactions in a single run; non-consecutive gaps require
+a separate proposal per run of consecutive missing txs:
 
 ```
       PROPOSER (A)                                     RECEIVER (B)

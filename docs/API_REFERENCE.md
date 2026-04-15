@@ -1696,7 +1696,7 @@ Generate a debug report, scrub sensitive data (addresses, keys, IPs), and submit
 
 ## Tx Drop Endpoints
 
-Tx drops allow resetting the transaction chain with a contact when integrity issues are detected (e.g., missing or corrupted transactions). Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`). The balance guard (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`) can be disabled for unconditional auto-accept.
+Tx drops allow mutually dropping one or more missing transactions from the shared chain with a contact and re-wiring the chain around the drop, when both sides have a mutual gap that sync and backup recovery cannot repair. A single tx drop spans one or more *consecutive* missing transactions; non-consecutive gaps require a separate proposal per run. Auto-propose is controlled by `EIOU_AUTO_CHAIN_DROP_PROPOSE` (default: `true`). Auto-accept is controlled by `EIOU_AUTO_CHAIN_DROP_ACCEPT` (default: `false`). The balance guard (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD`, default: `true`) can be disabled for unconditional auto-accept.
 
 ### GET /api/v1/chaindrop
 
@@ -1737,7 +1737,7 @@ List tx drop proposals.
 
 ### POST /api/v1/chaindrop/propose
 
-Propose a tx drop with a contact. This initiates the process of resetting the transaction chain.
+Propose a tx drop with a contact. This initiates the process of mutually dropping one or more missing transactions and re-wiring the chain around the drop.
 
 **Permission:** `wallet:send`
 

@@ -1324,9 +1324,9 @@ eiou request cancel req_abc123def456
 
 Manage tx drop agreements for resolving transaction chain gaps.
 
-When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Tx drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
+When both contacts are missing one or more of the same transactions in their shared chain, the chain cannot be repaired via sync. Tx drop resolves this by mutually agreeing to remove the missing transaction(s) and re-wire the chain around the drop (a single tx drop operation can span one or more *consecutive* missing transactions; non-consecutive gaps require a separate proposal per run of consecutive missing txs).
 
-**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. Before resorting to a tx drop, the sync flow attempts **backup recovery**: the local node checks its own backups first (self-repair), then tells the remote node which txids are still missing so it can check its backups too. If either side has the transaction in a backup, the chain is repaired without a tx drop. Only when neither side has a backup does the `send` command auto-propose a tx drop. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
+**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. Before resorting to a tx drop, the sync flow attempts **backup recovery**: the local node checks its own backups first (self-repair), then tells the remote node which txids are still missing so it can check its backups too. If either side has the missing transactions in a backup, the chain is repaired without a tx drop. Only when neither side has a backup does the `send` command auto-propose a tx drop. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transactions are recovered.
 
 **Syntax:**
 ```bash
@@ -1379,14 +1379,14 @@ eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
 Chain gaps are detected locally by three commands:
 - **`send`** — verifies chain integrity before every transaction; triggers sync to repair (which includes backup recovery on both sides); auto-proposes a tx drop only if sync fails to repair the gap
 - **`sync`** — verifies chain integrity, attempts local backup recovery before contacting the remote node, and asks the remote to check its backups for any remaining gaps
-- **`ping`** — verifies local chain integrity (not just chain head comparison); triggers sync if chains don't match; auto-proposes a tx drop if sync detects mutual gaps (both sides missing same transaction)
+- **`ping`** — verifies local chain integrity (not just chain head comparison); triggers sync if chains don't match; auto-proposes a tx drop if sync detects mutual gaps (both sides missing the same transaction(s))
 
 All detection is local — no transaction lists are sent over the wire.
 
 **Recovery priority:**
 1. **Local backup recovery** — during sync, the node checks its own database backups for missing transactions
 2. **Remote backup recovery** — remaining missing txids are sent to the contact, who checks its DB and backups
-3. **Tx drop** — only if neither side has the transaction in any backup
+3. **Tx drop** — only if neither side has the missing transactions in any backup; drops the missing run(s) and re-wires the chain around them
 
 **Flow (when backup recovery fails):**
 1. Contact A detects chain gap (`send` or `ping` auto-proposes, or `sync` reveals the gap)
