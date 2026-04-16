@@ -4589,10 +4589,13 @@ function parseQrData(text) {
 //
 // iOS Safari notes for future maintainers — if iOS users still report
 // "QR scanner doesn't work" after the layered fixes below:
-//   1. The relaxed `{ facingMode: { ideal: 'environment' } }` constraint
-//      and the getCameras() fallback (Layer 2 below) should handle most
-//      iOS quirks within html5-qrcode. Check console.warn output from
-//      showCameraError() to find the exact err.name reported by the user.
+//   1. The plain-string `{ facingMode: 'environment' }` constraint plus the
+//      getCameras() fallback (Layer 2 below) should handle most iOS quirks
+//      within html5-qrcode. Check console.warn output from showCameraError()
+//      to find the exact err.name reported by the user. Do NOT switch back
+//      to `{ facingMode: { ideal: 'environment' } }` — html5-qrcode v2.3.8
+//      does not accept the `ideal` form and throws synchronously before
+//      getUserMedia is called, breaking the scanner for every user.
 //   2. html5-qrcode v2.3.8 is the last release (April 2023) — the library
 //      is essentially unmaintained. There is no upgrade path within it.
 //      That said, Snyk reports zero known vulnerabilities for 2.3.8 as of
@@ -4718,12 +4721,19 @@ function openQrScanner(targetInputId, opts) {
     var scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
     function noopFrameError() { /* ignore — fires continuously when no QR in frame */ }
 
-    // Use { ideal: 'environment' } instead of literal 'environment'. iOS Safari
-    // (and some Android browsers) reject the strict form on devices where the
-    // camera enumeration doesn't tag a camera as 'environment', and fail with
-    // OverconstrainedError instead of just picking another camera.
+    // Use the literal 'environment' string form — html5-qrcode v2.3.8 only
+    // accepts a plain string ('user' / 'environment') or the hard-constraint
+    // `{ exact: 'environment' }` object. It does NOT accept the standard
+    // MediaTrackConstraints `{ ideal: 'environment' }` form and throws
+    // synchronously ("'facingMode' should be string or object with 'exact'")
+    // before getUserMedia is even called. An earlier attempt at `{ ideal:
+    // 'environment' }` broke every Android/Pixel user because that throw
+    // wasn't an OverconstrainedError/NotFoundError and fell straight through
+    // to showCameraError with name='Unknown'. The Layer 2 deviceId fallback
+    // below still handles devices whose rear camera isn't tagged as
+    // 'environment' — OverconstrainedError from getUserMedia does trigger it.
     scanner.start(
-        { facingMode: { ideal: 'environment' } },
+        { facingMode: 'environment' },
         scanConfig,
         onScanSuccess,
         noopFrameError
