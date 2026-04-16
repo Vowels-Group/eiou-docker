@@ -105,6 +105,12 @@ On startup, `startup.sh` creates a lockfile (`/tmp/eiou_maintenance.lock`) befor
 - Requests hitting a mid-migration database schema
 - Incoming P2P messages being processed before the node is fully initialized
 
+The response body is content-negotiated from the request's `Accept` header:
+- **Browsers** (`Accept: text/html...`) receive a styled, self-contained HTML page ("Under Maintenance — Your eIOU node is starting up or going through an update. Check back in a little bit.") with a `<meta http-equiv="refresh" content="15">` so it auto-recovers without requiring JavaScript (Tor Browser friendly). The page is fully inlined — no external CSS/JS/fonts — since `/app/eiou/` may be mid-rebuild and none of the app's own assets are guaranteed resolvable.
+- **API clients** (`Accept: application/json`, `*/*`, or missing) receive the existing JSON response (`{"success": false, "status": "maintenance", "error": {"message": "...", "code": "maintenance_mode"}}`).
+
+Both paths set HTTP 503 and `Retry-After: 30`.
+
 The lockfile is removed after all initialization is complete (composer install, migrations, processor startup).
 
 ### 7. Data-at-Rest Encryption (MariaDB TDE)
