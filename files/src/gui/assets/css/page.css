@@ -2379,11 +2379,11 @@ tr.tx-item-in-progress > td:first-child {
    Warning + info are category colours independent of win/loss semantics so
    they stay hardcoded. */
 .toast.toast-success {
-    border-left-color: var(--status-success-bg, #28a745);
+    border-left-color: var(--status-success-bg, #6c757d);
 }
 
 .toast.toast-error {
-    border-left-color: var(--status-failure-bg, #dc3545);
+    border-left-color: var(--status-failure-bg, #6c757d);
 }
 
 .toast.toast-warning {
@@ -2398,8 +2398,8 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 1.25rem;
 }
 
-.toast.toast-success .toast-icon { color: var(--status-success-bg, #28a745); }
-.toast.toast-error .toast-icon   { color: var(--status-failure-bg, #dc3545); }
+.toast.toast-success .toast-icon { color: var(--status-success-bg, #6c757d); }
+.toast.toast-error .toast-icon   { color: var(--status-failure-bg, #6c757d); }
 .toast.toast-warning .toast-icon { color: #ffc107; }
 .toast.toast-info .toast-icon    { color: #17a2b8; }
 
@@ -5064,8 +5064,8 @@ label.api-keys-permission .api-keys-permission-text {
     font-size: 0.55rem;
     vertical-align: middle;
 }
-.api-keys-status-dot--active   { color: var(--status-success-bg, #28a745); }
-.api-keys-status-dot--disabled { color: var(--status-failure-bg, #dc3545); }
+.api-keys-status-dot--active   { color: var(--status-success-bg, #6c757d); }
+.api-keys-status-dot--disabled { color: var(--status-failure-bg, #6c757d); }
 .api-keys-table .api-keys-id-cell {
     display: flex;
     align-items: center;
