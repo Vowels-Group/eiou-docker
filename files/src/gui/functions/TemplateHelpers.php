@@ -415,3 +415,87 @@ function renderContactAvatar(string $seedHex, string $name, string $style): stri
         default => renderContactGradientAvatar($seedHex, $name),
     };
 }
+
+/**
+ * Render a standardized announcement banner used at the top of the wallet
+ * view (release notes, pending requests, connectivity issues, etc.). One
+ * layout, one set of classes — each banner varies only by colour variant,
+ * icon, title, body copy, and the optional right-side action button.
+ *
+ * $config keys:
+ *   variant    — 'success' | 'info' | 'warning' | 'danger'.
+ *                Drives .alert-{variant} (bg), .alert-icon-*, .alert-title-*,
+ *                and the action button's .btn-{variant}. `info` maps to the
+ *                `primary` text/icon/button colour family.
+ *   icon       — Font Awesome class of the left-side icon (e.g. 'fa-gift').
+ *   title      — raw HTML of the heading; caller escapes untrusted content.
+ *   body       — raw HTML of the body paragraph; caller escapes.
+ *   action     — optional associative array describing the right-side action:
+ *                  ['label' => 'View', 'icon' => 'fa-eye',
+ *                   'href' => '#pending-contacts']              (renders <a>)
+ *                  ['label' => 'Dismiss', 'icon' => 'fa-check',
+ *                   'data' => ['action' => 'dismissWhatsNew']]  (renders <button>)
+ *                A non-empty `href` implies a link; otherwise a <button>.
+ *   id         — optional id on the outer <div>.
+ *   extraClass — optional extra class (e.g. 'alert-border-danger').
+ *   spinner    — truthy to render the left icon with `fa-spin`.
+ */
+function renderAlertBanner(array $config): string {
+    $variant = $config['variant'] ?? 'info';
+    // `info` uses the `primary` colour family for its text/icon/button.
+    $colorFamily = ($variant === 'info') ? 'primary' : $variant;
+    // Historical naming: .alert-error is the danger background.
+    $alertClass = ($variant === 'danger') ? 'alert-error' : 'alert-' . $variant;
+
+    $idAttr = !empty($config['id'])
+        ? ' id="' . htmlspecialchars((string)$config['id'], ENT_QUOTES) . '"'
+        : '';
+    $extra = !empty($config['extraClass'])
+        ? ' ' . htmlspecialchars((string)$config['extraClass'])
+        : '';
+    $icon = htmlspecialchars($config['icon'] ?? 'fa-info-circle');
+    $spinClass = !empty($config['spinner']) ? ' fa-spin' : '';
+    $iconHtml = '<i class="fas ' . $icon . $spinClass . ' alert-icon-' . $colorFamily . '"></i>';
+
+    $title = $config['title'] ?? '';
+    $body = $config['body'] ?? '';
+    $bodyHtml = $body !== '' ? '<p class="alert-body-text">' . $body . '</p>' : '';
+
+    $actionHtml = '';
+    if (!empty($config['action']) && is_array($config['action'])) {
+        $a = $config['action'];
+        $label = htmlspecialchars($a['label'] ?? 'Action');
+        $actionIcon = !empty($a['icon'])
+            ? '<i class="fas ' . htmlspecialchars($a['icon']) . '"></i> '
+            : '';
+        $class = 'btn btn-' . $colorFamily . ' btn-compact btn-nowrap alert-banner-action';
+        $dataAttrs = '';
+        if (!empty($a['data']) && is_array($a['data'])) {
+            foreach ($a['data'] as $k => $v) {
+                $dataAttrs .= ' data-' . htmlspecialchars((string)$k)
+                    . '="' . htmlspecialchars((string)$v, ENT_QUOTES) . '"';
+            }
+        }
+        if (!empty($a['href'])) {
+            $href = htmlspecialchars($a['href'], ENT_QUOTES);
+            $actionHtml = '<a href="' . $href . '" class="' . $class . '"' . $dataAttrs . '>'
+                . $actionIcon . $label . '</a>';
+        } else {
+            $actionHtml = '<button type="button" class="' . $class . '"' . $dataAttrs . '>'
+                . $actionIcon . $label . '</button>';
+        }
+    }
+
+    return '<div' . $idAttr . ' class="alert ' . $alertClass . ' fade-in-up mb-lg' . $extra . '">'
+        . '<div class="alert-banner-row">'
+            . '<div class="alert-banner-content">'
+                . $iconHtml
+                . '<div class="flex-1">'
+                    . '<h4 class="alert-title-' . $colorFamily . '">' . $title . '</h4>'
+                    . $bodyHtml
+                . '</div>'
+            . '</div>'
+            . $actionHtml
+        . '</div>'
+    . '</div>';
+}

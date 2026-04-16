@@ -355,8 +355,11 @@ $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 // Update check status (reads cache only — never triggers a new check on page load)
 $updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
 
-// "What's New" notification (shown after version upgrade until dismissed)
-$showWhatsNew = \Eiou\Services\UpdateCheckService::shouldShowWhatsNew();
+// "What's New" notification (shown after version upgrade until dismissed).
+// `fresh`    — node is on the version it was first installed on
+// `upgraded` — node has seen a previous version's banner and is now newer
+// null       — no banner (already dismissed this version, or pre-setup)
+$whatsNewVariant = \Eiou\Services\UpdateCheckService::getWhatsNewVariant();
 
 // Analytics status (reads cache only — never triggers a new submission on page load)
 try {
