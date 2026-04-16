@@ -1480,4 +1480,125 @@ class UserContextTest extends TestCase
         $this->assertArrayHasKey('analyticsOptInAt', $defaults);
         $this->assertNull($defaults['analyticsOptInAt']);
     }
+
+    // =========================================================================
+    // resetToDefaults Tests
+    //
+    // These hit the real /etc/eiou/config paths (the method hardcodes them),
+    // so they're skipped outside the Docker test environment. Each test backs
+    // up and restores the two files it touches.
+    // =========================================================================
+
+    /**
+     * Test resetToDefaults writes `{}` into defaultconfig.json so every
+     * setting getter falls back to its Constants-backed default.
+     */
+    public function testResetToDefaultsEmptiesDefaultConfig(): void
+    {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $defaultBackup = file_exists($defaultPath) ? file_get_contents($defaultPath) : null;
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+
+        file_put_contents($defaultPath, json_encode(['minFee' => 0.05, 'sessionTimeoutMinutes' => 120]));
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+
+            $this->assertFileExists($defaultPath);
+            $decoded = json_decode(file_get_contents($defaultPath), true);
+            $this->assertSame([], $decoded, 'defaultconfig.json should be an empty object');
+        } finally {
+            if ($defaultBackup !== null) {
+                file_put_contents($defaultPath, $defaultBackup);
+            } else {
+                @unlink($defaultPath);
+            }
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            }
+        }
+    }
+
+    /**
+     * Test resetToDefaults removes the `name` key from userconfig.json but
+     * preserves every other field (identity, hostname, keys, etc.).
+     */
+    public function testResetToDefaultsStripsNameFromUserConfigButPreservesIdentity(): void
+    {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $defaultBackup = file_exists($defaultPath) ? file_get_contents($defaultPath) : null;
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+
+        file_put_contents($userPath, json_encode([
+            'name' => 'Alice',
+            'public' => 'pubkey_abc',
+            'hostname' => 'http://alice.example',
+            'pubkey_hash' => 'hash_abc',
+        ]));
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+
+            $data = json_decode(file_get_contents($userPath), true);
+            $this->assertArrayNotHasKey('name', $data);
+            $this->assertSame('pubkey_abc', $data['public']);
+            $this->assertSame('http://alice.example', $data['hostname']);
+            $this->assertSame('hash_abc', $data['pubkey_hash']);
+        } finally {
+            if ($defaultBackup !== null) {
+                file_put_contents($defaultPath, $defaultBackup);
+            } else {
+                @unlink($defaultPath);
+            }
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            }
+        }
+    }
+
+    /**
+     * Test resetToDefaults leaves userconfig.json untouched when the
+     * `name` key is already absent (no spurious file rewrite).
+     */
+    public function testResetToDefaultsIsNoOpOnUserConfigWhenNameAbsent(): void
+    {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $defaultBackup = file_exists($defaultPath) ? file_get_contents($defaultPath) : null;
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+
+        $originalUserJson = json_encode(['public' => 'pubkey_xyz', 'hostname' => 'http://x']);
+        file_put_contents($userPath, $originalUserJson);
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+            $this->assertSame(
+                json_decode($originalUserJson, true),
+                json_decode(file_get_contents($userPath), true)
+            );
+        } finally {
+            if ($defaultBackup !== null) {
+                file_put_contents($defaultPath, $defaultBackup);
+            } else {
+                @unlink($defaultPath);
+            }
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            }
+        }
+    }
 }

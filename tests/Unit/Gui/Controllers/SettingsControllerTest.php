@@ -495,6 +495,45 @@ class SettingsControllerTest extends TestCase
     }
 
     #[Test]
+    public function routeActionHandlesResetToDefaultsAction(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['action' => 'resetToDefaults'];
+
+        $this->mockSession->expects($this->once())
+            ->method('verifyCSRFToken');
+
+        try {
+            $this->controller->routeAction();
+        } catch (\Throwable $e) {
+            // Expected — resetToDefaults() writes files and MessageHelper
+            // calls header()+exit under the hood, which throws or errors
+            // in a test harness. The assertion here is that the dispatch
+            // reached handleResetToDefaults (verifyCSRFToken was called).
+        }
+
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleResetToDefaultsCallsVerifyCSRFToken(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+
+        $this->mockSession->expects($this->once())
+            ->method('verifyCSRFToken');
+
+        try {
+            $this->controller->handleResetToDefaults();
+        } catch (\Throwable $e) {
+            // Expected — UserContext::resetToDefaults hits the real config
+            // paths and MessageHelper::redirectMessage calls header()+exit
+        }
+
+        $this->assertTrue(true);
+    }
+
+    #[Test]
     public function routeActionHandlesAnalyticsConsentAction(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';
