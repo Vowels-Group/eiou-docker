@@ -1006,6 +1006,19 @@ window.onclick = function(event) {
     if (event.target === whatsNewModal) {
         closeWhatsNewModal();
     }
+
+    // API-keys modals (all dispatch through the apiKeys IIFE so state
+    // gets cleaned up correctly; e.g. pendingEdit / pendingDelete are reset)
+    if (window.apiKeys) {
+        var ak = window.apiKeys;
+        if (event.target.id === 'apiKeysVerifyModal')      ak.closeVerifyModal();
+        else if (event.target.id === 'apiKeysCreateModal')     ak.closeCreateModal();
+        else if (event.target.id === 'apiKeysRevealModal')     ak.closeRevealModal();
+        else if (event.target.id === 'apiKeysDetailModal')     ak.closeDetailModal();
+        else if (event.target.id === 'apiKeysDeleteModal')     ak.closeDeleteModal();
+        else if (event.target.id === 'apiKeysDisableAllModal') ak.closeDisableAllModal();
+        else if (event.target.id === 'apiKeysDeleteAllModal')  ak.closeDeleteAllModal();
+    }
 }
 
 // Close modal with Escape key (Tor Browser compatible - uses keyCode fallback)
@@ -2358,7 +2371,7 @@ function showInfoModal(el) {
                 '<h3 style="font-size:1rem"><i class="fas fa-info-circle" style="color:#6c757d"></i> Info</h3>' +
                 '<span class="close" id="info-modal-close" title="Close">&times;</span>' +
             '</div>' +
-            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5">' +
+            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5;white-space:pre-line">' +
                 escapeHtml(text) +
             '</div>' +
         '</div>';
@@ -6084,7 +6097,38 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             showLoader('Sending payment request...', 'Connecting to contact server. The message processor will continue retrying in the background.');
             startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
             form.submit();
-        }
+        },
+
+        // API Keys
+        'openApiKeyCreateModal': function() { window.apiKeys.openCreateModal(); },
+        'closeApiKeyCreateModal': function() { window.apiKeys.closeCreateModal(); },
+        'submitApiKeyCreate': function() { window.apiKeys.submitCreate(); },
+        'applyApiKeyPreset': function(el) { window.apiKeys.applyPreset(el.getAttribute('data-preset')); },
+        'toggleApiKey': function(el) { window.apiKeys.toggle(el.getAttribute('data-key-id'), el.getAttribute('data-enable') === '1'); },
+        'deleteApiKeyPrompt': function(el) {
+            window.apiKeys.openDeleteModal(el.getAttribute('data-key-id'), el.getAttribute('data-label') || '');
+        },
+        'closeApiKeyDeleteModal': function() { window.apiKeys.closeDeleteModal(); },
+        'submitApiKeyDelete': function() { window.apiKeys.submitDelete(); },
+        'submitApiKeyEdit': function() { window.apiKeys.submitEdit(); },
+        'disableAllApiKeysPrompt': function() { window.apiKeys.openDisableAllModal(); },
+        'closeApiKeysDisableAllModal': function() { window.apiKeys.closeDisableAllModal(); },
+        'submitApiKeysDisableAll': function() { window.apiKeys.submitDisableAll(); },
+        'deleteAllApiKeysPrompt': function() { window.apiKeys.openDeleteAllModal(); },
+        'closeApiKeysDeleteAllModal': function() { window.apiKeys.closeDeleteAllModal(); },
+        'submitApiKeysDeleteAll': function() { window.apiKeys.submitDeleteAll(); },
+        'sortApiKeys': function(el) { window.apiKeys.sort(el.getAttribute('data-sort-column')); },
+        'filterApiKeys': function() { window.apiKeys.applyFilters(); },
+        'copyApiKeyId': function(el) { window.apiKeys.copyKeyId(el.getAttribute('data-key-id')); },
+        'openApiKeyDetail': function(el) { window.apiKeys.openDetailModal(el.getAttribute('data-key-id')); },
+        'closeApiKeysDetailModal': function() { window.apiKeys.closeDetailModal(); },
+        'detailToggleApiKey': function() { window.apiKeys.detailToggle(); },
+        'detailDeleteApiKey': function() { window.apiKeys.detailDelete(); },
+        'copyApiKeyIdFromDetail': function() { window.apiKeys.copyDetailKeyId(); },
+        'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
+        'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
+        'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
+        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -6146,6 +6190,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterTransactions') { filterTransactions(); }
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
+        else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
@@ -6182,5 +6227,864 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         if (action === 'filterContacts') { filterContacts(); }
         if (action === 'filterTransactions') { filterTransactions(); }
         if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
+        if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
     }, false);
+
+    // ========================================================================
+    // API Keys GUI module
+    //
+    // Backs the "API Keys" section in the Settings tab. All mutating calls
+    // (create / enable / disable / delete) round-trip through an additional
+    // sensitive-action gate: the server answers 401 sensitive_access_required
+    // when the grant is missing or expired, and the module re-prompts for the
+    // auth code before retrying the original action. This is independent of
+    // "Remember me" — a remembered session is still prompted here.
+    // ========================================================================
+    window.apiKeys = (function() {
+        var pendingAction = null;   // { fn: Function, label: string } to retry after verify
+        var pendingDelete = null;   // { keyId, label }
+        var pendingEdit = null;     // keyId currently being edited
+        var detailKeyId = null;     // keyId of the key in the detail modal
+        var lastCreated = null;     // { keyId, secret } for copy-to-clipboard
+        var keysById = {};          // cache of last rendered keys so Edit can prefill
+        var loaded = false;
+        // Table sort state: column name + asc/desc; null = unsorted (use stored order)
+        var sortState = { column: null, direction: null };
+        // Persistent order used when sort is cleared (server returns newest-first)
+        var originalOrder = [];
+
+        function csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return (el && el.value) ? el.value : '';
+        }
+
+        function post(payload) {
+            var body = new FormData();
+            Object.keys(payload).forEach(function(k) {
+                var v = payload[k];
+                if (Array.isArray(v)) {
+                    v.forEach(function(item) { body.append(k + '[]', item); });
+                } else if (v !== null && v !== undefined) {
+                    body.append(k, v);
+                }
+            });
+            if (!body.has('csrf_token')) { body.append('csrf_token', csrfToken()); }
+            return fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) {
+                    return { status: res.status, data: data };
+                });
+            });
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatWhen(ts) {
+            if (!ts) return 'Never';
+            // Backend returns SQL datetime strings. Parse as UTC then show local.
+            var d = new Date(ts.replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return escapeHtml(ts);
+            return d.toLocaleString();
+        }
+
+        function renderAccessState(secondsRemaining) {
+            var el = document.getElementById('api-keys-access-state');
+            if (!el) return;
+            if (secondsRemaining > 0) {
+                el.textContent = 'Edits unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min';
+            } else {
+                el.textContent = '';
+            }
+        }
+
+        function renderList(keys) {
+            keys = keys || [];
+            keysById = {};
+            originalOrder = [];
+            keys.forEach(function(k) {
+                keysById[k.key_id] = k;
+                originalOrder.push(k.key_id);
+            });
+
+            // Bulk-action button visibility based on what's actually present
+            var activeCount = keys.filter(function(k) { return k.enabled; }).length;
+            var disableAllBtn = document.getElementById('apiKeysDisableAllBtn');
+            var deleteAllBtn  = document.getElementById('apiKeysDeleteAllBtn');
+            if (disableAllBtn) disableAllBtn.classList.toggle('d-none', activeCount === 0);
+            if (deleteAllBtn)  deleteAllBtn.classList.toggle('d-none', keys.length === 0);
+
+            var emptyEl  = document.getElementById('api-keys-empty');
+            var tableEl  = document.getElementById('api-keys-table-wrapper');
+            var filterEl = document.getElementById('api-keys-filters');
+
+            if (keys.length === 0) {
+                if (emptyEl) {
+                    emptyEl.innerHTML = 'No API keys yet. Create one to let an external application connect to this wallet.';
+                    emptyEl.classList.remove('d-none');
+                }
+                if (tableEl)  tableEl.classList.add('d-none');
+                if (filterEl) filterEl.classList.add('d-none');
+                return;
+            }
+
+            if (emptyEl)  emptyEl.classList.add('d-none');
+            if (tableEl)  tableEl.classList.remove('d-none');
+            if (filterEl) filterEl.classList.remove('d-none');
+
+            // Repopulate permission dropdown with the union of perms actually in use
+            populatePermissionFilter(keys);
+
+            // Render the body according to current sort state, then apply filters
+            renderTableBody(sortedKeys());
+            applyTableFilters();
+            renderSortIndicators();
+        }
+
+        function sortedKeys() {
+            var arr = originalOrder.map(function(id) { return keysById[id]; }).filter(Boolean);
+            if (!sortState.column) return arr;
+            var col = sortState.column;
+            var dir = sortState.direction === 'desc' ? -1 : 1;
+            arr.sort(function(a, b) {
+                var av = a[col], bv = b[col];
+                // Nulls always sink to the bottom regardless of direction
+                if (av == null && bv == null) return 0;
+                if (av == null) return 1;
+                if (bv == null) return -1;
+                if (col === 'rate_limit_per_minute') {
+                    return (Number(av) - Number(bv)) * dir;
+                }
+                // timestamps: lexical compare works for ISO/SQL strings
+                return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
+            });
+            return arr;
+        }
+
+        // Collapse permissions by category for display only. Given
+        //   ['wallet:read', 'wallet:send', 'contacts:read', 'admin']
+        // returns ['wallet:read/send', 'contacts:read', 'admin']. Wildcards
+        // (wallet:*) and scopeless entries (admin) are never folded since
+        // they'd misrepresent scope. The underlying data row stays the raw
+        // list so filter/search/sort are unaffected.
+        function groupPermissionsForDisplay(perms) {
+            if (!perms || !perms.length) return [];
+            var buckets = {};
+            var order = [];
+            var standalone = [];
+            perms.forEach(function(p) {
+                var parts = String(p).split(':');
+                if (parts.length !== 2) { standalone.push(p); return; }
+                var cat = parts[0], action = parts[1];
+                if (action === '*') {
+                    var wKey = '__w_' + cat;
+                    buckets[wKey] = [p];
+                    if (order.indexOf(wKey) === -1) order.push(wKey);
+                    return;
+                }
+                if (!buckets[cat]) { buckets[cat] = []; order.push(cat); }
+                buckets[cat].push(action);
+            });
+            return order.map(function(key) {
+                var vals = buckets[key];
+                if (key.indexOf('__w_') === 0) return vals[0];
+                return key + ':' + vals.join('/');
+            }).concat(standalone);
+        }
+
+        function renderTableBody(keys) {
+            var tbody = document.getElementById('api-keys-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = keys.map(function(k) {
+                var perms = k.permissions || [];
+                var displayPerms = groupPermissionsForDisplay(perms);
+                var permChips = displayPerms.length
+                    ? displayPerms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">—</span>';
+                var statusDot = k.enabled
+                    ? '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--active" title="Active"></i>'
+                    : '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--disabled" title="Disabled"></i>';
+                var toggleLabel = k.enabled ? 'Disable' : 'Enable';
+                var toggleClass = k.enabled ? 'btn-secondary' : 'btn-primary';
+                var enableFlag = k.enabled ? '0' : '1';
+                var shortId = k.key_id.length > 14 ? k.key_id.slice(0, 13) + '…' : k.key_id;
+                var permData = perms.join(',').toLowerCase();
+                var searchHay = (k.name + ' ' + k.key_id).toLowerCase();
+
+                return '' +
+                    '<tr class="api-keys-row"' +
+                        ' data-action="openApiKeyDetail"' +
+                        ' data-key-id="' + escapeHtml(k.key_id) + '"' +
+                        ' data-search="' + escapeHtml(searchHay) + '"' +
+                        ' data-perms="' + escapeHtml(permData) + '"' +
+                        ' data-status="' + (k.enabled ? 'active' : 'disabled') + '">' +
+                        '<td class="col-api-keys-status text-center">' + statusDot + '</td>' +
+                        '<td><div class="api-keys-label-truncate" title="' + escapeHtml(k.name) + '"><strong>' + escapeHtml(k.name) + '</strong></div></td>' +
+                        '<td>' +
+                            '<div class="api-keys-id-cell">' +
+                                '<code title="' + escapeHtml(k.key_id) + '">' + escapeHtml(shortId) + '</code>' +
+                                '<button type="button" class="api-keys-id-copy" title="Copy full key ID" ' +
+                                    'data-action="copyApiKeyId" data-key-id="' + escapeHtml(k.key_id) + '" ' +
+                                    'data-stop-propagation="true">' +
+                                    '<i class="fas fa-copy"></i>' +
+                                '</button>' +
+                            '</div>' +
+                        '</td>' +
+                        '<td><div class="api-keys-perm-cell">' + permChips + '</div></td>' +
+                        '<td class="text-right">' + (k.rate_limit_per_minute || 0) + '</td>' +
+                        '<td>' + formatWhen(k.last_used_at) + '</td>' +
+                        '<td>' + (k.expires_at ? formatWhen(k.expires_at) : '<span class="text-muted">Never</span>') + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        function populatePermissionFilter(keys) {
+            var sel = document.getElementById('api-keys-filter-permission');
+            if (!sel) return;
+            var prev = sel.value || 'all';
+            var seen = {};
+            keys.forEach(function(k) {
+                (k.permissions || []).forEach(function(p) { seen[p] = true; });
+            });
+            var perms = Object.keys(seen).sort();
+            sel.innerHTML = '<option value="all">All permissions</option>' +
+                perms.map(function(p) {
+                    return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
+                }).join('');
+            // Preserve the user's selection across refreshes if it's still a valid option
+            sel.value = (prev === 'all' || seen[prev]) ? prev : 'all';
+        }
+
+        function applyTableFilters() {
+            var q      = (document.getElementById('api-keys-search') || {}).value || '';
+            var perm   = (document.getElementById('api-keys-filter-permission') || {}).value || 'all';
+            var status = (document.getElementById('api-keys-filter-status') || {}).value || 'all';
+            q = q.trim().toLowerCase();
+
+            var rows = document.querySelectorAll('#api-keys-tbody .api-keys-row');
+            var visible = 0;
+            rows.forEach(function(row) {
+                var show = true;
+                if (q && (row.getAttribute('data-search') || '').indexOf(q) === -1) show = false;
+                if (show && perm !== 'all') {
+                    var perms = (row.getAttribute('data-perms') || '').split(',');
+                    if (perms.indexOf(perm.toLowerCase()) === -1) show = false;
+                }
+                if (show && status !== 'all' && row.getAttribute('data-status') !== status) show = false;
+                row.classList.toggle('d-none', !show);
+                if (show) visible++;
+            });
+
+            var noMatches = document.getElementById('api-keys-no-matches');
+            if (noMatches) noMatches.classList.toggle('d-none', visible !== 0 || rows.length === 0);
+        }
+
+        function renderSortIndicators() {
+            document.querySelectorAll('.api-keys-table thead th.sortable').forEach(function(th) {
+                var col = th.getAttribute('data-sort-column');
+                var icon = th.querySelector('.sort-indicator');
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (icon) icon.className = 'fas fa-sort sort-indicator';
+                if (col === sortState.column && sortState.direction) {
+                    th.classList.add('sort-' + sortState.direction);
+                    if (icon) {
+                        icon.className = 'fas fa-sort-' + (sortState.direction === 'asc' ? 'up' : 'down') +
+                                         ' sort-indicator';
+                    }
+                }
+            });
+        }
+
+        function handleSort(column) {
+            if (!column) return;
+            if (sortState.column !== column) {
+                sortState = { column: column, direction: 'asc' };
+            } else if (sortState.direction === 'asc') {
+                sortState.direction = 'desc';
+            } else {
+                sortState = { column: null, direction: null };  // third click clears
+            }
+            renderTableBody(sortedKeys());
+            applyTableFilters();
+            renderSortIndicators();
+        }
+
+        // --- Row-click combined detail + edit modal ---------------------
+        // Populates read-only reference fields AND prefills the editable
+        // inputs (label / rate limit / expiry) so the user can adjust in one
+        // place. Shares pendingEdit + the existing submitEdit() flow.
+        function openDetailModal(keyId) {
+            var k = keysById[keyId];
+            if (!k) {
+                showToast('Error', 'Key details unavailable — refresh and try again', 'error');
+                return;
+            }
+            detailKeyId = keyId;
+            pendingEdit = keyId;  // enables the shared submitEdit()
+
+            document.getElementById('apiKeysDetailLabel').textContent = k.name || '';
+            document.getElementById('apiKeysDetailKeyId').textContent = k.key_id;
+            document.getElementById('apiKeysDetailStatus').innerHTML = k.enabled
+                ? '<span class="tx-status-badge tx-status-completed">Active</span>'
+                : '<span class="tx-status-badge tx-status-rejected">Disabled</span>';
+            document.getElementById('apiKeysDetailCreated').textContent = formatWhen(k.created_at);
+            document.getElementById('apiKeysDetailLastUsed').textContent = formatWhen(k.last_used_at);
+
+            // Editable fields — same IDs as the (now-retired) standalone edit
+            // modal, so submitEdit() works unchanged
+            var perms = k.permissions || [];
+            var displayPerms = groupPermissionsForDisplay(perms);
+            var permsEl = document.getElementById('apiKeysEditPermissions');
+            if (permsEl) {
+                permsEl.innerHTML = displayPerms.length
+                    ? displayPerms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">(none)</span>';
+            }
+
+            document.getElementById('apiKeyEditLabel').value = k.name || '';
+            var rateInput = document.getElementById('apiKeyEditRateLimit');
+            rateInput.value = k.rate_limit_per_minute || 100;
+            rateInput.oninput = function() { updateRateLimitWarning(k.rate_limit_per_minute); };
+            updateRateLimitWarning(k.rate_limit_per_minute);
+
+            // Expires select — "Keep current" default, disable presets that would
+            // extend a currently-finite expiry
+            var daysLeft = daysUntil(k.expires_at);
+            var select = document.getElementById('apiKeyEditExpires');
+            select.innerHTML = '';
+            var opts = [
+                { v: '', label: k.expires_at ? 'Keep current (expires ' + formatWhen(k.expires_at) + ')' : 'Keep current (never expires)' },
+                { v: '30',  label: '30 days from now' },
+                { v: '90',  label: '90 days from now' },
+                { v: '365', label: '1 year from now' }
+            ];
+            opts.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.v;
+                opt.textContent = o.label;
+                if (o.v !== '' && daysLeft !== null && Number(o.v) > daysLeft) {
+                    opt.disabled = true;
+                    opt.textContent += ' — would extend, blocked';
+                }
+                select.appendChild(opt);
+            });
+            select.value = '';
+
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+
+            // Footer toggle button — label + color reflect current state
+            var toggleBtn = document.getElementById('apiKeysDetailToggleBtn');
+            toggleBtn.innerHTML = k.enabled
+                ? '<i class="fas fa-ban"></i> Disable'
+                : '<i class="fas fa-play"></i> Enable';
+            toggleBtn.className = 'btn btn-compact ' + (k.enabled ? 'btn-secondary' : 'btn-primary');
+            toggleBtn.setAttribute('data-enable', k.enabled ? '0' : '1');
+
+            showModal('apiKeysDetailModal');
+        }
+
+        function closeDetailModal() {
+            detailKeyId = null;
+            pendingEdit = null;
+            hideModal('apiKeysDetailModal');
+        }
+
+        function detailToggle() {
+            if (!detailKeyId) return;
+            var k = keysById[detailKeyId];
+            if (!k) return;
+            var keyId = detailKeyId;
+            var enable = !k.enabled;
+            closeDetailModal();
+            toggle(keyId, enable);
+        }
+
+        function detailDelete() {
+            if (!detailKeyId) return;
+            var k = keysById[detailKeyId];
+            if (!k) return;
+            var keyId = detailKeyId;
+            var label = k.name || '';
+            closeDetailModal();
+            openDeleteModal(keyId, label);
+        }
+
+        function copyDetailKeyId() {
+            if (detailKeyId) copyKeyId(detailKeyId);
+        }
+
+        function copyKeyId(keyId) {
+            if (!keyId) return;
+            var ok = function() { showToast('Copied', 'Key ID copied to clipboard', 'success'); };
+            var fail = function() { showToast('Copy failed', 'Select and copy manually', 'error'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(keyId).then(ok, fail);
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = keyId;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); ok(); } catch (e) { fail(); }
+                document.body.removeChild(ta);
+            }
+        }
+
+        function refresh() {
+            return post({ action: 'apiKeysList' }).then(function(r) {
+                if (r.data && r.data.success) {
+                    renderList(r.data.keys || []);
+                    renderAccessState(r.data.seconds_remaining || 0);
+                    loaded = true;
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
+                }
+            }).catch(function() {
+                showToast('Error', 'Network error while loading API keys', 'error');
+            });
+        }
+
+        function ensureLoadedOnTab() {
+            // Lazy-load the list the first time the user switches to the
+            // Settings tab, so we don't fire an AJAX call on every page load
+            // for users who never open this section.
+            var settingsPanel = document.getElementById('tab-panel-settings');
+            if (!settingsPanel) return;
+            var observer = new MutationObserver(function() {
+                if (settingsPanel.style.display !== 'none' && !loaded) {
+                    refresh();
+                }
+            });
+            observer.observe(settingsPanel, { attributes: true, attributeFilter: ['style'] });
+            // Handle initial render (tab already visible, e.g. deep link)
+            if (settingsPanel.style.display !== 'none' && !loaded) {
+                refresh();
+            }
+        }
+
+        function showModal(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.remove('d-none');
+        }
+        function hideModal(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.add('d-none');
+        }
+
+        // --- Create -------------------------------------------------------
+        function openCreateModal() {
+            var form = document.getElementById('apiKeysCreateForm');
+            if (form) form.reset();
+            var err = document.getElementById('apiKeysCreateError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysCreateModal');
+        }
+
+        function closeCreateModal() { hideModal('apiKeysCreateModal'); }
+
+        function applyPreset(preset) {
+            var boxes = document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]');
+            if (preset === 'clear') {
+                boxes.forEach(function(b) { b.checked = false; });
+                return;
+            }
+            var presets = {
+                'read_only': ['wallet:read', 'contacts:read', 'system:read', 'backup:read'],
+                'full_access': ['admin']
+            };
+            var target = presets[preset] || [];
+            boxes.forEach(function(b) { b.checked = target.indexOf(b.value) !== -1; });
+        }
+
+        function collectPermissions() {
+            var out = [];
+            document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]:checked').forEach(function(b) {
+                out.push(b.value);
+            });
+            return out;
+        }
+
+        function submitCreate() {
+            var name = document.getElementById('apiKeyName').value.trim();
+            var permissions = collectPermissions();
+            var rate = document.getElementById('apiKeyRateLimit').value;
+            var expires = document.getElementById('apiKeyExpires').value;
+            var err = document.getElementById('apiKeysCreateError');
+
+            if (!name) { showCreateError('Please give the key a label.'); return; }
+            if (permissions.length === 0) { showCreateError('Select at least one permission.'); return; }
+
+            withSensitiveAccess(function() {
+                return post({
+                    action: 'apiKeysCreate',
+                    name: name,
+                    permissions: permissions,
+                    rate_limit_per_minute: rate,
+                    expires_in_days: expires
+                });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    closeCreateModal();
+                    showRevealModal(r.data.key);
+                    refresh();
+                } else {
+                    showCreateError((r.data && (r.data.message || r.data.error)) || 'Could not create key');
+                }
+            }, 'Create API key');
+        }
+
+        function showCreateError(msg) {
+            var err = document.getElementById('apiKeysCreateError');
+            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+        }
+
+        // --- Reveal (one-time) -------------------------------------------
+        function showRevealModal(key) {
+            lastCreated = { keyId: key.key_id, secret: key.secret };
+            document.getElementById('apiKeysRevealKeyId').textContent = key.key_id;
+            document.getElementById('apiKeysRevealSecret').textContent = key.secret;
+            var ack = document.getElementById('apiKeysRevealAck');
+            var err = document.getElementById('apiKeysRevealAckError');
+            ack.checked = false;
+            if (err) err.classList.add('d-none');
+            ack.onchange = function() {
+                if (ack.checked && err) err.classList.add('d-none');
+            };
+            showModal('apiKeysRevealModal');
+        }
+
+        function closeRevealModal() {
+            var ack = document.getElementById('apiKeysRevealAck');
+            var err = document.getElementById('apiKeysRevealAckError');
+            if (ack && !ack.checked) {
+                if (err) err.classList.remove('d-none');
+                return;
+            }
+            // Clear the secret from memory and from the DOM the moment the
+            // user closes. The server has no way to re-show this.
+            document.getElementById('apiKeysRevealSecret').textContent = '';
+            document.getElementById('apiKeysRevealKeyId').textContent = '';
+            lastCreated = null;
+            hideModal('apiKeysRevealModal');
+        }
+
+        function copyToClipboard(targetId) {
+            var el = document.getElementById(targetId);
+            if (!el) return;
+            var text = el.textContent || '';
+            if (!text) return;
+            var ok = function() { showToast('Copied', 'Copied to clipboard', 'success'); };
+            var fail = function() { showToast('Copy failed', 'Select and copy manually', 'error'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(ok, fail);
+            } else {
+                // Fallback — works over non-HTTPS and older browsers.
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); ok(); } catch (e) { fail(); }
+                document.body.removeChild(ta);
+            }
+        }
+
+        // --- Toggle / delete ---------------------------------------------
+        function toggle(keyId, enable) {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysToggle', key_id: keyId, enable: enable ? '1' : '0' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Saved', enable ? 'API key enabled' : 'API key disabled', 'success');
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not update key', 'error');
+                }
+            }, enable ? 'Enable API key' : 'Disable API key');
+        }
+
+        function openDeleteModal(keyId, label) {
+            pendingDelete = { keyId: keyId, label: label };
+            document.getElementById('apiKeysDeleteLabel').textContent = label;
+            var confirmInput = document.getElementById('apiKeysDeleteConfirm');
+            var submitBtn = document.getElementById('apiKeysDeleteSubmit');
+            confirmInput.value = '';
+            submitBtn.disabled = true;
+            confirmInput.oninput = function() {
+                submitBtn.disabled = confirmInput.value.trim() !== label;
+            };
+            showModal('apiKeysDeleteModal');
+        }
+
+        function closeDeleteModal() {
+            pendingDelete = null;
+            hideModal('apiKeysDeleteModal');
+        }
+
+        function submitDelete() {
+            if (!pendingDelete) return;
+            var keyId = pendingDelete.keyId;
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDelete', key_id: keyId });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Deleted', 'API key deleted', 'success');
+                    closeDeleteModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not delete key', 'error');
+                }
+            }, 'Delete API key');
+        }
+
+        // --- Edit ---------------------------------------------------------
+        // Compute how many days remain on the key's current expiry so we
+        // can disable any preset option in the dropdown that would EXTEND
+        // it. The backend enforces this too; the UI hides extensions so
+        // the user doesn't pick an option that just errors.
+        function daysUntil(isoOrSqlTimestamp) {
+            if (!isoOrSqlTimestamp) return null;
+            var d = new Date(String(isoOrSqlTimestamp).replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return null;
+            return Math.max(0, Math.floor((d.getTime() - Date.now()) / 86400000));
+        }
+
+        function updateRateLimitWarning(original) {
+            var input = document.getElementById('apiKeyEditRateLimit');
+            var warn  = document.getElementById('apiKeysEditRateLimitWarning');
+            if (!input || !warn) return;
+            var current = Number(input.value) || 0;
+            var was     = Number(original) || 0;
+            if (current > was) {
+                warn.textContent = 'Raising rate limit from ' + was + ' to ' + current +
+                    ' — existing callers can now send more traffic. Confirm this is intended.';
+                warn.classList.remove('d-none');
+            } else {
+                warn.classList.add('d-none');
+            }
+        }
+
+        function submitEdit() {
+            if (!pendingEdit) {
+                showToast('Error', 'Edit session lost — reopen the Edit dialog', 'error');
+                return;
+            }
+            var keyId = pendingEdit;
+            var original = keysById[keyId] || {};
+
+            // Clear any stale error from a prior click so the user sees the
+            // result of THIS attempt rather than yesterday's "Nothing changed."
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+
+            var name = document.getElementById('apiKeyEditLabel').value.trim();
+            var rate = document.getElementById('apiKeyEditRateLimit').value;
+            var expiresDays = document.getElementById('apiKeyEditExpires').value;
+
+            if (!name) { showEditError('Please give the key a label.'); return; }
+
+            var payload = { action: 'apiKeysUpdate', key_id: keyId };
+            var changed = false;
+            if (name !== original.name) { payload.name = name; changed = true; }
+            if (String(rate) !== String(original.rate_limit_per_minute)) {
+                payload.rate_limit_per_minute = rate;
+                changed = true;
+            }
+            if (expiresDays !== '') {
+                payload.expires_in_days = expiresDays;
+                changed = true;
+            }
+
+            if (!changed) {
+                showEditError('Nothing changed.');
+                return;
+            }
+
+            withSensitiveAccess(function() {
+                return post(payload);
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Saved', 'API key updated', 'success');
+                    closeDetailModal();
+                    refresh();
+                } else {
+                    showEditError((r.data && (r.data.message || r.data.error)) || 'Could not update key');
+                }
+            }, 'Edit API key');
+        }
+
+        function showEditError(msg) {
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+        }
+
+        // --- Bulk Disable / Delete ---------------------------------------
+        function openDisableAllModal() {
+            var active = Object.values(keysById).filter(function(k) { return k.enabled; }).length;
+            if (active === 0) {
+                showToast('Nothing to do', 'No active keys to disable', 'info');
+                return;
+            }
+            document.getElementById('apiKeysDisableAllCount').textContent = active;
+            showModal('apiKeysDisableAllModal');
+        }
+        function closeDisableAllModal() { hideModal('apiKeysDisableAllModal'); }
+        function submitDisableAll() {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDisableAll' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Disabled', 'Disabled ' + (r.data.count || 0) + ' key(s)', 'success');
+                    closeDisableAllModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not disable all keys', 'error');
+                }
+            }, 'Disable all API keys');
+        }
+
+        function openDeleteAllModal() {
+            var total = Object.keys(keysById).length;
+            if (total === 0) {
+                showToast('Nothing to do', 'No keys to delete', 'info');
+                return;
+            }
+            document.getElementById('apiKeysDeleteAllCount').textContent = total;
+            var input = document.getElementById('apiKeysDeleteAllConfirm');
+            var btn   = document.getElementById('apiKeysDeleteAllSubmit');
+            input.value = '';
+            btn.disabled = true;
+            input.oninput = function() {
+                btn.disabled = input.value.trim().toLowerCase() !== 'delete all';
+            };
+            showModal('apiKeysDeleteAllModal');
+        }
+        function closeDeleteAllModal() { hideModal('apiKeysDeleteAllModal'); }
+        function submitDeleteAll() {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDeleteAll' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Deleted', 'Deleted ' + (r.data.count || 0) + ' key(s)', 'success');
+                    closeDeleteAllModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not delete all keys', 'error');
+                }
+            }, 'Delete all API keys');
+        }
+
+        // --- Sensitive-access gate ---------------------------------------
+        // On 401 sensitive_access_required, opens the verify modal and
+        // retries `requestFn` after the user re-auths — only then calls onResponse.
+        // A rejected request (network / JSON parse / server returning HTML for an
+        // unrouted action) surfaces as a toast instead of dying silently.
+        function withSensitiveAccess(requestFn, onResponse, label) {
+            var attempt = function() {
+                return requestFn().then(function(r) {
+                    if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
+                        pendingAction = { fn: attempt, label: label };
+                        openVerifyModal(r.data.message);
+                        return;
+                    }
+                    if (typeof onResponse === 'function') onResponse(r);
+                    return r;
+                }).catch(function(e) {
+                    showToast('Error', (label || 'Request') + ' failed — ' + (e && e.message ? e.message : 'network / server error'), 'error');
+                });
+            };
+            return attempt();
+        }
+
+        function openVerifyModal(message) {
+            var input = document.getElementById('apiKeysVerifyAuthcode');
+            var err = document.getElementById('apiKeysVerifyError');
+            input.value = '';
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysVerifyModal');
+            setTimeout(function() { input.focus(); }, 50);
+        }
+
+        function closeVerifyModal() {
+            pendingAction = null;
+            hideModal('apiKeysVerifyModal');
+        }
+
+        function submitVerify() {
+            var input = document.getElementById('apiKeysVerifyAuthcode');
+            var err = document.getElementById('apiKeysVerifyError');
+            var code = input.value;
+            if (!code) { return; }
+
+            post({ action: 'apiKeysVerify', authcode: code }).then(function(r) {
+                if (r.data && r.data.success) {
+                    hideModal('apiKeysVerifyModal');
+                    input.value = '';
+                    renderAccessState(r.data.seconds_remaining || 0);
+                    if (pendingAction) {
+                        var fn = pendingAction.fn;
+                        pendingAction = null;
+                        fn();
+                    }
+                } else {
+                    if (err) {
+                        err.textContent = (r.data && r.data.error === 'invalid_authcode')
+                            ? 'Invalid auth code. Please try again.'
+                            : 'Could not verify. Please try again.';
+                        err.classList.remove('d-none');
+                    }
+                }
+            }).catch(function() {
+                if (err) {
+                    err.textContent = 'Network error. Please try again.';
+                    err.classList.remove('d-none');
+                }
+            });
+        }
+
+        // --- Init ---------------------------------------------------------
+        document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
+
+        return {
+            refresh: refresh,
+            openCreateModal: openCreateModal,
+            closeCreateModal: closeCreateModal,
+            submitCreate: submitCreate,
+            applyPreset: applyPreset,
+            toggle: toggle,
+            openDeleteModal: openDeleteModal,
+            closeDeleteModal: closeDeleteModal,
+            submitDelete: submitDelete,
+            submitEdit: submitEdit,
+            openDisableAllModal: openDisableAllModal,
+            closeDisableAllModal: closeDisableAllModal,
+            submitDisableAll: submitDisableAll,
+            openDeleteAllModal: openDeleteAllModal,
+            closeDeleteAllModal: closeDeleteAllModal,
+            submitDeleteAll: submitDeleteAll,
+            sort: handleSort,
+            applyFilters: applyTableFilters,
+            copyKeyId: copyKeyId,
+            openDetailModal: openDetailModal,
+            closeDetailModal: closeDetailModal,
+            detailToggle: detailToggle,
+            detailDelete: detailDelete,
+            copyDetailKeyId: copyDetailKeyId,
+            closeRevealModal: closeRevealModal,
+            copyToClipboard: copyToClipboard,
+            closeVerifyModal: closeVerifyModal,
+            submitVerify: submitVerify
+        };
+    })();
+
 })();

@@ -437,4 +437,65 @@ class Session
     {
         session_regenerate_id(true);
     }
+
+    /**
+     * Default sensitive-action grant window (seconds).
+     */
+    public const SENSITIVE_ACCESS_TTL_SECONDS = 300;
+
+    /**
+     * Grant the current session sensitive-action access for a short window.
+     * Called after a successful re-prompt for the auth code. Independent of
+     * remember-me: a remember-me login still requires this gate to be passed
+     * before mutating API keys.
+     */
+    public function grantSensitiveAccess(int $ttlSeconds = self::SENSITIVE_ACCESS_TTL_SECONDS): void
+    {
+        $_SESSION[SessionKeys::SENSITIVE_ACCESS_UNTIL] = time() + $ttlSeconds;
+        // Bind grant to the current auth_time. If the user logs out and back
+        // in, auth_time changes and the stale grant is ignored.
+        $_SESSION[SessionKeys::SENSITIVE_ACCESS_AUTH_TIME] = $_SESSION[SessionKeys::AUTH_TIME] ?? 0;
+    }
+
+    /**
+     * Check whether the current session currently holds sensitive-action access.
+     */
+    public function hasSensitiveAccess(): bool
+    {
+        $until = (int) ($_SESSION[SessionKeys::SENSITIVE_ACCESS_UNTIL] ?? 0);
+        $boundAuthTime = (int) ($_SESSION[SessionKeys::SENSITIVE_ACCESS_AUTH_TIME] ?? -1);
+        $currentAuthTime = (int) ($_SESSION[SessionKeys::AUTH_TIME] ?? 0);
+
+        if ($until <= time()) {
+            return false;
+        }
+        // If the underlying auth session has been replaced, the old grant
+        // must not carry over.
+        if ($boundAuthTime !== $currentAuthTime) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Clear any outstanding sensitive-action grant.
+     */
+    public function clearSensitiveAccess(): void
+    {
+        unset(
+            $_SESSION[SessionKeys::SENSITIVE_ACCESS_UNTIL],
+            $_SESSION[SessionKeys::SENSITIVE_ACCESS_AUTH_TIME]
+        );
+    }
+
+    /**
+     * Number of seconds remaining on the current sensitive-access grant, or 0.
+     */
+    public function sensitiveAccessSecondsRemaining(): int
+    {
+        if (!$this->hasSensitiveAccess()) {
+            return 0;
+        }
+        return max(0, (int) ($_SESSION[SessionKeys::SENSITIVE_ACCESS_UNTIL] ?? 0) - time());
+    }
 }

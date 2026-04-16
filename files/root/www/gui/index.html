@@ -21,6 +21,7 @@ use Eiou\Gui\Controllers\DlqController;
 use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
+use Eiou\Gui\Controllers\ApiKeysController;
 
 if (!file_exists("/etc/eiou/config/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
@@ -57,6 +58,10 @@ $transactionController->setP2pApprovalDependencies(
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
 $settingsController = new SettingsController($secureSession);
+$apiKeysController = new ApiKeysController(
+    $secureSession,
+    $repoFactory->get(Eiou\Database\ApiKeyRepository::class)
+);
 $paymentRequestController = new PaymentRequestController(
     $secureSession,
     $serviceContainer->getPaymentRequestService()
@@ -115,8 +120,13 @@ if (!$secureSession->isAuthenticated() && $user->has('authcode_encrypted')) {
     }
 }
 
-// Handle authentication POST request
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
+// Handle authentication POST request.
+// Guarded on !isAuthenticated() so AJAX actions that reuse the `authcode`
+// field for re-confirmation (e.g. apiKeysVerify) are not mistaken for a
+// fresh login — without this gate they'd trigger a 302 redirect that
+// breaks the JSON response the caller expects.
+if (!$secureSession->isAuthenticated()
+    && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
     // Rate limit GUI login attempts
     $rateLimiter = $serviceContainer->getRateLimiterService();
     $clientIp = \Eiou\Utils\Security::getClientIp();
