@@ -1006,6 +1006,19 @@ window.onclick = function(event) {
     if (event.target === whatsNewModal) {
         closeWhatsNewModal();
     }
+
+    // API-keys modals (all dispatch through the apiKeys IIFE so state
+    // gets cleaned up correctly; e.g. pendingEdit / pendingDelete are reset)
+    if (window.apiKeys) {
+        var ak = window.apiKeys;
+        if (event.target.id === 'apiKeysVerifyModal')      ak.closeVerifyModal();
+        else if (event.target.id === 'apiKeysCreateModal')     ak.closeCreateModal();
+        else if (event.target.id === 'apiKeysRevealModal')     ak.closeRevealModal();
+        else if (event.target.id === 'apiKeysDetailModal')     ak.closeDetailModal();
+        else if (event.target.id === 'apiKeysDeleteModal')     ak.closeDeleteModal();
+        else if (event.target.id === 'apiKeysDisableAllModal') ak.closeDisableAllModal();
+        else if (event.target.id === 'apiKeysDeleteAllModal')  ak.closeDeleteAllModal();
+    }
 }
 
 // Close modal with Escape key (Tor Browser compatible - uses keyCode fallback)
@@ -2358,7 +2371,7 @@ function showInfoModal(el) {
                 '<h3 style="font-size:1rem"><i class="fas fa-info-circle" style="color:#6c757d"></i> Info</h3>' +
                 '<span class="close" id="info-modal-close" title="Close">&times;</span>' +
             '</div>' +
-            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5">' +
+            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5;white-space:pre-line">' +
                 escapeHtml(text) +
             '</div>' +
         '</div>';
@@ -6091,15 +6104,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'closeApiKeyCreateModal': function() { window.apiKeys.closeCreateModal(); },
         'submitApiKeyCreate': function() { window.apiKeys.submitCreate(); },
         'applyApiKeyPreset': function(el) { window.apiKeys.applyPreset(el.getAttribute('data-preset')); },
-        'refreshApiKeys': function() { window.apiKeys.refresh(); },
         'toggleApiKey': function(el) { window.apiKeys.toggle(el.getAttribute('data-key-id'), el.getAttribute('data-enable') === '1'); },
         'deleteApiKeyPrompt': function(el) {
             window.apiKeys.openDeleteModal(el.getAttribute('data-key-id'), el.getAttribute('data-label') || '');
         },
         'closeApiKeyDeleteModal': function() { window.apiKeys.closeDeleteModal(); },
         'submitApiKeyDelete': function() { window.apiKeys.submitDelete(); },
-        'editApiKeyPrompt': function(el) { window.apiKeys.openEditModal(el.getAttribute('data-key-id')); },
-        'closeApiKeyEditModal': function() { window.apiKeys.closeEditModal(); },
         'submitApiKeyEdit': function() { window.apiKeys.submitEdit(); },
         'disableAllApiKeysPrompt': function() { window.apiKeys.openDisableAllModal(); },
         'closeApiKeysDisableAllModal': function() { window.apiKeys.closeDisableAllModal(); },
@@ -6107,6 +6117,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'deleteAllApiKeysPrompt': function() { window.apiKeys.openDeleteAllModal(); },
         'closeApiKeysDeleteAllModal': function() { window.apiKeys.closeDeleteAllModal(); },
         'submitApiKeysDeleteAll': function() { window.apiKeys.submitDeleteAll(); },
+        'sortApiKeys': function(el) { window.apiKeys.sort(el.getAttribute('data-sort-column')); },
+        'filterApiKeys': function() { window.apiKeys.applyFilters(); },
+        'copyApiKeyId': function(el) { window.apiKeys.copyKeyId(el.getAttribute('data-key-id')); },
+        'openApiKeyDetail': function(el) { window.apiKeys.openDetailModal(el.getAttribute('data-key-id')); },
+        'closeApiKeysDetailModal': function() { window.apiKeys.closeDetailModal(); },
+        'detailToggleApiKey': function() { window.apiKeys.detailToggle(); },
+        'detailDeleteApiKey': function() { window.apiKeys.detailDelete(); },
+        'copyApiKeyIdFromDetail': function() { window.apiKeys.copyDetailKeyId(); },
         'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
         'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
         'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
@@ -6172,6 +6190,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterTransactions') { filterTransactions(); }
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
+        else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
@@ -6208,6 +6227,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         if (action === 'filterContacts') { filterContacts(); }
         if (action === 'filterTransactions') { filterTransactions(); }
         if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
+        if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
     }, false);
 
     // ========================================================================
@@ -6224,9 +6244,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         var pendingAction = null;   // { fn: Function, label: string } to retry after verify
         var pendingDelete = null;   // { keyId, label }
         var pendingEdit = null;     // keyId currently being edited
+        var detailKeyId = null;     // keyId of the key in the detail modal
         var lastCreated = null;     // { keyId, secret } for copy-to-clipboard
         var keysById = {};          // cache of last rendered keys so Edit can prefill
         var loaded = false;
+        // Table sort state: column name + asc/desc; null = unsorted (use stored order)
+        var sortState = { column: null, direction: null };
+        // Persistent order used when sort is cleared (server returns newest-first)
+        var originalOrder = [];
 
         function csrfToken() {
             var el = document.querySelector('input[name="csrf_token"]');
@@ -6285,59 +6310,302 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function renderList(keys) {
-            var container = document.getElementById('api-keys-list');
-            if (!container) return;
-            if (!keys || keys.length === 0) {
-                container.innerHTML = '<div class="api-keys-empty text-muted">' +
-                    'No API keys yet. Create one to let an external application connect to this wallet.' +
-                    '</div>';
-                return;
-            }
+            keys = keys || [];
             keysById = {};
-            var activeCount = 0;
-            keys.forEach(function(k) { if (k.enabled) activeCount++; });
+            originalOrder = [];
+            keys.forEach(function(k) {
+                keysById[k.key_id] = k;
+                originalOrder.push(k.key_id);
+            });
+
+            // Bulk-action button visibility based on what's actually present
+            var activeCount = keys.filter(function(k) { return k.enabled; }).length;
             var disableAllBtn = document.getElementById('apiKeysDisableAllBtn');
             var deleteAllBtn  = document.getElementById('apiKeysDeleteAllBtn');
             if (disableAllBtn) disableAllBtn.classList.toggle('d-none', activeCount === 0);
             if (deleteAllBtn)  deleteAllBtn.classList.toggle('d-none', keys.length === 0);
 
-            var rows = keys.map(function(k) {
-                keysById[k.key_id] = k;
-                var permSummary = (k.permissions || []).join(', ') || '—';
-                var status = k.enabled
-                    ? '<span class="tx-status-badge tx-status-completed">Active</span>'
-                    : '<span class="tx-status-badge tx-status-rejected">Disabled</span>';
+            var emptyEl  = document.getElementById('api-keys-empty');
+            var tableEl  = document.getElementById('api-keys-table-wrapper');
+            var filterEl = document.getElementById('api-keys-filters');
+
+            if (keys.length === 0) {
+                if (emptyEl) {
+                    emptyEl.innerHTML = 'No API keys yet. Create one to let an external application connect to this wallet.';
+                    emptyEl.classList.remove('d-none');
+                }
+                if (tableEl)  tableEl.classList.add('d-none');
+                if (filterEl) filterEl.classList.add('d-none');
+                return;
+            }
+
+            if (emptyEl)  emptyEl.classList.add('d-none');
+            if (tableEl)  tableEl.classList.remove('d-none');
+            if (filterEl) filterEl.classList.remove('d-none');
+
+            // Repopulate permission dropdown with the union of perms actually in use
+            populatePermissionFilter(keys);
+
+            // Render the body according to current sort state, then apply filters
+            renderTableBody(sortedKeys());
+            applyTableFilters();
+            renderSortIndicators();
+        }
+
+        function sortedKeys() {
+            var arr = originalOrder.map(function(id) { return keysById[id]; }).filter(Boolean);
+            if (!sortState.column) return arr;
+            var col = sortState.column;
+            var dir = sortState.direction === 'desc' ? -1 : 1;
+            arr.sort(function(a, b) {
+                var av = a[col], bv = b[col];
+                // Nulls always sink to the bottom regardless of direction
+                if (av == null && bv == null) return 0;
+                if (av == null) return 1;
+                if (bv == null) return -1;
+                if (col === 'rate_limit_per_minute') {
+                    return (Number(av) - Number(bv)) * dir;
+                }
+                // timestamps: lexical compare works for ISO/SQL strings
+                return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
+            });
+            return arr;
+        }
+
+        function renderTableBody(keys) {
+            var tbody = document.getElementById('api-keys-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = keys.map(function(k) {
+                var perms = k.permissions || [];
+                var permChips = perms.length
+                    ? perms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">—</span>';
+                var statusDot = k.enabled
+                    ? '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--active" title="Active"></i>'
+                    : '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--disabled" title="Disabled"></i>';
                 var toggleLabel = k.enabled ? 'Disable' : 'Enable';
                 var toggleClass = k.enabled ? 'btn-secondary' : 'btn-primary';
                 var enableFlag = k.enabled ? '0' : '1';
+                var shortId = k.key_id.length > 14 ? k.key_id.slice(0, 13) + '…' : k.key_id;
+                var permData = perms.join(',').toLowerCase();
+                var searchHay = (k.name + ' ' + k.key_id).toLowerCase();
+
                 return '' +
-                    '<div class="api-keys-row">' +
-                        '<div class="api-keys-row-main">' +
-                            '<div class="api-keys-row-title">' +
-                                '<strong>' + escapeHtml(k.name) + '</strong> ' + status +
+                    '<tr class="api-keys-row"' +
+                        ' data-action="openApiKeyDetail"' +
+                        ' data-key-id="' + escapeHtml(k.key_id) + '"' +
+                        ' data-search="' + escapeHtml(searchHay) + '"' +
+                        ' data-perms="' + escapeHtml(permData) + '"' +
+                        ' data-status="' + (k.enabled ? 'active' : 'disabled') + '">' +
+                        '<td class="col-api-keys-status text-center">' + statusDot + '</td>' +
+                        '<td><div class="api-keys-label-truncate" title="' + escapeHtml(k.name) + '"><strong>' + escapeHtml(k.name) + '</strong></div></td>' +
+                        '<td>' +
+                            '<div class="api-keys-id-cell">' +
+                                '<code title="' + escapeHtml(k.key_id) + '">' + escapeHtml(shortId) + '</code>' +
+                                '<button type="button" class="api-keys-id-copy" title="Copy full key ID" ' +
+                                    'data-action="copyApiKeyId" data-key-id="' + escapeHtml(k.key_id) + '" ' +
+                                    'data-stop-propagation="true">' +
+                                    '<i class="fas fa-copy"></i>' +
+                                '</button>' +
                             '</div>' +
-                            '<div class="api-keys-row-id"><code>' + escapeHtml(k.key_id) + '</code></div>' +
-                            '<div class="api-keys-row-meta text-muted">' +
-                                'Permissions: ' + escapeHtml(permSummary) + '<br>' +
-                                'Rate limit: ' + (k.rate_limit_per_minute || 0) + '/min &middot; ' +
-                                'Created: ' + formatWhen(k.created_at) + ' &middot; ' +
-                                'Last used: ' + formatWhen(k.last_used_at) +
-                                (k.expires_at ? ' &middot; Expires: ' + formatWhen(k.expires_at) : '') +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="api-keys-row-actions">' +
-                            '<button type="button" class="btn ' + toggleClass + ' btn-compact" ' +
-                                'data-action="toggleApiKey" data-key-id="' + escapeHtml(k.key_id) + '" ' +
-                                'data-enable="' + enableFlag + '">' + toggleLabel + '</button>' +
-                            '<button type="button" class="btn btn-secondary btn-compact" ' +
-                                'data-action="editApiKeyPrompt" data-key-id="' + escapeHtml(k.key_id) + '">Edit</button>' +
-                            '<button type="button" class="btn btn-danger btn-compact" ' +
-                                'data-action="deleteApiKeyPrompt" data-key-id="' + escapeHtml(k.key_id) + '" ' +
-                                'data-label="' + escapeHtml(k.name) + '">Delete</button>' +
-                        '</div>' +
-                    '</div>';
+                        '</td>' +
+                        '<td><div class="api-keys-perm-cell">' + permChips + '</div></td>' +
+                        '<td class="text-right">' + (k.rate_limit_per_minute || 0) + '</td>' +
+                        '<td>' + formatWhen(k.last_used_at) + '</td>' +
+                        '<td>' + (k.expires_at ? formatWhen(k.expires_at) : '<span class="text-muted">Never</span>') + '</td>' +
+                    '</tr>';
             }).join('');
-            container.innerHTML = rows;
+        }
+
+        function populatePermissionFilter(keys) {
+            var sel = document.getElementById('api-keys-filter-permission');
+            if (!sel) return;
+            var prev = sel.value || 'all';
+            var seen = {};
+            keys.forEach(function(k) {
+                (k.permissions || []).forEach(function(p) { seen[p] = true; });
+            });
+            var perms = Object.keys(seen).sort();
+            sel.innerHTML = '<option value="all">All permissions</option>' +
+                perms.map(function(p) {
+                    return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
+                }).join('');
+            // Preserve the user's selection across refreshes if it's still a valid option
+            sel.value = (prev === 'all' || seen[prev]) ? prev : 'all';
+        }
+
+        function applyTableFilters() {
+            var q      = (document.getElementById('api-keys-search') || {}).value || '';
+            var perm   = (document.getElementById('api-keys-filter-permission') || {}).value || 'all';
+            var status = (document.getElementById('api-keys-filter-status') || {}).value || 'all';
+            q = q.trim().toLowerCase();
+
+            var rows = document.querySelectorAll('#api-keys-tbody .api-keys-row');
+            var visible = 0;
+            rows.forEach(function(row) {
+                var show = true;
+                if (q && (row.getAttribute('data-search') || '').indexOf(q) === -1) show = false;
+                if (show && perm !== 'all') {
+                    var perms = (row.getAttribute('data-perms') || '').split(',');
+                    if (perms.indexOf(perm.toLowerCase()) === -1) show = false;
+                }
+                if (show && status !== 'all' && row.getAttribute('data-status') !== status) show = false;
+                row.classList.toggle('d-none', !show);
+                if (show) visible++;
+            });
+
+            var noMatches = document.getElementById('api-keys-no-matches');
+            if (noMatches) noMatches.classList.toggle('d-none', visible !== 0 || rows.length === 0);
+        }
+
+        function renderSortIndicators() {
+            document.querySelectorAll('.api-keys-table thead th.sortable').forEach(function(th) {
+                var col = th.getAttribute('data-sort-column');
+                var icon = th.querySelector('.sort-indicator');
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (icon) icon.className = 'fas fa-sort sort-indicator';
+                if (col === sortState.column && sortState.direction) {
+                    th.classList.add('sort-' + sortState.direction);
+                    if (icon) {
+                        icon.className = 'fas fa-sort-' + (sortState.direction === 'asc' ? 'up' : 'down') +
+                                         ' sort-indicator';
+                    }
+                }
+            });
+        }
+
+        function handleSort(column) {
+            if (!column) return;
+            if (sortState.column !== column) {
+                sortState = { column: column, direction: 'asc' };
+            } else if (sortState.direction === 'asc') {
+                sortState.direction = 'desc';
+            } else {
+                sortState = { column: null, direction: null };  // third click clears
+            }
+            renderTableBody(sortedKeys());
+            applyTableFilters();
+            renderSortIndicators();
+        }
+
+        // --- Row-click combined detail + edit modal ---------------------
+        // Populates read-only reference fields AND prefills the editable
+        // inputs (label / rate limit / expiry) so the user can adjust in one
+        // place. Shares pendingEdit + the existing submitEdit() flow.
+        function openDetailModal(keyId) {
+            var k = keysById[keyId];
+            if (!k) {
+                showToast('Error', 'Key details unavailable — refresh and try again', 'error');
+                return;
+            }
+            detailKeyId = keyId;
+            pendingEdit = keyId;  // enables the shared submitEdit()
+
+            document.getElementById('apiKeysDetailLabel').textContent = k.name || '';
+            document.getElementById('apiKeysDetailKeyId').textContent = k.key_id;
+            document.getElementById('apiKeysDetailStatus').innerHTML = k.enabled
+                ? '<span class="tx-status-badge tx-status-completed">Active</span>'
+                : '<span class="tx-status-badge tx-status-rejected">Disabled</span>';
+            document.getElementById('apiKeysDetailCreated').textContent = formatWhen(k.created_at);
+            document.getElementById('apiKeysDetailLastUsed').textContent = formatWhen(k.last_used_at);
+
+            // Editable fields — same IDs as the (now-retired) standalone edit
+            // modal, so submitEdit() works unchanged
+            var perms = k.permissions || [];
+            var permsEl = document.getElementById('apiKeysEditPermissions');
+            if (permsEl) {
+                permsEl.innerHTML = perms.length
+                    ? perms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">(none)</span>';
+            }
+
+            document.getElementById('apiKeyEditLabel').value = k.name || '';
+            var rateInput = document.getElementById('apiKeyEditRateLimit');
+            rateInput.value = k.rate_limit_per_minute || 100;
+            rateInput.oninput = function() { updateRateLimitWarning(k.rate_limit_per_minute); };
+            updateRateLimitWarning(k.rate_limit_per_minute);
+
+            // Expires select — "Keep current" default, disable presets that would
+            // extend a currently-finite expiry
+            var daysLeft = daysUntil(k.expires_at);
+            var select = document.getElementById('apiKeyEditExpires');
+            select.innerHTML = '';
+            var opts = [
+                { v: '', label: k.expires_at ? 'Keep current (expires ' + formatWhen(k.expires_at) + ')' : 'Keep current (never expires)' },
+                { v: '30',  label: '30 days from now' },
+                { v: '90',  label: '90 days from now' },
+                { v: '365', label: '1 year from now' }
+            ];
+            opts.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.v;
+                opt.textContent = o.label;
+                if (o.v !== '' && daysLeft !== null && Number(o.v) > daysLeft) {
+                    opt.disabled = true;
+                    opt.textContent += ' — would extend, blocked';
+                }
+                select.appendChild(opt);
+            });
+            select.value = '';
+
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+
+            // Footer toggle button — label + color reflect current state
+            var toggleBtn = document.getElementById('apiKeysDetailToggleBtn');
+            toggleBtn.innerHTML = k.enabled
+                ? '<i class="fas fa-ban"></i> Disable'
+                : '<i class="fas fa-play"></i> Enable';
+            toggleBtn.className = 'btn btn-compact ' + (k.enabled ? 'btn-secondary' : 'btn-primary');
+            toggleBtn.setAttribute('data-enable', k.enabled ? '0' : '1');
+
+            showModal('apiKeysDetailModal');
+        }
+
+        function closeDetailModal() {
+            detailKeyId = null;
+            pendingEdit = null;
+            hideModal('apiKeysDetailModal');
+        }
+
+        function detailToggle() {
+            if (!detailKeyId) return;
+            var k = keysById[detailKeyId];
+            if (!k) return;
+            var keyId = detailKeyId;
+            var enable = !k.enabled;
+            closeDetailModal();
+            toggle(keyId, enable);
+        }
+
+        function detailDelete() {
+            if (!detailKeyId) return;
+            var k = keysById[detailKeyId];
+            if (!k) return;
+            var keyId = detailKeyId;
+            var label = k.name || '';
+            closeDetailModal();
+            openDeleteModal(keyId, label);
+        }
+
+        function copyDetailKeyId() {
+            if (detailKeyId) copyKeyId(detailKeyId);
+        }
+
+        function copyKeyId(keyId) {
+            if (!keyId) return;
+            var ok = function() { showToast('Copied', 'Key ID copied to clipboard', 'success'); };
+            var fail = function() { showToast('Copy failed', 'Select and copy manually', 'error'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(keyId).then(ok, fail);
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = keyId;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); ok(); } catch (e) { fail(); }
+                document.body.removeChild(ta);
+            }
         }
 
         function refresh() {
@@ -6573,65 +6841,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }
         }
 
-        function openEditModal(keyId) {
-            var k = keysById[keyId];
-            if (!k) {
-                showToast('Error', 'Key details not loaded — refresh and try again', 'error');
-                return;
-            }
-            pendingEdit = keyId;
-
-            var permsEl = document.getElementById('apiKeysEditPermissions');
-            if (permsEl) {
-                var perms = (k.permissions || []);
-                permsEl.innerHTML = perms.length
-                    ? perms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
-                    : '<span class="text-muted">(none)</span>';
-            }
-
-            document.getElementById('apiKeyEditLabel').value = k.name || '';
-            var rateInput = document.getElementById('apiKeyEditRateLimit');
-            rateInput.value = k.rate_limit_per_minute || 100;
-            rateInput.oninput = function() { updateRateLimitWarning(k.rate_limit_per_minute); };
-            updateRateLimitWarning(k.rate_limit_per_minute);
-
-            // Expiry select: "Keep current" is always available. Preset
-            // shorter options only if they'd actually be shorter than the
-            // current expiry. If the key has no expiry ("Never"), every
-            // finite option is a shortening so all are allowed.
-            var daysLeft = daysUntil(k.expires_at);
-            var select = document.getElementById('apiKeyEditExpires');
-            select.innerHTML = '';
-            var opts = [
-                { v: '', label: k.expires_at ? 'Keep current (expires ' + formatWhen(k.expires_at) + ')' : 'Keep current (never expires)' },
-                { v: '30',  label: '30 days from now' },
-                { v: '90',  label: '90 days from now' },
-                { v: '365', label: '1 year from now' }
-            ];
-            opts.forEach(function(o) {
-                var opt = document.createElement('option');
-                opt.value = o.v;
-                opt.textContent = o.label;
-                // Only hide finite options that would EXTEND a currently-
-                // finite expiry. Keep-current is always valid.
-                if (o.v !== '' && daysLeft !== null && Number(o.v) > daysLeft) {
-                    opt.disabled = true;
-                    opt.textContent += ' — would extend, blocked';
-                }
-                select.appendChild(opt);
-            });
-            select.value = '';
-
-            var err = document.getElementById('apiKeysEditError');
-            if (err) { err.classList.add('d-none'); err.textContent = ''; }
-            showModal('apiKeysEditModal');
-        }
-
-        function closeEditModal() {
-            pendingEdit = null;
-            hideModal('apiKeysEditModal');
-        }
-
         function submitEdit() {
             if (!pendingEdit) {
                 showToast('Error', 'Edit session lost — reopen the Edit dialog', 'error');
@@ -6673,7 +6882,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }, function(r) {
                 if (r.data && r.data.success) {
                     showToast('Saved', 'API key updated', 'success');
-                    closeEditModal();
+                    closeDetailModal();
                     refresh();
                 } else {
                     showEditError((r.data && (r.data.message || r.data.error)) || 'Could not update key');
@@ -6823,8 +7032,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openDeleteModal: openDeleteModal,
             closeDeleteModal: closeDeleteModal,
             submitDelete: submitDelete,
-            openEditModal: openEditModal,
-            closeEditModal: closeEditModal,
             submitEdit: submitEdit,
             openDisableAllModal: openDisableAllModal,
             closeDisableAllModal: closeDisableAllModal,
@@ -6832,6 +7039,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openDeleteAllModal: openDeleteAllModal,
             closeDeleteAllModal: closeDeleteAllModal,
             submitDeleteAll: submitDeleteAll,
+            sort: handleSort,
+            applyFilters: applyTableFilters,
+            copyKeyId: copyKeyId,
+            openDetailModal: openDetailModal,
+            closeDetailModal: closeDetailModal,
+            detailToggle: detailToggle,
+            detailDelete: detailDelete,
+            copyDetailKeyId: copyDetailKeyId,
             closeRevealModal: closeRevealModal,
             copyToClipboard: copyToClipboard,
             closeVerifyModal: closeVerifyModal,
