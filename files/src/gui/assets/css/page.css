@@ -220,6 +220,15 @@ body {
     max-width: 200px;
     height: auto;
 }
+/* Action buttons below the QR (Export / Scan) — side-by-side on wide,
+   wrap to two lines on narrow screens. */
+.qr-action-row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
 
 /* Input with inline action button (e.g., QR scanner) */
 .input-with-action {
@@ -2761,8 +2770,13 @@ tr.tx-item-in-progress > td:first-child {
 }
 /* Alert banners with inline action button — button sits to the right of the
    text on wide screens and wraps below (right-aligned) on narrow screens.
-   Icon + text stay together; only the button wraps. */
+   Icon + text stay together; only the button wraps. Self-contained flex so
+   callers only need `.alert-banner-row` (no parallel `d-flex align-center
+   gap-lg` needed). */
 .alert-banner-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
     flex-wrap: wrap;
 }
 .alert-banner-content {

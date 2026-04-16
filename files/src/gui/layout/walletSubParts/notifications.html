@@ -51,24 +51,14 @@
     $torStatusAge = time() - (int)($torGuiStatus['timestamp'] ?? 0);
 ?>
 <?php if ($torStatusType === 'issue' || $torStatusType === 'restarting'): ?>
-<div class="alert alert-warning fade-in-up mb-lg alert-border-warning">
-    <div class="d-flex align-center gap-lg">
-        <?php if ($torStatusType === 'restarting'): ?>
-            <i class="fas fa-spinner fa-spin alert-icon-warning"></i>
-        <?php else: ?>
-            <i class="fas fa-exclamation-triangle alert-icon-warning"></i>
-        <?php endif; ?>
-        <div class="flex-1">
-            <h4 class="alert-title-warning">
-                <i class="fas fa-shield-alt"></i> Tor Connectivity Issue
-            </h4>
-            <p class="alert-body-text">
-                <?php echo $torStatusMsg; ?>.
-                Transactions and messages may be delayed until connectivity is restored.
-            </p>
-        </div>
-    </div>
-</div>
+<?php echo renderAlertBanner([
+    'variant' => 'warning',
+    'icon' => $torStatusType === 'restarting' ? 'fa-spinner' : 'fa-exclamation-triangle',
+    'spinner' => $torStatusType === 'restarting',
+    'extraClass' => 'alert-border-warning',
+    'title' => 'Tor Connectivity Issue',
+    'body' => $torStatusMsg . '. Transactions and messages may be delayed until connectivity is restored.',
+]); ?>
 <?php elseif ($torStatusType === 'recovered' && $torStatusAge <= 300): ?>
 <script nonce="<?php echo cspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
@@ -82,167 +72,150 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Update Available Notification -->
 <?php if (!empty($updateCheckStatus['available']) && $updateCheckStatus['available'] === true): ?>
-<div class="alert alert-info fade-in-up mb-lg">
-    <div class="d-flex align-center gap-lg">
-        <i class="fas fa-arrow-circle-up alert-icon-primary"></i>
-        <div class="flex-1">
-            <h4 class="alert-title-primary">
-                <i class="fas fa-box-open"></i> Update Available
-            </h4>
-            <p class="alert-body-text">
-                Version <strong><?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?></strong> is available (you are running <?php echo htmlspecialchars($updateCheckStatus['current_version']); ?>).
-                Pull the latest image with: <code>docker pull eiou/eiou:<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?></code>
-                <br>
-                <a href="https://github.com/Vowels-Group/eiou-docker/releases/tag/v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?>" target="_blank" rel="noopener noreferrer">View release notes</a>
-                &middot;
-                <a href="https://hub.docker.com/r/eiou/eiou/tags" target="_blank" rel="noopener noreferrer">Docker Hub</a>
-            </p>
-        </div>
-    </div>
-</div>
+<?php
+$latest = htmlspecialchars($updateCheckStatus['latest_version']);
+$current = htmlspecialchars($updateCheckStatus['current_version']);
+echo renderAlertBanner([
+    'variant' => 'info',
+    'icon' => 'fa-arrow-circle-up',
+    'title' => 'Update Available',
+    'body' => 'Version <strong>' . $latest . '</strong> is available (you are running ' . $current . '). '
+        . 'Pull the latest image with: <code>docker pull eiou/eiou:' . $latest . '</code>'
+        . '<br>'
+        . '<a href="https://github.com/Vowels-Group/eiou-docker/releases/tag/v' . $latest . '" target="_blank" rel="noopener noreferrer">View release notes</a>'
+        . ' &middot; '
+        . '<a href="https://hub.docker.com/r/eiou/eiou/tags" target="_blank" rel="noopener noreferrer">Docker Hub</a>',
+]);
+?>
 <?php endif; ?>
 
-<!-- What's New After Upgrade Notification -->
-<?php if (!empty($showWhatsNew)): ?>
-<div id="whats-new-banner" class="alert alert-success fade-in-up mb-lg">
-    <div class="d-flex align-center gap-lg alert-banner-row">
-        <div class="alert-banner-content">
-            <i class="fas fa-gift alert-icon-success"></i>
-            <div class="flex-1">
-                <h4 class="alert-title-success">
-                    <i class="fas fa-check-circle"></i> Updated to v<?php echo htmlspecialchars(\Eiou\Core\Constants::APP_VERSION); ?>
-                </h4>
-                <p class="alert-body-text">
-                    Your node has been updated.
-                    <a href="#" data-action="openWhatsNewModal" data-version="<?php echo htmlspecialchars(\Eiou\Core\Constants::APP_VERSION); ?>">See what's new in v<?php echo htmlspecialchars(\Eiou\Core\Constants::APP_VERSION); ?></a>
-                </p>
-            </div>
-        </div>
-        <button type="button" class="btn btn-success btn-compact btn-nowrap alert-banner-action" data-action="dismissWhatsNew">
-            <i class="fas fa-check"></i> Dismiss
-        </button>
-    </div>
-</div>
+<!-- What's New notification. Two variants:
+       fresh    — node is on the version it was first installed on
+       upgraded — node has been upgraded from an earlier version      -->
+<?php if (!empty($whatsNewVariant)): ?>
+<?php
+$appVer = htmlspecialchars(\Eiou\Core\Constants::APP_VERSION);
+$isFresh = $whatsNewVariant === 'fresh';
+echo renderAlertBanner([
+    'id' => 'whats-new-banner',
+    'variant' => 'success',
+    'icon' => $isFresh ? 'fa-rocket' : 'fa-gift',
+    'title' => $isFresh
+        ? 'You&rsquo;re on v' . $appVer
+        : 'Updated to v' . $appVer,
+    'body' => ($isFresh
+            ? 'Welcome! '
+            : 'Your node has been updated. ')
+        . '<a href="#" data-action="openWhatsNewModal" data-version="' . $appVer . '">See what&rsquo;s new in v' . $appVer . '</a>',
+    'action' => [
+        'label' => 'Dismiss',
+        'icon' => 'fa-check',
+        'data' => ['action' => 'dismissWhatsNew'],
+    ],
+]);
+?>
 <?php endif; ?>
 
 <!-- In-Progress Transactions Notification -->
 <?php if (!empty($inProgressTransactions)): ?>
-<div id="in-progress-banner" class="alert alert-warning fade-in-up mb-lg">
-    <div class="d-flex align-center gap-lg alert-banner-row">
-        <div class="alert-banner-content">
-            <div class="tx-in-progress-spinner">
-                <i class="fas fa-spinner fa-spin alert-icon-warning"></i>
-            </div>
-            <div class="flex-1">
-                <h4 class="alert-title-warning">
-                    <i class="fas fa-clock"></i> <?php echo count($inProgressTransactions); ?> Transaction<?php echo count($inProgressTransactions) > 1 ? 's' : ''; ?> In Progress
-                </h4>
-                <p class="alert-body-text">
-                    <?php
-                    $pending = 0; $sent = 0; $accepted = 0;
-                    foreach ($inProgressTransactions as $tx) {
-                        if ($tx['status'] === 'pending') $pending++;
-                        elseif ($tx['status'] === 'sent') $sent++;
-                        elseif ($tx['status'] === 'accepted') $accepted++;
-                    }
-                    $parts = [];
-                    if ($pending > 0) $parts[] = "$pending pending";
-                    if ($sent > 0) $parts[] = "$sent sent";
-                    if ($accepted > 0) $parts[] = "$accepted awaiting confirmation";
-                    echo implode(', ', $parts);
-                    ?>
-                </p>
-            </div>
-        </div>
-        <a href="#transactions" class="btn btn-warning btn-compact alert-banner-action">
-            <i class="fas fa-eye"></i> View
-        </a>
-    </div>
-</div>
+<?php
+$pending = 0; $sent = 0; $accepted = 0;
+foreach ($inProgressTransactions as $tx) {
+    if ($tx['status'] === 'pending') $pending++;
+    elseif ($tx['status'] === 'sent') $sent++;
+    elseif ($tx['status'] === 'accepted') $accepted++;
+}
+$parts = [];
+if ($pending > 0) $parts[] = "$pending pending";
+if ($sent > 0) $parts[] = "$sent sent";
+if ($accepted > 0) $parts[] = "$accepted awaiting confirmation";
+$ipCount = count($inProgressTransactions);
+echo renderAlertBanner([
+    'id' => 'in-progress-banner',
+    'variant' => 'warning',
+    'icon' => 'fa-spinner',
+    'spinner' => true,
+    'title' => $ipCount . ' Transaction' . ($ipCount > 1 ? 's' : '') . ' In Progress',
+    'body' => htmlspecialchars(implode(', ', $parts)),
+    'action' => [
+        'label' => 'View',
+        'icon' => 'fa-eye',
+        'href' => '#transactions',
+    ],
+]);
+?>
 <?php endif; ?>
 
 <!-- Pending Payment Requests Notification -->
 <?php if (!empty($pendingPaymentRequestCount)): ?>
-<div class="alert alert-info fade-in-up mb-2xl">
-    <div class="d-flex align-center gap-lg alert-banner-row">
-        <div class="alert-banner-content">
-            <i class="fas fa-hand-holding-usd alert-icon-primary"></i>
-            <div class="flex-1">
-                <h4 class="alert-title-primary">
-                    <?php echo (int)$pendingPaymentRequestCount; ?> Incoming Payment Request<?php echo $pendingPaymentRequestCount > 1 ? 's' : ''; ?>
-                </h4>
-                <p class="alert-body-text-sm">
-                    You have payment request<?php echo $pendingPaymentRequestCount > 1 ? 's' : ''; ?> waiting for your approval.
-                </p>
-            </div>
-        </div>
-        <a href="#payment-requests" class="btn btn-primary btn-compact alert-banner-action">
-            <i class="fas fa-eye"></i> View
-        </a>
-    </div>
-</div>
+<?php
+$prc = (int)$pendingPaymentRequestCount;
+$plural = $prc > 1 ? 's' : '';
+echo renderAlertBanner([
+    'variant' => 'info',
+    'icon' => 'fa-hand-holding-usd',
+    'title' => $prc . ' Incoming Payment Request' . $plural,
+    'body' => 'You have payment request' . $plural . ' waiting for your approval.',
+    'action' => [
+        'label' => 'View',
+        'icon' => 'fa-eye',
+        'href' => '#payment-requests',
+    ],
+]);
+?>
 <?php endif; ?>
 
 <!-- Pending Contact Requests Notification -->
 <?php if (!empty($pendingContacts)): ?>
-<div class="alert alert-info fade-in-up mb-2xl">
-    <div class="d-flex align-center gap-lg alert-banner-row">
-        <div class="alert-banner-content">
-            <i class="fas fa-user-clock alert-icon-primary"></i>
-            <div class="flex-1">
-                <h4 class="alert-title-primary">
-                    <?php echo count($pendingContacts); ?> Pending Contact Request<?php echo count($pendingContacts) > 1 ? 's' : ''; ?>
-                </h4>
-                <?php
-                    $priorCount = 0;
-                    foreach ($pendingContacts as $pc) {
-                        if (!empty($pc['has_prior_history'])) $priorCount++;
-                    }
-                ?>
-                <p class="alert-body-text-sm">
-                    You have contact requests waiting for your approval.<?php if ($priorCount > 0): ?>
-                    <br><strong><?php echo $priorCount; ?></strong> of these <?php echo $priorCount === 1 ? 'is a' : 'are'; ?> prior contact<?php echo $priorCount > 1 ? 's' : ''; ?> with existing transaction history.
-                    <?php endif; ?>
-                </p>
-            </div>
-        </div>
-        <a href="#pending-contacts" class="btn btn-primary btn-compact alert-banner-action">
-            <i class="fas fa-eye"></i> View Requests
-        </a>
-    </div>
-</div>
+<?php
+$pcCount = count($pendingContacts);
+$priorCount = 0;
+foreach ($pendingContacts as $pc) {
+    if (!empty($pc['has_prior_history'])) $priorCount++;
+}
+$pcBody = 'You have contact requests waiting for your approval.';
+if ($priorCount > 0) {
+    $pcBody .= '<br><strong>' . $priorCount . '</strong> of these '
+        . ($priorCount === 1 ? 'is a' : 'are')
+        . ' prior contact' . ($priorCount > 1 ? 's' : '')
+        . ' with existing transaction history.';
+}
+echo renderAlertBanner([
+    'variant' => 'info',
+    'icon' => 'fa-user-clock',
+    'title' => $pcCount . ' Pending Contact Request' . ($pcCount > 1 ? 's' : ''),
+    'body' => $pcBody,
+    'action' => [
+        'label' => 'View Requests',
+        'icon' => 'fa-eye',
+        'href' => '#pending-contacts',
+    ],
+]);
+?>
 <?php endif; ?>
 
 <!-- Pending Currency Requests Notification (for named contacts with incoming currency requests) -->
 <?php if (!empty($pendingCurrencyContacts)): ?>
-<div class="alert alert-warning fade-in-up mb-2xl">
-    <div class="d-flex align-center gap-lg alert-banner-row">
-        <div class="alert-banner-content">
-            <i class="fas fa-exchange-alt alert-icon-primary"></i>
-            <div class="flex-1">
-                <h4 class="alert-title-primary">
-                    Pending Currency Request<?php echo count($pendingCurrencyContacts) > 1 ? 's' : ''; ?>
-                </h4>
-                <p class="alert-body-text-sm">
-                    <?php
-                        $currencyNames = [];
-                        foreach ($pendingCurrencyContacts as $pcc) {
-                            $contactName = $pcc['name'] ?? 'Unknown';
-                            foreach ($pcc['pending_currencies'] as $pc) {
-                                $currencyNames[] = '<strong>' . htmlspecialchars($contactName) . '</strong> requested <strong>' . htmlspecialchars($pc['currency']) . '</strong>';
-                            }
-                        }
-                        echo implode('; ', $currencyNames) . '.';
-                    ?>
-                    Review and accept or reject below.
-                </p>
-            </div>
-        </div>
-        <a href="#pending-contacts" class="btn btn-primary btn-compact alert-banner-action">
-            <i class="fas fa-eye"></i> View Requests
-        </a>
-    </div>
-</div>
+<?php
+$currencyNames = [];
+foreach ($pendingCurrencyContacts as $pcc) {
+    $contactName = $pcc['name'] ?? 'Unknown';
+    foreach ($pcc['pending_currencies'] as $pc) {
+        $currencyNames[] = '<strong>' . htmlspecialchars($contactName) . '</strong> requested <strong>' . htmlspecialchars($pc['currency']) . '</strong>';
+    }
+}
+echo renderAlertBanner([
+    'variant' => 'warning',
+    'icon' => 'fa-exchange-alt',
+    'title' => 'Pending Currency Request' . (count($pendingCurrencyContacts) > 1 ? 's' : ''),
+    'body' => implode('; ', $currencyNames) . '. Review and accept or reject below.',
+    'action' => [
+        'label' => 'View Requests',
+        'icon' => 'fa-eye',
+        'href' => '#pending-contacts',
+    ],
+]);
+?>
 <?php endif; ?>
 
 <!-- Incoming Tx Drop Proposal Notification -->
@@ -256,33 +229,36 @@ foreach ($acceptedContacts as $c) {
 }
 ?>
 <?php if (!empty($incomingChainDropContacts)): ?>
-<div class="alert alert-error fade-in-up mb-2xl alert-border-danger">
-    <div class="d-flex align-center gap-lg alert-banner-row">
-        <div class="alert-banner-content">
-            <i class="fas fa-exclamation-triangle alert-icon-danger"></i>
-            <div class="flex-1">
-                <h4 class="alert-title-danger">
-                    <?php echo count($incomingChainDropContacts); ?> Chain Gap Resolution<?php echo count($incomingChainDropContacts) > 1 ? 's' : ''; ?> — Action Required
-                </h4>
-                <p class="alert-body-text">
-                    <?php foreach ($incomingChainDropContacts as $i => $c): ?>
-                        <strong><?php echo htmlspecialchars($c['name']); ?></strong> has proposed dropping missing transaction(s) to repair the chain.
-                        Sending is blocked until resolved. Accepting will remove the dropped transaction and its funds from both balances.<?php echo $i < count($incomingChainDropContacts) - 1 ? '<br>' : ''; ?>
-                    <?php endforeach; ?>
-                </p>
-            </div>
-        </div>
-        <?php if (count($incomingChainDropContacts) === 1): ?>
-        <button type="button" class="btn btn-danger btn-compact btn-nowrap alert-banner-action" data-action="openContactByContactId" data-contact-id="<?php echo htmlspecialchars($incomingChainDropContacts[0]['contact_id'] ?? '', ENT_QUOTES); ?>">
-            <i class="fas fa-eye"></i> View
-        </button>
-        <?php else: ?>
-        <a href="#contacts" class="btn btn-danger btn-compact btn-nowrap alert-banner-action">
-            <i class="fas fa-eye"></i> View Contacts
-        </a>
-        <?php endif; ?>
-    </div>
-</div>
+<?php
+$cdCount = count($incomingChainDropContacts);
+$cdBodyParts = [];
+foreach ($incomingChainDropContacts as $c) {
+    $cdBodyParts[] = '<strong>' . htmlspecialchars($c['name']) . '</strong> has proposed dropping missing transaction(s) to repair the chain. '
+        . 'Sending is blocked until resolved. Accepting will remove the dropped transaction and its funds from both balances.';
+}
+$cdAction = $cdCount === 1
+    ? [
+        'label' => 'View',
+        'icon' => 'fa-eye',
+        'data' => [
+            'action' => 'openContactByContactId',
+            'contact-id' => $incomingChainDropContacts[0]['contact_id'] ?? '',
+        ],
+    ]
+    : [
+        'label' => 'View Contacts',
+        'icon' => 'fa-eye',
+        'href' => '#contacts',
+    ];
+echo renderAlertBanner([
+    'variant' => 'danger',
+    'icon' => 'fa-exclamation-triangle',
+    'extraClass' => 'alert-border-danger',
+    'title' => $cdCount . ' Chain Gap Resolution' . ($cdCount > 1 ? 's' : '') . ' &mdash; Action Required',
+    'body' => implode('<br>', $cdBodyParts),
+    'action' => $cdAction,
+]);
+?>
 <?php endif; ?>
 
 <!-- Toast notifications for newly completed transactions (sent by user) -->

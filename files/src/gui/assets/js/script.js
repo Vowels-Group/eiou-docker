@@ -2446,6 +2446,13 @@ function openContactModal(contact, openTab) {
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
 
+    // Propagate contact name onto the QR toggle button so the exported PNG
+    // filename can include who it belongs to (see exportAddressQr).
+    var contactQrBtn = document.querySelector('[data-qr-target="contact-address-qr-display"]');
+    if (contactQrBtn) {
+        contactQrBtn.setAttribute('data-qr-name', contact.name || '');
+    }
+
     // Set addresses dropdown
     var addressSelector = document.getElementById('modal_address_selector');
     var addressDisplay = document.getElementById('modal_address_display');
@@ -4429,14 +4436,95 @@ function toggleAddressQr(el) {
     if (!svg) {
         container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
     } else {
+        var safeAddr = escapeHtml(address);
+        var safeName = escapeHtml(displayName);
         container.innerHTML = svg +
-            '<div style="text-align:center;margin-top:0.5rem">' +
+            '<div class="qr-action-row">' +
+                '<button class="btn btn-sm btn-outline" data-action="exportAddressQr" data-qr-container="' + escapeHtml(targetId) + '" data-qr-address="' + safeAddr + '" data-qr-name="' + safeName + '" title="Download this QR code as a PNG image">' +
+                    '<i class="fas fa-download"></i> Export QR' +
+                '</button>' +
                 '<button class="btn btn-sm btn-outline" data-action="scanContactQr" title="Scan a contact\'s QR code to add them">' +
-                    '<i class="fas fa-camera"></i> Scan Contact QR' +
+                    '<i class="fas fa-camera"></i> Scan QR' +
                 '</button>' +
             '</div>';
     }
     container.style.display = 'block';
+}
+
+/**
+ * Export the QR code inside the given container as a downloadable PNG.
+ * The QR is stored as an <svg> element (see generateQrSvg above). We
+ * serialise it to a blob, render it to a canvas at higher resolution for
+ * print/share quality, and trigger a browser download.
+ */
+function exportAddressQr(containerId, address, name) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var svgEl = container.querySelector('svg');
+    if (!svgEl) {
+        if (typeof showToast === 'function') {
+            showToast('Error', 'No QR code to export', 'error');
+        }
+        return;
+    }
+
+    var svgString = new XMLSerializer().serializeToString(svgEl);
+    var svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    var svgUrl = URL.createObjectURL(svgBlob);
+
+    var img = new Image();
+    img.onload = function() {
+        var exportSize = 600; // 3x the 200px on-screen size for crisp printing
+        var canvas = document.createElement('canvas');
+        canvas.width = exportSize;
+        canvas.height = exportSize;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, exportSize, exportSize);
+        ctx.drawImage(img, 0, 0, exportSize, exportSize);
+        URL.revokeObjectURL(svgUrl);
+
+        canvas.toBlob(function(pngBlob) {
+            if (!pngBlob) {
+                if (typeof showToast === 'function') {
+                    showToast('Error', 'Could not generate PNG', 'error');
+                }
+                return;
+            }
+            var pngUrl = URL.createObjectURL(pngBlob);
+            var a = document.createElement('a');
+            a.href = pngUrl;
+            // Filename: eiou-qr-<name>-<transport>.png — encodes the display
+            // name (so the user can tell their own QR from a contact's) plus
+            // the transport type (http / https / onion). The raw address is
+            // never embedded, so the filename can be shared without leaking
+            // the specific host/port/onion-hash. Falls back to just the
+            // transport when no name is available.
+            var transport = 'contact';
+            if (address) {
+                var addrLower = address.toLowerCase();
+                if (addrLower.indexOf('https://') === 0) transport = 'https';
+                else if (addrLower.indexOf('http://') === 0) transport = 'http';
+                else if (addrLower.indexOf('.onion') !== -1) transport = 'onion';
+            }
+            var nameSlug = (name || '').trim()
+                .replace(/[^a-zA-Z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 32);
+            a.download = 'eiou-qr-' + (nameSlug ? nameSlug + '-' : '') + transport + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(pngUrl);
+        }, 'image/png');
+    };
+    img.onerror = function() {
+        URL.revokeObjectURL(svgUrl);
+        if (typeof showToast === 'function') {
+            showToast('Error', 'Could not render QR for export', 'error');
+        }
+    };
+    img.src = svgUrl;
 }
 
 /**
@@ -5880,6 +5968,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     openAddContactModal();
                 }
             });
+        },
+        'exportAddressQr': function(el) {
+            exportAddressQr(
+                el.getAttribute('data-qr-container'),
+                el.getAttribute('data-qr-address') || '',
+                el.getAttribute('data-qr-name') || ''
+            );
         },
 
         // Navigation & reload
