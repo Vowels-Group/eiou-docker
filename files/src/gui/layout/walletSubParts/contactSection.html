@@ -6,6 +6,26 @@
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
         <button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal"><i class="fas fa-user-plus"></i> New Contact</button>
     </div>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>About Your Contacts</span>
+        </summary>
+        <div class="section-intro-body">
+            Every peer this wallet knows about — accepted contacts you can transact
+            with, pending requests in either direction, and blocked parties. Search
+            by name or address, filter by status, chain state, or online state, or
+            click any row to open the contact detail.
+            <br><br>
+            <small>
+                <strong>Subnote on restored contacts.</strong>
+                <code>RestoredContact&lt;N&gt;</code> names are auto-assigned when a
+                contact reappears after deletion or when this node is re-seeded (the
+                number is just restore order, not an ID). Rename them anytime by
+                opening the contact and editing the Name field.
+            </small>
+        </div>
+    </details>
     <?php if (!empty($allContacts)): ?>
     <div class="contacts-search-bar mb-lg">
         <div class="search-icon-wrapper">

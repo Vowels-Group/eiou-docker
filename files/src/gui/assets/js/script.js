@@ -663,6 +663,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Section-intros always ship closed (HTML has no `open` attribute). Users
+// expand on demand via the native <details>/<summary> toggle — works with
+// or without JS, any viewport.
+
 // Edit contact modal functions
 
 /**
@@ -704,15 +708,18 @@ function openEditContactModal(address, name, fee, credit, currency) {
  * @returns {void}
  */
 function closeEditContactModal() {
-    document.getElementById('editContactModal').style.display = 'none';
+    var el = document.getElementById('editContactModal');
+    if (el) el.style.display = 'none';
 }
 
 function openAddContactModal() {
-    document.getElementById('add-contact-modal').style.display = 'flex';
+    var el = document.getElementById('add-contact-modal');
+    if (el) el.style.display = 'flex';
 }
 
 function closeAddContactModal() {
-    document.getElementById('add-contact-modal').style.display = 'none';
+    var el = document.getElementById('add-contact-modal');
+    if (el) el.style.display = 'none';
 }
 
 /**
@@ -1005,6 +1012,11 @@ window.onclick = function(event) {
     }
     if (event.target === whatsNewModal) {
         closeWhatsNewModal();
+    }
+
+    var resetModal = document.getElementById('settingsResetToDefaultsModal');
+    if (resetModal && event.target === resetModal) {
+        resetModal.classList.add('d-none');
     }
 
     // API-keys modals (all dispatch through the apiKeys IIFE so state
@@ -2838,7 +2850,8 @@ function openContactModal(contact, openTab) {
  * @returns {void}
  */
 function closeContactModal() {
-    document.getElementById('contactModal').style.display = 'none';
+    var el = document.getElementById('contactModal');
+    if (el) el.style.display = 'none';
 }
 
 /**
@@ -3944,25 +3957,6 @@ function toggleConfigSection(contentId, arrowId) {
             content.style.display = 'none';
             arrow.style.transform = 'rotate(0deg)';
         }
-    }
-}
-
-/**
- * Toggles the P2P routing info alert between collapsed and expanded states.
- * Collapsed shows only the header; expanded reveals the description paragraph.
- *
- * @returns {void}
- */
-function toggleP2pInfo() {
-    var detail = document.getElementById('p2p-info-detail');
-    var chevron = document.getElementById('p2p-info-chevron');
-    if (!detail) return;
-    if (detail.style.display === 'block') {
-        detail.style.display = 'none';
-        if (chevron) chevron.className = 'fas fa-chevron-down p2p-info-chevron';
-    } else {
-        detail.style.display = 'block';
-        if (chevron) chevron.className = 'fas fa-chevron-up p2p-info-chevron';
     }
 }
 
@@ -6003,7 +5997,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         // Wallet
         'refreshWalletData': function() { refreshWalletData(); },
-        'toggleP2pInfo': function() { toggleP2pInfo(); },
 
         // Payment request modals
         'openPrPendingModal': function(el) { openPrPendingModal(el); },
@@ -6031,6 +6024,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'revokeAllRememberSessions': function(el) {
             if (!confirm('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.')) return;
             revokeAllRememberSessions(el);
+        },
+        'openResetToDefaultsModal': function() {
+            var modal = document.getElementById('settingsResetToDefaultsModal');
+            var input = document.getElementById('settingsResetConfirm');
+            var btn = document.getElementById('settingsResetSubmit');
+            if (!modal || !input || !btn) return;
+            input.value = '';
+            btn.disabled = true;
+            input.oninput = function() {
+                btn.disabled = input.value.trim().toLowerCase() !== 'reset';
+            };
+            modal.classList.remove('d-none');
+            setTimeout(function() { input.focus(); }, 50);
+        },
+        'closeResetToDefaultsModal': function() {
+            var modal = document.getElementById('settingsResetToDefaultsModal');
+            if (modal) modal.classList.add('d-none');
         },
         'toggleDlqDropdown': function(el) {
             var targetId = el.getAttribute('data-target');

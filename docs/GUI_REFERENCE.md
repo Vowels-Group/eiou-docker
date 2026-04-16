@@ -191,6 +191,7 @@ Handles settings and debug operations.
 | Method | Action Value | Description | Parameters |
 |--------|-------------|-------------|------------|
 | `handleUpdateSettings()` | `updateSettings` | Save wallet settings | Multiple settings fields |
+| `handleResetToDefaults()` | `resetToDefaults` | Wipe every saved setting back to build defaults via `UserContext::resetToDefaults()` — empties `defaultconfig.json` so every setting getter falls back to its `Constants::`-backed default; clears the `name` key from `userconfig.json`. Identity fields, contacts, transactions, backups, and API keys are untouched. CSRF-gated. GUI confirmation modal requires typing `reset` before the submit button enables | `csrf_token` |
 | `handleClearDebugLogs()` | `clearDebugLogs` | Clear debug entries | None |
 | `handleSendDebugReport()` | `sendDebugReport` | Generate debug file | `description` |
 | `handleGetDebugReportJson()` | `getDebugReportJson` | Download debug JSON (AJAX) | `description`, `report_mode` |
@@ -607,12 +608,31 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 
 #### settingsSection.html
 
+**Header callout** — `.section-intro` explaining what Save does, what Reset reverts (unsaved changes only), and pointing at Advanced Settings → Reset to Defaults for a full wipe.
+
 **Settings Form:**
-- Basic wallet settings (currency, fee, credit limit, transport mode)
-- Collapsible Advanced Settings with category dropdown (Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Sync, Network, Currency, Display)
-- Save/Reset buttons
+- Basic wallet settings (currency, fee, credit limit, transport mode, display name, color schemes)
+- Collapsible Advanced Settings with category dropdown. Categories: **Feature Toggles**, **Currency**, **Display**, **Backup & Logging**, **Data Retention**, **Sync**, **Network**, **Rate Limiting**, **GUI Security**, **Reset to Defaults**
+- **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list
+- **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
+- Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state
 
 The Settings tab additionally hosts **apiKeysSection.html** (API-key lifecycle, see below) and **debugSection.html** (debug logs, system info, debug report).
+
+---
+
+#### .section-intro — shared top-of-section callout
+
+Any section can start with a `<details class="section-intro text-muted">` callout:
+```html
+<details class="section-intro text-muted">
+    <summary><i class="fas fa-info-circle"></i> <span>Short title</span></summary>
+    <div class="section-intro-body">Longer explanation…</div>
+</details>
+```
+Currently applied to: **Wallet Settings**, **API Keys**, **Failed Messages**, **Debug Information**, **New eIOU**, **Your Contacts**, **Recent Transactions**.
+
+Always ships closed (no `open` attribute) — user clicks the summary to expand via native `<details>` behaviour. Same UX on desktop and mobile and for JS-disabled users (Tor "Safest" mode). The summary shows an info icon on the left and a chevron on the right that rotates when open. CSS lives at `.section-intro` / `details.section-intro > summary` / `.section-intro-body` in `page.css`.
 
 ---
 

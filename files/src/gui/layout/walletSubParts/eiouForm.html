@@ -4,17 +4,17 @@
 <div id="send-form" class="form-container fade-in-up">
     <h2><i class="fas fa-paper-plane"></i> New eIOU</h2>
     
-    <!-- P2P Information Alert (collapsible) -->
-    <div class="p2p-info-alert" data-action="toggleP2pInfo">
-        <div class="p2p-info-header">
+    <details class="section-intro text-muted">
+        <summary>
             <i class="fas fa-info-circle"></i>
-            <strong>Peer-to-Peer Routing Available</strong>
-            <i id="p2p-info-chevron" class="fas fa-chevron-down p2p-info-chevron"></i>
+            <span>Peer-to-Peer routing available</span>
+        </summary>
+        <div class="section-intro-body">
+            You can send eIOUs to anyone, even if they&rsquo;re not in your contacts — the
+            system will automatically route the transaction through your network of contacts
+            to reach the recipient.
         </div>
-        <p id="p2p-info-detail" class="p2p-info-detail">
-            You can send eIOUs to anyone, even if they're not in your contacts! The system will automatically route the transaction through your network of contacts to reach the recipient.
-        </p>
-    </div>
+    </details>
     
     <form method="POST" id="send-form-el">
         <input type="hidden" name="action" id="send-form-action" value="sendEIOU">

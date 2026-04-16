@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // Settings actions
-    if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport'])) {
+    if (in_array($action, ['updateSettings', 'resetToDefaults', 'clearDebugLogs', 'sendDebugReport'])) {
         $settingsController->routeAction();
     }
 
