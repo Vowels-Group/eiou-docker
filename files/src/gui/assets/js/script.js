@@ -6372,13 +6372,45 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             return arr;
         }
 
+        // Collapse permissions by category for display only. Given
+        //   ['wallet:read', 'wallet:send', 'contacts:read', 'admin']
+        // returns ['wallet:read/send', 'contacts:read', 'admin']. Wildcards
+        // (wallet:*) and scopeless entries (admin) are never folded since
+        // they'd misrepresent scope. The underlying data row stays the raw
+        // list so filter/search/sort are unaffected.
+        function groupPermissionsForDisplay(perms) {
+            if (!perms || !perms.length) return [];
+            var buckets = {};
+            var order = [];
+            var standalone = [];
+            perms.forEach(function(p) {
+                var parts = String(p).split(':');
+                if (parts.length !== 2) { standalone.push(p); return; }
+                var cat = parts[0], action = parts[1];
+                if (action === '*') {
+                    var wKey = '__w_' + cat;
+                    buckets[wKey] = [p];
+                    if (order.indexOf(wKey) === -1) order.push(wKey);
+                    return;
+                }
+                if (!buckets[cat]) { buckets[cat] = []; order.push(cat); }
+                buckets[cat].push(action);
+            });
+            return order.map(function(key) {
+                var vals = buckets[key];
+                if (key.indexOf('__w_') === 0) return vals[0];
+                return key + ':' + vals.join('/');
+            }).concat(standalone);
+        }
+
         function renderTableBody(keys) {
             var tbody = document.getElementById('api-keys-tbody');
             if (!tbody) return;
             tbody.innerHTML = keys.map(function(k) {
                 var perms = k.permissions || [];
-                var permChips = perms.length
-                    ? perms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                var displayPerms = groupPermissionsForDisplay(perms);
+                var permChips = displayPerms.length
+                    ? displayPerms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
                     : '<span class="text-muted">—</span>';
                 var statusDot = k.enabled
                     ? '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--active" title="Active"></i>'
@@ -6512,10 +6544,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             // Editable fields — same IDs as the (now-retired) standalone edit
             // modal, so submitEdit() works unchanged
             var perms = k.permissions || [];
+            var displayPerms = groupPermissionsForDisplay(perms);
             var permsEl = document.getElementById('apiKeysEditPermissions');
             if (permsEl) {
-                permsEl.innerHTML = perms.length
-                    ? perms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                permsEl.innerHTML = displayPerms.length
+                    ? displayPerms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
                     : '<span class="text-muted">(none)</span>';
             }
 
