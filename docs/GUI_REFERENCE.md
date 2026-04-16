@@ -266,6 +266,39 @@ The controller re-sends the original signed payload (stored verbatim in the DLQ)
 
 ---
 
+### ApiKeysController
+
+Handles all API-key management done from the wallet GUI's Settings tab (AJAX only — all responses are JSON). CSRF is validated on every call via `Session::validateCSRFToken(..., false)` (non-rotating, since the page fires many AJAX calls from a single load). Every destructive call is additionally gated by a short-lived "sensitive access" grant (see below).
+
+| Method | Action Value | Description | Parameters |
+|--------|-------------|-------------|------------|
+| `status()` (inline) | `apiKeysStatus` | Report whether the session currently holds a sensitive-access grant and its seconds remaining. Safe to call from any page render. | `csrf_token` |
+| `verify()` | `apiKeysVerify` | Verify the user's auth code and open a `Session::SENSITIVE_ACCESS_TTL_SECONDS` grant (default 5 min) for this session. | `authcode`, `csrf_token` |
+| `clearAccess()` (inline) | `apiKeysClearAccess` | Drop the sensitive-access grant immediately (user clicked "lock again"). | `csrf_token` |
+| `listKeys()` | `apiKeysList` | List every key on this node — `name`, `key_id`, `permissions`, `rate_limit_per_minute`, `enabled`, timestamps, `expires_at`. **No sensitive-access required** — `key_id` values are public identifiers and listing them is non-destructive. | `csrf_token` |
+| `createKey()` | `apiKeysCreate` | Mint a new key. Returns the `key_id` + secret *once*; the secret is never retrievable again. Reuses `ApiKeyService::validatePermissions()` and `validateRateLimit()` so CLI and GUI agree on what's accepted. | `name`, `permissions[]`, `rate_limit_per_minute` (optional, default 100), `expires_in_days` (optional, `0` or absent = never), `csrf_token` |
+| `toggleKey()` | `apiKeysToggle` | Enable or disable a single key. Idempotent — toggling a key that's already in the target state returns success. | `key_id`, `enable` (`"1"` or `"0"`), `csrf_token` |
+| `updateKey()` | `apiKeysUpdate` | Edit a key's label, rate limit, and/or expiry. Permissions are intentionally **not** editable (revoke + reissue to change scope). Expiry may only be **shortened** — a proposed timestamp later than the current `expires_at` returns `expiration_extension_not_allowed`. Each of `name` / `rate_limit_per_minute` / `expires_in_days` is independently optional; omitted fields stay untouched. | `key_id`, any of `name`, `rate_limit_per_minute`, `expires_in_days`, `csrf_token` |
+| `deleteKey()` | `apiKeysDelete` | Permanently delete a single key. GUI requires the user to type the key's label to confirm. | `key_id`, `csrf_token` |
+| (inline) | `apiKeysDisableAll` | Disable every currently-enabled key in one statement. Returns the affected `count`. | `csrf_token` |
+| (inline) | `apiKeysDeleteAll` | Permanently delete every key on the node. GUI requires the user to type `delete all` verbatim before the destructive button enables. | `csrf_token` |
+
+**Sensitive-access gate:**
+Every mutating action (`apiKeysCreate`, `apiKeysToggle`, `apiKeysUpdate`, `apiKeysDelete`, `apiKeysDisableAll`, `apiKeysDeleteAll`) calls `$this->requireSensitive()` before handling the request. Without an active grant the controller returns `401 sensitive_access_required` with a descriptive message; the client responds by opening the verify modal, collecting the auth code, and retrying the original request automatically on a successful verify. The grant is bound to the session's `auth_time`, so `logout` or a session-timeout rotation invalidates it immediately. Listing (`apiKeysList`, `apiKeysStatus`) is deliberately outside the gate because it's read-only and leaks nothing the operator doesn't already see.
+
+**Bulk-action safety:**
+- "Disable all" is only offered when ≥1 enabled key exists; the confirmation modal states the exact active count.
+- "Delete all" is only offered when ≥1 key exists (enabled or disabled); the user must type `delete all` into a confirmation input before the destructive button enables. No bulk *Enable* — re-activation is intentionally one key at a time so a recently disabled key can't be reactivated in a single careless click.
+- Both return a `count` of affected rows so the client can toast the exact number processed.
+
+**Audit logging:**
+All GUI-driven creations, toggles, updates, deletions, and bulk operations log through the unified `Logger` facade — `SecureLogger` masks any `eiou_*` key-id patterns and any `sk_*` secret patterns, so the audit trail never contains a shown-once secret or correlates a `key_id` to an action in readable form in `app.log`.
+
+**Routing:**
+Dispatched from `Functions.php` via an allowlist of action names. A new action must be added to both the `in_array($action, [...])` check in `Functions.php` **and** the `switch ($action)` in `ApiKeysController::routeAction()` — missing it from the allowlist causes `Functions.php` to fall through and render `wallet.html` (107 kB of HTML) instead of routing to the controller, which manifests client-side as a silent `res.json()` rejection.
+
+---
+
 ## Layout Components
 
 ### authenticationForm.html
@@ -578,6 +611,38 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 - Basic wallet settings (currency, fee, credit limit, transport mode)
 - Collapsible Advanced Settings with category dropdown (Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Sync, Network, Currency, Display)
 - Save/Reset buttons
+
+The Settings tab additionally hosts **apiKeysSection.html** (API-key lifecycle, see below) and **debugSection.html** (debug logs, system info, debug report).
+
+---
+
+#### apiKeysSection.html
+
+Rendered on the **Settings** tab, between the settings form and the debug section. Lists every API key on the node and exposes the full lifecycle (create / enable / disable / edit / delete / bulk-disable / bulk-delete) without leaving the page.
+
+**Toolbar:**
+- **Create API Key** — opens the create modal
+- **Refresh** — re-fetches the list without a full page reload
+- **Disable all** — visible only when ≥1 key is enabled
+- **Delete all** — visible only when ≥1 key exists (enabled or disabled)
+- **"Edits unlocked for N min"** — status text shown while a sensitive-access grant is active
+
+**List rows (one per key):**
+- Label (bold) + Active/Disabled badge
+- `key_id` (monospace)
+- Meta line: permission summary (comma-joined), rate limit, created timestamp, last-used timestamp, expiration (if any)
+- Actions: **Enable/Disable** (toggles single key), **Edit** (label / rate limit / expiry), **Delete** (typed-confirmation)
+
+**Modals (all `position: fixed`, stacked on `.modal` z-index 10000 except re-auth at 10010):**
+- `apiKeysCreateModal` — label, permission checkboxes grouped by scope (Wallet / Contacts / System / Backup / Admin), Read-only / Full access / Clear presets, rate limit (1–`ApiKeyService::MAX_RATE_LIMIT`, default 100), expiry (Never / 30d / 90d / 1 year)
+- `apiKeysRevealModal` — **one-time** secret display with per-field Copy buttons and a mandatory "I've saved..." acknowledgement before Done. Secret is scrubbed from the DOM the moment this modal closes
+- `apiKeysEditModal` — read-only permission chips + editable label / rate-limit / expiry-shortening. Live warning when rate limit is raised above the stored value
+- `apiKeysDeleteModal` — typed confirmation (must match the key's label)
+- `apiKeysDisableAllModal` — one-click confirmation with the exact active-key count
+- `apiKeysDeleteAllModal` — typed confirmation (must type `delete all` verbatim)
+- `apiKeysVerifyModal` — sensitive-action re-auth prompt (auth code input + Unlock). Opens *on top of* whichever modal triggered the gate
+
+Client-side module (`script.js`, IIFE exported as `window.apiKeys`) handles dispatch through a shared `withSensitiveAccess(requestFn, onResponse, label)` helper: on a `401 sensitive_access_required` response the module opens the verify modal, and on successful verify retries the original request with the same `onResponse` handler so the caller doesn't have to know about the re-auth dance.
 
 ---
 

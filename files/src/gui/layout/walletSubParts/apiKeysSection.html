@@ -19,6 +19,12 @@
         <button type="button" class="btn btn-secondary btn-compact" data-action="refreshApiKeys">
             <i class="fas fa-sync-alt"></i> Refresh
         </button>
+        <button type="button" id="apiKeysDisableAllBtn" class="btn btn-secondary btn-compact d-none" data-action="disableAllApiKeysPrompt">
+            <i class="fas fa-ban"></i> Disable all
+        </button>
+        <button type="button" id="apiKeysDeleteAllBtn" class="btn btn-danger btn-compact d-none" data-action="deleteAllApiKeysPrompt">
+            <i class="fas fa-trash"></i> Delete all
+        </button>
         <span id="api-keys-access-state" class="api-keys-access-state text-muted"></span>
     </div>
 
@@ -108,8 +114,10 @@
                                 <?php foreach ($perms as $permKey => $permDesc): ?>
                                     <label class="api-keys-permission">
                                         <input type="checkbox" name="permissions[]" value="<?php echo htmlspecialchars($permKey); ?>">
-                                        <span class="api-keys-permission-key"><?php echo htmlspecialchars($permKey); ?></span>
-                                        <small class="api-keys-permission-desc"><?php echo htmlspecialchars($permDesc); ?></small>
+                                        <span class="api-keys-permission-text">
+                                            <span class="api-keys-permission-key"><?php echo htmlspecialchars($permKey); ?></span>
+                                            <small class="api-keys-permission-desc"><?php echo htmlspecialchars($permDesc); ?></small>
+                                        </span>
                                     </label>
                                 <?php endforeach; ?>
                             </fieldset>
@@ -117,11 +125,14 @@
                     </div>
                 </div>
 
-                <div class="settings-grid">
+                <div class="settings-grid api-keys-settings-grid">
                     <div class="form-group">
                         <label for="apiKeyRateLimit">Rate limit (requests / minute)</label>
                         <input type="number" id="apiKeyRateLimit" name="rate_limit_per_minute"
                                min="1" max="<?php echo \Eiou\Services\ApiKeyService::MAX_RATE_LIMIT; ?>" value="100">
+                        <small class="form-hint text-muted">
+                            Default 100 req/min. Max <?php echo \Eiou\Services\ApiKeyService::MAX_RATE_LIMIT; ?>.
+                        </small>
                     </div>
                     <div class="form-group">
                         <label for="apiKeyExpires">Expires</label>
@@ -181,10 +192,112 @@
                 <input type="checkbox" id="apiKeysRevealAck">
                 I&rsquo;ve saved the key ID and secret somewhere safe.
             </label>
+            <div id="apiKeysRevealAckError" class="form-error d-none">
+                Please tick the box above to confirm you&rsquo;ve saved the secret — it won&rsquo;t be shown again.
+            </div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-primary btn-compact" id="apiKeysRevealDone" disabled data-action="closeApiKeyRevealModal">
+            <button type="button" class="btn btn-primary btn-compact" id="apiKeysRevealDone" data-action="closeApiKeyRevealModal">
                 Done
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Disable-all confirmation modal -->
+<div id="apiKeysDisableAllModal" class="modal d-none">
+    <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-ban"></i> Disable all API keys</h3>
+            <span class="close" data-action="closeApiKeysDisableAllModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p>
+                This will immediately disable <strong id="apiKeysDisableAllCount">0</strong>
+                active key(s). Clients using any of them will stop working until you
+                re-enable each key individually.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysDisableAllModal">Cancel</button>
+            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeysDisableAll">
+                <i class="fas fa-ban"></i> Disable all
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Delete-all confirmation modal -->
+<div id="apiKeysDeleteAllModal" class="modal d-none">
+    <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-trash"></i> Delete all API keys</h3>
+            <span class="close" data-action="closeApiKeysDeleteAllModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p>
+                Deleting <strong id="apiKeysDeleteAllCount">0</strong> key(s) is
+                permanent. All clients using any of them will stop working immediately.
+                To confirm, type <code>delete all</code> below.
+            </p>
+            <div class="form-group">
+                <input type="text" id="apiKeysDeleteAllConfirm" autocomplete="off" placeholder="delete all">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysDeleteAllModal">Cancel</button>
+            <button type="button" class="btn btn-danger btn-compact" id="apiKeysDeleteAllSubmit" disabled data-action="submitApiKeysDeleteAll">
+                <i class="fas fa-trash"></i> Delete all
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit API key modal -->
+<div id="apiKeysEditModal" class="modal d-none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <h3><i class="fas fa-pen"></i> Edit API Key</h3>
+            <span class="close" data-action="closeApiKeyEditModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p class="text-muted">
+                Permissions are fixed once a key is issued — to change scope, delete
+                this key and create a new one. Expiry can be shortened but not extended.
+            </p>
+            <div id="apiKeysEditForm">
+                <div class="form-group">
+                    <label>Permissions <span class="text-muted" style="font-weight: normal;">(cannot be changed)</span></label>
+                    <div id="apiKeysEditPermissions" class="api-keys-edit-permissions"></div>
+                </div>
+                <div class="form-group">
+                    <label for="apiKeyEditLabel">Label</label>
+                    <input type="text" id="apiKeyEditLabel" name="name" maxlength="64" required>
+                </div>
+                <div class="settings-grid api-keys-settings-grid">
+                    <div class="form-group">
+                        <label for="apiKeyEditRateLimit">Rate limit (requests / minute)</label>
+                        <input type="number" id="apiKeyEditRateLimit" name="rate_limit_per_minute"
+                               min="1" max="<?php echo \Eiou\Services\ApiKeyService::MAX_RATE_LIMIT; ?>">
+                        <small class="form-hint text-muted">
+                            Default 100 req/min. Max <?php echo \Eiou\Services\ApiKeyService::MAX_RATE_LIMIT; ?>.
+                        </small>
+                        <div id="apiKeysEditRateLimitWarning" class="form-hint text-muted d-none"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="apiKeyEditExpires">Expires</label>
+                        <select id="apiKeyEditExpires" name="expires_in_days"></select>
+                    </div>
+                </div>
+                <div id="apiKeysEditError" class="form-error d-none"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeyEditModal">
+                Cancel
+            </button>
+            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeyEdit">
+                <i class="fas fa-save"></i> Save
             </button>
         </div>
     </div>

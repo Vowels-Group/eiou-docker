@@ -4957,6 +4957,9 @@ hr.currency-separator-double {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 0.75rem;
 }
+/* Re-auth modal is always opened on top of another API key modal, so it
+   needs to sit above the standard .modal z-index (10000). */
+#apiKeysVerifyModal { z-index: 10010; }
 .api-keys-permission-group {
     border: 1px solid var(--border-color, #ddd);
     border-radius: 6px;
@@ -4968,20 +4971,59 @@ hr.currency-separator-double {
     padding: 0 0.25rem;
     font-size: 0.9rem;
 }
-.api-keys-permission {
-    display: block;
-    padding: 0.25rem 0;
+/* `label.` prefix beats the generic `.form-group label { display: block;
+   font-weight: bold }` rule. `width: auto` on the checkbox beats the
+   `.form-group input { width: 100% }` rule that otherwise stretches it
+   across the row and shoves the text off-screen. */
+label.api-keys-permission {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    margin-bottom: 0;
+    font-weight: normal;
     cursor: pointer;
 }
-.api-keys-permission input[type="checkbox"] { margin-right: 0.4rem; }
+label.api-keys-permission input[type="checkbox"] {
+    width: auto;
+    margin: 0.2rem 0 0 0;
+    flex: 0 0 auto;
+}
+label.api-keys-permission .api-keys-permission-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+/* Rate limit + Expires side-by-side even in the narrow modal. */
+.api-keys-settings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+.api-keys-edit-permissions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+}
+.api-keys-edit-permissions .perm-chip {
+    font-family: var(--font-mono, monospace);
+    background: var(--surface-2, #f0f1f3);
+    color: var(--text-primary, #212529);
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #dee2e6);
+}
 .api-keys-permission-key {
     font-family: var(--font-mono, monospace);
     font-size: 0.85rem;
+    font-weight: 600;
 }
 .api-keys-permission-desc {
-    display: block;
-    margin-left: 1.5rem;
     color: var(--text-muted, #666);
+    font-size: 0.8rem;
+    margin-top: 0.1rem;
 }
 .api-keys-preset-row {
     display: flex;
@@ -5014,7 +5056,7 @@ hr.currency-separator-double {
 }
 .api-keys-ack input[type="checkbox"] { margin-top: 0.2rem; }
 .form-error {
-    color: var(--status-failure-fg, #842029);
+    color: var(--status-failure-soft-fg, #842029);
     background: var(--status-failure-soft-bg, #f8d7da);
     border: 1px solid var(--status-failure-soft-fg, #842029);
     border-radius: 4px;

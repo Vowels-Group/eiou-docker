@@ -210,6 +210,22 @@ class ApiKeyRepository extends AbstractRepository {
     }
 
     /**
+     * Disable every enabled key in a single statement. Returns the row count.
+     */
+    public function disableAllKeys(): int {
+        $stmt = $this->pdo->query("UPDATE api_keys SET enabled = 0 WHERE enabled = 1");
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Delete every key. Returns the row count.
+     */
+    public function deleteAllKeys(): int {
+        $stmt = $this->pdo->query("DELETE FROM api_keys");
+        return $stmt->rowCount();
+    }
+
+    /**
      * Update API key permissions
      *
      * @param string $keyId The public key identifier
@@ -223,6 +239,43 @@ class ApiKeyRepository extends AbstractRepository {
             ':key_id' => $keyId,
             ':permissions' => json_encode($permissions)
         ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Update one or more mutable fields on an API key. Each parameter is
+     * nullable — null means "leave this column unchanged". Permissions are
+     * intentionally NOT included here: changing scope post-issuance silently
+     * escalates what every existing caller can do, so the UI forces
+     * revoke + re-issue for that.
+     *
+     * @param string       $keyId      The public key identifier
+     * @param string|null  $name       New label (unchanged if null)
+     * @param int|null     $rateLimit  New rate limit (unchanged if null)
+     * @param string|null  $expiresAt  New expiry as 'Y-m-d H:i:s' UTC (unchanged if null)
+     * @return bool True if a row was affected
+     */
+    public function updateKey(string $keyId, ?string $name, ?int $rateLimit, ?string $expiresAt): bool {
+        $sets = [];
+        $params = [':key_id' => $keyId];
+        if ($name !== null) {
+            $sets[] = 'name = :name';
+            $params[':name'] = $name;
+        }
+        if ($rateLimit !== null) {
+            $sets[] = 'rate_limit_per_minute = :rate';
+            $params[':rate'] = $rateLimit;
+        }
+        if ($expiresAt !== null) {
+            $sets[] = 'expires_at = :expires';
+            $params[':expires'] = $expiresAt;
+        }
+        if (empty($sets)) {
+            return false;
+        }
+        $sql = "UPDATE api_keys SET " . implode(', ', $sets) . " WHERE key_id = :key_id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
         return $stmt->rowCount() > 0;
     }
 

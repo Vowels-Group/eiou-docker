@@ -228,6 +228,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         'apiKeysCreate',
         'apiKeysToggle',
         'apiKeysDelete',
+        'apiKeysUpdate',
+        'apiKeysDisableAll',
+        'apiKeysDeleteAll',
     ], true)) {
         try {
             $apiKeysController->routeAction();

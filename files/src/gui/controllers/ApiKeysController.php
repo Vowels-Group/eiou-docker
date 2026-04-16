@@ -108,9 +108,25 @@ class ApiKeysController
                     $this->requireSensitive();
                     $this->toggleKey();
                     break;
+                case 'apiKeysUpdate':
+                    $this->requireSensitive();
+                    $this->updateKey();
+                    break;
                 case 'apiKeysDelete':
                     $this->requireSensitive();
                     $this->deleteKey();
+                    break;
+                case 'apiKeysDisableAll':
+                    $this->requireSensitive();
+                    $count = $this->repository->disableAllKeys();
+                    Logger::getInstance()->info('api_keys_disable_all_via_gui', ['count' => $count]);
+                    $this->respond(['success' => true, 'count' => $count]);
+                    break;
+                case 'apiKeysDeleteAll':
+                    $this->requireSensitive();
+                    $count = $this->repository->deleteAllKeys();
+                    Logger::getInstance()->info('api_keys_delete_all_via_gui', ['count' => $count]);
+                    $this->respond(['success' => true, 'count' => $count]);
                     break;
                 default:
                     $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
@@ -258,6 +274,88 @@ class ApiKeysController
                 'expires_at' => $result['expires_at'],
             ],
         ]);
+    }
+
+    /**
+     * Edit mutable fields on an existing key. Only label, rate limit, and
+     * expiry are editable; expiry can only be SHORTENED, never extended —
+     * that keeps forgotten keys from silently outliving their usefulness,
+     * and there's no legitimate need to extend a key the operator can
+     * already delete + reissue. Permissions are deliberately read-only
+     * after creation (revoke + re-issue to change scope).
+     */
+    private function updateKey(): void
+    {
+        $keyId = (string) ($_POST['key_id'] ?? '');
+        if (!$this->isValidKeyId($keyId)) {
+            $this->respond(['success' => false, 'error' => 'invalid_key_id'], 400);
+        }
+
+        $existing = $this->repository->getByKeyId($keyId);
+        if ($existing === null) {
+            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+        }
+
+        $newName = null;
+        if (array_key_exists('name', $_POST)) {
+            $name = trim(Security::sanitizeInput((string) $_POST['name']));
+            if ($name === '' || strlen($name) > 64) {
+                $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+            }
+            $newName = $name;
+        }
+
+        $newRateLimit = null;
+        if (array_key_exists('rate_limit_per_minute', $_POST) && $_POST['rate_limit_per_minute'] !== '') {
+            $rateValidation = ApiKeyService::validateRateLimit($_POST['rate_limit_per_minute']);
+            if (!$rateValidation['valid']) {
+                $this->respond([
+                    'success' => false,
+                    'error' => 'invalid_rate_limit',
+                    'message' => $rateValidation['error'],
+                ], 400);
+            }
+            $newRateLimit = $rateValidation['value'];
+        }
+
+        $newExpiresAt = null;
+        if (array_key_exists('expires_in_days', $_POST) && $_POST['expires_in_days'] !== '') {
+            $days = $_POST['expires_in_days'];
+            if (!ctype_digit((string) $days) || (int) $days < 1 || (int) $days > 3650) {
+                $this->respond(['success' => false, 'error' => 'invalid_expiration'], 400);
+            }
+            $candidate = gmdate('Y-m-d H:i:s', time() + ((int) $days) * 86400);
+            // Reject extension: if the key already has an expiry, the new
+            // one must be earlier. A null current expiry ("Never") means
+            // any finite expiry is a shortening, so that's always allowed.
+            $currentExpiresAt = $existing['expires_at'] ?? null;
+            if ($currentExpiresAt !== null && $candidate > $currentExpiresAt) {
+                $this->respond([
+                    'success' => false,
+                    'error' => 'expiration_extension_not_allowed',
+                    'message' => 'Expiry can only be shortened. Delete and recreate the key to extend it.',
+                ], 400);
+            }
+            $newExpiresAt = $candidate;
+        }
+
+        if ($newName === null && $newRateLimit === null && $newExpiresAt === null) {
+            $this->respond(['success' => false, 'error' => 'nothing_to_update'], 400);
+        }
+
+        $this->repository->updateKey($keyId, $newName, $newRateLimit, $newExpiresAt);
+
+        $changed = [];
+        if ($newName !== null)      $changed[] = 'name';
+        if ($newRateLimit !== null) $changed[] = 'rate_limit_per_minute';
+        if ($newExpiresAt !== null) $changed[] = 'expires_at';
+
+        Logger::getInstance()->info('api_key_updated_via_gui', [
+            'key_id' => $keyId,
+            'changed' => $changed,
+        ]);
+
+        $this->respond(['success' => true, 'key_id' => $keyId, 'changed' => $changed]);
     }
 
     /**

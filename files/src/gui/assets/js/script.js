@@ -6098,6 +6098,15 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         },
         'closeApiKeyDeleteModal': function() { window.apiKeys.closeDeleteModal(); },
         'submitApiKeyDelete': function() { window.apiKeys.submitDelete(); },
+        'editApiKeyPrompt': function(el) { window.apiKeys.openEditModal(el.getAttribute('data-key-id')); },
+        'closeApiKeyEditModal': function() { window.apiKeys.closeEditModal(); },
+        'submitApiKeyEdit': function() { window.apiKeys.submitEdit(); },
+        'disableAllApiKeysPrompt': function() { window.apiKeys.openDisableAllModal(); },
+        'closeApiKeysDisableAllModal': function() { window.apiKeys.closeDisableAllModal(); },
+        'submitApiKeysDisableAll': function() { window.apiKeys.submitDisableAll(); },
+        'deleteAllApiKeysPrompt': function() { window.apiKeys.openDeleteAllModal(); },
+        'closeApiKeysDeleteAllModal': function() { window.apiKeys.closeDeleteAllModal(); },
+        'submitApiKeysDeleteAll': function() { window.apiKeys.submitDeleteAll(); },
         'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
         'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
         'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
@@ -6214,7 +6223,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
     window.apiKeys = (function() {
         var pendingAction = null;   // { fn: Function, label: string } to retry after verify
         var pendingDelete = null;   // { keyId, label }
+        var pendingEdit = null;     // keyId currently being edited
         var lastCreated = null;     // { keyId, secret } for copy-to-clipboard
+        var keysById = {};          // cache of last rendered keys so Edit can prefill
         var loaded = false;
 
         function csrfToken() {
@@ -6282,7 +6293,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     '</div>';
                 return;
             }
+            keysById = {};
+            var activeCount = 0;
+            keys.forEach(function(k) { if (k.enabled) activeCount++; });
+            var disableAllBtn = document.getElementById('apiKeysDisableAllBtn');
+            var deleteAllBtn  = document.getElementById('apiKeysDeleteAllBtn');
+            if (disableAllBtn) disableAllBtn.classList.toggle('d-none', activeCount === 0);
+            if (deleteAllBtn)  deleteAllBtn.classList.toggle('d-none', keys.length === 0);
+
             var rows = keys.map(function(k) {
+                keysById[k.key_id] = k;
                 var permSummary = (k.permissions || []).join(', ') || '—';
                 var status = k.enabled
                     ? '<span class="tx-status-badge tx-status-completed">Active</span>'
@@ -6309,6 +6329,8 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             '<button type="button" class="btn ' + toggleClass + ' btn-compact" ' +
                                 'data-action="toggleApiKey" data-key-id="' + escapeHtml(k.key_id) + '" ' +
                                 'data-enable="' + enableFlag + '">' + toggleLabel + '</button>' +
+                            '<button type="button" class="btn btn-secondary btn-compact" ' +
+                                'data-action="editApiKeyPrompt" data-key-id="' + escapeHtml(k.key_id) + '">Edit</button>' +
                             '<button type="button" class="btn btn-danger btn-compact" ' +
                                 'data-action="deleteApiKeyPrompt" data-key-id="' + escapeHtml(k.key_id) + '" ' +
                                 'data-label="' + escapeHtml(k.name) + '">Delete</button>' +
@@ -6409,15 +6431,15 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     permissions: permissions,
                     rate_limit_per_minute: rate,
                     expires_in_days: expires
-                }).then(function(r) {
-                    if (r.data && r.data.success) {
-                        closeCreateModal();
-                        showRevealModal(r.data.key);
-                        refresh();
-                    } else {
-                        showCreateError((r.data && (r.data.message || r.data.error)) || 'Could not create key');
-                    }
                 });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    closeCreateModal();
+                    showRevealModal(r.data.key);
+                    refresh();
+                } else {
+                    showCreateError((r.data && (r.data.message || r.data.error)) || 'Could not create key');
+                }
             }, 'Create API key');
         }
 
@@ -6432,14 +6454,22 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             document.getElementById('apiKeysRevealKeyId').textContent = key.key_id;
             document.getElementById('apiKeysRevealSecret').textContent = key.secret;
             var ack = document.getElementById('apiKeysRevealAck');
-            var done = document.getElementById('apiKeysRevealDone');
+            var err = document.getElementById('apiKeysRevealAckError');
             ack.checked = false;
-            done.disabled = true;
-            ack.onchange = function() { done.disabled = !ack.checked; };
+            if (err) err.classList.add('d-none');
+            ack.onchange = function() {
+                if (ack.checked && err) err.classList.add('d-none');
+            };
             showModal('apiKeysRevealModal');
         }
 
         function closeRevealModal() {
+            var ack = document.getElementById('apiKeysRevealAck');
+            var err = document.getElementById('apiKeysRevealAckError');
+            if (ack && !ack.checked) {
+                if (err) err.classList.remove('d-none');
+                return;
+            }
             // Clear the secret from memory and from the DOM the moment the
             // user closes. The server has no way to re-show this.
             document.getElementById('apiKeysRevealSecret').textContent = '';
@@ -6471,15 +6501,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // --- Toggle / delete ---------------------------------------------
         function toggle(keyId, enable) {
             withSensitiveAccess(function() {
-                return post({ action: 'apiKeysToggle', key_id: keyId, enable: enable ? '1' : '0' })
-                    .then(function(r) {
-                        if (r.data && r.data.success) {
-                            showToast('Saved', enable ? 'API key enabled' : 'API key disabled', 'success');
-                            refresh();
-                        } else {
-                            showToast('Error', (r.data && r.data.message) || 'Could not update key', 'error');
-                        }
-                    });
+                return post({ action: 'apiKeysToggle', key_id: keyId, enable: enable ? '1' : '0' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Saved', enable ? 'API key enabled' : 'API key disabled', 'success');
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not update key', 'error');
+                }
             }, enable ? 'Enable API key' : 'Disable API key');
         }
 
@@ -6505,28 +6534,234 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (!pendingDelete) return;
             var keyId = pendingDelete.keyId;
             withSensitiveAccess(function() {
-                return post({ action: 'apiKeysDelete', key_id: keyId }).then(function(r) {
-                    if (r.data && r.data.success) {
-                        showToast('Deleted', 'API key deleted', 'success');
-                        closeDeleteModal();
-                        refresh();
-                    } else {
-                        showToast('Error', (r.data && r.data.message) || 'Could not delete key', 'error');
-                    }
-                });
+                return post({ action: 'apiKeysDelete', key_id: keyId });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Deleted', 'API key deleted', 'success');
+                    closeDeleteModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not delete key', 'error');
+                }
             }, 'Delete API key');
         }
 
-        // --- Sensitive-access gate ---------------------------------------
-        function withSensitiveAccess(fn, label) {
-            return fn().then(function(r) {
-                if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
-                    pendingAction = { fn: fn, label: label };
-                    openVerifyModal(r.data.message);
-                    return;
+        // --- Edit ---------------------------------------------------------
+        // Compute how many days remain on the key's current expiry so we
+        // can disable any preset option in the dropdown that would EXTEND
+        // it. The backend enforces this too; the UI hides extensions so
+        // the user doesn't pick an option that just errors.
+        function daysUntil(isoOrSqlTimestamp) {
+            if (!isoOrSqlTimestamp) return null;
+            var d = new Date(String(isoOrSqlTimestamp).replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return null;
+            return Math.max(0, Math.floor((d.getTime() - Date.now()) / 86400000));
+        }
+
+        function updateRateLimitWarning(original) {
+            var input = document.getElementById('apiKeyEditRateLimit');
+            var warn  = document.getElementById('apiKeysEditRateLimitWarning');
+            if (!input || !warn) return;
+            var current = Number(input.value) || 0;
+            var was     = Number(original) || 0;
+            if (current > was) {
+                warn.textContent = 'Raising rate limit from ' + was + ' to ' + current +
+                    ' — existing callers can now send more traffic. Confirm this is intended.';
+                warn.classList.remove('d-none');
+            } else {
+                warn.classList.add('d-none');
+            }
+        }
+
+        function openEditModal(keyId) {
+            var k = keysById[keyId];
+            if (!k) {
+                showToast('Error', 'Key details not loaded — refresh and try again', 'error');
+                return;
+            }
+            pendingEdit = keyId;
+
+            var permsEl = document.getElementById('apiKeysEditPermissions');
+            if (permsEl) {
+                var perms = (k.permissions || []);
+                permsEl.innerHTML = perms.length
+                    ? perms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">(none)</span>';
+            }
+
+            document.getElementById('apiKeyEditLabel').value = k.name || '';
+            var rateInput = document.getElementById('apiKeyEditRateLimit');
+            rateInput.value = k.rate_limit_per_minute || 100;
+            rateInput.oninput = function() { updateRateLimitWarning(k.rate_limit_per_minute); };
+            updateRateLimitWarning(k.rate_limit_per_minute);
+
+            // Expiry select: "Keep current" is always available. Preset
+            // shorter options only if they'd actually be shorter than the
+            // current expiry. If the key has no expiry ("Never"), every
+            // finite option is a shortening so all are allowed.
+            var daysLeft = daysUntil(k.expires_at);
+            var select = document.getElementById('apiKeyEditExpires');
+            select.innerHTML = '';
+            var opts = [
+                { v: '', label: k.expires_at ? 'Keep current (expires ' + formatWhen(k.expires_at) + ')' : 'Keep current (never expires)' },
+                { v: '30',  label: '30 days from now' },
+                { v: '90',  label: '90 days from now' },
+                { v: '365', label: '1 year from now' }
+            ];
+            opts.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.v;
+                opt.textContent = o.label;
+                // Only hide finite options that would EXTEND a currently-
+                // finite expiry. Keep-current is always valid.
+                if (o.v !== '' && daysLeft !== null && Number(o.v) > daysLeft) {
+                    opt.disabled = true;
+                    opt.textContent += ' — would extend, blocked';
                 }
-                return r;
+                select.appendChild(opt);
             });
+            select.value = '';
+
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysEditModal');
+        }
+
+        function closeEditModal() {
+            pendingEdit = null;
+            hideModal('apiKeysEditModal');
+        }
+
+        function submitEdit() {
+            if (!pendingEdit) {
+                showToast('Error', 'Edit session lost — reopen the Edit dialog', 'error');
+                return;
+            }
+            var keyId = pendingEdit;
+            var original = keysById[keyId] || {};
+
+            // Clear any stale error from a prior click so the user sees the
+            // result of THIS attempt rather than yesterday's "Nothing changed."
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+
+            var name = document.getElementById('apiKeyEditLabel').value.trim();
+            var rate = document.getElementById('apiKeyEditRateLimit').value;
+            var expiresDays = document.getElementById('apiKeyEditExpires').value;
+
+            if (!name) { showEditError('Please give the key a label.'); return; }
+
+            var payload = { action: 'apiKeysUpdate', key_id: keyId };
+            var changed = false;
+            if (name !== original.name) { payload.name = name; changed = true; }
+            if (String(rate) !== String(original.rate_limit_per_minute)) {
+                payload.rate_limit_per_minute = rate;
+                changed = true;
+            }
+            if (expiresDays !== '') {
+                payload.expires_in_days = expiresDays;
+                changed = true;
+            }
+
+            if (!changed) {
+                showEditError('Nothing changed.');
+                return;
+            }
+
+            withSensitiveAccess(function() {
+                return post(payload);
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Saved', 'API key updated', 'success');
+                    closeEditModal();
+                    refresh();
+                } else {
+                    showEditError((r.data && (r.data.message || r.data.error)) || 'Could not update key');
+                }
+            }, 'Edit API key');
+        }
+
+        function showEditError(msg) {
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+        }
+
+        // --- Bulk Disable / Delete ---------------------------------------
+        function openDisableAllModal() {
+            var active = Object.values(keysById).filter(function(k) { return k.enabled; }).length;
+            if (active === 0) {
+                showToast('Nothing to do', 'No active keys to disable', 'info');
+                return;
+            }
+            document.getElementById('apiKeysDisableAllCount').textContent = active;
+            showModal('apiKeysDisableAllModal');
+        }
+        function closeDisableAllModal() { hideModal('apiKeysDisableAllModal'); }
+        function submitDisableAll() {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDisableAll' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Disabled', 'Disabled ' + (r.data.count || 0) + ' key(s)', 'success');
+                    closeDisableAllModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not disable all keys', 'error');
+                }
+            }, 'Disable all API keys');
+        }
+
+        function openDeleteAllModal() {
+            var total = Object.keys(keysById).length;
+            if (total === 0) {
+                showToast('Nothing to do', 'No keys to delete', 'info');
+                return;
+            }
+            document.getElementById('apiKeysDeleteAllCount').textContent = total;
+            var input = document.getElementById('apiKeysDeleteAllConfirm');
+            var btn   = document.getElementById('apiKeysDeleteAllSubmit');
+            input.value = '';
+            btn.disabled = true;
+            input.oninput = function() {
+                btn.disabled = input.value.trim().toLowerCase() !== 'delete all';
+            };
+            showModal('apiKeysDeleteAllModal');
+        }
+        function closeDeleteAllModal() { hideModal('apiKeysDeleteAllModal'); }
+        function submitDeleteAll() {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDeleteAll' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Deleted', 'Deleted ' + (r.data.count || 0) + ' key(s)', 'success');
+                    closeDeleteAllModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not delete all keys', 'error');
+                }
+            }, 'Delete all API keys');
+        }
+
+        // --- Sensitive-access gate ---------------------------------------
+        // On 401 sensitive_access_required, opens the verify modal and
+        // retries `requestFn` after the user re-auths — only then calls onResponse.
+        // A rejected request (network / JSON parse / server returning HTML for an
+        // unrouted action) surfaces as a toast instead of dying silently.
+        function withSensitiveAccess(requestFn, onResponse, label) {
+            var attempt = function() {
+                return requestFn().then(function(r) {
+                    if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
+                        pendingAction = { fn: attempt, label: label };
+                        openVerifyModal(r.data.message);
+                        return;
+                    }
+                    if (typeof onResponse === 'function') onResponse(r);
+                    return r;
+                }).catch(function(e) {
+                    showToast('Error', (label || 'Request') + ' failed — ' + (e && e.message ? e.message : 'network / server error'), 'error');
+                });
+            };
+            return attempt();
         }
 
         function openVerifyModal(message) {
@@ -6588,6 +6823,15 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openDeleteModal: openDeleteModal,
             closeDeleteModal: closeDeleteModal,
             submitDelete: submitDelete,
+            openEditModal: openEditModal,
+            closeEditModal: closeEditModal,
+            submitEdit: submitEdit,
+            openDisableAllModal: openDisableAllModal,
+            closeDisableAllModal: closeDisableAllModal,
+            submitDisableAll: submitDisableAll,
+            openDeleteAllModal: openDeleteAllModal,
+            closeDeleteAllModal: closeDeleteAllModal,
+            submitDeleteAll: submitDeleteAll,
             closeRevealModal: closeRevealModal,
             copyToClipboard: copyToClipboard,
             closeVerifyModal: closeVerifyModal,
