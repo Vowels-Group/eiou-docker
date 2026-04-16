@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Utils\InputValidator;
+use Eiou\Utils\Logger;
 use Eiou\Utils\Security;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
@@ -535,6 +536,28 @@ class SettingsController
     }
 
     /**
+     * Handle the destructive "Reset to Defaults" action — wipes every saved
+     * wallet setting back to the values this build considers default (see
+     * UserContext::resetToDefaults()). Contacts, transactions, backups,
+     * and API keys are untouched.
+     *
+     * @return void
+     */
+    public function handleResetToDefaults(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+            Logger::getInstance()->info('settings_reset_to_defaults_via_gui', []);
+            MessageHelper::redirectMessage('All settings have been reset to defaults', 'success');
+        } catch (Exception $e) {
+            Logger::getInstance()->logException($e, ['context' => 'settings_reset_to_defaults_via_gui']);
+            MessageHelper::redirectMessage('Reset failed: ' . $e->getMessage(), 'error');
+        }
+    }
+
+    /**
      * Handle send debug report action
      *
      * @return void
@@ -646,6 +669,9 @@ class SettingsController
         switch ($action) {
             case 'updateSettings':
                 $this->handleUpdateSettings();
+                break;
+            case 'resetToDefaults':
+                $this->handleResetToDefaults();
                 break;
             case 'clearDebugLogs':
                 $this->handleClearDebugLogs();

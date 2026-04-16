@@ -1074,6 +1074,22 @@ eiou changesettings contactStatusEnabled false
 eiou changesettings defaultFee 1.5 --json
 ```
 
+**Reset all settings to defaults:**
+
+`eiou changesettings reset` wipes every saved setting in `/etc/eiou/config/defaultconfig.json` back to the values this build of the code considers default (each getter in `UserContext` falls back to its `Constants::`-backed default when the override is absent). The display `name` in `userconfig.json` is also cleared; identity fields (keys, hostnames, onion address) are preserved. Destructive, so the bare form prints an error and requires `--yes` / `-y` to confirm.
+
+"Defaults" here means whatever the running code treats as default — if an operator has edited `Constants.php` on this node, this resets to the operator's edited values, not the upstream ship defaults. Contacts, transactions, backups, and API keys are never touched.
+
+```bash
+# Safety check — prints an error, does nothing:
+eiou changesettings reset
+
+# Actually reset:
+eiou changesettings reset --yes
+```
+
+The same operation is exposed in the GUI under **Settings → Advanced Settings → Reset to Defaults** (typed-confirmation modal).
+
 ---
 
 ## System Commands

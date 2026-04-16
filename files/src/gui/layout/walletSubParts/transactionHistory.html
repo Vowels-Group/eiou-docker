@@ -13,6 +13,28 @@
             </button>
         </div>
     </div>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>About Recent Transactions</span>
+        </summary>
+        <div class="section-intro-body">
+            Your most recent transactions across every contact and routing hop —
+            direct sends, P2P relays, contact-request transactions, and pending
+            items are all shown here. Search by counterparty name, address, or
+            description; filter by direction, type, or status; click any row to
+            open the full transaction detail.
+            <br><br>
+            <small>
+                <strong>Subnote on counterparty names.</strong>
+                <strong>Unknown</strong> means the other side isn&rsquo;t in your contacts
+                anymore — typically a P2P send, a relay hop, or a contact you&rsquo;ve
+                since deleted. <strong>RestoredContact&lt;N&gt;</strong> names are
+                auto-assigned when a contact reappears after deletion or when this
+                node is re-seeded — rename them from the Contacts tab.
+            </small>
+        </div>
+    </details>
 
     <!-- In-Progress Transactions Banner (within section) -->
     <?php if (!empty($inProgressTransactions)): ?>
@@ -135,9 +157,12 @@
 
     <?php
     // Build contact lookup maps for avatar/name resolution. Key by all known
-    // identifiers — name (lowercased) AND each address field — because the
-    // counterparty in $tx may match by name (formatter populates it) but the
-    // address format isn't always identical to the contact's stored address.
+    // identifiers — name (lowercased), each address field, AND pubkey_hash —
+    // because the counterparty in $tx may match by name (formatter populates
+    // it), by address (when the tx's address format matches the contact's
+    // stored address), or only by hash (the contact was restored from backup
+    // and lost one of its transport addresses — pubkey_hash is the only
+    // stable identifier across restorations).
     //
     // Include blocked and user-pending contacts in addition to accepted ones:
     // historical transactions with a contact don't disappear when the contact
@@ -147,10 +172,14 @@
     // later re-accepted under the same address).
     $txContactsByAddress = [];
     $txContactsByName = [];
+    $txContactsByHash = [];
     foreach ([$blockedContacts ?? [], $pendingUserContacts ?? [], $acceptedContacts ?? []] as $bucket) {
         foreach ($bucket as $tc) {
             if (!empty($tc['name'])) {
                 $txContactsByName[strtolower($tc['name'])] = $tc;
+            }
+            if (!empty($tc['pubkey_hash'])) {
+                $txContactsByHash[$tc['pubkey_hash']] = $tc;
             }
             foreach (validTransportIndices() as $addrField) {
                 if (!empty($tc[$addrField])) {
@@ -241,14 +270,28 @@
                 $inProgress  = ($statusLower !== 'completed' && $statusLower !== 'rejected' && $statusLower !== 'cancelled');
 
                 $cpAddr  = $isSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+                $cpTxHash = $isSent
+                    ? ($tx['receiver_public_key_hash'] ?? '')
+                    : ($tx['sender_public_key_hash'] ?? '');
                 $cpName  = !empty($tx['counterparty_name']) ? $tx['counterparty_name'] : null;
-                // Resolve contact: prefer name lookup (formatter populates it
-                // reliably), fall back to address lookup if no name match.
+                // Resolve contact in priority order:
+                //   1. name (formatter populates it reliably for most txs)
+                //   2. stored address (matches when the tx's address format is
+                //      the same one the contact still has saved)
+                //   3. pubkey_hash (stable across restorations — catches
+                //      RestoredContact<N>s whose old http:// address was lost)
                 $cpContact = null;
                 if ($cpName && isset($txContactsByName[strtolower($cpName)])) {
                     $cpContact = $txContactsByName[strtolower($cpName)];
                 } elseif ($cpAddr && isset($txContactsByAddress[$cpAddr])) {
                     $cpContact = $txContactsByAddress[$cpAddr];
+                } elseif ($cpTxHash && isset($txContactsByHash[$cpTxHash])) {
+                    $cpContact = $txContactsByHash[$cpTxHash];
+                }
+                // Bring the display name back into $cpName if the hash lookup
+                // is what resolved us (avoids the row rendering as "Unknown").
+                if ($cpContact && empty($cpName) && !empty($cpContact['name'])) {
+                    $cpName = $cpContact['name'];
                 }
                 $cpHash  = $cpContact['pubkey_hash'] ?? '';
 

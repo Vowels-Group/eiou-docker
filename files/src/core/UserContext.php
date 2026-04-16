@@ -98,6 +98,45 @@ class UserContext {
     }
 
     /**
+     * Reset every persisted wallet setting to the value this build considers
+     * default. Writes {} into defaultconfig.json so every setting getter
+     * falls back to its Constants-backed default, and removes the `name`
+     * key from userconfig.json (the only setting that lives there;
+     * identity / key fields are preserved). Reloads in-memory state so
+     * subsequent reads reflect the fresh defaults.
+     *
+     * "Defaults" means whatever the running code considers default. Editing
+     * Constants.php on a node redefines that baseline — this is not a
+     * factory reset in the ship-image sense. Contacts, transactions,
+     * backups, and API keys are not touched.
+     *
+     * @throws \RuntimeException on write failure
+     * @return void
+     */
+    public function resetToDefaults(): void {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        if (file_put_contents($defaultPath, json_encode(new \stdClass(), JSON_PRETTY_PRINT), LOCK_EX) === false) {
+            throw new \RuntimeException('Failed to write ' . $defaultPath);
+        }
+
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (file_exists($userPath)) {
+            $contents = file_get_contents($userPath);
+            $data = is_string($contents) ? (json_decode($contents, true) ?: []) : [];
+            if (array_key_exists('name', $data)) {
+                unset($data['name']);
+                if (file_put_contents($userPath, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+                    throw new \RuntimeException('Failed to write ' . $userPath);
+                }
+            }
+        }
+
+        $this->userData = [];
+        $this->initialized = false;
+        $this->loadConfigFromFiles();
+    }
+
+    /**
      * Get a user configuration value
      *
      * @param string $key Configuration key

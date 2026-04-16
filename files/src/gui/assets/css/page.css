@@ -1135,59 +1135,6 @@ body {
     margin-top: 2rem;
 }
 
-/* P2P Info Alert (collapsible) */
-.p2p-info-alert {
-    background: #e7f3ff;
-    border: 1px solid #b3d9ff;
-    border-radius: 4px;
-    padding: 0.6rem 1rem;
-    margin-bottom: 1.5rem;
-    cursor: pointer;
-}
-
-.p2p-info-header {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -webkit-box-align: center;
-    -ms-flex-align: center;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Fallback margin for browsers without gap support (TOR browser compatibility) */
-.p2p-info-header > * + * {
-    margin-left: 0.5rem;
-}
-
-@supports (gap: 0.5rem) {
-    .p2p-info-header > * + * {
-        margin-left: 0;
-    }
-}
-
-.p2p-info-header i,
-.p2p-info-header strong {
-    color: #0066cc;
-}
-
-.p2p-info-header strong {
-    -webkit-box-flex: 1;
-    -ms-flex: 1;
-    flex: 1;
-}
-
-.p2p-info-chevron {
-    font-size: 0.8rem;
-}
-
-.p2p-info-detail {
-    display: none;
-    margin: 0.5rem 0 0 1.5rem;
-    color: #333;
-    font-size: 0.9rem;
-}
-
 /* Best Fee Route — experimental warning */
 .best-fee-flask {
     color: #856404;
@@ -2427,12 +2374,16 @@ tr.tx-item-in-progress > td:first-child {
     }
 }
 
+/* Success / error accent follows the status-color-scheme setting (western
+   keeps green+/red-, eastern swaps, neutral collapses to the theme default).
+   Warning + info are category colours independent of win/loss semantics so
+   they stay hardcoded. */
 .toast.toast-success {
-    border-left-color: #28a745;
+    border-left-color: var(--status-success-bg, #28a745);
 }
 
 .toast.toast-error {
-    border-left-color: #dc3545;
+    border-left-color: var(--status-failure-bg, #dc3545);
 }
 
 .toast.toast-warning {
@@ -2447,10 +2398,10 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 1.25rem;
 }
 
-.toast.toast-success .toast-icon { color: #28a745; }
-.toast.toast-error .toast-icon { color: #dc3545; }
+.toast.toast-success .toast-icon { color: var(--status-success-bg, #28a745); }
+.toast.toast-error .toast-icon   { color: var(--status-failure-bg, #dc3545); }
 .toast.toast-warning .toast-icon { color: #ffc107; }
-.toast.toast-info .toast-icon { color: #17a2b8; }
+.toast.toast-info .toast-icon    { color: #17a2b8; }
 
 .toast-content {
     flex: 1;
@@ -3382,13 +3333,6 @@ tr.tx-item-in-progress > td:first-child {
     }
 }
 
-/* DLQ description / info paragraph */
-.dlq-description {
-    color: #6c757d;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-}
-
 /* Empty-state success icon */
 .dlq-empty-icon {
     color: #28a745;
@@ -4185,6 +4129,46 @@ hr.currency-separator-double {
     color: #6c757d;
     font-size: 0.875rem;
     margin-bottom: 0.75rem;
+}
+
+/* Shared callout block used at the top of sections (Wallet Settings,
+   API Keys, Failed Messages, …) to set context + explain key semantics
+   for the rest of the card. Reads as "help/guidance" distinct from
+   the surrounding controls. Rendered as a <details> so users can
+   collapse the block — particularly handy on mobile where the text
+   otherwise eats a full screen of scroll. Default state is open on
+   desktop / closed on mobile (script flips the `open` attribute). */
+.section-intro {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--surface-2, #f0f3f6);
+    border-left: 3px solid var(--border-color, #dee2e6);
+    border-radius: 4px;
+}
+details.section-intro > summary {
+    cursor: pointer;
+    list-style: none;           /* drop the default triangle */
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+details.section-intro > summary::-webkit-details-marker { display: none; }
+details.section-intro > summary::after {
+    content: "\f078"; /* fa-chevron-down */
+    font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+    margin-left: auto;
+    transition: transform 0.15s ease;
+}
+details.section-intro[open] > summary::after { transform: rotate(-180deg); }
+details.section-intro > .section-intro-body {
+    margin-top: 0.45rem;
+    font-weight: normal;
 }
 
 .settings-actions { margin-top: 1.5rem; }

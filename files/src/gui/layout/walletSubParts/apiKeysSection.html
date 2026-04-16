@@ -8,14 +8,19 @@
             <i class="fas fa-plus"></i> Create API Key
         </button>
     </div>
-    <p class="text-muted mb-lg">
-        Grant external applications programmatic access to this wallet. Keys
-        authenticate via HMAC-SHA256; the shared secret is shown once at
-        creation and cannot be retrieved again. Re-enter your auth code to
-        create, disable, or delete keys — a short-lived grant covers a few
-        minutes of edits before prompting again, independent of
-        &ldquo;Remember me&rdquo;.
-    </p>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>Grant external apps programmatic access</span>
+        </summary>
+        <div class="section-intro-body">
+            Keys authenticate via HMAC-SHA256; the shared secret is shown once at
+            creation and cannot be retrieved again. Re-enter your auth code to
+            create, disable, or delete keys — a short-lived grant covers a few
+            minutes of edits before prompting again, independent of
+            &ldquo;Remember me&rdquo;.
+        </div>
+    </details>
 
     <div id="api-keys-filters" class="api-keys-filters d-none">
         <div class="api-keys-search-row search-icon-wrapper">

@@ -7,6 +7,20 @@
         <input type="hidden" name="action" value="updateSettings">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
+        <details class="section-intro text-muted">
+            <summary>
+                <i class="fas fa-info-circle"></i>
+                <span>Save, Reset, and Reset to Defaults</span>
+            </summary>
+            <div class="section-intro-body">
+                Change settings here and hit <strong>Save Settings</strong> when you&rsquo;re done.
+                <strong>Reset</strong> only reverts your current unsaved changes — it does
+                <em>not</em> wipe your saved settings. To throw every saved setting back to
+                the defaults this node ships with, use
+                <strong>Advanced Settings → Reset to Defaults</strong>.
+            </div>
+        </details>
+
         <div class="settings-grid">
             <!-- Contact Avatar Style -->
             <div class="form-group">
@@ -114,24 +128,6 @@
                 </small>
             </div>
 
-            <!-- Session Timeout -->
-            <div class="form-group">
-                <label for="sessionTimeoutMinutes">Session Timeout:</label>
-                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
-                    <?php
-                    $currentTimeout = $user->getSessionTimeoutMinutes();
-                    foreach (sessionTimeoutOptions() as $minutes): ?>
-                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
-                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Auto-logout after this period of inactivity
-                </small>
-            </div>
-
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
@@ -163,7 +159,7 @@
             <!-- Minimum Fee -->
             <div class="form-group">
                 <label for="minFee">Minimum Fee Amount:</label>
-                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.00000001" min="0" class="default-value">
+                <input type="number" id="minFee" name="minFee" value="<?php echo number_format((float) $user->getMinimumFee(), internalPrecision(), '.', ''); ?>" step="0.00000001" min="0" class="default-value">
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo number_format(transactionMinimumFee(), internalPrecision()); ?>
@@ -233,6 +229,7 @@
                         <option value="network">Network</option>
                         <option value="rate-limiting">Rate Limiting</option>
                         <option value="gui-security">GUI Security</option>
+                        <option value="reset">Reset to Defaults</option>
                     </select>
                 </div>
 
@@ -640,6 +637,23 @@
                     </p>
                     <div class="settings-grid">
                         <div class="form-group">
+                            <label for="sessionTimeoutMinutes">Session Timeout:</label>
+                            <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
+                                <?php
+                                $currentTimeout = $user->getSessionTimeoutMinutes();
+                                foreach (sessionTimeoutOptions() as $minutes): ?>
+                                    <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
+                                        <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i>
+                                Auto-logout after this period of inactivity
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="rememberMeMaxDays">Remember Me Duration:</label>
                             <select id="rememberMeMaxDays" name="rememberMeMaxDays" class="default-value">
                                 <?php
@@ -724,6 +738,41 @@
                             </button>
                         <?php endif; ?>
                     </div>
+                </div>
+
+                <!-- Reset to Defaults (hidden by default) -->
+                <div id="adv-section-reset" class="adv-section d-none">
+                    <h4 class="settings-subsection-title">
+                        <i class="fas fa-undo-alt"></i> Reset to Defaults
+                    </h4>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-info-circle"></i>
+                        Throws every saved wallet setting back to the values this node
+                        ships with. Covers the main Wallet Settings fields <em>and</em>
+                        every Advanced Settings category (Feature Toggles, Currency,
+                        Display, Backup &amp; Logging, Data Retention, Sync, Network,
+                        Rate Limiting, GUI Security).
+                    </p>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Caveat:</strong> &ldquo;Defaults&rdquo; means whatever this
+                        build of the code considers default. If an operator has edited
+                        <code>Constants.php</code> on this node, this resets to the
+                        operator&rsquo;s edited values, not the upstream ship defaults.
+                        Your contacts, transactions, backups, and API keys are
+                        <strong>not</strong> touched.
+                    </p>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-terminal"></i>
+                        This is also exposed via the CLI —
+                        <code>eiou changesettings reset --yes</code> performs the same
+                        operation from inside the container.
+                    </p>
+                    <button type="button"
+                            class="btn btn-danger"
+                            data-action="openResetToDefaultsModal">
+                        <i class="fas fa-undo-alt"></i> Reset to Defaults&hellip;
+                    </button>
                 </div>
 
                 <!-- Network (hidden by default) -->
@@ -937,5 +986,39 @@
             <button type="reset" class="btn btn-secondary"><i class="fas fa-undo"></i> Reset</button>
         </div>
     </form>
+
+    <!-- Reset-to-Defaults confirmation modal. Its own form (POST outside the
+         main settings form), typed confirmation required, explicit CSRF. -->
+    <div id="settingsResetToDefaultsModal" class="modal d-none">
+        <div class="modal-content modal-content-sm">
+            <div class="modal-header">
+                <h3><i class="fas fa-undo-alt"></i> Reset to Defaults</h3>
+                <span class="close" data-action="closeResetToDefaultsModal">&times;</span>
+            </div>
+            <form method="POST" id="settingsResetToDefaultsForm">
+                <input type="hidden" name="action" value="resetToDefaults">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <div class="modal-body modal-body-padded">
+                    <p>
+                        This wipes every saved wallet setting back to the values this node
+                        ships with. Contacts, transactions, backups, and API keys are
+                        <strong>not</strong> affected.
+                    </p>
+                    <p class="text-muted">
+                        To confirm, type <code>reset</code> below.
+                    </p>
+                    <div class="form-group">
+                        <input type="text" id="settingsResetConfirm" autocomplete="off" placeholder="reset">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-compact" data-action="closeResetToDefaultsModal">Cancel</button>
+                    <button type="submit" id="settingsResetSubmit" class="btn btn-danger btn-compact" disabled>
+                        <i class="fas fa-undo-alt"></i> Reset all settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 

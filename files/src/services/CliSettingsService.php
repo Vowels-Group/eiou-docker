@@ -41,7 +41,26 @@ class CliSettingsService
 
         // Check if command line based or user input based
         if(isset($argv[2])){
-            if(strtolower($argv[2]) === 'defaultfee'){
+            if(strtolower($argv[2]) === 'reset'){
+                // "settings reset" → wipe every saved setting back to the
+                // defaults this build considers default. No value to validate.
+                // Destructive enough to warrant a typed confirmation unless
+                // the caller explicitly opts out with --yes.
+                $confirm = strtolower($argv[3] ?? '');
+                if ($confirm !== '--yes' && $confirm !== '-y') {
+                    $output->error('Destructive operation. Re-run with `eiou settings reset --yes` to confirm.');
+                    return;
+                }
+                try {
+                    \Eiou\Core\UserContext::getInstance()->resetToDefaults();
+                    \Eiou\Utils\Logger::getInstance()->info('settings_reset_to_defaults_via_cli', []);
+                    $output->success('All settings have been reset to defaults.');
+                } catch (\Throwable $e) {
+                    \Eiou\Utils\Logger::getInstance()->logException($e, ['context' => 'settings_reset_to_defaults_via_cli']);
+                    $output->error('Reset failed: ' . $e->getMessage());
+                }
+                return;
+            } elseif(strtolower($argv[2]) === 'defaultfee'){
                 $key = 'defaultFee';
                 $validation = InputValidator::validateFeePercent($argv[3]);
                 if (!$validation['valid']) {
