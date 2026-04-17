@@ -60,6 +60,7 @@ There are two event types:
     "tx_sent_count": 2,
     "tx_received_count": 1,
     "tx_p2p_count": 0,
+    "tx_contact_count": 0,
     "contact_count": 5,
     "days_active": 1,
     "volume_by_currency": [
@@ -79,6 +80,8 @@ There are two event types:
   }
 }
 ```
+
+`tx_sent_count`, `tx_received_count`, and `tx_p2p_count` cover real payment transactions only; zero-amount contact handshakes are excluded from those totals so payment-activity figures aren't inflated by social/onboarding activity. Contact-handshake volume in the same window is reported separately as `tx_contact_count`. `contact_count` is an absolute count of accepted contacts (node state, not activity).
 
 All counts are scoped to the `period_days` window so heartbeats never double-count across submissions. The normal daily heartbeat uses `period_days: 1`. After a multi-day submission gap (e.g. an outage, or a node that was offline), the next heartbeat widens its window to cover the whole gap since the last successful submission (or since `analyticsOptInAt`, whichever is later), so counts aren't lost. The window is clamped to a maximum of 365 days and is never allowed to reach back before the user's opt-in timestamp.
 
