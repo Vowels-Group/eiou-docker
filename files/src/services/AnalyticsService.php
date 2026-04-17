@@ -240,7 +240,11 @@ class AnalyticsService
         $contactRepo = new \Eiou\Database\ContactRepository($pdo);
 
         // All counts are scoped to the period window so heartbeats
-        // don't double-count when aggregated across submissions
+        // don't double-count when aggregated across submissions.
+        // Payment counts exclude tx_type='contact' (zero-amount handshake
+        // transactions) so sent/received/relay totals reflect real
+        // payment activity. Contact handshakes are reported separately
+        // as tx_contact_count.
         $periodStats = self::getPeriodTypeStats($pdo, $periodDays);
         $dailyCounts = (new \Eiou\Database\TransactionStatisticsRepository($pdo))
             ->getDailyTransactionCounts($periodDays);
@@ -259,6 +263,7 @@ class AnalyticsService
                 'tx_sent_count' => (int) ($periodStats['sent'] ?? 0),
                 'tx_received_count' => (int) ($periodStats['received'] ?? 0),
                 'tx_p2p_count' => (int) ($periodStats['relay'] ?? 0),
+                'tx_contact_count' => self::getContactTxnCount($pdo, $periodDays),
                 'contact_count' => $contactRepo->countAcceptedContacts(),
                 'days_active' => $daysActive,
                 'volume_by_currency' => $volumeByCurrency,
@@ -275,10 +280,14 @@ class AnalyticsService
      */
     private static function getPeriodTypeStats(\PDO $pdo, int $periodDays): array
     {
+        // Excludes tx_type='contact' — handshake transactions are zero-
+        // amount and shouldn't inflate payment counts. They're reported
+        // separately via getContactTxnCount().
         $stmt = $pdo->prepare(
             "SELECT type, COUNT(*) AS count
              FROM transactions
              WHERE timestamp >= DATE_SUB(NOW(), INTERVAL :days DAY)
+               AND tx_type != 'contact'
              GROUP BY type"
         );
 
@@ -297,6 +306,36 @@ class AnalyticsService
     }
 
     /**
+     * Count contact-handshake transactions in the given period.
+     *
+     * Contact transactions (tx_type='contact') are zero-amount handshakes
+     * used to establish peer relationships — they're tracked separately
+     * from payment activity.
+     *
+     * @param \PDO $pdo Database connection
+     * @param int $periodDays Number of days to look back
+     * @return int Number of contact transactions in the window
+     */
+    private static function getContactTxnCount(\PDO $pdo, int $periodDays): int
+    {
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) AS count
+             FROM transactions
+             WHERE timestamp >= DATE_SUB(NOW(), INTERVAL :days DAY)
+               AND tx_type = 'contact'"
+        );
+
+        try {
+            $stmt->execute([':days' => $periodDays]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
+            return 0;
+        }
+
+        return (int) ($row['count'] ?? 0);
+    }
+
+    /**
      * Get transaction volume grouped by currency and type for the given period.
      *
      * Returns aggregate counts and total amounts per currency.  Amounts are
@@ -310,11 +349,16 @@ class AnalyticsService
      */
     private static function getVolumeByCurrency(\PDO $pdo, int $periodDays): array
     {
+        // Excludes tx_type='contact' for consistency with getPeriodTypeStats.
+        // Contact handshakes are zero-amount so they don't affect the volume
+        // sums, but they'd still inflate the sent_count/received_count
+        // columns without this filter.
         $stmt = $pdo->prepare(
             "SELECT currency, type, COUNT(*) AS count,
                     SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
              FROM transactions
              WHERE timestamp >= DATE_SUB(NOW(), INTERVAL :days DAY)
+               AND tx_type != 'contact'
              GROUP BY currency, type"
         );
 
