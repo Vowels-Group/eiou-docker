@@ -48,7 +48,23 @@ $prStatusIcons = [
 ];
 ?>
 
-<?php if (!empty($incomingRequests) || !empty($outgoingRequests)): ?>
+<?php /* Section always renders — the existing inner empty-state
+         ("No Payment Requests" / "Payment requests you send or receive
+         will appear here") used to be gated behind a wrapper that
+         hid the whole section, so users wondered where the feature
+         lived. Keeping the section visible (with the empty-state
+         when all three buckets are empty) makes the absence of
+         requests explicit rather than invisible.
+         Users who prefer a shorter page can flip
+         `hideEmptyGuiSections` in Settings → Advanced → Display and
+         the whole section hides again when everything's empty. */
+if ($user->getHideEmptyGuiSections()
+    && empty($pendingIncoming)
+    && empty($pendingOutgoing)
+    && empty($resolvedAll)) {
+    return;
+}
+?>
 <div class="form-container fade-in-up" id="payment-requests-section">
     <div class="section-header">
         <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
@@ -289,4 +305,3 @@ $prStatusIcons = [
     <?php endif; ?>
 
 </div>
-<?php endif; ?>

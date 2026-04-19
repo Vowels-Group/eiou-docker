@@ -233,11 +233,15 @@
                     </select>
                 </div>
 
-                <!-- Feature Toggles -->
+                <!-- Feature Toggles — grouped by domain (Transactions /
+                     Contacts / GUI / System) since the flat list was
+                     getting long and the options bucket naturally. -->
                 <div id="adv-section-feature-toggles" class="adv-section">
                     <h4 class="settings-subsection-title">
                         <i class="fas fa-toggle-on"></i> Feature Toggles
                     </h4>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-address-book"></i> Contacts</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="contactStatusEnabled">Contact Status:</label>
@@ -268,6 +272,73 @@
                             </div>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Synchronize contact status during ping operations
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoAcceptRestoredContact">Auto-Accept Restored Contacts:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoAcceptRestoredContact" name="autoAcceptRestoredContact" value="1" <?php echo $user->getAutoAcceptRestoredContact() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoAcceptRestoredContactStatus" class="toggle-status <?php echo $user->getAutoAcceptRestoredContact() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoAcceptRestoredContact() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, contacts are auto-accepted on wallet restore if transaction history proves a prior relationship (with default fee/credit). When disabled, restored contacts stay pending for manual review.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
+                            </small>
+                        </div>
+                    </div>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-exchange-alt"></i> Transactions</h5>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="hopBudgetRandomized">Hop Budget Randomization:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="hopBudgetRandomized" name="hopBudgetRandomized" value="1" <?php echo $user->getHopBudgetRandomized() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="hopBudgetRandomizedStatus" class="toggle-status <?php echo $user->getHopBudgetRandomized() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getHopBudgetRandomized() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, P2P hop depth is randomized for privacy. Disable to always use full routing depth (recommended for sparse networks).
                             </small>
                         </div>
 
@@ -318,55 +389,10 @@
                                 <i class="fas fa-info-circle"></i> When enabled, checks balance consistency before auto-accepting tx drops
                             </small>
                         </div>
+                    </div>
 
-                        <div class="form-group">
-                            <label for="autoAcceptRestoredContact">Auto-Accept Restored Contacts:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="autoAcceptRestoredContact" name="autoAcceptRestoredContact" value="1" <?php echo $user->getAutoAcceptRestoredContact() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="autoAcceptRestoredContactStatus" class="toggle-status <?php echo $user->getAutoAcceptRestoredContact() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoAcceptRestoredContact() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, contacts are auto-accepted on wallet restore if transaction history proves a prior relationship (with default fee/credit). When disabled, restored contacts stay pending for manual review.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="hopBudgetRandomized">Hop Budget Randomization:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="hopBudgetRandomized" name="hopBudgetRandomized" value="1" <?php echo $user->getHopBudgetRandomized() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="hopBudgetRandomizedStatus" class="toggle-status <?php echo $user->getHopBudgetRandomized() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getHopBudgetRandomized() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, P2P hop depth is randomized for privacy. Disable to always use full routing depth (recommended for sparse networks).
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="apiEnabled">API Access:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="apiEnabled" name="apiEnabled" value="1" <?php echo $user->getApiEnabled() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="apiEnabledStatus" class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getApiEnabled() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Enable the REST API endpoint
-                            </small>
-                        </div>
-
+                    <h5 class="settings-group-heading"><i class="fas fa-desktop"></i> GUI</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="autoRefreshEnabled">Auto-Refresh Transactions:</label>
                             <div class="toggle-row">
@@ -384,34 +410,37 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
+                            <label for="hideEmptyGuiSections">Hide Empty Sections:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
+                                    <input type="checkbox" id="hideEmptyGuiSections" name="hideEmptyGuiSections" value="1" <?php echo $user->getHideEmptyGuiSections() ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
-                                <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
+                                <span id="hideEmptyGuiSectionsStatus" class="toggle-status <?php echo $user->getHideEmptyGuiSections() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getHideEmptyGuiSections() ? 'Enabled' : 'Disabled'; ?>
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
+                                <i class="fas fa-info-circle"></i> Hide Failed Messages, Payment Requests, and Pending Contact Requests sections when they have nothing in them. Default OFF — empty sections stay visible so you can see the feature exists and know there's nothing awaiting you.
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-server"></i> System</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
-                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <label for="apiEnabled">API Access:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <input type="checkbox" id="apiEnabled" name="apiEnabled" value="1" <?php echo $user->getApiEnabled() ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
-                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                <span id="apiEnabledStatus" class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getApiEnabled() ? 'Enabled' : 'Disabled'; ?>
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
+                                <i class="fas fa-info-circle"></i> Enable the REST API endpoint
                             </small>
                         </div>
 
@@ -444,17 +473,15 @@
                             </div>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Check Docker Hub daily for newer versions and show a notification when an update is available. No data is sent — only a read-only API call.
-                            </small>
-                            <?php if (!empty($updateCheckStatus['last_checked'])): ?>
-                            <small class="form-hint">
-                                <i class="fas fa-clock"></i> Last checked: <?php echo htmlspecialchars(formatTimestamp($updateCheckStatus['last_checked'])); ?>
-                                <?php if ($updateCheckStatus['available']): ?>
-                                    — <strong>v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?> available</strong>
-                                <?php else: ?>
-                                    — up to date
+                                <?php if (!empty($updateCheckStatus['last_checked'])): ?>
+                                    Last checked: <?php echo htmlspecialchars(formatTimestamp($updateCheckStatus['last_checked'])); ?>
+                                    <?php if ($updateCheckStatus['available']): ?>
+                                        — <strong>v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?> available</strong>.
+                                    <?php else: ?>
+                                        — up to date.
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </small>
-                            <?php endif; ?>
                         </div>
 
                         <div class="form-group">
@@ -469,15 +496,13 @@
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Share anonymous usage statistics to help improve eIOU. Only aggregate transaction counts are sent — no personal data, amounts, contacts, or addresses. <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Learn more</a>
+                                <i class="fas fa-info-circle"></i> Share anonymous usage statistics to help improve eIOU. Only aggregate transaction counts are sent — no personal data, amounts, contacts, or addresses.
+                                <?php if (!empty($analyticsStatus['last_submitted'])): ?>
+                                    Last submitted: <?php echo htmlspecialchars(formatTimestamp($analyticsStatus['last_submitted'])); ?>.
+                                <?php endif; ?>
+                                <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Learn more</a>
                             </small>
-                            <?php if (!empty($analyticsStatus['last_submitted'])): ?>
-                            <small class="form-hint">
-                                <i class="fas fa-clock"></i> Last submitted: <?php echo htmlspecialchars(formatTimestamp($analyticsStatus['last_submitted'])); ?>
-                            </small>
-                            <?php endif; ?>
                         </div>
-
                     </div>
                 </div>
 

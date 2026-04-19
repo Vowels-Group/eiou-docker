@@ -725,6 +725,32 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getHideEmptyGuiSections returns the Constants default when not set
+     */
+    public function testGetHideEmptyGuiSectionsReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+
+        $this->assertEquals(Constants::HIDE_EMPTY_GUI_SECTIONS, $instance->getHideEmptyGuiSections());
+    }
+
+    /**
+     * Test getHideEmptyGuiSections returns the user-set value when set
+     */
+    public function testGetHideEmptyGuiSectionsReturnsUserSetValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['hideEmptyGuiSections' => true]);
+
+        $this->assertTrue($instance->getHideEmptyGuiSections());
+
+        $instance->setUserData(['hideEmptyGuiSections' => false]);
+
+        $this->assertFalse($instance->getHideEmptyGuiSections());
+    }
+
+    /**
      * Test toArray returns same as getAll
      */
     public function testToArrayReturnsSameAsGetAll(): void
@@ -1433,6 +1459,16 @@ class UserContextTest extends TestCase
         $defaults = UserContext::getConfigurableDefaults();
         $this->assertArrayHasKey('sessionTimeoutMinutes', $defaults);
         $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $defaults['sessionTimeoutMinutes']);
+    }
+
+    public function testConfigurableDefaultsIncludesHideEmptyGuiSections(): void
+    {
+        // Guards against accidental drop from the defaults map — the
+        // resetToDefaults flow relies on this key being present so the
+        // "Reset to defaults" GUI action restores the shipped default.
+        $defaults = UserContext::getConfigurableDefaults();
+        $this->assertArrayHasKey('hideEmptyGuiSections', $defaults);
+        $this->assertSame(Constants::HIDE_EMPTY_GUI_SECTIONS, $defaults['hideEmptyGuiSections']);
     }
 
     // =========================================================================

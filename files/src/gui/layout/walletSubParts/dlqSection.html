@@ -1,5 +1,13 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
+<?php
+// User opt-in: skip rendering the whole Failed Messages section when
+// the queue is empty. Default is OFF — empty sections double as
+// "this feature exists, you just have nothing here" cues.
+if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
+    return;
+}
+?>
 <!-- Dead Letter Queue Section -->
 <div id="dlq" class="dlq-section fade-in-up">
     <div class="section-header">
@@ -134,11 +142,19 @@
         <table class="contacts-table dlq-table">
             <thead>
                 <tr>
+                    <!-- Status-icon column mirrors the leading column on
+                         the Recent Transactions table so every viewport
+                         distinguishes pending / retrying / resolved /
+                         abandoned at a glance. The dedicated "Status"
+                         column was removed once this icon replaced it:
+                         the Actions cell already shows "Delivered" /
+                         "Abandoned" text for terminal rows, and the
+                         icon + row-click detail modal cover the rest. -->
+                    <th class="col-dlq-status-icon" aria-label="Status"></th>
                     <th class="col-dlq-type text-center">Type</th>
                     <th class="col-name">Recipient</th>
                     <th class="col-dlq-reason">Failure Reason</th>
                     <th class="col-dlq-date text-right">Added</th>
-                    <th class="col-dlq-status text-center">Status</th>
                     <th class="col-dlq-actions text-center">Actions</th>
                 </tr>
             </thead>
@@ -161,10 +177,14 @@
                 ];
                 $typeInfo = $typeIcons[$msgType] ?? ['icon' => 'fa-envelope', 'label' => ucfirst($msgType), 'class' => ''];
 
+                // Resolved uses fa-check-double (double checkmark) to
+                // match the Recent Transactions "completed" icon — both
+                // states represent a fully-settled successful outcome,
+                // so the shared symbol helps users cross-recognise them.
                 $statusIcons = [
                     'pending'   => 'fa-hourglass-half',
                     'retrying'  => 'fa-sync-alt fa-spin',
-                    'resolved'  => 'fa-check',
+                    'resolved'  => 'fa-check-double',
                     'abandoned' => 'fa-ban',
                 ];
                 $statusIcon = $statusIcons[$status] ?? 'fa-circle';
@@ -192,6 +212,11 @@
                 }
             ?>
             <tr class="dlq-row cursor-pointer" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>" data-action="openDlqModal" data-dlq-type="<?php echo htmlspecialchars($typeInfo['label']); ?>" data-dlq-type-class="<?php echo htmlspecialchars($typeInfo['class']); ?>" data-dlq-type-icon="<?php echo htmlspecialchars($typeInfo['icon']); ?>" data-dlq-recipient="<?php echo htmlspecialchars($recipient); ?>" data-dlq-reason="<?php echo htmlspecialchars($reason); ?>" data-dlq-date="<?php echo htmlspecialchars($dateDisplay); ?>" data-dlq-can-retry="<?php echo $canRetry ? '1' : '0'; ?>" data-dlq-can-act="<?php echo $canAct ? '1' : '0'; ?>" data-dlq-txid="<?php echo htmlspecialchars($dlqTxid); ?>" title="Click for details">
+                <td class="col-dlq-status-icon text-center">
+                    <span class="dlq-type-status-icon dlq-type-status-<?php echo htmlspecialchars($status); ?>" title="<?php echo ucfirst(htmlspecialchars($status)); ?>" aria-label="<?php echo ucfirst(htmlspecialchars($status)); ?>">
+                        <i class="fas <?php echo $statusIcon; ?>"></i>
+                    </span>
+                </td>
                 <td class="col-dlq-type text-center">
                     <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
                         <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>
@@ -208,12 +233,6 @@
                 </td>
                 <td class="col-dlq-date text-right">
                     <?php echo htmlspecialchars($dateDisplay); ?>
-                </td>
-                <td class="col-dlq-status text-center">
-                    <span class="dlq-status-badge dlq-badge-<?php echo htmlspecialchars($status); ?>">
-                        <i class="fas <?php echo $statusIcon; ?>"></i>
-                        <span class="dlq-status-label"><?php echo ucfirst(htmlspecialchars($status)); ?></span>
-                    </span>
                 </td>
                 <td class="col-dlq-actions text-center">
                     <?php if ($canRetry): ?>

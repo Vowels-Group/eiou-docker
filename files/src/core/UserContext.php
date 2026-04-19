@@ -609,6 +609,20 @@ class UserContext {
     }
 
     /**
+     * GUI-only preference: hide empty Failed Messages / Payment Requests /
+     * Pending Contact Requests sections rather than rendering their
+     * empty-state panels. Default OFF — empty panels double as "this
+     * feature exists, you just have nothing here" cues, which helps
+     * discoverability more than it clutters. Power users who'd rather
+     * keep the page short can flip it on in Display.
+     *
+     * @return bool
+     */
+    public function getHideEmptyGuiSections(): bool {
+        return (bool) ($this->get('hideEmptyGuiSections') ?? Constants::HIDE_EMPTY_GUI_SECTIONS);
+    }
+
+    /**
      * Get auto-reject unknown currency setting.
      *
      * When true, incoming contact requests with currencies not in allowedCurrencies
@@ -1180,6 +1194,7 @@ class UserContext {
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
+            'hideEmptyGuiSections' => Constants::HIDE_EMPTY_GUI_SECTIONS,
             'autoRejectUnknownCurrency' => Constants::AUTO_REJECT_UNKNOWN_CURRENCY,
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
             'updateCheckEnabled' => Constants::UPDATE_CHECK_ENABLED,

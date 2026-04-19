@@ -607,6 +607,26 @@ body {
     margin-right: 0.35rem;
 }
 
+/* Shared one-liner empty-state note used under sections that otherwise
+   disappear when their list is empty (Pending Contact Requests, etc.).
+   A subdued line — not a big empty-state panel with a giant icon —
+   because the goal is "tell users there's nothing awaiting them"
+   without making the empty section feel weighty. The check icon pulls
+   from the user-selected status colour scheme via --status-success-bg,
+   so the same muted-green / red / neutral palette the rest of the
+   status UI uses flows through here too. */
+.section-empty-note {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+    margin-bottom: 1rem;
+}
+.section-empty-note .fa-check-circle {
+    color: var(--status-success-bg, #28a745);
+}
+
 /* Chain column icons on the contact list — icon-only, colored via the status
    color scheme custom properties (western/eastern/neutral). No background fill,
    just the SVG stroke/fill itself, matching the style of the valid check and
@@ -1312,7 +1332,13 @@ tr.paginator-hidden {
 /* Settings Grid Layout */
 .settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* `auto-fill` (not `auto-fit`) keeps empty column slots on rows that
+       aren't fully populated. A group with 2 items in a 3-column-wide
+       viewport now leaves an empty slot on the right instead of
+       stretching the two items to fill — which aligns them visually
+       with sibling groups that have 3+ items (Feature Toggles → GUI
+       vs Transactions, etc.). */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
 }
 
@@ -3448,8 +3474,11 @@ tr.tx-item-in-progress > td:first-child {
 
 /* DLQ table — extends .contacts-table with dlq-specific column widths.
    Reason column truncates with ellipsis so actions always fit on one line. */
-.dlq-table.contacts-table .col-dlq-type    { width: 9%; }
-.dlq-table.contacts-table .col-name        { width: 15%; }
+.dlq-table.contacts-table .col-dlq-type    { width: 10%; }
+/* Recipient widened substantially now that the Status column is gone
+   and the slim status icon takes only 2% — gives the .onion address
+   plenty of room before the ellipsis kicks in on desktop. */
+.dlq-table.contacts-table .col-name        { width: 32%; }
 .dlq-table.contacts-table .col-dlq-reason  {
     width: 16%;
     max-width: 0;
@@ -3459,7 +3488,6 @@ tr.tx-item-in-progress > td:first-child {
     color: #495057;
 }
 .dlq-table.contacts-table .col-dlq-date    { width: 13%; white-space: nowrap; }
-.dlq-table.contacts-table .col-dlq-status  { width: 8%; }
 .dlq-table.contacts-table .col-dlq-actions { width: 20%; white-space: nowrap; }
 
 /* Narrow screens: collapse action buttons and status to icon-only */
@@ -3497,6 +3525,54 @@ tr.tx-item-in-progress > td:first-child {
     background: #f0f7ff;
 }
 
+/* Dedicated leading status-icon column on DLQ rows — mirrors the
+   col-tx-status-icon pattern on the Recent Transactions table so that
+   on mobile (where the full Status column is hidden to save horizontal
+   space) the pending / retrying / resolved / abandoned state is still
+   visible at a glance in the one column that stays on-screen.
+   Resolved and abandoned colours pull from the user-selected status
+   colour scheme via --status-success-bg / --status-failure-bg (western
+   = green/red, eastern = red/green, neutral = greys), so a user's
+   colour-blind-friendly or culture-specific preference in Settings
+   flows through here too. Pending / retrying stay at fixed accent
+   colours because they're in-progress states, not outcomes. */
+.dlq-table.contacts-table .col-dlq-status-icon {
+    /* Very narrow — the column holds a single Font Awesome glyph so
+       more breathing room just shows as empty white space. Padding
+       zeroed on the right so the icon sits close to the Type badge
+       that follows. */
+    width: 2%;
+    padding: 0.4rem 0 0.4rem 0.75rem;
+    text-align: center;
+    vertical-align: middle;
+}
+.dlq-type-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+}
+.dlq-type-status-pending   { color: #b8860b; }  /* amber — needs attention */
+.dlq-type-status-retrying  { color: #0d6efd; }  /* blue — active retry */
+/* Resolved + abandoned use the #6c757d neutral-grey fallback (matching
+   every other status icon in this file — tx-status-completed,
+   chain-icon-valid, etc.) so the Settings → neutral colour scheme lands
+   on grey for success/failure rows. Under neutral the custom property
+   is set to `initial` which effectively reverts the var() lookup to
+   the fallback — the fallback IS the neutral colour for the scheme. */
+.dlq-type-status-resolved  { color: var(--status-success-bg, #6c757d); }
+.dlq-type-status-abandoned { color: var(--status-failure-bg, #6c757d); }
+
+/* Mobile: the generic .contacts-table rule hides cols 3+. With the new
+   leading status-icon column, Type + Recipient have shifted to cols
+   2 and 3 — keep col 3 visible so mobile shows icon + type + recipient. */
+@media (max-width: 600px) {
+    .contacts-table.dlq-table thead th:nth-child(3),
+    .contacts-table.dlq-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+}
+
 /* Inline status badge for DLQ rows */
 .dlq-status-badge {
     display: inline-flex;
@@ -3513,10 +3589,13 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 0.82rem;
 }
 
-/* Single-line truncation with ellipsis — applied to recipient and reason spans */
+/* Single-line truncation with ellipsis — applied to recipient and
+   reason spans. Uses width:100% so it fills whatever the column gives
+   it (28% of the table on desktop for Recipient) rather than a fixed
+   140px cap that truncated early. */
 .dlq-truncate {
     display: block;
-    max-width: 140px;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4390,6 +4469,32 @@ hr.currency-separator-double {
     border-bottom: 1px solid #dee2e6;
     padding-bottom: 0.25rem;
 }
+
+/* Sub-heading within a settings subsection — used to break long flat
+   toggle lists into domain groups (Transactions / Contacts / GUI /
+   System in Feature Toggles). Muted uppercase, smaller than the main
+   subsection title, with a hair-line divider above each group
+   (except the first) so the groups read as clearly separated blocks
+   rather than running together. */
+.settings-group-heading {
+    color: #6c757d;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin: 2.25rem 0 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.settings-group-heading:first-of-type {
+    margin-top: 0.5rem;
+    padding-top: 0;
+    border-top: none;
+}
+.settings-group-heading i { color: #adb5bd; }
 
 .settings-rate-desc {
     color: #6c757d;

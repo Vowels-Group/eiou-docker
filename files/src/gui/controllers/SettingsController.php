@@ -203,6 +203,10 @@ class SettingsController
         // Auto-Accept Transaction (boolean toggle, default: true/on)
         $settings['autoAcceptTransaction'] = isset($_POST['autoAcceptTransaction']) && $_POST['autoAcceptTransaction'] === '1';
 
+        // GUI-only: hide empty Failed Messages / Payment Requests / Pending
+        // Contact Requests sections (default off — see Constants comment).
+        $settings['hideEmptyGuiSections'] = isset($_POST['hideEmptyGuiSections']) && $_POST['hideEmptyGuiSections'] === '1';
+
         // Feature toggles (boolean checkboxes)
         $settings['contactStatusEnabled'] = isset($_POST['contactStatusEnabled']) && $_POST['contactStatusEnabled'] === '1';
         $settings['contactStatusSyncOnPing'] = isset($_POST['contactStatusSyncOnPing']) && $_POST['contactStatusSyncOnPing'] === '1';
