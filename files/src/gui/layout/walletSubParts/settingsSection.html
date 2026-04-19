@@ -272,7 +272,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="autoChainDropPropose">Auto Chain-Drop Propose:</label>
+                            <label for="autoChainDropPropose">Auto Tx Drop Propose:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="autoChainDropPropose" name="autoChainDropPropose" value="1" <?php echo $user->getAutoChainDropPropose() ? 'checked' : ''; ?>>
@@ -283,12 +283,12 @@
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Automatically propose chain-drop operations
+                                <i class="fas fa-info-circle"></i> Automatically propose tx drops
                             </small>
                         </div>
 
                         <div class="form-group">
-                            <label for="autoChainDropAccept">Auto Chain-Drop Accept:</label>
+                            <label for="autoChainDropAccept">Auto Tx Drop Accept:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="autoChainDropAccept" name="autoChainDropAccept" value="1" <?php echo $user->getAutoChainDropAccept() ? 'checked' : ''; ?>>
@@ -299,12 +299,12 @@
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Automatically accept incoming chain-drop proposals
+                                <i class="fas fa-info-circle"></i> Automatically accept incoming tx drop proposals
                             </small>
                         </div>
 
                         <div class="form-group">
-                            <label for="autoChainDropAcceptGuard">Auto Chain-Drop Accept Guard:</label>
+                            <label for="autoChainDropAcceptGuard">Auto Tx Drop Accept Guard:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="autoChainDropAcceptGuard" name="autoChainDropAcceptGuard" value="1" <?php echo $user->getAutoChainDropAcceptGuard() ? 'checked' : ''; ?>>
@@ -315,7 +315,7 @@
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, checks balance consistency before auto-accepting chain-drops
+                                <i class="fas fa-info-circle"></i> When enabled, checks balance consistency before auto-accepting tx drops
                             </small>
                         </div>
 

@@ -233,7 +233,7 @@ foreach ($acceptedContacts as $c) {
 $cdCount = count($incomingChainDropContacts);
 $cdBodyParts = [];
 foreach ($incomingChainDropContacts as $c) {
-    $cdBodyParts[] = '<strong>' . htmlspecialchars($c['name']) . '</strong> has proposed dropping missing transaction(s) to repair the chain. '
+    $cdBodyParts[] = '<strong>' . htmlspecialchars($c['name']) . '</strong> has proposed a tx drop to repair the chain. '
         . 'Sending is blocked until resolved. Accepting will remove the dropped transaction and its funds from both balances.';
 }
 $cdAction = $cdCount === 1
