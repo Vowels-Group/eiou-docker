@@ -548,6 +548,28 @@ class TransactionService implements TransactionServiceInterface {
         return $this->transactionRepository->checkForNewTransactions($lastCheckTime);
     }
 
+    /**
+     * Database-wide search backing the Recent Transactions "Search entire
+     * database" button. Thin passthrough to the repository; filter dims
+     * default to null so the GUI can hand through the currently-selected
+     * dropdown values verbatim without null-coalescing.
+     *
+     * @param string      $term       Non-empty substring search term
+     * @param string|null $direction  sent / received filter (null = any)
+     * @param string|null $txType     direct / p2p / contact filter (null = any)
+     * @param string|null $status     status filter (null = any)
+     * @param int         $maxResults Hard cap on returned rows (default 500)
+     */
+    public function searchTransactions(
+        string $term,
+        ?string $direction = null,
+        ?string $txType = null,
+        ?string $status = null,
+        int $maxResults = 500
+    ): array {
+        return $this->transactionRepository->searchTransactions($term, $direction, $txType, $status, $maxResults);
+    }
+
     public function getTransactionHistory(int $limit = 10, int $offset = 0): array {
         // Over-fetch from the primary table so the cancelled-P2P merge still
         // has a stable `$limit` rows of material after slicing. Offset is

@@ -992,4 +992,88 @@ class PaymentRequestServiceTest extends TestCase
 
         $this->assertEquals(4, $result);
     }
+
+    // =========================================================================
+    // getResolvedHistoryPage()
+    // =========================================================================
+
+    /**
+     * Happy-path: forwards limit+offset to the repository exactly as passed.
+     * Backs the loadMorePaymentRequests GUI AJAX handler — the handler
+     * computes `offset = currently loaded row count` and hands it straight
+     * through.
+     */
+    public function testGetResolvedHistoryPageDelegatesLimitAndOffset(): void
+    {
+        $page = [
+            ['id' => 100, 'direction' => 'incoming', 'status' => 'approved',  'amount_whole' => 5,  'amount_frac' => 0, 'currency' => 'USD'],
+            ['id' =>  99, 'direction' => 'outgoing', 'status' => 'cancelled', 'amount_whole' => 12, 'amount_frac' => 0, 'currency' => 'USD'],
+        ];
+
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('getResolvedHistoryPage')
+            ->with(50, 100)
+            ->willReturn($page);
+
+        $result = $this->service->getResolvedHistoryPage(50, 100);
+
+        $this->assertSame($page, $result);
+    }
+
+    /**
+     * Default offset is 0 — first-page semantics match the initial page
+     * render's ordering, so a caller that forgets to pass offset doesn't
+     * accidentally fetch a mid-history slice.
+     */
+    public function testGetResolvedHistoryPageDefaultsOffsetToZero(): void
+    {
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('getResolvedHistoryPage')
+            ->with(25, 0)
+            ->willReturn([]);
+
+        $result = $this->service->getResolvedHistoryPage(25);
+
+        $this->assertSame([], $result);
+    }
+
+    // =========================================================================
+    // searchResolvedHistory() — "Search entire database" passthrough
+    // =========================================================================
+
+    /**
+     * All filter dims + the max-results cap forward verbatim to the
+     * repository. Backs the searchPaymentRequests GUI AJAX action.
+     */
+    public function testSearchResolvedHistoryPassesAllArguments(): void
+    {
+        $rows = [
+            ['id' => 1, 'direction' => 'incoming', 'status' => 'approved',  'amount_whole' => 5,  'amount_frac' => 0, 'currency' => 'USD'],
+            ['id' => 2, 'direction' => 'outgoing', 'status' => 'cancelled', 'amount_whole' => 12, 'amount_frac' => 0, 'currency' => 'USD'],
+        ];
+
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('searchResolvedHistory')
+            ->with('bob', 'incoming', 'approved', 200)
+            ->willReturn($rows);
+
+        $result = $this->service->searchResolvedHistory('bob', 'incoming', 'approved', 200);
+
+        $this->assertSame($rows, $result);
+    }
+
+    /**
+     * Null filter dims forward as null — the repo layer is what decides
+     * whether "no filter" means "skip the WHERE clause" or "match
+     * everything"; the service is a thin passthrough.
+     */
+    public function testSearchResolvedHistoryForwardsNullFilters(): void
+    {
+        $this->paymentRequestRepository->expects($this->once())
+            ->method('searchResolvedHistory')
+            ->with('alice', null, null, 500)
+            ->willReturn([]);
+
+        $this->service->searchResolvedHistory('alice');
+    }
 }

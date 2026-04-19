@@ -72,6 +72,13 @@ $statusIcon = $statusIcons[$statusLower] ?? 'fa-circle';
     data-tx-name="<?php echo htmlspecialchars(strtolower($cpName ?? '')); ?>"
     data-tx-desc="<?php echo htmlspecialchars(strtolower($description)); ?>"
     data-tx-address="<?php echo htmlspecialchars(strtolower($cpAddr)); ?>"
+    <?php /* P2P endpoint (end-recipient on sent-P2P, initial-sender on
+             received-P2P). Exposed separately so the local search bar can
+             match a chain's ultimate counterparty even when we sent via
+             an intermediate relay — e.g. "carol" matches a tx we sent
+             through Bob to Carol. Empty for non-P2P rows. */ ?>
+    data-tx-endpoint-name="<?php echo htmlspecialchars(strtolower($endName ?? '')); ?>"
+    data-tx-endpoint-address="<?php echo htmlspecialchars(strtolower($endAddr ?? '')); ?>"
     data-direction="<?php echo $isSent ? 'sent' : 'received'; ?>"
     data-tx-type="<?php echo $typeKey; ?>"
     data-status="<?php echo htmlspecialchars($statusLower); ?>"

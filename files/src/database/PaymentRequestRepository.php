@@ -94,6 +94,111 @@ class PaymentRequestRepository extends AbstractRepository
     }
 
     /**
+     * Get a page of resolved (non-pending) requests across both directions,
+     * newest first. Backs the Payment Requests history paginator — the
+     * pending section is rendered separately from its own unbounded fetch,
+     * so the history table only needs terminal states.
+     *
+     * Server-sorted by `COALESCE(responded_at, created_at) DESC` so the
+     * ordering matches what the initial template render sorts to (see
+     * `paymentRequestsSection.html`'s `usort` on the combined array) —
+     * guarantees that successive "Load older" pages append cleanly
+     * without interleaving.
+     *
+     * @param int $limit  Max rows per page
+     * @param int $offset Zero-based offset (0 returns the first page)
+     * @return array Rows as returned by mapRows(); each row already has
+     *               the `direction` column set, so callers can tag it
+     *               onto the `$req['_direction']` the row partial expects
+     */
+    public function getResolvedHistoryPage(int $limit, int $offset = 0): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tableName}
+             WHERE status != 'pending'
+             ORDER BY COALESCE(responded_at, created_at) DESC
+             LIMIT :limit OFFSET :offset"
+        );
+        $stmt->bindValue(':limit', max(0, $limit), PDO::PARAM_INT);
+        $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        $stmt->execute();
+        return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * Database-wide search across resolved (non-pending) payment
+     * requests. Backs the Payment Requests "Search entire database"
+     * button.
+     *
+     * Matches (case-insensitive, substring) against:
+     *   - `contact_name`           — snapshot stored at request time
+     *   - `description`
+     *   - `requester_pubkey_hash` / `recipient_pubkey_hash`
+     *   - `requester_address`
+     *
+     * Filter dims (direction, status) mirror the client-side filter
+     * selects. Result capped at $maxResults (default 500).
+     *
+     * @param string      $term       Substring search term
+     * @param string|null $direction  'incoming' | 'outgoing' | null
+     * @param string|null $status     'approved' | 'declined' | 'cancelled' | 'expired' | null
+     * @param int         $maxResults Hard cap on returned rows
+     * @return array Rows as mapRows()
+     */
+    public function searchResolvedHistory(
+        string $term,
+        ?string $direction = null,
+        ?string $status = null,
+        int $maxResults = 500
+    ): array {
+        $term = trim($term);
+        if ($term === '') {
+            return [];
+        }
+        $like = '%' . strtolower($term) . '%';
+
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE status != 'pending'
+                    AND (
+                         LOWER(COALESCE(contact_name, '')) LIKE :term1
+                      OR LOWER(COALESCE(description,  '')) LIKE :term2
+                      OR LOWER(COALESCE(requester_pubkey_hash, '')) LIKE :term3
+                      OR LOWER(COALESCE(recipient_pubkey_hash, '')) LIKE :term4
+                      OR LOWER(COALESCE(requester_address, '')) LIKE :term5
+                    )";
+
+        $params = [
+            ':term1' => $like, ':term2' => $like, ':term3' => $like,
+            ':term4' => $like, ':term5' => $like,
+        ];
+
+        if ($direction !== null && $direction !== '') {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+        if ($status !== null && $status !== '') {
+            $query .= " AND status = :status";
+            $params[':status'] = $status;
+        }
+
+        $query .= " ORDER BY COALESCE(responded_at, created_at) DESC
+                    LIMIT :maxResults";
+
+        $stmt = $this->pdo->prepare($query);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
+        $stmt->bindValue(':maxResults', max(1, $maxResults), PDO::PARAM_INT);
+        try {
+            $stmt->execute();
+        } catch (PDOException $e) {
+            return [];
+        }
+
+        return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /**
      * Update the status of a request, optionally setting additional fields
      *
      * @param string $requestId    The request_id to update

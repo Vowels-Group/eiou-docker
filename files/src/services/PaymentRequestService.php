@@ -462,6 +462,42 @@ class PaymentRequestService
     }
 
     /**
+     * Paginate the resolved (non-pending) history. Consumed by the
+     * loadMorePaymentRequests GUI AJAX handler to walk the history beyond
+     * the initial window. Each returned row carries a `direction` column
+     * already — the caller tags it onto `_direction` before passing the
+     * row into the shared `_paymentRequestRow.html` partial, matching
+     * what the initial render's `$resolvedAll` usort-based pipeline does.
+     *
+     * @param int $limit  Max rows per page
+     * @param int $offset Zero-based offset
+     * @return array Resolved rows newest-first
+     */
+    public function getResolvedHistoryPage(int $limit, int $offset = 0): array
+    {
+        return $this->paymentRequestRepository->getResolvedHistoryPage($limit, $offset);
+    }
+
+    /**
+     * Database-wide search for the Payment Requests "Search entire
+     * database" button. Searches resolved (non-pending) requests only —
+     * pending ones render in a separate section and don't need search.
+     *
+     * @param string      $term       Substring search term
+     * @param string|null $direction  'incoming' | 'outgoing' | null
+     * @param string|null $status     Terminal status filter
+     * @param int         $maxResults Hard cap on returned rows
+     */
+    public function searchResolvedHistory(
+        string $term,
+        ?string $direction = null,
+        ?string $status = null,
+        int $maxResults = 500
+    ): array {
+        return $this->paymentRequestRepository->searchResolvedHistory($term, $direction, $status, $maxResults);
+    }
+
+    /**
      * Count pending incoming requests (for notification badge).
      */
     public function countPendingIncoming(): int

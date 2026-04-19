@@ -25,6 +25,16 @@
             description; filter by direction, type, or status; click any row to
             open the full transaction detail.
             <br><br>
+            <strong>Search database.</strong> The search bar above filters the
+            rows currently loaded on this page. If the transaction you&rsquo;re
+            looking for is older than the currently visible window, click
+            <strong>Search database</strong> (or press Enter) to run a
+            server-side search across your entire transaction history —
+            it respects the direction / type / status filters you&rsquo;ve
+            selected, replaces the table with matches (capped at 500),
+            and adds a <em>Clear search</em> link to return to the
+            default view.
+            <br><br>
             <small>
                 <strong>Subnote on counterparty names.</strong>
                 <strong>Unknown</strong> means the other side isn&rsquo;t in your contacts
@@ -195,11 +205,28 @@
     <div class="contacts-search-bar mb-lg">
         <div class="search-icon-wrapper">
             <i class="fas fa-search search-icon-positioned"></i>
-            <input type="text" id="tx-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterTransactions">
+            <input type="text" id="tx-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterTransactions" data-action-keypress-enter="searchTransactionsDatabase">
         </div>
+        <!-- Search entire database — fires a server-side LIKE across
+             name / address / description beyond the currently-loaded
+             row window, so users can find old transactions without
+             hammering Load-older. -->
+        <button type="button" class="btn btn-sm btn-outline search-database-btn" data-action="searchTransactionsDatabase" title="Server-side search across your entire transaction history — finds matches older than what's currently loaded on this page. Respects the direction / type / status filters. Results capped at 500; refine the term to narrow further. Also triggers when you press Enter in the search box.">
+            <i class="fas fa-database"></i> Search database
+        </button>
         <div id="tx-search-status" class="search-status">
             <span id="tx-search-count">0</span> transactions found
         </div>
+    </div>
+    <!-- Results banner — toggled visible after a server-side search.
+         Replaces the live local-filter "X transactions found" counter
+         with a count that reflects the DB query result set. -->
+    <div id="tx-search-results-banner" class="search-results-banner d-none" role="status">
+        <i class="fas fa-database"></i>
+        <span id="tx-search-results-text">Searching…</span>
+        <button type="button" class="search-results-clear" data-action="clearSearchResults" data-search-key="transactions">
+            <i class="fas fa-times"></i> Clear search
+        </button>
     </div>
     <div class="contacts-filters mb-lg">
         <select id="tx-filter-direction" class="contacts-filter-select" data-action-change="filterTransactions" aria-label="Filter by direction">
@@ -225,7 +252,10 @@
     </div>
     <div class="d-flex justify-between align-center mb-lg">
         <p class="tx-meta-info">
-            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $recentTransactionsLimit; ?> transactions</strong>
+            <!-- Count is kept in a dedicated span so the Load-older and
+                 Search-database paths can update it in-place without
+                 rebuilding the whole meta line. -->
+            <i class="fas fa-info-circle"></i> Showing the <strong>last <span id="tx-meta-loaded-count"><?php echo (int)$recentTransactionsLimit; ?></span> transactions</strong>
         </p>
     </div>
     <?php endif; ?>

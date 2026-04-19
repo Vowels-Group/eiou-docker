@@ -117,6 +117,18 @@
         <p>No items match the selected filter.</p>
     </div>
 
+    <!-- Meta-info placed ABOVE the table to match Recent Transactions and
+         Payment Requests layout (info icon + count + retention note on a
+         single line). Was previously a trailing <p> under the table which
+         was inconsistent with the other paginated tables. -->
+    <div class="d-flex justify-between align-center mb-lg">
+        <p class="tx-meta-info">
+            <i class="fas fa-info-circle"></i>
+            Showing <span id="dlq-visible-count"><?php echo count($dlqItems); ?></span> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
+            Resolved and abandoned items are automatically cleaned up after <?php echo cleanupDlqRetentionDays(); ?> days.
+        </p>
+    </div>
+
     <!-- DLQ table: uses contacts-table chrome for consistent styling -->
     <div class="contacts-table-wrapper">
         <table class="contacts-table dlq-table">
@@ -222,11 +234,6 @@
             </tbody>
         </table>
     </div>
-
-    <p class="dlq-footer-count">
-        Showing <span id="dlq-visible-count"><?php echo count($dlqItems); ?></span> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
-        Resolved and abandoned items are automatically cleaned up after <?php echo cleanupDlqRetentionDays(); ?> days.
-    </p>
 
     <?php endif; ?>
 </div>

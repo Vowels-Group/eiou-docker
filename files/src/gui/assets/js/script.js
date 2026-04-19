@@ -244,6 +244,11 @@ var Paginator = (function () {
             page: 0,
             size: loadSize(config.key),
             loadMoreFn: config.loadMore && config.loadMore.onClick ? config.loadMore.onClick : null,
+            // Per-table button label — contacts are alphabetically
+            // sorted, so "Load older" is wrong for them. Transactions
+            // and payment requests default to "Load older" because
+            // they're reverse-chronological. Callers can override.
+            loadMoreLabel: (config.loadMore && config.loadMore.label) ? config.loadMore.label : 'Load older',
             loadMoreExhausted: false,
             loadMoreBusy: false
         };
@@ -342,8 +347,8 @@ var Paginator = (function () {
             // Load-older button (Phase 2)
             if (state.loadMoreFn && !state.loadMoreExhausted) {
                 var busyIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt';
-                var busyLabel = state.loadMoreBusy ? 'Loading…' : 'Load older';
-                html += '<button type="button" class="paginator-btn paginator-load-more" ' + (state.loadMoreBusy ? 'disabled' : '') + ' data-paginator-action="load-more" data-paginator-key="' + escapeHtml(state.key) + '"><i class="fas ' + busyIcon + '"></i> ' + busyLabel + '</button>';
+                var busyLabel = state.loadMoreBusy ? 'Loading…' : state.loadMoreLabel;
+                html += '<button type="button" class="paginator-btn paginator-load-more" ' + (state.loadMoreBusy ? 'disabled' : '') + ' data-paginator-action="load-more" data-paginator-key="' + escapeHtml(state.key) + '"><i class="fas ' + busyIcon + '"></i> ' + escapeHtml(busyLabel) + '</button>';
             }
 
             html += '</div>';
@@ -2509,7 +2514,17 @@ function filterTransactions() {
             var name = item.getAttribute('data-tx-name') || '';
             var desc = item.getAttribute('data-tx-desc') || '';
             var addr = item.getAttribute('data-tx-address') || '';
-            if (name.indexOf(term) === -1 && desc.indexOf(term) === -1 && addr.indexOf(term) === -1) {
+            // P2P endpoint — matches the chain's ultimate counterparty
+            // even when the direct neighbour is a relay. Without these,
+            // searching "carol" wouldn't match a sent-P2P tx routed
+            // through Bob to Carol.
+            var endName = item.getAttribute('data-tx-endpoint-name') || '';
+            var endAddr = item.getAttribute('data-tx-endpoint-address') || '';
+            if (name.indexOf(term) === -1
+                && desc.indexOf(term) === -1
+                && addr.indexOf(term) === -1
+                && endName.indexOf(term) === -1
+                && endAddr.indexOf(term) === -1) {
                 matches = false;
             }
         }
@@ -2744,6 +2759,213 @@ function filterPaymentRequests() {
 
     var prPaginator = Paginator.get('payment-requests');
     if (prPaginator) prPaginator.apply();
+}
+
+// ============================================================================
+// "Search entire database" — server-side search for Recent Transactions and
+// Payment Requests history. The local filter functions above only inspect
+// already-rendered rows; these functions bypass them and ask the backend to
+// LIKE across the full table. Results replace the tbody contents and switch
+// the paginator into search mode (load-older suspended, banner visible).
+// ============================================================================
+
+function searchTransactionsDatabase() {
+    runDatabaseSearch({
+        action: 'searchTransactions',
+        paginatorKey: 'transactions',
+        inputId: 'tx-search-input',
+        filters: {
+            direction: 'tx-filter-direction',
+            tx_type:   'tx-filter-type',
+            status:    'tx-filter-status'
+        },
+        tbodyId: 'transaction-list',
+        bannerId: 'tx-search-results-banner',
+        bannerTextId: 'tx-search-results-text',
+        loadMoreLabel: 'Load older',
+        updateTransactionData: true
+    });
+}
+
+function searchPaymentRequestsDatabase() {
+    runDatabaseSearch({
+        action: 'searchPaymentRequests',
+        paginatorKey: 'payment-requests',
+        inputId: 'pr-search-input',
+        filters: {
+            direction: 'pr-filter-direction',
+            status:    'pr-filter-status'
+        },
+        tbodyId: 'pr-history-list',
+        bannerId: 'pr-search-results-banner',
+        bannerTextId: 'pr-search-results-text',
+        loadMoreLabel: 'Load older',
+        updateTransactionData: false
+    });
+}
+
+/**
+ * Shared server-side search runner. Reads the search term + filter dims from
+ * the specified inputs, POSTs to the GUI action router, replaces the
+ * paginator's tbody content with the returned HTML rows, and pops a banner
+ * summarising the result count. The paginator is moved back to page 0 and
+ * its load-older button is suspended so it doesn't compete with the search
+ * result set.
+ */
+function runDatabaseSearch(cfg) {
+    var inputEl = document.getElementById(cfg.inputId);
+    if (!inputEl) return;
+    var term = (inputEl.value || '').trim();
+    if (term === '') {
+        showToast('Search', 'Enter a search term first.', 'info');
+        return;
+    }
+
+    var tbody = document.getElementById(cfg.tbodyId);
+    var banner = document.getElementById(cfg.bannerId);
+    var bannerText = document.getElementById(cfg.bannerTextId);
+    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    if (banner && bannerText) {
+        banner.classList.remove('d-none');
+        bannerText.textContent = 'Searching the database for “' + term + '”…';
+    }
+
+    var formData = new FormData();
+    formData.append('action', cfg.action);
+    formData.append('q', term);
+    formData.append('csrf_token', csrfToken);
+    Object.keys(cfg.filters || {}).forEach(function(key) {
+        var filterEl = document.getElementById(cfg.filters[key]);
+        if (filterEl) formData.append(key, filterEl.value || '');
+    });
+
+    fetch(window.location.pathname, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    }).then(function(res) {
+        return res.json();
+    }).then(function(data) {
+        if (!data || !data.success) {
+            var msg = (data && data.message) || 'Search failed.';
+            if (banner && bannerText) {
+                bannerText.textContent = 'Search failed: ' + msg;
+            } else {
+                showToast('Search', msg, 'error');
+            }
+            return;
+        }
+
+        if (tbody) {
+            tbody.innerHTML = data.html || '';
+        }
+
+        // For the transactions table, replace the page-level transactionData
+        // array so openTransactionModal(index) on an appended row resolves
+        // correctly against the search result set.
+        if (cfg.updateTransactionData && Array.isArray(data.rows) && typeof transactionData !== 'undefined') {
+            transactionData.length = 0;
+            for (var i = 0; i < data.rows.length; i++) {
+                transactionData.push(data.rows[i]);
+            }
+        }
+
+        // Banner copy — "N matches for 'term'" + cap disclosure if
+        // the server clipped the result set so the user knows there
+        // might be more beyond what's shown.
+        var total = Number(data.total || 0);
+        var capNote = data.capped ? ' (capped at ' + (data.cap || 500) + ' — refine the term to narrow further)' : '';
+        if (bannerText) {
+            if (total === 0) {
+                bannerText.textContent = 'No matches for “' + term + '” in the database.';
+            } else {
+                bannerText.textContent = total + ' match' + (total === 1 ? '' : 'es') + ' for “' + term + '”' + capNote;
+            }
+        }
+
+        // Reset paginator + suspend load-older — the result set is
+        // bounded by the server cap, so there's nothing older to fetch.
+        var inst = Paginator.get(cfg.paginatorKey);
+        if (inst) {
+            inst.state.page = 0;
+            inst.setLoadMoreExhausted(true);
+            inst.apply();
+        }
+        // Rewrite the "Showing the last N …" copy to reflect the search
+        // result count — e.g. "last 100 transactions" becomes "last 12
+        // transactions" while a search is active, then reverts on reload
+        // (clear-search triggers a page reload which restores the
+        // server-side count).
+        refreshMetaLoadedCount(cfg.paginatorKey, Number(data.total || 0));
+
+        // Re-run the local filter so the "X transactions found" counter
+        // next to the search input reflects the replaced row set.
+        // Otherwise it shows a stale count from the last live-typed
+        // keystroke, which doesn't know the DB search ran.
+        if (cfg.paginatorKey === 'transactions' && typeof filterTransactions === 'function') {
+            filterTransactions();
+        } else if (cfg.paginatorKey === 'payment-requests' && typeof filterPaymentRequests === 'function') {
+            filterPaymentRequests();
+        }
+    }).catch(function(err) {
+        if (banner && bannerText) {
+            bannerText.textContent = 'Network error while searching the database.';
+        } else {
+            showToast('Search', 'Network error while searching.', 'error');
+        }
+    });
+}
+
+/**
+ * Map of paginator key → DOM id of the "Showing the last N …" counter
+ * span. Kept here (rather than on each Paginator instance) so the
+ * lookup works from both the load-older path (appends rows) and the
+ * search-database path (replaces rows), without having to plumb an
+ * extra field through the Paginator config.
+ */
+var META_LOADED_COUNT_IDS = {
+    'transactions':     'tx-meta-loaded-count',
+    'payment-requests': 'pr-meta-loaded-count'
+};
+
+/**
+ * Rewrite the "Showing the last N …" count span for the given paginator
+ * to reflect the current DOM row count. Safe to call from either the
+ * load-older success path (which appended rows) or the search-database
+ * path (which replaced them). Accepts an optional explicit override so
+ * the search path can say "N matches" rather than re-counting rows
+ * after a filter/paginator reshuffle.
+ *
+ * @param {string} paginatorKey
+ * @param {number|null} [override]
+ */
+function refreshMetaLoadedCount(paginatorKey, override) {
+    var spanId = META_LOADED_COUNT_IDS[paginatorKey];
+    if (!spanId) return;
+    var span = document.getElementById(spanId);
+    if (!span) return;
+    if (typeof override === 'number') {
+        span.textContent = String(override);
+        return;
+    }
+    var inst = Paginator.get(paginatorKey);
+    if (!inst) return;
+    span.textContent = String(inst.getLoadedCount());
+}
+
+/**
+ * Clear an active server-side search and return the table to the default
+ * view. Simplest and most robust approach: reload the page. A more
+ * elaborate "restore original rows from memory" variant is possible but
+ * adds non-trivial state management for a rare user action.
+ */
+function clearSearchResults(_key) {
+    // Drop any transient search-mode URL fragments before reload so the
+    // user lands cleanly on the default view.
+    var target = window.location.pathname + window.location.search;
+    window.location.href = target;
 }
 
 /**
@@ -3978,9 +4200,9 @@ function initPaginators() {
         });
     }
 
-    // Contacts + Payment Requests paginate the already-rendered rows
-    // (Phase 1 only). "Load older" is deferred for both until the
-    // server-side row partials and offset repositories are in place.
+    // Contacts — Phase 1 (client slicing) AND Phase 2 (load-older). Only
+    // accepted contacts paginate via Phase 2; pending + blocked are always
+    // rendered up-front because they're small and operationally important.
     var contactsBody = document.getElementById('contacts-grid');
     var contactsContainer = document.getElementById('contacts-paginator');
     if (contactsBody && contactsContainer) {
@@ -3988,7 +4210,11 @@ function initPaginators() {
             key: 'contacts',
             tbody: contactsBody,
             rowSelector: '.contact-card',
-            container: contactsContainer
+            container: contactsContainer,
+            // Contacts are sorted alphabetically (name ASC), not
+            // chronologically, so "Load older" would be wrong here —
+            // use "Load more" for the name-ordered view.
+            loadMore: { onClick: loadMoreContacts, label: 'Load more' }
         });
     }
 
@@ -3999,7 +4225,8 @@ function initPaginators() {
             key: 'payment-requests',
             tbody: prBody,
             rowSelector: '.pr-row',
-            container: prContainer
+            container: prContainer,
+            loadMore: { onClick: loadMorePaymentRequests }
         });
     }
 }
@@ -4013,6 +4240,29 @@ function initPaginators() {
  */
 function loadMoreTransactions(inst) {
     loadMoreViaGuiAction('loadMoreTransactions', 'transactions', inst);
+}
+
+/**
+ * Phase-2 Load-older callback for Payment Requests history. Rows are
+ * server-rendered via the shared _paymentRequestRow.html partial; the
+ * appended HTML carries everything the row needs (data-* attributes for
+ * filter/search + click targets) so no in-memory JS array extension is
+ * required — unlike Recent Transactions, where transactionData[] has to
+ * grow to keep openTransactionModal(index) working.
+ */
+function loadMorePaymentRequests(inst) {
+    loadMoreViaGuiAction('loadMorePaymentRequests', 'payment-requests', inst);
+}
+
+/**
+ * Phase-2 Load-older callback for the Contacts table. Appends more
+ * accepted-contact rows rendered server-side via _contactRow.html. The
+ * row's data-contact JSON payload (built by ContactDataBuilder) is what
+ * openContactModal consumes, so the appended rows open a fully-
+ * populated contact modal without any in-memory JS array extension.
+ */
+function loadMoreContacts(inst) {
+    loadMoreViaGuiAction('loadMoreContacts', 'contacts', inst);
 }
 
 /**
@@ -4064,6 +4314,10 @@ function loadMoreViaGuiAction(action, key, inst) {
         }
         inst.setLoadMoreBusy(false);
         inst.apply();
+        // Refresh the "Showing the last N" copy so it reflects the
+        // newly-loaded row count — "last 100" becomes "last 125" after
+        // a Load-older click, matches what the paginator range shows.
+        refreshMetaLoadedCount(key);
     }).catch(function() {
         showToast('Network error', 'Could not load more rows.', 'error');
         inst.setLoadMoreBusy(false);
@@ -6698,6 +6952,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'refreshContactModalTransactions': function() { refreshContactModalTransactions(); },
         'hideContactTxDetail': function() { hideContactTxDetail(); },
 
+        // Server-side "Search entire database" actions — bypass the
+        // local-filter loop and ask the backend to LIKE across the full
+        // table so old rows not yet Load-older'd into the DOM surface.
+        'searchTransactionsDatabase':    function() { searchTransactionsDatabase(); },
+        'searchPaymentRequestsDatabase': function() { searchPaymentRequestsDatabase(); },
+        'clearSearchResults': function(el) {
+            var key = el.getAttribute('data-search-key') || '';
+            clearSearchResults(key);
+        },
+
         // Contact list
 
         // Quick actions
@@ -6967,6 +7231,20 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         if (action === 'filterTransactions') { filterTransactions(); }
         if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
+    }, false);
+
+    // Delegated Enter-keypress handler — lets an input opt into "pressing
+    // Enter runs X" without hand-rolling a listener per field. Used by
+    // the search inputs to trigger the server-side database search, so
+    // the user can just type a term and hit Enter.
+    document.addEventListener('keydown', function(event) {
+        if (event.key !== 'Enter' && event.keyCode !== 13) return;
+        var el = event.target;
+        var action = el.getAttribute && el.getAttribute('data-action-keypress-enter');
+        if (!action) return;
+        event.preventDefault();
+        if (action === 'searchTransactionsDatabase') { searchTransactionsDatabase(); }
+        if (action === 'searchPaymentRequestsDatabase') { searchPaymentRequestsDatabase(); }
     }, false);
 
     // ========================================================================

@@ -78,66 +78,9 @@
             </thead>
             <tbody id="contacts-grid">
             <!-- Accepted Contacts -->
+            <?php $contactAvatarStyle = $user->getContactAvatarStyle(); ?>
             <?php foreach ($acceptedContacts as $contact): ?>
-                <?php
-                    $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
-                    $onlineStatus = $contact['online_status'] ?? 'unknown';
-                    $validChain = $contact['valid_chain'] ?? null;
-                    $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
-                    $displayCurrency = $primaryCur['currency'] ?? 'USD';
-                    $myCredit = $primaryCur['my_available_credit'] ?? $contact['my_available_credit'] ?? null;
-                    $theirCredit = $primaryCur['their_available_credit'] ?? $contact['their_available_credit'] ?? null;
-                    $proposal = $contact['chain_drop_proposal'] ?? null;
-                    $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
-                    $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
-                    $isRejected = $proposal && $proposal['status'] === 'rejected';
-                    // One-word chain state for filtering
-                    if ($isIncoming)            { $chainState = 'action'; }
-                    elseif ($isOutgoing)        { $chainState = 'waiting'; }
-                    elseif ($isRejected)        { $chainState = 'rejected'; }
-                    elseif ($validChain === 0)  { $chainState = 'warning'; }
-                    elseif ($validChain === 1)  { $chainState = 'valid'; }
-                    else                        { $chainState = 'none'; }
-                ?>
-                <tr class="contact-card contact-row cursor-pointer"
-                    data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
-                    data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
-                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
-                    data-status="accepted"
-                    data-chain-state="<?php echo $chainState; ?>"
-                    data-online="<?php echo htmlspecialchars($onlineStatus); ?>"
-                    data-balance="<?php echo (float) ($contact['balance'] ?? 0); ?>"
-                    data-your-credit="<?php echo $myCredit !== null ? (float) $myCredit : ''; ?>"
-                    data-their-credit="<?php echo $theirCredit !== null ? (float) $theirCredit : ''; ?>"
-                    data-action="openContactModal"
-                    data-contact="<?php echo $contactData; ?>">
-                    <td class="col-name">
-                        <div class="contact-name-cell">
-                            <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
-                            <span class="contact-name-text"><?php echo htmlspecialchars($contact['name']); ?></span>
-                        </div>
-                    </td>
-                    <td class="col-number text-right <?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
-                    <td class="col-number text-right"><?php echo $myCredit !== null ? number_format($myCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
-                    <td class="col-number text-right"><?php echo $theirCredit !== null ? number_format($theirCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
-                    <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
-                    <td class="col-chain text-center">
-                        <?php if ($isIncoming): ?>
-                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-action" title="Tx drop proposal received — action required" aria-label="Action required"></i>
-                        <?php elseif ($isOutgoing): ?>
-                        <i class="fas fa-clock chain-icon chain-icon-waiting" title="Awaiting contact's response" aria-label="Waiting"></i>
-                        <?php elseif ($isRejected): ?>
-                        <i class="fas fa-ban chain-icon chain-icon-blocked" title="Chain gap unresolved — proposal rejected" aria-label="Blocked"></i>
-                        <?php elseif ($validChain === 0): ?>
-                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-warning" title="Transaction chain needs sync" aria-label="Chain needs sync"></i>
-                        <?php elseif ($validChain === 1): ?>
-                        <i class="fas fa-check chain-icon chain-icon-valid" title="Chain valid" aria-label="Chain valid"></i>
-                        <?php else: ?>
-                        <span class="text-muted">—</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="col-online text-center"><span class="contact-status-dot status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?>"></span></td>
-                </tr>
+                <?php require __DIR__ . '/_contactRow.html'; ?>
             <?php endforeach; ?>
 
             <!-- Pending Contacts -->

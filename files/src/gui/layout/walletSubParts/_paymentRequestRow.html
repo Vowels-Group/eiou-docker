@@ -1,0 +1,79 @@
+<?php
+// Render a single Payment Requests history row. Included in a loop by
+// paymentRequestsSection.html for the initial page render, and included
+// once per row by the loadMorePaymentRequests AJAX handler for "Load older"
+// fetches.
+// Expected in-scope variables:
+//   $req                  (array)  — payment request row (direction+status+amount+…)
+//   $prContactsByHash     (array)  — pubkey_hash => contact row, for avatar lookup
+//   $prAvatarStyle        (string) — avatar style from user settings
+//   $prStatusIcons        (array)  — status => Font Awesome icon class map
+$status   = $req['status'] ?? '';
+$dir      = $req['_direction'] ?? '';
+$txid     = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
+$amountRaw = isSplitAmount($req['amount']) ? $req['amount']->toMajorUnits() : (float)($req['amount_whole'] ?? 0);
+$amount   = number_format($amountRaw, displayDecimals());
+$currency = htmlspecialchars($req['currency'] ?? '');
+$desc     = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+$dateRaw  = $req['responded_at'] ?? $req['created_at'] ?? '';
+$date     = !empty($dateRaw) ? formatTimestamp($dateRaw) : '';
+$dateTs   = !empty($dateRaw) ? (int) strtotime($dateRaw) : 0;
+
+// Counterparty name + lookup for avatar (prefer live name over stored snapshot)
+$cpHash = $dir === 'incoming' ? ($req['requester_pubkey_hash'] ?? '') : ($req['recipient_pubkey_hash'] ?? '');
+$cpContact = $prContactsByHash[$cpHash] ?? null;
+$cpName = $cpContact['name'] ?? $req['contact_name'] ?? substr($cpHash, 0, 12) . '…';
+
+$statusIcon = $prStatusIcons[$status] ?? 'fa-circle';
+?>
+<tr class="pr-row contact-row cursor-pointer"
+    data-action="<?php echo $txid ? 'openTransactionModalByTxid' : 'openPrHistoryModal'; ?>"
+    <?php if ($txid): ?>data-txid="<?php echo $txid; ?>"<?php endif; ?>
+    data-pr-name="<?php echo htmlspecialchars($cpName); ?>"
+    data-pr-amount="<?php echo $amount . ' ' . $currency; ?>"
+    data-pr-desc="<?php echo $desc; ?>"
+    data-pr-date="<?php echo $date; ?>"
+    data-pr-direction="<?php echo htmlspecialchars($dir); ?>"
+    data-pr-status="<?php echo htmlspecialchars($status); ?>"
+    title="Click for details"
+    <?php
+        $searchParts = strtolower($cpName . ' ' . $cpHash . ' ' . $desc);
+        if (!empty($req['requester_address'])) $searchParts .= ' ' . strtolower($req['requester_address']);
+        if ($cpContact) {
+            foreach (validTransportIndices() as $_af) {
+                if (!empty($cpContact[$_af])) $searchParts .= ' ' . strtolower($cpContact[$_af]);
+            }
+        }
+    ?>
+    data-pr-search="<?php echo htmlspecialchars($searchParts); ?>"
+    data-status="<?php echo htmlspecialchars($status); ?>"
+    data-direction="<?php echo htmlspecialchars($dir); ?>"
+    data-amount="<?php echo $amountRaw; ?>"
+    data-date="<?php echo $dateTs; ?>">
+    <td class="col-pr-status text-center">
+        <span class="pr-status-icon pr-status-<?php echo htmlspecialchars($status); ?>" title="<?php echo htmlspecialchars(ucfirst($status)); ?>">
+            <i class="fas <?php echo $statusIcon; ?>"></i>
+        </span>
+    </td>
+    <td class="col-name">
+        <div class="contact-name-cell">
+            <?php if ($cpContact): ?>
+                <?php echo renderContactAvatar($cpHash, $cpName, $prAvatarStyle); ?>
+            <?php endif; ?>
+            <div>
+                <span class="contact-name-text"><?php echo htmlspecialchars($cpName); ?></span>
+                <span class="pr-direction-hint"><?php echo $dir === 'incoming' ? 'requested' : 'you requested'; ?></span>
+            </div>
+        </div>
+    </td>
+    <td class="col-number col-pr-amount text-right"><?php echo $amount . ' ' . $currency; ?></td>
+    <td class="col-tx-desc col-pr-desc" title="<?php echo $desc ?: 'No description'; ?>"><?php echo $desc ?: '—'; ?></td>
+    <td class="col-pr-txid" title="<?php echo $txid; ?>">
+        <?php if ($txid): ?>
+            <span class="monospace"><?php echo substr($txid, 0, 10); ?>…</span>
+        <?php else: ?>
+            <span class="text-muted">—</span>
+        <?php endif; ?>
+    </td>
+    <td class="col-tx-date col-pr-date text-right"><?php echo $date; ?></td>
+</tr>

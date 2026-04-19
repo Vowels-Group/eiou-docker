@@ -465,6 +465,16 @@ Rendered below the Send form in the Send tab. Shows incoming and outgoing paymen
 
 Resolved requests (approved/declined) appear in a collapsed history section. Approved requests show a clickable truncated txid that opens the transaction detail modal.
 
+**History Paginator (resolved requests only):**
+- Same shared `Paginator` IIFE as the Recent Transactions and Contacts tables. Page buttons + size selector (25 / 50 / 100 / All), persisted as `eiou_paginator_size_payment-requests`.
+- **"Load older" button** — fetches next server-side page via `loadMorePaymentRequests` GUI AJAX action. Backed by `PaymentRequestRepository::getResolvedHistoryPage($limit, $offset)` — a single SQL query on the unified table with `WHERE status != 'pending' ORDER BY COALESCE(responded_at, created_at) DESC LIMIT ? OFFSET ?`, matching the initial template's `usort` key so pages append cleanly. Rows rendered via a shared `_paymentRequestRow.html` partial.
+- **"Showing the last N requests"** counter is dynamic via `#pr-meta-loaded-count`; updates after each Load-older click.
+
+**Search database (server-side):**
+- Same pattern as Recent Transactions — button next to the search input, or Enter in the search box. Fires `searchPaymentRequests` GUI AJAX action → `PaymentRequestRepository::searchResolvedHistory` (LIKE across `contact_name`, `description`, `requester_pubkey_hash`, `recipient_pubkey_hash`, `requester_address`).
+- Respects the direction / status filter selects. Hard-capped at 500 rows; response includes `{html, total, capped, cap}`.
+- Result rows replace the tbody; banner shows `N matches for "term" · Clear search`; Clear reloads the page.
+
 ---
 
 #### contactForm.html
@@ -492,6 +502,8 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 - Blocked contacts
 - Search/filter functionality
 - Show more toggle (>16 contacts)
+- **Shared paginator** — page-size selector (25/50/100/All, persisted per-table via `safeStorageSet` under `eiou_paginator_size_contacts`) + prev/next buttons + range indicator, installed by `Paginator.create('contacts', …)` in `script.js`. Orthogonal `.filter-hidden` / `.paginator-hidden` classes on rows so the local search + status/chain/online filters keep working in combination with pagination
+- **"Load more" button** (accepted contacts only — pending + blocked are always rendered up-front because they're bounded and operationally important). Fetches the next server-side page via the `loadMoreContacts` GUI AJAX action, rendering rows through a shared `_contactRow.html` partial so appended rows are byte-identical to the initial render
 - Tx drop proposal badges on contact cards:
   - Red "Action Required" — incoming proposal needs acceptance
   - Blue "Awaiting Response" — outgoing proposal pending
@@ -549,6 +561,19 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 - Type badges (Contact, P2P, Direct)
 - Click any row to open detail modal
+
+**Paginator:**
+- Shared `Paginator` IIFE in `script.js` — same infrastructure Contacts and Payment Requests history use. Page-size selector (25 / 50 / 100 / All, persisted per-table), prev/next buttons, range indicator ("101–125 of 200").
+- **"Load older" button** — fetches the next server-side page via the `loadMoreTransactions` GUI AJAX action, rendering rows through the `_transactionHistoryRow.html` partial that both the initial foreach and the AJAX handler consume. Client concatenates the returned `data.rows` onto the in-memory `transactionData[]` so `openTransactionModal(index)` keeps resolving for appended rows. Button auto-hides when the server reports `exhausted: true`.
+- **"Showing the last N transactions"** counter updates dynamically as rows are loaded or replaced. Uses a `#tx-meta-loaded-count` span rewritten by `refreshMetaLoadedCount()`.
+
+**Search database (server-side):**
+- Button next to the search input, also triggered by pressing Enter in the search box.
+- Fires `searchTransactions` GUI AJAX action — backend runs a case-insensitive `LIKE %term%` across counterparty name (direct + P2P end-recipient + P2P initial-sender), transaction description, and all four address fields (sender/receiver/end-recipient/initial-sender).
+- Respects the current direction / type / status filter select values.
+- Hard-capped at 500 rows; response carries `{html, rows[], total, capped, cap}` so the banner can disclose when a broad query was clipped.
+- Result rows **replace** (not append to) the table body. Paginator moves to page 0, load-older is suspended (the result set is bounded by the server cap). Banner shows `N matches for "term" · Clear search` which reloads to the default view.
+- The local search input's live-keystroke filter also searches the P2P endpoint name/address via new `data-tx-endpoint-name` / `data-tx-endpoint-address` row attributes — so typing "carol" locally matches the same rows the database search would return for already-loaded transactions, and the "X transactions found" counter stays consistent after a database search.
 
 **Transaction Modal:**
 - Full transaction details

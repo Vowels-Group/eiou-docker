@@ -480,6 +480,37 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Paginated variant of getAcceptedContacts — backs the contacts-table
+     * "Load older" button. Only accepted contacts paginate (pending +
+     * blocked are rendered fully up-front in the initial template; they're
+     * small and operationally important). Sort order matches the non-
+     * paginated query so pages append cleanly without reshuffling.
+     *
+     * @param int $limit  Max rows per page
+     * @param int $offset Zero-based offset
+     * @return array Rows joined with addresses, newest `name ASC` order
+     */
+    public function getAcceptedContactsPage(int $limit, int $offset = 0): array
+    {
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    AND c.status = 'accepted'
+                    ORDER BY c.name ASC
+                    LIMIT :limit OFFSET :offset";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':limit',  max(0, $limit),  PDO::PARAM_INT);
+        $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        try {
+            $stmt->execute();
+        } catch (PDOException $e) {
+            $this->logError('Failed to get accepted contacts page', $e);
+            return [];
+        }
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Get all blocked contacts
      *
      * @return array
