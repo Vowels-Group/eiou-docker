@@ -372,6 +372,19 @@ class ContactService implements ContactServiceInterface
     }
 
     /**
+     * Paginate the accepted contacts — consumed by the loadMoreContacts
+     * GUI AJAX handler to append further rows beyond the initial render.
+     *
+     * @param int $limit  Max rows per page
+     * @param int $offset Zero-based offset
+     * @return array Rows in the same shape as getAcceptedContacts()
+     */
+    public function getAcceptedContactsPage(int $limit, int $offset = 0): array
+    {
+        return $this->managementService->getAcceptedContactsPage($limit, $offset);
+    }
+
+    /**
      * Fetch accepted, user-pending, and blocked contacts in one DB round-trip,
      * partitioned by status. Prefer this over three separate get*Contacts
      * calls when you need multiple buckets on the same render.

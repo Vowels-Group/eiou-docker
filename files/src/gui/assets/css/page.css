@@ -735,6 +735,49 @@ body {
 }
 
 /* Contacts Table Layout */
+/* "Search entire database" button — sits inside the search bar next to
+   the search input on Recent Transactions and Payment Requests. On
+   narrow viewports it wraps to the next line via .contacts-search-bar's
+   flex-wrap. */
+.search-database-btn {
+    white-space: nowrap;
+    align-self: center;
+}
+
+/* Banner shown once a server-side search returns. Replaces the local
+   "X transactions found" count with a DB-sourced "N matches for 'term'
+   · Clear search" line. Uses the primary-info colour family because
+   the state it's reporting is informational, not a warning. */
+.search-results-banner {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 1rem;
+    background: #e7f1ff;
+    border: 1px solid #9ec5fe;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #084298;
+}
+.search-results-banner .fa-database { color: #0d6efd; }
+.search-results-banner .search-results-clear {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #0d6efd;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.search-results-banner .search-results-clear:hover {
+    text-decoration: underline;
+}
+
 /* Row visibility primitives used by filter/search and the paginator.
    Each class is independently toggleable; a row is visible iff neither is
    present. Search/filter code touches .filter-hidden; Paginator touches
@@ -3576,13 +3619,6 @@ tr.tx-item-in-progress > td:first-child {
     color: #6c757d;
     font-size: 0.85rem;
     font-style: italic;
-}
-
-/* Footer item count note */
-.dlq-footer-count {
-    color: #6c757d;
-    font-size: 0.85rem;
-    margin-top: 0.75rem;
 }
 
 /* Legacy class — scroll is now always enabled on .dlq-table-wrapper */

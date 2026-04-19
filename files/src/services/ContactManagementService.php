@@ -1547,6 +1547,18 @@ class ContactManagementService implements ContactManagementServiceInterface
     }
 
     /**
+     * Paginated accepted contacts. Thin passthrough to the repository;
+     * pagination semantics live there (LIMIT/OFFSET + stable name-sort).
+     *
+     * @param int $limit  Max rows per page
+     * @param int $offset Zero-based offset
+     */
+    public function getAcceptedContactsPage(int $limit, int $offset = 0): array
+    {
+        return $this->contactRepository->getAcceptedContactsPage($limit, $offset);
+    }
+
+    /**
      * Fetch accepted, user-pending, and blocked contacts in a single DB query
      * and return them grouped by status. Replaces the pattern of calling
      * getAcceptedContacts + getUserPendingContactRequests + getBlockedContacts

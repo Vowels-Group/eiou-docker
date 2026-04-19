@@ -672,4 +672,46 @@ class ContactManagementServiceTest extends TestCase
         $output = $this->createMock(CliOutputManager::class);
         $this->service->addContact($argv, $output);
     }
+
+    // =========================================================================
+    // getAcceptedContactsPage() — pagination delegation
+    // =========================================================================
+
+    /**
+     * Happy path: limit + offset forward verbatim to the repository.
+     * Backs the loadMoreContacts GUI AJAX handler (Phase 2 load-older).
+     */
+    public function testGetAcceptedContactsPageDelegatesLimitAndOffset(): void
+    {
+        $rows = [
+            ['pubkey_hash' => 'h1', 'name' => 'Alice',   'status' => 'accepted'],
+            ['pubkey_hash' => 'h2', 'name' => 'Bob',     'status' => 'accepted'],
+        ];
+
+        $this->contactRepo->expects($this->once())
+            ->method('getAcceptedContactsPage')
+            ->with(25, 50)
+            ->willReturn($rows);
+
+        $result = $this->service->getAcceptedContactsPage(25, 50);
+
+        $this->assertSame($rows, $result);
+    }
+
+    /**
+     * Default offset is 0 — first-page semantics. A caller that forgets
+     * to pass offset doesn't accidentally skip into the middle of the
+     * contact list.
+     */
+    public function testGetAcceptedContactsPageDefaultsOffsetToZero(): void
+    {
+        $this->contactRepo->expects($this->once())
+            ->method('getAcceptedContactsPage')
+            ->with(10, 0)
+            ->willReturn([]);
+
+        $result = $this->service->getAcceptedContactsPage(10);
+
+        $this->assertSame([], $result);
+    }
 }

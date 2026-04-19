@@ -565,6 +565,151 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Database-wide search across the user's transaction history. Backs
+     * the "Search entire database" button on the Recent Transactions
+     * table — lets users find old transactions (e.g. "Bob") without
+     * hammering the Load-older button until the match appears in the
+     * current page window.
+     *
+     * Search term matches (case-insensitive, substring) against:
+     *   - counterparty name (sender's contact.name or receiver's contact.name)
+     *   - transaction description
+     *   - sender address / receiver address
+     *
+     * Optional filter dimensions mirror the client-side filter select
+     * inputs so "search database" respects the same dropdowns the user
+     * already set. Empty filter = no restriction.
+     *
+     * Result capped at $maxResults (default 500) so a broad query like
+     * "USD" returns a bounded JSON response the GUI can paginate
+     * client-side. Callers can detect truncation when the result length
+     * equals $maxResults.
+     *
+     * @param string      $term        Lowercase substring search term (already lowercased by caller)
+     * @param string|null $direction   'sent' | 'received' | null
+     * @param string|null $txType      'direct' | 'p2p' | 'contact' | null (maps to tx_type column)
+     * @param string|null $status      'pending' | 'sent' | 'accepted' | 'completed' | 'rejected' | 'cancelled' | null
+     * @param int         $maxResults  Hard cap on returned rows
+     * @return array Formatted transactions (same shape as getTransactionHistory)
+     */
+    public function searchTransactions(
+        string $term,
+        ?string $direction = null,
+        ?string $txType = null,
+        ?string $status = null,
+        int $maxResults = 500
+    ): array {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
+            return [];
+        }
+        // Defensive: an empty term would match every row; short-circuit
+        // so a caller who accidentally submits "" doesn't ship the whole
+        // table over the wire.
+        if (trim($term) === '') {
+            return [];
+        }
+
+        $placeholders = $this->createPlaceholders($userAddresses);
+        $like = '%' . strtolower(trim($term)) . '%';
+
+        // Same SELECT + JOIN structure as getTransactionHistory — share
+        // the column list so the formatter + row partial see identical
+        // data shape between the history path and the search path.
+        // Extra JOINs for the P2P endpoint columns so a search for
+        // "carol" can match the tx's *ultimate* counterparty when Alice
+        // sent through Bob — end_recipient_address carries Carol's
+        // address on the sent-P2P side, initial_sender_address carries
+        // it on the received-P2P side. Without these JOINs the WHERE
+        // could only match direct neighbours, which missed every P2P tx
+        // where the search term names someone further down the chain.
+        $query = "SELECT
+                    t.id, t.txid, t.tx_type, t.type AS direction, t.status,
+                    t.sender_address, t.receiver_address,
+                    t.sender_public_key, t.sender_public_key_hash,
+                    t.receiver_public_key, t.receiver_public_key_hash,
+                    t.amount_whole, t.amount_frac, t.currency, t.timestamp,
+                    t.memo, t.description, t.previous_txid,
+                    t.end_recipient_address, t.initial_sender_address,
+                    sender_contact.name AS sender_name,
+                    receiver_contact.name AS receiver_name,
+                    p2p.destination_address AS p2p_destination,
+                    p2p.amount_whole AS p2p_amount_whole,
+                    p2p.amount_frac AS p2p_amount_frac,
+                    p2p.my_fee_amount_whole AS p2p_fee_whole,
+                    p2p.my_fee_amount_frac AS p2p_fee_frac
+                  FROM {$this->tableName} t
+                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
+                  LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
+                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
+                  LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
+                  LEFT JOIN addresses end_addr ON (t.end_recipient_address = end_addr.http OR t.end_recipient_address = end_addr.https OR t.end_recipient_address = end_addr.tor)
+                  LEFT JOIN contacts end_contact ON end_addr.pubkey_hash = end_contact.pubkey_hash
+                  LEFT JOIN addresses init_addr ON (t.initial_sender_address = init_addr.http OR t.initial_sender_address = init_addr.https OR t.initial_sender_address = init_addr.tor)
+                  LEFT JOIN contacts init_contact ON init_addr.pubkey_hash = init_contact.pubkey_hash
+                  LEFT JOIN p2p ON t.memo = p2p.hash
+                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
+                    AND (
+                         LOWER(COALESCE(sender_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(receiver_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(end_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(init_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(t.description, '')) LIKE ?
+                      OR LOWER(COALESCE(t.sender_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.receiver_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.end_recipient_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.initial_sender_address, '')) LIKE ?
+                    )";
+
+        $additional = [$like, $like, $like, $like, $like, $like, $like, $like, $like];
+
+        // status is a direct column filter
+        if ($status !== null && $status !== '') {
+            $query .= " AND t.status = ?";
+            $additional[] = $status;
+        }
+        // tx_type: the client-side filter uses 'direct' / 'p2p' /
+        // 'contact' labels. DB stores 'standard' / 'p2p' / 'contact' —
+        // map 'direct' → '<'standard','direct'>' (historical
+        // transactions may carry either), others pass through.
+        if ($txType !== null && $txType !== '') {
+            if ($txType === 'direct') {
+                $query .= " AND t.tx_type IN ('standard', 'direct')";
+            } else {
+                $query .= " AND t.tx_type = ?";
+                $additional[] = $txType;
+            }
+        }
+
+        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
+        $additional[] = max(1, $maxResults);
+
+        // addresses twice for the two IN clauses, then the tail params
+        $params = $this->buildInClauseParams($userAddresses, 2, $additional);
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to search transactions: ' . $e->getMessage(), 'WARNING');
+            return [];
+        }
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formatted = TransactionFormatter::formatHistoryMany($rows, $userAddresses);
+
+        // Direction filter applied post-SQL because `direction` (sent /
+        // received) is computed from the user's addresses in the
+        // formatter — same pipeline the rest of the GUI uses.
+        if ($direction !== null && $direction !== '') {
+            $formatted = array_values(array_filter($formatted, function ($tx) use ($direction) {
+                return ($tx['type'] ?? '') === $direction;
+            }));
+        }
+
+        return $formatted;
+    }
+
+    /**
      * Check if Transaction exists by memo
      *
      * @param string $memo Transaction memo
