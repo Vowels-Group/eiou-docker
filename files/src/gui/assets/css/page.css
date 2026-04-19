@@ -564,11 +564,47 @@ body {
 /* Ping Status Controls */
 .ping-controls {
     margin-top: 0.75rem;
+    min-height: 1.25rem;
 }
 
 .ping-result-message {
     margin-left: 0.5rem;
     font-size: 0.85rem;
+}
+
+/* Connection status row — Online badge, Chain badge, and the Check
+   Status button share one line. Wraps to multiple lines if the
+   viewport is too narrow for the whole row to fit. */
+.connection-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+.connection-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+}
+.connection-status-label {
+    color: #6c757d;
+    white-space: nowrap;
+}
+.connection-status-btn {
+    margin-left: auto;
+}
+
+/* Empty-state placeholder for the Chain Gap Resolution section when
+   the chain is healthy and no proposal is outstanding. */
+.chain-drop-empty {
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+}
+.chain-drop-empty .fa-check-circle {
+    color: var(--status-success-bg, #28a745);
+    margin-right: 0.35rem;
 }
 
 /* Chain column icons on the contact list — icon-only, colored via the status
@@ -1826,6 +1862,15 @@ html {
     justify-content: center;
 }
 
+/* Stacked-on-top variant — used when the contact modal is opened from
+   within the Transaction Details modal. Higher z-index so it renders
+   above, and a lighter backdrop so the two overlays don't double up
+   into near-black. */
+.modal.modal-stack-top {
+    z-index: 10010;
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
 .modal-content {
     background-color: white;
     margin: auto;
@@ -1987,6 +2032,52 @@ tr.contact-card:hover .contact-name-cell {
     color: #000;
 }
 
+/* Contact modal transactions tab — compact table (status + amount +
+   description). Counterparty is omitted because we're in the contact,
+   and date is omitted because rows are already sorted descending by
+   date; the full timestamp is available in the row's tooltip and in
+   the transaction detail view. */
+.contact-modal-tx-wrapper { width: 100%; }
+/* Keep table-layout:fixed (inherited from .contacts-table) but override the
+   column widths inherited from .tx-table which were sized for the wider
+   mobile Recent Transactions view with 7 columns. Here we have 3. */
+.contact-modal-tx-table thead th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid #dee2e6;
+}
+.contact-modal-tx-table tbody td { padding: 0.5rem 0.5rem; vertical-align: middle; }
+/* Status icon — tight column with just enough padding that the icon
+   doesn't hug the modal wall. Higher specificity than .tx-table td.col-tx-status-icon. */
+.contact-modal-tx-table th.col-tx-status-icon,
+.contact-modal-tx-table td.col-tx-status-icon {
+    width: 2.25rem;
+    padding-left: 0.5rem;
+    padding-right: 0.25rem;
+    text-align: center;
+}
+/* Description absorbs the middle space and truncates with ellipsis so
+   long memos don't push the amount off-screen. Amount sits on the
+   right with just enough width to fit typical values without wrapping. */
+.contact-modal-tx-table th.col-tx-desc,
+.contact-modal-tx-table td.col-tx-desc {
+    width: auto;
+    max-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+    font-size: 0.85rem;
+}
+.contact-modal-tx-table th.col-tx-amount,
+.contact-modal-tx-table td.col-tx-amount {
+    width: 28%;
+    white-space: nowrap;
+}
+.contact-modal-tx-table .tx-status-icon { font-size: 0.95rem; }
+
 /* Transaction Detail Modal */
 /* Transaction detail popup within the contact modal */
 .contact-tx-popup {
@@ -2034,6 +2125,17 @@ tr.contact-card:hover .contact-name-cell {
 .tx-detail-value {
     flex: 1;
     color: #212529;
+}
+
+/* Clickable variant — used when the detail row jumps to a contact modal. */
+.tx-detail-value-link {
+    color: #0d6efd;
+}
+.tx-detail-value-link:hover {
+    text-decoration: underline;
+}
+.tx-detail-value-link .tx-modal-mono {
+    color: inherit;
 }
 
 /* Transaction item hover effect */
@@ -2684,6 +2786,18 @@ tr.tx-item-in-progress > td:first-child {
 
 .modal-tab-scroll {
     height: 100%;
+}
+
+/* Contact modal shell: pin the height so switching between Info /
+   Transactions / Status / Settings doesn't reflow the modal. Each tab's
+   content area gets the same space — shorter tabs get bottom whitespace,
+   and the Transactions table scrolls internally when it exceeds it.
+   The Transaction Details modal matches the same height so that when
+   the contact modal is stacked on top of it the two shells align. */
+#contactModal .modal-content,
+#transactionModal .modal-content {
+    height: 85vh;
+    max-height: 90vh;
 }
 
 .modal-footer {
@@ -4367,12 +4481,28 @@ details.section-intro > .section-intro-body {
     gap: 0.5rem;
     margin-bottom: 1.5rem;
     -webkit-flex-wrap: wrap; -ms-flex-wrap: wrap; flex-wrap: wrap;
+    -webkit-align-items: center; -ms-flex-align: center; align-items: center;
 }
 
-.tx-modal-badge {
+/* Badges in the Transaction Details modal use inline-flex + centered
+   alignment so icon-bearing badges (P2P Routed, Sent) and plain-text
+   badges (Completed/Rejected/Cancelled) share identical vertical
+   metrics. Without this the text-only status badge sits off-center
+   relative to its icon-bearing neighbours. */
+.tx-modal-badge,
+.tx-modal-badges .tx-status-badge {
+    display: -webkit-inline-box;
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    -webkit-align-items: center; -ms-flex-align: center; align-items: center;
+    gap: 0.3rem;
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
+    line-height: 1;
+}
+
+.tx-modal-badge {
     color: white;
 }
 

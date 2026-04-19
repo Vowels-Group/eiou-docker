@@ -398,13 +398,36 @@
         echo $syncingCount;
     ?>;
 
-    var transactionData = <?php echo json_encode(array_map(function($tx) use ($dlqActiveTxMessageIds) {
+    var transactionData = <?php echo json_encode(array_map(function($tx) use ($dlqActiveTxMessageIds, $txContactsByAddress, $txContactsByName, $txContactsByHash) {
         $inDlq = false;
         if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
             foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
                 if (strpos($dlqMsgId, $tx['txid']) !== false) { $inDlq = true; break; }
             }
         }
+        // Resolve counterparty contact id — same priority order as the
+        // Recent Transactions table row (name → address → pubkey_hash) so
+        // the Transaction Details modal can offer a click-through to the
+        // contact's detail modal when we recognise them.
+        $isTxSent = (($tx['type'] ?? '') === 'sent');
+        $cpAddr = $isTxSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+        $cpHash = $isTxSent ? ($tx['receiver_public_key_hash'] ?? '') : ($tx['sender_public_key_hash'] ?? '');
+        $cpName = $tx['counterparty_name'] ?? '';
+        $cpContact = null;
+        if ($cpName && isset($txContactsByName[strtolower($cpName)])) {
+            $cpContact = $txContactsByName[strtolower($cpName)];
+        } elseif ($cpAddr && isset($txContactsByAddress[$cpAddr])) {
+            $cpContact = $txContactsByAddress[$cpAddr];
+        } elseif ($cpHash && isset($txContactsByHash[$cpHash])) {
+            $cpContact = $txContactsByHash[$cpHash];
+        }
+        // P2P endpoint — same sent/received polarity as the table.
+        if ($isTxSent) {
+            $endAddr = $tx['end_recipient_address'] ?? '';
+        } else {
+            $endAddr = $tx['initial_sender_address'] ?? '';
+        }
+        $endContact = ($endAddr && isset($txContactsByAddress[$endAddr])) ? $txContactsByAddress[$endAddr] : null;
         return [
             'txid' => $tx['txid'] ?? '',
             'tx_type' => $tx['tx_type'] ?? 'standard',
@@ -417,6 +440,7 @@
             'counterparty' => $tx['counterparty'] ?? '',
             'counterparty_address' => $tx['counterparty_address'] ?? '',
             'counterparty_name' => $tx['counterparty_name'] ?? '',
+            'counterparty_contact_id' => $cpContact['contact_id'] ?? null,
             'sender_address' => $tx['sender_address'] ?? '',
             'receiver_address' => $tx['receiver_address'] ?? '',
             'memo' => $tx['memo'] ?? '',
@@ -425,6 +449,8 @@
             'initial_sender_address' => $tx['initial_sender_address'] ?? null,
             'end_recipient_address' => $tx['end_recipient_address'] ?? null,
             'p2p_destination' => $tx['p2p_destination'] ?? null,
+            'p2p_destination_contact_id' => $endContact['contact_id'] ?? null,
+            'p2p_destination_contact_name' => $endContact['name'] ?? null,
             'p2p_amount' => $tx['p2p_amount'] ?? null,
             'p2p_fee' => $tx['p2p_fee'] ?? null,
             'in_dlq' => $inDlq

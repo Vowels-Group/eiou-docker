@@ -123,7 +123,7 @@
                     <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
                     <td class="col-chain text-center">
                         <?php if ($isIncoming): ?>
-                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-action" title="Proposal to drop missing transaction(s) received — action required" aria-label="Action required"></i>
+                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-action" title="Tx drop proposal received — action required" aria-label="Action required"></i>
                         <?php elseif ($isOutgoing): ?>
                         <i class="fas fa-clock chain-icon chain-icon-waiting" title="Awaiting contact's response" aria-label="Waiting"></i>
                         <?php elseif ($isRejected): ?>
@@ -351,7 +351,7 @@
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
                     </div>
-                    <div id="modal_transactions" class="transactions-list">
+                    <div id="modal_transactions" class="contact-modal-tx-wrapper">
                         <p class="no-transactions">No recent transactions with this contact.</p>
                     </div>
                 </div>
@@ -373,31 +373,37 @@
         <div id="status-tab" class="modal-tab-content">
             <div class="contact-info-section">
                 <h4><i class="fas fa-signal"></i> Connection Status</h4>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label><i class="fas fa-circle"></i> Online Status</label>
-                        <div class="info-value">
-                            <span id="modal_online_status" class="status-badge status-unknown">Unknown</span>
-                        </div>
-                    </div>
-                    <div class="info-item">
-                        <label><i class="fas fa-link"></i> Chain Status</label>
-                        <div class="info-value">
-                            <span id="modal_chain_status" class="chain-badge chain-unknown">Not Checked</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="ping-controls">
-                    <button id="ping_contact_btn" class="btn btn-sm btn-outline" data-action="pingContact" title="Check contact's online status">
+                <!-- Online + Chain badges and the Check Status button share
+                     one row; ping success/failure text falls to the row below. -->
+                <div class="connection-status-row">
+                    <span class="connection-status-item">
+                        <span class="connection-status-label"><i class="fas fa-circle"></i> Online:</span>
+                        <span id="modal_online_status" class="status-badge status-unknown">Unknown</span>
+                    </span>
+                    <span class="connection-status-item">
+                        <span class="connection-status-label"><i class="fas fa-link"></i> Chain:</span>
+                        <span id="modal_chain_status" class="chain-badge chain-unknown">Not Checked</span>
+                    </span>
+                    <button id="ping_contact_btn" class="btn btn-sm btn-outline connection-status-btn" data-action="pingContact" title="Check contact's online status">
                         <i class="fas fa-wifi" id="ping_icon"></i> <span id="ping_btn_text">Check Status</span>
                     </button>
+                </div>
+                <div class="ping-controls">
                     <span id="ping_result_message" class="ping-result-message"></span>
                 </div>
             </div>
 
-            <!-- Chain Gap Resolution — drop missing transaction(s) -->
-            <div id="chain_drop_section" class="contact-info-section d-none">
+            <!-- Chain Gap Resolution — drop missing transaction(s). Always
+                 visible: the empty-state row below shows when the chain is
+                 healthy, so users see there's no action to take. -->
+            <div id="chain_drop_section" class="contact-info-section">
                 <h4><i class="fas fa-unlink"></i> Chain Gap Resolution</h4>
+
+                <!-- Empty state — shown when no chain gap / proposal exists. -->
+                <div id="chain_drop_empty" class="chain-drop-empty text-muted">
+                    <i class="fas fa-check-circle"></i> No tx drops needed — the transaction chain with this contact is intact.
+                </div>
+
 
                 <!-- Chain gap details — shows which txids are valid before/after each gap -->
                 <div id="chain_gap_details" class="d-none mb-md">
@@ -418,8 +424,8 @@
                         <i class="fas fa-coins"></i>
                         <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                     </p>
-                    <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose dropping the missing transaction(s) to repair the chain">
-                        <i class="fas fa-handshake" id="chain_drop_propose_icon"></i> <span id="chain_drop_propose_text">Propose Dropping Missing Transaction(s)</span>
+                    <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose a tx drop to repair the chain">
+                        <i class="fas fa-handshake" id="chain_drop_propose_icon"></i> <span id="chain_drop_propose_text">Propose Tx Drop(s)</span>
                     </button>
                     <span id="chain_drop_propose_result" class="ping-result-message"></span>
                 </div>
@@ -441,9 +447,9 @@
                 <div id="chain_drop_incoming" class="d-none">
                     <div class="alert alert-warning chain-drop-alert alert-border-danger">
                         <i class="fas fa-exclamation-triangle text-danger"></i>
-                        <strong>Drop Missing Transaction(s) — Action Required</strong>
+                        <strong>Tx Drop Proposed — Action Required</strong>
                         <p class="chain-drop-alert-body">
-                            This contact has proposed dropping the missing transaction(s) to repair the chain.
+                            This contact has proposed a tx drop to repair the chain.
                             <strong>Sending transactions is blocked</strong> until this proposal is accepted or rejected.
                         </p>
                         <p class="chain-drop-note">
@@ -469,7 +475,7 @@
                         <i class="fas fa-ban text-warning-dark"></i>
                         <strong>Proposal Rejected — Chain Gap Unresolved</strong>
                         <p class="chain-drop-alert-body">
-                            The previous proposal to drop missing transaction(s) was rejected.
+                            The previous tx drop proposal was rejected.
                             The chain gap still exists and <strong>sending transactions remains blocked</strong>.
                             A new proposal can be submitted to try again.
                         </p>
@@ -477,8 +483,8 @@
                             <i class="fas fa-coins"></i>
                             <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                         </p>
-                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose dropping the missing transaction(s) to repair the chain">
-                            <i class="fas fa-handshake"></i> Propose Dropping Missing Transaction(s)
+                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose a tx drop to repair the chain">
+                            <i class="fas fa-handshake"></i> Propose Tx Drop(s)
                         </button>
                         <span id="chain_drop_repropose_result" class="ping-result-message"></span>
                     </div>

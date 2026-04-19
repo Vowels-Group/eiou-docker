@@ -138,6 +138,19 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) {}
 });
 
+// Relocate the Contact detail modal to document.body so it renders above
+// every tab-panel. The markup lives inside the Contacts tab partial
+// (#tab-panel-contacts), which is display:none when any other tab is
+// active — hiding the modal along with it. Lifting it once at page load
+// lets us open it from the Transaction Details modal (or anywhere else)
+// without first having to switch to the Contacts tab.
+document.addEventListener('DOMContentLoaded', function() {
+    var contactModalEl = document.getElementById('contactModal');
+    if (contactModalEl && contactModalEl.parentNode !== document.body) {
+        document.body.appendChild(contactModalEl);
+    }
+});
+
 /**
  * Escapes HTML special characters to prevent XSS attacks.
  *
@@ -837,10 +850,24 @@ function renderTransactionModal(tx) {
     // Details section
     html += '<div class="tx-detail-section">';
 
-    // Counterparty (To/From)
+    // Counterparty (To/From) — clickable when the counterparty resolves to
+    // one of our contacts, so the user can jump straight from a transaction
+    // detail to that contact's modal.
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>' : '') + '<span class="tx-modal-mono">' + escapeHtml(tx.counterparty_address) + '</span></div>';
+    var cpValueHtml = '';
+    if (tx.counterparty_name) {
+        cpValueHtml += '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>';
+    }
+    cpValueHtml += '<span class="tx-modal-mono">' + escapeHtml(tx.counterparty_address) + '</span>';
+    if (tx.counterparty_contact_id) {
+        html += '<div class="tx-detail-value tx-detail-value-link cursor-pointer"'
+            + ' data-action="jumpToContactFromTxModal"'
+            + ' data-contact-id="' + escapeHtml(tx.counterparty_contact_id) + '"'
+            + ' title="Open contact">' + cpValueHtml + '</div>';
+    } else {
+        html += '<div class="tx-detail-value">' + cpValueHtml + '</div>';
+    }
     html += '</div>';
 
     // Description (moved up, right after To/From)
@@ -882,10 +909,24 @@ function renderTransactionModal(tx) {
         html += '<i class="fas fa-network-wired"></i> P2P Transaction Details';
         html += '</div>';
 
-        // End Recipient
+        // End Recipient — clickable when we recognise them as a contact
+        // (typical case: we P2P'd through someone else because we had no
+        // direct credit line with the end recipient).
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">End Recipient</div>';
-        html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</div>';
+        var endValueHtml = '';
+        if (tx.p2p_destination_contact_name) {
+            endValueHtml += '<strong>' + escapeHtml(tx.p2p_destination_contact_name) + '</strong><br>';
+        }
+        endValueHtml += '<span class="tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</span>';
+        if (tx.p2p_destination_contact_id) {
+            html += '<div class="tx-detail-value tx-detail-value-link cursor-pointer"'
+                + ' data-action="jumpToContactFromTxModal"'
+                + ' data-contact-id="' + escapeHtml(tx.p2p_destination_contact_id) + '"'
+                + ' title="Open contact">' + endValueHtml + '</div>';
+        } else {
+            html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</div>';
+        }
         html += '</div>';
 
         // Amount to Recipient
@@ -896,11 +937,23 @@ function renderTransactionModal(tx) {
             html += '</div>';
         }
 
-        // Transaction Fee
+        // Routing Fee — always show when we can compute it (total amount −
+        // amount forwarded to the end recipient), so users see explicitly
+        // what the relay charged rather than having to subtract in their head.
+        var routingFee = null;
         if (tx.p2p_fee) {
+            routingFee = parseFloat(tx.p2p_fee);
+        } else if (tx.amount != null && tx.p2p_amount != null) {
+            var totalAmt = parseFloat(tx.amount);
+            var recipAmt = parseFloat(tx.p2p_amount);
+            if (!isNaN(totalAmt) && !isNaN(recipAmt)) {
+                routingFee = Math.abs(totalAmt - recipAmt);
+            }
+        }
+        if (routingFee !== null && !isNaN(routingFee)) {
             html += '<div class="tx-detail-row">';
-            html += '<div class="tx-detail-label">Transaction Fee</div>';
-            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_fee).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
+            html += '<div class="tx-detail-label">Routing Fee</div>';
+            html += '<div class="tx-detail-value">' + routingFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -1036,13 +1089,23 @@ window.onclick = function(event) {
 // Close modal with Escape key (Tor Browser compatible - uses keyCode fallback)
 document.addEventListener('keydown', function(event) {
     var isEscape = event.key === 'Escape' || event.keyCode === 27;
-    if (isEscape) {
-        closeEditContactModal();
-        closeTransactionModal();
+    if (!isEscape) return;
+    // When the contact modal is stacked on top of the transaction modal
+    // (opened via a To/From/P2P-endpoint click-through), Escape should
+    // dismiss only the top modal so the user returns to the tx details
+    // they were reading — not close everything at once.
+    var contactModalEl = document.getElementById('contactModal');
+    if (contactModalEl
+        && contactModalEl.classList.contains('modal-stack-top')
+        && contactModalEl.style.display !== 'none') {
         closeContactModal();
-        closeAddContactModal();
-        closeWhatsNewModal();
+        return;
     }
+    closeEditContactModal();
+    closeTransactionModal();
+    closeContactModal();
+    closeAddContactModal();
+    closeWhatsNewModal();
 });
 
 /**
@@ -2681,10 +2744,15 @@ function openContactModal(contact, openTab) {
         if (chainDropAwaiting) chainDropAwaiting.style.display = 'none';
         if (chainDropIncoming) chainDropIncoming.style.display = 'none';
         if (chainDropRejected) chainDropRejected.style.display = 'none';
+        var chainDropEmpty = document.getElementById('chain_drop_empty');
         currentChainDropProposalId = null;
 
+        // Section is always visible; which sub-state shows depends on the
+        // chain/proposal state. Default is the empty placeholder.
+        chainDropSection.style.display = 'block';
+        var showEmpty = true;
+
         if (contact.chain_drop_proposal) {
-            chainDropSection.style.display = 'block';
             var proposal = contact.chain_drop_proposal;
             if (proposal.direction === 'incoming' && proposal.status === 'pending') {
                 if (chainDropIncoming) {
@@ -2695,6 +2763,7 @@ function openContactModal(contact, openTab) {
                     }
                 }
                 currentChainDropProposalId = proposal.proposal_id;
+                showEmpty = false;
             } else if (proposal.direction === 'outgoing' && proposal.status === 'pending') {
                 if (chainDropAwaiting) {
                     chainDropAwaiting.style.display = 'block';
@@ -2703,15 +2772,18 @@ function openContactModal(contact, openTab) {
                         awaitingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
                     }
                 }
+                showEmpty = false;
             } else if (proposal.status === 'rejected') {
                 if (chainDropRejected) chainDropRejected.style.display = 'block';
+                showEmpty = false;
             }
         } else if (contact.valid_chain === false || contact.valid_chain === 0) {
             // Chain is invalid but no proposal exists yet — show propose button
-            chainDropSection.style.display = 'block';
             if (chainDropPropose) chainDropPropose.style.display = 'block';
-        } else {
-            chainDropSection.style.display = 'none';
+            showEmpty = false;
+        }
+        if (chainDropEmpty) {
+            chainDropEmpty.style.display = showEmpty ? 'block' : 'none';
         }
 
         // Populate chain gap details if available
@@ -2813,23 +2885,49 @@ function openContactModal(contact, openTab) {
     if (transactions.length === 0) {
         transactionsEl.innerHTML = '<p class="no-transactions">No recent transactions with this contact.</p>';
     } else {
-        var html = '';
+        var statusIconMap = {
+            'pending':   'fa-hourglass-half',
+            'sending':   'fa-spinner',
+            'sent':      'fa-check',
+            'accepted':  'fa-check',
+            'completed': 'fa-check-double',
+            'rejected':  'fa-times',
+            'cancelled': 'fa-ban'
+        };
+        var html = '<table class="contacts-table tx-table contact-modal-tx-table">';
+        html += '<thead><tr>'
+             +  '<th class="col-tx-status-icon" aria-label="Status"></th>'
+             +  '<th class="col-tx-desc">Description</th>'
+             +  '<th class="col-tx-amount text-right">Amount</th>'
+             +  '</tr></thead>';
+        html += '<tbody>';
         for (var i = 0; i < transactions.length; i++) {
             var tx = transactions[i];
-            var typeClass = tx.type === 'sent' ? 'tx-sent' : 'tx-received';
-            var typeIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
-            var typeLabel = tx.type === 'sent' ? 'Sent' : 'Received';
-            var amountPrefix = tx.type === 'sent' ? '-' : '+';
+            var isSent = tx.type === 'sent';
+            var amountClass = isSent ? 'transaction-sent' : 'transaction-received';
+            var amountPrefix = isSent ? '−' : '+';
+            var status = (tx.status || '').toLowerCase();
+            var inProgress = (status !== 'completed' && status !== 'rejected' && status !== 'cancelled');
+            var statusIcon = statusIconMap[status] || 'fa-circle';
+            var statusTitle = status ? (status.charAt(0).toUpperCase() + status.slice(1)) : 'Unknown';
+            var description = tx.description || '';
+            var rowClass = 'tx-row cursor-pointer' + (inProgress ? ' tx-item-in-progress' : '');
 
-            html += '<div class="transaction-item ' + typeClass + ' cursor-pointer" data-action="showContactTxDetail" data-index="' + i + '" title="Click for details">';
-            html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
-            html += '<div class="tx-details">';
-            html += '<div class="tx-type">' + typeLabel + '</div>';
-            html += '<div class="tx-date">' + escapeHtml(tx.date || 'Unknown date') + '</div>';
-            html += '</div>';
-            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right chevron-indicator"></i></div>';
-            html += '</div>';
+            html += '<tr class="' + rowClass + '" data-action="showContactTxDetail" data-index="' + i + '" title="' + escapeHtml(tx.date || '') + ' — click for details">';
+            html += '<td class="col-tx-status-icon text-center">';
+            html += '<span class="tx-status-icon tx-status-' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">';
+            html += '<i class="fas ' + statusIcon + '"></i>';
+            html += '</span>';
+            html += '</td>';
+            html += '<td class="col-tx-desc" title="' + escapeHtml(description || 'No description') + '">';
+            html += escapeHtml(description || '—');
+            html += '</td>';
+            html += '<td class="col-number col-tx-amount text-right ' + amountClass + '">';
+            html += amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD');
+            html += '</td>';
+            html += '</tr>';
         }
+        html += '</tbody></table>';
         transactionsEl.innerHTML = html;
     }
 
@@ -2858,7 +2956,12 @@ function openContactModal(contact, openTab) {
  */
 function closeContactModal() {
     var el = document.getElementById('contactModal');
-    if (el) el.style.display = 'none';
+    if (el) {
+        el.style.display = 'none';
+        // Clear the stack marker set by jumpToContactFromTxModal so the next
+        // time the contact modal opens standalone it isn't stuck on top.
+        el.classList.remove('modal-stack-top');
+    }
 }
 
 /**
@@ -3334,16 +3437,22 @@ function showModalTab(tabId, button) {
         targetTab.classList.add('active');
     }
 
-    // Activate the clicked button or find matching button
+    // Activate the clicked button or find matching button. The fallback
+    // lookup uses data-tab (the current markup); the old onclick= attribute
+    // lookup was a dead path since the tab buttons moved to data-action
+    // dispatch — that's why the Status tab lost its blue underline after
+    // the "Check Status" reload path called showModalTab(tabId, null).
     if (button) {
         button.classList.add('active');
     } else {
-        // Find the button that corresponds to this tab
-        var tabButtons = document.querySelectorAll('.modal-tab');
-        for (var k = 0; k < tabButtons.length; k++) {
-            var btn = tabButtons[k];
-            var onclickStr = btn.getAttribute('onclick') || '';
-            if (onclickStr.indexOf(tabId) !== -1) {
+        var matchTab = tabId.replace(/-tab$/, '');
+        var tabButtonsAll = document.querySelectorAll('.modal-tab');
+        for (var k = 0; k < tabButtonsAll.length; k++) {
+            var btn = tabButtonsAll[k];
+            var dataTab = btn.getAttribute('data-tab') || '';
+            // data-tab stores either "status-tab" or just "status" in older
+            // markup — accept both.
+            if (dataTab === tabId || dataTab === matchTab) {
                 btn.classList.add('active');
                 break;
             }
@@ -3630,7 +3739,7 @@ function resetChainDropProposeButton() {
     var btnText = document.getElementById('chain_drop_propose_text');
     if (btn) btn.disabled = false;
     if (icon) icon.className = 'fas fa-handshake';
-    if (btnText) btnText.textContent = 'Propose Dropping Missing Transaction(s)';
+    if (btnText) btnText.textContent = 'Propose Tx Drop(s)';
 }
 
 /**
@@ -6020,6 +6129,17 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openTransactionModalByTxid(el.getAttribute('data-txid'));
         },
         'closeTransactionModal': function() { closeTransactionModal(); },
+        // Jump from the Transaction Details modal to a contact's detail modal
+        // (e.g. clicking the "To" / "From" party, or a P2P end recipient).
+        // The contact modal is stacked on top of the tx modal so closing it
+        // returns the user to the transaction they were investigating.
+        'jumpToContactFromTxModal': function(el) {
+            var cid = el.getAttribute('data-contact-id');
+            if (!cid) return;
+            var contactModalEl = document.getElementById('contactModal');
+            if (contactModalEl) contactModalEl.classList.add('modal-stack-top');
+            openContactByContactId(cid);
+        },
 
         // P2P transaction approval
         'approveP2pTransaction': function(el) {
