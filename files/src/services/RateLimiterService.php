@@ -111,8 +111,11 @@ class RateLimiterService implements RateLimiterServiceInterface {
         $attempts = $record['attempts'] + 1;
 
         if ($attempts > $maxAttempts) {
-            // Block the user
-            $blockedUntil = date(Constants::DISPLAY_DATE_FORMAT, time() + $blockSeconds);
+            // Block the user. Use the MySQL DATETIME wire format ('Y-m-d H:i:s')
+            // — NOT DISPLAY_DATE_FORMAT, which is the European d/m/Y H:i:s
+            // presentation format and causes SQLSTATE[22007] 1292 when written
+            // back into the rate_limits.blocked_until DATETIME column.
+            $blockedUntil = date('Y-m-d H:i:s', time() + $blockSeconds);
             $this->repository->blockIdentifier($identifier, $action, $attempts, $blockedUntil);
 
             return [

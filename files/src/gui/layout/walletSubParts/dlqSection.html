@@ -165,8 +165,19 @@
                     $ts = strtotime($createdAt);
                     $dateDisplay = $ts ? date(displayDateFormat(), $ts) : $createdAt;
                 }
+
+                // Pull the txid out of transaction-like payloads so the
+                // Failed Message Details modal can show it and let the
+                // user click through to the full tx. The DLQ repository
+                // already json_decodes payload into an array — don't
+                // re-decode (fatals with TypeError). Silent on any shape
+                // surprise so the DLQ table still renders.
+                $dlqTxid = '';
+                if (!empty($item['payload']) && is_array($item['payload']) && in_array($msgType, ['transaction', 'p2p', 'rp2p', 'payment_request'], true)) {
+                    $dlqTxid = $item['payload']['txid'] ?? '';
+                }
             ?>
-            <tr class="dlq-row cursor-pointer" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>" data-action="openDlqModal" data-dlq-type="<?php echo htmlspecialchars($typeInfo['label']); ?>" data-dlq-type-class="<?php echo htmlspecialchars($typeInfo['class']); ?>" data-dlq-type-icon="<?php echo htmlspecialchars($typeInfo['icon']); ?>" data-dlq-recipient="<?php echo htmlspecialchars($recipient); ?>" data-dlq-reason="<?php echo htmlspecialchars($reason); ?>" data-dlq-date="<?php echo htmlspecialchars($dateDisplay); ?>" data-dlq-can-retry="<?php echo $canRetry ? '1' : '0'; ?>" data-dlq-can-act="<?php echo $canAct ? '1' : '0'; ?>" title="Click for details">
+            <tr class="dlq-row cursor-pointer" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>" data-action="openDlqModal" data-dlq-type="<?php echo htmlspecialchars($typeInfo['label']); ?>" data-dlq-type-class="<?php echo htmlspecialchars($typeInfo['class']); ?>" data-dlq-type-icon="<?php echo htmlspecialchars($typeInfo['icon']); ?>" data-dlq-recipient="<?php echo htmlspecialchars($recipient); ?>" data-dlq-reason="<?php echo htmlspecialchars($reason); ?>" data-dlq-date="<?php echo htmlspecialchars($dateDisplay); ?>" data-dlq-can-retry="<?php echo $canRetry ? '1' : '0'; ?>" data-dlq-can-act="<?php echo $canAct ? '1' : '0'; ?>" data-dlq-txid="<?php echo htmlspecialchars($dlqTxid); ?>" title="Click for details">
                 <td class="col-dlq-type text-center">
                     <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
                         <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>

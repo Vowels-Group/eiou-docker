@@ -335,6 +335,8 @@ $prStatusIcons = [
             </tbody>
         </table>
     </div>
+    <!-- Paginator controls — populated by Paginator.create('payment-requests', …) -->
+    <div id="pr-paginator" class="paginator-container"></div>
     <?php endif; ?>
 
     <?php if (empty($pendingIncoming) && empty($pendingOutgoing) && empty($resolvedAll)): ?>

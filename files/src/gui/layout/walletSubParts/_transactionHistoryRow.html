@@ -1,0 +1,121 @@
+<?php
+// Render a single Recent Transactions table row. Included in a loop by
+// transactionHistory.html for the initial page render, and included once
+// per row by the loadMoreTransactions AJAX handler for "Load older" fetches.
+// Expected in-scope variables:
+//   $tx                   (array)  — formatted transaction (see TransactionFormatter::formatHistory)
+//   $index                (int)    — row index, consumed by openTransactionModal(transactionData[index])
+//   $statusIcons          (array)  — status => Font Awesome icon class map
+//                                      (must include 'sending' => 'fa-paper-plane' — see main template)
+//   $txContactsByName     (array)  — lowercased name => contact row
+//   $txContactsByAddress  (array)  — address       => contact row
+//   $txContactsByHash     (array)  — pubkey_hash   => contact row
+//   $txAvatarStyle        (string) — avatar style from user settings
+//   $dlqActiveTxMessageIds(array)  — active DLQ message ids for the delivery-failed marker
+$isSent      = ($tx['type'] === 'sent');
+$isP2P       = (($tx['tx_type'] ?? '') === 'p2p');
+$isContactReq = (($tx['tx_type'] ?? '') === 'contact');
+$statusLower = strtolower($tx['status'] ?? '');
+$inProgress  = ($statusLower !== 'completed' && $statusLower !== 'rejected' && $statusLower !== 'cancelled');
+
+$cpAddr  = $isSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+$cpTxHash = $isSent
+    ? ($tx['receiver_public_key_hash'] ?? '')
+    : ($tx['sender_public_key_hash'] ?? '');
+$cpName  = !empty($tx['counterparty_name']) ? $tx['counterparty_name'] : null;
+// Resolve contact in priority order: name → address → pubkey_hash.
+// (See transactionHistory.html's original foreach for the full rationale.)
+$cpContact = null;
+if ($cpName && isset($txContactsByName[strtolower($cpName)])) {
+    $cpContact = $txContactsByName[strtolower($cpName)];
+} elseif ($cpAddr && isset($txContactsByAddress[$cpAddr])) {
+    $cpContact = $txContactsByAddress[$cpAddr];
+} elseif ($cpTxHash && isset($txContactsByHash[$cpTxHash])) {
+    $cpContact = $txContactsByHash[$cpTxHash];
+}
+if ($cpContact && empty($cpName) && !empty($cpContact['name'])) {
+    $cpName = $cpContact['name'];
+}
+$cpHash  = $cpContact['pubkey_hash'] ?? '';
+
+if ($isSent && $isP2P) {
+    $endAddr = $tx['end_recipient_address'] ?? '';
+} elseif (!$isSent && $isP2P) {
+    $endAddr = $tx['initial_sender_address'] ?? '';
+} else {
+    $endAddr = '';
+}
+$endContact = $endAddr && isset($txContactsByAddress[$endAddr]) ? $txContactsByAddress[$endAddr] : null;
+$endName = $endContact['name'] ?? null;
+$endHash = $endContact['pubkey_hash'] ?? '';
+
+$description = !empty($tx['description']) ? $tx['description'] : '';
+
+if ($isContactReq) { $typeKey = 'contact'; $typeLabel = 'Contact'; $typeIcon = 'fa-user-plus'; }
+elseif ($isP2P)    { $typeKey = 'p2p';     $typeLabel = 'P2P';     $typeIcon = 'fa-network-wired'; }
+else               { $typeKey = 'direct';  $typeLabel = 'Direct';  $typeIcon = 'fa-exchange-alt'; }
+
+$txidInDlq = false;
+if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+    foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+        if (strpos($dlqMsgId, $tx['txid']) !== false) { $txidInDlq = true; break; }
+    }
+}
+
+$statusIcon = $statusIcons[$statusLower] ?? 'fa-circle';
+?>
+<tr class="tx-row cursor-pointer<?php echo $inProgress ? ' tx-item-in-progress' : ''; ?>"
+    data-action="openTransactionModal"
+    data-index="<?php echo $index; ?>"
+    title="Click for details"
+    data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>"
+    data-tx-name="<?php echo htmlspecialchars(strtolower($cpName ?? '')); ?>"
+    data-tx-desc="<?php echo htmlspecialchars(strtolower($description)); ?>"
+    data-tx-address="<?php echo htmlspecialchars(strtolower($cpAddr)); ?>"
+    data-direction="<?php echo $isSent ? 'sent' : 'received'; ?>"
+    data-tx-type="<?php echo $typeKey; ?>"
+    data-status="<?php echo htmlspecialchars($statusLower); ?>"
+    data-amount="<?php echo (float) ($tx['amount'] ?? 0); ?>"
+    data-date="<?php echo !empty($tx['date']) ? (int) strtotime($tx['date']) : 0; ?>">
+    <td class="col-tx-status-icon text-center">
+        <?php if ($txidInDlq): ?>
+            <a href="#dlq" class="dlq-tx-icon" title="Delivery failed — see Failed Messages to retry or abandon" data-stop-propagation="true"><i class="fas fa-inbox"></i></a>
+        <?php else: ?>
+            <span class="tx-status-icon tx-status-<?php echo htmlspecialchars($statusLower); ?>" title="<?php echo ucfirst(htmlspecialchars($statusLower)); ?>">
+                <i class="fas <?php echo $statusIcon; ?>"></i>
+            </span>
+        <?php endif; ?>
+    </td>
+    <td class="col-name">
+        <div class="contact-name-cell">
+            <?php if ($cpContact): ?>
+                <?php echo renderContactAvatar($cpHash, $cpName ?? $cpAddr ?? '', $txAvatarStyle); ?>
+            <?php endif; ?>
+            <span class="contact-name-text"><?php echo htmlspecialchars($cpName ?: 'Unknown'); ?></span>
+        </div>
+    </td>
+    <td class="col-number col-tx-amount text-right <?php echo $isSent ? 'transaction-sent' : 'transaction-received'; ?>">
+        <?php echo ($isSent ? '−' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+    </td>
+    <td class="col-tx-desc" title="<?php echo htmlspecialchars($description ?: 'No description'); ?>">
+        <?php echo htmlspecialchars($description ?: '—'); ?>
+    </td>
+    <td class="col-tx-type text-center">
+        <span class="tx-type-badge tx-type-<?php echo $typeKey; ?>"><i class="fas <?php echo $typeIcon; ?>"></i> <?php echo $typeLabel; ?></span>
+    </td>
+    <td class="col-tx-endpoint" title="<?php echo htmlspecialchars($endAddr ? ($endName ? $endName . ' — ' . $endAddr : $endAddr) : ''); ?>">
+        <?php if ($endAddr): ?>
+            <div class="contact-name-cell">
+                <?php if ($endContact): ?>
+                    <?php echo renderContactAvatar($endHash, $endName ?? $endAddr, $txAvatarStyle); ?>
+                <?php endif; ?>
+                <span class="contact-name-text"><?php echo htmlspecialchars($endName ?: (substr($endAddr, 0, 18) . (strlen($endAddr) > 18 ? '…' : ''))); ?></span>
+            </div>
+        <?php else: ?>
+            <span class="text-muted">—</span>
+        <?php endif; ?>
+    </td>
+    <td class="col-tx-date text-right">
+        <?php echo htmlspecialchars(formatTimestamp($tx['date'])); ?>
+    </td>
+</tr>

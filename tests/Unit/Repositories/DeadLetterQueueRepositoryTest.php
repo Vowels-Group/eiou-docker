@@ -487,6 +487,71 @@ class DeadLetterQueueRepositoryTest extends TestCase
     }
 
     // =========================================================================
+    // markResolvedByTxid() Tests
+    // =========================================================================
+
+    /**
+     * Empty txid short-circuits — no DB call, returns 0.
+     *
+     * Prevents a `LIKE '%%'` sweep from marking EVERY pending
+     * transaction-type DLQ row resolved if the caller ever passes an empty
+     * string (e.g. tx with no txid populated, defensive edge).
+     */
+    public function testMarkResolvedByTxidSkipsEmptyTxid(): void
+    {
+        $this->pdo->expects($this->never())->method('prepare');
+
+        $result = $this->repository->markResolvedByTxid('');
+
+        $this->assertSame(0, $result);
+    }
+
+    /**
+     * Valid txid issues a single UPDATE with the LIKE pattern and returns
+     * the row count reported by PDO. Covers the happy path used by
+     * MessageService::resolveDlqForCompletedTxid().
+     */
+    public function testMarkResolvedByTxidReturnsRowCount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('bindValue')
+            ->with(':pattern', '%abc123%');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('rowCount')
+            ->willReturn(2);
+
+        $result = $this->repository->markResolvedByTxid('abc123');
+
+        $this->assertSame(2, $result);
+    }
+
+    /**
+     * PDOException during prepare / execute is swallowed by
+     * AbstractRepository::execute() which returns false — markResolvedByTxid
+     * must then return 0 so callers can treat "nothing resolved" and
+     * "DB error" uniformly (both are non-fatal for the completion path).
+     */
+    public function testMarkResolvedByTxidReturnsZeroOnFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willThrowException(new \PDOException('Database error'));
+
+        $result = $this->repository->markResolvedByTxid('abc123');
+
+        $this->assertSame(0, $result);
+    }
+
+    // =========================================================================
     // markAbandoned() Tests
     // =========================================================================
 

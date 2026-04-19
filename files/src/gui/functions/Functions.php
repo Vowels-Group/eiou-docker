@@ -241,6 +241,150 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // AJAX-only "Load older" handlers for the three paginated tables
+    // (Recent Transactions, Contacts, Payment Requests). Each renders the
+    // next chunk of rows as an HTML fragment so the client can append
+    // directly to the existing <tbody> without duplicating the row
+    // template in JS.
+    if (in_array($action, ['loadMoreTransactions', 'loadMoreContacts', 'loadMorePaymentRequests'], true)) {
+        header('Content-Type: application/json');
+        try {
+            if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
+                echo json_encode(['success' => false, 'error' => 'csrf_error']);
+                exit;
+            }
+            $offset = max(0, (int) ($_POST['offset'] ?? 0));
+            $limit  = (int) $user->getDisplayRecentTransactionsLimit();
+            if ($limit <= 0) { $limit = 10; }
+
+            if ($action === 'loadMoreTransactions') {
+                $transactions = $transactionService->getTransactionHistory($limit, $offset);
+                $exhausted = count($transactions) < $limit;
+
+                // Rebuild the same lookup maps the full template uses so
+                // avatar resolution, contact names, and counterparty links
+                // match the initial server render 1:1. Must pass the
+                // *enriched* arrays (after contactBalanceConversion) — the
+                // raw contacts table has no http/https/tor columns (those
+                // live in the addresses table and are merged in by
+                // contactBalanceConversion), so passing the raw arrays
+                // would leave byAddress empty and break avatar lookup for
+                // any tx whose counterparty_name is NULL.
+                $contactsByStatus = $contactService->getContactsGroupedByStatus();
+                $contactTxLimit   = 0; // Don't need transactions here; set 0 to avoid batch fetching.
+                $acceptedEnriched     = $transactionService->contactBalanceConversion($contactsByStatus['accepted']     ?? [], $contactTxLimit);
+                $pendingUserEnriched  = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'] ?? [], $contactTxLimit);
+                $blockedEnriched      = $transactionService->contactBalanceConversion($contactsByStatus['blocked']      ?? [], $contactTxLimit);
+                $lookups = buildTxContactLookupMaps(
+                    $acceptedEnriched,
+                    $pendingUserEnriched,
+                    $blockedEnriched
+                );
+                $txContactsByAddress   = $lookups['byAddress'];
+                $txContactsByName      = $lookups['byName'];
+                $txContactsByHash      = $lookups['byHash'];
+                $txAvatarStyle         = $user->getContactAvatarStyle();
+                $dlqActiveTxMessageIds = fetchDlqActiveTxMessageIds($serviceContainer);
+                $statusIcons = [
+                    'pending'   => 'fa-hourglass-half',
+                    'sending'   => 'fa-paper-plane',
+                    'sent'      => 'fa-check',
+                    'accepted'  => 'fa-check',
+                    'completed' => 'fa-check-double',
+                    'rejected'  => 'fa-times',
+                    'cancelled' => 'fa-ban',
+                ];
+
+                // Build the JSON row array that matches transactionData[] —
+                // the client will concat() this onto the in-memory array so
+                // openTransactionModal(index) keeps working for newly
+                // appended rows.
+                $rowDataOut = [];
+                ob_start();
+                foreach ($transactions as $i => $tx) {
+                    $index = $offset + $i;
+                    require __DIR__ . '/../layout/walletSubParts/_transactionHistoryRow.html';
+
+                    $inDlq = false;
+                    if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                        foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                            if (strpos($dlqMsgId, $tx['txid']) !== false) { $inDlq = true; break; }
+                        }
+                    }
+                    $isTxSent = (($tx['type'] ?? '') === 'sent');
+                    $cpAddr2 = $isTxSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+                    $cpHash2 = $isTxSent ? ($tx['receiver_public_key_hash'] ?? '') : ($tx['sender_public_key_hash'] ?? '');
+                    $cpName2 = $tx['counterparty_name'] ?? '';
+                    $cpContact2 = null;
+                    if ($cpName2 && isset($txContactsByName[strtolower($cpName2)])) {
+                        $cpContact2 = $txContactsByName[strtolower($cpName2)];
+                    } elseif ($cpAddr2 && isset($txContactsByAddress[$cpAddr2])) {
+                        $cpContact2 = $txContactsByAddress[$cpAddr2];
+                    } elseif ($cpHash2 && isset($txContactsByHash[$cpHash2])) {
+                        $cpContact2 = $txContactsByHash[$cpHash2];
+                    }
+                    $endAddr2 = $isTxSent ? ($tx['end_recipient_address'] ?? '') : ($tx['initial_sender_address'] ?? '');
+                    $endContact2 = ($endAddr2 && isset($txContactsByAddress[$endAddr2])) ? $txContactsByAddress[$endAddr2] : null;
+
+                    $rowDataOut[] = [
+                        'txid' => $tx['txid'] ?? '',
+                        'tx_type' => $tx['tx_type'] ?? 'standard',
+                        'direction' => $tx['direction'] ?? $tx['type'],
+                        'status' => $tx['status'] ?? 'completed',
+                        'date' => !empty($tx['date']) ? formatTimestamp($tx['date']) : '',
+                        'type' => $tx['type'] ?? '',
+                        'amount' => $tx['amount'] ?? 0,
+                        'currency' => $tx['currency'] ?? 'USD',
+                        'counterparty' => $tx['counterparty'] ?? '',
+                        'counterparty_address' => $tx['counterparty_address'] ?? '',
+                        'counterparty_name' => $tx['counterparty_name'] ?? '',
+                        'counterparty_contact_id' => $cpContact2['contact_id'] ?? null,
+                        'sender_address' => $tx['sender_address'] ?? '',
+                        'receiver_address' => $tx['receiver_address'] ?? '',
+                        'memo' => $tx['memo'] ?? '',
+                        'description' => $tx['description'] ?? '',
+                        'previous_txid' => $tx['previous_txid'] ?? '',
+                        'initial_sender_address' => $tx['initial_sender_address'] ?? null,
+                        'end_recipient_address' => $tx['end_recipient_address'] ?? null,
+                        'p2p_destination' => $tx['p2p_destination'] ?? null,
+                        'p2p_destination_contact_id' => $endContact2['contact_id'] ?? null,
+                        'p2p_destination_contact_name' => $endContact2['name'] ?? null,
+                        'p2p_amount' => $tx['p2p_amount'] ?? null,
+                        'p2p_fee' => $tx['p2p_fee'] ?? null,
+                        'in_dlq' => $inDlq,
+                    ];
+                }
+                $html = ob_get_clean();
+
+                echo json_encode([
+                    'success'   => true,
+                    'html'      => $html,
+                    'rows'      => $rowDataOut,
+                    'exhausted' => $exhausted,
+                ]);
+                exit;
+            }
+
+            // loadMoreContacts / loadMorePaymentRequests — intentionally
+            // not yet implemented server-side. Phase 1 pagination of the
+            // already-rendered rows works for both tables; "Load older"
+            // is deferred until the corresponding row-template partials
+            // and repository offset methods land. Return a soft error so
+            // the client can toast and move on without wedging.
+            if ($action === 'loadMoreContacts' || $action === 'loadMorePaymentRequests') {
+                echo json_encode(['success' => false, 'error' => 'not_implemented', 'message' => 'Load older is not yet available for this table.']);
+                exit;
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'load_more_handler',
+                'action'  => $action,
+            ]);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            exit;
+        }
+    }
+
     // AJAX-only DLQ actions (returns JSON, exits immediately)
     if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {
@@ -350,7 +494,14 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
 
 $recentTransactionsLimit = $user->getDisplayRecentTransactionsLimit();
 $transactions = $transactionService->getTransactionHistory($recentTransactionsLimit);
-$inProgressTransactions = $transactionService->getInProgressTransactions(5);
+// Scope the In-Progress banner to the same user-configured row limit as
+// the Recent Transactions view. Was hard-coded at 5, which undercounted
+// whenever a bulk batch or chain-gap backlog produced more in-flight
+// sends than that — users saw "5" on the badge with no way to see the
+// rest without opening the DB. getMaxOutput() already caps the Recent
+// Transactions table, the contact modal transactions list, and payment
+// request history, so the three views stay consistent.
+$inProgressTransactions = $transactionService->getInProgressTransactions($recentTransactionsLimit);
 
 // Update check status (reads cache only — never triggers a new check on page load)
 $updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
