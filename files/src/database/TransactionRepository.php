@@ -659,9 +659,10 @@ class TransactionRepository extends AbstractRepository {
                       OR LOWER(COALESCE(t.receiver_address, '')) LIKE ?
                       OR LOWER(COALESCE(t.end_recipient_address, '')) LIKE ?
                       OR LOWER(COALESCE(t.initial_sender_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.txid, '')) LIKE ?
                     )";
 
-        $additional = [$like, $like, $like, $like, $like, $like, $like, $like, $like];
+        $additional = [$like, $like, $like, $like, $like, $like, $like, $like, $like, $like];
 
         // status is a direct column filter
         if ($status !== null && $status !== '') {

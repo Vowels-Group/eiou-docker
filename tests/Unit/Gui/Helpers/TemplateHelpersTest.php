@@ -147,4 +147,65 @@ class TemplateHelpersTest extends TestCase
         $this->assertArrayNotHasKey('', $maps['byAddress']);
         $this->assertSame($contact, $maps['byHash']['onlyhash']);
     }
+
+    // =========================================================================
+    // formatTimestamp() — microsecond preservation
+    // =========================================================================
+
+    /**
+     * Regression guard: the DLQ "Added" column was calling
+     * `date(displayDateFormat(), strtotime($createdAt))` which strips
+     * fractional seconds because strtotime() returns an integer. Fix
+     * was to route DLQ through formatTimestamp() which uses DateTime
+     * + the `Y-m-d H:i:s.u` parse format. This test locks that in.
+     */
+    public function testFormatTimestampPreservesMicroseconds(): void
+    {
+        // Configure the user's display format via the in-memory setter
+        // so we can assert the micros survive the round-trip. set() is
+        // non-persistent (mutates only the UserContext $userData map in
+        // memory), so no test teardown needed beyond restoring the key.
+        $user = \Eiou\Core\UserContext::getInstance();
+        $original = $user->get('displayDateFormat');
+        try {
+            $user->set('displayDateFormat', 'Y-m-d H:i:s.u');
+            $formatted = formatTimestamp('2026-04-19 14:01:30.123456');
+            $this->assertStringEndsWith('.123456', $formatted, 'Microseconds must survive formatTimestamp');
+        } finally {
+            if ($original === null) {
+                // No prior value — leave the key unset so subsequent
+                // tests fall back to Constants::DISPLAY_DATE_FORMAT.
+                $refl = new \ReflectionObject($user);
+                $prop = $refl->getProperty('userData');
+                $prop->setAccessible(true);
+                $data = $prop->getValue($user);
+                unset($data['displayDateFormat']);
+                $prop->setValue($user, $data);
+            } else {
+                $user->set('displayDateFormat', $original);
+            }
+        }
+    }
+
+    public function testFormatTimestampHandlesTimestampWithoutMicros(): void
+    {
+        $user = \Eiou\Core\UserContext::getInstance();
+        $original = $user->get('displayDateFormat');
+        try {
+            $user->set('displayDateFormat', 'Y-m-d H:i:s');
+            $formatted = formatTimestamp('2026-04-19 14:01:30');
+            $this->assertSame('2026-04-19 14:01:30', $formatted);
+        } finally {
+            if ($original === null) {
+                $refl = new \ReflectionObject($user);
+                $prop = $refl->getProperty('userData');
+                $prop->setAccessible(true);
+                $data = $prop->getValue($user);
+                unset($data['displayDateFormat']);
+                $prop->setValue($user, $data);
+            } else {
+                $user->set('displayDateFormat', $original);
+            }
+        }
+    }
 }

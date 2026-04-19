@@ -23,8 +23,16 @@
         <div class="form-group position-relative">
             <label for="recipient-search">Recipient:</label>
             <input type="hidden" id="recipient" name="recipient" value="">
-            <input type="text" id="recipient-search" placeholder="Search contacts by name or address..." autocomplete="off"
-                   data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
+            <!-- Match the search-icon styling used on every other search
+                 bar in the wallet (Recent Transactions / Contacts / DLQ /
+                 Payment Requests). The dropdown below is still anchored
+                 to the form-group via position:absolute + left/right:0,
+                 so wrapping the input alone doesn't affect its layout. -->
+            <div class="search-icon-wrapper">
+                <i class="fas fa-search search-icon-positioned"></i>
+                <input type="text" id="recipient-search" class="search-input-with-icon" placeholder="Search contacts by name or address..." autocomplete="off"
+                       data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
+            </div>
             <div id="recipient-dropdown" class="recipient-dropdown">
                 <?php foreach ($acceptedContacts as $contact): ?>
                     <?php
