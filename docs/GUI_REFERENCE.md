@@ -236,7 +236,10 @@ Handles settings and debug operations.
 
 | Category | Settings |
 |----------|----------|
-| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `autoRejectUnknownCurrency`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
+| Feature Toggles → Contacts | `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoAcceptRestoredContact`, `autoRejectUnknownCurrency` |
+| Feature Toggles → Transactions | `autoAcceptTransaction`, `hopBudgetRandomized`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard` |
+| Feature Toggles → GUI | `autoRefreshEnabled`, `hideEmptyGuiSections` |
+| Feature Toggles → System | `apiEnabled`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
 | Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
 | Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
@@ -593,9 +596,9 @@ The Dead Letter Queue section displays messages that could not be delivered afte
 
 **Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
 
-**Table Columns:** Type, Recipient, Failure Reason (truncated), Added, Status, Actions. Uses `contacts-table` chrome with 60vh scrollable wrapper. Clicking any row opens a detail modal with all fields + Retry/Abandon buttons.
+**Table Columns:** Status icon (leading, slim), Type, Recipient, Failure Reason (truncated), Added, Actions. Uses `contacts-table` chrome with 60vh scrollable wrapper. Clicking any row opens a detail modal with all fields + Retry/Abandon buttons. The leading status-icon column carries pending / retrying / resolved / abandoned state via `fa-hourglass-half` / `fa-sync-alt fa-spin` / `fa-check-double` / `fa-ban` — resolved and abandoned colours follow the user-selected status colour scheme. The legacy dedicated "Status" column was removed: the Actions cell carries "Delivered" / "Abandoned" text for terminal rows and the icon + row-click modal cover the rest.
 
-**Mobile (≤600px):** Shows Type + Recipient. Tap row for detail modal with full info and actions. Action buttons and status collapse to icon-only at ≤900px.
+**Mobile (≤600px):** Shows status icon + Type + Recipient (the generic `.contacts-table` rule hiding cols 3+ is overridden here so the recipient stays visible alongside the icon column). Tap row for detail modal with full info and actions. Action buttons collapse to icon-only at ≤900px.
 
 **Actions per row:**
 
@@ -638,6 +641,8 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 **Settings Form:**
 - Basic wallet settings (currency, fee, credit limit, transport mode, display name, color schemes)
 - Collapsible Advanced Settings with category dropdown. Categories: **Feature Toggles**, **Currency**, **Display**, **Backup & Logging**, **Data Retention**, **Sync**, **Network**, **Rate Limiting**, **GUI Security**, **Reset to Defaults**
+- **Feature Toggles** category is internally subdivided into four groups via `<h5 class="settings-group-heading">` dividers: **Contacts**, **Transactions**, **GUI**, **System**. Each group is its own `.settings-grid` so the 3-column layout applies per group (keeps a 2-item group aligned column-wise with a 5-item group — `auto-fill` preserves empty slots)
+- **GUI subsection** hosts `autoRefreshEnabled` and `hideEmptyGuiSections`. `hideEmptyGuiSections` (default OFF) hides the Failed Messages / Payment Requests / Pending Contact Requests sections when their lists are empty — when OFF (the default) these sections render an empty-state panel so users know the feature exists
 - **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list
 - **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
 - Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state

@@ -6425,8 +6425,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('autoChainDropPropose', 'autoChainDropProposeStatus');
     initToggleSwitch('autoChainDropAccept', 'autoChainDropAcceptStatus');
     initToggleSwitch('autoChainDropAcceptGuard', 'autoChainDropAcceptGuardStatus');
+    initToggleSwitch('autoAcceptTransaction', 'autoAcceptTransactionStatus');
     initToggleSwitch('autoAcceptRestoredContact', 'autoAcceptRestoredContactStatus');
+    initToggleSwitch('autoRejectUnknownCurrency', 'autoRejectUnknownCurrencyStatus');
     initToggleSwitch('hopBudgetRandomized', 'hopBudgetRandomizedStatus');
+    initToggleSwitch('hideEmptyGuiSections', 'hideEmptyGuiSectionsStatus');
     initToggleSwitch('apiEnabled', 'apiEnabledStatus');
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initToggleSwitch('updateCheckEnabled', 'updateCheckEnabledStatus');
