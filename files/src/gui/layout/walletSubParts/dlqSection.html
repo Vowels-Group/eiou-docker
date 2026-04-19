@@ -172,11 +172,13 @@
                 $canAct      = in_array($status, ['pending', 'retrying'], true);
                 $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact', 'payment_request'], true);
 
-                $dateDisplay = '';
-                if ($createdAt) {
-                    $ts = strtotime($createdAt);
-                    $dateDisplay = $ts ? date(displayDateFormat(), $ts) : $createdAt;
-                }
+                // Use formatTimestamp() so microseconds survive the
+                // display round-trip — strtotime() returns an integer
+                // Unix timestamp that strips fractional seconds, which
+                // is why the Added column was rendering `.000000` for
+                // every row even though `created_at` is TIMESTAMP(6)
+                // on disk.
+                $dateDisplay = $createdAt ? formatTimestamp($createdAt) : '';
 
                 // Pull the txid out of transaction-like payloads so the
                 // Failed Message Details modal can show it and let the

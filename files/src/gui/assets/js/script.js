@@ -2520,11 +2520,17 @@ function filterTransactions() {
             // through Bob to Carol.
             var endName = item.getAttribute('data-tx-endpoint-name') || '';
             var endAddr = item.getAttribute('data-tx-endpoint-address') || '';
+            // txid is lowercased on the attribute for case-insensitive
+            // paste-a-hash lookup. Stored on data-txid (not a dedicated
+            // search attr) because the row already carries it for the
+            // detail-modal / DLQ cross-link paths.
+            var txidAttr = (item.getAttribute('data-txid') || '').toLowerCase();
             if (name.indexOf(term) === -1
                 && desc.indexOf(term) === -1
                 && addr.indexOf(term) === -1
                 && endName.indexOf(term) === -1
-                && endAddr.indexOf(term) === -1) {
+                && endAddr.indexOf(term) === -1
+                && txidAttr.indexOf(term) === -1) {
                 matches = false;
             }
         }
@@ -4751,14 +4757,22 @@ function toggleConfigSection(contentId, arrowId) {
     var content = document.getElementById(contentId);
     var arrow = document.getElementById(arrowId);
 
-    if (content && arrow) {
-        if (content.style.display === 'none') {
-            content.style.display = 'block';
-            arrow.style.transform = 'rotate(180deg)';
-        } else {
-            content.style.display = 'none';
-            arrow.style.transform = 'rotate(0deg)';
-        }
+    if (!content || !arrow) { return; }
+
+    // A section that ships hidden uses the `d-none` utility class, not
+    // an inline `style.display = "none"`. Reading `content.style.display`
+    // alone returns "" in that case, so the first click would fall into
+    // the "else" branch, set `display = "none"` (already hidden), and
+    // *only* the second click would flip into the visible branch.
+    // Fix: treat the d-none class as hidden too, and clear it on show.
+    var isHidden = content.classList.contains('d-none') || content.style.display === 'none';
+    if (isHidden) {
+        content.classList.remove('d-none');
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+    } else {
+        content.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
     }
 }
 

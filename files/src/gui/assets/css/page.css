@@ -3868,7 +3868,13 @@ tr.tx-item-in-progress > td:first-child {
     color: #6c757d;
 }
 
-.search-input-with-icon {
+/* Scoped through `.search-icon-wrapper` to bump specificity to 0,2,0 so
+   the asymmetric left padding wins against the generic `.form-group
+   input { padding: 0.8rem }` rule (same specificity, but this selector
+   appears later in the stylesheet, so it wins). Without this the New
+   eIOU recipient search renders with equal padding all round and the
+   magnifying-glass icon overlaps the placeholder text. */
+.search-icon-wrapper .search-input-with-icon {
     width: 100%;
     padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border: 1px solid #ced4da;
@@ -4241,6 +4247,15 @@ hr.currency-separator-double {
 
 
 .input-monospace { font-family: 'Courier New', monospace; }
+/* Let the placeholder render in the normal proportional font — the
+   monospace is meant for the *typed* address (legibility of long
+   base32 / hex strings), not for the prompt text. In monospace,
+   punctuation runs like `HTTP(S) address` look like they have a
+   double space after the parenthesis because monospace cells are
+   wider than the glyph; proportional font removes the illusion. */
+.input-monospace::placeholder {
+    font-family: inherit;
+}
 
 /* --- Transactions --- */
 .section-header-actions {

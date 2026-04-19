@@ -569,11 +569,11 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 **Search database (server-side):**
 - Button next to the search input, also triggered by pressing Enter in the search box.
-- Fires `searchTransactions` GUI AJAX action — backend runs a case-insensitive `LIKE %term%` across counterparty name (direct + P2P end-recipient + P2P initial-sender), transaction description, and all four address fields (sender/receiver/end-recipient/initial-sender).
+- Fires `searchTransactions` GUI AJAX action — backend runs a case-insensitive `LIKE %term%` across counterparty name (direct + P2P end-recipient + P2P initial-sender), transaction description, all four address fields (sender/receiver/end-recipient/initial-sender), and the txid. Pasting any full or partial hash surfaces the matching row, whether it's currently loaded in the paginator window or not.
 - Respects the current direction / type / status filter select values.
 - Hard-capped at 500 rows; response carries `{html, rows[], total, capped, cap}` so the banner can disclose when a broad query was clipped.
 - Result rows **replace** (not append to) the table body. Paginator moves to page 0, load-older is suspended (the result set is bounded by the server cap). Banner shows `N matches for "term" · Clear search` which reloads to the default view.
-- The local search input's live-keystroke filter also searches the P2P endpoint name/address via new `data-tx-endpoint-name` / `data-tx-endpoint-address` row attributes — so typing "carol" locally matches the same rows the database search would return for already-loaded transactions, and the "X transactions found" counter stays consistent after a database search.
+- The local search input's live-keystroke filter also searches the P2P endpoint name/address via new `data-tx-endpoint-name` / `data-tx-endpoint-address` row attributes and the txid (via `data-txid`, which was already present on the row for the detail-modal cross-link) — so typing "carol" or pasting a txid locally matches the same rows the database search would return for already-loaded transactions, and the "X transactions found" counter stays consistent after a database search.
 
 **Transaction Modal:**
 - Full transaction details
