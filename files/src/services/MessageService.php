@@ -124,6 +124,14 @@ class MessageService implements MessageServiceInterface {
     private ?\Eiou\Database\ContactCreditRepository $contactCreditRepository = null;
 
     /**
+     * @var \Eiou\Database\DeadLetterQueueRepository|null DLQ repository (optional, from RepositoryFactory).
+     * Used to auto-resolve any still-pending DLQ entries when the local
+     * tx transitions to `completed` — covers duplicate-queued retries
+     * for the same txid that succeeded via a different DLQ row.
+     */
+    private ?\Eiou\Database\DeadLetterQueueRepository $dlqRepository = null;
+
+    /**
      * @var TransactionContactRepository Transaction contact repository for contact transaction operations
      */
     private TransactionContactRepository $transactionContactRepository;
@@ -186,6 +194,26 @@ class MessageService implements MessageServiceInterface {
         if ($repositoryFactory !== null) {
             $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
             $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
+            $this->dlqRepository = $repositoryFactory->get(\Eiou\Database\DeadLetterQueueRepository::class);
+        }
+    }
+
+    /**
+     * Resolve any pending/retrying DLQ entries for a completed txid.
+     * Idempotent — UPDATE WHERE message_id LIKE %txid% AND status IN (…)
+     * is a no-op if nothing matches. Silent on error so a DLQ bookkeeping
+     * hiccup never blocks the completion-response path the caller is on.
+     */
+    private function resolveDlqForCompletedTxid(string $txid): void {
+        if ($txid === '' || $this->dlqRepository === null) {
+            return;
+        }
+        try {
+            $this->dlqRepository->markResolvedByTxid($txid);
+        } catch (\Throwable $e) {
+            // Non-critical — the tx is already marked completed; the DLQ
+            // sweep is best-effort cleanup, not correctness-critical.
+            Logger::getInstance()->log('DLQ auto-resolve failed for txid ' . substr($txid, 0, 12) . '…: ' . $e->getMessage(), 'WARNING');
         }
     }
 
@@ -792,6 +820,11 @@ class MessageService implements MessageServiceInterface {
                                 // Transaction confirmed completed at end-recipient
                                 $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
                                 $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
+                                // Sweep any still-pending DLQ entries for this txid —
+                                // a duplicate-queued retry for the same send shouldn't
+                                // keep the Failed Messages banner lit once the tx
+                                // has reached a terminal completed state.
+                                $this->resolveDlqForCompletedTxid($hash);
                                 if (!$p2pAlreadyCompleted) {
                                     $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                                 }
@@ -829,6 +862,7 @@ class MessageService implements MessageServiceInterface {
                     } else{
                         $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
                         $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
+                        $this->resolveDlqForCompletedTxid($hash);
                         if (!$p2pAlreadyCompleted) {
                             $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                         }
@@ -870,6 +904,7 @@ class MessageService implements MessageServiceInterface {
                         }
                     }
                     $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
+                    $this->resolveDlqForCompletedTxid($hash);
                     if (!$txAlreadyCompleted) {
                         $this->balanceRepository->updateBalanceGivenTransactions($transaction);
                     }

@@ -257,6 +257,37 @@ class DeadLetterQueueRepository extends AbstractRepository {
     }
 
     /**
+     * Mark any pending/retrying transaction DLQ entries for this txid as
+     * resolved. Called when the underlying transaction reaches terminal
+     * `completed` state — covers duplicate retries queued for the same
+     * txid, which would otherwise linger as "pending" forever and keep
+     * the Failed-Messages banner showing on a tx that's fully delivered.
+     *
+     * Scoped to `message_type='transaction'` to avoid accidentally
+     * touching DLQ rows for other message types that happen to contain
+     * the txid substring (extremely unlikely but cheap defense).
+     *
+     * @param string $txid Transaction id to resolve DLQ entries for
+     * @return int Number of rows marked resolved
+     */
+    public function markResolvedByTxid(string $txid): int {
+        if ($txid === '') {
+            return 0;
+        }
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'resolved',
+                      resolved_at = CURRENT_TIMESTAMP(6)
+                  WHERE message_type = 'transaction'
+                    AND status IN ('pending', 'retrying')
+                    AND message_id LIKE :pattern";
+        $stmt = $this->execute($query, [':pattern' => '%' . $txid . '%']);
+        if ($stmt === false) {
+            return 0;
+        }
+        return $stmt->rowCount();
+    }
+
+    /**
      * Mark item as abandoned (manually abandoned)
      *
      * @param int $id DLQ item ID

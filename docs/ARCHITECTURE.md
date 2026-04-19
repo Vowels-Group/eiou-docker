@@ -2200,6 +2200,73 @@ invisible to the chain walk, to sync, and to new-tx linking. This closes a
 class of permanent chain gap where a cancel-while-pending on the sender would
 leave the peer unable to verify any subsequent transaction.
 
+#### Self-healing on failed delivery (core strength)
+
+A transaction that never reaches the recipient — whether the send times out,
+the transport is down, or all retries exhaust and the user Abandons the DLQ
+entry — **does not create a sync gap**. The mechanism is deliberately
+asymmetric between the two sides:
+
+- **Sender side**: keeps the failed tx as a local `cancelled` row for audit
+  and accounting. The row has a valid `previous_txid` pointing into the chain
+  but nothing ever points *at* it — it's a leaf, not a link. The sender's
+  chain walker (`TransactionChainRepository::getTransactionChain`) filters
+  `status NOT IN ('cancelled', 'rejected')`, so the chain walk skips right
+  past it. `verifyChainIntegrity` only inspects `completed`/`accepted`/`paid`,
+  so the cancelled row doesn't trip the verifier either. `valid_chain`
+  stays `true` on the sender.
+- **Recipient side**: never heard of the tx at all, so there's nothing to
+  reconcile. The next tx the recipient DOES receive already has a rewritten
+  `previous_txid` pointing at the last *completed* predecessor — a direct
+  link across the gap the cancelled tx left behind on the sender's side.
+  `valid_chain` stays `true` on the recipient too.
+
+**The DLQ retry path actively participates in this self-healing.**
+`MessageDeliveryService::refreshTransactionDlqPayload` (`files/src/services/MessageDeliveryService.php`)
+re-queries `getPreviousTxid` before every retry and rewrites the pending
+tx's `previousTxid` to the *current* chain head. If intervening cancelled
+siblings accumulated while the retry was queued, the rewritten payload
+points past them. If a retry eventually succeeds, the delivered tx's
+`previous_txid` reflects the chain as it existed at delivery time — not
+at original-send time. If the retry is abandoned, the dormant payload's
+`previousTxid` is irrelevant because nothing references its txid.
+
+#### Concrete example
+
+Three consecutive sends on Alice's side: `TX_A` completes, `TX_B` never
+reaches Bob and ends up `cancelled`, `TX_C` is sent afterwards. Abbreviated
+txids for readability:
+
+```
+Alice's DB:
+  TX_A   prev=TX_0   completed     ← last known-good before the run
+  TX_B   prev=TX_A   CANCELLED     ← leaf: signed pointing at TX_A, but
+                                     nothing ever points back at TX_B
+  TX_C   prev=TX_A   completed     ← skipped past TX_B on send; its
+                                     previous_txid references TX_A directly,
+                                     because getPreviousTxid() filters out
+                                     cancelled rows when picking the parent
+
+Bob's DB (same window):
+  TX_A   prev=TX_0   completed
+  TX_C   prev=TX_A   completed     ← links cleanly to TX_A; Bob has no
+                                     record of TX_B at all (COUNT = 0)
+```
+
+The key detail: `TX_C` on Alice's side has `previous_txid = TX_A`, NOT
+`TX_B`. The cancelled `TX_B` is a dangling leaf — it points backwards
+into the chain but no subsequent row points at it. Both sides' chain
+walks start from the same head and follow the same `TX_C → TX_A → TX_0`
+path. Both sides' `valid_chain = true`.
+
+**User-facing consequence**: Abandoning a stuck-in-DLQ transaction is
+safe — it's a bookkeeping action, not a chain surgery. No tx drop
+proposal is needed. The "Failed Messages" queue exists to tell the user
+the send didn't land; once they've acknowledged that (Abandon) or the
+retry eventually succeeded (auto-resolve on tx completion — see
+`DeadLetterQueueRepository::markResolvedByTxid`), there is nothing
+else for the chain-integrity subsystem to do.
+
 When a chain gap is detected during sync, the `SyncService` attempts backup
 recovery before falling through to a tx drop:
 1. **Local self-repair** — checks local database backups for missing transactions

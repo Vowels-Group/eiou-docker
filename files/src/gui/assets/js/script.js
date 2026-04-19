@@ -178,6 +178,278 @@ function escapeHtml(text) {
 }
 
 // ============================================================================
+// Paginator — shared pagination utility for server-rendered tables
+// ============================================================================
+//
+// The wallet has three tables (Recent Transactions, Contacts, Payment
+// Requests history) that server-render a capped slice of rows and then do
+// 100% client-side sort / filter / search on the rendered DOM. Paginator
+// layers on top of that so the user isn't presented with one long scroll.
+//
+// Row visibility is driven by two independent classes (both apply
+// `display: none`):
+//   - `.filter-hidden` — set by filter/search code; unrelated to pagination
+//   - `.paginator-hidden` — set by Paginator to hide rows outside current page
+// A row is visible iff neither class is present. Filter code doesn't touch
+// `.paginator-hidden`; Paginator doesn't touch `.filter-hidden`. Sort only
+// reorders DOM nodes, so the two hidden states stay consistent.
+//
+// Integration: after the filter or sort function runs, call
+// `Paginator.get(key).apply()` so Paginator recomputes which subset of the
+// currently-visible (unfiltered) rows falls in the active page.
+//
+// Phase 2 "Load older" is layered on via the `loadMore` config: Paginator
+// renders a button below the nav that triggers the configured fetcher,
+// appends the returned HTML fragment to the tbody, and re-runs `apply()`.
+
+var PAGINATOR_SIZE_OPTIONS = [25, 50, 100, 0]; // 0 = All
+var PAGINATOR_DEFAULT_SIZE = 25;
+
+var Paginator = (function () {
+    var instances = {};
+
+    function storageKey(key) {
+        return 'eiou_paginator_size_' + key;
+    }
+
+    function loadSize(key) {
+        try {
+            var v = safeStorageGet(storageKey(key));
+            if (v === null || v === undefined || v === '') return PAGINATOR_DEFAULT_SIZE;
+            var n = parseInt(v, 10);
+            if (isNaN(n)) return PAGINATOR_DEFAULT_SIZE;
+            // Sanity-clamp: reject sizes not in our option set to avoid an
+            // orphaned localStorage value surviving a future option change.
+            for (var i = 0; i < PAGINATOR_SIZE_OPTIONS.length; i++) {
+                if (PAGINATOR_SIZE_OPTIONS[i] === n) return n;
+            }
+            return PAGINATOR_DEFAULT_SIZE;
+        } catch (e) {
+            return PAGINATOR_DEFAULT_SIZE;
+        }
+    }
+
+    function saveSize(key, size) {
+        try { safeStorageSet(storageKey(key), String(size)); } catch (e) {}
+    }
+
+    function create(config) {
+        // config: { key, tbody, rowSelector, container, loadMore?: { button, onClick } }
+        if (!config || !config.tbody || !config.container) return null;
+        var state = {
+            key: config.key,
+            tbody: config.tbody,
+            rowSelector: config.rowSelector || 'tr',
+            container: config.container,
+            page: 0,
+            size: loadSize(config.key),
+            loadMoreFn: config.loadMore && config.loadMore.onClick ? config.loadMore.onClick : null,
+            loadMoreExhausted: false,
+            loadMoreBusy: false
+        };
+
+        function getRows() {
+            return state.tbody.querySelectorAll(state.rowSelector);
+        }
+
+        function getVisibleRows() {
+            // "Visible" here means "not filtered out" — i.e. the rows the
+            // paginator is allowed to page through. Paginator's own
+            // `.paginator-hidden` is ignored because we're about to
+            // recompute it.
+            var rows = getRows();
+            var out = [];
+            for (var i = 0; i < rows.length; i++) {
+                if (!rows[i].classList.contains('filter-hidden')) {
+                    out.push(rows[i]);
+                }
+            }
+            return out;
+        }
+
+        function pageCount(visibleLen) {
+            if (state.size === 0) return 1;
+            if (visibleLen <= 0) return 1;
+            return Math.ceil(visibleLen / state.size);
+        }
+
+        function apply() {
+            var visible = getVisibleRows();
+            var pages = pageCount(visible.length);
+            if (state.page >= pages) state.page = pages - 1;
+            if (state.page < 0) state.page = 0;
+
+            if (state.size === 0) {
+                // "All" — every visible row stays visible
+                for (var i = 0; i < visible.length; i++) {
+                    visible[i].classList.remove('paginator-hidden');
+                }
+            } else {
+                var start = state.page * state.size;
+                var end = start + state.size;
+                for (var j = 0; j < visible.length; j++) {
+                    if (j >= start && j < end) {
+                        visible[j].classList.remove('paginator-hidden');
+                    } else {
+                        visible[j].classList.add('paginator-hidden');
+                    }
+                }
+            }
+
+            renderControls(visible.length, pages);
+        }
+
+        function renderControls(visibleLen, pages) {
+            var sizeSelectId = 'paginator-size-' + state.key;
+            var html = '';
+            html += '<div class="paginator-row">';
+
+            // Page size selector
+            html += '<label class="paginator-size-label" for="' + sizeSelectId + '">';
+            html += 'Rows:&nbsp;';
+            html += '<select id="' + sizeSelectId + '" class="paginator-size-select">';
+            for (var i = 0; i < PAGINATOR_SIZE_OPTIONS.length; i++) {
+                var opt = PAGINATOR_SIZE_OPTIONS[i];
+                var label = opt === 0 ? 'All' : String(opt);
+                var sel = (opt === state.size) ? ' selected' : '';
+                html += '<option value="' + opt + '"' + sel + '>' + label + '</option>';
+            }
+            html += '</select>';
+            html += '</label>';
+
+            // Range summary
+            var rangeText;
+            if (visibleLen === 0) {
+                rangeText = '0 rows';
+            } else if (state.size === 0) {
+                rangeText = 'All ' + visibleLen + ' rows';
+            } else {
+                var from = state.page * state.size + 1;
+                var to = Math.min(from + state.size - 1, visibleLen);
+                rangeText = from + '–' + to + ' of ' + visibleLen;
+            }
+            html += '<span class="paginator-range">' + rangeText + '</span>';
+
+            // Page navigation (only when more than one page)
+            if (pages > 1) {
+                html += '<span class="paginator-nav">';
+                html += '<button type="button" class="paginator-btn paginator-prev" ' + (state.page === 0 ? 'disabled' : '') + ' data-paginator-action="prev" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>';
+                html += '<span class="paginator-page-indicator">Page ' + (state.page + 1) + ' / ' + pages + '</span>';
+                html += '<button type="button" class="paginator-btn paginator-next" ' + (state.page + 1 >= pages ? 'disabled' : '') + ' data-paginator-action="next" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Next page"><i class="fas fa-chevron-right"></i></button>';
+                html += '</span>';
+            }
+
+            // Load-older button (Phase 2)
+            if (state.loadMoreFn && !state.loadMoreExhausted) {
+                var busyIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt';
+                var busyLabel = state.loadMoreBusy ? 'Loading…' : 'Load older';
+                html += '<button type="button" class="paginator-btn paginator-load-more" ' + (state.loadMoreBusy ? 'disabled' : '') + ' data-paginator-action="load-more" data-paginator-key="' + escapeHtml(state.key) + '"><i class="fas ' + busyIcon + '"></i> ' + busyLabel + '</button>';
+            }
+
+            html += '</div>';
+            state.container.innerHTML = html;
+        }
+
+        function goTo(page) {
+            state.page = page;
+            apply();
+        }
+
+        function setSize(size) {
+            state.size = size;
+            state.page = 0;
+            saveSize(state.key, size);
+            apply();
+        }
+
+        function appendFragment(html) {
+            // Parse and append — use a template so <tr> fragments are allowed
+            // outside of <tbody>'s normal context.
+            var template = document.createElement('template');
+            template.innerHTML = html.trim();
+            while (template.content.firstChild) {
+                state.tbody.appendChild(template.content.firstChild);
+            }
+        }
+
+        function setLoadMoreExhausted(exhausted) {
+            state.loadMoreExhausted = !!exhausted;
+        }
+
+        function setLoadMoreBusy(busy) {
+            state.loadMoreBusy = !!busy;
+            apply();
+        }
+
+        function getLoadedCount() {
+            return getRows().length;
+        }
+
+        var api = {
+            apply: apply,
+            goTo: goTo,
+            setSize: setSize,
+            appendFragment: appendFragment,
+            setLoadMoreExhausted: setLoadMoreExhausted,
+            setLoadMoreBusy: setLoadMoreBusy,
+            getLoadedCount: getLoadedCount,
+            state: state
+        };
+        instances[config.key] = api;
+        apply();
+        return api;
+    }
+
+    function get(key) {
+        return instances[key] || null;
+    }
+
+    // Delegated click/change handlers — bound once at DOMContentLoaded.
+    function handleClick(event) {
+        var el = event.target;
+        while (el && el !== document) {
+            var action = el.getAttribute && el.getAttribute('data-paginator-action');
+            if (action) {
+                var key = el.getAttribute('data-paginator-key');
+                var inst = instances[key];
+                if (!inst) return;
+                event.preventDefault();
+                if (action === 'prev') {
+                    inst.goTo(inst.state.page - 1);
+                } else if (action === 'next') {
+                    inst.goTo(inst.state.page + 1);
+                } else if (action === 'load-more') {
+                    if (inst.state.loadMoreFn && !inst.state.loadMoreBusy) {
+                        inst.setLoadMoreBusy(true);
+                        inst.state.loadMoreFn(inst);
+                    }
+                }
+                return;
+            }
+            el = el.parentNode;
+        }
+    }
+
+    function handleChange(event) {
+        var el = event.target;
+        if (!el || !el.classList || !el.classList.contains('paginator-size-select')) return;
+        var match = el.id.match(/^paginator-size-(.+)$/);
+        if (!match) return;
+        var inst = instances[match[1]];
+        if (!inst) return;
+        inst.setSize(parseInt(el.value, 10));
+    }
+
+    document.addEventListener('click', handleClick);
+    document.addEventListener('change', handleChange);
+
+    return {
+        create: create,
+        get: get
+    };
+})();
+
+// ============================================================================
 // Tab Navigation
 // ============================================================================
 
@@ -892,6 +1164,22 @@ function renderTransactionModal(tx) {
         html += '</div>';
     }
 
+    // Previous Transaction — the immediately prior tx on the same chain
+    // with this counterparty. Clickable: openTransactionModalByTxid
+    // has a fast in-memory path and an AJAX fallback so chains can be
+    // traversed even when the prior tx isn't in the current view window.
+    if (tx.previous_txid) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Previous Tx</div>';
+        html += '<div class="tx-detail-value tx-modal-mono-sm tx-detail-value-link cursor-pointer"'
+             +  ' data-action="openTransactionModalByTxid"'
+             +  ' data-txid="' + escapeHtml(tx.previous_txid) + '"'
+             +  ' title="Open previous transaction">'
+             +  escapeHtml(tx.previous_txid)
+             +  '</div>';
+        html += '</div>';
+    }
+
     // Routing Hash (only for P2P transactions, not direct or contact)
     if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
@@ -977,6 +1265,9 @@ function closeTransactionModal() {
     var modal = document.getElementById('transactionModal');
     if (modal) {
         modal.style.display = 'none';
+        // Clear the stack marker set when the tx modal was opened from
+        // within another modal (e.g. DLQ detail → tx details).
+        modal.classList.remove('modal-stack-top');
     }
 }
 
@@ -1090,15 +1381,23 @@ window.onclick = function(event) {
 document.addEventListener('keydown', function(event) {
     var isEscape = event.key === 'Escape' || event.keyCode === 27;
     if (!isEscape) return;
-    // When the contact modal is stacked on top of the transaction modal
-    // (opened via a To/From/P2P-endpoint click-through), Escape should
-    // dismiss only the top modal so the user returns to the tx details
-    // they were reading — not close everything at once.
+    // Stacked-modal case: if a modal is currently flagged as stacked on
+    // top of another (e.g. contact modal opened from tx modal, or tx
+    // modal opened from DLQ modal via its Transaction ID link), Escape
+    // should dismiss only the top modal so the user returns to the
+    // underlying modal they were reading.
     var contactModalEl = document.getElementById('contactModal');
     if (contactModalEl
         && contactModalEl.classList.contains('modal-stack-top')
         && contactModalEl.style.display !== 'none') {
         closeContactModal();
+        return;
+    }
+    var txModalEl = document.getElementById('transactionModal');
+    if (txModalEl
+        && txModalEl.classList.contains('modal-stack-top')
+        && txModalEl.style.display !== 'none') {
+        closeTransactionModal();
         return;
     }
     closeEditContactModal();
@@ -2015,10 +2314,10 @@ function filterContacts() {
         var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
 
         if (matches) {
-            card.style.display = '';
+            card.classList.remove('filter-hidden');
             visibleCount++;
         } else {
-            card.style.display = 'none';
+            card.classList.add('filter-hidden');
         }
     }
 
@@ -2031,6 +2330,10 @@ function filterContacts() {
             searchStatus.style.display = 'none';
         }
     }
+
+    // Re-cut paginator pages against the newly filtered row set.
+    var contactsPaginator = Paginator.get('contacts');
+    if (contactsPaginator) contactsPaginator.apply();
 }
 
 /**
@@ -2103,6 +2406,8 @@ function sortContacts(column) {
     }
 
     updateSortIndicators();
+    var contactsPaginator = Paginator.get('contacts');
+    if (contactsPaginator) contactsPaginator.apply();
 }
 
 /**
@@ -2219,10 +2524,10 @@ function filterTransactions() {
         }
 
         if (matches) {
-            item.style.display = '';
+            item.classList.remove('filter-hidden');
             visible++;
         } else {
-            item.style.display = 'none';
+            item.classList.add('filter-hidden');
         }
     }
 
@@ -2234,6 +2539,9 @@ function filterTransactions() {
             searchStatus.style.display = 'none';
         }
     }
+
+    var txPaginator = Paginator.get('transactions');
+    if (txPaginator) txPaginator.apply();
 }
 
 // Independent sort state for the Recent Transactions table.
@@ -2291,6 +2599,8 @@ function sortTransactions(column) {
     }
 
     updateTransactionsSortIndicators();
+    var txPaginator = Paginator.get('transactions');
+    if (txPaginator) txPaginator.apply();
 }
 
 function updateTransactionsSortIndicators() {
@@ -2379,6 +2689,8 @@ function sortPaymentRequests(column) {
     }
 
     updatePrSortIndicators();
+    var prPaginator = Paginator.get('payment-requests');
+    if (prPaginator) prPaginator.apply();
 }
 
 function updatePrSortIndicators() {
@@ -2423,8 +2735,15 @@ function filterPaymentRequests() {
         if (term && (row.getAttribute('data-pr-search') || '').indexOf(term) === -1) show = false;
         if (show && statusFilter && (row.getAttribute('data-status') || '') !== statusFilter) show = false;
         if (show && dirFilter && (row.getAttribute('data-direction') || '') !== dirFilter) show = false;
-        row.style.display = show ? '' : 'none';
+        if (show) {
+            row.classList.remove('filter-hidden');
+        } else {
+            row.classList.add('filter-hidden');
+        }
     }
+
+    var prPaginator = Paginator.get('payment-requests');
+    if (prPaginator) prPaginator.apply();
 }
 
 /**
@@ -2887,7 +3206,7 @@ function openContactModal(contact, openTab) {
     } else {
         var statusIconMap = {
             'pending':   'fa-hourglass-half',
-            'sending':   'fa-spinner',
+            'sending':   'fa-paper-plane',
             'sent':      'fa-check',
             'accepted':  'fa-check',
             'completed': 'fa-check-double',
@@ -3636,7 +3955,120 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Check if we need to reopen contact modal after refresh
     checkReopenContactModal();
+
+    initPaginators();
 });
+
+/**
+ * Attach Paginator instances to every paginated table on the current page.
+ * Re-runs safely if the tables aren't rendered (short-circuits on null
+ * tbody), so it's fine to call from the main DOMContentLoaded handler
+ * regardless of which server-rendered tab is active at load time.
+ */
+function initPaginators() {
+    var txBody = document.getElementById('transaction-list');
+    var txContainer = document.getElementById('tx-paginator');
+    if (txBody && txContainer) {
+        Paginator.create({
+            key: 'transactions',
+            tbody: txBody,
+            rowSelector: '.tx-row',
+            container: txContainer,
+            loadMore: { onClick: loadMoreTransactions }
+        });
+    }
+
+    // Contacts + Payment Requests paginate the already-rendered rows
+    // (Phase 1 only). "Load older" is deferred for both until the
+    // server-side row partials and offset repositories are in place.
+    var contactsBody = document.getElementById('contacts-grid');
+    var contactsContainer = document.getElementById('contacts-paginator');
+    if (contactsBody && contactsContainer) {
+        Paginator.create({
+            key: 'contacts',
+            tbody: contactsBody,
+            rowSelector: '.contact-card',
+            container: contactsContainer
+        });
+    }
+
+    var prBody = document.getElementById('pr-history-list');
+    var prContainer = document.getElementById('pr-paginator');
+    if (prBody && prContainer) {
+        Paginator.create({
+            key: 'payment-requests',
+            tbody: prBody,
+            rowSelector: '.pr-row',
+            container: prContainer
+        });
+    }
+}
+
+/**
+ * Phase-2 Load-older callback for Recent Transactions. Fetches the next
+ * chunk via loadMoreTransactions AJAX action, appends the returned row
+ * HTML, extends the in-memory transactionData[] so openTransactionModal
+ * keeps working for newly appended rows, then asks the paginator to
+ * re-cut pages.
+ */
+function loadMoreTransactions(inst) {
+    loadMoreViaGuiAction('loadMoreTransactions', 'transactions', inst);
+}
+
+/**
+ * Shared fetcher for the three "Load older" buttons. Posts to the GUI
+ * action router with the current loaded count as the offset, appends the
+ * returned HTML fragment to the paginator's tbody, and marks the paginator
+ * exhausted when the server reports no more rows available.
+ *
+ * @param {string} action - GUI action name (e.g. 'loadMoreTransactions')
+ * @param {string} key    - Paginator key (for logging / debugging only)
+ * @param {Object} inst   - Paginator instance returned by Paginator.create
+ */
+function loadMoreViaGuiAction(action, key, inst) {
+    var offset = inst.getLoadedCount();
+    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    var formData = new FormData();
+    formData.append('action', action);
+    formData.append('offset', String(offset));
+    formData.append('csrf_token', csrfToken);
+
+    fetch(window.location.pathname, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    }).then(function(res) {
+        return res.json();
+    }).then(function(data) {
+        if (!data || !data.success) {
+            showToast('Load failed', (data && data.error) || 'Could not load more rows.', 'error');
+            inst.setLoadMoreBusy(false);
+            return;
+        }
+        if (data.html) {
+            inst.appendFragment(data.html);
+        }
+        // Extend transactionData[] so openTransactionModal(index) keeps
+        // resolving for appended rows (their data-index attributes are
+        // set server-side from the POSTed offset, so they line up with
+        // the position we're about to extend the array to).
+        if (Array.isArray(data.rows) && typeof transactionData !== 'undefined') {
+            for (var i = 0; i < data.rows.length; i++) {
+                transactionData.push(data.rows[i]);
+            }
+        }
+        if (data.exhausted) {
+            inst.setLoadMoreExhausted(true);
+        }
+        inst.setLoadMoreBusy(false);
+        inst.apply();
+    }).catch(function() {
+        showToast('Network error', 'Could not load more rows.', 'error');
+        inst.setLoadMoreBusy(false);
+    });
+}
 
 // Tx Drop Resolution state
 var currentChainDropProposalId = null;
@@ -5158,13 +5590,52 @@ function openDlqModal(el) {
     var status = row.getAttribute('data-status') || 'pending';
     var canRetry = row.getAttribute('data-dlq-can-retry') === '1';
     var canAct = row.getAttribute('data-dlq-can-act') === '1';
+    // Payload-extracted txid — populated server-side only for
+    // transaction-like message types. Empty for 'contact' / unknown types.
+    var dlqTxid = row.getAttribute('data-dlq-txid') || '';
 
     var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
     var typeBadge = '<span class="tx-type-badge ' + escapeHtml(typeClass) + '"><i class="fas ' + escapeHtml(typeIcon) + '"></i> ' + escapeHtml(type) + '</span>';
 
     var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + typeBadge + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Recipient</div><div class="tx-detail-value tx-modal-mono">' + escapeHtml(recipient) + '</div></div>';
-    html += '<div class="tx-detail-row"><div class="tx-detail-label">Failure Reason</div><div class="tx-detail-value">' + escapeHtml(reason) + '</div></div>';
+
+    // Transaction ID — clickable so the user can jump straight into the
+    // full Transaction Details modal for amount/description/etc. Keeps
+    // the DLQ modal tight instead of duplicating transaction fields.
+    // openTransactionModalByTxid has an in-memory fast path and an AJAX
+    // fallback for older txids outside the current paginator window.
+    if (dlqTxid !== '') {
+        html += '<div class="tx-detail-row">' +
+                '<div class="tx-detail-label">Transaction ID</div>' +
+                '<div class="tx-detail-value tx-modal-mono-sm tx-detail-value-link cursor-pointer"' +
+                    ' data-action="openTransactionModalByTxid"' +
+                    ' data-txid="' + escapeHtml(dlqTxid) + '"' +
+                    ' title="Open transaction details">' +
+                    escapeHtml(dlqTxid) +
+                '</div>' +
+                '</div>';
+    }
+    // Failure Reason + info icon: the stored reason is the LAST error
+    // encountered, which is usually from the fallback transport rather
+    // than the primary. Without the note the pairing of a Tor-looking
+    // recipient with a non-Tor error is confusing (e.g. ".onion" address
+    // + "SSL certificate problem" from an HTTPS fallback attempt). The
+    // info icon opens the shared info modal so users see the full story.
+    // Plain-language copy — avoids jargon like "transport" / "primary"
+    // and spells out the *why* with short paragraphs separated by blank
+    // lines (the info modal uses white-space: pre-line so \n renders).
+    var fallbackNote =
+        'Why doesn\u2019t the error match the recipient\u2019s address?\n\n' +
+        'Your wallet tries more than one way to reach a contact — first over Tor, then HTTPS, then plain HTTP — and stops when one works.\n\n' +
+        'The reason shown above comes from the LAST attempt. So if the contact\u2019s address is a Tor (.onion) one but the error mentions HTTPS or HTTP, it means Tor was unreachable AND the other methods also failed.\n\n' +
+        'This usually clears up once the contact is back online. Tap Retry to try again now.';
+    html += '<div class="tx-detail-row">' +
+            '<div class="tx-detail-label">Failure Reason ' +
+                '<i class="fas fa-info-circle info-tooltip-icon" title="' + escapeHtml(fallbackNote) + '" data-action="showInfoModal" role="button" aria-label="About failure reasons"></i>' +
+            '</div>' +
+            '<div class="tx-detail-value">' + escapeHtml(reason) + '</div>' +
+            '</div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Added</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value"><span class="dlq-status-badge dlq-badge-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div></div>';
 
@@ -5324,6 +5795,12 @@ function retryDlqItem(dlqId, btn) {
     if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
 
     showLoader('Retrying delivery...', 'Attempting to re-send the message to the recipient.');
+    // Match the send / approve / add-contact flows — show the 15s refresh
+    // countdown so the user knows the page will refresh automatically.
+    // The server-side retry continues regardless; a reload just returns
+    // them to an interactive page. clearOperationTimeout fires on any
+    // terminal XHR callback below.
+    startOperationTimeout('dlqRetry', 'Still retrying delivery. The retry is continuing in the background — check Failed Messages for updates.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
@@ -5335,17 +5812,20 @@ function retryDlqItem(dlqId, btn) {
     xhr.timeout = 90000; // 90s — Tor connections can be slow
 
     xhr.ontimeout = function() {
+        clearOperationTimeout();
         hideLoader();
         showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
     };
 
     xhr.onerror = function() {
+        clearOperationTimeout();
         hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        clearOperationTimeout();
         hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
@@ -6126,6 +6606,30 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openTransactionModal(index);
         },
         'openTransactionModalByTxid': function(el) {
+            // Preserve the current stack state whenever the click
+            // originates *inside* the tx modal itself (e.g. the Previous
+            // Tx link chaining from one tx to the prior one) — otherwise
+            // we'd strip `modal-stack-top` mid-traversal and drop the tx
+            // modal behind whichever modal it was stacked on top of.
+            //
+            // Only opt in / out of the stack when the click came from a
+            // *different* modal. DLQ detail modal → Transaction ID adds
+            // the class; a click from outside any modal clears it so a
+            // stale flag from a previous session doesn't survive.
+            var txModalEl = document.getElementById('transactionModal');
+            if (txModalEl) {
+                var originModal = el.closest ? el.closest('.modal') : null;
+                var originatedInTxModal = (originModal && originModal.id === 'transactionModal');
+                if (!originatedInTxModal) {
+                    if (originModal
+                        && originModal.style.display !== 'none'
+                        && (originModal.offsetParent !== null || originModal.classList.contains('active'))) {
+                        txModalEl.classList.add('modal-stack-top');
+                    } else {
+                        txModalEl.classList.remove('modal-stack-top');
+                    }
+                }
+            }
             openTransactionModalByTxid(el.getAttribute('data-txid'));
         },
         'closeTransactionModal': function() { closeTransactionModal(); },

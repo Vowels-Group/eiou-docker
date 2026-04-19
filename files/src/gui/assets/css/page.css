@@ -735,6 +735,77 @@ body {
 }
 
 /* Contacts Table Layout */
+/* Row visibility primitives used by filter/search and the paginator.
+   Each class is independently toggleable; a row is visible iff neither is
+   present. Search/filter code touches .filter-hidden; Paginator touches
+   .paginator-hidden. Keeping them orthogonal means sort (which only
+   reorders DOM nodes) doesn't have to care about either. */
+tr.filter-hidden,
+tr.paginator-hidden {
+    display: none;
+}
+
+/* Paginator bar — rendered below each paginated table via Paginator.create().
+   Flex row so size selector, range summary, page nav, and Load-older
+   button all sit on one line on desktop and wrap on mobile. */
+.paginator-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #495057;
+}
+.paginator-size-label {
+    display: inline-flex;
+    align-items: center;
+    font-weight: 500;
+}
+.paginator-size-select {
+    padding: 0.2rem 0.35rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+}
+.paginator-range {
+    color: #6c757d;
+}
+.paginator-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.paginator-page-indicator {
+    min-width: 5.5rem;
+    text-align: center;
+    color: #6c757d;
+}
+.paginator-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    color: #495057;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.paginator-btn:hover:not([disabled]) {
+    background: #f0f7ff;
+    border-color: #9ec5fe;
+}
+.paginator-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.paginator-load-more {
+    margin-left: auto;
+}
+
 .contacts-table-wrapper {
     /* Horizontal scroll for narrow screens, vertical scroll past ~60% of the
        viewport height so power users with many contacts don't stretch the
@@ -2788,16 +2859,32 @@ tr.tx-item-in-progress > td:first-child {
     height: 100%;
 }
 
-/* Contact modal shell: pin the height so switching between Info /
-   Transactions / Status / Settings doesn't reflow the modal. Each tab's
-   content area gets the same space — shorter tabs get bottom whitespace,
-   and the Transactions table scrolls internally when it exceeds it.
-   The Transaction Details modal matches the same height so that when
-   the contact modal is stacked on top of it the two shells align. */
-#contactModal .modal-content,
-#transactionModal .modal-content {
-    height: 85vh;
+/* Contact modal shell — pinned so switching between Info / Transactions /
+   Status / Settings does NOT reflow the modal height. Lower pin on
+   desktop (70vh) than on mobile (85vh) because the tallest tab (Info)
+   doesn't need 85% of a desktop viewport, and the extra whitespace
+   below short tabs (Status especially) looked wasted. The Transactions
+   table scrolls internally when it exceeds the remaining space. */
+#contactModal .modal-content {
+    height: 70vh;
     max-height: 90vh;
+}
+@media (max-width: 600px) {
+    #contactModal .modal-content {
+        height: 85vh;
+    }
+}
+
+/* Transaction Details modal — single-content, so it fits to content on
+   desktop (capped by the shared `.modal-content { max-height: 90vh }`)
+   rather than rendering as a giant mostly-empty panel for a short tx.
+   On phones we pin to 85vh so the modal doesn't awkwardly overlap the
+   on-screen keyboard or end up tiny on short viewports. */
+@media (max-width: 600px) {
+    #transactionModal .modal-content {
+        height: 85vh;
+        max-height: 90vh;
+    }
 }
 
 .modal-footer {

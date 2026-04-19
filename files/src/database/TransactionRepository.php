@@ -243,7 +243,10 @@ class TransactionRepository extends AbstractRepository {
                     WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
                     AND timestamp > ?";
 
-        $params = $this->buildInClauseParams($userAddresses, 2, [date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
+        // Use MySQL DATETIME wire format — DISPLAY_DATE_FORMAT is the European
+        // presentation format and MySQL 1292-errors when it's passed as a
+        // parameter to a DATETIME comparison.
+        $params = $this->buildInClauseParams($userAddresses, 2, [date('Y-m-d H:i:s', $lastCheckTime)]);
         try {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
@@ -489,7 +492,7 @@ class TransactionRepository extends AbstractRepository {
      * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getTransactionHistory(int $limit = 10, ?string $currency = null): array
+    public function getTransactionHistory(int $limit = 10, ?string $currency = null, int $offset = 0): array
     {
         $userAddresses = $this->getUserAddressesOrNull();
 
@@ -543,10 +546,11 @@ class TransactionRepository extends AbstractRepository {
             $additionalParams[] = $currency;
         }
 
-        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
+        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ? OFFSET ?";
         $additionalParams[] = $limit;
+        $additionalParams[] = max(0, $offset);
 
-        // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit
+        // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit, offset
         $params = $this->buildInClauseParams($userAddresses, 2, $additionalParams);
         try {
             $stmt = $this->pdo->prepare($query);
