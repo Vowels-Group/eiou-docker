@@ -4478,21 +4478,24 @@ hr.currency-separator-double {
    rather than running together. */
 .settings-group-heading {
     color: #6c757d;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    margin: 2.25rem 0 0.75rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid #dee2e6;
+    margin: 0.5rem 0 0.75rem;
     display: flex;
     align-items: center;
     gap: 0.4rem;
 }
-.settings-group-heading:first-of-type {
-    margin-top: 0.5rem;
-    padding-top: 0;
-    border-top: none;
+/* Divider + extra top spacing only when a heading follows a preceding
+   settings-grid — so the second, third, … group in a multi-group section
+   gets a hair-line separator, and the first heading in a section (which
+   sits right below the section's h4 or intro prose) stays tight. Also
+   catches cases where a single h5 follows a grid (e.g. Active Remembered
+   Sessions below the GUI Security fields), which `:first-of-type`
+   incorrectly treated as first. */
+.settings-grid + .settings-group-heading {
+    margin-top: 2.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #dee2e6;
 }
 .settings-group-heading i { color: #adb5bd; }
 
@@ -4548,16 +4551,6 @@ details.section-intro > .section-intro-body {
    Full-width block beneath the two select fields. Each row shows a device's
    UA family, a "This device" badge if it matches the current cookie, the
    last-used/expires timestamps, and a per-device Sign-out button. */
-.active-sessions-container {
-    margin-top: 1.25rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e9ecef;
-}
-.active-sessions-heading {
-    margin: 0 0 0.5rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-}
 .active-sessions-list {
     display: flex;
     flex-direction: column;
@@ -5289,7 +5282,8 @@ details.section-intro > .section-intro-body {
 .api-keys-access-state {
     font-size: 0.85rem;
 }
-.api-keys-empty {
+.api-keys-empty,
+.empty-panel {
     padding: 1.25rem;
     border: 1px dashed var(--border-color, #ccc);
     border-radius: 6px;
