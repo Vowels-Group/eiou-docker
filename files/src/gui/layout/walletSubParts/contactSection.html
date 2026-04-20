@@ -286,28 +286,16 @@
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
-                <!-- Transaction List View -->
-                <div id="tx-list-view">
-                    <div class="tx-tab-header">
-                        <p>
-                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
-                        </p>
-                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="modal_transactions" class="contact-modal-tx-wrapper">
-                        <p class="no-transactions">No recent transactions with this contact.</p>
-                    </div>
+                <div class="tx-tab-header">
+                    <p>
+                        <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
+                    </p>
+                    <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
                 </div>
-                <!-- Transaction Detail View (card-style popup within the modal) -->
-                <div id="tx-detail-view" class="d-none">
-                    <div class="contact-tx-popup">
-                        <div class="text-right mb-sm">
-                            <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
-                        </div>
-                        <div id="contact-tx-detail-content"></div>
-                    </div>
+                <div id="modal_transactions" class="contact-modal-tx-wrapper">
+                    <p class="no-transactions">No recent transactions with this contact.</p>
                 </div>
             </div>
         </div>
