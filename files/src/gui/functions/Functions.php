@@ -943,7 +943,7 @@ if (!empty($pendingContacts) && $user->has('public')) {
         // Get the contact transaction description (message sent with the request)
         $contactTx = $txContactRepo->getContactTransactionByParties($pc['pubkey'], $myPubkey);
         $desc = $contactTx['description'] ?? null;
-        if ($desc !== null && $desc !== 'Contact request transaction') {
+        if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
             $pc['contact_description'] = $desc;
         }
     }

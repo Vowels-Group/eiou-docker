@@ -50,6 +50,13 @@ $endName = $endContact['name'] ?? null;
 $endHash = $endContact['pubkey_hash'] ?? '';
 
 $description = !empty($tx['description']) ? $tx['description'] : '';
+// Old contact-request txs stored the description as the longer phrase
+// "Contact request transaction"; the current default is the shorter
+// "Contact request". Display the short form regardless of what's stored
+// so users see consistent wording across old + new history.
+if ($description === 'Contact request transaction') {
+    $description = 'Contact request';
+}
 
 if ($isContactReq) { $typeKey = 'contact'; $typeLabel = 'Contact'; $typeIcon = 'fa-user-plus'; }
 elseif ($isP2P)    { $typeKey = 'p2p';     $typeLabel = 'P2P';     $typeIcon = 'fa-network-wired'; }
@@ -101,8 +108,17 @@ $statusIcon = $statusIcons[$statusLower] ?? 'fa-circle';
             <span class="contact-name-text"><?php echo htmlspecialchars($cpName ?: 'Unknown'); ?></span>
         </div>
     </td>
-    <td class="col-number col-tx-amount text-right <?php echo $isSent ? 'transaction-sent' : 'transaction-received'; ?>">
-        <?php echo ($isSent ? '−' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+    <td class="col-number col-tx-amount text-right <?php echo $isContactReq ? 'text-muted' : ($isSent ? 'transaction-sent' : 'transaction-received'); ?>">
+        <?php if ($isContactReq): ?>
+            <?php /* Mobile hides the Type column so the bare em-dash reads as
+                     ambiguous — label it explicitly on narrow viewports. Desktop
+                     keeps the em-dash alone because the "Contact" badge is
+                     visible in the Type column. */ ?>
+            <span class="tx-amount-contact-label">Contact request</span>
+            <span class="tx-amount-mdash">&mdash;</span>
+        <?php else: ?>
+            <?php echo ($isSent ? '−' : '+') . number_format($tx['amount'], displayDecimals()); ?> <?php echo htmlspecialchars($tx['currency']); ?>
+        <?php endif; ?>
     </td>
     <td class="col-tx-desc" title="<?php echo htmlspecialchars($description ?: 'No description'); ?>">
         <?php echo htmlspecialchars($description ?: '—'); ?>

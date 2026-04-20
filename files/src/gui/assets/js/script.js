@@ -177,6 +177,21 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * Display-time normalisation for transaction descriptions. Old contact-
+ * request txs stored their description as the long phrase "Contact request
+ * transaction"; the current default is the shorter "Contact request".
+ * Render the short form regardless of what's in the DB so the history looks
+ * consistent across old + new rows. Returns the input unchanged for any
+ * other description.
+ */
+function displayTxDescription(desc) {
+    if (desc === 'Contact request transaction') {
+        return 'Contact request';
+    }
+    return desc;
+}
+
 // ============================================================================
 // Paginator — shared pagination utility for server-rendered tables
 // ============================================================================
@@ -1102,11 +1117,23 @@ function renderTransactionModal(tx) {
     // Build HTML content
     var html = '';
 
-    // Header with amount
-    var headerClass = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
+    // Header with amount. Contact-request transactions carry amount=0 by
+    // definition (they only exist to establish a bilateral link) — showing
+    // "+0 USD" with a green/red sent/received tint misrepresents them as
+    // money movements. For contact reqs, promote the direction (Sent /
+    // Received with arrow icon) into the header's hero slot instead of a
+    // muted em-dash above a duplicate direction line.
+    var isContactReq = tx.tx_type === 'contact';
+    var headerClass = isContactReq
+        ? 'tx-modal-header-neutral'
+        : (tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received');
     html += '<div class="tx-modal-header ' + headerClass + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
-    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    if (isContactReq) {
+        html += '<div class="tx-modal-amount tx-modal-amount-placeholder"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    } else {
+        html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
+        html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    }
     html += '</div>';
 
     // Status, type, and role badges
@@ -1151,7 +1178,7 @@ function renderTransactionModal(tx) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
         html += '</div>';
     }
 
@@ -3451,7 +3478,8 @@ function openContactModal(contact, openTab) {
         for (var i = 0; i < transactions.length; i++) {
             var tx = transactions[i];
             var isSent = tx.type === 'sent';
-            var amountClass = isSent ? 'transaction-sent' : 'transaction-received';
+            var isContactReq = tx.tx_type === 'contact';
+            var amountClass = isContactReq ? 'text-muted' : (isSent ? 'transaction-sent' : 'transaction-received');
             var amountPrefix = isSent ? '−' : '+';
             var status = (tx.status || '').toLowerCase();
             var inProgress = (status !== 'completed' && status !== 'rejected' && status !== 'cancelled');
@@ -3460,17 +3488,30 @@ function openContactModal(contact, openTab) {
             var description = tx.description || '';
             var rowClass = 'tx-row cursor-pointer' + (inProgress ? ' tx-item-in-progress' : '');
 
-            html += '<tr class="' + rowClass + '" data-action="showContactTxDetail" data-index="' + i + '" title="' + escapeHtml(tx.date || '') + ' — click for details">';
+            // Route clicks to the main transactionModal (as a stacked overlay)
+            // instead of the embedded tx-detail-view. That gives us the same
+            // click-outside + Escape dismissal the Recent Transactions modal
+            // has, which the in-place view-swap was missing — user couldn't
+            // dismiss the tx detail by clicking elsewhere in the contact modal.
+            html += '<tr class="' + rowClass + '" data-action="openTransactionModalByTxid" data-txid="' + escapeHtml(tx.txid || '') + '" title="' + escapeHtml(tx.date || '') + ' — click for details">';
             html += '<td class="col-tx-status-icon text-center">';
             html += '<span class="tx-status-icon tx-status-' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">';
             html += '<i class="fas ' + statusIcon + '"></i>';
             html += '</span>';
             html += '</td>';
-            html += '<td class="col-tx-desc" title="' + escapeHtml(description || 'No description') + '">';
-            html += escapeHtml(description || '—');
+            var displayDesc = displayTxDescription(description);
+            html += '<td class="col-tx-desc" title="' + escapeHtml(displayDesc || 'No description') + '">';
+            html += escapeHtml(displayDesc || '—');
             html += '</td>';
             html += '<td class="col-number col-tx-amount text-right ' + amountClass + '">';
-            html += amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD');
+            if (isContactReq) {
+                // Mobile shows the label instead of the em-dash (see
+                // `.tx-amount-contact-label` comment in page.css for why).
+                html += '<span class="tx-amount-contact-label">Contact request</span>';
+                html += '<span class="tx-amount-mdash">&mdash;</span>';
+            } else {
+                html += amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD');
+            }
             html += '</td>';
             html += '</tr>';
         }
@@ -4063,11 +4104,20 @@ function showContactTxDetail(index) {
     // Build HTML content
     var html = '';
 
-    // Header with amount
-    var headerClass2 = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
+    // Header with amount — contact-request txs show the direction (arrow +
+    // Sent/Received) as the hero instead of a zero amount (see the sibling
+    // render path earlier in this file for the rationale).
+    var isContactReq2 = tx.tx_type === 'contact';
+    var headerClass2 = isContactReq2
+        ? 'tx-modal-header-neutral'
+        : (tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received');
     html += '<div class="tx-modal-header ' + headerClass2 + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
-    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    if (isContactReq2) {
+        html += '<div class="tx-modal-amount tx-modal-amount-placeholder"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    } else {
+        html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
+        html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    }
     html += '</div>';
 
     // Status, type, and role badges
@@ -4093,7 +4143,7 @@ function showContactTxDetail(index) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
         html += '</div>';
     }
 
@@ -5732,7 +5782,7 @@ function openPrPendingModal(el) {
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + escapeHtml(dirLabel) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
     if (desc) {
-        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(displayTxDescription(desc)) + '</div></div>';
     }
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
 
@@ -5809,7 +5859,7 @@ function openPrHistoryModal(el) {
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + (direction === 'incoming' ? 'Incoming — they requested' : 'Outgoing — you requested') + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
     if (desc) {
-        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(displayTxDescription(desc)) + '</div></div>';
     }
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value" style="color:' + statusColor + '">' + ucfirst(escapeHtml(status)) + '</div></div>';

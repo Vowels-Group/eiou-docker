@@ -970,6 +970,18 @@ tr.paginator-hidden {
     .contacts-table.tx-table .col-tx-amount { width: auto; }
 }
 
+/* Contact-request rows show an em-dash in the amount cell instead of a
+   zero value. On desktop, the Type column's "Contact" badge disambiguates;
+   on mobile, the Type column is hidden — so swap the em-dash for a
+   "Contact request" label at narrow viewports to avoid an orphan em-dash
+   that could read as "hidden" or "unknown". */
+.tx-amount-contact-label { display: none; font-style: italic; font-size: 0.85em; }
+.tx-amount-mdash         { display: inline; }
+@media (max-width: 600px) {
+    .tx-amount-contact-label { display: inline; }
+    .tx-amount-mdash         { display: none; }
+}
+
 /* Sortable column headers */
 .contacts-table thead th.sortable {
     cursor: pointer;
@@ -2122,12 +2134,19 @@ tr.contact-card:hover .contact-name-cell {
 
 /* Transaction Status Badges */
 .tx-status-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
+    line-height: 1.2;
+}
+.tx-status-badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .tx-status-pending {
@@ -2433,6 +2452,11 @@ tr.tx-item-in-progress > td:first-child {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    line-height: 1.2;   /* see .tx-modal-badge comment — symmetric whitespace around x-height */
+}
+.tx-type-badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .tx-type-p2p {
@@ -2842,10 +2866,18 @@ tr.tx-item-in-progress > td:first-child {
 }
 
 .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-size: 0.75rem;
     font-weight: 600;
+    line-height: 1.2;   /* symmetric whitespace around x-height; keeps icon + text co-centered */
+}
+.badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .badge-id {
@@ -3436,6 +3468,11 @@ tr.tx-item-in-progress > td:first-child {
     border: 1.5px solid currentColor;
     font-size: 0.82rem;
     font-weight: 600;
+    line-height: 1.2;
+}
+.dlq-stat-chip > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 /* Filter dropdown reuses .contacts-filter-select from the shared table chrome.
@@ -4675,8 +4712,16 @@ details.section-intro > .section-intro-body {
    The actual direction color is driven by the amount color scheme further
    down in this file. */
 .tx-modal-header-sent,
-.tx-modal-header-received {
+.tx-modal-header-received,
+.tx-modal-header-neutral {
     /* background/border inherited from .tx-modal-header above */
+}
+/* Neutral variant for contact-request transactions — amount is always zero
+   by definition, so the sent/received color scheme would be misleading.
+   Amount itself is rendered as a muted em-dash placeholder below. */
+.tx-modal-amount-placeholder {
+    color: var(--text-muted, #6c757d);
+    font-weight: normal;
 }
 
 .tx-modal-amount {
@@ -4724,7 +4769,13 @@ details.section-intro > .section-intro-body {
    alignment so icon-bearing badges (P2P Routed, Sent) and plain-text
    badges (Completed/Rejected/Cancelled) share identical vertical
    metrics. Without this the text-only status badge sits off-center
-   relative to its icon-bearing neighbours. */
+   relative to its icon-bearing neighbours.
+
+   `line-height: 1` cropped the natural descender/x-height whitespace
+   asymmetrically against Font Awesome's glyph metrics, which made the
+   text look slightly low vs the icon even though both boxes were
+   centered. Bumping to 1.2 restores symmetric vertical whitespace around
+   the text's x-height, so text + icon read as centered together. */
 .tx-modal-badge,
 .tx-modal-badges .tx-status-badge {
     display: -webkit-inline-box;
@@ -4735,7 +4786,12 @@ details.section-intro > .section-intro-body {
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
-    line-height: 1;
+    line-height: 1.2;
+}
+.tx-modal-badge > i,
+.tx-modal-badges .tx-status-badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .tx-modal-badge {
