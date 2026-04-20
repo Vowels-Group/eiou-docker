@@ -1031,16 +1031,17 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         $localTxid = $localTx['txid'];
         $remoteTxid = $remoteTx['txid'];
 
-        // #863 phase 5 — archive-wins rule. If the local conflict partner is
-        // from `transactions_archive`, it has already been through the full
-        // gap-free-at-archival check and sat as settled history for at least
-        // the retention window. Forcing lexicographic comparison here would
-        // potentially "un-settle" an archived row (via the re-sign path,
-        // which can't safely modify the archive anyway). Bypass the
-        // comparison and declare archive the winner regardless of txid order.
+        // Archive-wins rule. If the local conflict partner is from
+        // `transactions_archive`, it has already been through the full
+        // gap-free-at-archival check and sat as settled history for at
+        // least the retention window. Forcing lexicographic comparison
+        // here would potentially "un-settle" an archived row (via the
+        // re-sign path, which can't safely modify the archive anyway).
+        // Bypass the comparison and declare archive the winner regardless
+        // of txid order.
         //
-        // The remote tx is STILL inserted into live by the caller (both have
-        // valid signatures; chain ordering is deterministic per the
+        // The remote tx is STILL inserted into live by the caller (both
+        // have valid signatures; chain ordering is deterministic per the
         // lexicographic tie-break at read time). We just don't modify the
         // archive via re-sign — which is exactly what "local wins" already
         // does in the non-archive case.

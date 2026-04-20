@@ -348,7 +348,7 @@ elseif($request === "backup"){
   $backupService = $app->services->getBackupService();
   $backupService->handleCommand($cleanArgv, $output);
 }
-// Chain integrity audit (#863 phase 2 safety net)
+// Chain integrity audit — safety net for archived chains
 // Walks every bilateral chain end-to-end (live + archive) and verifies
 // each pair's archive hash against the stored checkpoint. Exits 1 if
 // any pair has findings (gap or hash mismatch).

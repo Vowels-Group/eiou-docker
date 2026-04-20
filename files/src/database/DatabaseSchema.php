@@ -712,12 +712,12 @@ function getTransactionsArchiveTableSchema() {
 // it successfully archives a batch of transactions for a given
 // (user_pubkey_hash, contact_pubkey_hash) pair.
 //
-// Phase 2 (issue #863 follow-up) will use these rows to let
-// verifyChainIntegrity() stop at the checkpoint boundary — if a pair has a
-// checkpoint and the live tail is itself gap-free, the full chain is
-// trivially gap-free without walking the archived portion. A tamper or
-// corruption on the archive is detected by recomputing archived_txid_hash
-// and comparing against the stored value.
+// verifyChainIntegrity() on every outbound send consults these rows to
+// stop at the checkpoint boundary — if a pair has a checkpoint and the
+// live tail is itself gap-free, the full chain is trivially gap-free
+// without walking the archived portion. A tamper or corruption on the
+// archive is detected by `eiou verify-chain` recomputing
+// archived_txid_hash and comparing against the stored value.
 //
 // Rows are upserted: archival runs update highest_archived_timestamp +
 // archived_txid_hash + archived_count + last_verified_gap_free_at on the
@@ -730,7 +730,7 @@ function getTransactionChainCheckpointsTableSchema() {
         highest_archived_timestamp DATETIME(6) NOT NULL,  /* Newest archived_at timestamp under this checkpoint */
         highest_archived_time BIGINT NULL,                /* Newest wallet `time` value under this checkpoint, for chain-walk seeking */
         archived_count INT NOT NULL DEFAULT 0,            /* Total rows in the archive covered by this checkpoint */
-        archived_txid_hash VARCHAR(64) NOT NULL,          /* SHA-256 over sorted archived txid list; tamper detection for Phase 2 */
+        archived_txid_hash VARCHAR(64) NOT NULL,          /* SHA-256 over sorted archived txid list; tamper detection for the audit CLI */
         last_verified_gap_free_at DATETIME(6) NOT NULL,   /* Last time verifyChainIntegrity reported valid=true for the pair */
         created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),

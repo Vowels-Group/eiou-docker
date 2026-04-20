@@ -837,7 +837,7 @@ class TransactionRepository extends AbstractRepository {
         if ($this->exists('txid', $txid)) {
             return true;
         }
-        // Also check the archive — #863 phase 4 correctness fix for sync.
+        // Also check the archive — sync dedup correctness after archival.
         // Without this, sync from a counterparty that still has an already-
         // archived tx re-inserts it into live, causing duplicate-key
         // violations on the next archival run AND inflating live with
@@ -872,10 +872,10 @@ class TransactionRepository extends AbstractRepository {
             }
         }
 
-        // #863 phase 4 correctness fix: fall through to the archive so sync
-        // can re-send an archived tx to a counterparty that doesn't have
-        // it. Without this, Alice's archived txs would never propagate to
-        // a restored or new Bob — remote stays permanently missing them.
+        // Fall through to the archive so sync can re-send an archived tx
+        // to a counterparty that doesn't have it. Without this, our
+        // archived txs would never propagate to a restored or new peer —
+        // remote stays permanently missing them.
         try {
             $archiveStmt = $this->pdo->prepare("SELECT * FROM transactions_archive WHERE txid = :txid");
             $archiveStmt->execute([':txid' => $txid]);
@@ -906,11 +906,11 @@ class TransactionRepository extends AbstractRepository {
             }
         }
 
-        // #863 phase 4: archive rows are status='completed' by construction
-        // (only completed txs get archived). Answer status queries from the
+        // Archive rows are status='completed' by construction (only
+        // completed txs get archived). Answer status queries from the
         // archive so a peer asking "did tx X complete?" gets 'completed'
-        // rather than a TransactionNotFound — archive is not "not found", it's
-        // settled history.
+        // rather than a TransactionNotFound — archive is not "not found",
+        // it's settled history.
         try {
             $archiveStmt = $this->pdo->prepare("SELECT status FROM transactions_archive WHERE txid = :txid");
             $archiveStmt->execute([':txid' => $txid]);

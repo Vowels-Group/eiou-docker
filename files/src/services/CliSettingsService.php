@@ -884,7 +884,7 @@ class CliSettingsService
                     break;
 
                 case '35b':
-                    echo "Enter transactions archive retention days (minimum 1, default 180): ";
+                    echo "Enter transactions archive retention days (minimum 1, default 30): ";
                     $key = 'transactionsArchiveRetentionDays';
                     $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
                     if (!$validation['valid']) {

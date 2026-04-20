@@ -1013,7 +1013,7 @@ eiou changesettings [setting] [value]
 | `cleanupMetricsRetentionDays` | Days to retain metrics data (min 1) | `90` |
 | `paymentRequestsArchiveRetentionDays` | Days resolved (non-pending) payment requests stay in the live table before moving to `payment_requests_archive` (min 1). **Not a delete** — archived rows stay queryable | `180` |
 | `paymentRequestsArchiveBatchSize` | Max rows moved per archival cron run (min 1) | `500` |
-| `transactionsArchiveRetentionDays` | Days completed transactions stay in the live table before moving to `transactions_archive` (min 1). Archival is additionally gated per bilateral pair on a gap-free chain-integrity check — pairs with a detected gap are skipped, not archived. **Not a delete** | `180` |
+| `transactionsArchiveRetentionDays` | Days completed transactions stay in the live table before moving to `transactions_archive` (min 1). Archival is additionally gated per bilateral pair on a gap-free chain-integrity check — pairs with a detected gap are skipped, not archived. **Not a delete** | `30` |
 | `transactionsArchiveBatchSize` | Max rows moved per transactions archival cron run (min 1) | `500` |
 
 **Advanced Settings (Rate Limiting):**
@@ -1597,7 +1597,7 @@ php /app/eiou/scripts/transaction-archive-cron.php --dry-run
 php /app/eiou/scripts/transaction-archive-cron.php
 ```
 
-Logs are written to `/var/log/eiou/transaction-archive.log`. The run's JSON output includes `pairs_processed`, `pairs_archived`, `pairs_skipped_gap`, `moved`, `batches`, and `archive_backup_file` — `pairs_skipped_gap > 0` is worth investigating (a gap is either a local data issue or a missing sync). Phase 2 of #863 (shipped) wires `verifyChainIntegrity()` to consume the checkpoint for an O(recent) hot-path.
+Logs are written to `/var/log/eiou/transaction-archive.log`. The run's JSON output includes `pairs_processed`, `pairs_archived`, `pairs_skipped_gap`, `moved`, `batches`, and `archive_backup_file` — `pairs_skipped_gap > 0` is worth investigating (a gap is either a local data issue or a missing sync). The per-pair checkpoint written here is consumed by `verifyChainIntegrity()` on every outbound send, so the send hot-path stays O(recent tail) regardless of total history size.
 
 ---
 
@@ -1621,7 +1621,7 @@ eiou verify-chain
 - `0` — every pair clean
 - `1` — at least one pair has a finding (chain gap or hash mismatch)
 
-This command is intentionally NOT on any cron — it's O(all history) per pair, which is the cost Phase 2 exists to AVOID on every send. Run it deliberately.
+This command is intentionally NOT on any cron — it's O(all history) per pair, which is the cost the per-pair checkpoint avoids on the hot path. Run it deliberately.
 
 ---
 

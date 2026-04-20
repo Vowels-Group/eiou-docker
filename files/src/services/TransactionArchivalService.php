@@ -36,11 +36,10 @@ use Throwable;
  *      WARNING. Operator can investigate the gap before the next cron run;
  *      archival will naturally retry once the chain is repaired.
  *
- * Phase 2 of #863 will make verifyChainIntegrity() use the checkpoint row
- * to skip the archived portion of the chain, collapsing its cost from
- * O(all history) to O(recent tail). That optimization is intentionally
- * NOT in this phase — this phase only produces the checkpoint metadata
- * that Phase 2 will consume.
+ * The checkpoint this service writes is what lets
+ * `verifyChainIntegrity()` skip the archived portion of the chain on the
+ * send hot path — see `TransactionChainRepository::verifyChainIntegrityByHashes`
+ * for how the fast path consumes it.
  */
 class TransactionArchivalService
 {

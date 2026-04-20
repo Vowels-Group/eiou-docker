@@ -141,7 +141,7 @@ class TransactionRepositoryTest extends TestCase
     }
 
     // =========================================================================
-    // #863 phase 4: sync-dedup archive-awareness
+    // Sync-dedup archive-awareness.
     //
     // Without these, a counterparty that still has our archived txs would
     // re-push them via sync into our live table, causing duplicate-key
@@ -236,5 +236,49 @@ class TransactionRepositoryTest extends TestCase
 
         $repo = new TransactionRepository($pdo);
         $this->assertSame('completed', $repo->getStatusByTxid('tx-archived'));
+    }
+
+    public function testGetByTxidFallsThroughToArchiveWhenLiveMisses(): void
+    {
+        // handleSyncNegotiationRequest calls getByTxid to fetch a tx the
+        // remote is missing. If we only have it in archive, we must still
+        // return it so the sync response contains it (otherwise remote
+        // stays permanently missing the archived tx).
+        $pdo = $this->createMock(PDO::class);
+
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetchAll')->willReturn([]);  // live miss (empty result)
+
+        $archiveRow = ['txid' => 'tx-archived', 'status' => 'completed', 'amount_whole' => 0, 'amount_frac' => 0];
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetchAll')->willReturn([$archiveRow]);
+
+        $pdo->method('prepare')->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $repo = new TransactionRepository($pdo);
+        $result = $repo->getByTxid('tx-archived');
+
+        $this->assertNotNull($result);
+        $this->assertSame('tx-archived', $result[0]['txid']);
+    }
+
+    public function testGetByTxidLiveHitShortCircuits(): void
+    {
+        // Live hit → should NOT query archive.
+        $pdo = $this->createMock(PDO::class);
+
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetchAll')->willReturn([
+            ['txid' => 'tx-live', 'status' => 'completed', 'amount_whole' => 0, 'amount_frac' => 0]
+        ]);
+
+        $pdo->expects($this->once())->method('prepare')->willReturn($liveStmt);
+
+        $repo = new TransactionRepository($pdo);
+        $result = $repo->getByTxid('tx-live');
+        $this->assertSame('tx-live', $result[0]['txid']);
     }
 }

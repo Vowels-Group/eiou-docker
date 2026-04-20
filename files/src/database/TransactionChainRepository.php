@@ -70,7 +70,7 @@ class TransactionChainRepository extends AbstractRepository
      * transaction archival job, which finds bilateral pairs by hash and would
      * otherwise have to re-fetch the public keys just to hash them again).
      *
-     * Phase 2 fast path (default, $useCheckpoint=true):
+     * Fast path (default, $useCheckpoint=true):
      *   1. Query ONLY live rows for the pair.
      *   2. Look up the pair's checkpoint in transaction_chain_checkpoints.
      *   3. Walk settled live txs. A settled tx whose previous_txid is not in
@@ -457,12 +457,12 @@ class TransactionChainRepository extends AbstractRepository
         // to be included, even cancelled/rejected ones. The chain must be complete for proper
         // conflict resolution during sync operations.
         //
-        // #863 phase 4: check archive too. If we've archived a tx that
-        // shares the same previous_txid as an incoming remote tx, that's
-        // still a conflict we need to detect — without this check, sync
-        // would insert the remote tx into live even though the archive
-        // already has a tx claiming the same prev, leaving the chain
-        // permanently ambiguous.
+        // Check the archive too: if we've archived a tx that shares the
+        // same previous_txid as an incoming remote tx, that's still a
+        // conflict we need to detect — without this check, sync would
+        // insert the remote tx into live even though the archive already
+        // has a tx claiming the same prev, leaving the chain permanently
+        // ambiguous.
         $whereBody = "previous_txid = :previous_txid
                       AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
                            OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))";
@@ -488,9 +488,9 @@ class TransactionChainRepository extends AbstractRepository
             if ($result) {
                 // Tag the row with its source so downstream conflict-resolution
                 // can recognise an archived local tx and apply the archive-wins
-                // rule (see SyncService::resolveChainConflict + #863 phase 5
-                // notes). Underscore prefix matches the existing `_direction`
-                // convention for transport-only metadata that never hits the DB.
+                // rule (see SyncService::resolveChainConflict). Underscore
+                // prefix matches the existing `_direction` convention for
+                // transport-only metadata that never hits the DB.
                 $result['_source'] = 'live';
                 return $result;
             }

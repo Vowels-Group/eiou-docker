@@ -1300,7 +1300,7 @@ Get system settings.
             "cleanup_metrics_retention_days": 90,
             "payment_requests_archive_retention_days": 180,
             "payment_requests_archive_batch_size": 500,
-            "transactions_archive_retention_days": 180,
+            "transactions_archive_retention_days": 30,
             "transactions_archive_batch_size": 500,
             "p2p_rate_limit_per_minute": 60,
             "rate_limit_max_attempts": 10,

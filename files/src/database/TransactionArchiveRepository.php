@@ -17,12 +17,12 @@ use PDOException;
  * chain-integrity precondition per bilateral pair. There is no path for
  * the normal send/receive flow to insert directly into the archive.
  *
- * Read paths in the rest of the app don't use this class directly today —
- * Phase 2 of #863 will extend `TransactionChainRepository` +
- * `TransactionContactRepository` + friends to consult the archive / the
- * checkpoint metadata. For Phase 1, this repository is only exercised by
- * the archival cron and by operator-visibility helpers
- * (`countAll`, `getLatestArchivedAt`).
+ * Read paths elsewhere (`TransactionChainRepository` verify path,
+ * `TransactionContactRepository` balances, `TransactionStatisticsRepository`
+ * aggregates, CLI history) consult either the per-pair checkpoint or the
+ * archive table directly — see `getCheckpoint`, `computeArchivedTxidHash`,
+ * `getArchiveHeadForPair`. The archival cron is the only writer; operator
+ * visibility uses `countAll` + `getLatestArchivedAt`.
  */
 class TransactionArchiveRepository extends AbstractRepository
 {
@@ -373,8 +373,8 @@ class TransactionArchiveRepository extends AbstractRepository
      * The choice of a full recomputation (vs. an incremental hash-chain)
      * trades write cost for simplicity: each archival batch reads the
      * pair's archive rows once, which is dominated by the batch size
-     * itself. Phase 2's verify path will recompute the same way and
-     * compare.
+     * itself. The audit-path verify (`eiou verify-chain`) recomputes the
+     * hash the same way and compares against the stored value.
      */
     public function computeArchivedTxidHash(string $hashA, string $hashB): string
     {

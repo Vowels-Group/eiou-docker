@@ -1671,7 +1671,7 @@ class SyncServiceTest extends TestCase
     }
 
     /**
-     * #863 phase 5: archive-wins rule in chain conflict resolution.
+     * Archive-wins rule in chain conflict resolution.
      *
      * When the local conflict partner is from `transactions_archive`
      * (identified via the `_source` sentinel set by

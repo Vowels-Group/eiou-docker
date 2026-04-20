@@ -2,7 +2,7 @@
 /**
  * Unit Tests for ChainAuditService
  *
- * The audit/--full-verify path #863 Phase 2 adds. Three scenarios matter:
+ * The audit / --full-verify path for archived chains. Three scenarios matter:
  *   1. Clean state: live + archive + checkpoint all agree. No findings.
  *   2. Chain gap in live that the fast-path verify (with checkpoint
  *      trust) would miss — audit with useCheckpoint=false must catch it.

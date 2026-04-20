@@ -539,54 +539,95 @@ class TransactionChainRepositoryTest extends TestCase
     // getLocalTransactionByPreviousTxid() Tests
     // =========================================================================
 
-    public function testGetLocalTransactionByPreviousTxidReturnsTransaction(): void
+    public function testGetLocalTransactionByPreviousTxidReturnsTransactionTaggedAsLive(): void
     {
+        // Live hit short-circuits (no archive prepare) and tags the row
+        // with _source='live' so downstream conflict resolution can apply
+        // the archive-wins rule iff source is 'archive'.
         $previousTxid = 'prev-tx';
         $pubkeyHash1 = 'hash1';
         $pubkeyHash2 = 'hash2';
-        $expectedTransaction = [
+        $dbRow = [
             'txid' => 'local-tx',
             'previous_txid' => $previousTxid,
             'sender_public_key_hash' => $pubkeyHash1
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->once())  // live prepare only, archive short-circuited
             ->method('prepare')
             ->with($this->stringContains('WHERE previous_txid = :previous_txid'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(5))
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute');
-
-        $this->stmt->expects($this->once())
-            ->method('fetch')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedTransaction);
+        $this->stmt->expects($this->exactly(5))->method('bindValue');
+        $this->stmt->expects($this->once())->method('execute');
+        $this->stmt->expects($this->once())->method('fetch')->willReturn($dbRow);
 
         $result = $this->repository->getLocalTransactionByPreviousTxid($previousTxid, $pubkeyHash1, $pubkeyHash2);
 
-        $this->assertEquals($expectedTransaction, $result);
+        $this->assertSame('live', $result['_source']);
+        // Every other field from the DB row is preserved
+        $this->assertSame('local-tx', $result['txid']);
+        $this->assertSame($previousTxid, $result['previous_txid']);
     }
 
-    public function testGetLocalTransactionByPreviousTxidReturnsNullWhenNotFound(): void
+    public function testGetLocalTransactionByPreviousTxidReturnsNullWhenNeitherHasIt(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->willReturn($this->stmt);
+        // Live miss falls through to archive; both miss → null.
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(false);
 
-        $this->stmt->expects($this->once())
-            ->method('execute');
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetch')->willReturn(false);
 
-        $this->stmt->expects($this->once())
-            ->method('fetch')
-            ->willReturn(false);
+        $this->pdo->expects($this->exactly(2))->method('prepare')
+            ->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $result = $this->repository->getLocalTransactionByPreviousTxid('prev', 'hash1', 'hash2');
+        $this->assertNull($result);
+    }
+
+    public function testGetLocalTransactionByPreviousTxidFallsThroughToArchiveTaggedSource(): void
+    {
+        // Live miss → archive hit → row returned with _source='archive'
+        // so resolveChainConflict applies the archive-wins rule.
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(false);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetch')->willReturn([
+            'txid' => 'archived-tx',
+            'previous_txid' => 'prev',
+        ]);
+
+        $this->pdo->expects($this->exactly(2))->method('prepare')
+            ->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
 
         $result = $this->repository->getLocalTransactionByPreviousTxid('prev', 'hash1', 'hash2');
 
-        $this->assertNull($result);
+        $this->assertNotNull($result);
+        $this->assertSame('archived-tx', $result['txid']);
+        $this->assertSame('archive', $result['_source']);
+    }
+
+    public function testGetLocalTransactionByPreviousTxidArchiveMissingFallsBackToNull(): void
+    {
+        // Live miss + archive table missing (v9→v10 transitional or test
+        // env without archive table) — must not blow up.
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(false);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')
+            ->willThrowException(new PDOException('Table transactions_archive not found'));
+
+        $this->pdo->method('prepare')->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $this->assertNull($this->repository->getLocalTransactionByPreviousTxid('prev', 'hash1', 'hash2'));
     }
 
     // =========================================================================

@@ -11,11 +11,11 @@ use Eiou\Utils\Logger;
  * Chain Verification Service
  *
  * Implements the `eiou verify-chain` CLI command — a safety-net / audit
- * path that bypasses the Phase-2 checkpoint-trust optimization and walks
- * every bilateral chain end-to-end (live + archive). Also recomputes each
- * pair's `archived_txid_hash` from the archive rows and compares it
- * against the stored checkpoint hash — detects tampering that the
- * steady-state verify path trusts past by design.
+ * path that bypasses the checkpoint-trust optimization in the send hot
+ * path and walks every bilateral chain end-to-end (live + archive). Also
+ * recomputes each pair's `archived_txid_hash` from the archive rows and
+ * compares it against the stored checkpoint hash — detects tampering
+ * that the hot path trusts past by design.
  *
  * Use when:
  *   - An operator wants to audit a node after a restore or backup swap.
@@ -25,7 +25,7 @@ use Eiou\Utils\Logger;
  *     outside of the archival service's normal flow.
  *
  * Intentionally NOT on any cron — it's on-demand. Cost is O(all history)
- * per pair, which is the cost #863's Phase 2 exists to AVOID on every
+ * per pair, which is the cost the per-pair checkpoint avoids on every
  * send; running it is a deliberate choice.
  */
 class ChainAuditService
