@@ -42,6 +42,7 @@ use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
 use Eiou\Services\PaymentRequestService;
+use Eiou\Services\PaymentRequestArchivalService;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Proxies\SyncServiceProxy;
@@ -971,6 +972,22 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['PaymentRequestService'];
+    }
+
+    /**
+     * Get PaymentRequestArchivalService instance
+     *
+     * Used by the payment-request-archive-cron to move resolved requests
+     * older than the retention threshold into payment_requests_archive.
+     */
+    public function getPaymentRequestArchivalService(): PaymentRequestArchivalService {
+        if (!isset($this->services['PaymentRequestArchivalService'])) {
+            $this->services['PaymentRequestArchivalService'] = new PaymentRequestArchivalService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestArchiveRepository::class),
+                $this->currentUser
+            );
+        }
+        return $this->services['PaymentRequestArchivalService'];
     }
 
     /**

@@ -618,6 +618,40 @@ function getPaymentRequestsTableSchema() {
     )";
 }
 
+// Payment Requests Archive table — cold storage for resolved requests older
+// than the configured retention window. Schema mirrors payment_requests so
+// the repository can UNION both tables transparently for audit/history
+// reads. Archive is append-only from the archival job's perspective: writes
+// only happen during scheduled moves, never from the normal request flow.
+function getPaymentRequestsArchiveTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS payment_requests_archive (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        request_id VARCHAR(64) UNIQUE NOT NULL,
+        direction ENUM('incoming','outgoing') NOT NULL,
+        status ENUM('pending','approved','declined','cancelled','expired') NOT NULL,
+        requester_pubkey_hash VARCHAR(64) NOT NULL,
+        requester_address     VARCHAR(255) DEFAULT NULL,
+        contact_name          VARCHAR(255) DEFAULT NULL,
+        recipient_pubkey_hash VARCHAR(64) NOT NULL,
+        amount_whole BIGINT NOT NULL,
+        amount_frac  BIGINT NOT NULL DEFAULT 0,
+        currency     VARCHAR(10) NOT NULL,
+        description  VARCHAR(255) DEFAULT NULL,
+        created_at   DATETIME(6) NOT NULL,
+        expires_at   DATETIME(6) DEFAULT NULL,
+        responded_at DATETIME(6) DEFAULT NULL,
+        resulting_txid VARCHAR(64) DEFAULT NULL,
+        signed_message_content TEXT DEFAULT NULL,
+        archived_at  DATETIME(6) NOT NULL,             /* When the archival job moved this row */
+        INDEX idx_pra_requester (requester_pubkey_hash),
+        INDEX idx_pra_recipient (recipient_pubkey_hash),
+        INDEX idx_pra_status (status),
+        INDEX idx_pra_direction_status (direction, status),
+        INDEX idx_pra_responded_at (responded_at),
+        INDEX idx_pra_archived_at (archived_at)
+    )";
+}
+
 // ============================================================================
 // CAPACITY RESERVATIONS & ROUTE CANCELLATIONS
 // Tables for tracking reserved credit capacity during P2P route discovery
