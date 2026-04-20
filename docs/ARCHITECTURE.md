@@ -330,6 +330,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `BackupService` | Encrypted backup and restore | TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
 | `PaymentRequestService` | Payment request lifecycle — create, approve (triggers sendEiou), decline, cancel, handle incoming request/response messages | PaymentRequestRepo, TransactionService, MessageDeliveryService, ContactRepo, TransportUtility |
+| `PaymentRequestArchivalService` | Nightly batch move of resolved payment requests from `payment_requests` → `payment_requests_archive` once `responded_at` is older than `paymentRequestsArchiveRetentionDays`. Invoked by `payment-request-archive-cron.php` at 01:00 UTC. Supports `--dry-run` (count only). After any successful move (moved > 0) calls `BackupService::createArchiveBackup()` + `cleanupOldBackups()` so the cold backup is refreshed; backup failures are logged but never fail archival | PaymentRequestArchiveRepo, UserContext, BackupService (optional) |
 | `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService, PaymentRequestService |
 | `ApiAuthService` | API authentication (HMAC-SHA256) | ApiKeyRepo |
 | `ApiKeyService` | API key management | ApiKeyRepo |
@@ -1242,6 +1243,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing` = who initiated the relationship) |
 | `capacity_reservations` | Credit reserved at each relay hop during P2P routing (base_amount and total_amount including fees), status: active/released/committed |
 | `route_cancellations` | Audit trail for route cancellation messages sent to unselected P2P candidates after best-fee selection |
+| `payment_requests` | Live payment request lifecycle: pending + recently-resolved rows. Resolved rows older than `paymentRequestsArchiveRetentionDays` move to `payment_requests_archive` via the nightly archival cron |
+| `payment_requests_archive` | Cold storage for resolved payment requests. Schema mirrors `payment_requests` + an `archived_at` timestamp. Read paths (`getResolvedHistoryPage`, `searchResolvedHistory`, `getByRequestId`) UNION across live + archive transparently; pending reads never touch the archive. Created at schema version 9 (fresh installs via `DatabaseSetup.php`, existing nodes via `runMigrations()`). Pilot for the eventual `transactions_archive` (#863) |
 
 ### Amount Storage: SplitAmount
 

@@ -898,6 +898,22 @@ class UserContext {
     }
 
     /**
+     * Days after resolution before a payment request moves to the archive table.
+     * Floor of 1 day so a misconfigured 0 can't turn the job into an immediate move.
+     */
+    public function getPaymentRequestsArchiveRetentionDays(): int {
+        return max(1, (int) ($this->get('paymentRequestsArchiveRetentionDays') ?? Constants::PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS));
+    }
+
+    /**
+     * How many rows the archival job moves per transaction. Keeps the per-batch
+     * lock window short; the cron loops until no eligible rows remain.
+     */
+    public function getPaymentRequestsArchiveBatchSize(): int {
+        return max(1, (int) ($this->get('paymentRequestsArchiveBatchSize') ?? Constants::PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE));
+    }
+
+    /**
      * Get held transaction retention days
      *
      * @return int
@@ -1225,6 +1241,8 @@ class UserContext {
             'cleanupHeldTxRetentionDays' => Constants::CLEANUP_HELD_TX_RETENTION_DAYS,
             'cleanupRp2pRetentionDays' => Constants::CLEANUP_RP2P_RETENTION_DAYS,
             'cleanupMetricsRetentionDays' => Constants::CLEANUP_METRICS_RETENTION_DAYS,
+            'paymentRequestsArchiveRetentionDays' => Constants::PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS,
+            'paymentRequestsArchiveBatchSize' => Constants::PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE,
 
             // Rate limiting
             'p2pRateLimitPerMinute' => Constants::P2P_RATE_LIMIT_PER_MINUTE,

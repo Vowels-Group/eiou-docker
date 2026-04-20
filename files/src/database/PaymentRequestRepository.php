@@ -4,16 +4,23 @@
 namespace Eiou\Database;
 
 use PDO;
+use PDOException;
 
 /**
  * Payment Request Repository
  *
  * Handles all database operations for the payment_requests table.
  * Stores both incoming (requests sent to us) and outgoing (requests we sent) records.
+ *
+ * History and search reads UNION the live table with `payment_requests_archive`
+ * so archived rows remain queryable transparently to callers. Pending-only
+ * reads (`getPendingIncoming`, `countPendingIncoming`) intentionally query
+ * the live table only — pending rows are never archived.
  */
 class PaymentRequestRepository extends AbstractRepository
 {
     protected $tableName = 'payment_requests';
+    private const ARCHIVE_TABLE = 'payment_requests_archive';
     protected array $allowedColumns = [
         'id', 'request_id', 'direction', 'status',
         'requester_pubkey_hash', 'requester_address', 'contact_name',
@@ -33,11 +40,28 @@ class PaymentRequestRepository extends AbstractRepository
     }
 
     /**
-     * Get a request by its unique request_id
+     * Get a request by its unique request_id. Falls through to the archive
+     * if the row isn't in the live table — audit paths (tx detail → linked
+     * request, old txid resolution) keep working after archival.
      */
     public function getByRequestId(string $requestId): ?array
     {
-        return $this->findByColumn('request_id', $requestId);
+        $row = $this->findByColumn('request_id', $requestId);
+        if ($row !== null) {
+            return $row;
+        }
+
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM " . self::ARCHIVE_TABLE . " WHERE request_id = :rid LIMIT 1"
+        );
+        $stmt->bindValue(':rid', $requestId);
+        $stmt->execute();
+        $archiveRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$archiveRow) {
+            return null;
+        }
+        $mapped = $this->mapRows([$archiveRow]);
+        return $mapped[0] ?? null;
     }
 
     /**
@@ -113,15 +137,48 @@ class PaymentRequestRepository extends AbstractRepository
      */
     public function getResolvedHistoryPage(int $limit, int $offset = 0): array
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT * FROM {$this->tableName}
+        // UNION ALL across live + archive so paginated history includes
+        // archived rows without the caller knowing. Archive rows are always
+        // non-pending by construction, so the status filter is only needed
+        // on the live side. Column list kept identical on both sides so the
+        // union is well-formed regardless of the archive-specific `archived_at`.
+        $sql = "
+            SELECT id, request_id, direction, status, requester_pubkey_hash,
+                   requester_address, contact_name, recipient_pubkey_hash,
+                   amount_whole, amount_frac, currency, description,
+                   created_at, expires_at, responded_at, resulting_txid,
+                   signed_message_content
+              FROM {$this->tableName}
              WHERE status != 'pending'
-             ORDER BY COALESCE(responded_at, created_at) DESC
-             LIMIT :limit OFFSET :offset"
-        );
+            UNION ALL
+            SELECT id, request_id, direction, status, requester_pubkey_hash,
+                   requester_address, contact_name, recipient_pubkey_hash,
+                   amount_whole, amount_frac, currency, description,
+                   created_at, expires_at, responded_at, resulting_txid,
+                   signed_message_content
+              FROM " . self::ARCHIVE_TABLE . "
+            ORDER BY COALESCE(responded_at, created_at) DESC
+            LIMIT :limit OFFSET :offset";
+
+        $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':limit', max(0, $limit), PDO::PARAM_INT);
         $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
-        $stmt->execute();
+        try {
+            $stmt->execute();
+        } catch (PDOException $e) {
+            // Archive table may not exist yet on a freshly-migrated node — fall
+            // back to live-only so history pagination keeps working.
+            $fallback = $this->pdo->prepare(
+                "SELECT * FROM {$this->tableName}
+                 WHERE status != 'pending'
+                 ORDER BY COALESCE(responded_at, created_at) DESC
+                 LIMIT :limit OFFSET :offset"
+            );
+            $fallback->bindValue(':limit', max(0, $limit), PDO::PARAM_INT);
+            $fallback->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+            $fallback->execute();
+            return $this->mapRows($fallback->fetchAll(PDO::FETCH_ASSOC));
+        }
         return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
@@ -157,32 +214,56 @@ class PaymentRequestRepository extends AbstractRepository
         }
         $like = '%' . strtolower($term) . '%';
 
-        $query = "SELECT * FROM {$this->tableName}
-                  WHERE status != 'pending'
-                    AND (
-                         LOWER(COALESCE(contact_name, '')) LIKE :term1
-                      OR LOWER(COALESCE(description,  '')) LIKE :term2
-                      OR LOWER(COALESCE(requester_pubkey_hash, '')) LIKE :term3
-                      OR LOWER(COALESCE(recipient_pubkey_hash, '')) LIKE :term4
-                      OR LOWER(COALESCE(requester_address, '')) LIKE :term5
-                    )";
+        // Match expression shared by both sides of the UNION. Each side owns
+        // its own set of bound params because PDO positional-vs-named bindings
+        // cannot be reused across subqueries.
+        $matchExpr = "(
+                 LOWER(COALESCE(contact_name, '')) LIKE %s
+              OR LOWER(COALESCE(description,  '')) LIKE %s
+              OR LOWER(COALESCE(requester_pubkey_hash, '')) LIKE %s
+              OR LOWER(COALESCE(recipient_pubkey_hash, '')) LIKE %s
+              OR LOWER(COALESCE(requester_address, '')) LIKE %s
+            )";
 
+        $liveMatch    = sprintf($matchExpr, ':lterm1', ':lterm2', ':lterm3', ':lterm4', ':lterm5');
+        $archiveMatch = sprintf($matchExpr, ':aterm1', ':aterm2', ':aterm3', ':aterm4', ':aterm5');
+
+        $liveExtra = '';
+        $archiveExtra = '';
         $params = [
-            ':term1' => $like, ':term2' => $like, ':term3' => $like,
-            ':term4' => $like, ':term5' => $like,
+            ':lterm1' => $like, ':lterm2' => $like, ':lterm3' => $like,
+            ':lterm4' => $like, ':lterm5' => $like,
+            ':aterm1' => $like, ':aterm2' => $like, ':aterm3' => $like,
+            ':aterm4' => $like, ':aterm5' => $like,
         ];
-
         if ($direction !== null && $direction !== '') {
-            $query .= " AND direction = :direction";
-            $params[':direction'] = $direction;
+            $liveExtra    .= " AND direction = :lDir";
+            $archiveExtra .= " AND direction = :aDir";
+            $params[':lDir'] = $direction;
+            $params[':aDir'] = $direction;
         }
         if ($status !== null && $status !== '') {
-            $query .= " AND status = :status";
-            $params[':status'] = $status;
+            $liveExtra    .= " AND status = :lStatus";
+            $archiveExtra .= " AND status = :aStatus";
+            $params[':lStatus'] = $status;
+            $params[':aStatus'] = $status;
         }
 
-        $query .= " ORDER BY COALESCE(responded_at, created_at) DESC
-                    LIMIT :maxResults";
+        $cols = "id, request_id, direction, status, requester_pubkey_hash,
+                 requester_address, contact_name, recipient_pubkey_hash,
+                 amount_whole, amount_frac, currency, description,
+                 created_at, expires_at, responded_at, resulting_txid,
+                 signed_message_content";
+
+        $query = "
+            SELECT {$cols} FROM {$this->tableName}
+             WHERE status != 'pending'
+               AND {$liveMatch}{$liveExtra}
+            UNION ALL
+            SELECT {$cols} FROM " . self::ARCHIVE_TABLE . "
+             WHERE {$archiveMatch}{$archiveExtra}
+            ORDER BY COALESCE(responded_at, created_at) DESC
+            LIMIT :maxResults";
 
         $stmt = $this->pdo->prepare($query);
         foreach ($params as $k => $v) {
@@ -192,7 +273,26 @@ class PaymentRequestRepository extends AbstractRepository
         try {
             $stmt->execute();
         } catch (PDOException $e) {
-            return [];
+            // Archive table missing (fresh node before migration ran) — retry
+            // against live only so search stays functional.
+            $liveOnly = "SELECT {$cols} FROM {$this->tableName}
+                          WHERE status != 'pending'
+                            AND {$liveMatch}{$liveExtra}
+                          ORDER BY COALESCE(responded_at, created_at) DESC
+                          LIMIT :maxResults";
+            $stmt = $this->pdo->prepare($liveOnly);
+            foreach ($params as $k => $v) {
+                if (strpos($k, ':a') === 0) {
+                    continue;
+                }
+                $stmt->bindValue($k, $v);
+            }
+            $stmt->bindValue(':maxResults', max(1, $maxResults), PDO::PARAM_INT);
+            try {
+                $stmt->execute();
+            } catch (PDOException $e2) {
+                return [];
+            }
         }
 
         return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));

@@ -418,10 +418,11 @@ Database migrations run automatically on startup (step 8 above) and are idempote
 
 | Schema version | Change | Released |
 |----------------|--------|---------|
+| v9 | Added `payment_requests_archive` table — cold storage for resolved (non-pending) payment requests older than `paymentRequestsArchiveRetentionDays`. Schema mirrors `payment_requests` + an `archived_at` timestamp. Populated by the nightly archival cron (`payment-request-archive-cron.php` at 01:00 UTC). Read paths UNION across live + archive, so archived rows stay queryable via GUI/CLI | Unreleased |
 | v5 | Added `payment_requests` table — stores both outgoing requests you sent and incoming requests from contacts, with direction, status, amount, currency, description, requester address, timestamps, and resulting txid on approval | Unreleased |
 | v4 and earlier | Prior tables (transactions, contacts, balances, P2P, DLQ, etc.) | — |
 
-If you are upgrading from any version with schema ≤ v4, the `payment_requests` table is created automatically on first boot. No data is lost.
+If you are upgrading from any version with schema ≤ v4, the `payment_requests` table is created automatically on first boot. No data is lost. Upgrading from schema ≤ v8 adds the new `payment_requests_archive` table (empty on first boot) — the archival cron starts moving rows once any resolved request is older than the configured retention window.
 
 ### Version Compatibility
 

@@ -299,6 +299,7 @@ class SettingsController
             'cleanupHeldTxRetentionDays' => 'held TX retention',
             'cleanupRp2pRetentionDays' => 'RP2P retention',
             'cleanupMetricsRetentionDays' => 'metrics retention',
+            'paymentRequestsArchiveRetentionDays' => 'payment requests archive retention',
         ];
         foreach ($retentionFields as $field => $label) {
             if (isset($_POST[$field])) {
