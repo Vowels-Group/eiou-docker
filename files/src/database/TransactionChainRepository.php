@@ -486,6 +486,12 @@ class TransactionChainRepository extends AbstractRepository
         if ($stmt) {
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($result) {
+                // Tag the row with its source so downstream conflict-resolution
+                // can recognise an archived local tx and apply the archive-wins
+                // rule (see SyncService::resolveChainConflict + #863 phase 5
+                // notes). Underscore prefix matches the existing `_direction`
+                // convention for transport-only metadata that never hits the DB.
+                $result['_source'] = 'live';
                 return $result;
             }
         }
@@ -501,7 +507,11 @@ class TransactionChainRepository extends AbstractRepository
             }
             $archiveStmt->execute();
             $archiveResult = $archiveStmt->fetch(PDO::FETCH_ASSOC);
-            return $archiveResult ?: null;
+            if ($archiveResult) {
+                $archiveResult['_source'] = 'archive';
+                return $archiveResult;
+            }
+            return null;
         } catch (PDOException $e) {
             // Archive missing — live-side miss was authoritative.
             return null;

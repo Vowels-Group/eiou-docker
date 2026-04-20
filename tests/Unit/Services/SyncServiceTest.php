@@ -1671,6 +1671,93 @@ class SyncServiceTest extends TestCase
     }
 
     /**
+     * #863 phase 5: archive-wins rule in chain conflict resolution.
+     *
+     * When the local conflict partner is from `transactions_archive`
+     * (identified via the `_source` sentinel set by
+     * `getLocalTransactionByPreviousTxid`), local is forced to win
+     * regardless of lexicographic txid order. Scenario constructed so the
+     * remote tx would ORDINARILY win (its txid is lexicographically
+     * smaller) — without the archive-wins rule, this test would observe
+     * a 'remote' winner and the resignLocalTransaction path would try
+     * to modify the archive. Instead, local wins, no re-sign is called,
+     * remote is still inserted (chain ordering handled at read time).
+     */
+    public function testResolveChainConflictArchiveWinsRegardlessOfTxidOrder(): void
+    {
+        $service = $this->createServiceWithBypassedSignatureVerification();
+        $service->setHeldTransactionService($this->mockHeldTransactionService);
+
+        $contactAddress = 'http://contact.example.com';
+        $contactPubkey = 'contact-public-key';
+
+        $this->mockUserContext->method('getPublicKey')->willReturn('user-public-key');
+        $this->mockUserContext->method('getUserAddresses')->willReturn(['http://user.example.com']);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn('previous-tx-123');
+
+        // Remote tx has LEXICOGRAPHICALLY SMALLER txid — would win in the
+        // live-vs-live case. Here local is archived so archive-wins applies.
+        $remoteTransaction = [
+            'txid' => 'aaa-remote-would-normally-win',
+            'previous_txid' => 'previous-tx-123',
+            'sender_address' => 'http://contact.example.com',
+            'sender_public_key' => 'contact-public-key',
+            'receiver_address' => 'http://user.example.com',
+            'receiver_public_key' => 'user-public-key',
+            'amount' => 1000,
+            'currency' => 'USD',
+            'memo' => 'standard',
+            'time' => time(),
+            'status' => 'completed',
+            'sender_signature' => 'valid-signature',
+            'signature_nonce' => time(),
+        ];
+
+        // Local tx is ARCHIVED — `_source` sentinel triggers archive-wins.
+        // Lexicographically LARGER, so without the rule it would lose.
+        $localArchivedTx = [
+            'txid' => 'zzz-local-archived',
+            'previous_txid' => 'previous-tx-123',
+            'sender_address' => 'http://user.example.com',
+            'sender_public_key' => 'user-public-key',
+            'receiver_address' => 'http://contact.example.com',
+            'receiver_public_key' => 'contact-public-key',
+            'amount' => 500,
+            'currency' => 'USD',
+            'memo' => 'standard',
+            'status' => 'completed',
+            '_source' => 'archive',
+        ];
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn(json_encode([
+                'status' => Constants::STATUS_ACCEPTED,
+                'transactions' => [$remoteTransaction],
+                'latestTxid' => 'aaa-remote-would-normally-win',
+            ]));
+
+        $this->mockChainRepo->expects($this->once())
+            ->method('getLocalTransactionByPreviousTxid')
+            ->willReturn($localArchivedTx);
+
+        $this->mockTransactionRepo->method('transactionExistsTxid')->willReturn(false);
+
+        // THE ASSERTION: updatePreviousTxid must NEVER be called when local
+        // is archived. That's the re-sign path that would try to modify the
+        // archive — archive-wins rule guarantees it's skipped.
+        $this->mockChainRepo->expects($this->never())->method('updatePreviousTxid');
+
+        $result = $service->syncTransactionChain($contactAddress, $contactPubkey);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(1, $result['conflicts_resolved']);
+    }
+
+    /**
      * Test conflict resolution when remote txid is lexicographically smaller
      *
      * When the remote transaction has a lexicographically lower txid,
