@@ -456,10 +456,16 @@ class TransactionChainRepository extends AbstractRepository
         // NOTE: Do NOT filter by status here - chain conflict detection requires ALL transactions
         // to be included, even cancelled/rejected ones. The chain must be complete for proper
         // conflict resolution during sync operations.
-        $query = "SELECT * FROM {$this->tableName}
-                  WHERE previous_txid = :previous_txid
-                  AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
-                       OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))";
+        //
+        // #863 phase 4: check archive too. If we've archived a tx that
+        // shares the same previous_txid as an incoming remote tx, that's
+        // still a conflict we need to detect — without this check, sync
+        // would insert the remote tx into live even though the archive
+        // already has a tx claiming the same prev, leaving the chain
+        // permanently ambiguous.
+        $whereBody = "previous_txid = :previous_txid
+                      AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
+                           OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))";
 
         $params = [
             ':previous_txid' => $previousTxid,
@@ -470,20 +476,36 @@ class TransactionChainRepository extends AbstractRepository
         ];
 
         if ($currency !== null) {
-            $query .= " AND currency = :currency";
+            $whereBody .= " AND currency = :currency";
             $params[':currency'] = $currency;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT 1";
-
+        $query = "SELECT * FROM {$this->tableName} WHERE {$whereBody} ORDER BY timestamp DESC LIMIT 1";
         $stmt = $this->execute($query, $params);
 
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $result;
+            }
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        // Fall through to archive. Use direct PDO since AbstractRepository's
+        // execute() is scoped to `$this->tableName`.
+        try {
+            $archiveStmt = $this->pdo->prepare(
+                "SELECT * FROM transactions_archive WHERE {$whereBody} ORDER BY timestamp DESC LIMIT 1"
+            );
+            foreach ($params as $k => $v) {
+                $archiveStmt->bindValue($k, $v);
+            }
+            $archiveStmt->execute();
+            $archiveResult = $archiveStmt->fetch(PDO::FETCH_ASSOC);
+            return $archiveResult ?: null;
+        } catch (PDOException $e) {
+            // Archive missing — live-side miss was authoritative.
+            return null;
+        }
     }
 
     /**

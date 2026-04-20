@@ -834,7 +834,24 @@ class TransactionRepository extends AbstractRepository {
      * @return bool True if exists
      */
     public function transactionExistsTxid(string $txid): bool {
-        return $this->exists('txid', $txid);
+        if ($this->exists('txid', $txid)) {
+            return true;
+        }
+        // Also check the archive — #863 phase 4 correctness fix for sync.
+        // Without this, sync from a counterparty that still has an already-
+        // archived tx re-inserts it into live, causing duplicate-key
+        // violations on the next archival run AND inflating live with
+        // rows that the archive is the authoritative copy of.
+        try {
+            $stmt = $this->pdo->prepare("SELECT 1 FROM transactions_archive WHERE txid = :txid LIMIT 1");
+            $stmt->execute([':txid' => $txid]);
+            return $stmt->fetchColumn() !== false;
+        } catch (PDOException $e) {
+            // Archive table missing (v9→v10 transitional) — live check was
+            // already done above, treat as "not present" and let the caller
+            // proceed as if the archive isn't there.
+            return false;
+        }
     }
 
 
@@ -848,12 +865,28 @@ class TransactionRepository extends AbstractRepository {
         $query = "SELECT * FROM {$this->tableName} WHERE txid = :txid";
         $stmt = $this->execute($query, [':txid' => $txid]);
 
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $this->mapRows($result);
+            }
         }
 
-        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
-        return $result ? $this->mapRows($result) : null;
+        // #863 phase 4 correctness fix: fall through to the archive so sync
+        // can re-send an archived tx to a counterparty that doesn't have
+        // it. Without this, Alice's archived txs would never propagate to
+        // a restored or new Bob — remote stays permanently missing them.
+        try {
+            $archiveStmt = $this->pdo->prepare("SELECT * FROM transactions_archive WHERE txid = :txid");
+            $archiveStmt->execute([':txid' => $txid]);
+            $archiveResult = $archiveStmt->fetchAll(PDO::FETCH_ASSOC);
+            if ($archiveResult) {
+                return $this->mapRows($archiveResult);
+            }
+        } catch (PDOException $e) {
+            // Archive missing (v9→v10 transitional) — fall through to null.
+        }
+        return null;
     }
 
     /**
@@ -866,12 +899,26 @@ class TransactionRepository extends AbstractRepository {
         $query = "SELECT status FROM {$this->tableName} WHERE txid = :txid";
         $stmt = $this->execute($query, [':txid' => $txid]);
 
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $result = $stmt->fetchColumn();
+            if ($result) {
+                return $result;
+            }
         }
 
-        $result = $stmt->fetchColumn();
-        return $result ?: null;
+        // #863 phase 4: archive rows are status='completed' by construction
+        // (only completed txs get archived). Answer status queries from the
+        // archive so a peer asking "did tx X complete?" gets 'completed'
+        // rather than a TransactionNotFound — archive is not "not found", it's
+        // settled history.
+        try {
+            $archiveStmt = $this->pdo->prepare("SELECT status FROM transactions_archive WHERE txid = :txid");
+            $archiveStmt->execute([':txid' => $txid]);
+            $archiveResult = $archiveStmt->fetchColumn();
+            return $archiveResult ?: null;
+        } catch (PDOException $e) {
+            return null;
+        }
     }
 
     /**

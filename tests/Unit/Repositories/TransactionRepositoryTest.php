@@ -139,4 +139,102 @@ class TransactionRepositoryTest extends TestCase
         $testDate = date(Constants::DISPLAY_DATE_FORMAT);
         $this->assertNotEmpty($testDate);
     }
+
+    // =========================================================================
+    // #863 phase 4: sync-dedup archive-awareness
+    //
+    // Without these, a counterparty that still has our archived txs would
+    // re-push them via sync into our live table, causing duplicate-key
+    // violations on the next archival run.
+    // =========================================================================
+
+    public function testTransactionExistsTxidChecksLiveFirst(): void
+    {
+        // Live returns true → archive query should not happen (short-circuit)
+        // Live path goes through AbstractRepository::count() which expects
+        // the result row to have a 'count' column — returning 1 here means
+        // the row exists, so we short-circuit and never hit archive.
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetch')->willReturn(['count' => 1]);  // live has 1 matching row
+        $pdo->expects($this->once())->method('prepare')->willReturn($stmt);
+
+        $repo = new TransactionRepository($pdo);
+        $this->assertTrue($repo->transactionExistsTxid('tx1'));
+    }
+
+    public function testTransactionExistsTxidFallsThroughToArchiveWhenLiveMisses(): void
+    {
+        // Live miss (count=0) → archive check → fetchColumn returns truthy → true
+        $pdo = $this->createMock(PDO::class);
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(['count' => 0]);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetchColumn')->willReturn('1');
+
+        $pdo->expects($this->exactly(2))->method('prepare')
+            ->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $repo = new TransactionRepository($pdo);
+        $this->assertTrue($repo->transactionExistsTxid('tx-archived'));
+    }
+
+    public function testTransactionExistsTxidReturnsFalseWhenNeitherHasIt(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(['count' => 0]);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetchColumn')->willReturn(false);
+
+        $pdo->method('prepare')->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $repo = new TransactionRepository($pdo);
+        $this->assertFalse($repo->transactionExistsTxid('tx-unknown'));
+    }
+
+    public function testTransactionExistsTxidArchiveMissingFallsBackToLiveOnly(): void
+    {
+        // v9→v10 transitional: archive table doesn't exist yet. Live miss
+        // + archive PDOException should return false (not blow up).
+        $pdo = $this->createMock(PDO::class);
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(['count' => 0]);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')
+            ->willThrowException(new \PDOException('Table transactions_archive not found'));
+
+        $pdo->method('prepare')->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $repo = new TransactionRepository($pdo);
+        $this->assertFalse($repo->transactionExistsTxid('tx'));
+    }
+
+    public function testGetStatusByTxidFallsThroughToArchive(): void
+    {
+        // Live returns null (not found) → archive returns 'completed'
+        $pdo = $this->createMock(PDO::class);
+
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetchColumn')->willReturn(false);  // live miss
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetchColumn')->willReturn('completed');
+
+        $pdo->method('prepare')->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $repo = new TransactionRepository($pdo);
+        $this->assertSame('completed', $repo->getStatusByTxid('tx-archived'));
+    }
 }
