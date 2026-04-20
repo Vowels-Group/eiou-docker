@@ -266,19 +266,57 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getTransactionsByType(string $type, int $limit = 10, int $offset = 0): array
     {
-        // TODO(#863 phase 3): push $type into SQL + UNION archive so this
-        // isn't O(all history). Callers in ApiController already pass
-        // $limit + $offset (which this method previously silently dropped
-        // because its signature was single-arg) — matching the signature
-        // here at least lets the API result respect pagination, but the
-        // inner getTransactionHistory still scans live-only until a deeper
-        // refactor.
-        $allTransactions = $this->getTransactionHistory(PHP_INT_MAX);
-        $filtered = array_values(array_filter(
-            $allTransactions,
-            fn($tx) => ($tx['type'] ?? null) === $type
-        ));
-        return array_slice($filtered, $offset, $limit);
+        // SQL-level $type filter + pagination across live AND archive.
+        // Fetches $limit + $offset rows from each side so the worst-case
+        // offset window (all matches from archive side, nothing live)
+        // still resolves correctly after the merge and slice.
+        //
+        // Previous behaviour loaded the entire joined history via
+        // getTransactionHistory(PHP_INT_MAX) and filtered in PHP — O(all
+        // history) every call. This version is O(limit + offset) per
+        // table. The API-level result shape is preserved: ApiController
+        // only reads txid / type / tx_type / status / amount / currency /
+        // addresses / description / memo / timestamp, none of which need
+        // the LEFT JOINs that getTransactionHistory assembles.
+        $cols = "id, txid, tx_type, type, status,
+                 sender_address, receiver_address,
+                 amount_whole, amount_frac, currency,
+                 timestamp, description, memo";
+
+        $fetchSize = $limit + $offset;
+        $params = [$type, $fetchSize];
+
+        try {
+            $liveStmt = $this->pdo->prepare(
+                "SELECT {$cols} FROM transactions
+                 WHERE type = ?
+                 ORDER BY timestamp DESC
+                 LIMIT ?"
+            );
+            $liveStmt->execute($params);
+            $live = $liveStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get transactions by type: ' . $e->getMessage(), 'WARNING');
+            return [];
+        }
+
+        $archive = [];
+        try {
+            $aStmt = $this->pdo->prepare(
+                "SELECT {$cols} FROM transactions_archive
+                 WHERE type = ?
+                 ORDER BY timestamp DESC
+                 LIMIT ?"
+            );
+            $aStmt->execute($params);
+            $archive = $aStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Archive missing — live-only result is correct.
+        }
+
+        $merged = array_merge($live, $archive);
+        usort($merged, fn($a, $b) => strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? ''));
+        return array_slice($merged, $offset, $limit);
     }
 
     /**
