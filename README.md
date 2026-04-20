@@ -245,13 +245,39 @@ Adjust in the `deploy.resources` section of `docker-compose.yml` if needed.
 
 Enabled by default (`EIOU_BACKUP_AUTO_ENABLED=true`). Runs at midnight, encrypts with AES-256-GCM, retains 3 most recent backups.
 
+Backups are split by type so the hot (live) cadence doesn't evict the rarely-written cold (archive) backups:
+
+| Filename prefix | Contents | When written |
+|-----------------|----------|--------------|
+| `backup_YYYYMMDD_HHmmss.eiou.enc` | Live tables (archive tables excluded via `mysqldump --ignore-table`) | Nightly at midnight, and on demand |
+| `archive_backup_YYYYMMDD_HHmmss.eiou.enc` | Archive tables only (`payment_requests_archive`) | After the nightly archival cron moves any rows |
+
+Each prefix is rotated independently — the 3-most-recent retention applies per type.
+
+### Payment Request Archival
+
+Resolved (non-pending) payment requests older than `paymentRequestsArchiveRetentionDays` (default: 180 days) are moved to a separate `payment_requests_archive` table by a nightly cron (`payment-request-archive-cron.php` at 01:00 UTC). Archived rows stay queryable via the GUI and CLI — the history/search paths UNION across live + archive transparently. Pending requests are never archived.
+
+Tune the retention window (and the per-batch move size) the same way as any other setting:
+
+```bash
+docker exec eiou-node eiou changesettings paymentRequestsArchiveRetentionDays 90
+docker exec eiou-node eiou changesettings paymentRequestsArchiveBatchSize 1000
+```
+
+Preview what would move without touching the DB:
+
+```bash
+docker exec eiou-node php /app/eiou/scripts/payment-request-archive-cron.php --dry-run
+```
+
 ### Manual Backup Commands
 
 ```bash
-docker exec eiou-node eiou backup create                              # Create backup now
-docker exec eiou-node eiou backup list                                # List available backups
+docker exec eiou-node eiou backup create                              # Create live backup now
+docker exec eiou-node eiou backup list                                # List all backups (both prefixes)
 docker exec eiou-node eiou backup restore <backup-file> --confirm     # Restore from backup
-docker exec eiou-node eiou backup cleanup                             # Delete old backups (keeps 3)
+docker exec eiou-node eiou backup cleanup                             # Delete old backups (keeps 3 per prefix)
 ```
 
 ### Volume-Level Backup

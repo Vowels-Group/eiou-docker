@@ -241,7 +241,7 @@ Handles settings and debug operations.
 | Feature Toggles → GUI | `autoRefreshEnabled`, `hideEmptyGuiSections` |
 | Feature Toggles → System | `apiEnabled`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
 | Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
-| Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
+| Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`, `paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize` |
 | Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
 | Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
@@ -644,6 +644,7 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 - **Feature Toggles** category is internally subdivided into four groups via `<h5 class="settings-group-heading">` dividers: **Contacts**, **Transactions**, **GUI**, **System**. Each group is its own `.settings-grid` so the 3-column layout applies per group (keeps a 2-item group aligned column-wise with a 5-item group — `auto-fill` preserves empty slots)
 - **GUI subsection** hosts `autoRefreshEnabled` and `hideEmptyGuiSections`. `hideEmptyGuiSections` (default OFF) hides the Failed Messages / Payment Requests / Pending Contact Requests sections when their lists are empty — when OFF (the default) these sections render an empty-state panel so users know the feature exists
 - **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list
+- **Data Retention** category has two subsections with distinct semantics: a **Cleanup** block (`cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`) where rows past retention are **deleted**, and a separate **Archive Retention (Days)** block (`paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`) where resolved payment requests past retention **move to the `payment_requests_archive` table** — they stay queryable in the history/search paths. The archive block carries its own inline warning ("nothing is deleted") so users don't confuse it with the cleanup retentions above it
 - **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
 - Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state
 

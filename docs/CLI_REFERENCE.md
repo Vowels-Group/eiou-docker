@@ -1011,6 +1011,8 @@ eiou changesettings [setting] [value]
 | `cleanupHeldTxRetentionDays` | Days to retain held transactions (min 1) | `7` |
 | `cleanupRp2pRetentionDays` | Days to retain P2P routing records (min 1) | `30` |
 | `cleanupMetricsRetentionDays` | Days to retain metrics data (min 1) | `90` |
+| `paymentRequestsArchiveRetentionDays` | Days resolved (non-pending) payment requests stay in the live table before moving to `payment_requests_archive` (min 1). **Not a delete** — archived rows stay queryable | `180` |
+| `paymentRequestsArchiveBatchSize` | Max rows moved per archival cron run (min 1) | `500` |
 
 **Advanced Settings (Rate Limiting):**
 
@@ -1063,6 +1065,8 @@ eiou changesettings allowedCurrencies "USD,EUR"
 eiou changesettings logLevel WARNING
 eiou changesettings backupRetentionCount 5
 eiou changesettings cleanupDeliveryRetentionDays 60
+eiou changesettings paymentRequestsArchiveRetentionDays 90
+eiou changesettings paymentRequestsArchiveBatchSize 1000
 eiou changesettings httpTransportTimeoutSeconds 30
 eiou changesettings rateLimitEnabled false
 eiou changesettings displayDecimals 4
@@ -1520,7 +1524,7 @@ eiou backup <action> [args...]
 | `enable` | `backup enable` | Enable automatic daily backups |
 | `disable` | `backup disable` | Disable automatic daily backups |
 | `status` | `backup status` | Show backup system status |
-| `cleanup` | `backup cleanup` | Remove old backups (keep 3 most recent) |
+| `cleanup` | `backup cleanup` | Remove old backups (keep 3 most recent per type) |
 | `help` | `backup help` | Show backup help |
 
 **Examples:**
@@ -1557,8 +1561,25 @@ eiou backup status --json
 
 **Backup Storage:**
 - Location: `/var/lib/eiou/backups/`
-- Filename format: `backup_YYYYMMDD_HHmmss.eiou.enc`
-- Retention: 3 most recent backups (configurable)
+- Filename format:
+  - `backup_YYYYMMDD_HHmmss.eiou.enc` — live tables (archive tables excluded)
+  - `archive_backup_YYYYMMDD_HHmmss.eiou.enc` — archive tables only; written by the payment-request archival cron after any move
+- Retention: 3 most recent backups **per prefix** (configurable via `backupRetentionCount`); a frequent live cadence never evicts the rarer archive backups
+- `backup list` shows both prefixes; `backup restore <file>` restores whichever type the filename points at
+
+**Payment Request Archival:**
+
+The archival cron moves resolved payment requests older than `paymentRequestsArchiveRetentionDays` into `payment_requests_archive`. Run it manually for a preflight check or off-schedule sweep:
+
+```bash
+# Dry-run: count eligible rows, make no changes
+php /app/eiou/scripts/payment-request-archive-cron.php --dry-run
+
+# Normal run: move up to paymentRequestsArchiveBatchSize rows and trigger an archive_backup_* dump
+php /app/eiou/scripts/payment-request-archive-cron.php
+```
+
+Logs are written to `/var/log/eiou/payment-request-archive.log`. A backup failure during archival is logged as WARNING but never fails the archival run itself — rows are already safely moved, and the next archival run that moves rows will re-attempt the archive backup.
 
 ---
 
