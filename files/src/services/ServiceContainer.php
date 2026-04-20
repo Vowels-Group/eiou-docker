@@ -984,7 +984,8 @@ class ServiceContainer implements ContainerInterface {
         if (!isset($this->services['PaymentRequestArchivalService'])) {
             $this->services['PaymentRequestArchivalService'] = new PaymentRequestArchivalService(
                 $this->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestArchiveRepository::class),
-                $this->currentUser
+                $this->currentUser,
+                $this->getBackupService()
             );
         }
         return $this->services['PaymentRequestArchivalService'];

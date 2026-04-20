@@ -7,6 +7,7 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Core\UserContext;
 use Eiou\Database\PaymentRequestArchiveRepository;
 use Eiou\Services\PaymentRequestArchivalService;
@@ -121,5 +122,74 @@ class PaymentRequestArchivalServiceTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('db down');
         $svc->run(false);
+    }
+
+    public function testTriggersArchiveBackupAfterSuccessfulMove(): void
+    {
+        $this->repo->method('findEligibleLiveIds')
+            ->willReturnOnConsecutiveCalls([10, 11, 12], []);
+        $this->repo->method('getLatestArchivedAt')->willReturn('2026-04-20 01:00:00');
+        $this->repo->method('moveRows')->willReturn(3);
+
+        $backup = $this->createMock(BackupServiceInterface::class);
+        $backup->expects($this->once())
+            ->method('createArchiveBackup')
+            ->willReturn(['success' => true, 'filename' => 'archive_backup_20260420_010000.json']);
+        $backup->expects($this->once())->method('cleanupOldBackups')
+            ->willReturn(['success' => true, 'deleted_count' => 0, 'deleted_files' => []]);
+
+        $svc = new PaymentRequestArchivalService($this->repo, $this->currentUser, $backup);
+        $result = $svc->run(false);
+
+        $this->assertSame(3, $result['moved']);
+        $this->assertSame('archive_backup_20260420_010000.json', $result['archive_backup_file']);
+    }
+
+    public function testDoesNotTriggerBackupWhenNoRowsMoved(): void
+    {
+        $this->repo->method('findEligibleLiveIds')->willReturn([]);
+        $this->repo->method('getLatestArchivedAt')->willReturn(null);
+
+        $backup = $this->createMock(BackupServiceInterface::class);
+        $backup->expects($this->never())->method('createArchiveBackup');
+
+        $svc = new PaymentRequestArchivalService($this->repo, $this->currentUser, $backup);
+        $result = $svc->run(false);
+
+        $this->assertSame(0, $result['moved']);
+        $this->assertNull($result['archive_backup_file']);
+    }
+
+    public function testBackupFailureDoesNotFailArchival(): void
+    {
+        $this->repo->method('findEligibleLiveIds')
+            ->willReturnOnConsecutiveCalls([10, 11, 12], []);
+        $this->repo->method('getLatestArchivedAt')->willReturn('2026-04-20 01:00:00');
+        $this->repo->method('moveRows')->willReturn(3);
+
+        $backup = $this->createMock(BackupServiceInterface::class);
+        $backup->method('createArchiveBackup')
+            ->willThrowException(new \RuntimeException('disk full'));
+
+        $svc = new PaymentRequestArchivalService($this->repo, $this->currentUser, $backup);
+        $result = $svc->run(false);
+
+        $this->assertSame(3, $result['moved']);
+        $this->assertNull($result['archive_backup_file']);
+    }
+
+    public function testWorksWithoutBackupServiceInjected(): void
+    {
+        $this->repo->method('findEligibleLiveIds')
+            ->willReturnOnConsecutiveCalls([10, 11, 12], []);
+        $this->repo->method('getLatestArchivedAt')->willReturn(null);
+        $this->repo->method('moveRows')->willReturn(3);
+
+        // No backup service passed — constructor param is nullable
+        $svc = new PaymentRequestArchivalService($this->repo, $this->currentUser);
+        $result = $svc->run(false);
+
+        $this->assertSame(3, $result['moved']);
+        $this->assertNull($result['archive_backup_file']);
     }
 }

@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Core\UserContext;
 use Eiou\Database\PaymentRequestArchiveRepository;
 use Eiou\Utils\Logger;
@@ -23,13 +24,16 @@ class PaymentRequestArchivalService
 {
     private PaymentRequestArchiveRepository $archiveRepository;
     private UserContext $currentUser;
+    private ?BackupServiceInterface $backupService;
 
     public function __construct(
         PaymentRequestArchiveRepository $archiveRepository,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?BackupServiceInterface $backupService = null
     ) {
         $this->archiveRepository = $archiveRepository;
         $this->currentUser = $currentUser;
+        $this->backupService = $backupService;
     }
 
     /**
@@ -106,12 +110,31 @@ class PaymentRequestArchivalService
             }
         }
 
+        $archiveBackupFile = null;
+        if ($totalMoved > 0 && $this->backupService !== null) {
+            try {
+                $backupResult = $this->backupService->createArchiveBackup();
+                $archiveBackupFile = $backupResult['filename'] ?? null;
+                $this->backupService->cleanupOldBackups();
+            } catch (Throwable $e) {
+                // Archive rows are already safely moved; a failed backup is
+                // not a reason to fail the archival run. Log loudly so the
+                // operator notices and can re-trigger manually. The next
+                // archival run that moves rows will attempt backup again.
+                $logger->error('Archive backup failed after successful archival', [
+                    'error' => $e->getMessage(),
+                    'moved' => $totalMoved,
+                ]);
+            }
+        }
+
         $result = [
-            'moved'              => $totalMoved,
-            'batches'            => $batches,
-            'eligible'           => $totalMoved,
-            'dry_run'            => false,
-            'latest_archived_at' => $this->archiveRepository->getLatestArchivedAt(),
+            'moved'               => $totalMoved,
+            'batches'             => $batches,
+            'eligible'            => $totalMoved,
+            'dry_run'             => false,
+            'latest_archived_at'  => $this->archiveRepository->getLatestArchivedAt(),
+            'archive_backup_file' => $archiveBackupFile,
         ];
 
         $logger->info('Payment request archival complete', $result);

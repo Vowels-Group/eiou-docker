@@ -24,6 +24,17 @@ use Exception;
  */
 class BackupService implements BackupServiceInterface
 {
+    // Tables that are deliberately excluded from the daily "live" backup and
+    // snapshotted separately by createArchiveBackup(). These are append-only
+    // archive tables that don't change on a day-to-day basis, so re-dumping
+    // them in every nightly backup wastes disk and backup-window time.
+    private const ARCHIVE_TABLES = ['payment_requests_archive'];
+
+    // Filename prefix used to identify archive-only backups in listBackups()
+    // and during per-type rotation in cleanupOldBackups().
+    private const ARCHIVE_BACKUP_PREFIX = 'archive_backup_';
+    private const LIVE_BACKUP_PREFIX = 'backup_';
+
     private UserContext $currentUser;
     private PDO $pdo;
     private string $backupDirectory;
@@ -49,15 +60,56 @@ class BackupService implements BackupServiceInterface
 
     public function createBackup(?string $customFilename = null): array
     {
-        // Generate filename
+        // Live backup: excludes the archive tables so the nightly dump stays
+        // small once archival has been running for a while. Archive tables
+        // are snapshotted separately via createArchiveBackup().
         $timestamp = date('Ymd_His');
         $filename = $customFilename
             ? preg_replace('/[^a-zA-Z0-9_-]/', '', $customFilename) . Constants::BACKUP_FILE_EXTENSION
-            : "backup_{$timestamp}" . Constants::BACKUP_FILE_EXTENSION;
+            : self::LIVE_BACKUP_PREFIX . $timestamp . Constants::BACKUP_FILE_EXTENSION;
 
+        return $this->runDump(
+            $filename,
+            $this->buildIgnoreTableArgs(self::ARCHIVE_TABLES),
+            'backup',
+            'Backup created'
+        );
+    }
+
+    public function createArchiveBackup(?string $customFilename = null): array
+    {
+        $timestamp = date('Ymd_His');
+        $filename = $customFilename
+            ? preg_replace('/[^a-zA-Z0-9_-]/', '', $customFilename) . Constants::BACKUP_FILE_EXTENSION
+            : self::ARCHIVE_BACKUP_PREFIX . $timestamp . Constants::BACKUP_FILE_EXTENSION;
+
+        // mysqldump accepts positional table names after the database name
+        // to restrict the dump. Passing just the archive table(s) here is the
+        // complement of createBackup()'s --ignore-table approach.
+        $tableArgs = implode(' ', array_map('escapeshellarg', self::ARCHIVE_TABLES));
+
+        return $this->runDump(
+            $filename,
+            $tableArgs,
+            'archive-backup',
+            'Archive backup created'
+        );
+    }
+
+    /**
+     * Runs mysqldump with the given table filter, encrypts + saves the result,
+     * and returns the standard result shape. Shared internal helper for both
+     * createBackup() and createArchiveBackup().
+     *
+     * @param string $filename         Full filename including extension
+     * @param string $tableFilterArgs  Either --ignore-table=… args or positional table names (already escapeshellarg'd)
+     * @param string $aad              AAD context passed to KeyEncryption::encrypt
+     * @param string $logMessage       Info-log message on success
+     */
+    private function runDump(string $filename, string $tableFilterArgs, string $aad, string $logMessage): array
+    {
         $filepath = $this->backupDirectory . '/' . $filename;
 
-        // Get database credentials from config file
         $dbConfig = $this->getDatabaseCredentials();
         if (!$dbConfig) {
             throw new FatalServiceException(
@@ -71,32 +123,28 @@ class BackupService implements BackupServiceInterface
         $dbUser = $dbConfig['dbUser'];
         $dbPass = $dbConfig['dbPass'];
 
-        // Create temporary MySQL config file for secure password passing
-        // Use /dev/shm (RAM-backed tmpfs) to avoid writing credentials to disk.
-        // Set umask before tempnam() so the file is created with 0600 permissions
-        // atomically — eliminates the TOCTOU race between creation and chmod.
+        // Temp MySQL config in /dev/shm — credentials never hit disk.
         $tmpDir = is_dir('/dev/shm') ? '/dev/shm' : '/tmp';
-        $oldUmask = umask(0177); // Only owner read/write (0600)
+        $oldUmask = umask(0177);
         $tempCnf = tempnam($tmpDir, 'mysql_');
         umask($oldUmask);
         file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
 
         try {
             $cmd = sprintf(
-                'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s 2>&1',
+                'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s %s 2>&1',
                 escapeshellarg($tempCnf),
-                escapeshellarg($dbName)
+                escapeshellarg($dbName),
+                $tableFilterArgs
             );
 
             $sqlDump = shell_exec($cmd);
         } finally {
-            // Securely remove temp config file even on failure
             if (file_exists($tempCnf)) {
                 unlink($tempCnf);
             }
         }
 
-        // Better error diagnostics
         if (empty($sqlDump)) {
             throw new FatalServiceException(
                 'mysqldump returned empty result',
@@ -110,9 +158,10 @@ class BackupService implements BackupServiceInterface
             );
         }
 
-        // Check if output is an error message rather than SQL
+        // Archive-only dumps may not have any data if the archive table is
+        // empty, but they still emit the CREATE TABLE statement — so this
+        // check catches both mysqldump errors and truly empty output.
         if (strpos($sqlDump, 'CREATE TABLE') === false) {
-            // Truncate potential error message for logging
             $errorPreview = substr(trim($sqlDump), 0, 500);
             throw new FatalServiceException(
                 'mysqldump failed: ' . $errorPreview,
@@ -126,13 +175,9 @@ class BackupService implements BackupServiceInterface
             );
         }
 
-        // Encrypt the SQL dump with context AAD (L-28)
-        $encrypted = KeyEncryption::encrypt($sqlDump, 'backup');
-
-        // Clear sensitive data
+        $encrypted = KeyEncryption::encrypt($sqlDump, $aad);
         KeyEncryption::secureClear($sqlDump);
 
-        // Create backup file with metadata
         $backupData = [
             'version' => '1.0',
             'created_at' => date('c'),
@@ -153,7 +198,7 @@ class BackupService implements BackupServiceInterface
 
         chmod($filepath, 0600);
 
-        Logger::getInstance()->info("Backup created", ['filename' => $filename, 'size' => filesize($filepath)]);
+        Logger::getInstance()->info($logMessage, ['filename' => $filename, 'size' => filesize($filepath)]);
 
         return [
             'success' => true,
@@ -161,6 +206,27 @@ class BackupService implements BackupServiceInterface
             'size' => filesize($filepath),
             'path' => $filepath
         ];
+    }
+
+    /**
+     * Build `--ignore-table=<db>.<table>` args for mysqldump from a bare table
+     * list. Caller supplies the table names; we handle the db prefix + escaping.
+     *
+     * @param string[] $tables
+     */
+    private function buildIgnoreTableArgs(array $tables): string
+    {
+        $dbConfig = $this->getDatabaseCredentials();
+        if (!$dbConfig) {
+            return '';
+        }
+        $dbName = $dbConfig['dbName'];
+
+        $parts = [];
+        foreach ($tables as $table) {
+            $parts[] = '--ignore-table=' . escapeshellarg("{$dbName}.{$table}");
+        }
+        return implode(' ', $parts);
     }
 
     public function restoreBackup(string $filename, bool $confirmOverwrite = false): array
@@ -433,14 +499,40 @@ class BackupService implements BackupServiceInterface
 
     public function cleanupOldBackups(): array
     {
-        $backups = $this->listBackups();
         $retentionCount = $this->currentUser->getBackupRetentionCount();
         $deletedFiles = [];
 
-        if (count($backups) > $retentionCount) {
-            $toDelete = array_slice($backups, $retentionCount);
+        // Rotate each backup type independently — otherwise a node that
+        // does daily live backups plus occasional archive backups would see
+        // archive backups evicted first (they're always older on average),
+        // leaving the operator without a restore point for the archive.
+        foreach ([self::LIVE_BACKUP_PREFIX, self::ARCHIVE_BACKUP_PREFIX] as $prefix) {
+            $subset = array_values(array_filter(
+                $this->listBackups(),
+                fn($b) => strpos($b['filename'], $prefix) === 0
+            ));
+            if (count($subset) <= $retentionCount) {
+                continue;
+            }
+            foreach (array_slice($subset, $retentionCount) as $backup) {
+                $result = $this->deleteBackup($backup['filename']);
+                if ($result['success']) {
+                    $deletedFiles[] = $backup['filename'];
+                }
+            }
+        }
 
-            foreach ($toDelete as $backup) {
+        // Sweep any remaining files that don't match either prefix (custom
+        // named backups from createBackup($customFilename)). Keep the global
+        // retention count on those as a whole so they don't accumulate
+        // unboundedly either.
+        $untyped = array_values(array_filter(
+            $this->listBackups(),
+            fn($b) => strpos($b['filename'], self::LIVE_BACKUP_PREFIX) !== 0
+                  && strpos($b['filename'], self::ARCHIVE_BACKUP_PREFIX) !== 0
+        ));
+        if (count($untyped) > $retentionCount) {
+            foreach (array_slice($untyped, $retentionCount) as $backup) {
                 $result = $this->deleteBackup($backup['filename']);
                 if ($result['success']) {
                     $deletedFiles[] = $backup['filename'];

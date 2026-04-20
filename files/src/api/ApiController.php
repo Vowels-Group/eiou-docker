@@ -1661,6 +1661,7 @@ class ApiController {
             'cleanup_held_tx_retention_days' => ['key' => 'cleanupHeldTxRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
             'cleanup_rp2p_retention_days' => ['key' => 'cleanupRp2pRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
             'cleanup_metrics_retention_days' => ['key' => 'cleanupMetricsRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
+            'payment_requests_archive_retention_days' => ['key' => 'paymentRequestsArchiveRetentionDays', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
             // Rate limiting
             'p2p_rate_limit_per_minute' => ['key' => 'p2pRateLimitPerMinute', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
             'rate_limit_max_attempts' => ['key' => 'rateLimitMaxAttempts', 'validate' => 'validatePositiveInteger', 'config' => 'defaultconfig.json'],
