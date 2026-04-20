@@ -94,8 +94,11 @@ if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
     </div>
     <?php endif; ?>
 
+    <?php if (!empty($dlqItems)): ?>
     <!-- Search bar — rendered above the filter tabs to match the Contacts
-         section layout (Title → Search → Filter → Table). -->
+         section layout (Title → Search → Filter → Table). Gated on
+         non-empty queue so an empty DLQ doesn't show controls with
+         nothing to act on, matching Contacts / Payment Requests. -->
     <div class="dlq-search-bar search-icon-wrapper">
         <i class="fas fa-search search-icon-positioned"></i>
         <input type="text" id="dlq-search" class="search-input-with-icon" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
@@ -111,6 +114,7 @@ if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
             <option value="abandoned">Abandoned</option>
         </select>
     </div>
+    <?php endif; ?>
 
     <?php if (empty($dlqItems)): ?>
     <div class="empty-state">

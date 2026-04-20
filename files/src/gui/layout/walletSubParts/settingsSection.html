@@ -21,6 +21,7 @@
             </div>
         </details>
 
+        <h5 class="settings-group-heading"><i class="fas fa-palette"></i> Appearance</h5>
         <div class="settings-grid">
             <!-- Contact Avatar Style -->
             <div class="form-group">
@@ -117,7 +118,10 @@
                     Color for accepted/completed/resolved vs rejected/blocked/failed badges and success/error toast messages. Sent/Received direction labels are always neutral to avoid conflicting semantics.
                 </small>
             </div>
+        </div>
 
+        <h5 class="settings-group-heading"><i class="fas fa-id-card"></i> Identity</h5>
+        <div class="settings-grid">
             <!-- Display Name -->
             <div class="form-group">
                 <label for="settingsName">Display Name:</label>
@@ -127,7 +131,10 @@
                     Your display name shown in the GUI and shared when contacts scan your QR code
                 </small>
             </div>
+        </div>
 
+        <h5 class="settings-group-heading"><i class="fas fa-coins"></i> Payments</h5>
+        <div class="settings-grid">
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
@@ -185,7 +192,10 @@
                     Default credit limit for new contacts
                 </small>
             </div>
+        </div>
 
+        <h5 class="settings-group-heading"><i class="fas fa-network-wired"></i> Network</h5>
+        <div class="settings-grid">
             <!-- Default Transport Mode -->
             <div class="form-group">
                 <label for="defaultTransportMode">Default Transport Mode:</label>
@@ -511,6 +521,8 @@
                     <h4 class="settings-subsection-title">
                         <i class="fas fa-archive"></i> Backup &amp; Logging
                     </h4>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-save"></i> Backup</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="backupCronTime">Backup Time (UTC):</label>
@@ -527,7 +539,10 @@
                                 <i class="fas fa-info-circle"></i> Number of backup files to keep (minimum 1)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-file-alt"></i> Logging</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="logMaxEntries">Max Log Entries:</label>
                             <input type="number" id="logMaxEntries" name="logMaxEntries" value="<?php echo htmlspecialchars($user->getLogMaxEntries()); ?>" min="10" step="1" class="default-value">
@@ -563,6 +578,8 @@
                     <p class="settings-section-warning">
                         <i class="fas fa-exclamation-triangle"></i> Lowering retention values will permanently delete older records on next cleanup. Changes take effect at next scheduled cleanup run.
                     </p>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-broom"></i> Cleanup</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="cleanupDeliveryRetentionDays">Delivery Retention:</label>
@@ -605,9 +622,7 @@
                         </div>
                     </div>
 
-                    <h4 class="settings-subsection-title" style="margin-top: 1.5em;">
-                        <i class="fas fa-archive"></i> Archive Retention (Days)
-                    </h4>
+                    <h5 class="settings-group-heading"><i class="fas fa-archive"></i> Archive</h5>
                     <p class="form-hint">
                         <i class="fas fa-info-circle"></i> Archive-based retention moves old records to an archive table instead of deleting them. Nothing is permanently removed — lowering the value just archives sooner.
                     </p>
@@ -630,6 +645,8 @@
                     <p class="settings-rate-desc">
                         <i class="fas fa-info-circle"></i> Two independent mechanisms: a P2P throughput cap (requests per minute), and an attempt-counting blocker (blocks IPs that exceed max attempts in a window). Rate limiting can only be disabled via CLI or API.
                     </p>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-wave-square"></i> Throughput</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="p2pRateLimitPerMinute">P2P Throughput Limit (per min):</label>
@@ -638,7 +655,10 @@
                                 <i class="fas fa-info-circle"></i> Maximum P2P requests allowed per minute (throughput cap)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-user-lock"></i> Attempt Blocking</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="rateLimitMaxAttempts">Max Attempts per Window:</label>
                             <input type="number" id="rateLimitMaxAttempts" name="rateLimitMaxAttempts" value="<?php echo htmlspecialchars($user->getRateLimitMaxAttempts()); ?>" min="1" step="1" class="default-value">
@@ -740,12 +760,14 @@
                         $activeSessions = [];
                     }
                     ?>
+                    <h5 class="settings-group-heading">
+                        <i class="fas fa-desktop"></i> Active Remembered Sessions
+                    </h5>
                     <div class="active-sessions-container">
-                        <h5 class="active-sessions-heading">
-                            <i class="fas fa-desktop"></i> Active Remembered Sessions
-                        </h5>
                         <?php if (empty($activeSessions)): ?>
-                            <p class="form-hint"><i class="fas fa-info-circle"></i> No remembered browsers yet. Tick "Remember this browser" at login to add this device to the list.</p>
+                            <div class="empty-panel text-muted">
+                                No remembered browsers yet. Tick "Remember this browser" at login to add this device to the list.
+                            </div>
                         <?php else: ?>
                             <div class="active-sessions-list">
                                 <?php foreach ($activeSessions as $s): ?>
@@ -824,6 +846,8 @@
                     <p class="settings-section-warning">
                         <i class="fas fa-exclamation-triangle"></i> <strong>Expert setting.</strong> Incorrect timeout values can cause connectivity issues. Only change these if you know what you are doing.
                     </p>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-stopwatch"></i> Transport Timeouts</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="httpTransportTimeoutSeconds">HTTP Timeout (seconds):</label>
@@ -840,7 +864,10 @@
                                 <i class="fas fa-info-circle"></i> Tor transport timeout (10-300 seconds)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-shield-alt"></i> Tor Resilience</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="torCircuitMaxFailures">Tor Circuit Max Failures:</label>
                             <input type="number" id="torCircuitMaxFailures" name="torCircuitMaxFailures" value="<?php echo htmlspecialchars($user->getTorCircuitMaxFailures()); ?>" min="1" max="10" step="1" class="default-value">
@@ -878,7 +905,10 @@
                                 <i class="fas fa-info-circle"></i> When Tor fails, only fall back to HTTPS (never plain HTTP)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-route"></i> Routing &amp; Delivery</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="maxP2pLevel">Max P2P Routing Level:</label>
                             <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo p2pMaxRoutingLevel(); ?>" class="default-value">
@@ -902,7 +932,10 @@
                                 <i class="fas fa-info-circle"></i> How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry. Failed deliveries appear in <a href="#dlq">Failed Messages</a> and can be retried.
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-plug"></i> API</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
                             <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
@@ -913,7 +946,6 @@
                                 <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
                             </small>
                         </div>
-
                     </div>
                 </div>
 

@@ -240,11 +240,17 @@ Handles settings and debug operations.
 | Feature Toggles → Transactions | `autoAcceptTransaction`, `hopBudgetRandomized`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard` |
 | Feature Toggles → GUI | `autoRefreshEnabled`, `hideEmptyGuiSections` |
 | Feature Toggles → System | `apiEnabled`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
-| Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
-| Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`, `paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize` |
-| Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
+| Backup & Logging → Backup | `backupCronTime`, `backupRetentionCount` |
+| Backup & Logging → Logging | `logMaxEntries`, `logLevel` |
+| Data Retention → Cleanup | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
+| Data Retention → Archive | `paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize` |
+| Rate Limiting → Throughput | `p2pRateLimitPerMinute` |
+| Rate Limiting → Attempt Blocking | `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
-| Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
+| Network → Transport Timeouts | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds` |
+| Network → Tor Resilience | `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted` |
+| Network → Routing & Delivery | `maxP2pLevel`, `p2pExpiration`, `directTxExpiration` |
+| Network → API | `apiCorsAllowedOrigins` |
 | Currency | `allowedCurrencies` |
 | Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput`, `sessionTimeoutMinutes`, `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme` |
 
@@ -592,7 +598,7 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 The Dead Letter Queue section displays messages that could not be delivered after all automatic retry attempts.
 
-**Status Filter:** Dropdown matching contacts/transactions pattern — Any status (default), Pending & Retrying, Pending Only, Resolved, Abandoned.
+**Status Filter:** Dropdown matching contacts/transactions pattern — Any status (default), Pending & Retrying, Pending Only, Resolved, Abandoned. The search bar and filter are both gated on `!empty($dlqItems)` — an empty queue hides them so users aren't shown controls with nothing to act on (matches the Contacts and Payment Requests sections).
 
 **Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
 
@@ -639,12 +645,12 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 **Header callout** — `.section-intro` explaining what Save does, what Reset reverts (unsaved changes only), and pointing at Advanced Settings → Reset to Defaults for a full wipe.
 
 **Settings Form:**
-- Basic wallet settings (currency, fee, credit limit, transport mode, display name, color schemes)
+- Basic wallet settings organized into four `<h5 class="settings-group-heading">` subsections — **Appearance** (contact avatar style, amount and status color schemes), **Identity** (display name), **Payments** (default currency, fees, credit limit), **Network** (default transport mode)
 - Collapsible Advanced Settings with category dropdown. Categories: **Feature Toggles**, **Currency**, **Display**, **Backup & Logging**, **Data Retention**, **Sync**, **Network**, **Rate Limiting**, **GUI Security**, **Reset to Defaults**
-- **Feature Toggles** category is internally subdivided into four groups via `<h5 class="settings-group-heading">` dividers: **Contacts**, **Transactions**, **GUI**, **System**. Each group is its own `.settings-grid` so the 3-column layout applies per group (keeps a 2-item group aligned column-wise with a 5-item group — `auto-fill` preserves empty slots)
+- Advanced categories with >3 fields are further subdivided into `<h5 class="settings-group-heading">` groups: **Feature Toggles** (Contacts, Transactions, GUI, System), **Backup & Logging** (Backup, Logging), **Data Retention** (Cleanup, Archive), **Rate Limiting** (Throughput, Attempt Blocking), **Network** (Transport Timeouts, Tor Resilience, Routing & Delivery, API). Each subsection is its own `.settings-grid` so the 3-column `auto-fill` layout applies per group
 - **GUI subsection** hosts `autoRefreshEnabled` and `hideEmptyGuiSections`. `hideEmptyGuiSections` (default OFF) hides the Failed Messages / Payment Requests / Pending Contact Requests sections when their lists are empty — when OFF (the default) these sections render an empty-state panel so users know the feature exists
-- **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list
-- **Data Retention** category has two subsections with distinct semantics: a **Cleanup** block (`cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`) where rows past retention are **deleted**, and a separate **Archive Retention (Days)** block (`paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`) where resolved payment requests past retention **move to the `payment_requests_archive` table** — they stay queryable in the history/search paths. The archive block carries its own inline warning ("nothing is deleted") so users don't confuse it with the cleanup retentions above it
+- **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list. The sessions list heading uses `settings-group-heading` for cross-category consistency, and the empty state uses the shared `.empty-panel` (dashed border + centered text) that also backs the API Keys empty state
+- **Data Retention** category has two subsections with distinct semantics: a **Cleanup** block (`cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`) where rows past retention are **deleted**, and a separate **Archive** block (`paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`) where resolved payment requests past retention **move to the `payment_requests_archive` table** — they stay queryable in the history/search paths. The archive block carries its own inline warning ("nothing is deleted") so users don't confuse it with the cleanup retentions above it
 - **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
 - Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state
 
