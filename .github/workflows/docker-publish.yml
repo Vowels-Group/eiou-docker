@@ -1,7 +1,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 #
 # Builds and publishes the eIOU Docker image when a GitHub release is created.
-# Pushes the image to Docker Hub and attaches the image tarball to the release.
+# Produces a multi-architecture manifest (linux/amd64 + linux/arm64) on Docker
+# Hub and attaches per-arch tarballs to the release.
 #
 # Supported tag formats:
 #   v1.0.0        → stable release (also tagged latest, 1.0, 1)
@@ -21,29 +22,30 @@ on:
 permissions:
   contents: write    # upload release assets
 
+env:
+  IMAGE: eiou/eiou
+
 jobs:
-  build-and-push:
-    name: Build & Publish
+  meta:
+    name: Resolve version + tags
     runs-on: ubuntu-latest
-    # Only run for version tags (vX.Y.Z, vX.Y.Z-alpha, vX.Y.Z-beta)
     if: >-
       startsWith(github.event.release.tag_name, 'v') &&
       contains(github.event.release.tag_name, '.')
-    timeout-minutes: 30
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      channel: ${{ steps.version.outputs.channel }}
+      tags: ${{ steps.tags.outputs.tags }}
     steps:
-      - name: "Checkout repository"
-        uses: actions/checkout@v6
-
       - name: "Extract version metadata"
-        id: meta
+        id: version
         run: |
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-          # Determine release channel
           if [[ "$VERSION" == *-alpha* ]]; then
             echo "channel=alpha" >> "$GITHUB_OUTPUT"
           elif [[ "$VERSION" == *-beta* ]]; then
@@ -51,6 +53,44 @@ jobs:
           else
             echo "channel=stable" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: "Generate Docker tags"
+        id: tags
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANNEL="${{ steps.version.outputs.channel }}"
+
+          TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
+
+          if [ "$CHANNEL" = "stable" ]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            TAGS="${TAGS},${IMAGE}:${MAJOR}.${MINOR},${IMAGE}:${MAJOR}"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+          echo "### Docker Tags" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "$TAGS" | tr ',' '\n' | while read -r t; do
+            echo "- \`$t\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v6
 
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v4
@@ -61,67 +101,129 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: "Generate Docker tags"
-        id: tags
-        run: |
-          IMAGE="eiou/eiou"
-          VERSION="${{ steps.meta.outputs.version }}"
-          CHANNEL="${{ steps.meta.outputs.channel }}"
-
-          # Always tag with the full version and latest
-          TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
-
-          # Stable releases get additional convenience tags
-          if [ "$CHANNEL" = "stable" ]; then
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-            TAGS="${TAGS},${IMAGE}:${MAJOR}.${MINOR},${IMAGE}:${MAJOR}"
-          fi
-
-          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
-          echo "### Docker Tags" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "$TAGS" | tr ',' '\n' | while read -r t; do
-            echo "- \`$t\`" >> "$GITHUB_STEP_SUMMARY"
-          done
-
-      - name: "Build and push to Docker Hub"
+      - name: "Build and push by digest"
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: eiou.dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.tags }}
+          platforms: linux/${{ matrix.platform }}
           labels: |
-            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Load into local daemon so the export step doesn't need to pull from Hub
-          load: true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
-      - name: "Export image for release attachment"
+      - name: "Export digest"
         run: |
-          IMAGE="eiou/eiou"
-          VERSION="${{ steps.meta.outputs.version }}"
-          docker save "${IMAGE}:${VERSION}" | gzip > "eiou-node-${VERSION}.tar.gz"
-          ls -lh "eiou-node-${VERSION}.tar.gz"
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
 
-      - name: "Upload image to GitHub release"
+      - name: "Upload digest"
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      # Second single-arch build with load:true so we can docker-save a tarball
+      # for the release asset. Layers come from the cache written above, so this
+      # is effectively a re-export, not a rebuild.
+      - name: "Build tarball image (single-arch, loaded)"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: eiou.dockerfile
+          platforms: linux/${{ matrix.platform }}
+          tags: ${{ env.IMAGE }}:${{ needs.meta.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: false
+          load: true
+          cache-from: type=gha,scope=${{ matrix.platform }}
+
+      - name: "Export image tarball"
+        run: |
+          VERSION="${{ needs.meta.outputs.version }}"
+          ARCH="${{ matrix.platform }}"
+          docker save "${IMAGE}:${VERSION}" | gzip > "eiou-node-${VERSION}-${ARCH}.tar.gz"
+          ls -lh "eiou-node-${VERSION}-${ARCH}.tar.gz"
+
+      - name: "Upload tarball to GitHub release"
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ needs.meta.outputs.version }}"
+          ARCH="${{ matrix.platform }}"
+          TAG="${{ needs.meta.outputs.tag }}"
           gh release upload "${TAG}" \
-            "eiou-node-${VERSION}.tar.gz" \
+            "eiou-node-${VERSION}-${ARCH}.tar.gz" \
             --clobber
+
+  merge:
+    name: Merge manifests + publish
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Download per-arch digests"
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v4
+
+      - name: "Log in to Docker Hub"
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: "Create multi-arch manifest list"
+        run: |
+          cd /tmp/digests
+
+          # Build -t args from the comma-separated tag list
+          TAG_ARGS=""
+          IFS=',' read -ra TAG_ARR <<< "${{ needs.meta.outputs.tags }}"
+          for t in "${TAG_ARR[@]}"; do
+            TAG_ARGS="$TAG_ARGS -t $t"
+          done
+
+          # Each artifact filename is a digest (without sha256: prefix)
+          SOURCES=""
+          for f in *; do
+            SOURCES="$SOURCES ${IMAGE}@sha256:$f"
+          done
+
+          echo "docker buildx imagetools create$TAG_ARGS$SOURCES"
+          docker buildx imagetools create $TAG_ARGS $SOURCES
+
+      - name: "Inspect published manifest"
+        run: |
+          VERSION="${{ needs.meta.outputs.version }}"
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}" | tee /tmp/inspect.txt
+          {
+            echo "### Published Manifest"
+            echo ""
+            echo '```'
+            cat /tmp/inspect.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: "Add Docker Hub reference to release notes"
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ needs.meta.outputs.version }}"
+          TAG="${{ needs.meta.outputs.tag }}"
           gh release view "${TAG}" --json body -q '.body' > /tmp/release-notes.md
           cat >> /tmp/release-notes.md <<EOF
 
@@ -129,22 +231,27 @@ jobs:
 
           ### Docker Image
 
+          Multi-architecture (linux/amd64, linux/arm64):
+
           \`\`\`bash
-          docker pull eiou/eiou:${VERSION}
+          docker pull ${IMAGE}:${VERSION}
           \`\`\`
 
-          [View on Docker Hub](https://hub.docker.com/r/eiou/eiou/tags?name=${VERSION})
+          [View on Docker Hub](https://hub.docker.com/r/${IMAGE}/tags?name=${VERSION})
           EOF
           gh release edit "${TAG}" --notes-file /tmp/release-notes.md
 
       - name: "Summary"
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          CHANNEL="${{ steps.meta.outputs.channel }}"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Published" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Version**: ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Channel**: ${CHANNEL}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Docker Hub**: \`docker pull eiou/eiou:${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Release asset**: \`eiou-node-${VERSION}.tar.gz\`" >> "$GITHUB_STEP_SUMMARY"
+          VERSION="${{ needs.meta.outputs.version }}"
+          CHANNEL="${{ needs.meta.outputs.channel }}"
+          {
+            echo ""
+            echo "### Published"
+            echo ""
+            echo "- **Version**: ${VERSION}"
+            echo "- **Channel**: ${CHANNEL}"
+            echo "- **Docker Hub**: \`docker pull ${IMAGE}:${VERSION}\`"
+            echo "- **Platforms**: linux/amd64, linux/arm64"
+            echo "- **Release assets**: \`eiou-node-${VERSION}-amd64.tar.gz\`, \`eiou-node-${VERSION}-arm64.tar.gz\`"
+          } >> "$GITHUB_STEP_SUMMARY"
