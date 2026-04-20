@@ -64,21 +64,24 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'],
         ];
 
-        $this->pdo->expects($this->once())
+        // verifyChainIntegrity now issues TWO prepares: live SELECT + archive
+        // SELECT. Archive is merged into the txid lookup set so archived
+        // `previous_txid` references don't false-positive as gaps. Tests
+        // return empty-archive via willReturnOnConsecutiveCalls.
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->with($this->stringContains('SELECT txid, previous_txid, status'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(8))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('fetchAll')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn($transactions);
+            ->willReturnOnConsecutiveCalls($transactions, []);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -100,19 +103,19 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 is missing
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(8))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('fetchAll')
-            ->willReturn($transactions);
+            ->willReturnOnConsecutiveCalls($transactions, []);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -128,16 +131,16 @@ class TransactionChainRepositoryTest extends TestCase
         $userPublicKey = 'user-pubkey';
         $contactPublicKey = 'contact-pubkey';
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('fetchAll')
-            ->willReturn([]);
+            ->willReturnOnConsecutiveCalls([], []);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -161,20 +164,19 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 txid in lookup
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(8))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('fetchAll')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn($transactions);
+            ->willReturnOnConsecutiveCalls($transactions, []);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -194,19 +196,19 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 missing entirely
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(8))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('fetchAll')
-            ->willReturn($transactions);
+            ->willReturnOnConsecutiveCalls($transactions, []);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -229,20 +231,19 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'],
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(8))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('fetchAll')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn($transactions);
+            ->willReturnOnConsecutiveCalls($transactions, []);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -257,13 +258,15 @@ class TransactionChainRepositoryTest extends TestCase
         // Regression: the query must NOT filter out cancelled/rejected transactions.
         // Asserting on the SQL shape locks in the intent of the fix so a future
         // refactor can't reintroduce the status filter without this test failing.
-        $this->pdo->expects($this->once())
+        // With #863 Phase 1, verify now issues TWO prepares (live + archive) —
+        // neither should contain "status NOT IN".
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->with($this->logicalNot($this->stringContains("status NOT IN")))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->once())->method('execute');
-        $this->stmt->expects($this->once())->method('fetchAll')->willReturn([]);
+        $this->stmt->expects($this->exactly(2))->method('execute');
+        $this->stmt->expects($this->exactly(2))->method('fetchAll')->willReturn([]);
 
         $this->repository->verifyChainIntegrity('user', 'contact');
     }

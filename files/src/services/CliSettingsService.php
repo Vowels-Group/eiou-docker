@@ -288,6 +288,11 @@ class CliSettingsService
                 $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'transactionsarchiveretentiondays'){
+                $key = 'transactionsArchiveRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             // Rate limiting
             } elseif(strtolower($argv[2]) === 'p2pratelimitperminute'){
                 $key = 'p2pRateLimitPerMinute';
@@ -432,6 +437,7 @@ class CliSettingsService
                     ['num' => '34', 'label' => 'RP2P retention days'],
                     ['num' => '35', 'label' => 'Metrics retention days'],
                     ['num' => '35a', 'label' => 'Payment requests archive retention days'],
+                    ['num' => '35b', 'label' => 'Transactions archive retention days'],
                 ],
                 'Rate Limiting' => [
                     ['num' => '36', 'label' => 'P2P rate limit per minute'],
@@ -877,6 +883,17 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
+                case '35b':
+                    echo "Enter transactions archive retention days (minimum 1, default 180): ";
+                    $key = 'transactionsArchiveRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 // Rate Limiting
                 case '36':
                     echo "Enter P2P rate limit per minute (minimum 1): ";
@@ -1197,6 +1214,7 @@ class CliSettingsService
             'cleanup_rp2p_retention_days' => $this->currentUser->getCleanupRp2pRetentionDays(),
             'cleanup_metrics_retention_days' => $this->currentUser->getCleanupMetricsRetentionDays(),
             'payment_requests_archive_retention_days' => $this->currentUser->getPaymentRequestsArchiveRetentionDays(),
+            'transactions_archive_retention_days' => $this->currentUser->getTransactionsArchiveRetentionDays(),
             // Rate limiting
             'p2p_rate_limit_per_minute' => $this->currentUser->getP2pRateLimitPerMinute(),
             'rate_limit_max_attempts' => $this->currentUser->getRateLimitMaxAttempts(),
@@ -1267,6 +1285,7 @@ class CliSettingsService
             echo "\tRP2P retention: " . $settings['cleanup_rp2p_retention_days'] . " days\n";
             echo "\tMetrics retention: " . $settings['cleanup_metrics_retention_days'] . " days\n";
             echo "\tPayment requests archive: " . $settings['payment_requests_archive_retention_days'] . " days\n";
+            echo "\tTransactions archive: " . $settings['transactions_archive_retention_days'] . " days\n";
             echo "\n  Rate Limiting:\n";
             echo "\tP2P rate limit: " . $settings['p2p_rate_limit_per_minute'] . "/min\n";
             echo "\tMax attempts: " . $settings['rate_limit_max_attempts'] . "\n";

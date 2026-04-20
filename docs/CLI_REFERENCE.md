@@ -1013,6 +1013,8 @@ eiou changesettings [setting] [value]
 | `cleanupMetricsRetentionDays` | Days to retain metrics data (min 1) | `90` |
 | `paymentRequestsArchiveRetentionDays` | Days resolved (non-pending) payment requests stay in the live table before moving to `payment_requests_archive` (min 1). **Not a delete** — archived rows stay queryable | `180` |
 | `paymentRequestsArchiveBatchSize` | Max rows moved per archival cron run (min 1) | `500` |
+| `transactionsArchiveRetentionDays` | Days completed transactions stay in the live table before moving to `transactions_archive` (min 1). Archival is additionally gated per bilateral pair on a gap-free chain-integrity check — pairs with a detected gap are skipped, not archived. **Not a delete** | `180` |
+| `transactionsArchiveBatchSize` | Max rows moved per transactions archival cron run (min 1) | `500` |
 
 **Advanced Settings (Rate Limiting):**
 
@@ -1067,6 +1069,8 @@ eiou changesettings backupRetentionCount 5
 eiou changesettings cleanupDeliveryRetentionDays 60
 eiou changesettings paymentRequestsArchiveRetentionDays 90
 eiou changesettings paymentRequestsArchiveBatchSize 1000
+eiou changesettings transactionsArchiveRetentionDays 90
+eiou changesettings transactionsArchiveBatchSize 1000
 eiou changesettings httpTransportTimeoutSeconds 30
 eiou changesettings rateLimitEnabled false
 eiou changesettings displayDecimals 4
@@ -1563,7 +1567,7 @@ eiou backup status --json
 - Location: `/var/lib/eiou/backups/`
 - Filename format:
   - `backup_YYYYMMDD_HHmmss.eiou.enc` — live tables (archive tables excluded)
-  - `archive_backup_YYYYMMDD_HHmmss.eiou.enc` — archive tables only; written by the payment-request archival cron after any move
+  - `archive_backup_YYYYMMDD_HHmmss.eiou.enc` — archive tables only (`payment_requests_archive` AND `transactions_archive`); written by either archival cron after a successful move
 - Retention: 3 most recent backups **per prefix** (configurable via `backupRetentionCount`); a frequent live cadence never evicts the rarer archive backups
 - `backup list` shows both prefixes; `backup restore <file>` restores whichever type the filename points at
 
@@ -1580,6 +1584,20 @@ php /app/eiou/scripts/payment-request-archive-cron.php
 ```
 
 Logs are written to `/var/log/eiou/payment-request-archive.log`. A backup failure during archival is logged as WARNING but never fails the archival run itself — rows are already safely moved, and the next archival run that moves rows will re-attempt the archive backup.
+
+**Transactions Archival:**
+
+The archival cron moves completed transactions older than `transactionsArchiveRetentionDays` into `transactions_archive`, gated per bilateral pair on a gap-free chain-integrity check. Pairs with a detected gap are **skipped** (not archived) so the gap stays inspectable; clean pairs get a row upserted in `transaction_chain_checkpoints` recording the gap-free-at-archival proof. Runs nightly at 01:30 UTC (offset 30m from the payment-request archival at 01:00).
+
+```bash
+# Dry-run: count eligible pairs + rows, make no changes
+php /app/eiou/scripts/transaction-archive-cron.php --dry-run
+
+# Normal run: verify per pair, move up to transactionsArchiveBatchSize rows per pair
+php /app/eiou/scripts/transaction-archive-cron.php
+```
+
+Logs are written to `/var/log/eiou/transaction-archive.log`. The run's JSON output includes `pairs_processed`, `pairs_archived`, `pairs_skipped_gap`, `moved`, `batches`, and `archive_backup_file` — `pairs_skipped_gap > 0` is worth investigating (a gap is either a local data issue or a missing sync). Phase 1 of #863 only produces the checkpoint metadata; Phase 2 will wire `verifyChainIntegrity()` to consume it for the O(recent) hot-path.
 
 ---
 

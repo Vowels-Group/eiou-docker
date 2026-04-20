@@ -28,7 +28,7 @@ class BackupService implements BackupServiceInterface
     // snapshotted separately by createArchiveBackup(). These are append-only
     // archive tables that don't change on a day-to-day basis, so re-dumping
     // them in every nightly backup wastes disk and backup-window time.
-    private const ARCHIVE_TABLES = ['payment_requests_archive'];
+    private const ARCHIVE_TABLES = ['payment_requests_archive', 'transactions_archive'];
 
     // Filename prefix used to identify archive-only backups in listBackups()
     // and during per-type rotation in cleanupOldBackups().

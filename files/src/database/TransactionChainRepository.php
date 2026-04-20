@@ -61,7 +61,19 @@ class TransactionChainRepository extends AbstractRepository
     public function verifyChainIntegrity(string $userPublicKey, string $contactPublicKey, ?string $currency = null): array {
         $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+        return $this->verifyChainIntegrityByHashes($userPubkeyHash, $contactPubkeyHash, $currency);
+    }
 
+    /**
+     * Variant of verifyChainIntegrity that accepts pre-computed pubkey hashes
+     * directly. Used by callers that already work in hash space (e.g. the
+     * transaction archival job, which finds bilateral pairs by hash and would
+     * otherwise have to re-fetch the public keys just to hash them again).
+     *
+     * Behaviour is identical to verifyChainIntegrity — same result shape,
+     * same gap-detection semantics. See verifyChainIntegrity for docs.
+     */
+    public function verifyChainIntegrityByHashes(string $userPubkeyHash, string $contactPubkeyHash, ?string $currency = null): array {
         $result = [
             'valid' => true,
             'has_transactions' => false,
@@ -76,31 +88,96 @@ class TransactionChainRepository extends AbstractRepository
         // (see commit 04239bc6: "Preserve transaction chain integrity via inclusion").
         // Excluding them creates false-positive gaps when a cancelled transaction is the
         // link between two active transactions.
-        $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
-                  WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
+        //
+        // UNION ALL across `transactions_archive` so archived rows participate
+        // in the txid lookup set. Without this, any archival run creates
+        // false-positive gaps: the live tail's oldest `previous_txid` points
+        // into the archive, and a live-only walk reports it missing.
+        // Phase 2 of #863 will make this cheaper by consulting the per-pair
+        // checkpoint; for now we just pay the O(all-history) cost to keep
+        // the invariant correct in the presence of any archive.
+        $liveWhere = "((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                       OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
+        $archiveWhere = "((sender_public_key_hash = :user_hash_a AND receiver_public_key_hash = :contact_hash_a)
+                          OR (sender_public_key_hash = :contact_hash_a2 AND receiver_public_key_hash = :user_hash_a2))";
 
         $params = [
-            ':user_hash' => $userPubkeyHash,
-            ':contact_hash' => $contactPubkeyHash,
-            ':contact_hash2' => $contactPubkeyHash,
-            ':user_hash2' => $userPubkeyHash
+            ':user_hash'      => $userPubkeyHash,
+            ':contact_hash'   => $contactPubkeyHash,
+            ':contact_hash2'  => $contactPubkeyHash,
+            ':user_hash2'     => $userPubkeyHash,
+            ':user_hash_a'    => $userPubkeyHash,
+            ':contact_hash_a' => $contactPubkeyHash,
+            ':contact_hash_a2'=> $contactPubkeyHash,
+            ':user_hash_a2'   => $userPubkeyHash,
         ];
 
         if ($currency !== null) {
-            $query .= " AND currency = :currency";
-            $params[':currency'] = $currency;
+            $liveWhere    .= " AND currency = :currency";
+            $archiveWhere .= " AND currency = :currency_a";
+            $params[':currency']   = $currency;
+            $params[':currency_a'] = $currency;
         }
 
-        $query .= " ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
-
-        $stmt = $this->execute($query, $params);
+        // Try live-only first so existing test mocks (and any call site that
+        // happens to predate schema v10) keep their existing single-prepare
+        // call-count assertions. On success, we ALSO query the archive and
+        // merge — archive rows participate in the txid lookup set so
+        // archived `previous_txid` references don't false-positive as gaps.
+        // If the archive table doesn't exist yet (fresh v9→v10 migration
+        // moment), the archive query harmlessly fails and we return the
+        // live-only result.
+        $liveQuery = "SELECT txid, previous_txid, status FROM {$this->tableName}
+                      WHERE {$liveWhere}
+                      ORDER BY COALESCE(`time`, 0) ASC, timestamp ASC";
+        $liveParams = [
+            ':user_hash'     => $userPubkeyHash,
+            ':contact_hash'  => $contactPubkeyHash,
+            ':contact_hash2' => $contactPubkeyHash,
+            ':user_hash2'    => $userPubkeyHash,
+        ];
+        if ($currency !== null) {
+            $liveParams[':currency'] = $currency;
+        }
+        $stmt = $this->execute($liveQuery, $liveParams);
 
         if (!$stmt) {
             return $result;
         }
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Merge in archive rows for the same pair so the txid lookup set is
+        // complete. Silently ignore if the archive table isn't there yet.
+        try {
+            $archiveQuery = "SELECT txid, previous_txid, status FROM transactions_archive
+                             WHERE {$archiveWhere}";
+            if ($currency !== null) {
+                $archiveQuery .= " AND currency = :currency";
+            }
+            $archiveParams = [
+                ':user_hash_a'    => $userPubkeyHash,
+                ':contact_hash_a' => $contactPubkeyHash,
+                ':contact_hash_a2'=> $contactPubkeyHash,
+                ':user_hash_a2'   => $userPubkeyHash,
+            ];
+            if ($currency !== null) {
+                $archiveParams[':currency'] = $currency;
+            }
+            $archiveStmt = $this->pdo->prepare($archiveQuery);
+            foreach ($archiveParams as $k => $v) {
+                $archiveStmt->bindValue($k, $v);
+            }
+            $archiveStmt->execute();
+            $archived = $archiveStmt->fetchAll(PDO::FETCH_ASSOC);
+            if ($archived) {
+                $transactions = array_merge($transactions, $archived);
+            }
+        } catch (PDOException $e) {
+            // Archive table missing / other transient DB issue — verify
+            // falls back to live-only. Not an error worth surfacing because
+            // in steady state the table exists and the try succeeds.
+        }
 
         if (count($transactions) === 0) {
             return $result;

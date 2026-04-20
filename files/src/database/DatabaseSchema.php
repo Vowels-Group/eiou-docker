@@ -652,6 +652,93 @@ function getPaymentRequestsArchiveTableSchema() {
     )";
 }
 
+// Transactions Archive table — cold storage for completed transactions older
+// than the configured retention window AND belonging to a bilateral chain
+// that verified gap-free at the moment of archival. Schema mirrors
+// transactions with the same indices so read paths can UNION both tables.
+// Archive is append-only from the archival job's perspective: writes only
+// happen during scheduled moves, never from the normal transaction flow.
+//
+// Unlike payment_requests_archive, archival here is gated on a
+// chain-integrity invariant enforced per bilateral pair — see
+// TransactionArchivalService and the transaction_chain_checkpoints table.
+function getTransactionsArchiveTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS transactions_archive (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        tx_type ENUM('standard','p2p','contact') DEFAULT 'standard',
+        type ENUM('received','sent','relay') DEFAULT 'sent',
+        status ENUM('pending','sending','sent','accepted','rejected','cancelled','completed','failed') DEFAULT 'pending',
+        sender_address VARCHAR(255) NOT NULL,
+        sender_public_key TEXT NOT NULL,
+        sender_public_key_hash VARCHAR(64),
+        receiver_address VARCHAR(255) NOT NULL,
+        receiver_public_key TEXT NOT NULL,
+        receiver_public_key_hash VARCHAR(64),
+        amount_whole BIGINT NOT NULL,
+        amount_frac BIGINT NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        timestamp DATETIME(6) NOT NULL,
+        txid VARCHAR(255) UNIQUE NOT NULL,
+        previous_txid VARCHAR(255),
+        sender_signature TEXT,
+        recipient_signature TEXT,
+        signature_nonce VARCHAR(64),
+        time BIGINT NULL,
+        memo TEXT,
+        description TEXT,
+        initial_sender_address VARCHAR(255) DEFAULT NULL,
+        end_recipient_address VARCHAR(255) DEFAULT NULL,
+        sending_started_at DATETIME(6) DEFAULT NULL,
+        recovery_count INT DEFAULT 0,
+        needs_manual_review TINYINT(1) DEFAULT 0,
+        expires_at DATETIME(6) DEFAULT NULL,
+        signed_message_content TEXT DEFAULT NULL,
+        archived_at DATETIME(6) NOT NULL,              /* When the archival job moved this row */
+        INDEX idx_txa_sender (sender_public_key_hash),
+        INDEX idx_txa_receiver (receiver_public_key_hash),
+        INDEX idx_txa_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
+        INDEX idx_txa_chain (sender_public_key_hash, receiver_public_key_hash, timestamp DESC),
+        INDEX idx_txa_currency_chain (sender_public_key_hash, receiver_public_key_hash, currency, timestamp DESC),
+        INDEX idx_txa_status (status),
+        INDEX idx_txa_timestamp (timestamp),
+        INDEX idx_txa_txid (txid),
+        INDEX idx_txa_previous_txid (previous_txid),
+        INDEX idx_txa_archived_at (archived_at)
+    )";
+}
+
+// Transaction Chain Checkpoints table — records the gap-free-at-archival
+// proof per bilateral pair. Populated by TransactionArchivalService whenever
+// it successfully archives a batch of transactions for a given
+// (user_pubkey_hash, contact_pubkey_hash) pair.
+//
+// Phase 2 (issue #863 follow-up) will use these rows to let
+// verifyChainIntegrity() stop at the checkpoint boundary — if a pair has a
+// checkpoint and the live tail is itself gap-free, the full chain is
+// trivially gap-free without walking the archived portion. A tamper or
+// corruption on the archive is detected by recomputing archived_txid_hash
+// and comparing against the stored value.
+//
+// Rows are upserted: archival runs update highest_archived_timestamp +
+// archived_txid_hash + archived_count + last_verified_gap_free_at on the
+// existing row for the pair. There is at most one row per bilateral pair.
+function getTransactionChainCheckpointsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS transaction_chain_checkpoints (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        user_public_key_hash VARCHAR(64) NOT NULL,
+        contact_public_key_hash VARCHAR(64) NOT NULL,
+        highest_archived_timestamp DATETIME(6) NOT NULL,  /* Newest archived_at timestamp under this checkpoint */
+        highest_archived_time BIGINT NULL,                /* Newest wallet `time` value under this checkpoint, for chain-walk seeking */
+        archived_count INT NOT NULL DEFAULT 0,            /* Total rows in the archive covered by this checkpoint */
+        archived_txid_hash VARCHAR(64) NOT NULL,          /* SHA-256 over sorted archived txid list; tamper detection for Phase 2 */
+        last_verified_gap_free_at DATETIME(6) NOT NULL,   /* Last time verifyChainIntegrity reported valid=true for the pair */
+        created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+        updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+        UNIQUE INDEX idx_tcc_pair (user_public_key_hash, contact_public_key_hash),
+        INDEX idx_tcc_last_verified (last_verified_gap_free_at)
+    )";
+}
+
 // ============================================================================
 // CAPACITY RESERVATIONS & ROUTE CANCELLATIONS
 // Tables for tracking reserved credit capacity during P2P route discovery
